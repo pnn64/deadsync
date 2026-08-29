@@ -1,6 +1,7 @@
+use crate::registry::{register_texture_dims_shared, register_texture_handle_shared};
 use crate::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture, register_texture_dims,
-    register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
+    remove_texture_handle, take_pending_generated_texture_keys,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
 use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
@@ -77,10 +78,13 @@ impl<T> TextureStore<T> {
         if let Some(&handle) = self.texture_handles.get(key.as_str()) {
             return handle;
         }
+        self.reserve_new_texture_handle(Arc::from(key))
+    }
+
+    fn reserve_new_texture_handle(&mut self, key: Arc<str>) -> TextureHandle {
         let handle = self.next_texture_handle;
         self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
-        register_texture_handle(&key, handle);
-        let key: Arc<str> = Arc::from(key);
+        register_texture_handle_shared(Arc::clone(&key), handle);
         self.texture_keys.insert(handle, Arc::clone(&key));
         self.texture_handles.insert(key, handle);
         handle
@@ -177,6 +181,24 @@ impl<T> TextureStore<T> {
     }
 
     pub fn queue_texture_upload_shared(
+        &mut self,
+        key: String,
+        image: Arc<RgbaImage>,
+        sampler: SamplerDesc,
+    ) {
+        let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
+            register_texture_dims(&key, image.width(), image.height());
+            handle
+        } else {
+            let key: Arc<str> = Arc::from(key);
+            register_texture_dims_shared(Arc::clone(&key), image.width(), image.height());
+            self.reserve_new_texture_handle(key)
+        };
+        self.pending_texture_uploads.push(handle, image, sampler);
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub fn queue_texture_upload_shared_reference(
         &mut self,
         key: String,
         image: Arc<RgbaImage>,
@@ -313,6 +335,30 @@ mod tests {
         assert!(textures.remove_texture("queued").is_none());
         assert!(!textures.has_texture_key("queued"));
         assert!(!textures.has_pending_texture_upload("queued"));
+    }
+
+    #[test]
+    fn shared_upload_key_keeps_handle_and_metadata_in_sync() {
+        let key = "shared-key-ownership-test";
+        let mut textures = TextureStore::<()>::new();
+        textures.queue_texture_upload_shared(
+            key.to_string(),
+            Arc::new(blank_rgba(2, 2)),
+            SamplerDesc::default(),
+        );
+        let first_handle = textures.reserve_texture_handle(key.to_string());
+
+        textures.queue_texture_upload_shared(
+            key.to_string(),
+            Arc::new(blank_rgba(4, 2)),
+            SamplerDesc::default(),
+        );
+        let second_handle = textures.reserve_texture_handle(key.to_string());
+
+        assert_eq!(first_handle, second_handle);
+        assert_eq!(crate::texture_handle(key), first_handle);
+        let dims = crate::texture_dims(key).unwrap();
+        assert_eq!((dims.w, dims.h), (4, 2));
     }
 
     #[test]

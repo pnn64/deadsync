@@ -203,10 +203,18 @@ pub struct Player {
 }
 
 impl Player {
+    #[inline]
     pub fn take_due_frame(&mut self, play_time_sec: f32) -> Option<VideoFrame> {
         let target = clamp_play_time(play_time_sec, self.info);
         let mut latest = None;
         loop {
+            if self
+                .next_frame
+                .as_ref()
+                .is_some_and(|frame| frame.pts_sec > target)
+            {
+                break;
+            }
             let frame = match self.next_frame.take() {
                 Some(frame) => frame,
                 None => match self.frame_rx.as_ref()?.try_recv() {
@@ -819,6 +827,107 @@ struct ProbeFormat<'a> {
 pub mod bench_support {
     use super::*;
 
+    pub struct FutureFrameBench {
+        player: Player,
+    }
+
+    impl FutureFrameBench {
+        #[must_use]
+        pub fn new() -> Self {
+            let (recycle_tx, _recycle_rx) = sync_channel(1);
+            let (_frame_tx, frame_rx) = sync_channel(1);
+            Self {
+                player: Player {
+                    info: Info {
+                        width: 2,
+                        height: 2,
+                        fps: 30.0,
+                        duration_sec: None,
+                        looped: false,
+                        conversion: YuvConversion::BT709_LIMITED,
+                    },
+                    frame_rx: Some(frame_rx),
+                    next_frame: Some(QueuedFrame {
+                        pts_sec: 1.0,
+                        image: Yuv420Image::from_raw(2, 2, vec![0; 6])
+                            .expect("valid benchmark frame"),
+                    }),
+                    recycle_tx,
+                    buffer_pool_misses: Arc::new(AtomicU64::new(0)),
+                    stop: Arc::new(AtomicBool::new(false)),
+                    child: Arc::new(Mutex::new(None)),
+                    worker: None,
+                },
+            }
+        }
+
+        #[must_use]
+        pub fn poll_reference(&mut self, calls: usize) -> u64 {
+            let mut checksum = 0_u64;
+            for _ in 0..calls {
+                checksum = checksum.wrapping_add(
+                    u64::from(take_due_frame_reference(&mut self.player, 0.0).is_none())
+                        + u64::from(
+                            self.player
+                                .next_frame
+                                .as_ref()
+                                .map_or(0, |frame| frame.pts_sec.to_bits()),
+                        ),
+                );
+            }
+            checksum
+        }
+
+        #[must_use]
+        pub fn poll_current(&mut self, calls: usize) -> u64 {
+            let mut checksum = 0_u64;
+            for _ in 0..calls {
+                checksum = checksum.wrapping_add(
+                    u64::from(self.player.take_due_frame(0.0).is_none())
+                        + u64::from(
+                            self.player
+                                .next_frame
+                                .as_ref()
+                                .map_or(0, |frame| frame.pts_sec.to_bits()),
+                        ),
+                );
+            }
+            checksum
+        }
+    }
+
+    impl Default for FutureFrameBench {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    fn take_due_frame_reference(player: &mut Player, play_time_sec: f32) -> Option<VideoFrame> {
+        let target = clamp_play_time(play_time_sec, player.info);
+        let mut latest = None;
+        loop {
+            let frame = match player.next_frame.take() {
+                Some(frame) => frame,
+                None => match player.frame_rx.as_ref()?.try_recv() {
+                    Ok(frame) => frame,
+                    Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+                },
+            };
+            if frame.pts_sec > target {
+                player.next_frame = Some(frame);
+                break;
+            }
+            if let Some(image) = latest.take() {
+                recycle_frame_buffer(&player.recycle_tx, image);
+            }
+            latest = Some(frame.image);
+        }
+        latest.map(|image| VideoFrame {
+            image: Some(image),
+            recycle_tx: Some(player.recycle_tx.clone()),
+        })
+    }
+
     #[must_use]
     pub fn probe_json_checksum(raw: &[u8]) -> u64 {
         let parsed: ProbeOutput<'_> =
@@ -1018,6 +1127,37 @@ mod tests {
         assert_eq!(recycle_rx.try_recv().unwrap(), vec![1; 6]);
         drop(frame);
         assert_eq!(recycle_rx.try_recv().unwrap(), vec![2; 6]);
+    }
+
+    #[test]
+    fn future_frame_poll_keeps_the_buffered_frame_in_place() {
+        let (recycle_tx, _recycle_rx) = sync_channel(1);
+        let (_frame_tx, frame_rx) = sync_channel(1);
+        let mut player = Player {
+            info: Info {
+                width: 2,
+                height: 2,
+                fps: 30.0,
+                duration_sec: None,
+                looped: false,
+                conversion: YuvConversion::BT709_LIMITED,
+            },
+            frame_rx: Some(frame_rx),
+            next_frame: Some(QueuedFrame {
+                pts_sec: 1.0,
+                image: Yuv420Image::from_raw(2, 2, vec![3; 6]).unwrap(),
+            }),
+            recycle_tx,
+            buffer_pool_misses: Arc::new(AtomicU64::new(0)),
+            stop: Arc::new(AtomicBool::new(false)),
+            child: Arc::new(Mutex::new(None)),
+            worker: None,
+        };
+
+        assert!(player.take_due_frame(0.5).is_none());
+        assert!(player.take_due_frame(0.75).is_none());
+        assert_eq!(player.next_frame.as_ref().unwrap().pts_sec, 1.0);
+        assert_eq!(player.next_frame.as_ref().unwrap().image.as_raw(), &[3; 6]);
     }
 
     #[test]

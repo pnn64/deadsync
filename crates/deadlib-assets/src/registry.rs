@@ -27,12 +27,17 @@ struct RegisteredTextureMeta {
 
 #[derive(Default)]
 struct TextureMetadataRegistry {
-    entries: FxHashMap<String, RegisteredTextureMeta>,
+    entries: FxHashMap<Arc<str>, RegisteredTextureMeta>,
 }
 
 impl TextureMetadataRegistry {
-    fn register(&mut self, key: &str, texture: TexMeta, sheet: (u32, u32)) -> bool {
-        if let Some(entry) = self.entries.get_mut(key) {
+    fn register(
+        &mut self,
+        key: impl AsRef<str> + Into<Arc<str>>,
+        texture: TexMeta,
+        sheet: (u32, u32),
+    ) -> bool {
+        if let Some(entry) = self.entries.get_mut(key.as_ref()) {
             if entry
                 .texture
                 .is_some_and(|meta| meta.w == texture.w && meta.h == texture.h)
@@ -46,7 +51,7 @@ impl TextureMetadataRegistry {
             };
         } else {
             self.entries.insert(
-                key.to_string(),
+                key.into(),
                 RegisteredTextureMeta {
                     texture: Some(texture),
                     sheet,
@@ -64,9 +69,16 @@ impl TextureMetadataRegistry {
         self.entries.get(key).map(|entry| entry.sheet)
     }
 
-    fn insert_sheet_dims(&mut self, key: &str, sheet: (u32, u32)) -> (u32, u32) {
+    fn insert_sheet_dims(
+        &mut self,
+        key: impl AsRef<str> + Into<Arc<str>>,
+        sheet: (u32, u32),
+    ) -> (u32, u32) {
+        if let Some(entry) = self.entries.get(key.as_ref()) {
+            return entry.sheet;
+        }
         self.entries
-            .entry(key.to_string())
+            .entry(key.into())
             .or_insert(RegisteredTextureMeta {
                 texture: None,
                 sheet,
@@ -143,7 +155,7 @@ impl<T> GeneratedTextureRegistry<T> {
 static TEXTURE_METADATA: LazyLock<RwLock<TextureMetadataRegistry>> =
     LazyLock::new(|| RwLock::new(TextureMetadataRegistry::default()));
 
-static TEXTURE_HANDLES: LazyLock<RwLock<FxHashMap<String, TextureHandle>>> =
+static TEXTURE_HANDLES: LazyLock<RwLock<FxHashMap<Arc<str>, TextureHandle>>> =
     LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 #[derive(Clone, Copy)]
@@ -204,7 +216,7 @@ fn note_texture_handle_alias(
 }
 
 fn rebuild_texture_handle_aliases(
-    handles: &FxHashMap<String, TextureHandle>,
+    handles: &FxHashMap<Arc<str>, TextureHandle>,
     aliases: &mut FastU64Map<TextureHandleAlias>,
 ) {
     aliases.clear();
@@ -217,7 +229,7 @@ fn rebuild_texture_handle_aliases(
 /// Remove a common unique alias in O(1). An already-colliding alias takes the
 /// rare rebuild path so deleting one collision restores exact fallback lookup.
 fn remove_texture_handle_alias(
-    handles: &FxHashMap<String, TextureHandle>,
+    handles: &FxHashMap<Arc<str>, TextureHandle>,
     aliases: &mut FastU64Map<TextureHandleAlias>,
     key: &str,
 ) {
@@ -237,23 +249,35 @@ fn remove_texture_handle_alias(
 /// # Panics
 ///
 /// Panics if an internal synchronization lock is poisoned.
-pub fn register_texture_handle(key: &str, handle: TextureHandle) {
+fn register_texture_handle_inner(key: impl AsRef<str> + Into<Arc<str>>, handle: TextureHandle) {
     let mut handles = TEXTURE_HANDLES.write().unwrap();
     let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    if let Some((owned_key, old)) = handles.remove_entry(key) {
+    let lookup = key.as_ref();
+    if let Some((owned_key, old)) = handles.remove_entry(lookup) {
         if old == handle {
             handles.insert(owned_key, old);
             return;
         }
-        remove_texture_handle_alias(&handles, &mut aliases, key);
+        remove_texture_handle_alias(&handles, &mut aliases, lookup);
         handles.insert(owned_key, handle);
-        note_texture_handle_alias(&mut aliases, key, handle);
+        note_texture_handle_alias(&mut aliases, lookup, handle);
         touch_texture_registry();
     } else {
-        handles.insert(key.to_string(), handle);
-        note_texture_handle_alias(&mut aliases, key, handle);
+        note_texture_handle_alias(&mut aliases, lookup, handle);
+        handles.insert(key.into(), handle);
         touch_texture_registry();
     }
+}
+
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
+pub fn register_texture_handle(key: &str, handle: TextureHandle) {
+    register_texture_handle_inner(key, handle);
+}
+
+pub(crate) fn register_texture_handle_shared(key: Arc<str>, handle: TextureHandle) {
+    register_texture_handle_inner(key, handle);
 }
 
 /// # Panics
@@ -283,6 +307,17 @@ pub fn clear_texture_handles() {
 /// Panics if an internal synchronization lock is poisoned.
 pub fn register_texture_dims(key: &str, w: u32, h: u32) {
     let sheet = parse_sprite_sheet_dims(key);
+    if TEXTURE_METADATA
+        .write()
+        .unwrap()
+        .register(key, TexMeta { w, h }, sheet)
+    {
+        touch_texture_registry();
+    }
+}
+
+pub(crate) fn register_texture_dims_shared(key: Arc<str>, w: u32, h: u32) {
+    let sheet = parse_sprite_sheet_dims(&key);
     if TEXTURE_METADATA
         .write()
         .unwrap()
@@ -397,6 +432,50 @@ impl GeneratedTexturePendingBench {
     }
 }
 
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn texture_key_ownership_reference(keys: &[String]) -> u64 {
+    let mut registry = FxHashMap::<String, TextureHandle>::default();
+    let mut metadata = FxHashMap::<String, TextureHandle>::default();
+    let mut store = FxHashMap::<Arc<str>, TextureHandle>::default();
+    for (index, input) in keys.iter().enumerate() {
+        let key = input.clone();
+        let handle = index as TextureHandle + 1;
+        registry.insert(key.clone(), handle);
+        metadata.insert(key.clone(), handle);
+        store.insert(Arc::from(key), handle);
+    }
+    registry
+        .iter()
+        .fold(registry.len() as u64, |sum, (key, handle)| {
+            sum.wrapping_add(key.len() as u64).wrapping_add(*handle)
+        })
+        ^ (metadata.len() as u64).rotate_left(7)
+        ^ store.len() as u64
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn texture_key_ownership_shared(keys: &[String]) -> u64 {
+    let mut registry = FxHashMap::<Arc<str>, TextureHandle>::default();
+    let mut metadata = FxHashMap::<Arc<str>, TextureHandle>::default();
+    let mut store = FxHashMap::<Arc<str>, TextureHandle>::default();
+    for (index, input) in keys.iter().enumerate() {
+        let key: Arc<str> = Arc::from(input.clone());
+        let handle = index as TextureHandle + 1;
+        registry.insert(Arc::clone(&key), handle);
+        metadata.insert(Arc::clone(&key), handle);
+        store.insert(key, handle);
+    }
+    registry
+        .iter()
+        .fold(registry.len() as u64, |sum, (key, handle)| {
+            sum.wrapping_add(key.len() as u64).wrapping_add(*handle)
+        })
+        ^ (metadata.len() as u64).rotate_left(7)
+        ^ store.len() as u64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -404,8 +483,8 @@ mod tests {
     #[test]
     fn unique_alias_removal_updates_reference_count_without_rebuild() {
         let mut handles = FxHashMap::default();
-        handles.insert("Banner.png".to_string(), 17);
-        handles.insert("banner.PNG".to_string(), 17);
+        handles.insert(Arc::from("Banner.png"), 17);
+        handles.insert(Arc::from("banner.PNG"), 17);
         let mut aliases = FastU64Map::default();
         note_texture_handle_alias(&mut aliases, "Banner.png", 17);
         note_texture_handle_alias(&mut aliases, "banner.PNG", 17);
@@ -421,8 +500,8 @@ mod tests {
     #[test]
     fn colliding_alias_removal_rebuilds_the_surviving_handle() {
         let mut handles = FxHashMap::default();
-        handles.insert("Banner.png".to_string(), 17);
-        handles.insert("banner.PNG".to_string(), 23);
+        handles.insert(Arc::from("Banner.png"), 17);
+        handles.insert(Arc::from("banner.PNG"), 23);
         let mut aliases = FastU64Map::default();
         rebuild_texture_handle_aliases(&handles, &mut aliases);
         assert_eq!(

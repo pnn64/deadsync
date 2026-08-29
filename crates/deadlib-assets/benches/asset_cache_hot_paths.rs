@@ -1,7 +1,9 @@
 use deadlib_assets::dynamic::benchmark_write_raw_cached_banner;
-use deadlib_assets::registry::GeneratedTexturePendingBench;
+use deadlib_assets::registry::{
+    GeneratedTexturePendingBench, texture_key_ownership_reference, texture_key_ownership_shared,
+};
 use deadlib_assets::upload::{TextureUploadBudget, TextureUploadQueue};
-use deadlib_assets::{TextureHints, parse_texture_hints};
+use deadlib_assets::{TextureHints, TextureStore, parse_texture_hints};
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
@@ -380,6 +382,8 @@ fn main() {
     const GENERATED_OPS: usize = 512;
     const CACHE_WRITE_OPS: usize = 32;
     const BUDGET_STOP_OPS: usize = 32_768;
+    const SHARED_QUEUE_OPS: usize = 8_192;
+    const KEY_OWNERSHIP_OPS: usize = 128;
 
     let hint_cases = [
         "",
@@ -449,6 +453,48 @@ fn main() {
         "raw artwork-cache staging (2 MiB RGBA)",
         &old_cache_write,
         &new_cache_write,
+    );
+
+    let shared_upload = Arc::new(RgbaImage::new(64, 64));
+    let mut old_store = TextureStore::<()>::new();
+    let old_shared_queue = measure(SHARED_QUEUE_OPS, 1, || {
+        old_store.queue_texture_upload_shared_reference(
+            String::from("generated/old/shared-upload-texture"),
+            Arc::clone(&shared_upload),
+            SamplerDesc::default(),
+        );
+        1
+    });
+    let mut new_store = TextureStore::<()>::new();
+    let new_shared_queue = measure(SHARED_QUEUE_OPS, 1, || {
+        new_store.queue_texture_upload_shared(
+            String::from("generated/new/shared-upload-texture"),
+            Arc::clone(&shared_upload),
+            SamplerDesc::default(),
+        );
+        1
+    });
+    assert_eq!(old_shared_queue.checksum, new_shared_queue.checksum);
+    print_pair(
+        "owned-key shared upload queueing",
+        &old_shared_queue,
+        &new_shared_queue,
+    );
+
+    let texture_keys = (0..256)
+        .map(|index| format!("assets/graphics/session/texture-{index:04}.png"))
+        .collect::<Vec<_>>();
+    let old_key_ownership = measure(KEY_OWNERSHIP_OPS, texture_keys.len(), || {
+        texture_key_ownership_reference(black_box(&texture_keys))
+    });
+    let new_key_ownership = measure(KEY_OWNERSHIP_OPS, texture_keys.len(), || {
+        texture_key_ownership_shared(black_box(&texture_keys))
+    });
+    assert_eq!(old_key_ownership.checksum, new_key_ownership.checksum);
+    print_pair(
+        "shared texture-key ownership (256 registrations)",
+        &old_key_ownership,
+        &new_key_ownership,
     );
 
     let upload = Arc::new(RgbaImage::new(64, 64));
