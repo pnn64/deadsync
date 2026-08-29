@@ -17,7 +17,7 @@ use glutin::{
 use image::RgbaImage;
 use log::{debug, info, warn};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawWindowHandle};
-use std::{error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant};
+use std::{cell::Cell, error::Error, ffi::CStr, mem, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::window::Window;
 
 #[cfg(all(unix, not(target_os = "macos")))]
@@ -191,9 +191,11 @@ const TMESH_ATTRIBS: [(u32, &str); 13] = [
     (12, "i_texture_mask"),
 ];
 
-// A handle to one RGBA texture or three planar video textures on the GPU.
+// A handle to one RGBA texture or three planar video textures on the GPU. The
+// scalar filter mirror is render-thread-only and suppresses redundant AFT
+// sampler mutations; it is initialized with the filter installed at creation.
 #[derive(Debug)]
-pub struct Texture(TextureImages);
+pub struct Texture(TextureImages, Cell<SamplerFilter>);
 
 #[derive(Debug)]
 enum TextureImages {
@@ -857,7 +859,7 @@ pub fn create_texture(
         image.as_raw(),
         sampler,
     )
-    .map(|texture| Texture(TextureImages::Rgba(texture)))
+    .map(|texture| Texture(TextureImages::Rgba(texture), Cell::new(sampler.filter)))
 }
 
 fn create_gl_texture(
@@ -986,11 +988,14 @@ pub fn create_yuv420_texture(
             return Err(error);
         }
     };
-    Ok(Texture(TextureImages::Yuv420 {
-        planes: [y_texture, u_texture, v_texture],
-        levels: upload.levels,
-        coeffs: upload.coeffs,
-    }))
+    Ok(Texture(
+        TextureImages::Yuv420 {
+            planes: [y_texture, u_texture, v_texture],
+            levels: upload.levels,
+            coeffs: upload.coeffs,
+        },
+        Cell::new(sampler.filter),
+    ))
 }
 
 pub fn update_yuv420_texture(
@@ -1141,7 +1146,7 @@ fn create_offscreen_target(
             handle,
             width,
             height,
-            texture: Texture(TextureImages::Rgba(raw)),
+            texture: Texture(TextureImages::Rgba(raw), Cell::new(SamplerFilter::Linear)),
             framebuffer,
             depth,
             initialized: false,
@@ -1197,20 +1202,46 @@ fn resolved_texture<'a, T: TextureLookup + ?Sized>(
     textures.opengl_texture(handle)
 }
 
-fn apply_render_target_filter(gl: &glow::Context, handle: TextureHandle) {
-    if !is_render_target_texture(handle) {
+fn apply_render_target_filter(gl: &glow::Context, texture: &Texture, handle: TextureHandle) {
+    let Some(filter) = changed_render_target_filter(texture.1.get(), handle) else {
         return;
-    }
-    let filter = if render_target_uses_nearest(handle) {
-        glow::NEAREST
-    } else {
-        glow::LINEAR
+    };
+    let gl_filter = match filter {
+        SamplerFilter::Linear => glow::LINEAR,
+        SamplerFilter::Nearest => glow::NEAREST,
     };
     // SAFETY: callers invoke this immediately after binding the referenced AFT
     // texture on the live render context.
     unsafe {
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter as i32);
-        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, gl_filter as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, gl_filter as i32);
+    }
+    texture.1.set(filter);
+}
+
+#[inline(always)]
+fn changed_render_target_filter(
+    current: SamplerFilter,
+    handle: TextureHandle,
+) -> Option<SamplerFilter> {
+    if !is_render_target_texture(handle) {
+        return None;
+    }
+    let wanted = if render_target_uses_nearest(handle) {
+        SamplerFilter::Nearest
+    } else {
+        SamplerFilter::Linear
+    };
+    (wanted != current).then_some(wanted)
+}
+
+#[inline(always)]
+fn gl_state_update<T: Copy + PartialEq>(last: &mut Option<T>, wanted: T) -> bool {
+    if *last == Some(wanted) {
+        false
+    } else {
+        *last = Some(wanted);
+        true
     }
 }
 
@@ -1302,7 +1333,7 @@ fn draw_modern_offscreen_pass(
     state: &State,
     frame: &deadlib_render_core::RenderTargetFrame,
     textures: &impl TextureLookup,
-) -> u32 {
+) -> u64 {
     // SAFETY: the backend owns a current context for the whole draw call; every
     // GL handle below belongs to it and all uploaded slices remain borrowed
     // until their immediate driver call returns.
@@ -1403,7 +1434,7 @@ fn draw_modern_offscreen_pass(
                     .unwrap_or(state.projection)
         };
 
-        let mut vertices = 0u32;
+        let mut vertices = 0u64;
         let mut last_bound_tex = None;
         let mut last_blend = None;
         let mut last_prog = None;
@@ -1474,7 +1505,7 @@ fn draw_modern_offscreen_pass(
                         bind_sprite_texture(state, texture);
                         last_bound_tex = Some(texture.primary());
                     }
-                    apply_render_target_filter(gl, run.texture_handle);
+                    apply_render_target_filter(gl, texture, run.texture_handle);
                     if state.base_instance {
                         gl.draw_elements_instanced_base_vertex_base_instance(
                             glow::TRIANGLES,
@@ -1494,7 +1525,7 @@ fn draw_modern_offscreen_pass(
                             run.instance_count as i32,
                         );
                     }
-                    vertices = vertices.saturating_add(4 * run.instance_count);
+                    vertices += 4 * u64::from(run.instance_count);
                 }
                 DrawOp::Mesh(run) => {
                     if run.vertex_count == 0 {
@@ -1521,7 +1552,7 @@ fn draw_modern_offscreen_pass(
                         run.vertex_start as i32,
                         run.vertex_count as i32,
                     );
-                    vertices = vertices.saturating_add(run.vertex_count);
+                    vertices += u64::from(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
                     let Some(source) = state.uploads.source(run.geometry) else {
@@ -1602,16 +1633,16 @@ fn draw_modern_offscreen_pass(
                             bytemuck::cast_slice(&matrix),
                         );
                     }
-                    let Some(texture) =
-                        resolved_texture(state, textures, run.texture_handle).map(Texture::primary)
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
                     else {
                         continue;
                     };
-                    if last_bound_tex != Some(texture) {
-                        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                        last_bound_tex = Some(texture);
+                    let primary = texture.primary();
+                    if last_bound_tex != Some(primary) {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(primary));
+                        last_bound_tex = Some(primary);
                     }
-                    apply_render_target_filter(gl, run.texture_handle);
+                    apply_render_target_filter(gl, texture, run.texture_handle);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     if state.base_instance {
@@ -1630,9 +1661,8 @@ fn draw_modern_offscreen_pass(
                             run.instance_count as i32,
                         );
                     }
-                    vertices = vertices.saturating_add(
-                        (source.vertex_count() / 3).saturating_mul(run.instance_count),
-                    );
+                    vertices +=
+                        u64::from(source.vertex_count() / 3) * u64::from(run.instance_count);
                 }
             }
         }
@@ -1647,7 +1677,7 @@ fn draw_legacy_offscreen_pass(
     state: &State,
     frame: &RenderTargetFrame,
     textures: &impl TextureLookup,
-) -> u32 {
+) -> u64 {
     let gl = &state.gl;
     let sprite_uniforms = state
         .legacy_sprite_uniforms
@@ -1663,7 +1693,10 @@ fn draw_legacy_offscreen_pass(
                 .copied()
                 .unwrap_or(state.projection)
     };
-    let apply_blend = |mode: BlendMode| {
+    let apply_blend = |mode: BlendMode, last: &mut Option<BlendMode>| {
+        if !gl_state_update(last, mode) {
+            return;
+        }
         // SAFETY: these calls only mutate state on the current context.
         unsafe {
             gl.enable(glow::BLEND);
@@ -1687,7 +1720,10 @@ fn draw_legacy_offscreen_pass(
             }
         }
     };
-    let apply_depth = |enabled: bool| {
+    let apply_depth = |enabled: bool, last: &mut Option<bool>| {
+        if !gl_state_update(last, enabled) {
+            return;
+        }
         // SAFETY: these calls only mutate state on the current context.
         unsafe {
             if enabled {
@@ -1721,7 +1757,9 @@ fn draw_legacy_offscreen_pass(
             );
         }
         gl.active_texture(glow::TEXTURE0);
-        let mut vertices = 0u32;
+        let mut vertices = 0u64;
+        let mut last_blend = None;
+        let mut last_depth = None;
         for op in frame.ops.iter().copied() {
             match op {
                 DrawOp::Sprite(run) => {
@@ -1729,8 +1767,8 @@ fn draw_legacy_offscreen_pass(
                     else {
                         continue;
                     };
-                    apply_blend(run.blend);
-                    apply_depth(false);
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(false, &mut last_depth);
                     gl.use_program(Some(state.program));
                     gl.uniform_1_i32(Some(&state.texture_location), 0);
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
@@ -1756,7 +1794,7 @@ fn draw_legacy_offscreen_pass(
                         bytemuck::cast_slice(&projection),
                     );
                     bind_sprite_texture(state, texture);
-                    apply_render_target_filter(gl, run.texture_handle);
+                    apply_render_target_filter(gl, texture, run.texture_handle);
                     let end = run.instance_start.saturating_add(run.instance_count);
                     for index in run.instance_start..end {
                         let Some(instance) = frame.sprite_instances.get(index as usize) else {
@@ -1823,15 +1861,15 @@ fn draw_legacy_offscreen_pass(
                             glow::UNSIGNED_SHORT,
                             0,
                         );
-                        vertices = vertices.saturating_add(4);
+                        vertices += 4;
                     }
                 }
                 DrawOp::Mesh(run) => {
                     if run.vertex_count == 0 {
                         continue;
                     }
-                    apply_blend(run.blend);
-                    apply_depth(false);
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(false, &mut last_depth);
                     gl.use_program(Some(state.mesh_program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
                     let stride = mem::size_of::<deadlib_render_core::MeshVertex>() as i32;
@@ -1859,19 +1897,18 @@ fn draw_legacy_offscreen_pass(
                         run.vertex_start as i32,
                         run.vertex_count as i32,
                     );
-                    vertices = vertices.saturating_add(run.vertex_count);
+                    vertices += u64::from(run.vertex_count);
                 }
                 DrawOp::TexturedMesh(run) => {
                     let Some(source) = state.uploads.source(run.geometry) else {
                         continue;
                     };
-                    let Some(texture) =
-                        resolved_texture(state, textures, run.texture_handle).map(Texture::primary)
+                    let Some(texture) = resolved_texture(state, textures, run.texture_handle)
                     else {
                         continue;
                     };
-                    apply_blend(run.blend);
-                    apply_depth(run.depth_test);
+                    apply_blend(run.blend, &mut last_blend);
+                    apply_depth(run.depth_test, &mut last_depth);
                     gl.use_program(Some(state.tmesh_program));
                     gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                     gl.enable_vertex_attrib_array(0);
@@ -1919,8 +1956,8 @@ fn draw_legacy_offscreen_pass(
                         false,
                         bytemuck::cast_slice(&projection),
                     );
-                    gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                    apply_render_target_filter(gl, run.texture_handle);
+                    gl.bind_texture(glow::TEXTURE_2D, Some(texture.primary()));
+                    apply_render_target_filter(gl, texture, run.texture_handle);
                     let start = source.vertex_start() as i32;
                     let count = source.vertex_count() as i32;
                     let triangles = source.vertex_count() / 3;
@@ -1972,12 +2009,12 @@ fn draw_legacy_offscreen_pass(
                         );
                         gl.uniform_1_f32(Some(&tmesh_uniforms.texture_mask), instance.texture_mask);
                         gl.draw_arrays(glow::TRIANGLES, start, count);
-                        vertices = vertices.saturating_add(triangles);
+                        vertices += u64::from(triangles);
                     }
                 }
             }
         }
-        apply_depth(false);
+        apply_depth(false, &mut last_depth);
         gl.use_program(None);
         vertices
     }
@@ -2060,7 +2097,7 @@ pub fn draw(
 
     ensure_offscreen_targets(state, frame).map_err(std::io::Error::other)?;
     let offscreen_started = Instant::now();
-    let mut offscreen_vertices = 0u32;
+    let mut offscreen_vertices = 0u64;
     for (index, target_frame) in frame.render_targets.iter().enumerate() {
         {
             let uploads = &mut state.uploads;
@@ -2099,17 +2136,9 @@ pub fn draw(
             state.gl.color_mask(true, true, true, target_frame.alpha);
             state.gl.depth_mask(false);
             if state.path == GlPath::Modern {
-                offscreen_vertices = offscreen_vertices.saturating_add(draw_modern_offscreen_pass(
-                    state,
-                    target_frame,
-                    textures,
-                ));
+                offscreen_vertices += draw_modern_offscreen_pass(state, target_frame, textures);
             } else {
-                offscreen_vertices = offscreen_vertices.saturating_add(draw_legacy_offscreen_pass(
-                    state,
-                    target_frame,
-                    textures,
-                ));
+                offscreen_vertices += draw_legacy_offscreen_pass(state, target_frame, textures);
             }
         }
         state.offscreen_targets[index].initialized = true;
@@ -2138,7 +2167,7 @@ pub fn draw(
         ..DrawStats::default()
     };
 
-    let mut vertices: u32 = 0;
+    let mut vertices = 0u64;
 
     let backend_record_started = Instant::now();
     // SAFETY: the OpenGL context in `state` is current on this thread for drawing,
@@ -2362,7 +2391,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, run.texture_handle);
+                        apply_render_target_filter(gl, texture, run.texture_handle);
 
                         if state.base_instance {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -2383,7 +2412,7 @@ pub fn draw(
                                 run.instance_count as i32,
                             );
                         }
-                        vertices = vertices.saturating_add(4 * run.instance_count);
+                        vertices += 4 * u64::from(run.instance_count);
                     }
                     DrawOp::Mesh(run) => {
                         if run.vertex_count == 0 {
@@ -2419,7 +2448,7 @@ pub fn draw(
                             run.vertex_start as i32,
                             run.vertex_count as i32,
                         );
-                        vertices = vertices.saturating_add(run.vertex_count);
+                        vertices += u64::from(run.vertex_count);
                     }
                     DrawOp::TexturedMesh(run) => {
                         let Some(source) = state.uploads.source(run.geometry) else {
@@ -2577,16 +2606,16 @@ pub fn draw(
                         }
 
                         let Some(texture) = resolved_texture(state, textures, run.texture_handle)
-                            .map(Texture::primary)
                         else {
                             continue;
                         };
 
-                        if last_bound_tex != Some(texture) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                            last_bound_tex = Some(texture);
+                        let primary = texture.primary();
+                        if last_bound_tex != Some(primary) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(primary));
+                            last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, run.texture_handle);
+                        apply_render_target_filter(gl, texture, run.texture_handle);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2607,8 +2636,7 @@ pub fn draw(
                             );
                         }
                         let tri_count = source.vertex_count() / 3;
-                        vertices =
-                            vertices.saturating_add(tri_count.saturating_mul(run.instance_count));
+                        vertices += u64::from(tri_count) * u64::from(run.instance_count);
                     }
                 }
             }
@@ -2672,7 +2700,7 @@ pub fn draw(
                             bind_sprite_texture(state, texture);
                             last_bound_tex = Some(texture.primary());
                         }
-                        apply_render_target_filter(gl, run.texture_handle);
+                        apply_render_target_filter(gl, texture, run.texture_handle);
 
                         let end = run.instance_start.saturating_add(run.instance_count);
                         for idx in run.instance_start..end {
@@ -2740,7 +2768,7 @@ pub fn draw(
                                 glow::UNSIGNED_SHORT,
                                 0,
                             );
-                            vertices = vertices.saturating_add(4);
+                            vertices += 4;
                         }
                     }
                     DrawOp::Mesh(run) => {
@@ -2792,7 +2820,7 @@ pub fn draw(
                             run.vertex_start as i32,
                             run.vertex_count as i32,
                         );
-                        vertices = vertices.saturating_add(run.vertex_count);
+                        vertices += u64::from(run.vertex_count);
                     }
                     DrawOp::TexturedMesh(run) => {
                         let Some(source) = state.uploads.source(run.geometry) else {
@@ -2869,16 +2897,16 @@ pub fn draw(
                         }
 
                         let Some(texture) = resolved_texture(state, textures, run.texture_handle)
-                            .map(Texture::primary)
                         else {
                             continue;
                         };
 
-                        if last_bound_tex != Some(texture) {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                            last_bound_tex = Some(texture);
+                        let primary = texture.primary();
+                        if last_bound_tex != Some(primary) {
+                            gl.bind_texture(glow::TEXTURE_2D, Some(primary));
+                            last_bound_tex = Some(primary);
                         }
-                        apply_render_target_filter(gl, run.texture_handle);
+                        apply_render_target_filter(gl, texture, run.texture_handle);
 
                         let draw_start = source.vertex_start() as i32;
                         let draw_count = source.vertex_count() as i32;
@@ -2938,7 +2966,7 @@ pub fn draw(
                                 instance.texture_mask,
                             );
                             gl.draw_arrays(glow::TRIANGLES, draw_start, draw_count);
-                            vertices = vertices.saturating_add(tri_count);
+                            vertices += u64::from(tri_count);
                         }
                     }
                 }
@@ -3006,8 +3034,17 @@ pub fn draw(
             height
         );
     }
-    stats.vertices = vertices.saturating_add(offscreen_vertices);
+    stats.vertices = clamp_vertex_count(vertices + offscreen_vertices);
     Ok(stats)
+}
+
+#[inline(always)]
+const fn clamp_vertex_count(count: u64) -> u32 {
+    if count > u32::MAX as u64 {
+        u32::MAX
+    } else {
+        count as u32
+    }
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
@@ -3588,11 +3625,207 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
     )
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{
+        BlendMode, SamplerFilter, TextureHandle, changed_render_target_filter, clamp_vertex_count,
+        gl_state_update,
+    };
+    use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
+    use std::hint::black_box;
+
+    #[derive(Clone, Copy)]
+    pub enum VertexEvent {
+        Sprite(u32),
+        Mesh(u32),
+        TexturedMesh { vertices: u32, instances: u32 },
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct StateEvent {
+        blend: BlendMode,
+        depth: bool,
+    }
+
+    #[must_use]
+    pub fn filter_handles(count: usize) -> Vec<TextureHandle> {
+        let target = render_target_texture_handle(7);
+        (0..count)
+            .map(|index| render_target_sample_handle(target, index / 32 % 2 != 0))
+            .collect()
+    }
+
+    #[must_use]
+    pub fn filters_old(handles: &[TextureHandle]) -> u64 {
+        filter_checksum(handles, |_, handle| {
+            let wanted = wanted_filter(handle);
+            mock_driver_write(wanted);
+            mock_driver_write(wanted);
+            wanted
+        })
+    }
+
+    #[must_use]
+    pub fn filters_new(handles: &[TextureHandle]) -> u64 {
+        filter_checksum(handles, |current, handle| {
+            if let Some(wanted) = changed_render_target_filter(*current, handle) {
+                mock_driver_write(wanted);
+                mock_driver_write(wanted);
+                *current = wanted;
+            }
+            wanted_filter(handle)
+        })
+    }
+
+    #[must_use]
+    pub fn state_events(count: usize) -> Vec<StateEvent> {
+        (0..count)
+            .map(|index| StateEvent {
+                blend: match index / 32 % 4 {
+                    0 => BlendMode::Alpha,
+                    1 => BlendMode::Add,
+                    2 => BlendMode::Multiply,
+                    _ => BlendMode::Subtract,
+                },
+                depth: index / 64 % 2 != 0,
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn states_old(events: &[StateEvent]) -> u64 {
+        state_checksum(events, |_, _, event| {
+            mock_state_write(event.blend as u64);
+            mock_state_write(event.blend as u64);
+            mock_state_write(event.blend as u64);
+            mock_state_write(event.depth as u64);
+            mock_state_write(event.depth as u64);
+            if event.depth {
+                mock_state_write(1);
+            }
+        })
+    }
+
+    #[must_use]
+    pub fn states_new(events: &[StateEvent]) -> u64 {
+        state_checksum(events, |blend, depth, event| {
+            if gl_state_update(blend, event.blend) {
+                mock_state_write(event.blend as u64);
+                mock_state_write(event.blend as u64);
+                mock_state_write(event.blend as u64);
+            }
+            if gl_state_update(depth, event.depth) {
+                mock_state_write(event.depth as u64);
+                mock_state_write(event.depth as u64);
+                if event.depth {
+                    mock_state_write(1);
+                }
+            }
+        })
+    }
+
+    #[must_use]
+    pub fn vertex_events(count: usize) -> Vec<VertexEvent> {
+        let mut seed = 0x1357_9bdf_2468_ace0_u64;
+        (0..count)
+            .map(|_| {
+                seed = seed
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                match seed % 3 {
+                    0 => VertexEvent::Sprite(((seed >> 8) % 64 + 1) as u32),
+                    1 => VertexEvent::Mesh(((seed >> 16) % 1_024 + 3) as u32),
+                    _ => VertexEvent::TexturedMesh {
+                        vertices: (((seed >> 24) % 256 + 1) * 3) as u32,
+                        instances: ((seed >> 40) % 32 + 1) as u32,
+                    },
+                }
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn vertices_old(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u32, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count.saturating_add(4 * instances),
+            VertexEvent::Mesh(vertices) => count.saturating_add(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count.saturating_add((vertices / 3).saturating_mul(instances)),
+        });
+        u64::from(count)
+    }
+
+    #[must_use]
+    pub fn vertices_new(events: &[VertexEvent]) -> u64 {
+        let count = events.iter().fold(0_u64, |count, event| match *event {
+            VertexEvent::Sprite(instances) => count + 4 * u64::from(instances),
+            VertexEvent::Mesh(vertices) => count + u64::from(vertices),
+            VertexEvent::TexturedMesh {
+                vertices,
+                instances,
+            } => count + u64::from(vertices / 3) * u64::from(instances),
+        });
+        u64::from(clamp_vertex_count(count))
+    }
+
+    fn filter_checksum(
+        handles: &[TextureHandle],
+        mut apply: impl FnMut(&mut SamplerFilter, TextureHandle) -> SamplerFilter,
+    ) -> u64 {
+        let mut current = SamplerFilter::Linear;
+        handles.iter().fold(0_u64, |checksum, &handle| {
+            let filter = apply(&mut current, handle);
+            checksum
+                .wrapping_mul(257)
+                .wrapping_add((filter == SamplerFilter::Nearest) as u64)
+        })
+    }
+
+    fn state_checksum(
+        events: &[StateEvent],
+        mut apply: impl FnMut(&mut Option<BlendMode>, &mut Option<bool>, StateEvent),
+    ) -> u64 {
+        let mut blend = None;
+        let mut depth = None;
+        events.iter().copied().fold(0_u64, |checksum, event| {
+            apply(&mut blend, &mut depth, event);
+            checksum
+                .wrapping_mul(257)
+                .wrapping_add(event.blend as u64)
+                .wrapping_add((event.depth as u64) << 8)
+        })
+    }
+
+    #[inline(always)]
+    fn wanted_filter(handle: TextureHandle) -> SamplerFilter {
+        if deadlib_render_core::render_target_uses_nearest(handle) {
+            SamplerFilter::Nearest
+        } else {
+            SamplerFilter::Linear
+        }
+    }
+
+    #[inline(never)]
+    fn mock_driver_write(filter: SamplerFilter) {
+        black_box(filter);
+    }
+
+    #[inline(never)]
+    fn mock_state_write(value: u64) {
+        black_box(value);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        GlApi, GlPath, GlVersion, base_instance_capability, parse_gl_version, surface_extent,
+        GlApi, GlPath, GlVersion, SamplerFilter, base_instance_capability,
+        changed_render_target_filter, clamp_vertex_count, gl_state_update, parse_gl_version,
+        surface_extent,
     };
+    use deadlib_render_core::{render_target_sample_handle, render_target_texture_handle};
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
@@ -3600,6 +3833,50 @@ mod tests {
         assert_eq!(surface_extent(0, 0).1.get(), 1);
         assert_eq!(surface_extent(1920, 1080).0.get(), 1920);
         assert_eq!(surface_extent(1920, 1080).1.get(), 1080);
+    }
+
+    #[test]
+    fn render_target_filter_changes_only_when_sampling_changes() {
+        let target = render_target_texture_handle(3);
+        let nearest = render_target_sample_handle(target, true);
+
+        assert_eq!(
+            changed_render_target_filter(SamplerFilter::Linear, target),
+            None
+        );
+        assert_eq!(
+            changed_render_target_filter(SamplerFilter::Linear, nearest),
+            Some(SamplerFilter::Nearest)
+        );
+        assert_eq!(
+            changed_render_target_filter(SamplerFilter::Nearest, nearest),
+            None
+        );
+        assert_eq!(
+            changed_render_target_filter(SamplerFilter::Nearest, target),
+            Some(SamplerFilter::Linear)
+        );
+        assert_eq!(
+            changed_render_target_filter(SamplerFilter::Linear, 42),
+            None
+        );
+    }
+
+    #[test]
+    fn gl_state_cache_emits_only_exact_transitions() {
+        let mut state = None;
+        assert!(gl_state_update(&mut state, 3_u8));
+        assert!(!gl_state_update(&mut state, 3_u8));
+        assert!(gl_state_update(&mut state, 7_u8));
+        assert!(!gl_state_update(&mut state, 7_u8));
+    }
+
+    #[test]
+    fn vertex_count_clamps_only_at_the_stats_boundary() {
+        assert_eq!(clamp_vertex_count(0), 0);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) - 1), u32::MAX - 1);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX)), u32::MAX);
+        assert_eq!(clamp_vertex_count(u64::from(u32::MAX) + 1), u32::MAX);
     }
 
     #[test]
