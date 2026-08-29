@@ -488,7 +488,12 @@ mod tests {
         let bass_events = events
             .iter()
             .copied()
-            .filter(|event| event.light.is_bass())
+            .filter(|event| {
+                matches!(
+                    event.light,
+                    CabinetLight::BassLeft | CabinetLight::BassRight
+                )
+            })
             .collect::<Vec<_>>();
 
         assert_eq!(bass_events.len(), 4);

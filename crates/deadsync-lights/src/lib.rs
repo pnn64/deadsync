@@ -19,6 +19,11 @@ use std::thread::{self, JoinHandle};
 const PLAYER_COUNT: usize = 2;
 const CABINET_COUNT: usize = 6;
 const BUTTON_COUNT: usize = 6;
+const CABINET_MASK: u8 = (1 << CABINET_COUNT) - 1;
+const BUTTON_MASK: u8 = (1 << BUTTON_COUNT) - 1;
+const MARQUEE_MASK: u8 = (1 << 4) - 1;
+const BASS_MASK: u8 = CABINET_MASK & !MARQUEE_MASK;
+const DIRECTION_BUTTON_MASK: u8 = (1 << 4) - 1;
 const BLINK_SECONDS: f32 = 0.1;
 const SERIAL_PORT_NAME_CAP: usize = 64;
 const TEST_AUTO_CYCLE_SECONDS: f32 = 1.0;
@@ -336,18 +341,8 @@ impl CabinetLight {
         }
     }
 
-    const fn is_marquee(self) -> bool {
-        matches!(
-            self,
-            Self::MarqueeUpperLeft
-                | Self::MarqueeUpperRight
-                | Self::MarqueeLowerLeft
-                | Self::MarqueeLowerRight
-        )
-    }
-
-    const fn is_bass(self) -> bool {
-        matches!(self, Self::BassLeft | Self::BassRight)
+    const fn bit(self) -> u8 {
+        1 << self.ix()
     }
 }
 
@@ -388,6 +383,10 @@ impl ButtonLight {
             Self::Start => 4,
             Self::Select => 5,
         }
+    }
+
+    const fn bit(self) -> u8 {
+        1 << self.ix()
     }
 }
 
@@ -483,44 +482,91 @@ pub struct HideFlags {
     pub bass: bool,
 }
 
+const fn hidden_cabinet_mask(joined: [bool; PLAYER_COUNT], hide: [HideFlags; PLAYER_COUNT]) -> u8 {
+    let mut mask = 0;
+    let mut player = 0;
+    while player < PLAYER_COUNT {
+        if joined[player] {
+            if hide[player].all {
+                return CABINET_MASK;
+            }
+            if hide[player].marquee {
+                mask |= MARQUEE_MASK;
+            }
+            if hide[player].bass {
+                mask |= BASS_MASK;
+            }
+        }
+        player += 1;
+    }
+    mask
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct State {
-    cabinet: [bool; CABINET_COUNT],
-    buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
-    menu_buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+    cabinet: u8,
+    buttons: [u8; PLAYER_COUNT],
+    menu_buttons: [u8; PLAYER_COUNT],
 }
 
 impl State {
     #[must_use]
     pub const fn cabinet(self, light: CabinetLight) -> bool {
-        self.cabinet[light.ix()]
+        self.cabinet & light.bit() != 0
     }
 
     #[must_use]
     pub const fn button(self, player: Player, button: ButtonLight) -> bool {
-        self.buttons[player.ix()][button.ix()]
+        self.buttons[player.ix()] & button.bit() != 0
     }
 
     #[must_use]
     pub const fn menu_button(self, player: Player, button: ButtonLight) -> bool {
-        self.menu_buttons[player.ix()][button.ix()]
+        self.menu_buttons[player.ix()] & button.bit() != 0
     }
 
     const fn set_cabinet(&mut self, light: CabinetLight, on: bool) {
-        self.cabinet[light.ix()] = on;
+        set_flag(&mut self.cabinet, light.bit(), on);
     }
 
     const fn set_button(&mut self, player: Player, button: ButtonLight, on: bool) {
-        self.buttons[player.ix()][button.ix()] = on;
+        set_flag(&mut self.buttons[player.ix()], button.bit(), on);
     }
 
     const fn set_menu_button(&mut self, player: Player, button: ButtonLight, on: bool) {
-        self.menu_buttons[player.ix()][button.ix()] = on;
+        set_flag(&mut self.menu_buttons[player.ix()], button.bit(), on);
     }
 
     const fn set_any_button(&mut self, player: Player, button: ButtonLight, on: bool) {
         self.set_button(player, button, on);
         self.set_menu_button(player, button, on);
+    }
+}
+
+const fn set_flag(bits: &mut u8, flag: u8, on: bool) {
+    if on {
+        *bits |= flag;
+    } else {
+        *bits &= !flag;
+    }
+}
+
+const fn merge_pressed(
+    state: &mut State,
+    buttons: [u8; PLAYER_COUNT],
+    menu_buttons: [u8; PLAYER_COUNT],
+    chart_drives_directions: bool,
+) {
+    let button_mask = if chart_drives_directions {
+        BUTTON_MASK & !DIRECTION_BUTTON_MASK
+    } else {
+        BUTTON_MASK
+    };
+    let mut player = 0;
+    while player < PLAYER_COUNT {
+        state.buttons[player] |= buttons[player] & button_mask;
+        state.menu_buttons[player] |= menu_buttons[player] & BUTTON_MASK;
+        player += 1;
     }
 }
 
@@ -542,8 +588,9 @@ pub struct Manager {
     mode: Mode,
     joined: [bool; PLAYER_COUNT],
     hide: [HideFlags; PLAYER_COUNT],
-    button_pressed: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
-    menu_button_pressed: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+    hidden_cabinet: u8,
+    button_pressed: [u8; PLAYER_COUNT],
+    menu_button_pressed: [u8; PLAYER_COUNT],
     button_blink: [[f32; BUTTON_COUNT]; PLAYER_COUNT],
     cabinet_blink: [f32; CABINET_COUNT],
     test_auto_seconds: f32,
@@ -568,8 +615,9 @@ impl Manager {
             mode: Mode::Attract,
             joined: [false; PLAYER_COUNT],
             hide: [HideFlags::default(); PLAYER_COUNT],
-            button_pressed: [[false; BUTTON_COUNT]; PLAYER_COUNT],
-            menu_button_pressed: [[false; BUTTON_COUNT]; PLAYER_COUNT],
+            hidden_cabinet: 0,
+            button_pressed: [0; PLAYER_COUNT],
+            menu_button_pressed: [0; PLAYER_COUNT],
             button_blink: [[0.0; BUTTON_COUNT]; PLAYER_COUNT],
             cabinet_blink: [0.0; CABINET_COUNT],
             test_auto_seconds: 0.0,
@@ -640,14 +688,16 @@ impl Manager {
 
     pub const fn set_joined(&mut self, joined: [bool; PLAYER_COUNT]) {
         self.joined = joined;
+        self.hidden_cabinet = hidden_cabinet_mask(self.joined, self.hide);
     }
 
     pub const fn set_hide_flags(&mut self, hide: [HideFlags; PLAYER_COUNT]) {
         self.hide = hide;
+        self.hidden_cabinet = hidden_cabinet_mask(self.joined, self.hide);
     }
 
     pub const fn set_button_pressed(&mut self, player: Player, button: ButtonLight, pressed: bool) {
-        self.button_pressed[player.ix()][button.ix()] = pressed;
+        set_flag(&mut self.button_pressed[player.ix()], button.bit(), pressed);
     }
 
     pub const fn set_menu_button_pressed(
@@ -656,12 +706,16 @@ impl Manager {
         button: ButtonLight,
         pressed: bool,
     ) {
-        self.menu_button_pressed[player.ix()][button.ix()] = pressed;
+        set_flag(
+            &mut self.menu_button_pressed[player.ix()],
+            button.bit(),
+            pressed,
+        );
     }
 
     pub const fn clear_button_pressed(&mut self) {
-        self.button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
-        self.menu_button_pressed = [[false; BUTTON_COUNT]; PLAYER_COUNT];
+        self.button_pressed = [0; PLAYER_COUNT];
+        self.menu_button_pressed = [0; PLAYER_COUNT];
     }
 
     pub const fn clear_blinks(&mut self) {
@@ -731,12 +785,12 @@ impl Manager {
 
     fn build_gameplay(&self, state: &mut State) {
         for light in MARQUEE_LIGHTS {
-            if self.cabinet_blink[light.ix()] > 0.0 && !self.hidden(light) {
+            if self.cabinet_blink[light.ix()] > 0.0 && self.hidden_cabinet & light.bit() == 0 {
                 state.set_cabinet(light, true);
             }
         }
         for light in BASS_LIGHTS {
-            if self.cabinet_blink[light.ix()] > 0.0 && !self.hidden(light) {
+            if self.cabinet_blink[light.ix()] > 0.0 && self.hidden_cabinet & light.bit() == 0 {
                 state.set_cabinet(light, true);
             }
         }
@@ -781,46 +835,18 @@ impl Manager {
         state.set_any_button(player, button, true);
     }
 
-    fn hidden(&self, light: CabinetLight) -> bool {
-        self.joined.iter().zip(self.hide).any(|(joined, hide)| {
-            *joined
-                && (hide.all
-                    || (hide.marquee && light.is_marquee())
-                    || (hide.bass && light.is_bass()))
-        })
-    }
-
     fn apply_physical_buttons(&self, state: &mut State) {
         if matches!(self.mode, Mode::TestAutoCycle | Mode::TestManualCycle) {
             return;
         }
         let chart_pad_lights =
             self.mode == Mode::Gameplay && self.gameplay_pad_lights == GameplayPadLightMode::Chart;
-        for player in [Player::P1, Player::P2] {
-            for button in [
-                ButtonLight::Left,
-                ButtonLight::Down,
-                ButtonLight::Up,
-                ButtonLight::Right,
-                ButtonLight::Start,
-                ButtonLight::Select,
-            ] {
-                let chart_drives_pad = chart_pad_lights
-                    && matches!(
-                        button,
-                        ButtonLight::Left
-                            | ButtonLight::Down
-                            | ButtonLight::Up
-                            | ButtonLight::Right
-                    );
-                if !chart_drives_pad && self.button_pressed[player.ix()][button.ix()] {
-                    state.set_button(player, button, true);
-                }
-                if self.menu_button_pressed[player.ix()][button.ix()] {
-                    state.set_menu_button(player, button, true);
-                }
-            }
-        }
+        merge_pressed(
+            state,
+            self.button_pressed,
+            self.menu_button_pressed,
+            chart_pad_lights,
+        );
     }
 
     fn push_state(&mut self, state: State) {
@@ -994,6 +1020,285 @@ pub fn parse_gameplay_pad_lights_or_default(
         warn!("Ignoring unknown GameplayPadLights value '{raw}'");
         default
     })
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{
+        BUTTON_COUNT, BUTTON_MASK, CABINET_COUNT, CABINET_MASK, CabinetLight, HideFlags,
+        PLAYER_COUNT, State, hidden_cabinet_mask, merge_pressed,
+    };
+
+    #[derive(Clone, Copy, Default, PartialEq, Eq)]
+    struct LegacyState {
+        cabinet: [bool; CABINET_COUNT],
+        buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+        menu_buttons: [[bool; BUTTON_COUNT]; PLAYER_COUNT],
+    }
+
+    pub struct StateFixture {
+        old: Vec<LegacyState>,
+        new: Vec<State>,
+    }
+
+    pub struct PressedFixture {
+        old_buttons: Vec<[[bool; BUTTON_COUNT]; PLAYER_COUNT]>,
+        old_menu_buttons: Vec<[[bool; BUTTON_COUNT]; PLAYER_COUNT]>,
+        new_buttons: Vec<[u8; PLAYER_COUNT]>,
+        new_menu_buttons: Vec<[u8; PLAYER_COUNT]>,
+        chart_drives_directions: Vec<bool>,
+    }
+
+    pub struct HideFixture {
+        joined: Vec<[bool; PLAYER_COUNT]>,
+        hide: Vec<[HideFlags; PLAYER_COUNT]>,
+        hidden: Vec<u8>,
+    }
+
+    #[must_use]
+    pub const fn legacy_state_size() -> usize {
+        std::mem::size_of::<LegacyState>()
+    }
+
+    #[must_use]
+    pub const fn state_size() -> usize {
+        std::mem::size_of::<State>()
+    }
+
+    #[must_use]
+    pub fn state_fixture(patterns: &[u32]) -> StateFixture {
+        let mut old = Vec::with_capacity(patterns.len());
+        let mut new = Vec::with_capacity(patterns.len());
+        for &pattern in patterns {
+            let cabinet = pattern as u8 & CABINET_MASK;
+            let buttons = [
+                (pattern >> CABINET_COUNT) as u8 & BUTTON_MASK,
+                (pattern >> (CABINET_COUNT + BUTTON_COUNT)) as u8 & BUTTON_MASK,
+            ];
+            let menu_buttons = [
+                (pattern >> (CABINET_COUNT + BUTTON_COUNT * 2)) as u8 & BUTTON_MASK,
+                (pattern >> (CABINET_COUNT + BUTTON_COUNT * 3)) as u8 & BUTTON_MASK,
+            ];
+            old.push(legacy_state(cabinet, buttons, menu_buttons));
+            new.push(State {
+                cabinet,
+                buttons,
+                menu_buttons,
+            });
+        }
+        StateFixture { old, new }
+    }
+
+    #[must_use]
+    pub fn state_scan_old(fixture: &StateFixture) -> u64 {
+        let mut last = LegacyState::default();
+        let mut checksum = 0_u64;
+        for &state in &fixture.old {
+            checksum = checksum
+                .wrapping_mul(33)
+                .wrapping_add(u64::from(state != last))
+                .wrapping_add(u64::from(state.cabinet[0]));
+            last = state;
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn state_scan_new(fixture: &StateFixture) -> u64 {
+        let mut last = State::default();
+        let mut checksum = 0_u64;
+        for &state in &fixture.new {
+            checksum = checksum
+                .wrapping_mul(33)
+                .wrapping_add(u64::from(state != last))
+                .wrapping_add(u64::from(state.cabinet(CabinetLight::MarqueeUpperLeft)));
+            last = state;
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn pressed_fixture(patterns: &[(u16, u16, bool)]) -> PressedFixture {
+        let mut old_buttons = Vec::with_capacity(patterns.len());
+        let mut old_menu_buttons = Vec::with_capacity(patterns.len());
+        let mut new_buttons = Vec::with_capacity(patterns.len());
+        let mut new_menu_buttons = Vec::with_capacity(patterns.len());
+        let mut chart_drives_directions = Vec::with_capacity(patterns.len());
+        for &(buttons, menu_buttons, chart) in patterns {
+            let button_masks = [
+                buttons as u8 & BUTTON_MASK,
+                (buttons >> 8) as u8 & BUTTON_MASK,
+            ];
+            let menu_masks = [
+                menu_buttons as u8 & BUTTON_MASK,
+                (menu_buttons >> 8) as u8 & BUTTON_MASK,
+            ];
+            old_buttons.push(legacy_buttons(button_masks));
+            old_menu_buttons.push(legacy_buttons(menu_masks));
+            new_buttons.push(button_masks);
+            new_menu_buttons.push(menu_masks);
+            chart_drives_directions.push(chart);
+        }
+        PressedFixture {
+            old_buttons,
+            old_menu_buttons,
+            new_buttons,
+            new_menu_buttons,
+            chart_drives_directions,
+        }
+    }
+
+    #[must_use]
+    pub fn pressed_merge_old(fixture: &PressedFixture) -> u64 {
+        let mut checksum = 0_u64;
+        for case in 0..fixture.old_buttons.len() {
+            let mut state = LegacyState::default();
+            for player in 0..PLAYER_COUNT {
+                for button in 0..BUTTON_COUNT {
+                    if fixture.old_buttons[case][player][button]
+                        && (!fixture.chart_drives_directions[case] || button >= 4)
+                    {
+                        state.buttons[player][button] = true;
+                    }
+                    if fixture.old_menu_buttons[case][player][button] {
+                        state.menu_buttons[player][button] = true;
+                    }
+                }
+            }
+            checksum = checksum.wrapping_mul(1_099_511_628_211) ^ legacy_bits(&state);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn pressed_merge_new(fixture: &PressedFixture) -> u64 {
+        let mut checksum = 0_u64;
+        for case in 0..fixture.new_buttons.len() {
+            let mut state = State::default();
+            merge_pressed(
+                &mut state,
+                fixture.new_buttons[case],
+                fixture.new_menu_buttons[case],
+                fixture.chart_drives_directions[case],
+            );
+            checksum = checksum.wrapping_mul(1_099_511_628_211) ^ state_bits(state);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn hide_fixture(
+        cases: &[([bool; PLAYER_COUNT], [HideFlags; PLAYER_COUNT])],
+    ) -> HideFixture {
+        let mut joined = Vec::with_capacity(cases.len());
+        let mut hide = Vec::with_capacity(cases.len());
+        let mut hidden = Vec::with_capacity(cases.len());
+        for &(case_joined, case_hide) in cases {
+            joined.push(case_joined);
+            hide.push(case_hide);
+            hidden.push(hidden_cabinet_mask(case_joined, case_hide));
+        }
+        HideFixture {
+            joined,
+            hide,
+            hidden,
+        }
+    }
+
+    #[must_use]
+    pub fn hide_scan_old(fixture: &HideFixture) -> u64 {
+        let mut checksum = 0_u64;
+        for case in 0..fixture.joined.len() {
+            let mut visible = 0_u8;
+            for light in super::TEST_CABINET_LIGHTS {
+                if !legacy_hidden(light, fixture.joined[case], fixture.hide[case]) {
+                    visible |= light.bit();
+                }
+            }
+            checksum = checksum.wrapping_mul(257).wrapping_add(u64::from(visible));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn hide_scan_new(fixture: &HideFixture) -> u64 {
+        let mut checksum = 0_u64;
+        for &hidden in &fixture.hidden {
+            let mut visible = 0_u8;
+            for light in super::TEST_CABINET_LIGHTS {
+                if hidden & light.bit() == 0 {
+                    visible |= light.bit();
+                }
+            }
+            checksum = checksum.wrapping_mul(257).wrapping_add(u64::from(visible));
+        }
+        checksum
+    }
+
+    fn legacy_state(
+        cabinet: u8,
+        buttons: [u8; PLAYER_COUNT],
+        menu_buttons: [u8; PLAYER_COUNT],
+    ) -> LegacyState {
+        let mut state = LegacyState::default();
+        for light in 0..CABINET_COUNT {
+            state.cabinet[light] = cabinet & (1 << light) != 0;
+        }
+        state.buttons = legacy_buttons(buttons);
+        state.menu_buttons = legacy_buttons(menu_buttons);
+        state
+    }
+
+    fn legacy_buttons(masks: [u8; PLAYER_COUNT]) -> [[bool; BUTTON_COUNT]; PLAYER_COUNT] {
+        let mut buttons = [[false; BUTTON_COUNT]; PLAYER_COUNT];
+        for (player, player_buttons) in buttons.iter_mut().enumerate() {
+            for (button, on) in player_buttons.iter_mut().enumerate() {
+                *on = masks[player] & (1 << button) != 0;
+            }
+        }
+        buttons
+    }
+
+    fn legacy_bits(state: &LegacyState) -> u64 {
+        let mut bits = 0_u64;
+        for player in 0..PLAYER_COUNT {
+            for button in 0..BUTTON_COUNT {
+                bits |=
+                    u64::from(state.buttons[player][button]) << (player * BUTTON_COUNT + button);
+                bits |= u64::from(state.menu_buttons[player][button])
+                    << (BUTTON_COUNT * 2 + player * BUTTON_COUNT + button);
+            }
+        }
+        bits
+    }
+
+    fn state_bits(state: State) -> u64 {
+        u64::from(state.buttons[0])
+            | (u64::from(state.buttons[1]) << BUTTON_COUNT)
+            | (u64::from(state.menu_buttons[0]) << (BUTTON_COUNT * 2))
+            | (u64::from(state.menu_buttons[1]) << (BUTTON_COUNT * 3))
+    }
+
+    fn legacy_hidden(
+        light: CabinetLight,
+        joined: [bool; PLAYER_COUNT],
+        hide: [HideFlags; PLAYER_COUNT],
+    ) -> bool {
+        joined.into_iter().zip(hide).any(|(joined, flags)| {
+            joined
+                && (flags.all
+                    || (flags.marquee
+                        && matches!(
+                            light,
+                            CabinetLight::MarqueeUpperLeft
+                                | CabinetLight::MarqueeUpperRight
+                                | CabinetLight::MarqueeLowerLeft
+                                | CabinetLight::MarqueeLowerRight
+                        ))
+                    || (flags.bass
+                        && matches!(light, CabinetLight::BassLeft | CabinetLight::BassRight)))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1211,6 +1516,42 @@ mod tests {
         lights.set_joined([true, false]);
         let hidden = lights.build_state(0.0);
         assert!(!hidden.cabinet(CabinetLight::MarqueeUpperLeft));
+
+        lights.set_joined([false, false]);
+        assert!(
+            lights
+                .build_state(0.0)
+                .cabinet(CabinetLight::MarqueeUpperLeft)
+        );
+
+        lights.set_joined([true, false]);
+        lights.set_hide_flags([HideFlags::default(); PLAYER_COUNT]);
+        assert!(
+            lights
+                .build_state(0.0)
+                .cabinet(CabinetLight::MarqueeUpperLeft)
+        );
+    }
+
+    #[test]
+    fn compact_state_keeps_light_domains_independent() {
+        assert_eq!(std::mem::size_of::<State>(), 5);
+
+        let mut state = State::default();
+        state.set_cabinet(CabinetLight::BassRight, true);
+        state.set_button(Player::P1, ButtonLight::Left, true);
+        state.set_menu_button(Player::P2, ButtonLight::Select, true);
+
+        assert!(state.cabinet(CabinetLight::BassRight));
+        assert!(!state.cabinet(CabinetLight::BassLeft));
+        assert!(state.button(Player::P1, ButtonLight::Left));
+        assert!(!state.menu_button(Player::P1, ButtonLight::Left));
+        assert!(state.menu_button(Player::P2, ButtonLight::Select));
+
+        state.set_button(Player::P1, ButtonLight::Left, false);
+        assert!(!state.button(Player::P1, ButtonLight::Left));
+        assert!(state.cabinet(CabinetLight::BassRight));
+        assert!(state.menu_button(Player::P2, ButtonLight::Select));
     }
 
     #[test]
@@ -1232,6 +1573,30 @@ mod tests {
         let chart = lights.build_state(0.0);
         assert!(!chart.button(Player::P1, ButtonLight::Left));
         assert!(chart.button(Player::P1, ButtonLight::Right));
+    }
+
+    #[test]
+    fn chart_lights_only_suppress_physical_directions() {
+        let mut lights = Manager::new(
+            DriverKind::Off,
+            DEFAULT_LITBOARD_PORT,
+            PacDriveLightOrdering::default(),
+        );
+        lights.set_mode(Mode::Gameplay);
+        lights.set_gameplay_pad_lights(GameplayPadLightMode::Chart);
+        lights.set_button_pressed(Player::P1, ButtonLight::Left, true);
+        lights.set_button_pressed(Player::P1, ButtonLight::Start, true);
+        lights.set_menu_button_pressed(Player::P2, ButtonLight::Up, true);
+
+        let state = lights.build_state(0.0);
+        assert!(!state.button(Player::P1, ButtonLight::Left));
+        assert!(state.button(Player::P1, ButtonLight::Start));
+        assert!(state.menu_button(Player::P2, ButtonLight::Up));
+
+        lights.clear_button_pressed();
+        let cleared = lights.build_state(0.0);
+        assert!(!cleared.button(Player::P1, ButtonLight::Start));
+        assert!(!cleared.menu_button(Player::P2, ButtonLight::Up));
     }
 
     #[test]

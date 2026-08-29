@@ -31,6 +31,14 @@ hidapi = { version = "2.6.6", default-features = false }
 [target.'cfg(target_os = "macos")'.dependencies]
 hidapi = { version = "2.6.6", default-features = false }
 
+[features]
+bench-support = []
+
+[[bench]]
+name = "lighting_frame_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
