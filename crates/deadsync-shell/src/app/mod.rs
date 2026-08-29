@@ -8271,7 +8271,7 @@ impl App {
                     self.dynamic_media.set_gameplay_background_keys(
                         &mut self.asset_manager,
                         backend,
-                        deadsync_assets::dynamic_media::gameplay_media_keys(
+                        deadsync_assets::dynamic_media::gameplay_media_key_set(
                             gs.song(),
                             &gs.background_changes,
                         ),
@@ -8716,7 +8716,7 @@ impl App {
                     self.dynamic_media.set_gameplay_background_keys(
                         &mut self.asset_manager,
                         backend,
-                        deadsync_assets::dynamic_media::gameplay_media_keys(
+                        deadsync_assets::dynamic_media::gameplay_media_key_set(
                             gs.song(),
                             &gs.background_changes,
                         ),

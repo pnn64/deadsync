@@ -1179,18 +1179,13 @@ impl DynamicMedia {
         }
     }
 
-    pub fn set_gameplay_background_keys<I>(
+    pub fn set_gameplay_background_keys(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        keys: I,
-    ) where
-        I: IntoIterator<Item = String>,
-    {
-        let stale = replace_texture_key_set(
-            &mut self.gameplay_background_keys,
-            keys.into_iter().collect(),
-        );
+        keys: FxHashSet<String>,
+    ) {
+        let stale = replace_texture_key_set(&mut self.gameplay_background_keys, keys);
         for key in stale {
             self.release_texture_key(assets, backend, key);
         }

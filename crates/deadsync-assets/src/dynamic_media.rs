@@ -109,16 +109,17 @@ where
         .collect()
 }
 
-#[must_use]
-pub fn stale_texture_keys(current: &FxHashSet<String>, next: &FxHashSet<String>) -> Vec<String> {
-    current.difference(next).cloned().collect()
-}
-
 pub fn replace_texture_key_set(
     current: &mut FxHashSet<String>,
     next: FxHashSet<String>,
 ) -> Vec<String> {
-    let stale = stale_texture_keys(current, &next);
+    let stale_count = current.iter().filter(|key| !next.contains(*key)).count();
+    if stale_count == 0 {
+        *current = next;
+        return Vec::new();
+    }
+    let mut stale = Vec::with_capacity(stale_count);
+    stale.extend(current.extract_if(|key| !next.contains(key)));
     *current = next;
     stale
 }
@@ -131,83 +132,79 @@ pub fn dynamic_video_path_in_set(path: &Path, desired_paths: &[&Path]) -> bool {
             .any(|desired| path == *desired && dynamic::is_dynamic_video_path(desired))
 }
 
-pub fn push_gameplay_media_paths<'a>(
-    out: &mut Vec<&'a PathBuf>,
+fn for_each_gameplay_media_path<'a>(
     song: &'a SongData,
     gameplay_background_changes: &'a [SongBackgroundChange],
+    mut visit: impl FnMut(&'a PathBuf),
 ) {
     if let Some(path) = song.background_path.as_ref() {
-        out.push(path);
+        visit(path);
     }
     for change in gameplay_background_changes {
-        push_bgchange_paths(out, change);
+        visit_bgchange_paths(change, &mut visit);
     }
     for change in &song.background_layer2_changes {
-        push_bgchange_paths(out, change);
+        visit_bgchange_paths(change, &mut visit);
     }
     for change in &song.foreground_changes {
-        out.push(&change.path);
+        visit(&change.path);
     }
 }
 
 #[must_use]
-pub const fn gameplay_media_paths_capacity(
+fn gameplay_media_path_capacity(
     song: &SongData,
     gameplay_background_changes: &[SongBackgroundChange],
 ) -> usize {
+    let second_files = gameplay_background_changes
+        .iter()
+        .chain(&song.background_layer2_changes)
+        .filter(|change| change.file2.is_some())
+        .count();
     1usize
         .saturating_add(gameplay_background_changes.len())
         .saturating_add(song.background_layer2_changes.len())
         .saturating_add(song.foreground_changes.len())
+        .saturating_add(second_files)
 }
 
 #[must_use]
-pub fn gameplay_media_keys(
-    song: &SongData,
-    gameplay_background_changes: &[SongBackgroundChange],
-) -> Vec<String> {
-    let mut keys = Vec::with_capacity(gameplay_media_paths_capacity(
+pub fn gameplay_media_paths<'a>(
+    song: &'a SongData,
+    gameplay_background_changes: &'a [SongBackgroundChange],
+) -> Vec<&'a PathBuf> {
+    let mut paths = Vec::with_capacity(gameplay_media_path_capacity(
         song,
         gameplay_background_changes,
     ));
-    push_gameplay_media_keys(&mut keys, song, gameplay_background_changes);
+    for_each_gameplay_media_path(song, gameplay_background_changes, |path| paths.push(path));
+    paths
+}
+
+#[must_use]
+pub fn gameplay_media_key_set(
+    song: &SongData,
+    gameplay_background_changes: &[SongBackgroundChange],
+) -> FxHashSet<String> {
+    let mut keys = FxHashSet::with_capacity_and_hasher(
+        gameplay_media_path_capacity(song, gameplay_background_changes),
+        rustc_hash::FxBuildHasher,
+    );
+    for_each_gameplay_media_path(song, gameplay_background_changes, |path| {
+        let key = path.to_string_lossy();
+        if !keys.contains(key.as_ref()) {
+            keys.insert(key.into_owned());
+        }
+    });
     keys
 }
 
-pub fn push_gameplay_media_keys(
-    out: &mut Vec<String>,
-    song: &SongData,
-    gameplay_background_changes: &[SongBackgroundChange],
-) {
-    if let Some(path) = song.background_path.as_ref() {
-        out.push(path_texture_key(path));
-    }
-    for change in gameplay_background_changes {
-        push_bgchange_keys(out, change);
-    }
-    for change in &song.background_layer2_changes {
-        push_bgchange_keys(out, change);
-    }
-    for change in &song.foreground_changes {
-        out.push(path_texture_key(&change.path));
-    }
-}
-
-fn push_bgchange_paths<'a>(out: &mut Vec<&'a PathBuf>, change: &'a SongBackgroundChange) {
+fn visit_bgchange_paths<'a>(change: &'a SongBackgroundChange, visit: &mut impl FnMut(&'a PathBuf)) {
     if let SongBackgroundChangeTarget::File(path) = &change.target {
-        out.push(path);
+        visit(path);
     }
     if let Some(path) = change.file2.as_ref() {
-        out.push(path);
-    }
-}
-
-fn push_bgchange_keys(out: &mut Vec<String>, change: &SongBackgroundChange) {
-    if let SongBackgroundChangeTarget::File(path) = &change.target {
-        out.push(path_texture_key(path));
-    }
-    if let Some(path) = change.file2.as_ref() {
-        out.push(path_texture_key(path));
+        visit(path);
     }
 }
 
@@ -500,7 +497,7 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn gameplay_media_keys_include_song_and_bgchange_paths() {
+    fn gameplay_media_key_set_includes_song_and_bgchange_paths() {
         let mut song = test_song();
         song.background_path = Some(PathBuf::from("base.png"));
         song.background_layer2_changes.push({
@@ -515,26 +512,30 @@ mod tests {
             start_beat: 16.0,
             path: "fg.png".into(),
         });
-        let gameplay_changes = vec![{
+        let mut gameplay_changes = vec![{
             let mut change =
                 SongBackgroundChange::new(4.0, SongBackgroundChangeTarget::File("game.png".into()));
             change.file2 = Some("game2.png".into());
             change
         }];
+        gameplay_changes.push(SongBackgroundChange::new(
+            12.0,
+            SongBackgroundChangeTarget::File("game.png".into()),
+        ));
 
-        let keys = gameplay_media_keys(&song, &gameplay_changes);
+        let keys = gameplay_media_key_set(&song, &gameplay_changes);
 
-        assert_eq!(
-            keys,
-            vec![
-                "base.png",
-                "game.png",
-                "game2.png",
-                "layer.png",
-                "layer2.png",
-                "fg.png",
-            ]
-        );
+        assert_eq!(keys.len(), 6);
+        for expected in [
+            "base.png",
+            "game.png",
+            "game2.png",
+            "layer.png",
+            "layer2.png",
+            "fg.png",
+        ] {
+            assert!(keys.contains(expected));
+        }
     }
 
     #[test]
@@ -562,26 +563,27 @@ mod tests {
     }
 
     #[test]
-    fn gameplay_media_paths_match_key_order() {
+    fn gameplay_media_paths_match_order_and_exact_capacity() {
         let mut song = test_song();
         song.background_path = Some(PathBuf::from("base.png"));
         song.foreground_changes.push(SongForegroundChange {
             start_beat: 16.0,
             path: "fg.png".into(),
         });
-        let gameplay_changes = vec![SongBackgroundChange::new(
-            4.0,
-            SongBackgroundChangeTarget::File("game.png".into()),
-        )];
-        let mut paths = Vec::new();
-
-        push_gameplay_media_paths(&mut paths, &song, &gameplay_changes);
+        let gameplay_changes = vec![{
+            let mut change =
+                SongBackgroundChange::new(4.0, SongBackgroundChangeTarget::File("game.png".into()));
+            change.file2 = Some("mask.png".into());
+            change
+        }];
+        let paths = gameplay_media_paths(&song, &gameplay_changes);
 
         let keys: Vec<_> = paths
             .iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(keys, vec!["base.png", "game.png", "fg.png"]);
+        assert_eq!(keys, vec!["base.png", "game.png", "mask.png", "fg.png"]);
+        assert_eq!(paths.capacity(), paths.len());
     }
 
     #[test]
@@ -647,6 +649,21 @@ mod tests {
         assert!(current.contains("b.png"));
         assert!(current.contains("c.png"));
         assert!(!current.contains("a.png"));
+    }
+
+    #[test]
+    fn replace_texture_key_set_returns_empty_for_same_membership() {
+        let mut current = ["a.png".to_string(), "b.png".to_string()]
+            .into_iter()
+            .collect::<FxHashSet<_>>();
+        let next = current.clone();
+
+        let stale = replace_texture_key_set(&mut current, next);
+
+        assert!(stale.is_empty());
+        assert_eq!(current.len(), 2);
+        assert!(current.contains("a.png"));
+        assert!(current.contains("b.png"));
     }
 
     #[test]

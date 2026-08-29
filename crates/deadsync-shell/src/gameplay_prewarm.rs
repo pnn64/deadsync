@@ -88,15 +88,7 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
         );
     }
 
-    let mut media_paths = Vec::with_capacity(
-        deadsync_assets::dynamic_media::gameplay_media_paths_capacity(song, background_changes),
-    );
-    deadsync_assets::dynamic_media::push_gameplay_media_paths(
-        &mut media_paths,
-        song,
-        background_changes,
-    );
-    for path in media_paths {
+    for path in deadsync_assets::dynamic_media::gameplay_media_paths(song, background_changes) {
         let key = path.to_string_lossy();
         if insert_texture_key(&mut seen, key.as_ref()) {
             media_cache::ensure_banner_texture(assets, backend, path);
