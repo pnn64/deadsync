@@ -11,7 +11,7 @@ use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_input::KeyCode;
@@ -19,7 +19,7 @@ use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayerSide;
 use deadsync_profile::favorites_view::unicode_case_insensitive_cmp;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -111,8 +111,49 @@ enum NavWrap {
 struct NameEntryState {
     mode: NameEntryMode,
     value: String,
+    presentation: NameEntryPresentation,
     error: Option<Arc<str>>,
     blink_t: f32,
+}
+
+#[derive(Clone, Debug)]
+struct NameEntryPresentation {
+    cursor_on: Arc<str>,
+    cursor_off: Arc<str>,
+}
+
+impl NameEntryPresentation {
+    fn new(value: &str) -> Self {
+        if value.chars().count() >= NAME_MAX_LEN {
+            let text = Arc::from(value);
+            return Self {
+                cursor_on: Arc::clone(&text),
+                cursor_off: text,
+            };
+        }
+        let mut cursor_on = String::with_capacity(value.len() + 1);
+        cursor_on.push_str(value);
+        cursor_on.push('_');
+        let mut cursor_off = String::with_capacity(value.len() + 1);
+        cursor_off.push_str(value);
+        cursor_off.push(' ');
+        Self {
+            cursor_on: Arc::from(cursor_on),
+            cursor_off: Arc::from(cursor_off),
+        }
+    }
+
+    fn sync(&mut self, value: &str) {
+        *self = Self::new(value);
+    }
+
+    fn text(&self, blink_t: f32) -> &Arc<str> {
+        if blink_t < 0.5 {
+            &self.cursor_on
+        } else {
+            &self.cursor_off
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -173,12 +214,45 @@ struct DeleteConfirmState {
 /// index `candidates.len()`) lets the user point at a portable install.
 struct ImportPickerState {
     candidates: Vec<crate::SimplyLoveItgProfileCandidate>,
+    /// Actor-ready names kept index-aligned with `candidates` by
+    /// `sync_candidate_labels` after every candidate-list mutation.
+    candidate_labels: Vec<Arc<str>>,
     selected: usize,
     /// Transient notice shown under the list (e.g. after a browse found nothing).
     info: Option<Arc<str>>,
+    presentation: ImportPickerPresentation,
+    /// Render-owned, picker-lifetime measurements. The first visible frame
+    /// warms this once; stable frames do no font lookup, allocation, eviction,
+    /// or destruction work. The picker is game-thread owned and bounded to five
+    /// scalar widths, so the worst miss is five short label measurements.
+    metrics: OnceLock<ImportPickerMetrics>,
 }
 
 impl ImportPickerState {
+    fn new(candidates: Vec<crate::SimplyLoveItgProfileCandidate>) -> Self {
+        let candidate_labels = candidates
+            .iter()
+            .map(|candidate| Arc::from(candidate.display_name.as_str()))
+            .collect();
+        Self {
+            candidates,
+            candidate_labels,
+            selected: 0,
+            info: None,
+            presentation: ImportPickerPresentation::new(),
+            metrics: OnceLock::new(),
+        }
+    }
+
+    fn sync_candidate_labels(&mut self) {
+        self.candidate_labels.clear();
+        self.candidate_labels.extend(
+            self.candidates
+                .iter()
+                .map(|candidate| Arc::from(candidate.display_name.as_str())),
+        );
+    }
+
     /// The index of the synthetic "Browse…" row.
     const fn browse_index(&self) -> usize {
         self.candidates.len()
@@ -195,6 +269,34 @@ impl ImportPickerState {
             .get(idx)
             .and_then(|candidate| candidate.imported_as.as_deref())
     }
+}
+
+struct ImportPickerPresentation {
+    title: Arc<str>,
+    prompt: Arc<str>,
+    browse: Arc<str>,
+    empty: Arc<str>,
+    tag: Arc<str>,
+}
+
+impl ImportPickerPresentation {
+    fn new() -> Self {
+        Self {
+            title: tr("Profiles", "ImportPickTitle"),
+            prompt: tr("Profiles", "ImportPickPrompt"),
+            browse: tr("Profiles", "ImportBrowseButton"),
+            empty: tr("Profiles", "ImportPickEmpty"),
+            tag: Arc::from(format!("✔ {}", tr("Profiles", "ImportTagImported"))),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ImportPickerMetrics {
+    widest_label: f32,
+    tag_w: f32,
+    title_w: f32,
+    footer_w: f32,
 }
 
 /// Theme-owned presentation state for a shell-owned import worker.
@@ -244,38 +346,38 @@ impl SectionStatus {
 /// One line in the import summary / message modal.
 enum MessageLine {
     /// A centered line (sub-heading, notes, error/canceled body) with its color.
-    Center { text: String, rgba: [f32; 4] },
+    Center { text: Arc<str>, rgba: [f32; 4] },
     /// A two-column ledger row: `label` on the left, a status icon + `status`
     /// text on the right.
     Row {
-        label: String,
-        status: String,
+        label: Arc<str>,
+        status: Arc<str>,
         kind: SectionStatus,
     },
 }
 
 impl MessageLine {
     /// A centered, full-white line (error/canceled bodies, sub-heading).
-    const fn plain(text: String) -> Self {
+    fn plain(text: impl Into<Arc<str>>) -> Self {
         Self::Center {
-            text,
+            text: text.into(),
             rgba: [1.0, 1.0, 1.0, 1.0],
         }
     }
 
     /// A centered, dimmed line (secondary notes / caveats).
-    const fn note(text: String) -> Self {
+    fn note(text: impl Into<Arc<str>>) -> Self {
         Self::Center {
-            text,
+            text: text.into(),
             rgba: [0.78, 0.78, 0.78, 1.0],
         }
     }
 
     /// A two-column ledger row.
-    const fn row(label: String, status: String, kind: SectionStatus) -> Self {
+    fn row(label: impl Into<Arc<str>>, status: impl Into<Arc<str>>, kind: SectionStatus) -> Self {
         Self::Row {
-            label,
-            status,
+            label: label.into(),
+            status: status.into(),
             kind,
         }
     }
@@ -286,6 +388,27 @@ impl MessageLine {
 struct ImportMessageState {
     title: Arc<str>,
     lines: Vec<MessageLine>,
+    /// Message-lifetime, render-owned measurements. It is populated on the
+    /// first modal frame and never pruned; the message owns at most three
+    /// scalar widths, so later frames have a bounded, allocation-free hit.
+    metrics: OnceLock<ImportMessageMetrics>,
+}
+
+impl ImportMessageState {
+    fn new(title: Arc<str>, lines: Vec<MessageLine>) -> Self {
+        Self {
+            title,
+            lines,
+            metrics: OnceLock::new(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ImportMessageMetrics {
+    widest_label: f32,
+    widest_status: f32,
+    icon_w: f32,
 }
 
 pub struct State {
@@ -567,9 +690,11 @@ fn cancel_name_entry(state: &mut State) {
 
 fn begin_name_entry_create(state: &mut State) {
     reset_nav_hold(state);
+    let value = default_new_profile_name(state);
     state.name_entry = Some(NameEntryState {
         mode: NameEntryMode::Create,
-        value: default_new_profile_name(state),
+        presentation: NameEntryPresentation::new(&value),
+        value,
         error: None,
         blink_t: 0.0,
     });
@@ -577,9 +702,11 @@ fn begin_name_entry_create(state: &mut State) {
 
 fn begin_name_entry_rename(state: &mut State, id: &str, display_name: &str) {
     reset_nav_hold(state);
+    let value = display_name.to_string();
     state.name_entry = Some(NameEntryState {
         mode: NameEntryMode::Rename { id: id.to_string() },
-        value: display_name.to_string(),
+        presentation: NameEntryPresentation::new(&value),
+        value,
         error: None,
         blink_t: 0.0,
     });
@@ -785,15 +912,9 @@ fn cancel_delete_confirm(state: &mut State) {
 
 fn begin_import_picker(state: &mut State) -> ThemeEffect {
     reset_nav_hold(state);
-    let candidates = Vec::new();
     // Always open the picker — even with nothing auto-detected — so the
     // "Browse for game directory…" row is available (no dead end).
-    let info = None;
-    state.import_picker = Some(ImportPickerState {
-        candidates,
-        selected: 0,
-        info,
-    });
+    state.import_picker = Some(ImportPickerState::new(Vec::new()));
     crate::effects::sfx_then(
         "assets/sounds/start.ogg",
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
@@ -897,6 +1018,7 @@ fn merge_import_candidates(
     picker
         .candidates
         .sort_by(|a, b| unicode_case_insensitive_cmp(&a.display_name, &b.display_name));
+    picker.sync_candidate_labels();
     added
 }
 
@@ -988,10 +1110,10 @@ fn finish_import(state: &mut State, outcome: Result<crate::SimplyLoveItgImportSu
             }
         }
         Err(error) => {
-            state.import_message = Some(ImportMessageState {
-                title: tr("Profiles", "ImportFailedTitle"),
-                lines: vec![MessageLine::plain(error)],
-            });
+            state.import_message = Some(ImportMessageState::new(
+                tr("Profiles", "ImportFailedTitle"),
+                vec![MessageLine::plain(error)],
+            ));
         }
     }
 }
@@ -1115,15 +1237,12 @@ fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> Import
     lines.push(MessageLine::note(
         tr("Profiles", "ImportSummaryExNote").to_string(),
     ));
-    ImportMessageState {
-        title: tr("Profiles", "ImportSummaryTitle"),
-        lines,
-    }
+    ImportMessageState::new(tr("Profiles", "ImportSummaryTitle"), lines)
 }
 
 /// Builds a ledger row from a label key and an already-resolved status string.
-fn section_row(label_key: &str, status: impl Into<String>, kind: SectionStatus) -> MessageLine {
-    MessageLine::row(tr("Profiles", label_key).to_string(), status.into(), kind)
+fn section_row(label_key: &str, status: impl Into<Arc<str>>, kind: SectionStatus) -> MessageLine {
+    MessageLine::row(tr("Profiles", label_key), status, kind)
 }
 
 /// Builds a boolean ledger row: imported (green, `done_key` status) when `on`,
@@ -1167,23 +1286,23 @@ fn fmt_count(n: usize) -> String {
 
 /// The modal shown after a canceled import (the partial profile was deleted).
 fn import_canceled_message() -> ImportMessageState {
-    ImportMessageState {
-        title: tr("Profiles", "ImportCanceledTitle"),
-        lines: vec![MessageLine::plain(
-            tr("Profiles", "ImportCanceledBody").to_string(),
-        )],
-    }
+    ImportMessageState::new(
+        tr("Profiles", "ImportCanceledTitle"),
+        vec![MessageLine::plain(tr("Profiles", "ImportCanceledBody"))],
+    )
 }
 
 /// The modal shown when an import was refused because the `ITGmania` profile was
 /// already imported (matched by derived GUID); `existing` is its `DeadSync` name.
 fn import_already_message(existing: &str) -> ImportMessageState {
-    ImportMessageState {
-        title: tr("Profiles", "ImportAlreadyTitle"),
-        lines: vec![MessageLine::plain(
-            tr_fmt("Profiles", "ImportAlreadyBody", &[("name", existing)]).to_string(),
-        )],
-    }
+    ImportMessageState::new(
+        tr("Profiles", "ImportAlreadyTitle"),
+        vec![MessageLine::plain(tr_fmt(
+            "Profiles",
+            "ImportAlreadyBody",
+            &[("name", existing)],
+        ))],
+    )
 }
 
 fn dismiss_import_message(state: &mut State) -> ThemeEffect {
@@ -1566,6 +1685,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 .as_mut()
                 .expect("name entry presence checked above");
             let _ = entry.value.pop();
+            entry.presentation.sync(&entry.value);
             entry.error = None;
         }
         KeyCode::Escape if !key_event.repeat => cancel_name_entry(state),
@@ -1592,6 +1712,7 @@ pub fn handle_text(state: &mut State, text: &str) -> ThemeEffect {
         entry.value.push(ch);
         len += 1;
     }
+    entry.presentation.sync(&entry.value);
     entry.error = None;
     ThemeEffect::None
 }
@@ -1828,18 +1949,13 @@ fn push_name_entry_overlay(ui: &mut Vec<Actor>, state: &State) {
         horizalign(center)
     ));
 
-    let cursor = if entry.blink_t < 0.5 { "_" } else { " " };
-    let mut value = entry.value.clone();
-    if value.chars().count() < NAME_MAX_LEN {
-        value.push_str(cursor);
-    }
     ui.push(act!(text:
         align(0.5, 0.5):
         xy(cx, answer_cy):
         font("miso"):
         zoom(1.0):
         maxwidth(box_w - 40.0):
-        settext(value):
+        settext(Arc::clone(entry.presentation.text(entry.blink_t))):
         diffuse(1.0, 1.0, 1.0, 1.0):
         z(1003):
         horizalign(center)
@@ -1965,7 +2081,7 @@ fn push_popup_box(ui: &mut Vec<Actor>, cx: f32, cy: f32, w: f32, h: f32) {
 /// standard popup heading. `top` is the popup box's top edge.
 fn push_popup_title(
     ui: &mut Vec<Actor>,
-    text: impl Into<String>,
+    text: impl Into<TextContent>,
     cx: f32,
     top: f32,
     max_w: f32,
@@ -1986,7 +2102,7 @@ fn push_popup_title(
 
 /// A popup footer hint (e.g. "Press Start to continue.") in the standard dimmed
 /// white style used by the app's popups.
-fn push_popup_footer(ui: &mut Vec<Actor>, text: impl Into<String>, cx: f32, baseline_y: f32) {
+fn push_popup_footer(ui: &mut Vec<Actor>, text: impl Into<TextContent>, cx: f32, baseline_y: f32) {
     ui.push(act!(text:
         align(0.5, 1.0):
         xy(cx, baseline_y):
@@ -2024,6 +2140,7 @@ fn push_overlay_error(
 }
 
 const IMPORT_PICK_MAX_VISIBLE: usize = 8;
+const IMPORT_PICK_MAX_NAME_REF: &str = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
 
 fn push_import_picker_overlay(
     ui: &mut Vec<Actor>,
@@ -2056,31 +2173,21 @@ fn push_import_picker_overlay(
     const TAG_ZOOM: f32 = 0.82;
     const ROW_TAG_GAP: f32 = 24.0;
     const SIDE_PAD: f32 = 56.0;
-    let tag_text = format!("✔ {}", tr("Profiles", "ImportTagImported"));
-    let tag_w = measure_label_width(asset_manager, &tag_text, TAG_ZOOM);
-    // Fixed name-column width: size for the longest name a profile can have
-    // (NAME_MAX_LEN), so the container stays the same width regardless of which
-    // profiles are in the list. "M" is the widest glyph, guaranteeing any name fits.
-    let max_name_ref: String = std::iter::repeat_n('M', NAME_MAX_LEN).collect();
-    let widest_label =
-        measure_label_width(asset_manager, &max_name_ref, ROW_ZOOM).max(measure_label_width(
-            asset_manager,
-            &tr("Profiles", "ImportBrowseButton"),
-            ROW_ZOOM,
-        ));
+    let metrics = picker.metrics.get_or_init(|| ImportPickerMetrics {
+        widest_label: measure_label_width(asset_manager, IMPORT_PICK_MAX_NAME_REF, ROW_ZOOM).max(
+            measure_label_width(asset_manager, &picker.presentation.browse, ROW_ZOOM),
+        ),
+        tag_w: measure_label_width(asset_manager, &picker.presentation.tag, TAG_ZOOM),
+        title_w: measure_text_width(asset_manager, header_font, &picker.presentation.title, 0.72),
+        footer_w: measure_label_width(asset_manager, &picker.presentation.prompt, 0.78),
+    });
+    let widest_label = metrics.widest_label;
     // Always reserve the tag column so the container is the same width whether or
     // not any profile is currently flagged as imported.
-    let block_w = widest_label + ROW_TAG_GAP + tag_w;
-    let title_w = measure_text_width(
-        asset_manager,
-        header_font,
-        &tr("Profiles", "ImportPickTitle"),
-        0.72,
-    );
-    let footer_w = measure_label_width(asset_manager, &tr("Profiles", "ImportPickPrompt"), 0.78);
+    let block_w = widest_label + ROW_TAG_GAP + metrics.tag_w;
     let box_w = (block_w + SIDE_PAD)
-        .max(title_w + 40.0)
-        .max(footer_w + 40.0)
+        .max(metrics.title_w + 40.0)
+        .max(metrics.footer_w + 40.0)
         .clamp(360.0, w * 0.92);
     let cx = w * 0.5;
     let cy = h * 0.5;
@@ -2090,7 +2197,7 @@ fn push_import_picker_overlay(
     push_popup_box(ui, cx, cy, box_w, box_h);
     push_popup_title(
         ui,
-        tr("Profiles", "ImportPickTitle").to_string(),
+        Arc::clone(&picker.presentation.title),
         cx,
         top,
         box_w - 40.0,
@@ -2122,7 +2229,7 @@ fn push_import_picker_overlay(
             font("miso"):
             zoom(0.9):
             maxwidth(box_w - 40.0):
-            settext(tr("Profiles", "ImportPickEmpty")):
+            settext(Arc::clone(&picker.presentation.empty)):
             diffuse(0.7, 0.7, 0.7, 1.0):
             z(1003):
             horizalign(center)
@@ -2130,7 +2237,8 @@ fn push_import_picker_overlay(
     } else {
         for i in 0..visible {
             let idx = offset + i;
-            let Some(cand) = picker.candidates.get(idx) else {
+            let Some(label) = picker.candidate_labels.get(idx) else {
+                debug_assert!(false, "candidate labels must match candidates");
                 break;
             };
             let row_y = (i as f32).mul_add(item_h, top + header_h);
@@ -2161,7 +2269,7 @@ fn push_import_picker_overlay(
                 font("miso"):
                 zoom(ROW_ZOOM):
                 maxwidth(widest_label):
-                settext(cand.display_name.clone()):
+                settext(Arc::clone(label)):
                 diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
                 z(1003):
                 horizalign(left)
@@ -2174,7 +2282,7 @@ fn push_import_picker_overlay(
                     xy(tag_x, item_h.mul_add(0.5, row_y)):
                     font("miso"):
                     zoom(TAG_ZOOM):
-                    settext(format!("✔ {}", tr("Profiles", "ImportTagImported"))):
+                    settext(Arc::clone(&picker.presentation.tag)):
                     diffuse(0.55, 0.92, 0.55, 0.85):
                     z(1003):
                     horizalign(left)
@@ -2206,7 +2314,7 @@ fn push_import_picker_overlay(
         font("miso"):
         zoom(ROW_ZOOM):
         maxwidth(widest_label):
-        settext(tr("Profiles", "ImportBrowseButton")):
+        settext(Arc::clone(&picker.presentation.browse)):
         diffuse(browse_col[0], browse_col[1], browse_col[2], browse_col[3]):
         z(1003):
         horizalign(left)
@@ -2222,7 +2330,7 @@ fn push_import_picker_overlay(
             font("miso"):
             zoom(0.8):
             maxwidth(box_w - 40.0):
-            settext(info.to_string()):
+            settext(Arc::clone(info)):
             diffuse(accent[0], accent[1], accent[2], 1.0):
             z(1003):
             horizalign(center)
@@ -2231,7 +2339,7 @@ fn push_import_picker_overlay(
 
     push_popup_footer(
         ui,
-        tr("Profiles", "ImportPickPrompt").to_string(),
+        Arc::clone(&picker.presentation.prompt),
         cx,
         cy + box_h * 0.5 - 12.0,
     );
@@ -2259,7 +2367,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font:
     } else {
         tr("Profiles", "ImportInProgress")
     };
-    push_popup_title(ui, heading.to_string(), cx, top, box_w - 40.0, header_font);
+    push_popup_title(ui, heading, cx, top, box_w - 40.0, header_font);
 
     // Until scores start being written there's no determinate progress yet
     // (file read, resolver build and in-memory score matching are quick) — leave
@@ -2289,9 +2397,9 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font:
         }));
 
         let sublabel = if label.is_empty() {
-            saving_status_text(state, *done, *total)
+            TextContent::from(saving_status_text(state, *done, *total))
         } else {
-            label.to_string()
+            TextContent::from(Arc::clone(label))
         };
         ui.push(act!(text:
             align(0.5, 0.5):
@@ -2310,7 +2418,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State, header_font:
     if !canceling {
         push_popup_footer(
             ui,
-            tr("Profiles", "ImportCancelHint").to_string(),
+            tr("Profiles", "ImportCancelHint"),
             cx,
             box_h.mul_add(0.5, cy) - 12.0,
         );
@@ -2385,7 +2493,7 @@ fn push_import_message_overlay(
     push_popup_box(ui, cx, cy, box_w, box_h);
     push_popup_title(
         ui,
-        message.title.to_string(),
+        Arc::clone(&message.title),
         cx,
         top,
         box_w - 40.0,
@@ -2398,21 +2506,38 @@ fn push_import_message_overlay(
     const ROW_ZOOM: f32 = 0.9;
     const GAP_LABEL_ICON: f32 = 66.0;
     const GAP_ICON_STATUS: f32 = 12.0;
-    let mut widest_label = 0.0_f32;
-    let mut widest_status = 0.0_f32;
-    let mut icon_w = 0.0_f32;
-    for line in &message.lines {
-        if let MessageLine::Row {
-            label,
-            status,
-            kind,
-        } = line
-        {
-            widest_label = widest_label.max(measure_label_width(asset_manager, label, ROW_ZOOM));
-            widest_status = widest_status.max(measure_label_width(asset_manager, status, ROW_ZOOM));
-            icon_w = icon_w.max(measure_label_width(asset_manager, kind.icon(), ROW_ZOOM));
+    let metrics = message.metrics.get_or_init(|| {
+        let mut metrics = ImportMessageMetrics {
+            widest_label: 0.0,
+            widest_status: 0.0,
+            icon_w: 0.0,
+        };
+        for line in &message.lines {
+            if let MessageLine::Row {
+                label,
+                status,
+                kind,
+            } = line
+            {
+                metrics.widest_label =
+                    metrics
+                        .widest_label
+                        .max(measure_label_width(asset_manager, label, ROW_ZOOM));
+                metrics.widest_status =
+                    metrics
+                        .widest_status
+                        .max(measure_label_width(asset_manager, status, ROW_ZOOM));
+                metrics.icon_w =
+                    metrics
+                        .icon_w
+                        .max(measure_label_width(asset_manager, kind.icon(), ROW_ZOOM));
+            }
         }
-    }
+        metrics
+    });
+    let widest_label = metrics.widest_label;
+    let widest_status = metrics.widest_status;
+    let icon_w = metrics.icon_w;
     let block_w = widest_label + GAP_LABEL_ICON + icon_w + GAP_ICON_STATUS + widest_status;
     let block_left = block_w.mul_add(-0.5, cx);
     let label_x = block_left;
@@ -2429,7 +2554,7 @@ fn push_import_message_overlay(
                     font("miso"):
                             zoom(ROW_ZOOM):
                     maxwidth(box_w - 48.0):
-                            settext(text.clone()):
+                            settext(Arc::clone(text)):
                             diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
                     z(1002):
                     horizalign(center)
@@ -2448,7 +2573,7 @@ fn push_import_message_overlay(
                     font("miso"):
                                 zoom(ROW_ZOOM):
                                 maxwidth(widest_label + 1.0):
-                                settext(label.clone()):
+                                settext(Arc::clone(label)):
                                 diffuse(0.96, 0.96, 0.96, 1.0):
                     z(1002):
                                 horizalign(left)
@@ -2459,7 +2584,7 @@ fn push_import_message_overlay(
                     xy(icon_x, line_y):
                     font("miso"):
                     zoom(ROW_ZOOM):
-                    settext(kind.icon().to_string()):
+                    settext(kind.icon()):
                     diffuse(c[0], c[1], c[2], c[3]):
                     z(1002):
                     horizalign(left)
@@ -2471,7 +2596,7 @@ fn push_import_message_overlay(
                     font("miso"):
                     zoom(ROW_ZOOM):
                     maxwidth(widest_status + 1.0):
-                    settext(status.clone()):
+                    settext(Arc::clone(status)):
                     diffuse(c[0], c[1], c[2], c[3]):
                     z(1002):
                     horizalign(left)
@@ -2482,7 +2607,7 @@ fn push_import_message_overlay(
 
     push_popup_footer(
         ui,
-        tr("Profiles", "ImportMessageDismiss").to_string(),
+        tr("Profiles", "ImportMessageDismiss"),
         cx,
         cy + box_h * 0.5 - 12.0,
     );
@@ -2900,10 +3025,256 @@ pub fn get_actors(
     actors
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+fn text_checksum(checksum: u64, text: &str) -> u64 {
+    text.bytes()
+        .fold(checksum ^ text.len() as u64, |hash, byte| {
+            hash.rotate_left(7) ^ u64::from(byte)
+        })
+}
+
+/// Stable-frame old/new text ownership fixture for the three Manage Profiles
+/// modal optimizations. It deliberately keeps measurement outside production
+/// rendering while exercising the same owned-versus-shared conversions.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ManageProfilesHotBenchmark {
+    name: String,
+    name_presentation: NameEntryPresentation,
+    picker: ImportPickerState,
+    message: ImportMessageState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ManageProfilesHotBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let name = "Long Profile Name 0123456789".to_owned();
+        let name_presentation = NameEntryPresentation::new(&name);
+        let candidates = (0..IMPORT_PICK_MAX_VISIBLE)
+            .map(|index| crate::SimplyLoveItgProfileCandidate {
+                dir: std::path::PathBuf::from(format!("itg-profile-{index}")),
+                display_name: format!("ITG Profile {index}"),
+                imported_as: (index % 2 == 0).then(|| format!("DeadSync {index}")),
+            })
+            .collect();
+        let picker = ImportPickerState::new(candidates);
+        let message = ImportMessageState::new(
+            tr("Profiles", "ImportSummaryTitle"),
+            vec![
+                MessageLine::plain("ITG Profile".to_owned()),
+                MessageLine::row(
+                    "Scores".to_owned(),
+                    "12,345 / 12,500".to_owned(),
+                    SectionStatus::Partial,
+                ),
+                MessageLine::row(
+                    "Favorites".to_owned(),
+                    "500 / 500".to_owned(),
+                    SectionStatus::Imported,
+                ),
+                MessageLine::row(
+                    "Avatar".to_owned(),
+                    "Imported".to_owned(),
+                    SectionStatus::Imported,
+                ),
+                MessageLine::note("Press Start to continue".to_owned()),
+            ],
+        );
+        Self {
+            name,
+            name_presentation,
+            picker,
+            message,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_name_frame(&self, blink_t: f32) -> u64 {
+        let mut value = self.name.clone();
+        if value.chars().count() < NAME_MAX_LEN {
+            value.push(if blink_t < 0.5 { '_' } else { ' ' });
+        }
+        text_checksum(0, &value)
+    }
+
+    #[must_use]
+    pub fn prepared_name_frame(&self, blink_t: f32) -> u64 {
+        let text = Arc::clone(self.name_presentation.text(blink_t));
+        text_checksum(0, &text)
+    }
+
+    #[must_use]
+    pub fn legacy_picker_frame(&self) -> u64 {
+        let mut checksum = 0;
+        let title = self.picker.presentation.title.to_string();
+        checksum = text_checksum(checksum, &title);
+        let tag = format!("✔ {}", tr("Profiles", "ImportTagImported"));
+        checksum = text_checksum(checksum, &tag);
+        let max_name_ref: String = std::iter::repeat_n('M', NAME_MAX_LEN).collect();
+        checksum = text_checksum(checksum, &max_name_ref);
+        for candidate in &self.picker.candidates {
+            let label = candidate.display_name.clone();
+            checksum = text_checksum(checksum, &label);
+            if candidate.imported_as.is_some() {
+                let row_tag = format!("✔ {}", tr("Profiles", "ImportTagImported"));
+                checksum = text_checksum(checksum, &row_tag);
+            }
+        }
+        let prompt = self.picker.presentation.prompt.to_string();
+        text_checksum(checksum, &prompt)
+    }
+
+    #[must_use]
+    pub fn prepared_picker_frame(&self) -> u64 {
+        let mut checksum = 0;
+        let title = Arc::clone(&self.picker.presentation.title);
+        checksum = text_checksum(checksum, &title);
+        let tag = Arc::clone(&self.picker.presentation.tag);
+        checksum = text_checksum(checksum, &tag);
+        checksum = text_checksum(checksum, IMPORT_PICK_MAX_NAME_REF);
+        for (candidate, label) in self
+            .picker
+            .candidates
+            .iter()
+            .zip(&self.picker.candidate_labels)
+        {
+            let label = Arc::clone(label);
+            checksum = text_checksum(checksum, &label);
+            if candidate.imported_as.is_some() {
+                let row_tag = Arc::clone(&self.picker.presentation.tag);
+                checksum = text_checksum(checksum, &row_tag);
+            }
+        }
+        let prompt = Arc::clone(&self.picker.presentation.prompt);
+        text_checksum(checksum, &prompt)
+    }
+
+    #[must_use]
+    pub fn legacy_message_frame(&self) -> u64 {
+        let mut checksum = 0;
+        let title = self.message.title.to_string();
+        checksum = text_checksum(checksum, &title);
+        for line in &self.message.lines {
+            match line {
+                MessageLine::Center { text, .. } => {
+                    let text = text.to_string();
+                    checksum = text_checksum(checksum, &text);
+                }
+                MessageLine::Row {
+                    label,
+                    status,
+                    kind,
+                } => {
+                    let label = label.to_string();
+                    checksum = text_checksum(checksum, &label);
+                    let icon = kind.icon().to_string();
+                    checksum = text_checksum(checksum, &icon);
+                    let status = status.to_string();
+                    checksum = text_checksum(checksum, &status);
+                }
+            }
+        }
+        let footer = tr("Profiles", "ImportMessageDismiss").to_string();
+        text_checksum(checksum, &footer)
+    }
+
+    #[must_use]
+    pub fn prepared_message_frame(&self) -> u64 {
+        let mut checksum = 0;
+        let title = Arc::clone(&self.message.title);
+        checksum = text_checksum(checksum, &title);
+        for line in &self.message.lines {
+            match line {
+                MessageLine::Center { text, .. } => {
+                    let text = Arc::clone(text);
+                    checksum = text_checksum(checksum, &text);
+                }
+                MessageLine::Row {
+                    label,
+                    status,
+                    kind,
+                } => {
+                    let label = Arc::clone(label);
+                    checksum = text_checksum(checksum, &label);
+                    checksum = text_checksum(checksum, kind.icon());
+                    let status = Arc::clone(status);
+                    checksum = text_checksum(checksum, &status);
+                }
+            }
+        }
+        let footer = tr("Profiles", "ImportMessageDismiss");
+        text_checksum(checksum, &footer)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ManageProfilesHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use deadsync_core::input::InputSource;
+
+    #[test]
+    fn retained_modal_text_matches_legacy_frames() {
+        let benchmark = ManageProfilesHotBenchmark::new();
+        for blink_t in [0.0, 0.49, 0.5, 0.99] {
+            assert_eq!(
+                benchmark.legacy_name_frame(blink_t),
+                benchmark.prepared_name_frame(blink_t)
+            );
+        }
+        assert_eq!(
+            benchmark.legacy_picker_frame(),
+            benchmark.prepared_picker_frame()
+        );
+        assert_eq!(
+            benchmark.legacy_message_frame(),
+            benchmark.prepared_message_frame()
+        );
+    }
+
+    #[test]
+    fn name_entry_presentation_refreshes_after_edit() {
+        let mut presentation = NameEntryPresentation::new("Alice");
+        assert_eq!(presentation.text(0.0).as_ref(), "Alice_");
+        assert_eq!(presentation.text(0.5).as_ref(), "Alice ");
+
+        presentation.sync("Alicia");
+        assert_eq!(presentation.text(0.0).as_ref(), "Alicia_");
+        assert_eq!(presentation.text(0.5).as_ref(), "Alicia ");
+
+        let full = "M".repeat(NAME_MAX_LEN);
+        presentation.sync(&full);
+        assert_eq!(presentation.text(0.0).as_ref(), full);
+        assert_eq!(presentation.text(0.5).as_ref(), full);
+    }
+
+    #[test]
+    fn candidate_labels_follow_sorted_candidate_order() {
+        let mut picker = ImportPickerState::new(vec![crate::SimplyLoveItgProfileCandidate {
+            dir: std::path::PathBuf::from("zulu"),
+            display_name: "Zulu".to_owned(),
+            imported_as: None,
+        }]);
+        merge_import_candidates(
+            &mut picker,
+            vec![crate::SimplyLoveItgProfileCandidate {
+                dir: std::path::PathBuf::from("alpha"),
+                display_name: "Alpha".to_owned(),
+                imported_as: None,
+            }],
+        );
+
+        assert_eq!(picker.candidates[0].display_name, "Alpha");
+        assert_eq!(picker.candidate_labels[0].as_ref(), "Alpha");
+        assert_eq!(picker.candidates[1].display_name, "Zulu");
+        assert_eq!(picker.candidate_labels[1].as_ref(), "Zulu");
+    }
 
     #[test]
     fn format_eta_uses_seconds_then_minutes() {
@@ -3105,6 +3476,7 @@ mod tests {
         state.name_entry = Some(NameEntryState {
             mode: NameEntryMode::Create,
             value: "Alice".to_owned(),
+            presentation: NameEntryPresentation::new("Alice"),
             error: None,
             blink_t: 0.0,
         });
@@ -3299,15 +3671,13 @@ mod tests {
         );
 
         state.profile_menu = None;
-        state.import_picker = Some(ImportPickerState {
-            candidates: vec![crate::SimplyLoveItgProfileCandidate {
+        state.import_picker = Some(ImportPickerState::new(vec![
+            crate::SimplyLoveItgProfileCandidate {
                 dir: std::path::PathBuf::from("itg-profile"),
                 display_name: "ITG Profile".to_owned(),
                 imported_as: None,
-            }],
-            selected: 0,
-            info: None,
-        });
+            },
+        ]));
 
         press(&mut state, VirtualAction::p2_menu_right);
         assert_eq!(
@@ -3324,11 +3694,7 @@ mod tests {
     #[test]
     fn browse_requests_shell_picker_and_keeps_modal_open() {
         let mut state = init(ManageLocalProfilesView::default());
-        state.import_picker = Some(ImportPickerState {
-            candidates: Vec::new(),
-            selected: 0,
-            info: None,
-        });
+        state.import_picker = Some(ImportPickerState::new(Vec::new()));
 
         let effect = confirm_import_picker(&mut state);
         let ThemeEffect::Batch(effects) = effect else {

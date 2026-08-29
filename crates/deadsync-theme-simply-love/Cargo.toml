@@ -78,6 +78,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "manage_profiles_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "song_search_hot_paths"
 harness = false
 required-features = ["bench-support"]
