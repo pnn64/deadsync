@@ -6,16 +6,24 @@ use deadsync_assets::{AssetManager, media_cache};
 use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::SongLuaRuntimeVisuals;
+use hashbrown::HashSet as FastHashSet;
 use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+#[inline]
+pub(super) fn insert_texture_key(seen: &mut FastHashSet<String>, key: &str) -> bool {
+    let previous_len = seen.len();
+    seen.get_or_insert_with(key, str::to_owned);
+    seen.len() != previous_len
+}
+
 fn prewarm_model_texture_key(
     assets: &mut AssetManager,
     backend: &mut Backend,
-    seen: &mut HashSet<String>,
-    seen_model_textures: &mut HashSet<String>,
+    seen: &mut FastHashSet<String>,
+    seen_model_textures: &mut FastHashSet<String>,
     key: &str,
 ) {
     let key = deadsync_assets::canonical_texture_key(key);
@@ -33,13 +41,13 @@ fn prewarm_model_texture_key(
 fn prewarm_noteskin_textures(
     assets: &mut AssetManager,
     backend: &mut Backend,
-    seen: &mut HashSet<String>,
-    seen_model_textures: &mut HashSet<String>,
+    seen: &mut FastHashSet<String>,
+    seen_model_textures: &mut FastHashSet<String>,
     noteskin: &Noteskin,
 ) {
     noteskin.for_each_slot(|slot| {
         let key = slot.texture_key();
-        if seen.insert(key.to_owned()) {
+        if insert_texture_key(seen, key) {
             assets.ensure_texture_for_key(backend, key);
         }
     });
@@ -64,9 +72,9 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     background_changes: &[SongBackgroundChange],
     song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
 ) {
-    let mut seen = HashSet::<String>::with_capacity(256);
-    let mut seen_model_textures = HashSet::<String>::with_capacity(64);
-    let mut seen_song_lua_fonts = HashSet::<&'static str>::with_capacity(8);
+    let mut seen = FastHashSet::<String>::with_capacity(256);
+    let mut seen_model_textures = FastHashSet::<String>::with_capacity(64);
+    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::with_capacity(8);
     for noteskin in noteskin_sets
         .into_iter()
         .flat_map(|set| set.iter().flatten())
@@ -89,8 +97,8 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
         background_changes,
     );
     for path in media_paths {
-        let key = path.to_string_lossy().into_owned();
-        if seen.insert(key) {
+        let key = path.to_string_lossy();
+        if insert_texture_key(&mut seen, key.as_ref()) {
             media_cache::ensure_banner_texture(assets, backend, path);
         }
     }
@@ -126,7 +134,7 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                     ..
                 } => {
                     let key = texture_key.as_ref();
-                    let first_seen = seen.insert(key.to_owned());
+                    let first_seen = insert_texture_key(&mut seen, key);
                     let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
                     if sampler != SamplerDesc::default() {
                         match media_cache::load_banner_source_rgba(texture_path) {
@@ -170,7 +178,7 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                                 &mut seen_model_textures,
                                 slot.texture_key(),
                             );
-                        } else if seen.insert(slot.texture_key().to_owned()) {
+                        } else if insert_texture_key(&mut seen, slot.texture_key()) {
                             assets.ensure_texture_for_key(backend, slot.texture_key());
                         }
                     }
@@ -185,6 +193,22 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
     }
     for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn texture_key_insert_reports_only_first_owner() {
+        let mut seen = FastHashSet::new();
+        assert!(insert_texture_key(&mut seen, "noteskin/receptor.png"));
+        assert!(!insert_texture_key(&mut seen, "noteskin/receptor.png"));
+        assert!(insert_texture_key(&mut seen, "noteskin/tap.png"));
+        assert_eq!(seen.len(), 2);
+        assert!(seen.contains("noteskin/receptor.png"));
+        assert!(seen.contains("noteskin/tap.png"));
     }
 }
 

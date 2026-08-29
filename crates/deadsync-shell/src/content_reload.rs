@@ -241,7 +241,8 @@ fn scan_library(
 
 fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
     let (banner_paths, cdtitle_paths) = artwork_cache_paths();
-    let total = deadsync_assets::media_cache::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
+    let plan = deadsync_assets::media_cache::artwork_cache_plan(&banner_paths, &cdtitle_paths);
+    let total = plan.job_count();
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::Artwork,
     ));
@@ -269,11 +270,7 @@ fn prewarm_artwork(tx: &SyncSender<SimplyLoveContentReloadEvent>) {
             },
         );
     };
-    deadsync_assets::media_cache::prewarm_artwork_cache_with_progress(
-        &banner_paths,
-        &cdtitle_paths,
-        &mut on_artwork,
-    );
+    deadsync_assets::media_cache::prewarm_artwork_cache_with_progress(plan, &mut on_artwork);
     info!("Init loading: artwork cache prewarm complete.");
 }
 

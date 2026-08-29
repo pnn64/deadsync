@@ -5,10 +5,8 @@ use deadlib_render::Backend;
 use deadlib_video as video;
 use image::RgbaImage;
 use log::warn;
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use rustc_hash::FxHashSet;
+use std::path::{Path, PathBuf};
 
 #[inline(always)]
 #[must_use]
@@ -78,71 +76,157 @@ pub fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Backend, p
     }
 }
 
-#[must_use]
-pub fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
-    let banner_opts = banner_cache_options();
-    let cdtitle_opts = cdtitle_cache_options();
-    let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
-    let mut unique = HashSet::<String>::with_capacity(total_paths);
-    let bcache = dirs::app_dirs().banner_cache_dir();
-    let ccache = dirs::app_dirs().cdtitle_cache_dir();
-    if banner_opts.enabled {
-        for path in banner_paths {
-            unique.insert(dynamic::dynamic_image_prewarm_dedupe_key(
-                path,
-                banner_opts,
-                &bcache,
-            ));
-        }
-    }
-    if cdtitle_opts.enabled {
-        for path in cdtitle_paths {
-            unique.insert(dynamic::dynamic_image_prewarm_dedupe_key(
-                path,
-                cdtitle_opts,
-                &ccache,
-            ));
-        }
-    }
-    unique.len()
+/// One-shot artwork work list retained between progress setup and execution.
+///
+/// Building the plan performs path canonicalization and deduplication once;
+/// consuming it guarantees that the progress total matches the executed jobs.
+#[must_use = "an artwork plan does no work until it is prewarmed"]
+pub struct ArtworkCachePlan {
+    total_paths: usize,
+    duplicate: usize,
+    jobs: Vec<dynamic::DynamicImagePrewarmJob>,
 }
 
-pub fn prewarm_artwork_cache_with_progress<F>(
+impl ArtworkCachePlan {
+    #[inline(always)]
+    #[must_use]
+    pub const fn job_count(&self) -> usize {
+        self.jobs.len()
+    }
+}
+
+fn build_artwork_cache_plan(
     banner_paths: &[PathBuf],
     cdtitle_paths: &[PathBuf],
-    progress: &mut F,
-) where
-    F: FnMut(usize, usize, Option<&Path>),
-{
-    let banner_opts = banner_cache_options();
-    let cdtitle_opts = cdtitle_cache_options();
+    banner_opts: dynamic::BannerCacheOptions,
+    cdtitle_opts: dynamic::BannerCacheOptions,
+    banner_cache_dir: &Path,
+    cdtitle_cache_dir: &Path,
+) -> ArtworkCachePlan {
     let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
-    let mut unique = HashSet::<String>::with_capacity(total_paths);
+    let mut unique =
+        FxHashSet::<String>::with_capacity_and_hasher(total_paths, rustc_hash::FxBuildHasher);
     let mut jobs = Vec::<dynamic::DynamicImagePrewarmJob>::with_capacity(total_paths);
-    let mut duplicate = 0usize;
-    let bcache = dirs::app_dirs().banner_cache_dir();
-    let ccache = dirs::app_dirs().cdtitle_cache_dir();
-    duplicate = duplicate.saturating_add(dynamic::push_dynamic_image_prewarm_jobs(
+    let mut duplicate = dynamic::push_dynamic_image_prewarm_jobs(
         &mut jobs,
         &mut unique,
         banner_paths,
         banner_opts,
-        &bcache,
+        banner_cache_dir,
         "Banner",
-    ));
+    );
     duplicate = duplicate.saturating_add(dynamic::push_dynamic_image_prewarm_jobs(
         &mut jobs,
         &mut unique,
         cdtitle_paths,
         cdtitle_opts,
-        &ccache,
+        cdtitle_cache_dir,
         "CDTitle",
     ));
-    dynamic::prewarm_dynamic_image_jobs_with_progress(
+    ArtworkCachePlan {
         total_paths,
-        jobs,
         duplicate,
+        jobs,
+    }
+}
+
+#[must_use]
+pub fn artwork_cache_plan(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> ArtworkCachePlan {
+    let banner_opts = banner_cache_options();
+    let cdtitle_opts = cdtitle_cache_options();
+    let bcache = dirs::app_dirs().banner_cache_dir();
+    let ccache = dirs::app_dirs().cdtitle_cache_dir();
+    build_artwork_cache_plan(
+        banner_paths,
+        cdtitle_paths,
+        banner_opts,
+        cdtitle_opts,
+        &bcache,
+        &ccache,
+    )
+}
+
+pub fn prewarm_artwork_cache_with_progress<F>(plan: ArtworkCachePlan, progress: &mut F)
+where
+    F: FnMut(usize, usize, Option<&Path>),
+{
+    dynamic::prewarm_dynamic_image_jobs_with_progress(
+        plan.total_paths,
+        plan.jobs,
+        plan.duplicate,
         "Artwork",
         progress,
     );
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_artwork_cache_plan(
+    banner_paths: &[PathBuf],
+    cdtitle_paths: &[PathBuf],
+) -> (usize, usize) {
+    let opts = dynamic::BannerCacheOptions { enabled: true };
+    let plan = build_artwork_cache_plan(
+        banner_paths,
+        cdtitle_paths,
+        opts,
+        opts,
+        Path::new("benchmark-banner-cache"),
+        Path::new("benchmark-cdtitle-cache"),
+    );
+    (plan.job_count(), plan.job_count())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn artwork_plan_preserves_order_labels_and_duplicate_count() {
+        let banners = vec!["a.png".into(), "b.png".into(), "a.png".into()];
+        let cdtitles = vec!["c.png".into(), "c.png".into()];
+        let opts = dynamic::BannerCacheOptions { enabled: true };
+        let plan = build_artwork_cache_plan(
+            &banners,
+            &cdtitles,
+            opts,
+            opts,
+            Path::new("banner-cache"),
+            Path::new("cdtitle-cache"),
+        );
+
+        assert_eq!(plan.total_paths, 5);
+        assert_eq!(plan.duplicate, 2);
+        assert_eq!(plan.job_count(), 3);
+        assert_eq!(
+            plan.jobs
+                .iter()
+                .map(|job| (job.label, job.path.as_path()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("Banner", Path::new("a.png")),
+                ("Banner", Path::new("b.png")),
+                ("CDTitle", Path::new("c.png")),
+            ]
+        );
+    }
+
+    #[test]
+    fn artwork_plan_excludes_disabled_cache_classes() {
+        let banners = vec!["banner.png".into()];
+        let cdtitles = vec!["cdtitle.png".into()];
+        let plan = build_artwork_cache_plan(
+            &banners,
+            &cdtitles,
+            dynamic::BannerCacheOptions { enabled: false },
+            dynamic::BannerCacheOptions { enabled: true },
+            Path::new("banner-cache"),
+            Path::new("cdtitle-cache"),
+        );
+
+        assert_eq!(plan.total_paths, 2);
+        assert_eq!(plan.duplicate, 0);
+        assert_eq!(plan.job_count(), 1);
+        assert_eq!(plan.jobs[0].label, "CDTitle");
+    }
 }

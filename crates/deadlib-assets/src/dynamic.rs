@@ -2,10 +2,11 @@ use crate::open_image_fallback_quiet;
 use deadlib_video as video;
 use image::RgbaImage;
 use log::{debug, warn};
+use rustc_hash::FxHashSet;
 use std::{
     collections::HashSet,
     fs,
-    hash::Hasher,
+    hash::{BuildHasher, Hasher},
     io::Read,
     path::{Path, PathBuf},
     sync::{
@@ -296,9 +297,9 @@ struct DynamicImagePrewarmResult {
     outcome: DynamicImagePrewarmOutcome,
 }
 
-pub fn push_dynamic_image_prewarm_jobs(
+pub fn push_dynamic_image_prewarm_jobs<S: BuildHasher>(
     jobs: &mut Vec<DynamicImagePrewarmJob>,
-    unique: &mut HashSet<String>,
+    unique: &mut HashSet<String, S>,
     paths: &[PathBuf],
     opts: BannerCacheOptions,
     cache_dir: &Path,
@@ -512,14 +513,16 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
 
 #[must_use]
 pub fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
-    let mut seen = HashSet::with_capacity(keys.len());
-    let mut out = Vec::with_capacity(keys.len());
-    for key in keys {
-        if seen.insert(key.clone()) {
-            out.push(key);
-        }
-    }
-    out
+    let mut keys = keys;
+    let mut seen =
+        FxHashSet::<&str>::with_capacity_and_hasher(keys.len(), rustc_hash::FxBuildHasher);
+    let mut keep = Vec::with_capacity(keys.len());
+    keep.extend(keys.iter().map(|key| seen.insert(key.as_str())));
+    drop(seen);
+
+    let mut keep = keep.into_iter();
+    keys.retain(|_| keep.next().expect("one keep flag per dynamic key"));
+    keys
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -641,6 +644,19 @@ mod tests {
                 "shared.mp4".to_string(),
                 "bg.mp4".to_string(),
             ]
+        );
+    }
+
+    #[test]
+    fn dedupe_dynamic_keys_handles_empty_unique_and_repeated_inputs() {
+        assert!(dedupe_dynamic_keys(Vec::new()).is_empty());
+        assert_eq!(
+            dedupe_dynamic_keys(vec!["a".into(), "b".into(), "c".into()]),
+            vec!["a", "b", "c"]
+        );
+        assert_eq!(
+            dedupe_dynamic_keys(vec!["same".into(), "same".into(), "same".into()]),
+            vec!["same"]
         );
     }
 
