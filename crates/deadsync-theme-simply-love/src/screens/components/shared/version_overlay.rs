@@ -71,12 +71,24 @@ pub fn build(
     log_level: LogLevel,
     build_hash: Option<&'static str>,
 ) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(2);
+    push(&mut actors, side, log_level, build_hash);
+    actors
+}
+
+/// Appends the version watermark directly into a caller-retained frame buffer.
+pub fn push(
+    actors: &mut Vec<Actor>,
+    side: VersionOverlaySide,
+    log_level: LogLevel,
+    build_hash: Option<&'static str>,
+) {
     let text = version_text(deadsync_version::current_static(), build_hash);
     let w = screen_width();
     let h = screen_height();
     let warning = log_warning_text(log_level);
 
-    let mut actors = Vec::with_capacity(1 + usize::from(warning.is_some()));
+    actors.reserve(1 + usize::from(warning.is_some()));
     let version_x = match side {
         VersionOverlaySide::Left => MARGIN_X,
         VersionOverlaySide::Right => w - MARGIN_X,
@@ -134,6 +146,21 @@ pub fn build(
         };
         actors.push(warning_actor);
     }
+}
 
-    actors
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direct_version_append_matches_owned_batch_for_both_sides_and_warnings() {
+        for side in [VersionOverlaySide::Left, VersionOverlaySide::Right] {
+            for level in [LogLevel::Info, LogLevel::Debug, LogLevel::Trace] {
+                let legacy = build(side, level, Some("123456789"));
+                let mut direct = Vec::with_capacity(2);
+                push(&mut direct, side, level, Some("123456789"));
+                assert_eq!(format!("{direct:#?}"), format!("{legacy:#?}"));
+            }
+        }
+    }
 }

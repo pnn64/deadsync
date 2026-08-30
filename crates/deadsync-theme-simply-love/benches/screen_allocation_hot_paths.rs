@@ -1,5 +1,6 @@
 use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
 use deadsync_config::frame_pacing::StutterSampleRing;
+use deadsync_config::prelude::{LogLevel, VersionOverlaySide};
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::shared::frame_stats_overlay::{
     benchmark_build_legacy as benchmark_frame_stats_build_legacy, push as push_frame_stats,
@@ -9,6 +10,7 @@ use deadsync_theme_simply_love::screens::components::shared::stats_overlay::{
     benchmark_timing_text_current, benchmark_timing_text_legacy, push as push_stats, push_stutter,
 };
 use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
+use deadsync_theme_simply_love::screens::components::shared::{gamepad_overlay, version_overlay};
 use deadsync_theme_simply_love::screens::evaluation_summary::{
     benchmark_eval_numeric_text, benchmark_profile_name_changed,
 };
@@ -60,6 +62,7 @@ const SCORE_PICKER_OPS: usize = 50_000;
 const LIGHTS_TEXT_OPS: usize = 300_000;
 const OPTIONS_SEARCH_OPS: usize = 200_000;
 const QR_OVERLAY_OPS: usize = 25_000;
+const SMALL_OVERLAY_OPS: usize = 300_000;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -440,6 +443,27 @@ fn legacy_elapsed_text(second: u64) -> Arc<str> {
 fn text_checksum(text: &str) -> u64 {
     text.bytes().fold(text.len() as u64, |checksum, byte| {
         checksum.rotate_left(5) ^ u64::from(byte)
+    })
+}
+
+fn overlay_actor_checksum(actors: &[deadlib_present::actors::Actor]) -> u64 {
+    use deadlib_present::actors::Actor;
+
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text {
+                content, offset, z, ..
+            } => {
+                text_checksum(content)
+                    ^ u64::from(offset[0].to_bits())
+                    ^ u64::from(offset[1].to_bits()).rotate_left(13)
+                    ^ u64::from(*z as u16).rotate_left(29)
+            }
+            Actor::Frame { children, .. } => overlay_actor_checksum(children),
+            Actor::SharedFrame { children, .. } => overlay_actor_checksum(children),
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
     })
 }
 
@@ -850,10 +874,63 @@ fn main() {
     let old_qr = measure(QR_OVERLAY_OPS, 25, || qr.legacy_frame(&mut old_qr_actors));
     let mut new_qr_actors = Vec::with_capacity(24);
     let new_qr = measure(QR_OVERLAY_OPS, 25, || qr.current_frame(&mut new_qr_actors));
-    print_reduced_pair(
+    print_pair(
         "18. shared/direct QR-login overlay",
         QR_OVERLAY_OPS,
         &old_qr,
         &new_qr,
+    );
+
+    let mut old_version_actors = Vec::with_capacity(2);
+    let old_version = measure(SMALL_OVERLAY_OPS, 300, || {
+        old_version_actors.clear();
+        old_version_actors.extend(version_overlay::build(
+            VersionOverlaySide::Right,
+            LogLevel::Debug,
+            Some("123456789abcdef"),
+        ));
+        overlay_actor_checksum(&old_version_actors)
+    });
+    let mut new_version_actors = Vec::with_capacity(2);
+    let new_version = measure(SMALL_OVERLAY_OPS, 300, || {
+        new_version_actors.clear();
+        version_overlay::push(
+            &mut new_version_actors,
+            VersionOverlaySide::Right,
+            LogLevel::Debug,
+            Some("123456789abcdef"),
+        );
+        overlay_actor_checksum(&new_version_actors)
+    });
+    print_pair(
+        "19. direct version-watermark append",
+        SMALL_OVERLAY_OPS,
+        &old_version,
+        &new_version,
+    );
+
+    let message: Arc<str> = Arc::from("Benchmark gamepad connected");
+    let mut old_message_actors = Vec::with_capacity(2);
+    let old_message = measure(SMALL_OVERLAY_OPS, 300, || {
+        old_message_actors.clear();
+        old_message_actors.extend(gamepad_overlay::benchmark_build_owned(&message));
+        overlay_actor_checksum(&old_message_actors)
+    });
+    let mut new_message_actors = Vec::with_capacity(2);
+    let new_message = measure(SMALL_OVERLAY_OPS, 300, || {
+        new_message_actors.clear();
+        gamepad_overlay::push(
+            &mut new_message_actors,
+            gamepad_overlay::Params {
+                message: Arc::clone(&message),
+            },
+        );
+        overlay_actor_checksum(&new_message_actors)
+    });
+    print_pair(
+        "20. retained/direct system-message overlay",
+        SMALL_OVERLAY_OPS,
+        &old_message,
+        &new_message,
     );
 }

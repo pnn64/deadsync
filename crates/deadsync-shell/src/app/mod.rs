@@ -6732,17 +6732,20 @@ impl App {
         // carry the running version. Default on; user-toggleable via
         // Options, with a separate Left/Right side preference.
         if policy.show_version_overlay {
-            actors.extend(screens::components::shared::version_overlay::build(
+            screens::components::shared::version_overlay::push(
+                &mut actors,
                 policy.version_overlay_side,
                 policy.log_level,
                 option_env!("DEADSYNC_BUILD_HASH"),
-            ));
+            );
         }
 
         // Gamepad connection overlay (always on top of screen, but below transitions)
-        if let Some(msg) = self.state.shell.interaction.message() {
-            let params = screens::components::shared::gamepad_overlay::Params { message: msg };
-            actors.extend(screens::components::shared::gamepad_overlay::build(params));
+        if let Some(message) = self.state.shell.interaction.shared_message() {
+            let params = screens::components::shared::gamepad_overlay::Params {
+                message: Arc::clone(message),
+            };
+            screens::components::shared::gamepad_overlay::push(&mut actors, params);
         }
         self.append_gameplay_offset_prompt_actors(&mut actors);
 

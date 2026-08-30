@@ -7,13 +7,14 @@
 //! events prepared by the shell. Network workers, cancellation, and
 //! credential persistence stay outside the concrete theme.
 
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::screens::components::shared::qr_code;
 use crate::screens::{Screen, ThemeEffect};
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
@@ -118,6 +119,20 @@ pub struct LoginSlot {
 
 pub struct QrLoginUiState {
     pub(crate) slots: [LoginSlot; 2],
+    presentation: RefCell<Option<QrLoginPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct QrLoginPresentationKey {
+    active_color_index: i32,
+    i18n_revision: u64,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct QrLoginPresentation {
+    key: QrLoginPresentationKey,
+    children: Arc<[Actor]>,
 }
 
 /// Build theme-owned display state from the shell-prepared login request.
@@ -134,6 +149,7 @@ pub fn create_login_ui(request: &crate::SimplyLoveQrLoginRequest) -> QrLoginUiSt
             display_name: slot.display_name,
             had_existing_key: slot.had_existing_key,
         }),
+        presentation: RefCell::default(),
     }
 }
 
@@ -143,6 +159,7 @@ pub(crate) fn apply_events(
     ui: &mut QrLoginUiState,
     events: impl IntoIterator<Item = crate::SimplyLoveQrLoginEvent>,
 ) {
+    ui.presentation.get_mut().take();
     for event in events {
         let side = match &event {
             crate::SimplyLoveQrLoginEvent::Started { side, .. }
@@ -178,6 +195,55 @@ pub fn login_overlay_is_terminal(ui: &QrLoginUiState) -> bool {
 }
 
 pub fn push_qr_login_overlay_actors(
+    out: &mut Vec<Actor>,
+    ui: &QrLoginUiState,
+    active_color_index: i32,
+    alpha_multiplier: f32,
+) {
+    let key = QrLoginPresentationKey {
+        active_color_index,
+        i18n_revision: crate::assets::i18n::revision(),
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    if let Some(cached) = ui.presentation.borrow().as_ref()
+        && cached.key == key
+    {
+        push_shared_qr_login_overlay(out, Arc::clone(&cached.children), alpha_multiplier);
+        return;
+    }
+
+    // One bounded immutable tree is retained by this overlay state and rebuilt only when
+    // login data, color, locale, or screen geometry changes.
+    let mut actors = Vec::with_capacity(24);
+    push_qr_login_overlay(&mut actors, ui, active_color_index);
+    let children: Arc<[Actor]> = Arc::from(actors);
+    *ui.presentation.borrow_mut() = Some(QrLoginPresentation {
+        key,
+        children: Arc::clone(&children),
+    });
+    push_shared_qr_login_overlay(out, children, alpha_multiplier);
+}
+
+fn push_shared_qr_login_overlay(
+    out: &mut Vec<Actor>,
+    children: Arc<[Actor]>,
+    alpha_multiplier: f32,
+) {
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children,
+        background: None,
+        z: 0,
+        tint: [1.0, 1.0, 1.0, alpha_multiplier],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_qr_login_overlay_actors_legacy(
     out: &mut Vec<Actor>,
     ui: &QrLoginUiState,
     active_color_index: i32,
@@ -480,28 +546,19 @@ fn qr_text_checksum(text: &str) -> u64 {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn qr_actor_checksum(actors: &[Actor]) -> u64 {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
         let value = match actor {
             Actor::Text { content, .. } => qr_text_checksum(content),
             Actor::Frame { children, .. } => qr_actor_checksum(children),
+            Actor::SharedFrame { children, .. } => qr_actor_checksum(children),
             _ => 1,
         };
         checksum.rotate_left(11) ^ value
     })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn legacy_own_actor_text(actors: &[Actor]) {
-    for actor in actors {
-        match actor {
-            Actor::Text { content, .. } => {
-                let owned = content.to_string();
-                std::hint::black_box(qr_text_checksum(std::hint::black_box(&owned)));
-            }
-            Actor::Frame { children, .. } => legacy_own_actor_text(children),
-            _ => {}
-        }
-    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -536,6 +593,7 @@ impl QrOverlayBenchmark {
                         had_existing_key: false,
                     },
                 ],
+                presentation: RefCell::default(),
             },
         };
         let mut warm = Vec::with_capacity(24);
@@ -545,12 +603,7 @@ impl QrOverlayBenchmark {
 
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut batch = Vec::with_capacity(24);
-        push_qr_login_overlay_actors(&mut batch, &self.ui, 2, 0.75);
-        // The immediate implementation moved owned copies of every translated
-        // or event-provided string into the temporary actor batch.
-        legacy_own_actor_text(&batch);
-        out.extend(batch);
+        push_qr_login_overlay_actors_legacy(out, &self.ui, 2, 0.75);
         qr_actor_checksum(out)
     }
 
@@ -623,6 +676,7 @@ mod tests {
                 slot(profile_data::PlayerSide::P1, SlotState::Success),
                 slot(profile_data::PlayerSide::P2, SlotState::NotJoined),
             ],
+            presentation: RefCell::default(),
         };
         assert!(login_overlay_is_terminal(&ui));
         ui.slots[1].state = SlotState::Starting;
@@ -692,14 +746,41 @@ mod tests {
     }
 
     #[test]
-    fn direct_overlay_append_matches_temporary_owned_batch() {
-        let benchmark = QrOverlayBenchmark::new();
+    fn retained_overlay_matches_immediate_tree_reuses_and_invalidates() {
+        let mut benchmark = QrOverlayBenchmark::new();
         let mut legacy = Vec::with_capacity(24);
-        let mut current = Vec::with_capacity(24);
-        assert_eq!(
-            benchmark.legacy_frame(&mut legacy),
-            benchmark.current_frame(&mut current)
+        push_qr_login_overlay_actors_legacy(&mut legacy, &benchmark.ui, 2, 1.0);
+
+        let mut current = Vec::with_capacity(1);
+        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 1.0);
+        let [Actor::SharedFrame { children, tint, .. }] = current.as_slice() else {
+            panic!("retained QR overlay should use one shared frame");
+        };
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
+        let first = Arc::clone(children);
+
+        current.clear();
+        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 0.5);
+        let [Actor::SharedFrame { children, tint, .. }] = current.as_slice() else {
+            panic!("retained QR overlay should stay shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.5]);
+
+        apply_events(
+            &mut benchmark.ui,
+            [SimplyLoveQrLoginEvent::Failed {
+                service: SimplyLoveQrLoginService::ArrowCloud,
+                side: profile_data::PlayerSide::P1,
+                reason: "expired".into(),
+            }],
         );
-        assert_eq!(format!("{legacy:#?}"), format!("{current:#?}"));
+        current.clear();
+        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 1.0);
+        let [Actor::SharedFrame { children, .. }] = current.as_slice() else {
+            panic!("invalidated QR overlay should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
     }
 }

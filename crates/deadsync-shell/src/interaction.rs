@@ -1,5 +1,6 @@
 //! Shell interaction state shared across input, navigation, and overlays.
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use deadsync_config::frame_pacing::apply_tab_acceleration;
@@ -124,7 +125,7 @@ impl HeldControls {
 /// Process-lifetime interaction state owned by the shell/game thread.
 pub struct ShellInteractionState {
     controls: HeldControls,
-    message: Option<(String, Instant)>,
+    message: Option<(Arc<str>, Instant)>,
     exit_intent: ExitIntent,
 }
 
@@ -148,7 +149,7 @@ impl ShellInteractionState {
     }
 
     pub fn show_message(&mut self, message: String, now: Instant) {
-        self.message = Some((message, now));
+        self.message = Some((Arc::from(message), now));
     }
 
     pub fn update_message(&mut self, now: Instant) {
@@ -159,8 +160,14 @@ impl ShellInteractionState {
         }
     }
 
+    #[cfg(test)]
     pub fn message(&self) -> Option<&str> {
-        self.message.as_ref().map(|(message, _)| message.as_str())
+        self.message.as_ref().map(|(message, _)| message.as_ref())
+    }
+
+    #[inline(always)]
+    pub fn shared_message(&self) -> Option<&Arc<str>> {
+        self.message.as_ref().map(|(message, _)| message)
     }
 
     #[inline(always)]
@@ -216,6 +223,11 @@ mod tests {
         let start = Instant::now();
         let mut state = ShellInteractionState::new(false);
         state.show_message("connected".to_string(), start);
+        let retained = Arc::clone(state.shared_message().expect("retained message"));
+        assert!(Arc::ptr_eq(
+            &retained,
+            state.shared_message().expect("same retained message")
+        ));
         state.update_message(start + Duration::from_secs_f32(MESSAGE_TOTAL_SECONDS));
         assert_eq!(state.message(), Some("connected"));
         state.update_message(start + Duration::from_secs_f32(MESSAGE_TOTAL_SECONDS + 0.01));
