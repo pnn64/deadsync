@@ -11,6 +11,7 @@ use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
+use std::cell::RefCell;
 
 use super::utils::{eval_style_alpha, pane_origin_x};
 
@@ -29,9 +30,25 @@ const EMPTY_BAND: TimingBand = TimingBand {
     color: [0.0, 0.0, 0.0, 0.0],
 };
 
+#[derive(Clone, Copy, PartialEq)]
+struct TimingPaneCacheKey {
+    worst_window_bits: u32,
+    timing_window_bits: [u32; 5],
+    mesh_address: usize,
+    mesh_len: usize,
+    controller: profile_data::PlayerSide,
+    scale: TimingHistogramScale,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+}
+
+type CachedTimingPane = Option<(TimingPaneCacheKey, Arc<[Actor]>)>;
+
 #[derive(Clone)]
 pub(crate) struct TimingPaneText {
     values: [TextContent; 4],
+    cached: RefCell<[CachedTimingPane; 3]>,
 }
 
 impl TimingPaneText {
@@ -47,7 +64,64 @@ impl TimingPaneText {
                 super::retained_text(format_args!("{:.2}ms", stats.stddev_ms * 3.0)),
                 super::retained_text(format_args!("{:.2}ms", stats.max_abs_ms)),
             ],
+            cached: RefCell::new(std::array::from_fn(|_| None)),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn cached_actors(
+        &self,
+        worst_window_ms: f32,
+        timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
+        controller: profile_data::PlayerSide,
+        scale: TimingHistogramScale,
+        transparent: bool,
+        machine_font: MachineFont,
+        palette: JudgmentPalette,
+    ) -> Arc<[Actor]> {
+        let timing_windows = timing::effective_windows_ms();
+        let key = TimingPaneCacheKey {
+            worst_window_bits: worst_window_ms.to_bits(),
+            timing_window_bits: timing_windows.map(f32::to_bits),
+            mesh_address: timing_hist_mesh.map_or(0, |mesh| mesh.as_ptr() as usize),
+            mesh_len: timing_hist_mesh.map_or(0, |mesh| mesh.len()),
+            controller,
+            scale,
+            transparent,
+            machine_font,
+            palette,
+        };
+        let index = timing_scale_index(scale);
+        if let Some((_, actors)) = self.cached.borrow()[index]
+            .as_ref()
+            .filter(|(cached, _)| *cached == key)
+        {
+            return Arc::clone(actors);
+        }
+
+        let actors: Arc<[Actor]> = Arc::from([timing_pane_actor(
+            worst_window_ms,
+            timing_windows,
+            self,
+            timing_hist_mesh,
+            controller,
+            scale,
+            transparent,
+            machine_font,
+            palette,
+            27,
+        )]);
+        self.cached.borrow_mut()[index] = Some((key, Arc::clone(&actors)));
+        actors
+    }
+}
+
+#[inline(always)]
+const fn timing_scale_index(scale: TimingHistogramScale) -> usize {
+    match scale {
+        TimingHistogramScale::Itg => 0,
+        TimingHistogramScale::Ex => 1,
+        TimingHistogramScale::HardEx => 2,
     }
 }
 
@@ -173,6 +247,7 @@ const fn timing_bands_ms(
 #[allow(clippy::too_many_arguments)]
 fn timing_pane_actor(
     worst_window_ms: f32,
+    timing_windows: [f32; 5],
     text: &TimingPaneText,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
     controller: profile_data::PlayerSide,
@@ -229,7 +304,6 @@ fn timing_pane_actor(
 
     // Bottom bar judgment labels
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
-    let timing_windows: [f32; 5] = timing::effective_windows_ms(); // ms, with +1.5ms
     let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows, palette);
     let legend_span_ms = super::eval_graphs::timing_display_window_ms(worst_window_ms, scale);
 
@@ -337,20 +411,24 @@ pub(crate) fn push_timing_pane_with_palette(
     machine_font: MachineFont,
     palette: JudgmentPalette,
 ) {
-    // Five fixed chrome actors, thirteen HardEx legend labels, one mesh,
-    // and eight statistic labels/values.
-    const TIMING_PANE_CHILD_CAPACITY: usize = 27;
-    out.push(timing_pane_actor(
-        score_info.histogram.worst_window_ms,
-        text,
-        timing_hist_mesh,
-        controller,
-        scale,
-        transparent,
-        machine_font,
-        palette,
-        TIMING_PANE_CHILD_CAPACITY,
-    ));
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children: text.cached_actors(
+            score_info.histogram.worst_window_ms,
+            timing_hist_mesh,
+            controller,
+            scale,
+            transparent,
+            machine_font,
+            palette,
+        ),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -367,6 +445,7 @@ fn build_timing_pane_legacy(
 ) -> Vec<Actor> {
     vec![timing_pane_actor(
         worst_window_ms,
+        timing::effective_windows_ms(),
         text,
         timing_hist_mesh,
         controller,
@@ -388,14 +467,24 @@ pub struct TimingPaneAppendBenchmark {
 impl TimingPaneAppendBenchmark {
     #[must_use]
     pub fn new() -> Self {
-        Self {
+        let fixture = Self {
             text: TimingPaneText::from_timing(timing::TimingStats {
                 mean_abs_ms: 12.345,
                 mean_ms: -3.5,
                 stddev_ms: 2.25,
                 max_abs_ms: 180.0,
             }),
-        }
+        };
+        let _ = fixture.text.cached_actors(
+            180.0,
+            None,
+            profile_data::PlayerSide::P1,
+            TimingHistogramScale::HardEx,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        fixture
     }
 
     #[must_use]
@@ -420,6 +509,7 @@ impl TimingPaneAppendBenchmark {
         out.clear();
         out.push(timing_pane_actor(
             180.0,
+            timing::effective_windows_ms(),
             &self.text,
             None,
             profile_data::PlayerSide::P1,
@@ -430,7 +520,32 @@ impl TimingPaneAppendBenchmark {
             27,
         ));
         std::hint::black_box(&*out);
-        actor_tree_count(out)
+        semantic_actor_tree_count(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.push(Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            children: self.text.cached_actors(
+                180.0,
+                None,
+                profile_data::PlayerSide::P1,
+                TimingHistogramScale::HardEx,
+                false,
+                MachineFont::Mega,
+                JudgmentPalette::default(),
+            ),
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        });
+        std::hint::black_box(&*out);
+        semantic_actor_tree_count(out)
     }
 }
 
@@ -450,6 +565,14 @@ fn actor_tree_count(actors: &[Actor]) -> u64 {
                 _ => 1,
             }
     })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn semantic_actor_tree_count(actors: &[Actor]) -> u64 {
+    match actors {
+        [Actor::SharedFrame { children, .. }] => actor_tree_count(children),
+        _ => actor_tree_count(actors),
+    }
 }
 
 #[cfg(test)]
@@ -505,5 +628,30 @@ mod tests {
             fixture.direct_frame(&mut direct)
         );
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn retained_timing_matches_direct_and_reuses_the_shared_slice() {
+        let fixture = TimingPaneAppendBenchmark::new();
+        let mut direct = Vec::new();
+        let mut retained = Vec::new();
+        let _ = fixture.direct_frame(&mut direct);
+        let _ = fixture.retained_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("expected retained timing actors in one shared frame");
+        };
+        assert_eq!(format!("{direct:#?}"), format!("{children:#?}"));
+
+        let children = Arc::clone(children);
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained timing actors in one shared frame");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
     }
 }

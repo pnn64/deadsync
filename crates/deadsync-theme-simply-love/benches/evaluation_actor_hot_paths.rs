@@ -7,7 +7,7 @@ use deadsync_theme_simply_love::screens::components::evaluation::{
     event_progress::{EventOverlayCacheBenchmark, EventProgressCacheBenchmark},
     pane_gs_records::OnlineRecordsPaneCacheBenchmark,
     pane_machine_records::MachineRecordsPaneCacheBenchmark,
-    pane_modifiers::{benchmark_build_modifiers_pane, benchmark_push_modifiers_pane},
+    pane_modifiers::ModifiersPaneCacheBenchmark,
     pane_percentage::PercentagePaneAppendBenchmark,
     pane_qr::QrPaneCacheBenchmark,
     pane_stats::StatsPaneCacheBenchmark,
@@ -19,7 +19,6 @@ use deadsync_theme_simply_love::screens::components::shared::lobby_hud::{
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -271,24 +270,18 @@ fn grade_benchmark() {
 }
 
 fn modifiers_benchmark() {
-    let text: Arc<str> = Arc::from("M700, 40% Mini, Overhead, cel");
-    let mut legacy = benchmark_build_modifiers_pane(Arc::clone(&text));
+    let fixture = ModifiersPaneCacheBenchmark::new();
     let mut direct = Vec::with_capacity(2);
-    benchmark_push_modifiers_pane(&mut direct, Arc::clone(&text));
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.direct_frame(&mut direct),
+        fixture.retained_frame(&mut retained),
+    );
 
-    let old = measure(MODIFIER_FRAMES, || {
-        legacy.clear();
-        legacy.extend(benchmark_build_modifiers_pane(Arc::clone(&text)));
-        actor_count_checksum(black_box(&legacy))
-    });
-    let new = measure(MODIFIER_FRAMES, || {
-        direct.clear();
-        benchmark_push_modifiers_pane(&mut direct, Arc::clone(&text));
-        actor_count_checksum(black_box(&direct))
-    });
+    let old = measure(MODIFIER_FRAMES, || fixture.direct_frame(&mut direct));
+    let new = measure(MODIFIER_FRAMES, || fixture.retained_frame(&mut retained));
     report_pair(
-        "modifiers bar actor append",
+        "retained modifiers-bar actor tree",
         MODIFIER_FRAMES,
         &old,
         &new,
@@ -384,39 +377,42 @@ fn lobby_benchmark() {
 
 fn percentage_pane_benchmark() {
     let fixture = PercentagePaneAppendBenchmark::new();
-    let mut legacy = Vec::with_capacity(1);
     let mut direct = Vec::with_capacity(1);
-    let _ = fixture.legacy_frame(&mut legacy);
+    let mut retained = Vec::with_capacity(1);
     let _ = fixture.direct_frame(&mut direct);
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    assert_eq!(
+        fixture.direct_frame(&mut direct),
+        fixture.retained_frame(&mut retained),
+    );
 
-    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
-    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let old = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
     report_pair(
-        "percentage pane actor staging",
+        "retained percentage-pane actor tree",
         PANE_FRAMES,
         &old,
         &new,
-        false,
+        true,
     );
 }
 
 fn timing_pane_benchmark() {
     let fixture = TimingPaneAppendBenchmark::new();
-    let mut legacy = Vec::with_capacity(1);
     let mut direct = Vec::with_capacity(1);
-    let _ = fixture.legacy_frame(&mut legacy);
-    let _ = fixture.direct_frame(&mut direct);
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.direct_frame(&mut direct),
+        fixture.retained_frame(&mut retained),
+    );
 
-    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
-    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let old = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
     report_pair(
-        "aggregate timing pane actor staging",
+        "retained aggregate-timing actor tree",
         PANE_FRAMES,
         &old,
         &new,
-        false,
+        true,
     );
 }
 

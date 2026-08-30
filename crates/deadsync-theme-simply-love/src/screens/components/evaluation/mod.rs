@@ -103,6 +103,7 @@ pub(crate) use pane_gs_records::{
     push_gs_records_pane, push_itl_records_pane, push_srpg_records_pane,
 };
 pub(crate) use pane_machine_records::{MachineRecordsPaneText, push_machine_records_pane};
+pub(crate) use pane_modifiers::{ModifiersPanePresentation, push_cached_modifiers_pane};
 pub use pane_modifiers::{build_modifiers_pane, push_modifiers_pane};
 pub(crate) use pane_percentage::{PercentageText, push_pane_percentage_display_with_palette};
 pub(crate) use pane_qr::{QrPanePresentation, push_gs_qr_pane};

@@ -6,6 +6,8 @@ use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_profile as profile_data;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 use super::utils::{eval_style_alpha, pane_origin_x, pane3_origin_x};
 
@@ -19,11 +21,23 @@ const SMALL_SCORE_ZOOM_MEGA: f32 = 0.406;
 const COMPANION_SCORE_ZOOM_WENDY: f32 = 0.32;
 const COMPANION_SCORE_ZOOM_MEGA: f32 = 0.52;
 
+#[derive(Clone, Copy, PartialEq)]
+struct PercentageCacheKey {
+    show_ex_score: bool,
+    column_count: usize,
+    pane: EvalPane,
+    controller: profile_data::PlayerSide,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+}
+
 #[derive(Clone)]
 pub(crate) struct PercentageText {
     score: TextContent,
     ex: TextContent,
     hard_ex: TextContent,
+    cached: RefCell<Option<(PercentageCacheKey, Arc<[Actor]>)>>,
 }
 
 impl PercentageText {
@@ -32,7 +46,56 @@ impl PercentageText {
             score: percent_text(score.score_percent * 100.0),
             ex: percent_text(score.ex_score_percent.max(0.0)),
             hard_ex: percent_text(score.hard_ex_score_percent.max(0.0)),
+            cached: RefCell::new(None),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn cached_actors(
+        &self,
+        show_ex_score: bool,
+        column_count: usize,
+        pane: EvalPane,
+        controller: profile_data::PlayerSide,
+        transparent: bool,
+        machine_font: MachineFont,
+        palette: JudgmentPalette,
+    ) -> Arc<[Actor]> {
+        let key = PercentageCacheKey {
+            show_ex_score,
+            column_count,
+            pane,
+            controller,
+            transparent,
+            machine_font,
+            palette,
+        };
+        if let Some((_, actors)) = self
+            .cached
+            .borrow()
+            .as_ref()
+            .filter(|(cached, _)| *cached == key)
+        {
+            return Arc::clone(actors);
+        }
+
+        let actors = Arc::from(
+            pane_percentage_actor(
+                show_ex_score,
+                column_count,
+                self,
+                pane,
+                controller,
+                transparent,
+                machine_font,
+                palette,
+                4,
+            )
+            .into_iter()
+            .collect::<Vec<_>>(),
+        );
+        *self.cached.borrow_mut() = Some((key, Arc::clone(&actors)));
+        actors
     }
 }
 
@@ -276,19 +339,28 @@ pub(crate) fn push_pane_percentage_display_with_palette(
     machine_font: MachineFont,
     palette: JudgmentPalette,
 ) {
-    if let Some(actor) = pane_percentage_actor(
+    let children = text.cached_actors(
         score_info.show_ex_score,
         score_info.column_judgments.len(),
-        text,
         pane,
         controller,
         transparent,
         machine_font,
         palette,
-        4,
-    ) {
-        out.push(actor);
+    );
+    if children.is_empty() {
+        return;
     }
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -328,13 +400,24 @@ pub struct PercentagePaneAppendBenchmark {
 impl PercentagePaneAppendBenchmark {
     #[must_use]
     pub fn new() -> Self {
-        Self {
+        let fixture = Self {
             text: PercentageText {
                 score: percent_text(98.76),
                 ex: percent_text(99.12),
                 hard_ex: percent_text(97.54),
+                cached: RefCell::new(None),
             },
-        }
+        };
+        let _ = fixture.text.cached_actors(
+            true,
+            4,
+            EvalPane::FaPlus,
+            profile_data::PlayerSide::P1,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        fixture
     }
 
     #[must_use]
@@ -371,7 +454,33 @@ impl PercentagePaneAppendBenchmark {
             out.push(actor);
         }
         std::hint::black_box(&*out);
-        actor_tree_count(out)
+        semantic_actor_tree_count(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let children = self.text.cached_actors(
+            true,
+            4,
+            EvalPane::FaPlus,
+            profile_data::PlayerSide::P1,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        out.push(Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            children,
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        });
+        std::hint::black_box(&*out);
+        semantic_actor_tree_count(out)
     }
 }
 
@@ -391,6 +500,14 @@ fn actor_tree_count(actors: &[Actor]) -> u64 {
                 _ => 1,
             }
     })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn semantic_actor_tree_count(actors: &[Actor]) -> u64 {
+    match actors {
+        [Actor::SharedFrame { children, .. }] => actor_tree_count(children),
+        _ => actor_tree_count(actors),
+    }
 }
 
 #[cfg(test)]
@@ -430,5 +547,30 @@ mod tests {
             fixture.direct_frame(&mut direct)
         );
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn retained_percentage_matches_direct_and_reuses_the_shared_slice() {
+        let fixture = PercentagePaneAppendBenchmark::new();
+        let mut direct = Vec::new();
+        let mut retained = Vec::new();
+        let _ = fixture.direct_frame(&mut direct);
+        let _ = fixture.retained_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("expected retained percentage actors in one shared frame");
+        };
+        assert_eq!(format!("{direct:#?}"), format!("{children:#?}"));
+
+        let children = Arc::clone(children);
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained percentage actors in one shared frame");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
     }
 }
