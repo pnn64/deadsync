@@ -7,6 +7,9 @@ use deadsync_theme_simply_love::screens::components::select_music::select_music_
     SongSearchMatch, build_pack_matches, build_pack_matches_reference, build_song_matches,
     build_song_matches_reference, build_song_search_index,
 };
+use deadsync_theme_simply_love::screens::components::shared::fuzzy::{
+    best_match_score, best_match_score_reference, prepare_query, prepare_query_reference,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -24,7 +27,8 @@ struct CountingAlloc {
     allocs: AtomicU64,
     reallocs: AtomicU64,
     deallocs: AtomicU64,
-    bytes: AtomicU64,
+    allocated_bytes: AtomicU64,
+    freed_bytes: AtomicU64,
 }
 
 impl CountingAlloc {
@@ -34,7 +38,8 @@ impl CountingAlloc {
             allocs: AtomicU64::new(0),
             reallocs: AtomicU64::new(0),
             deallocs: AtomicU64::new(0),
-            bytes: AtomicU64::new(0),
+            allocated_bytes: AtomicU64::new(0),
+            freed_bytes: AtomicU64::new(0),
         }
     }
 
@@ -43,7 +48,8 @@ impl CountingAlloc {
             allocs: self.allocs.load(Ordering::Relaxed),
             reallocs: self.reallocs.load(Ordering::Relaxed),
             deallocs: self.deallocs.load(Ordering::Relaxed),
-            bytes: self.bytes.load(Ordering::Relaxed),
+            allocated_bytes: self.allocated_bytes.load(Ordering::Relaxed),
+            freed_bytes: self.freed_bytes.load(Ordering::Relaxed),
         }
     }
 }
@@ -56,7 +62,7 @@ unsafe impl GlobalAlloc for CountingAlloc {
         let ptr = unsafe { System.alloc(layout) };
         if !ptr.is_null() && self.enabled.load(Ordering::Relaxed) {
             self.allocs.fetch_add(1, Ordering::Relaxed);
-            self.bytes
+            self.allocated_bytes
                 .fetch_add(layout.size() as u64, Ordering::Relaxed);
         }
         ptr
@@ -65,6 +71,8 @@ unsafe impl GlobalAlloc for CountingAlloc {
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         if self.enabled.load(Ordering::Relaxed) {
             self.deallocs.fetch_add(1, Ordering::Relaxed);
+            self.freed_bytes
+                .fetch_add(layout.size() as u64, Ordering::Relaxed);
         }
         // SAFETY: this pair came from the delegated allocator.
         unsafe { System.dealloc(ptr, layout) };
@@ -76,8 +84,11 @@ unsafe impl GlobalAlloc for CountingAlloc {
         if !out.is_null() && self.enabled.load(Ordering::Relaxed) {
             self.reallocs.fetch_add(1, Ordering::Relaxed);
             if new_size > old.size() {
-                self.bytes
+                self.allocated_bytes
                     .fetch_add((new_size - old.size()) as u64, Ordering::Relaxed);
+            } else {
+                self.freed_bytes
+                    .fetch_add((old.size() - new_size) as u64, Ordering::Relaxed);
             }
         }
         out
@@ -89,7 +100,8 @@ struct AllocSnapshot {
     allocs: u64,
     reallocs: u64,
     deallocs: u64,
-    bytes: u64,
+    allocated_bytes: u64,
+    freed_bytes: u64,
 }
 
 impl AllocSnapshot {
@@ -98,8 +110,13 @@ impl AllocSnapshot {
             allocs: self.allocs - before.allocs,
             reallocs: self.reallocs - before.reallocs,
             deallocs: self.deallocs - before.deallocs,
-            bytes: self.bytes - before.bytes,
+            allocated_bytes: self.allocated_bytes - before.allocated_bytes,
+            freed_bytes: self.freed_bytes - before.freed_bytes,
         }
+    }
+
+    const fn churn_bytes(self) -> u64 {
+        self.allocated_bytes + self.freed_bytes
     }
 }
 
@@ -184,7 +201,7 @@ fn measure(ops_per_sample: usize, mut op: impl FnMut() -> u64) -> BenchResult {
 fn print_result(label: &str, result: &BenchResult) {
     println!(
         "{label:<9} {:>11.1} ns median  {:>11.1} ns p95  {:>11.1} cycles  \
-         {:>9.1} query/s  {:>5} alloc  {:>5} realloc  {:>5} free  {:>9} B",
+         {:>9.1} query/s  {:>5} alloc  {:>5} realloc  {:>5} free  {:>9} B alloc  {:>9} B churn",
         result.median_ns,
         result.p95_ns,
         result.median_cycles,
@@ -192,7 +209,8 @@ fn print_result(label: &str, result: &BenchResult) {
         result.allocated.allocs,
         result.allocated.reallocs,
         result.allocated.deallocs,
-        result.allocated.bytes,
+        result.allocated.allocated_bytes,
+        result.allocated.churn_bytes(),
     );
 }
 
@@ -201,16 +219,70 @@ fn print_pair(title: &str, old: &BenchResult, new: &BenchResult) {
     println!("\n{title}");
     print_result("old", old);
     print_result("new", new);
+    let cycle_reduction = if old.median_cycles.is_finite()
+        && new.median_cycles.is_finite()
+        && old.median_cycles != 0.0
+    {
+        100.0 * (1.0 - new.median_cycles / old.median_cycles)
+    } else {
+        0.0
+    };
     println!(
-        "change    {:>8.2}x throughput  {:>7.2}% median CPU  {:>7.2}% p95  {:>7.2}% bytes",
+        "change    {:>8.2}x throughput  {:>7.2}% median  {:>7.2}% p95  \
+         {:>7.2}% cycles  {:>7.2}% bytes  {:>7.2}% churn",
         old.median_ns / new.median_ns,
         100.0 * (1.0 - new.median_ns / old.median_ns),
         100.0 * (1.0 - new.p95_ns / old.p95_ns),
-        if old.allocated.bytes == 0 {
+        cycle_reduction,
+        if old.allocated.allocated_bytes == 0 {
             0.0
         } else {
-            100.0 * (1.0 - new.allocated.bytes as f64 / old.allocated.bytes as f64)
+            100.0
+                * (1.0
+                    - new.allocated.allocated_bytes as f64 / old.allocated.allocated_bytes as f64)
         },
+        if old.allocated.churn_bytes() == 0 {
+            0.0
+        } else {
+            100.0 * (1.0 - new.allocated.churn_bytes() as f64 / old.allocated.churn_bytes() as f64)
+        },
+    );
+}
+
+fn assert_strict_improvement(title: &str, old: &BenchResult, new: &BenchResult) {
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title}: median latency did not improve"
+    );
+    assert!(
+        new.p95_ns < old.p95_ns,
+        "{title}: p95 latency did not improve"
+    );
+    if old.median_cycles.is_finite() && new.median_cycles.is_finite() {
+        assert!(
+            new.median_cycles < old.median_cycles,
+            "{title}: CPU cycles did not improve"
+        );
+    }
+    assert!(
+        new.allocated.allocs < old.allocated.allocs,
+        "{title}: allocation count did not improve"
+    );
+    assert!(
+        new.allocated.reallocs <= old.allocated.reallocs,
+        "{title}: reallocation count regressed"
+    );
+    assert!(
+        new.allocated.deallocs < old.allocated.deallocs,
+        "{title}: free count did not improve"
+    );
+    assert!(
+        new.allocated.allocated_bytes < old.allocated.allocated_bytes,
+        "{title}: allocated bytes did not improve"
+    );
+    assert!(
+        new.allocated.churn_bytes() < old.allocated.churn_bytes(),
+        "{title}: memory churn did not improve"
     );
 }
 
@@ -362,11 +434,35 @@ fn filter_checksum(songs: &[Arc<SongData>], reference: bool) -> u64 {
     checksum
 }
 
+fn typo_fallback_checksum(songs: &[Arc<SongData>], reference: bool) -> u64 {
+    let mut checksum = 0u64;
+    if reference {
+        let query = prepare_query_reference("sonf");
+        for song in songs {
+            let score = best_match_score_reference(&query, &song.title, &[]);
+            checksum = checksum.rotate_left(3) ^ score.map_or(u64::MAX, |value| value as u64);
+        }
+    } else {
+        let query = prepare_query("sonf");
+        for song in songs {
+            let score = best_match_score(&query, &song.title, &[]);
+            checksum = checksum.rotate_left(3) ^ score.map_or(u64::MAX, |value| value as u64);
+        }
+    }
+    checksum
+}
+
 fn main() {
     let (song_wheel, songs) = catalog(128, 24);
     let song_index = build_song_search_index(&song_wheel);
     let (pack_wheel, _) = catalog(512, 1);
     let pack_index = build_song_search_index(&pack_wheel);
+
+    let old = measure(2, || typo_fallback_checksum(black_box(&songs), true));
+    let new = measure(2, || typo_fallback_checksum(black_box(&songs), false));
+    let title = "typo fallback (3,072 songs, one-edit query)";
+    print_pair(title, &old, &new);
+    assert_strict_improvement(title, &old, &new);
 
     let old = measure(5, || {
         match_checksum(&build_song_matches_reference(

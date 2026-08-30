@@ -11,6 +11,7 @@
 //!
 //! Scores are an ordering within a single query, not a stable scale.
 
+use smallvec::{SmallVec, smallvec};
 use std::borrow::Cow;
 use unicode_normalization::char::decompose_canonical;
 
@@ -21,6 +22,9 @@ const GAP_PENALTY_MAX: i32 = 10;
 /// Alias hits rank below a direct label hit of equal quality.
 const ALIAS_PENALTY: i32 = 30;
 const TYPO_BASE: i32 = 40;
+/// Keeps the typo fallback on the stack for every query accepted by song
+/// search, including the trailing DP cell.
+const EDIT_DISTANCE_STACK_CAPACITY: usize = 96;
 
 /// Full Unicode fold, not `to_ascii_lowercase`: labels are often non-Latin.
 #[inline]
@@ -85,7 +89,7 @@ pub fn fold_diacritics(text: &str) -> Cow<'_, str> {
 #[derive(Clone, Debug, Default)]
 pub struct Query {
     chars: Vec<char>,
-    text: String,
+    ascii: bool,
 }
 
 impl Query {
@@ -107,8 +111,8 @@ impl Query {
 #[must_use]
 pub fn prepare_query(query: &str) -> Query {
     let chars = query_chars(query);
-    let text: String = chars.iter().collect();
-    Query { chars, text }
+    let ascii = chars.iter().all(char::is_ascii);
+    Query { chars, ascii }
 }
 
 /// Folded query characters, computed once per keystroke and reused per candidate.
@@ -265,6 +269,158 @@ fn typo_score(query: &Query, candidate: &str) -> Option<i32> {
 
     let mut best_distance: Option<usize> = None;
     for word in std::iter::once(candidate).chain(candidate.split_whitespace()) {
+        let distance = if query.ascii && word.is_ascii() {
+            let bytes = word.as_bytes();
+            if bytes.len().abs_diff(qlen) > threshold {
+                continue;
+            }
+            bounded_levenshtein_by(qlen, bytes.len(), threshold, |qi, wi| {
+                query.chars[qi] == char::from(bytes[wi].to_ascii_lowercase())
+            })
+        } else {
+            // Candidate titles are already diacritic-folded. Case-fold into an
+            // inline buffer so Unicode typo matching has the same semantics as
+            // the old temporary `String` without touching the heap for normal
+            // search lengths.
+            let word_folded: SmallVec<[char; EDIT_DISTANCE_STACK_CAPACITY]> =
+                word.chars().map(fold).collect();
+            if word_folded.len().abs_diff(qlen) > threshold {
+                continue;
+            }
+            bounded_levenshtein_by(qlen, word_folded.len(), threshold, |qi, wi| {
+                query.chars[qi] == word_folded[wi]
+            })
+        };
+        let Some(distance) = distance else {
+            continue;
+        };
+        best_distance = Some(best_distance.map_or(distance, |b| b.min(distance)));
+        if best_distance == Some(0) {
+            break;
+        }
+    }
+    match best_distance {
+        Some(distance) if distance <= threshold => Some(TYPO_BASE - distance as i32),
+        _ => None,
+    }
+}
+
+/// Levenshtein distance limited to the only values typo scoring can accept.
+///
+/// The diagonal band avoids work that cannot lead to a distance at or below
+/// `limit`, while the inline row removes the allocation performed by
+/// `strsim::levenshtein` for each candidate word.
+fn bounded_levenshtein_by(
+    a_len: usize,
+    b_len: usize,
+    limit: usize,
+    mut equal: impl FnMut(usize, usize) -> bool,
+) -> Option<usize> {
+    if a_len.abs_diff(b_len) > limit {
+        return None;
+    }
+    if a_len == 0 {
+        return (b_len <= limit).then_some(b_len);
+    }
+    if b_len == 0 {
+        return (a_len <= limit).then_some(a_len);
+    }
+
+    let sentinel = limit + 1;
+    let mut row: SmallVec<[usize; EDIT_DISTANCE_STACK_CAPACITY]> = smallvec![sentinel; b_len + 1];
+    for (j, cell) in row.iter_mut().enumerate().take(b_len.min(limit) + 1) {
+        *cell = j;
+    }
+
+    for i in 1..=a_len {
+        let start = i.saturating_sub(limit).max(1);
+        let end = (i + limit).min(b_len);
+        if start > end {
+            return None;
+        }
+
+        let mut diagonal = row[start - 1];
+        if start == 1 {
+            row[0] = i.min(sentinel);
+        } else {
+            row[start - 1] = sentinel;
+        }
+        for j in start..=end {
+            let above = row[j];
+            let value = (above + 1)
+                .min(row[j - 1] + 1)
+                .min(diagonal + usize::from(!equal(i - 1, j - 1)))
+                .min(sentinel);
+            diagonal = above;
+            row[j] = value;
+        }
+        if end < b_len {
+            row[end + 1] = sentinel;
+        }
+    }
+
+    (row[b_len] <= limit).then_some(row[b_len])
+}
+
+/// The committed pre-optimization query representation, retained so the
+/// guarded benchmark can compare the new implementation with its exact old
+/// allocation and CPU behavior.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ReferenceQuery {
+    chars: Vec<char>,
+    text: String,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReferenceQuery {
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.chars.is_empty()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn prepare_query_reference(query: &str) -> ReferenceQuery {
+    let chars = query_chars(query);
+    let text = chars.iter().collect();
+    ReferenceQuery { chars, text }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn best_match_score_reference(
+    query: &ReferenceQuery,
+    label: &str,
+    aliases: &[&str],
+) -> Option<i32> {
+    let mut best = subsequence_score(&query.chars, label);
+
+    for alias in aliases {
+        if let Some(score) = subsequence_score(&query.chars, alias) {
+            let adjusted = score - ALIAS_PENALTY;
+            best = Some(best.map_or(adjusted, |b| b.max(adjusted)));
+        }
+    }
+
+    if best.is_none() {
+        best = typo_score_reference(query, label);
+    }
+
+    best
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn typo_score_reference(query: &ReferenceQuery, candidate: &str) -> Option<i32> {
+    let qlen = query.chars.len();
+    if qlen == 0 {
+        return None;
+    }
+    let threshold = (qlen / 3).max(1);
+
+    let mut best_distance: Option<usize> = None;
+    for word in std::iter::once(candidate).chain(candidate.split_whitespace()) {
         let wlen = word.chars().count();
         if wlen + threshold < qlen || wlen > qlen + threshold {
             continue;
@@ -411,5 +567,68 @@ mod tests {
         let q = prepare_query("xylophone");
         assert!(best_match_score(&q, "Speed Mod", SPEED_ALIASES).is_none());
         assert!(best_match_score(&q, "Butterfly", &[]).is_none());
+    }
+
+    #[test]
+    fn bounded_distance_matches_full_levenshtein_within_threshold() {
+        let words = ["", "a", "b", "ab", "ba", "abc", "cab", "скор"];
+        for a in words {
+            for b in words {
+                let a_chars: Vec<char> = a.chars().collect();
+                let b_chars: Vec<char> = b.chars().collect();
+                let full = strsim::levenshtein(a, b);
+                for limit in 0..=4 {
+                    let bounded =
+                        bounded_levenshtein_by(a_chars.len(), b_chars.len(), limit, |ai, bi| {
+                            a_chars[ai] == b_chars[bi]
+                        });
+                    assert_eq!(
+                        bounded,
+                        (full <= limit).then_some(full),
+                        "a={a:?}, b={b:?}, limit={limit}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_matcher_matches_committed_reference() {
+        const QUERIES: [&str; 9] = [
+            "",
+            "sonf",
+            "prespective",
+            "atcion",
+            "deja",
+            "déjà",
+            "скол",
+            "速度",
+            "xylophone",
+        ];
+        const LABELS: [&str; 9] = [
+            "Catalog Song 0042 Remix 11",
+            "Perspective",
+            "Action",
+            "Déjà Vu",
+            "Скорость",
+            "速度",
+            "Butterfly",
+            "Speed Mod",
+            "A Very Long Unrelated Candidate",
+        ];
+
+        for query in QUERIES {
+            let optimized = prepare_query(query);
+            let reference = prepare_query_reference(query);
+            assert_eq!(optimized.is_empty(), reference.is_empty());
+            for label in LABELS {
+                let folded = fold_diacritics(label);
+                assert_eq!(
+                    best_match_score(&optimized, &folded, SPEED_ALIASES),
+                    best_match_score_reference(&reference, &folded, SPEED_ALIASES),
+                    "query={query:?}, label={label:?}",
+                );
+            }
+        }
     }
 }
