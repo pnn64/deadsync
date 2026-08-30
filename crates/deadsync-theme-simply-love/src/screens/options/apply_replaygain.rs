@@ -20,6 +20,25 @@ pub(super) struct ApplyReplayGainUiState {
     /// Set when the user asks to cancel but the worker hasn't confirmed yet.
     pub(super) cancel_requested: bool,
     pub(super) started_at: Instant,
+    /// Game-thread-owned, one-entry result-tree cache. The first finished
+    /// frame warms it; worker/progress mutations, color, or viewport changes
+    /// replace it, and dismissal drops it. Its fixed bound needs no eviction
+    /// policy or instrumentation.
+    presentation_revision: u64,
+    presentation: RefCell<Option<ReplayGainPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ReplayGainPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct ReplayGainPresentation {
+    key: ReplayGainPresentationKey,
+    children: Arc<[Actor]>,
 }
 
 impl ApplyReplayGainUiState {
@@ -34,7 +53,15 @@ impl ApplyReplayGainUiState {
             cancelled: false,
             cancel_requested: false,
             started_at: Instant::now(),
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         }
+    }
+
+    #[inline(always)]
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
     }
 }
 
@@ -61,6 +88,7 @@ pub(super) fn apply_apply_replaygain_event(
     let Some(ui) = state.apply_replaygain_ui.as_mut() else {
         return;
     };
+    ui.invalidate_presentation();
     match event {
         SimplyLoveApplyReplayGainEvent::Started { total } => {
             ui.total = total;
@@ -98,15 +126,22 @@ pub(super) fn apply_apply_replaygain_event(
 }
 
 pub(super) fn update_apply_replaygain_ui(ui: &mut ApplyReplayGainUiState, dt: f32) {
+    let previous_displayed_done = ui.displayed_done.to_bits();
     let target = ui.done as f32;
     if ui.finished {
         ui.displayed_done = target;
+        if ui.displayed_done.to_bits() != previous_displayed_done {
+            ui.invalidate_presentation();
+        }
         return;
     }
     let dt = dt.max(0.0);
     let alpha = 1.0 - (-dt / APPLY_REPLAYGAIN_PROGRESS_TAU).exp();
     ui.displayed_done =
         (target - ui.displayed_done).mul_add(alpha.clamp(0.0, 1.0), ui.displayed_done);
+    if ui.displayed_done.to_bits() != previous_displayed_done {
+        ui.invalidate_presentation();
+    }
 }
 
 #[inline(always)]
@@ -129,6 +164,42 @@ fn apply_replaygain_progress(ui: &ApplyReplayGainUiState) -> (usize, usize, f32)
 }
 
 pub(super) fn push_apply_replaygain_overlay_actors(
+    out: &mut Vec<Actor>,
+    ui: &ApplyReplayGainUiState,
+    active_color_index: i32,
+) {
+    // Running progress has elapsed-time speed/ETA text. The finished result is
+    // stable while it waits for dismissal, so retain only that immutable tree.
+    if !ui.finished {
+        push_apply_replaygain_overlay_actors_unreserved(out, ui, active_color_index);
+        return;
+    }
+    let key = ReplayGainPresentationKey {
+        revision: ui.presentation_revision,
+        active_color_index,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = ui
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(8);
+        push_apply_replaygain_overlay_actors_unreserved(&mut children, ui, active_color_index);
+        let children = Arc::<[Actor]>::from(children);
+        *ui.presentation.borrow_mut() = Some(ReplayGainPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(out, children);
+}
+
+fn push_apply_replaygain_overlay_actors_unreserved(
     out: &mut Vec<Actor>,
     ui: &ApplyReplayGainUiState,
     active_color_index: i32,
@@ -307,25 +378,34 @@ pub(super) fn push_apply_replaygain_overlay_actors(
 
 #[cfg(any(test, feature = "bench-support"))]
 fn replaygain_overlay_checksum(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, z, .. } => content
-                .as_str()
-                .bytes()
-                .fold(u64::from(*z as u16), |hash, byte| {
-                    hash.rotate_left(7) ^ u64::from(byte)
-                }),
-            Actor::Frame { children, z, .. } => {
-                replaygain_overlay_checksum(children) ^ u64::from(*z as u16)
-            }
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    semantic_actors
+        .iter()
+        .fold(semantic_actors.len() as u64, |checksum, actor| {
+            let value = match actor {
+                Actor::Text { content, z, .. } => content
+                    .as_str()
+                    .bytes()
+                    .fold(u64::from(*z as u16), |hash, byte| {
+                        hash.rotate_left(7) ^ u64::from(byte)
+                    }),
+                Actor::Frame { children, z, .. } => {
+                    replaygain_overlay_checksum(children) ^ u64::from(*z as u16)
+                }
+                Actor::SharedFrame { children, z, .. } => {
+                    replaygain_overlay_checksum(children) ^ u64::from(*z as u16)
+                }
+                _ => 1,
+            };
+            checksum.rotate_left(11) ^ value
+        })
 }
 
-/// Stable completed-analysis frame used to compare the former temporary actor
-/// batch with direct append into the screen-owned actor list.
+/// Stable completed-analysis frame used to compare the former per-frame
+/// builder with the retained result tree.
 #[cfg(any(test, feature = "bench-support"))]
 pub struct ReplayGainOverlayBenchmark {
     ui: ApplyReplayGainUiState,
@@ -346,6 +426,8 @@ impl ReplayGainOverlayBenchmark {
                 cancelled: false,
                 cancel_requested: false,
                 started_at: Instant::now(),
+                presentation_revision: 0,
+                presentation: RefCell::new(None),
             },
         }
     }
@@ -353,16 +435,14 @@ impl ReplayGainOverlayBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(8);
-        push_apply_replaygain_overlay_actors(&mut actors, &self.ui, 2);
+        push_apply_replaygain_overlay_actors_unreserved(&mut actors, &self.ui, 2);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(8);
-        push_apply_replaygain_overlay_actors(&mut staged, &self.ui, 2);
-        out.extend(staged);
+        push_apply_replaygain_overlay_actors_unreserved(out, &self.ui, 2);
         std::hint::black_box(&*out);
         replaygain_overlay_checksum(out)
     }
@@ -388,7 +468,7 @@ mod overlay_staging_tests {
     use super::*;
 
     #[test]
-    fn direct_replaygain_append_matches_legacy_batch() {
+    fn retained_replaygain_result_matches_builder_and_reuses_tree() {
         crate::assets::i18n::init_for_tests();
         let benchmark = ReplayGainOverlayBenchmark::new();
         let mut legacy = Vec::with_capacity(8);
@@ -399,6 +479,42 @@ mod overlay_staging_tests {
             benchmark.direct_frame(&mut direct)
         );
         assert_eq!(legacy.len(), benchmark.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("expected a retained ReplayGain result tree");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        let children = Arc::clone(children);
+        let _ = benchmark.direct_frame(&mut direct);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = direct.as_slice()
+        else {
+            panic!("expected a retained ReplayGain result tree");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
+    }
+
+    #[test]
+    fn replaygain_result_mutation_invalidates_retained_tree() {
+        crate::assets::i18n::init_for_tests();
+        let mut benchmark = ReplayGainOverlayBenchmark::new();
+        let mut actors = Vec::with_capacity(8);
+        let _ = benchmark.direct_frame(&mut actors);
+        let old_checksum = replaygain_overlay_checksum(&actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained ReplayGain result tree");
+        };
+        let old = Arc::clone(children);
+
+        benchmark.ui.cancelled = true;
+        benchmark.ui.invalidate_presentation();
+        let _ = benchmark.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained ReplayGain result tree");
+        };
+        assert!(!Arc::ptr_eq(&old, children));
+        assert_ne!(old_checksum, replaygain_overlay_checksum(&actors));
     }
 }

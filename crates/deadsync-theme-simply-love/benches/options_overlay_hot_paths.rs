@@ -322,7 +322,7 @@ fn main() {
         score_import.actor_count(),
         &old_score,
         &new_score,
-        false,
+        true,
     );
 
     let replaygain = ReplayGainOverlayBenchmark::new();
@@ -337,7 +337,7 @@ fn main() {
         replaygain.actor_count(),
         &old_replaygain,
         &new_replaygain,
-        false,
+        true,
     );
 
     let pack_sync = PackSyncOverlayBenchmark::new();
@@ -543,7 +543,7 @@ fn main() {
         sync.actor_count(),
         &old_sync,
         &new_sync,
-        false,
+        true,
     );
 
     let shop = SrpgShopOverlayAppendBenchmark::new();

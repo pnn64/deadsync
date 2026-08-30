@@ -85,6 +85,25 @@ pub(super) struct ScoreImportUiState {
     pub(super) done_message: String,
     pub(super) done_since: Option<Instant>,
     pub(super) started_at: Instant,
+    /// Game-thread-owned, one-entry result-tree cache. The first completed
+    /// frame warms it; worker/progress mutations, color, or viewport changes
+    /// replace it, and closing the overlay drops it. Its fixed bound needs no
+    /// eviction policy or instrumentation.
+    presentation_revision: u64,
+    presentation: RefCell<Option<ScoreImportPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ScoreImportPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct ScoreImportPresentation {
+    key: ScoreImportPresentationKey,
+    children: Arc<[Actor]>,
 }
 
 impl ScoreImportUiState {
@@ -108,7 +127,15 @@ impl ScoreImportUiState {
             done_message: String::new(),
             done_since: None,
             started_at: Instant::now(),
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         }
+    }
+
+    #[inline(always)]
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
     }
 }
 
@@ -158,6 +185,47 @@ pub(super) fn score_import_progress(score_import: &ScoreImportUiState) -> (usize
 }
 
 pub(super) fn push_score_import_overlay_actors(
+    out: &mut Vec<Actor>,
+    score_import: &ScoreImportUiState,
+    active_color_index: i32,
+) {
+    // Live progress includes elapsed-time speed and ETA text, so it must stay
+    // on the dynamic builder. Once the worker finishes, the overlay is an
+    // immutable result screen that can share one actor tree until dismissal.
+    if !score_import.done {
+        push_score_import_overlay_actors_unreserved(out, score_import, active_color_index);
+        return;
+    }
+    let key = ScoreImportPresentationKey {
+        revision: score_import.presentation_revision,
+        active_color_index,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = score_import
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(8);
+        push_score_import_overlay_actors_unreserved(
+            &mut children,
+            score_import,
+            active_color_index,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *score_import.presentation.borrow_mut() = Some(ScoreImportPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(out, children);
+}
+
+fn push_score_import_overlay_actors_unreserved(
     out: &mut Vec<Actor>,
     score_import: &ScoreImportUiState,
     active_color_index: i32,
@@ -354,25 +422,34 @@ pub(super) fn push_score_import_overlay_actors(
 
 #[cfg(any(test, feature = "bench-support"))]
 fn score_overlay_checksum(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, z, .. } => content
-                .as_str()
-                .bytes()
-                .fold(u64::from(*z as u16), |hash, byte| {
-                    hash.rotate_left(7) ^ u64::from(byte)
-                }),
-            Actor::Frame { children, z, .. } => {
-                score_overlay_checksum(children) ^ u64::from(*z as u16)
-            }
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    semantic_actors
+        .iter()
+        .fold(semantic_actors.len() as u64, |checksum, actor| {
+            let value = match actor {
+                Actor::Text { content, z, .. } => content
+                    .as_str()
+                    .bytes()
+                    .fold(u64::from(*z as u16), |hash, byte| {
+                        hash.rotate_left(7) ^ u64::from(byte)
+                    }),
+                Actor::Frame { children, z, .. } => {
+                    score_overlay_checksum(children) ^ u64::from(*z as u16)
+                }
+                Actor::SharedFrame { children, z, .. } => {
+                    score_overlay_checksum(children) ^ u64::from(*z as u16)
+                }
+                _ => 1,
+            };
+            checksum.rotate_left(11) ^ value
+        })
 }
 
-/// Stable completed-import frame used to compare the former temporary actor
-/// batch with direct append into the screen-owned actor list.
+/// Stable completed-import frame used to compare the former per-frame builder
+/// with the retained result tree.
 #[cfg(any(test, feature = "bench-support"))]
 pub struct ScoreImportOverlayBenchmark {
     ui: ScoreImportUiState,
@@ -398,6 +475,8 @@ impl ScoreImportOverlayBenchmark {
                 done_message: "Score import benchmark complete".to_owned(),
                 done_since: None,
                 started_at: Instant::now(),
+                presentation_revision: 0,
+                presentation: RefCell::new(None),
             },
         }
     }
@@ -405,16 +484,14 @@ impl ScoreImportOverlayBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(8);
-        push_score_import_overlay_actors(&mut actors, &self.ui, 2);
+        push_score_import_overlay_actors_unreserved(&mut actors, &self.ui, 2);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(8);
-        push_score_import_overlay_actors(&mut staged, &self.ui, 2);
-        out.extend(staged);
+        push_score_import_overlay_actors_unreserved(out, &self.ui, 2);
         std::hint::black_box(&*out);
         score_overlay_checksum(out)
     }
@@ -440,7 +517,7 @@ mod overlay_staging_tests {
     use super::*;
 
     #[test]
-    fn direct_score_import_append_matches_legacy_batch() {
+    fn retained_score_import_result_matches_builder_and_reuses_tree() {
         crate::assets::i18n::init_for_tests();
         let benchmark = ScoreImportOverlayBenchmark::new();
         let mut legacy = Vec::with_capacity(8);
@@ -451,7 +528,42 @@ mod overlay_staging_tests {
             benchmark.direct_frame(&mut direct)
         );
         assert_eq!(legacy.len(), benchmark.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("expected a retained score-import result tree");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        let children = Arc::clone(children);
+        let _ = benchmark.direct_frame(&mut direct);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = direct.as_slice()
+        else {
+            panic!("expected a retained score-import result tree");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
+    }
+
+    #[test]
+    fn score_import_result_mutation_invalidates_retained_tree() {
+        crate::assets::i18n::init_for_tests();
+        let mut benchmark = ScoreImportOverlayBenchmark::new();
+        let mut actors = Vec::with_capacity(8);
+        let _ = benchmark.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained score-import result tree");
+        };
+        let old = Arc::clone(children);
+
+        benchmark.ui.done_message = "Updated import result".to_owned();
+        benchmark.ui.invalidate_presentation();
+        let _ = benchmark.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained score-import result tree");
+        };
+        assert!(!Arc::ptr_eq(&old, children));
+        assert!(format!("{children:#?}").contains("Updated import result"));
     }
 }
 
@@ -1147,6 +1259,7 @@ pub(super) fn apply_score_import_event(
     let Some(score_import) = state.score_import_ui.as_mut() else {
         return;
     };
+    score_import.invalidate_presentation();
     match event {
         crate::SimplyLoveScoreImportEvent::Progress(progress) => {
             score_import.total_charts = progress.total_charts;
@@ -1194,6 +1307,7 @@ pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: 
     // Ease the displayed progress toward the latest integer target. On `done`
     // we snap so the bar fills completely and the final speed readout matches
     // the summary's rate exactly.
+    let previous_displayed_done = score_import.displayed_done.to_bits();
     let target = score_import.processed_charts as f32;
     if score_import.done {
         score_import.displayed_done = target;
@@ -1206,5 +1320,8 @@ pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: 
     }
     if score_import.displayed_done > target {
         score_import.displayed_done = target;
+    }
+    if score_import.displayed_done.to_bits() != previous_displayed_done {
+        score_import.invalidate_presentation();
     }
 }

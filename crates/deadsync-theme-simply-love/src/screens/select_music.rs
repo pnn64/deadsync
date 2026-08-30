@@ -1143,6 +1143,34 @@ struct NullOrDieOverlayData {
     nav_last_tick_at: Option<Instant>,
     nav_last_sfx_at: Option<Instant>,
     confirm_selection: Option<ConfirmAction>,
+    /// Game-thread-owned, one-entry review-tree cache. The first non-running
+    /// frame warms it; worker/input mutations, color, font, or viewport changes
+    /// replace it, and closing the overlay drops it. Its fixed bound needs no
+    /// eviction policy or instrumentation.
+    presentation_revision: u64,
+    presentation: RefCell<Option<NullOrDiePresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NullOrDiePresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct NullOrDiePresentation {
+    key: NullOrDiePresentationKey,
+    children: Arc<[Actor]>,
+}
+
+impl NullOrDieOverlayData {
+    #[inline(always)]
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
+    }
 }
 
 enum ManualSyncTarget {
@@ -6488,6 +6516,7 @@ fn set_sync_overlay_phase(overlay: &mut NullOrDieOverlayData, phase: NullOrDieOv
         overlay.phase = phase;
         overlay.phase_changed_at = Instant::now();
         exit_confirm_mode(overlay);
+        overlay.invalidate_presentation();
     }
 }
 
@@ -6592,8 +6621,43 @@ fn push_null_or_die_overlay(
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
 ) {
-    actors.reserve(36);
-    push_null_or_die_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+    // Running analysis contains elapsed-time rate text and keeps using the
+    // dynamic builder. Ready/error review states are immutable between input
+    // or worker events, so share their complete tree across stable frames.
+    if overlay.phase == NullOrDieOverlayPhase::Running {
+        actors.reserve(36);
+        push_null_or_die_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+        return;
+    }
+    let key = NullOrDiePresentationKey {
+        revision: overlay.presentation_revision,
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(36);
+        push_null_or_die_overlay_unreserved(
+            &mut children,
+            overlay,
+            active_color_index,
+            machine_font,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(NullOrDiePresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(actors, children);
 }
 
 fn push_null_or_die_overlay_unreserved(
@@ -7253,6 +7317,8 @@ impl SyncOverlayAppendBenchmark {
                 nav_last_tick_at: None,
                 nav_last_sfx_at: None,
                 confirm_selection: Some(ConfirmAction::Confirm),
+                presentation_revision: 0,
+                presentation: RefCell::new(None),
             })),
         }
     }
@@ -7260,9 +7326,12 @@ impl SyncOverlayAppendBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(48);
-        push_sync_overlay(
+        let SyncOverlayState::NullOrDie(overlay) = &self.state else {
+            unreachable!("sync fixture uses automatic sync");
+        };
+        push_null_or_die_overlay_unreserved(
             &mut actors,
-            &self.state,
+            overlay,
             3,
             crate::config::MachineFont::Mega,
         );
@@ -7275,14 +7344,7 @@ impl SyncOverlayAppendBenchmark {
         let SyncOverlayState::NullOrDie(overlay) = &self.state else {
             unreachable!("sync fixture uses automatic sync");
         };
-        let mut staged = Vec::with_capacity(36);
-        push_null_or_die_overlay_unreserved(
-            &mut staged,
-            overlay,
-            3,
-            crate::config::MachineFont::Mega,
-        );
-        out.extend(staged);
+        push_null_or_die_overlay_unreserved(out, overlay, 3, crate::config::MachineFont::Mega);
         std::hint::black_box(&*out);
         select_music_overlay_actor_checksum(out)
     }
@@ -7305,21 +7367,30 @@ impl Default for SyncOverlayAppendBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn select_music_overlay_actor_checksum(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, z, .. } => content
-                .as_str()
-                .bytes()
-                .fold(u64::from(*z as u16), |hash, byte| {
-                    hash.rotate_left(7) ^ u64::from(byte)
-                }),
-            Actor::Frame { children, z, .. } => {
-                select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
-            }
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    semantic_actors
+        .iter()
+        .fold(semantic_actors.len() as u64, |checksum, actor| {
+            let value = match actor {
+                Actor::Text { content, z, .. } => content
+                    .as_str()
+                    .bytes()
+                    .fold(u64::from(*z as u16), |hash, byte| {
+                        hash.rotate_left(7) ^ u64::from(byte)
+                    }),
+                Actor::Frame { children, z, .. } => {
+                    select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
+                }
+                Actor::SharedFrame { children, z, .. } => {
+                    select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
+                }
+                _ => 1,
+            };
+            checksum.rotate_left(11) ^ value
+        })
 }
 
 /// Carry the song-search request counter over from the screen being replaced.
@@ -8855,6 +8926,7 @@ fn sync_song_hold_tick_interval(hold_elapsed: Duration) -> Duration {
 
 fn apply_sync_song_manual_nudge(overlay: &mut NullOrDieOverlayData, delta_seconds: f32) {
     overlay.manual_delta_seconds += delta_seconds;
+    overlay.invalidate_presentation();
 }
 
 fn begin_sync_song_hold(overlay: &mut NullOrDieOverlayData, dir: i8) {
@@ -8896,7 +8968,7 @@ impl ConfirmAction {
     }
 }
 
-const fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
     if overlay.confirm_selection.is_some() {
         return;
     }
@@ -8905,12 +8977,16 @@ const fn enter_confirm_mode(overlay: &mut NullOrDieOverlayData) {
     // the change and close. LEFT navigates to Edit (return to nudging),
     // RIGHT to Discard.
     overlay.confirm_selection = Some(ConfirmAction::Confirm);
+    overlay.invalidate_presentation();
     // Cancel any in-progress LEFT/RIGHT nudge ramp so it can't keep mutating
     // the sync delta after the user has switched modes.
     clear_sync_song_hold(overlay);
 }
 
-const fn exit_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+fn exit_confirm_mode(overlay: &mut NullOrDieOverlayData) {
+    if overlay.confirm_selection.is_some() {
+        overlay.invalidate_presentation();
+    }
     overlay.confirm_selection = None;
     clear_sync_song_hold(overlay);
 }
@@ -9453,6 +9529,7 @@ fn apply_song_sync_events(
     overlay: &mut NullOrDieOverlayData,
     events: Vec<crate::SimplyLoveSyncEvent>,
 ) {
+    let has_events = !events.is_empty();
     let mut refresh = NullOrDieOverlayRefresh::default();
     for event in events {
         match event {
@@ -9478,6 +9555,9 @@ fn apply_song_sync_events(
         }
     }
     refresh.flush(overlay);
+    if has_events {
+        overlay.invalidate_presentation();
+    }
 }
 
 pub fn apply_sync_analysis_events(
@@ -9575,6 +9655,8 @@ fn show_sync_song_overlay(state: &mut State) {
         nav_last_tick_at: None,
         nav_last_sfx_at: None,
         confirm_selection: None,
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
     }));
 }
 
@@ -9756,6 +9838,7 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
                             let next = selected.step(-1);
                             if next != selected {
                                 overlay.confirm_selection = Some(next);
+                                overlay.invalidate_presentation();
                                 play_change = true;
                             }
                         }
@@ -9766,6 +9849,7 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
                             let next = selected.step(1);
                             if next != selected {
                                 overlay.confirm_selection = Some(next);
+                                overlay.invalidate_presentation();
                                 play_change = true;
                             }
                         }
@@ -16748,6 +16832,8 @@ mod tests {
             nav_last_tick_at: None,
             nav_last_sfx_at: None,
             confirm_selection: None,
+            presentation_revision: 0,
+            presentation: std::cell::RefCell::new(None),
         }
     }
 
@@ -19856,7 +19942,44 @@ mod tests {
 
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), fixture.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("expected a retained automatic-sync result tree");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        let children = Arc::clone(children);
+        let _ = fixture.direct_frame(&mut direct);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = direct.as_slice()
+        else {
+            panic!("expected a retained automatic-sync result tree");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
+    }
+
+    #[test]
+    fn sync_review_mutation_invalidates_retained_tree() {
+        crate::assets::i18n::init_for_tests();
+        let mut fixture = super::SyncOverlayAppendBenchmark::new();
+        let mut actors = Vec::with_capacity(48);
+        let old_checksum = fixture.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained automatic-sync result tree");
+        };
+        let old = Arc::clone(children);
+
+        let super::SyncOverlayState::NullOrDie(overlay) = &mut fixture.state else {
+            unreachable!("sync fixture uses automatic sync");
+        };
+        super::apply_sync_song_manual_nudge(overlay, 0.001);
+        let new_checksum = fixture.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected a retained automatic-sync result tree");
+        };
+        assert!(!Arc::ptr_eq(&old, children));
+        assert_ne!(old_checksum, new_checksum);
     }
 
     #[test]
