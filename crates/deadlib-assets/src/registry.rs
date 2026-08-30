@@ -144,6 +144,10 @@ impl<T> GeneratedTextureRegistry<T> {
         self.entries.get(key).map(|entry| &entry.value)
     }
 
+    fn shared_key(&self, key: &str) -> Option<Arc<str>> {
+        self.entries.get(key).map(|entry| Arc::clone(&entry.key))
+    }
+
     #[cfg(any(test, feature = "bench-support"))]
     fn take_pending_keys(&mut self) -> Vec<Arc<str>> {
         let pending = std::mem::take(&mut self.pending_keys);
@@ -415,6 +419,17 @@ pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerD
 /// Panics if an internal synchronization lock is poisoned.
 pub fn generated_texture(key: &str) -> Option<GeneratedTexture> {
     GENERATED_TEXTURES.read().unwrap().get(key).cloned()
+}
+
+/// Return the session-owned key for a generated texture without allocating a
+/// second string.
+///
+/// # Panics
+///
+/// Panics if the generated-texture registry lock is poisoned.
+#[must_use]
+pub fn generated_texture_shared_key(key: &str) -> Option<Arc<str>> {
+    GENERATED_TEXTURES.read().unwrap().shared_key(key)
 }
 
 pub(crate) fn drain_pending_generated_textures(mut visit: impl FnMut(Arc<str>, GeneratedTexture)) {
@@ -725,6 +740,9 @@ mod tests {
         registry.register("generated/lifebar", 2_u64);
 
         assert_eq!(registry.get("generated/lifebar"), Some(&2));
+        let first_key = registry.shared_key("generated/lifebar").unwrap();
+        let second_key = registry.shared_key("generated/lifebar").unwrap();
+        assert!(Arc::ptr_eq(&first_key, &second_key));
         assert_eq!(
             registry
                 .take_pending_keys()
@@ -736,6 +754,10 @@ mod tests {
         assert!(registry.take_pending_keys().is_empty());
 
         registry.register("generated/lifebar", 3);
+        assert!(Arc::ptr_eq(
+            &first_key,
+            &registry.shared_key("generated/lifebar").unwrap()
+        ));
         assert_eq!(
             registry
                 .take_pending_keys()

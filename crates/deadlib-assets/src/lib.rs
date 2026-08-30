@@ -46,9 +46,9 @@ pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
-    register_generated_texture, register_texture_dims, register_texture_handle,
-    remove_texture_handle, sprite_sheet_dims, texture_dims, texture_handle,
-    texture_registry_generation,
+    generated_texture_shared_key, register_generated_texture, register_texture_dims,
+    register_texture_handle, remove_texture_handle, sprite_sheet_dims, texture_dims,
+    texture_handle, texture_registry_generation,
 };
 pub use texture_store::TextureStore;
 pub use upload::TextureUploadImage;

@@ -5,6 +5,7 @@ use deadlib_render_core::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_score as score_data;
 use image::{Rgba, RgbaImage};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 const DEFAULT_EVAL_ZOOM: f32 = 0.4;
 const LETTER_ZOOM: f32 = 0.85;
@@ -556,17 +557,33 @@ fn raw_affluent_actor(st: StarTransform, z: i16, alpha: f32, face_rot: f32) -> A
     )
 }
 
-fn clipped_affluent_texture(rot_deg: f32) -> Option<String> {
+static AFFLUENT_CLIP_KEYS: LazyLock<[Arc<str>; AFFLUENT_ROT_BUCKETS as usize]> =
+    LazyLock::new(|| {
+        std::array::from_fn(|bucket| {
+            Arc::<str>::from(format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}"))
+        })
+    });
+
+struct AffluentSourceImages {
+    star: RgbaImage,
+    face: RgbaImage,
+}
+
+// The effect has exactly two immutable bundled inputs. Keep their decoded pixels
+// for the process lifetime instead of decoding both PNGs for every new rotation.
+static AFFLUENT_SOURCE_IMAGES: OnceLock<Option<AffluentSourceImages>> = OnceLock::new();
+
+fn clipped_affluent_texture(rot_deg: f32) -> Option<Arc<str>> {
     let bucket = affluent_rot_bucket(rot_deg);
-    let key = format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}");
-    if assets::texture_dims(&key).is_some() {
-        return Some(key);
+    let key = &AFFLUENT_CLIP_KEYS[bucket as usize];
+    if assets::texture_dims(key).is_some() {
+        return Some(Arc::clone(key));
     }
 
     let rot = bucket as f32 * AFFLUENT_ROT_BUCKET_DEG;
     let image = build_clipped_affluent_texture(rot)?;
-    assets::register_generated_texture(&key, image, SamplerDesc::default());
-    Some(key)
+    assets::register_generated_texture(key, image, SamplerDesc::default());
+    Some(Arc::clone(key))
 }
 
 #[inline(always)]
@@ -581,13 +598,29 @@ fn load_grade_rgba(key: &str) -> Option<RgbaImage> {
         .ok()
 }
 
+fn load_affluent_source_images() -> Option<AffluentSourceImages> {
+    Some(AffluentSourceImages {
+        star: load_grade_rgba(STAR_TEX)?,
+        face: load_grade_rgba(AFFLUENT_TEX)?,
+    })
+}
+
+fn affluent_source_images() -> Option<&'static AffluentSourceImages> {
+    AFFLUENT_SOURCE_IMAGES
+        .get_or_init(load_affluent_source_images)
+        .as_ref()
+}
+
 fn build_clipped_affluent_texture(rot_deg: f32) -> Option<RgbaImage> {
-    let star = load_grade_rgba(STAR_TEX)?;
-    let face = load_grade_rgba(AFFLUENT_TEX)?;
-    let (w, h) = (star.width(), star.height());
+    let sources = affluent_source_images()?;
+    Some(build_clipped_affluent_texture_dense(sources, rot_deg))
+}
+
+fn build_clipped_affluent_texture_dense(sources: &AffluentSourceImages, rot_deg: f32) -> RgbaImage {
+    let (w, h) = (sources.star.width(), sources.star.height());
     let mut out = RgbaImage::new(w, h);
-    let face_cx = face.width() as f32 * 0.5;
-    let face_cy = face.height() as f32 * 0.5;
+    let face_cx = sources.face.width() as f32 * 0.5;
+    let face_cy = sources.face.height() as f32 * 0.5;
     let out_cx = w as f32 * 0.5;
     let out_cy = h as f32 * 0.5;
     let rot = -rot_deg.to_radians();
@@ -595,8 +628,8 @@ fn build_clipped_affluent_texture(rot_deg: f32) -> Option<RgbaImage> {
 
     for y in 0..h {
         for x in 0..w {
-            let mask_a = star.get_pixel(x, y)[3];
-            if mask_a == 0 {
+            let mask_alpha = sources.star.get_pixel(x, y)[3];
+            if mask_alpha == 0 {
                 continue;
             }
 
@@ -604,15 +637,69 @@ fn build_clipped_affluent_texture(rot_deg: f32) -> Option<RgbaImage> {
             let ly = y as f32 + 0.5 - out_cy - AFFLUENT_OFFSET_Y;
             let rx = (lx * cos - ly * sin) / AFFLUENT_ZOOM + face_cx;
             let ry = (lx * sin + ly * cos) / AFFLUENT_ZOOM + face_cy;
-            let Some(src) = sample_rgba_bilinear(&face, rx, ry) else {
+            let Some(src) = sample_rgba_bilinear(&sources.face, rx, ry) else {
                 continue;
             };
 
-            let a = ((u16::from(src[3]) * u16::from(mask_a)) / 255) as u8;
-            out.put_pixel(x, y, Rgba([src[0], src[1], src[2], a]));
+            let alpha = ((u16::from(src[3]) * u16::from(mask_alpha)) / 255) as u8;
+            out.put_pixel(x, y, Rgba([src[0], src[1], src[2], alpha]));
         }
     }
-    Some(out)
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn affluent_source_checksum(sources: &AffluentSourceImages) -> u64 {
+    let image_checksum = |image: &RgbaImage| {
+        let bytes = image.as_raw();
+        let middle = bytes.len() / 2;
+        (u64::from(image.width()) << 48)
+            ^ (u64::from(image.height()) << 32)
+            ^ u64::from(bytes.first().copied().unwrap_or_default())
+            ^ (u64::from(bytes.get(middle).copied().unwrap_or_default()) << 8)
+            ^ (u64::from(bytes.last().copied().unwrap_or_default()) << 16)
+    };
+    image_checksum(&sources.star).rotate_left(17) ^ image_checksum(&sources.face)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_prime_affluent_texture(rot_deg: f32) -> bool {
+    clipped_affluent_texture(rot_deg).is_some()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_legacy_affluent_texture_key(rot_deg: f32) -> Option<Arc<str>> {
+    let bucket = affluent_rot_bucket(rot_deg);
+    let key = format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}");
+    assets::texture_dims(&key)?;
+    Some(Arc::<str>::from(key))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_cached_affluent_texture_key(rot_deg: f32) -> Option<Arc<str>> {
+    clipped_affluent_texture(rot_deg)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_legacy_affluent_source_checksum() -> Option<u64> {
+    load_affluent_source_images()
+        .as_ref()
+        .map(affluent_source_checksum)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_cached_affluent_source_checksum() -> Option<u64> {
+    affluent_source_images().map(affluent_source_checksum)
 }
 
 fn sample_rgba_bilinear(img: &RgbaImage, x: f32, y: f32) -> Option<[u8; 4]> {
@@ -855,6 +942,35 @@ mod tests {
             push_actors(&mut direct, grade, params);
             assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
         }
+    }
+
+    #[test]
+    fn affluent_bucket_keys_preserve_names_and_shared_identity() {
+        assert_eq!(AFFLUENT_CLIP_KEYS.len(), AFFLUENT_ROT_BUCKETS as usize);
+        for (bucket, key) in AFFLUENT_CLIP_KEYS.iter().enumerate() {
+            assert_eq!(
+                key.as_ref(),
+                format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}")
+            );
+        }
+
+        let first = Arc::clone(&AFFLUENT_CLIP_KEYS[45]);
+        let second = Arc::clone(&AFFLUENT_CLIP_KEYS[45]);
+        assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn retained_affluent_sources_match_fresh_decodes() {
+        let freshly_loaded =
+            load_affluent_source_images().expect("bundled grade art should load freshly");
+        let retained = affluent_source_images().expect("bundled grade art should stay loaded");
+
+        assert_eq!(freshly_loaded.star, retained.star);
+        assert_eq!(freshly_loaded.face, retained.face);
+        assert_eq!(
+            affluent_source_checksum(&freshly_loaded),
+            affluent_source_checksum(retained)
+        );
     }
 
     #[test]

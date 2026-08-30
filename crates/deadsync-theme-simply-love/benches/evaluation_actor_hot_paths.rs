@@ -34,6 +34,9 @@ const MODIFIER_FRAMES: usize = 500_000;
 const LOBBY_FRAMES: usize = 30_000;
 const PANE_FRAMES: usize = 50_000;
 const TEST_INPUT_FRAMES: usize = 100_000;
+const AFFLUENT_KEY_FRAMES: usize = 200_000;
+const AFFLUENT_SOURCE_READS: usize = 500;
+const PANE_MASK_KEY_FRAMES: usize = 200_000;
 const SAMPLE_OPS: usize = 500;
 
 struct CountingAlloc {
@@ -243,6 +246,77 @@ fn percent_change(old: f64, new: f64) -> f64 {
 
 fn actor_count_checksum(actors: &[Actor]) -> u64 {
     actors.len() as u64
+}
+
+fn text_checksum(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
+    })
+}
+
+fn affluent_texture_benchmarks() {
+    const ROT_DEG: f32 = 90.0;
+    assert!(
+        eval_grades::benchmark_prime_affluent_texture(ROT_DEG),
+        "bundled affluent grade art should load"
+    );
+    let legacy_key = eval_grades::benchmark_legacy_affluent_texture_key(ROT_DEG)
+        .expect("primed generated texture should exist");
+    let cached_key = eval_grades::benchmark_cached_affluent_texture_key(ROT_DEG)
+        .expect("primed generated texture should exist");
+    assert_eq!(legacy_key, cached_key);
+
+    let old = measure(AFFLUENT_KEY_FRAMES, || {
+        eval_grades::benchmark_legacy_affluent_texture_key(black_box(ROT_DEG))
+            .map_or(0, |key| text_checksum(&key))
+    });
+    let new = measure(AFFLUENT_KEY_FRAMES, || {
+        eval_grades::benchmark_cached_affluent_texture_key(black_box(ROT_DEG))
+            .map_or(0, |key| text_checksum(&key))
+    });
+    report_pair(
+        "shared affluent rotation-bucket keys",
+        AFFLUENT_KEY_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    assert_eq!(
+        eval_grades::benchmark_legacy_affluent_source_checksum(),
+        eval_grades::benchmark_cached_affluent_source_checksum(),
+    );
+    let old = measure(AFFLUENT_SOURCE_READS, || {
+        eval_grades::benchmark_legacy_affluent_source_checksum().unwrap_or_default()
+    });
+    let new = measure(AFFLUENT_SOURCE_READS, || {
+        eval_grades::benchmark_cached_affluent_source_checksum().unwrap_or_default()
+    });
+    report_pair(
+        "retained decoded affluent source images",
+        AFFLUENT_SOURCE_READS,
+        &old,
+        &new,
+        true,
+    );
+
+    let pane = ColumnPaneCacheBenchmark::new();
+    let shared_key = pane.shared_mask_key();
+    let legacy_key = pane.legacy_mask_key();
+    assert_eq!(legacy_key, shared_key);
+    let old = measure(PANE_MASK_KEY_FRAMES, || {
+        text_checksum(&pane.legacy_mask_key())
+    });
+    let new = measure(PANE_MASK_KEY_FRAMES, || {
+        text_checksum(&pane.shared_mask_key())
+    });
+    report_pair(
+        "shared pane arrow-mask keys",
+        PANE_MASK_KEY_FRAMES,
+        &old,
+        &new,
+        true,
+    );
 }
 
 fn test_input_benchmarks() {
@@ -673,6 +747,7 @@ fn cycle_counter() -> Option<u64> {
 
 fn main() {
     deadsync_theme_simply_love::i18n::init_for_tests();
+    affluent_texture_benchmarks();
     grade_benchmark();
     modifiers_benchmark();
     lobby_benchmark();

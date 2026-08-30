@@ -16,6 +16,7 @@ use deadsync_profile as profile_data;
 use image::{Rgba, RgbaImage};
 use std::cell::RefCell;
 use std::hash::Hasher;
+use std::sync::Arc;
 use twox_hash::XxHash64;
 
 use super::utils::{arrow_breakdown_rgba, pane3_origin_x};
@@ -83,23 +84,60 @@ const fn pane3_width(num_cols: usize) -> f32 {
     }
 }
 
-#[inline(always)]
-fn pane3_solid_arrow_mask_key(texture_key: &str) -> String {
-    let mut hasher = XxHash64::default();
-    hasher.write(texture_key.as_bytes());
-    format!("__eval_pane3_arrow_mask_{:016x}", hasher.finish())
+const PANE3_SOLID_ARROW_MASK_KEY_PREFIX: &str = "__eval_pane3_arrow_mask_";
+
+struct Pane3SolidArrowMaskKey {
+    bytes: [u8; 64],
+    len: usize,
 }
 
-fn pane3_solid_arrow_texture(texture_key: &str) -> String {
+impl Pane3SolidArrowMaskKey {
+    #[inline(always)]
+    fn as_str(&self) -> &str {
+        // SAFETY: construction copies an ASCII prefix and lowercase hex digits.
+        unsafe { std::str::from_utf8_unchecked(&self.bytes[..self.len]) }
+    }
+}
+
+#[inline(always)]
+fn pane3_solid_arrow_mask_key(texture_key: &str) -> Pane3SolidArrowMaskKey {
+    let mut hasher = XxHash64::default();
+    hasher.write(texture_key.as_bytes());
+    let hash = hasher.finish();
+    let prefix = PANE3_SOLID_ARROW_MASK_KEY_PREFIX.as_bytes();
+    let mut bytes = [0_u8; 64];
+    bytes[..prefix.len()].copy_from_slice(prefix);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for digit in 0..16 {
+        let shift = (15 - digit) * 4;
+        bytes[prefix.len() + digit] = HEX[((hash >> shift) & 0xF) as usize];
+    }
+    Pane3SolidArrowMaskKey {
+        bytes,
+        len: prefix.len() + 16,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn pane3_solid_arrow_mask_key_legacy(texture_key: &str) -> String {
+    let mut hasher = XxHash64::default();
+    hasher.write(texture_key.as_bytes());
+    format!(
+        "{PANE3_SOLID_ARROW_MASK_KEY_PREFIX}{:016x}",
+        hasher.finish()
+    )
+}
+
+fn pane3_solid_arrow_texture(texture_key: &str) -> Arc<str> {
     let key = pane3_solid_arrow_mask_key(texture_key);
-    if assets::texture_dims(&key).is_some() {
+    if let Some(key) = assets::generated_texture_shared_key(key.as_str()) {
         return key;
     }
 
     let Ok(src) = deadsync_assets::open_bundled_image(&format!("assets/{texture_key}"))
         .map(|img| img.to_rgba8())
     else {
-        return texture_key.to_string();
+        return Arc::from(texture_key);
     };
 
     let (w, h) = (src.width(), src.height());
@@ -113,8 +151,9 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> String {
         };
         mask.put_pixel(x, y, out);
     }
-    assets::register_generated_texture(&key, mask, SamplerDesc::default());
-    key
+    assets::register_generated_texture(key.as_str(), mask, SamplerDesc::default());
+    assets::generated_texture_shared_key(key.as_str())
+        .expect("generated pane arrow texture was just registered")
 }
 
 #[inline(always)]
@@ -1235,6 +1274,31 @@ impl ColumnPaneCacheBenchmark {
         }
     }
 
+    fn benchmark_texture_key(&self) -> &str {
+        self.noteskin
+            .note_layers
+            .iter()
+            .flat_map(|layers| layers.iter())
+            .next()
+            .expect("benchmark noteskin should contain a tap-note layer")
+            .texture_key()
+    }
+
+    #[must_use]
+    pub fn legacy_mask_key(&self) -> Arc<str> {
+        let key = pane3_solid_arrow_mask_key_legacy(self.benchmark_texture_key());
+        assert!(
+            assets::texture_dims(&key).is_some(),
+            "benchmark generated mask should be primed"
+        );
+        Arc::from(key)
+    }
+
+    #[must_use]
+    pub fn shared_mask_key(&self) -> Arc<str> {
+        pane3_solid_arrow_texture(self.benchmark_texture_key())
+    }
+
     #[must_use]
     pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
@@ -1294,8 +1358,8 @@ mod tests {
     use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
         ColumnPaneCacheBenchmark, FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts,
-        RowKind, STANDARD_ROWS, build_pane3_arrow_preview, column_row_counts, pane3_width,
-        row_disabled,
+        RowKind, STANDARD_ROWS, build_pane3_arrow_preview, column_row_counts,
+        pane3_solid_arrow_mask_key, pane3_solid_arrow_mask_key_legacy, pane3_width, row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::actors::Actor;
@@ -1304,6 +1368,21 @@ mod tests {
     use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
     use std::sync::Arc;
+
+    #[test]
+    fn stack_arrow_mask_keys_match_legacy_formatting() {
+        for texture_key in [
+            "noteskins/pump/default/DownLeft Tap Note 8x4.png",
+            "noteskins/dance/love/Left Tap Note.png",
+            "short.png",
+            "",
+        ] {
+            assert_eq!(
+                pane3_solid_arrow_mask_key(texture_key).as_str(),
+                pane3_solid_arrow_mask_key_legacy(texture_key)
+            );
+        }
+    }
 
     #[test]
     fn static_column_rows_preserve_judgment_order_and_labels() {
