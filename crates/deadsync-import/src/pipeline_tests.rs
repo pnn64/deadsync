@@ -8,9 +8,11 @@ use std::sync::Arc;
 
 use deadsync_chart::{ArrowStats, ChartData, SongData, SongPack, StaminaCounts, TechCounts};
 use deadsync_profile::PlayerOptionsData;
-use deadsync_score::{decode_local_score_entry, encode_local_score_entry, local_score_from_itg};
+use deadsync_score::{
+    ImportedHighScore, decode_local_score_entry, encode_local_score_entry, local_score_from_itg,
+};
 
-use super::itg::parse_song_scores;
+use super::itg::{ItgSongScores, ItgSource, ItgStepsScores, parse_song_scores};
 use super::pipeline::{prepare_import, run_import};
 use super::resolver::{ChartResolver, Resolution};
 use super::xml;
@@ -126,6 +128,10 @@ fn song(simfile_path: &str, charts: Vec<ChartData>) -> SongData {
 }
 
 fn library() -> Vec<SongPack> {
+    library_with_charts(vec![chart("Hard", "abc123def456")])
+}
+
+fn library_with_charts(charts: Vec<ChartData>) -> Vec<SongPack> {
     vec![SongPack {
         group_name: "My Pack".into(),
         name: "My Pack".into(),
@@ -137,11 +143,17 @@ fn library() -> Vec<SongPack> {
         sync_pref: deadsync_chart::SyncPref::Default,
         directory: PathBuf::from("Songs/My Pack"),
         banner_path: None,
-        songs: vec![Arc::new(song(
-            "Songs/My Pack/Cool Song/cool.ssc",
-            vec![chart("Hard", "abc123def456")],
-        ))],
+        songs: vec![Arc::new(song("Songs/My Pack/Cool Song/cool.ssc", charts))],
     }]
+}
+
+fn imported_high_score(grade: &str, w1: u32) -> ImportedHighScore {
+    ImportedHighScore {
+        grade: grade.to_owned(),
+        percent_dp: 0.95,
+        w1,
+        ..Default::default()
+    }
 }
 
 #[test]
@@ -273,6 +285,111 @@ fn chart_resolver_handles_case_edits_and_missing_charts() {
         resolver.resolve("Ghost Pack/Ghost Song", "dance-single", "Hard", ""),
         Resolution::SongNotFound
     );
+}
+
+#[test]
+fn score_output_reserves_the_source_record_count() {
+    let mut source = ItgSource::default();
+    source.songs.push(ItgSongScores {
+        dir: "Songs/My Pack/Cool Song/".to_owned(),
+        steps: vec![ItgStepsScores {
+            steps_type: "dance-single".to_owned(),
+            difficulty: "Hard".to_owned(),
+            high_scores: (0..32)
+                .map(|index| imported_high_score("Tier03", index))
+                .collect(),
+            ..Default::default()
+        }],
+    });
+    let prepared = prepare_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &library(),
+    );
+    assert_eq!(prepared.score_entries.len(), 32);
+    assert!(prepared.score_entries.capacity() >= source.total_high_scores());
+    assert_eq!(prepared.summary.scores_total, 32);
+}
+
+#[test]
+fn step_resolution_keeps_per_record_summary_counts() {
+    let valid_steps = ItgStepsScores {
+        steps_type: "dance-single".to_owned(),
+        difficulty: "Hard".to_owned(),
+        high_scores: vec![
+            imported_high_score("Tier03", 1),
+            imported_high_score("Unknown", 2),
+            imported_high_score("Tier04", 3),
+        ],
+        ..Default::default()
+    };
+    let missing_chart_steps = ItgStepsScores {
+        difficulty: "Challenge".to_owned(),
+        high_scores: vec![
+            imported_high_score("Tier03", 4),
+            imported_high_score("Tier03", 5),
+        ],
+        ..valid_steps.clone()
+    };
+    let source = ItgSource {
+        songs: vec![
+            ItgSongScores {
+                dir: "Songs/My Pack/Cool Song/".to_owned(),
+                steps: vec![valid_steps, missing_chart_steps],
+            },
+            ItgSongScores {
+                dir: "Songs/Missing Pack/Ghost Song/".to_owned(),
+                steps: vec![ItgStepsScores {
+                    steps_type: "dance-single".to_owned(),
+                    difficulty: "Hard".to_owned(),
+                    high_scores: vec![
+                        imported_high_score("Tier03", 6),
+                        imported_high_score("Tier03", 7),
+                    ],
+                    ..Default::default()
+                }],
+            },
+        ],
+        ..Default::default()
+    };
+    let prepared = prepare_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &library(),
+    );
+    assert_eq!(prepared.score_entries.len(), 2);
+    assert_eq!(prepared.summary.scores_total, 7);
+    assert_eq!(prepared.summary.scores_unmapped, 1);
+    assert_eq!(prepared.summary.charts_chart_not_found, 2);
+    assert_eq!(prepared.summary.charts_song_not_found, 2);
+}
+
+#[test]
+fn favorite_hashes_reserve_and_collect_every_resolved_chart() {
+    let charts = (0..24)
+        .map(|index| chart("Hard", &format!("favorite-hash-{index:02}")))
+        .collect();
+    let packs = library_with_charts(charts);
+    let source = ItgSource {
+        favorites: vec![
+            "My Pack/Cool Song".to_owned(),
+            "Missing Pack/Ghost Song".to_owned(),
+        ],
+        ..Default::default()
+    };
+    let prepared = prepare_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &packs,
+    );
+    assert_eq!(prepared.favorite_hashes.len(), 24);
+    assert!(prepared.favorite_hashes.capacity() >= 24);
+    assert_eq!(prepared.summary.favorites_total, 2);
+    assert_eq!(prepared.summary.favorites_imported, 1);
+    assert_eq!(prepared.summary.favorites_song_not_found, 1);
 }
 
 #[test]
