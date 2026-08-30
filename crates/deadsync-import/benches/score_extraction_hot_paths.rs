@@ -16,6 +16,12 @@ const SONGS: usize = 96;
 const STEPS_PER_SONG: usize = 6;
 const SCORES_PER_STEPS: usize = 8;
 const SCORE_ITEMS: usize = SONGS * STEPS_PER_SONG * SCORES_PER_STEPS;
+const CAPACITY_SONGS: usize = 2_048;
+const CAPACITY_STEP_SONGS: usize = 8;
+const CAPACITY_STEPS_PER_SONG: usize = 512;
+const CAPACITY_SCORE_SONGS: usize = 4;
+const CAPACITY_SCORE_STEPS: usize = 4;
+const CAPACITY_SCORES_PER_STEPS: usize = 1_024;
 const GZIP_LINES: usize = 24_000;
 const ITERATIONS: usize = 60;
 const SAMPLES: usize = 20;
@@ -173,6 +179,17 @@ fn measure(items_per_op: usize, mut operation: impl FnMut() -> u64) -> BenchResu
         allocation_runs,
         checksum,
     }
+}
+
+fn measure_best_of(items_per_op: usize, mut operation: impl FnMut() -> u64) -> BenchResult {
+    let mut best = measure(items_per_op, &mut operation);
+    for _ in 1..3 {
+        let candidate = measure(items_per_op, &mut operation);
+        if candidate.ns_per_op < best.ns_per_op {
+            best = candidate;
+        }
+    }
+    best
 }
 
 #[derive(Clone, Copy)]
@@ -376,6 +393,45 @@ fn fixture() -> XmlNode {
     }
 }
 
+fn capacity_fixture(song_count: usize, steps_per_song: usize, scores_per_steps: usize) -> XmlNode {
+    let mut songs = Vec::with_capacity(song_count);
+    for song_index in 0..song_count {
+        let mut steps = Vec::with_capacity(steps_per_song);
+        for steps_index in 0..steps_per_song {
+            let high_scores = (0..scores_per_steps)
+                .map(|_| XmlNode {
+                    tag: "HighScore".to_owned(),
+                    ..Default::default()
+                })
+                .collect();
+            steps.push(XmlNode {
+                tag: "Steps".to_owned(),
+                attrs: vec![
+                    ("StepsType".to_owned(), "dance-single".to_owned()),
+                    ("Difficulty".to_owned(), format!("Capacity-{steps_index}")),
+                ],
+                children: vec![XmlNode {
+                    tag: "HighScoreList".to_owned(),
+                    children: high_scores,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            });
+        }
+        songs.push(XmlNode {
+            tag: "Song".to_owned(),
+            attrs: vec![("Dir".to_owned(), format!("Songs/Capacity/{song_index}/"))],
+            children: steps,
+            ..Default::default()
+        });
+    }
+    XmlNode {
+        tag: "SongScores".to_owned(),
+        children: songs,
+        ..Default::default()
+    }
+}
+
 fn gzip_fixture() -> (Vec<u8>, usize) {
     let mut text = String::with_capacity(GZIP_LINES * 128);
     let mut state = 0x9e37_79b9_7f4a_7c15u64;
@@ -404,8 +460,47 @@ fn gzip_fixture() -> (Vec<u8>, usize) {
 
 fn main() {
     let root = fixture();
+    let song_capacity_root = capacity_fixture(CAPACITY_SONGS, 1, 1);
+    let step_capacity_root = capacity_fixture(CAPACITY_STEP_SONGS, CAPACITY_STEPS_PER_SONG, 1);
+    let score_capacity_root = capacity_fixture(
+        CAPACITY_SCORE_SONGS,
+        CAPACITY_SCORE_STEPS,
+        CAPACITY_SCORES_PER_STEPS,
+    );
     let (compressed, decoded_bytes) = gzip_fixture();
 
+    print_pair(
+        "reserve score song output",
+        &measure_best_of(CAPACITY_SONGS, || {
+            bench_support::score_capacity_none(black_box(&song_capacity_root))
+        }),
+        &measure_best_of(CAPACITY_SONGS, || {
+            bench_support::score_capacity_songs(black_box(&song_capacity_root))
+        }),
+        AllocationGuard::ReallocationsDrop,
+    );
+    print_pair(
+        "reserve steps per score song",
+        &measure_best_of(CAPACITY_STEP_SONGS * CAPACITY_STEPS_PER_SONG, || {
+            bench_support::score_capacity_songs(black_box(&step_capacity_root))
+        }),
+        &measure_best_of(CAPACITY_STEP_SONGS * CAPACITY_STEPS_PER_SONG, || {
+            bench_support::score_capacity_steps(black_box(&step_capacity_root))
+        }),
+        AllocationGuard::ReallocationsDrop,
+    );
+    print_pair(
+        "reserve high scores per steps",
+        &measure_best_of(
+            CAPACITY_SCORE_SONGS * CAPACITY_SCORE_STEPS * CAPACITY_SCORES_PER_STEPS,
+            || bench_support::score_capacity_steps(black_box(&score_capacity_root)),
+        ),
+        &measure_best_of(
+            CAPACITY_SCORE_SONGS * CAPACITY_SCORE_STEPS * CAPACITY_SCORES_PER_STEPS,
+            || bench_support::score_capacity_all(black_box(&score_capacity_root)),
+        ),
+        AllocationGuard::ReallocationsDrop,
+    );
     print_pair(
         "gzip output capacity from footer",
         &measure(decoded_bytes, || {

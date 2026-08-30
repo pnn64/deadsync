@@ -516,6 +516,24 @@ fn gzip_output_capacity(bytes: &[u8]) -> usize {
 
 /// Extracts `<SongScores>` from a parsed `Stats.xml` root (`<Stats>`).
 pub fn parse_song_scores(root: &XmlNode) -> Vec<ItgSongScores> {
+    parse_song_scores_with::<true, true, true>(root)
+}
+
+fn output_vec<T, const RESERVE: bool>(source_len: usize) -> Vec<T> {
+    if RESERVE {
+        Vec::with_capacity(source_len)
+    } else {
+        Vec::new()
+    }
+}
+
+fn parse_song_scores_with<
+    const RESERVE_SONGS: bool,
+    const RESERVE_STEPS: bool,
+    const RESERVE_SCORES: bool,
+>(
+    root: &XmlNode,
+) -> Vec<ItgSongScores> {
     // The root is normally <Stats>, with <SongScores> inside. Be tolerant: if we
     // were handed <SongScores> directly, use it.
     let song_scores = if root.tag == "SongScores" {
@@ -527,13 +545,13 @@ pub fn parse_song_scores(root: &XmlNode) -> Vec<ItgSongScores> {
         }
     };
 
-    let mut out = Vec::new();
+    let mut out = output_vec::<_, RESERVE_SONGS>(song_scores.children.len());
     for song in song_scores.children_named("Song") {
         let dir = song.attr("Dir").unwrap_or("").to_string();
         if dir.is_empty() {
             continue;
         }
-        let mut steps_list = Vec::new();
+        let mut steps_list = output_vec::<_, RESERVE_STEPS>(song.children.len());
         for steps in song.children_named("Steps") {
             let steps_type = steps.attr("StepsType").unwrap_or("").to_string();
             let difficulty = steps.attr("Difficulty").unwrap_or("").to_string();
@@ -544,10 +562,10 @@ pub fn parse_song_scores(root: &XmlNode) -> Vec<ItgSongScores> {
             let Some(list) = steps.child("HighScoreList") else {
                 continue;
             };
-            let high_scores: Vec<ImportedHighScore> = list
-                .children_named("HighScore")
-                .map(parse_high_score)
-                .collect();
+            let mut high_scores = output_vec::<_, RESERVE_SCORES>(list.children.len());
+            for high_score in list.children_named("HighScore") {
+                high_scores.push(parse_high_score(high_score));
+            }
             if high_scores.is_empty() {
                 continue;
             }
@@ -678,6 +696,16 @@ fn parse_hold_judgments_once(node: &XmlNode, score: &mut ImportedHighScore) {
 }
 
 fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
+    parse_song_scores_owned_with::<true, true, true>(root)
+}
+
+fn parse_song_scores_owned_with<
+    const RESERVE_SONGS: bool,
+    const RESERVE_STEPS: bool,
+    const RESERVE_SCORES: bool,
+>(
+    root: XmlNode,
+) -> Vec<ItgSongScores> {
     let song_scores = if root.tag == "SongScores" {
         root
     } else {
@@ -691,7 +719,7 @@ fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
         }
     };
 
-    let mut out = Vec::new();
+    let mut out = output_vec::<_, RESERVE_SONGS>(song_scores.children.len());
     for song in song_scores.children {
         if song.tag != "Song" {
             continue;
@@ -704,7 +732,7 @@ fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
             continue;
         }
 
-        let mut steps_list = Vec::new();
+        let mut steps_list = output_vec::<_, RESERVE_STEPS>(children.len());
         for steps in children {
             if steps.tag != "Steps" {
                 continue;
@@ -722,7 +750,7 @@ fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
             else {
                 continue;
             };
-            let mut high_scores = Vec::new();
+            let mut high_scores = output_vec::<_, RESERVE_SCORES>(list.children.len());
             for high_score in list.children {
                 if high_score.tag == "HighScore" {
                     high_scores.push(parse_high_score_owned(high_score));
@@ -864,6 +892,22 @@ pub mod bench_support {
 
     pub fn consumed(root: XmlNode) -> u64 {
         checksum(&parse_song_scores_owned(root))
+    }
+
+    pub fn score_capacity_none(root: &XmlNode) -> u64 {
+        checksum(&parse_song_scores_with::<false, false, false>(root))
+    }
+
+    pub fn score_capacity_songs(root: &XmlNode) -> u64 {
+        checksum(&parse_song_scores_with::<true, false, false>(root))
+    }
+
+    pub fn score_capacity_steps(root: &XmlNode) -> u64 {
+        checksum(&parse_song_scores_with::<true, true, false>(root))
+    }
+
+    pub fn score_capacity_all(root: &XmlNode) -> u64 {
+        checksum(&parse_song_scores_with::<true, true, true>(root))
     }
 
     fn gzip_checksum(text: &str) -> u64 {
@@ -1076,6 +1120,38 @@ mod tests {
         assert_eq!(score.grade, "Tier02");
         assert_eq!(score.w1, 321);
         assert_eq!(score.held, 12);
+    }
+
+    #[test]
+    fn score_capacity_stages_preserve_borrowed_and_owned_results() {
+        let root = xml::parse(SAMPLE_STATS).expect("xml");
+        let borrowed_reference = parse_song_scores_with::<false, false, false>(&root);
+        assert_song_scores_eq(
+            &borrowed_reference,
+            &parse_song_scores_with::<true, false, false>(&root),
+        );
+        assert_song_scores_eq(
+            &borrowed_reference,
+            &parse_song_scores_with::<true, true, false>(&root),
+        );
+        assert_song_scores_eq(
+            &borrowed_reference,
+            &parse_song_scores_with::<true, true, true>(&root),
+        );
+
+        let owned_reference = parse_song_scores_owned_with::<false, false, false>(root.clone());
+        assert_song_scores_eq(
+            &owned_reference,
+            &parse_song_scores_owned_with::<true, false, false>(root.clone()),
+        );
+        assert_song_scores_eq(
+            &owned_reference,
+            &parse_song_scores_owned_with::<true, true, false>(root.clone()),
+        );
+        assert_song_scores_eq(
+            &owned_reference,
+            &parse_song_scores_owned_with::<true, true, true>(root),
+        );
     }
 
     #[test]
