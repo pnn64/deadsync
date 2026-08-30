@@ -3093,47 +3093,58 @@ fn build_meter_grouped_entries(
 }
 
 fn build_popularity_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     history: &SelectMusicHistoryView,
 ) -> Vec<MusicWheelEntry> {
-    let ranked = score_data::ranked_popular_songs(
-        songs_from_entries(grouped_entries),
+    ranking.rank_popular(
         history
             .machine_played_chart_counts
             .iter()
             .map(|(hash, count)| (hash.as_str(), *count)),
         POPULAR_SONGS_TO_SHOW,
         true,
+        workspace,
         song_title_cmp,
     );
+    let songs = ranking.songs();
     single_header_song_entries(
         tr("SelectMusic", "MostPopular").to_string(),
-        ranked.into_iter().map(|(song, _)| song),
+        workspace
+            .drain_popular()
+            .map(|(song_ix, _)| Arc::clone(&songs[song_ix])),
     )
 }
 
 fn build_recent_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     history: &SelectMusicHistoryView,
 ) -> Vec<MusicWheelEntry> {
-    let songs = score_data::ranked_recent_songs(
-        songs_from_entries(grouped_entries),
+    ranking.rank_recent(
         history
             .machine_recent_chart_hashes
             .iter()
             .map(String::as_str),
         RECENT_SONGS_TO_SHOW,
+        workspace,
     );
-    single_header_song_entries(tr("SelectMusic", "RecentlyPlayed").to_string(), songs)
+    let songs = ranking.songs();
+    single_header_song_entries(
+        tr("SelectMusic", "RecentlyPlayed").to_string(),
+        workspace
+            .drain_recent_song_indices()
+            .map(|song_ix| Arc::clone(&songs[song_ix])),
+    )
 }
 
 fn build_top_grades_grouped_entries(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     chart_type: &str,
     history: &SelectMusicHistoryView,
 ) -> Vec<MusicWheelEntry> {
-    let graded_songs = score_data::ranked_top_grade_songs(
-        songs_from_entries(grouped_entries),
+    ranking.rank_top_grades(
         chart_type,
         |chart_hash, out| {
             for side_history in &history.sides {
@@ -3142,17 +3153,19 @@ fn build_top_grades_grouped_entries(
                 }
             }
         },
-        song_title_sort_key,
+        workspace,
+        song_title_cmp,
     );
 
     let mut entries: Vec<MusicWheelEntry> =
-        Vec::with_capacity(graded_songs.len().saturating_add(20));
+        Vec::with_capacity(workspace.top_grades().len().saturating_add(20));
     let mut current_group: Option<String> = None;
     let mut current_header_index: Option<usize> = None;
     let mut current_count = 0usize;
     let mut header_idx = 0usize;
+    let songs = ranking.songs();
 
-    for (song, best) in graded_songs {
+    for (song_ix, best) in workspace.drain_top_grades() {
         let group_name = match best {
             Some(g) => score_data::grade_group_name(g).to_string(),
             None => tr("SelectMusic", "Unplayed").to_string(),
@@ -3173,7 +3186,7 @@ fn build_top_grades_grouped_entries(
             header_idx += 1;
         }
         current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
+        entries.push(MusicWheelEntry::Song(Arc::clone(&songs[song_ix])));
     }
 
     write_header_song_count(&mut entries, current_header_index, current_count);
@@ -3181,62 +3194,76 @@ fn build_top_grades_grouped_entries(
 }
 
 fn build_popularity_grouped_entries_for_profile(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     history: &SelectMusicHistorySideView,
 ) -> Vec<MusicWheelEntry> {
     let header = format!("{} (Profile)", tr("SelectMusic", "MostPopular"));
-    let ranked = score_data::ranked_popular_songs(
-        songs_from_entries(grouped_entries),
+    ranking.rank_popular(
         history
             .played_chart_counts
             .iter()
             .map(|(hash, count)| (hash.as_str(), *count)),
         POPULAR_SONGS_TO_SHOW,
         false,
+        workspace,
         song_title_cmp,
     );
-    single_header_song_entries(header, ranked.into_iter().map(|(song, _)| song))
+    let songs = ranking.songs();
+    single_header_song_entries(
+        header,
+        workspace
+            .drain_popular()
+            .map(|(song_ix, _)| Arc::clone(&songs[song_ix])),
+    )
 }
 
 fn build_recent_grouped_entries_for_profile(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     history: &SelectMusicHistorySideView,
 ) -> Vec<MusicWheelEntry> {
     let header = format!("{} (Profile)", tr("SelectMusic", "RecentlyPlayed"));
+    ranking.rank_recent(
+        history.recent_chart_hashes.iter().map(String::as_str),
+        RECENT_SONGS_TO_SHOW,
+        workspace,
+    );
+    let songs = ranking.songs();
     single_header_song_entries(
         header,
-        score_data::ranked_recent_songs(
-            songs_from_entries(grouped_entries),
-            history.recent_chart_hashes.iter().map(String::as_str),
-            RECENT_SONGS_TO_SHOW,
-        ),
+        workspace
+            .drain_recent_song_indices()
+            .map(|song_ix| Arc::clone(&songs[song_ix])),
     )
 }
 
 fn build_top_grades_grouped_entries_for_side(
-    grouped_entries: &[MusicWheelEntry],
+    ranking: &score_data::SongRankingIndex<'_>,
+    workspace: &mut score_data::SongRankingWorkspace,
     chart_type: &str,
     history: &SelectMusicHistorySideView,
 ) -> Vec<MusicWheelEntry> {
-    let graded_songs = score_data::ranked_top_grade_songs(
-        songs_from_entries(grouped_entries),
+    ranking.rank_top_grades(
         chart_type,
         |chart_hash, out| {
             if let Some(score) = history_score(history, chart_hash) {
                 out.push(score);
             }
         },
-        song_title_sort_key,
+        workspace,
+        song_title_cmp,
     );
 
     let mut entries: Vec<MusicWheelEntry> =
-        Vec::with_capacity(graded_songs.len().saturating_add(20));
+        Vec::with_capacity(workspace.top_grades().len().saturating_add(20));
     let mut current_group: Option<String> = None;
     let mut current_header_index: Option<usize> = None;
     let mut current_count = 0usize;
     let mut header_idx = 0usize;
+    let songs = ranking.songs();
 
-    for (song, best) in graded_songs {
+    for (song_ix, best) in workspace.drain_top_grades() {
         let group_name = match best {
             Some(g) => score_data::grade_group_name(g).to_string(),
             None => tr("SelectMusic", "Unplayed").to_string(),
@@ -3257,7 +3284,7 @@ fn build_top_grades_grouped_entries_for_side(
             header_idx += 1;
         }
         current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
+        entries.push(MusicWheelEntry::Song(Arc::clone(&songs[song_ix])));
     }
 
     write_header_song_count(&mut entries, current_header_index, current_count);
@@ -3530,13 +3557,19 @@ fn playlist_cache_entry<'a>(state: &'a State, id: &str) -> Option<&'a PlaylistCa
 }
 
 fn refresh_recent_cache(state: &mut State) {
+    let songs = songs_from_entries(&state.group_entries);
+    let ranking = score_data::SongRankingIndex::new(&songs);
+    let mut workspace = score_data::SongRankingWorkspace::default();
     state.recent_entries =
-        build_recent_grouped_entries(&state.group_entries, &state.history).into();
+        build_recent_grouped_entries(&ranking, &mut workspace, &state.history).into();
 }
 
 fn refresh_popularity_cache(state: &mut State) {
+    let songs = songs_from_entries(&state.group_entries);
+    let ranking = score_data::SongRankingIndex::new(&songs);
+    let mut workspace = score_data::SongRankingWorkspace::default();
     state.popularity_entries =
-        build_popularity_grouped_entries(&state.group_entries, &state.history).into();
+        build_popularity_grouped_entries(&ranking, &mut workspace, &state.history).into();
 }
 
 fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
@@ -3911,12 +3944,22 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let bpm_entries = build_bpm_grouped_entries(&all_entries).into();
     let length_entries = build_length_grouped_entries(&all_entries).into();
     let meter_entries = build_meter_grouped_entries(&all_entries, target_chart_type).into();
+    let ranking_songs = songs_from_entries(&all_entries);
+    let mut ranking = score_data::SongRankingIndex::new(&ranking_songs);
+    ranking.prepare_song_order(song_title_cmp);
+    let mut ranking_workspace = score_data::SongRankingWorkspace::default();
     let popularity_entries =
-        build_popularity_grouped_entries(&all_entries, &init_view.history).into();
-    let recent_entries = build_recent_grouped_entries(&all_entries, &init_view.history).into();
-    let top_grades_entries =
-        build_top_grades_grouped_entries(&all_entries, target_chart_type, &init_view.history)
+        build_popularity_grouped_entries(&ranking, &mut ranking_workspace, &init_view.history)
             .into();
+    let recent_entries =
+        build_recent_grouped_entries(&ranking, &mut ranking_workspace, &init_view.history).into();
+    let top_grades_entries = build_top_grades_grouped_entries(
+        &ranking,
+        &mut ranking_workspace,
+        target_chart_type,
+        &init_view.history,
+    )
+    .into();
 
     // Per-player sort entries use shell-prepared history and side-specific grades.
     let p1_history =
@@ -3924,35 +3967,43 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     let p2_history =
         &init_view.history.sides[profile_data::player_side_index(profile_data::PlayerSide::P2)];
     let popularity_p1_entries: Arc<[MusicWheelEntry]> = if p1_history.available {
-        build_popularity_grouped_entries_for_profile(&all_entries, p1_history)
+        build_popularity_grouped_entries_for_profile(&ranking, &mut ranking_workspace, p1_history)
     } else {
         Vec::default()
     }
     .into();
     let popularity_p2_entries: Arc<[MusicWheelEntry]> = if p2_history.available {
-        build_popularity_grouped_entries_for_profile(&all_entries, p2_history)
+        build_popularity_grouped_entries_for_profile(&ranking, &mut ranking_workspace, p2_history)
     } else {
         Vec::default()
     }
     .into();
     let recent_p1_entries: Arc<[MusicWheelEntry]> = if p1_history.available {
-        build_recent_grouped_entries_for_profile(&all_entries, p1_history)
+        build_recent_grouped_entries_for_profile(&ranking, &mut ranking_workspace, p1_history)
     } else {
         Vec::default()
     }
     .into();
     let recent_p2_entries: Arc<[MusicWheelEntry]> = if p2_history.available {
-        build_recent_grouped_entries_for_profile(&all_entries, p2_history)
+        build_recent_grouped_entries_for_profile(&ranking, &mut ranking_workspace, p2_history)
     } else {
         Vec::default()
     }
     .into();
-    let top_grades_p1_entries =
-        build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p1_history)
-            .into();
-    let top_grades_p2_entries =
-        build_top_grades_grouped_entries_for_side(&all_entries, target_chart_type, p2_history)
-            .into();
+    let top_grades_p1_entries = build_top_grades_grouped_entries_for_side(
+        &ranking,
+        &mut ranking_workspace,
+        target_chart_type,
+        p1_history,
+    )
+    .into();
+    let top_grades_p2_entries = build_top_grades_grouped_entries_for_side(
+        &ranking,
+        &mut ranking_workspace,
+        target_chart_type,
+        p2_history,
+    )
+    .into();
     let joined_favorites_entries = build_favorites_view_entries(
         &all_entries,
         &series_entries,

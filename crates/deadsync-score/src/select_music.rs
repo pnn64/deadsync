@@ -3,8 +3,228 @@ use deadsync_chart::SongData;
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use std::cmp::Ordering;
 use std::sync::Arc;
+use std::vec::Drain;
 
 pub const FOLDER_STATS_STAR_BUCKETS: usize = 5;
+
+/// Immutable chart-to-song lookup shared by a batch of Select Music rankings.
+///
+/// The index borrows the screen's song list and is intentionally short-lived:
+/// callers build it once before producing the machine and per-profile views,
+/// then discard it after those immutable views have been assembled.
+pub struct SongRankingIndex<'a> {
+    songs: &'a [Arc<SongData>],
+    chart_hash_to_song: FxHashMap<&'a str, usize>,
+    song_order_rank: Vec<usize>,
+}
+
+/// Reusable main-thread storage for a batch of Select Music rankings.
+///
+/// All vectors retain their capacity between rankings. Recent-song membership
+/// uses generation stamps so clearing it is O(1); a full clear occurs only
+/// after the `u32` generation counter wraps.
+#[derive(Default)]
+pub struct SongRankingWorkspace {
+    song_play_counts: Vec<u32>,
+    popular: Vec<(usize, u32)>,
+    recent_song_indices: Vec<usize>,
+    seen_generation: Vec<u32>,
+    generation: u32,
+    scores: Vec<CachedScore>,
+    top_grades: Vec<(usize, Option<Grade>)>,
+}
+
+impl<'a> SongRankingIndex<'a> {
+    #[must_use]
+    pub fn new(songs: &'a [Arc<SongData>]) -> Self {
+        Self {
+            songs,
+            chart_hash_to_song: chart_hash_song_indices(songs),
+            song_order_rank: Vec::new(),
+        }
+    }
+
+    /// Precomputes a total song-order rank once for all subsequent ranking
+    /// calls. Those calls must use the same comparator.
+    pub fn prepare_song_order(&mut self, song_cmp: impl Fn(&SongData, &SongData) -> Ordering) {
+        let mut song_order: Vec<usize> = (0..self.songs.len()).collect();
+        song_order.sort_unstable_by(|left, right| {
+            song_cmp(&self.songs[*left], &self.songs[*right]).then_with(|| left.cmp(right))
+        });
+        self.song_order_rank.resize(self.songs.len(), 0);
+        for (rank, song_ix) in song_order.into_iter().enumerate() {
+            self.song_order_rank[song_ix] = rank;
+        }
+    }
+
+    #[must_use]
+    pub const fn songs(&self) -> &'a [Arc<SongData>] {
+        self.songs
+    }
+
+    pub fn rank_popular<H: AsRef<str>>(
+        &self,
+        chart_play_counts: impl IntoIterator<Item = (H, u32)>,
+        limit: usize,
+        include_zero_play_songs: bool,
+        workspace: &mut SongRankingWorkspace,
+        song_cmp: impl Fn(&SongData, &SongData) -> Ordering,
+    ) {
+        workspace.song_play_counts.resize(self.songs.len(), 0);
+        workspace.song_play_counts.fill(0);
+        for (chart_hash, chart_plays) in chart_play_counts {
+            let Some(&song_ix) = self.chart_hash_to_song.get(chart_hash.as_ref()) else {
+                continue;
+            };
+            workspace.song_play_counts[song_ix] =
+                workspace.song_play_counts[song_ix].saturating_add(chart_plays);
+        }
+
+        workspace.popular.clear();
+        workspace.popular.reserve(self.songs.len());
+        workspace.popular.extend(
+            self.songs
+                .iter()
+                .enumerate()
+                .filter(|(song_ix, _)| {
+                    include_zero_play_songs || workspace.song_play_counts[*song_ix] > 0
+                })
+                .map(|(song_ix, _)| (song_ix, workspace.song_play_counts[song_ix])),
+        );
+        workspace
+            .popular
+            .sort_unstable_by(|(left_ix, left_count), (right_ix, right_count)| {
+                right_count.cmp(left_count).then_with(|| {
+                    if self.song_order_rank.len() == self.songs.len() {
+                        self.song_order_rank[*left_ix].cmp(&self.song_order_rank[*right_ix])
+                    } else {
+                        song_cmp(&self.songs[*left_ix], &self.songs[*right_ix])
+                            .then_with(|| left_ix.cmp(right_ix))
+                    }
+                })
+            });
+        workspace
+            .popular
+            .truncate(limit.min(workspace.popular.len()));
+    }
+
+    pub fn rank_recent<H: AsRef<str>>(
+        &self,
+        recent_chart_hashes: impl IntoIterator<Item = H>,
+        limit: usize,
+        workspace: &mut SongRankingWorkspace,
+    ) {
+        workspace.begin_recent_pass(self.songs.len(), limit);
+        let generation = workspace.generation;
+        for chart_hash in recent_chart_hashes {
+            let Some(&song_ix) = self.chart_hash_to_song.get(chart_hash.as_ref()) else {
+                continue;
+            };
+            if workspace.seen_generation[song_ix] == generation {
+                continue;
+            }
+            workspace.seen_generation[song_ix] = generation;
+            workspace.recent_song_indices.push(song_ix);
+            if workspace.recent_song_indices.len() >= limit {
+                break;
+            }
+        }
+    }
+
+    pub fn rank_top_grades(
+        &self,
+        chart_type: &str,
+        mut chart_scores: impl FnMut(&str, &mut Vec<CachedScore>),
+        workspace: &mut SongRankingWorkspace,
+        song_cmp: impl Fn(&SongData, &SongData) -> Ordering,
+    ) {
+        workspace.scores.clear();
+        if workspace.scores.capacity() < 2 {
+            workspace.scores.reserve(2);
+        }
+        workspace.top_grades.clear();
+        workspace.top_grades.reserve(self.songs.len());
+
+        for (song_ix, song) in self.songs.iter().enumerate() {
+            let mut best_grade = None;
+            for chart in &song.charts {
+                if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
+                    continue;
+                }
+                workspace.scores.clear();
+                chart_scores(&chart.short_hash, &mut workspace.scores);
+                for score in &workspace.scores {
+                    if score.grade == Grade::Failed && score.score_percent <= 0.0 {
+                        continue;
+                    }
+                    let grade = score.grade;
+                    if best_grade
+                        .is_none_or(|best| grade_sort_order(grade) < grade_sort_order(best))
+                    {
+                        best_grade = Some(grade);
+                    }
+                }
+            }
+            workspace.top_grades.push((song_ix, best_grade));
+        }
+
+        workspace
+            .top_grades
+            .sort_unstable_by(|(left_ix, left_grade), (right_ix, right_grade)| {
+                left_grade
+                    .map_or(u8::MAX, grade_sort_order)
+                    .cmp(&right_grade.map_or(u8::MAX, grade_sort_order))
+                    .then_with(|| {
+                        if self.song_order_rank.len() == self.songs.len() {
+                            self.song_order_rank[*left_ix].cmp(&self.song_order_rank[*right_ix])
+                        } else {
+                            song_cmp(&self.songs[*left_ix], &self.songs[*right_ix])
+                                .then_with(|| left_ix.cmp(right_ix))
+                        }
+                    })
+            });
+    }
+}
+
+impl SongRankingWorkspace {
+    fn begin_recent_pass(&mut self, song_count: usize, limit: usize) {
+        self.seen_generation.resize(song_count, 0);
+        self.generation = self.generation.wrapping_add(1);
+        if self.generation == 0 {
+            self.seen_generation.fill(0);
+            self.generation = 1;
+        }
+        self.recent_song_indices.clear();
+        self.recent_song_indices.reserve(limit.min(song_count));
+    }
+
+    #[must_use]
+    pub fn popular(&self) -> &[(usize, u32)] {
+        &self.popular
+    }
+
+    pub fn drain_popular(&mut self) -> Drain<'_, (usize, u32)> {
+        self.popular.drain(..)
+    }
+
+    #[must_use]
+    pub fn recent_song_indices(&self) -> &[usize] {
+        &self.recent_song_indices
+    }
+
+    pub fn drain_recent_song_indices(&mut self) -> Drain<'_, usize> {
+        self.recent_song_indices.drain(..)
+    }
+
+    #[must_use]
+    pub fn top_grades(&self) -> &[(usize, Option<Grade>)] {
+        &self.top_grades
+    }
+
+    pub fn drain_top_grades(&mut self) -> Drain<'_, (usize, Option<Grade>)> {
+        self.top_grades.drain(..)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FolderStatsSummary {
@@ -121,28 +341,19 @@ pub fn ranked_popular_songs<H: AsRef<str>>(
     include_zero_play_songs: bool,
     song_cmp: impl Fn(&SongData, &SongData) -> Ordering,
 ) -> Vec<(Arc<SongData>, u32)> {
-    let hash_to_song_ix = chart_hash_song_indices(&songs);
-    let mut song_play_counts = vec![0u32; songs.len()];
-    for (chart_hash, chart_plays) in chart_play_counts {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
-            continue;
-        };
-        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
-    }
-
-    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
-        .into_iter()
-        .enumerate()
-        .filter(|(song_ix, _)| include_zero_play_songs || song_play_counts[*song_ix] > 0)
-        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
-        .collect();
-    ranked.sort_by(|(left_song, left_count), (right_song, right_count)| {
-        right_count
-            .cmp(left_count)
-            .then_with(|| song_cmp(left_song, right_song))
-    });
-    ranked.truncate(limit.min(ranked.len()));
-    ranked
+    let index = SongRankingIndex::new(&songs);
+    let mut workspace = SongRankingWorkspace::default();
+    index.rank_popular(
+        chart_play_counts,
+        limit,
+        include_zero_play_songs,
+        &mut workspace,
+        song_cmp,
+    );
+    workspace
+        .drain_popular()
+        .map(|(song_ix, count)| (Arc::clone(&songs[song_ix]), count))
+        .collect()
 }
 
 pub fn ranked_recent_songs<H: AsRef<str>>(
@@ -150,34 +361,14 @@ pub fn ranked_recent_songs<H: AsRef<str>>(
     recent_chart_hashes: impl IntoIterator<Item = H>,
     limit: usize,
 ) -> Vec<Arc<SongData>> {
-    let recent_song_ixs = ranked_recent_song_indices(&songs, recent_chart_hashes, limit);
-    recent_song_ixs
+    let index = SongRankingIndex::new(&songs);
+    let mut workspace = SongRankingWorkspace::default();
+    index.rank_recent(recent_chart_hashes, limit, &mut workspace);
+    workspace
+        .drain_recent_song_indices()
         .into_iter()
         .map(|song_ix| songs[song_ix].clone())
         .collect()
-}
-
-fn ranked_recent_song_indices<H: AsRef<str>>(
-    songs: &[Arc<SongData>],
-    recent_chart_hashes: impl IntoIterator<Item = H>,
-    limit: usize,
-) -> Vec<usize> {
-    let hash_to_song_ix = chart_hash_song_indices(songs);
-    let mut recent_song_ixs = Vec::with_capacity(limit);
-
-    for chart_hash in recent_chart_hashes {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
-            continue;
-        };
-        if recent_song_ixs.contains(&song_ix) {
-            continue;
-        }
-        recent_song_ixs.push(song_ix);
-        if recent_song_ixs.len() >= limit {
-            break;
-        }
-    }
-    recent_song_ixs
 }
 
 /// # Panics
@@ -467,6 +658,40 @@ mod tests {
     }
 
     #[test]
+    fn ranking_workspace_reuses_index_without_leaking_previous_results() {
+        let mut first = song(vec![chart("Hard", "a"), chart("Challenge", "b")]);
+        first.simfile_path = PathBuf::from("b.ssc");
+        let mut second = song(vec![chart("Hard", "c")]);
+        second.simfile_path = PathBuf::from("a.ssc");
+        let songs = vec![Arc::new(first), Arc::new(second)];
+        let mut index = SongRankingIndex::new(&songs);
+        index.prepare_song_order(|left, right| left.simfile_path.cmp(&right.simfile_path));
+        let mut workspace = SongRankingWorkspace::default();
+
+        index.rank_popular(
+            [("a", 2), ("b", 3), ("c", 1)],
+            2,
+            true,
+            &mut workspace,
+            |left, right| left.simfile_path.cmp(&right.simfile_path),
+        );
+        assert_eq!(workspace.popular()[0].1, 5);
+        assert_eq!(workspace.popular()[0].0, 0);
+
+        index.rank_popular([("c", 7)], 2, false, &mut workspace, |left, right| {
+            left.simfile_path.cmp(&right.simfile_path)
+        });
+        assert_eq!(workspace.popular().len(), 1);
+        assert_eq!(workspace.popular()[0].1, 7);
+        assert_eq!(workspace.popular()[0].0, 1);
+
+        index.rank_recent(["b", "a", "c"], 2, &mut workspace);
+        assert_eq!(workspace.recent_song_indices(), &[0, 1]);
+        index.rank_recent(["c", "a"], 2, &mut workspace);
+        assert_eq!(workspace.recent_song_indices(), &[1, 0]);
+    }
+
+    #[test]
     fn ranked_top_grade_songs_sorts_best_grade_then_title_key() {
         let songs = vec![
             Arc::new(song(vec![chart("Hard", "a")])),
@@ -489,5 +714,44 @@ mod tests {
         assert_eq!(ranked[0].1, Some(Grade::Quint));
         assert_eq!(ranked[1].1, Some(Grade::Tier03));
         assert_eq!(ranked[2].1, None);
+    }
+
+    #[test]
+    fn indexed_top_grades_match_cached_key_ranking() {
+        let mut songs = vec![
+            Arc::new(song(vec![chart("Hard", "a")])),
+            Arc::new(song(vec![chart("Hard", "b")])),
+            Arc::new(song(vec![chart("Challenge", "c")])),
+        ];
+        Arc::get_mut(&mut songs[0]).unwrap().simfile_path = PathBuf::from("c.ssc");
+        Arc::get_mut(&mut songs[1]).unwrap().simfile_path = PathBuf::from("a.ssc");
+        Arc::get_mut(&mut songs[2]).unwrap().simfile_path = PathBuf::from("b.ssc");
+        let fill_scores = |hash: &str, out: &mut Vec<CachedScore>| match hash {
+            "a" => out.push(cached_score(Grade::Tier03, 0.90, None, None)),
+            "b" => out.push(cached_score(Grade::Tier03, 0.91, None, None)),
+            "c" => out.push(cached_score(Grade::Failed, 0.0, None, None)),
+            _ => {}
+        };
+        let expected = ranked_top_grade_songs(songs.clone(), "dance-single", fill_scores, |song| {
+            song.simfile_path.clone()
+        });
+
+        let mut index = SongRankingIndex::new(&songs);
+        index.prepare_song_order(|left, right| left.simfile_path.cmp(&right.simfile_path));
+        let mut workspace = SongRankingWorkspace::default();
+        index.rank_top_grades(
+            "dance-single",
+            fill_scores,
+            &mut workspace,
+            |left, right| left.simfile_path.cmp(&right.simfile_path),
+        );
+
+        assert_eq!(workspace.top_grades().len(), expected.len());
+        for ((actual_ix, actual_grade), (expected_song, expected_grade)) in
+            workspace.top_grades().iter().zip(&expected)
+        {
+            assert!(Arc::ptr_eq(&songs[*actual_ix], expected_song));
+            assert_eq!(actual_grade, expected_grade);
+        }
     }
 }

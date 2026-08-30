@@ -1,7 +1,9 @@
 use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 use deadsync_score::select_music::{
-    benchmark_ranked_popular_songs_cached, ranked_popular_songs, ranked_recent_songs,
+    SongRankingIndex, SongRankingWorkspace, benchmark_ranked_popular_songs_cached,
+    grade_sort_order, ranked_popular_songs, ranked_recent_songs,
 };
+use deadsync_score::{CachedScore, Grade, cached_score};
 use deadsync_simfile::song_sort::{song_title_cmp, song_title_sort_key};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -219,6 +221,17 @@ fn percent_change(old: f64, new: f64) -> f64 {
     (new / old - 1.0) * 100.0
 }
 
+fn assert_faster(old: &BenchResult, new: &BenchResult) {
+    assert!(new.ns_per_op < old.ns_per_op, "new latency must improve");
+    assert!(
+        new.items_per_second > old.items_per_second,
+        "new throughput must improve"
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.cycles_per_op, new.cycles_per_op) {
+        assert!(new_cycles < old_cycles, "new cycle count must improve");
+    }
+}
+
 #[cfg(target_arch = "x86")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: the fence and timestamp instructions require no memory operands.
@@ -365,12 +378,110 @@ fn ranked_checksum(ranked: &[(Arc<SongData>, u32)]) -> u64 {
         })
 }
 
+fn ranked_indices_checksum(songs: &[Arc<SongData>], ranked: &[(usize, u32)]) -> u64 {
+    ranked
+        .iter()
+        .fold(ranked.len() as u64, |checksum, (song_ix, count)| {
+            checksum
+                .wrapping_mul(31)
+                .wrapping_add(songs[*song_ix].title.len() as u64)
+                .wrapping_add(u64::from(*count))
+        })
+}
+
 fn recent_checksum(ranked: &[Arc<SongData>]) -> u64 {
     ranked.iter().fold(ranked.len() as u64, |checksum, song| {
         checksum
             .wrapping_mul(31)
             .wrapping_add(song.simfile_path.as_os_str().len() as u64)
     })
+}
+
+fn recent_indices_checksum(songs: &[Arc<SongData>], ranked: &[usize]) -> u64 {
+    ranked
+        .iter()
+        .fold(ranked.len() as u64, |checksum, song_ix| {
+            checksum
+                .wrapping_mul(31)
+                .wrapping_add(songs[*song_ix].simfile_path.as_os_str().len() as u64)
+        })
+}
+
+fn top_grades_checksum(ranked: &[(Arc<SongData>, Option<Grade>)]) -> u64 {
+    ranked
+        .iter()
+        .fold(ranked.len() as u64, |checksum, (song, grade)| {
+            let checksum = song
+                .simfile_path
+                .to_string_lossy()
+                .bytes()
+                .fold(checksum, |checksum, byte| {
+                    checksum.wrapping_mul(16777619) ^ u64::from(byte)
+                });
+            checksum.wrapping_add(u64::from(grade.map_or(u8::MAX, grade_sort_order)))
+        })
+}
+
+fn top_grade_indices_checksum(songs: &[Arc<SongData>], ranked: &[(usize, Option<Grade>)]) -> u64 {
+    ranked
+        .iter()
+        .fold(ranked.len() as u64, |checksum, (song_ix, grade)| {
+            let checksum = songs[*song_ix]
+                .simfile_path
+                .to_string_lossy()
+                .bytes()
+                .fold(checksum, |checksum, byte| {
+                    checksum.wrapping_mul(16777619) ^ u64::from(byte)
+                });
+            checksum.wrapping_add(u64::from(grade.map_or(u8::MAX, grade_sort_order)))
+        })
+}
+
+fn fill_fixture_scores(chart_hash: &str, out: &mut Vec<CachedScore>) {
+    let grade = match chart_hash.as_bytes().first().copied().unwrap_or_default() % 7 {
+        0 => Grade::Quint,
+        1 => Grade::Tier01,
+        2 => Grade::Tier03,
+        3 => Grade::Tier06,
+        4 => Grade::Tier09,
+        5 => Grade::Tier12,
+        _ => Grade::Failed,
+    };
+    let percent = if grade == Grade::Failed { 0.0 } else { 0.95 };
+    out.push(cached_score(grade, percent, None, None));
+}
+
+fn cached_key_top_grades(songs: &[Arc<SongData>]) -> Vec<(Arc<SongData>, Option<Grade>)> {
+    let mut scores = Vec::with_capacity(2);
+    let mut graded_songs = Vec::with_capacity(songs.len());
+    for song in songs {
+        let mut best_grade = None;
+        for chart in &song.charts {
+            if !chart.chart_type.eq_ignore_ascii_case("dance-single") || !chart.has_note_data {
+                continue;
+            }
+            scores.clear();
+            fill_fixture_scores(&chart.short_hash, &mut scores);
+            for score in &scores {
+                if score.grade == Grade::Failed && score.score_percent <= 0.0 {
+                    continue;
+                }
+                if best_grade
+                    .is_none_or(|best| grade_sort_order(score.grade) < grade_sort_order(best))
+                {
+                    best_grade = Some(score.grade);
+                }
+            }
+        }
+        graded_songs.push((Arc::clone(song), best_grade));
+    }
+    graded_songs.sort_by_cached_key(|(song, grade)| {
+        (
+            grade.map_or(u8::MAX, grade_sort_order),
+            song_title_sort_key(song),
+        )
+    });
+    graded_songs
 }
 
 fn main() {
@@ -452,4 +563,153 @@ fn main() {
         &cached_keys,
         &direct_cmp,
     );
+
+    let old = measure(fixture.counts.len() + fixture.recent.len(), || {
+        let popular = ranked_popular_songs(
+            fixture.songs.clone(),
+            fixture
+                .counts
+                .iter()
+                .map(|(hash, count)| (hash.as_str(), *count)),
+            50,
+            true,
+            song_title_cmp,
+        );
+        let recent = ranked_recent_songs(
+            fixture.songs.clone(),
+            fixture.recent.iter().map(String::as_str),
+            30,
+        );
+        ranked_checksum(&popular)
+            .rotate_left(17)
+            .wrapping_add(recent_checksum(&recent))
+    });
+    let new = measure(fixture.counts.len() + fixture.recent.len(), || {
+        let index = SongRankingIndex::new(&fixture.songs);
+        let mut workspace = SongRankingWorkspace::default();
+        index.rank_popular(
+            fixture
+                .counts
+                .iter()
+                .map(|(hash, count)| (hash.as_str(), *count)),
+            50,
+            true,
+            &mut workspace,
+            song_title_cmp,
+        );
+        let popular = ranked_indices_checksum(&fixture.songs, workspace.popular());
+        index.rank_recent(
+            fixture.recent.iter().map(String::as_str),
+            30,
+            &mut workspace,
+        );
+        popular
+            .rotate_left(17)
+            .wrapping_add(recent_indices_checksum(
+                &fixture.songs,
+                workspace.recent_song_indices(),
+            ))
+    });
+    print_pair(
+        "batch ranking: rebuilt maps vs one shared index",
+        &old,
+        &new,
+    );
+    assert_faster(&old, &new);
+    assert!(new.allocated.allocs < old.allocated.allocs);
+    assert!(new.allocated.churn_bytes() < old.allocated.churn_bytes());
+
+    let mut index = SongRankingIndex::new(&fixture.songs);
+    index.prepare_song_order(song_title_cmp);
+    let old = measure(fixture.counts.len() + fixture.recent.len(), || {
+        let mut popular_workspace = SongRankingWorkspace::default();
+        index.rank_popular(
+            fixture
+                .counts
+                .iter()
+                .map(|(hash, count)| (hash.as_str(), *count)),
+            50,
+            true,
+            &mut popular_workspace,
+            song_title_cmp,
+        );
+        let popular = ranked_indices_checksum(&fixture.songs, popular_workspace.popular());
+        let mut recent_workspace = SongRankingWorkspace::default();
+        index.rank_recent(
+            fixture.recent.iter().map(String::as_str),
+            30,
+            &mut recent_workspace,
+        );
+        popular
+            .rotate_left(17)
+            .wrapping_add(recent_indices_checksum(
+                &fixture.songs,
+                recent_workspace.recent_song_indices(),
+            ))
+    });
+    let mut workspace = SongRankingWorkspace::default();
+    let new = measure(fixture.counts.len() + fixture.recent.len(), || {
+        index.rank_popular(
+            fixture
+                .counts
+                .iter()
+                .map(|(hash, count)| (hash.as_str(), *count)),
+            50,
+            true,
+            &mut workspace,
+            song_title_cmp,
+        );
+        let popular = ranked_indices_checksum(&fixture.songs, workspace.popular());
+        index.rank_recent(
+            fixture.recent.iter().map(String::as_str),
+            30,
+            &mut workspace,
+        );
+        popular
+            .rotate_left(17)
+            .wrapping_add(recent_indices_checksum(
+                &fixture.songs,
+                workspace.recent_song_indices(),
+            ))
+    });
+    print_pair(
+        "ranking scratch: fresh vectors vs retained workspace",
+        &old,
+        &new,
+    );
+    assert_faster(&old, &new);
+    assert_eq!(new.allocated.allocs, 0);
+    assert_eq!(new.allocated.reallocs, 0);
+    assert_eq!(new.allocated.churn_bytes(), 0);
+
+    let old = measure(SONGS * 3, || {
+        (0..3).fold(0u64, |checksum, _| {
+            checksum.wrapping_add(top_grades_checksum(&cached_key_top_grades(&fixture.songs)))
+        })
+    });
+    let new = measure(SONGS * 3, || {
+        let mut top_index = SongRankingIndex::new(&fixture.songs);
+        top_index.prepare_song_order(song_title_cmp);
+        let mut workspace = SongRankingWorkspace::default();
+        (0..3).fold(0u64, |checksum, _| {
+            top_index.rank_top_grades(
+                "dance-single",
+                fill_fixture_scores,
+                &mut workspace,
+                song_title_cmp,
+            );
+            checksum.wrapping_add(top_grade_indices_checksum(
+                &fixture.songs,
+                workspace.top_grades(),
+            ))
+        })
+    });
+    print_pair(
+        "three top-grade views: rebuilt title keys vs shared integer ranks",
+        &old,
+        &new,
+    );
+    assert_faster(&old, &new);
+    assert!(new.allocated.allocs < old.allocated.allocs);
+    assert!(new.allocated.churn_bytes() < old.allocated.churn_bytes());
 }
