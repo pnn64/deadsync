@@ -716,7 +716,7 @@ fn song_select_matches(song: &SongData, select: &SongSelect) -> bool {
 }
 
 fn pick_course_candidate(
-    candidates: &mut [CourseCandidate],
+    candidates: &mut Vec<CourseCandidate>,
     sort: Option<SongSort>,
     pick: usize,
     song_play_counts: &HashMap<String, u32>,
@@ -728,14 +728,164 @@ fn pick_course_candidate(
     if candidates.is_empty() {
         return None;
     }
-    if let Some(sort) = sort {
-        sort_course_candidates(candidates, sort, song_play_counts, song_grade_counts);
-        return candidates.get(pick).cloned();
-    }
-    let index = random_pick_index(random_seed, course_path, entry_index, candidates.len());
-    candidates.get(index).cloned()
+    let index = if let Some(sort) = sort {
+        selected_course_candidate_index(
+            candidates,
+            sort,
+            pick,
+            song_play_counts,
+            song_grade_counts,
+        )?
+    } else {
+        random_pick_index(random_seed, course_path, entry_index, candidates.len())
+    };
+    Some(candidates.swap_remove(index))
 }
 
+enum RankedCourseCandidates<'a> {
+    Plays(Vec<(u32, usize)>),
+    Grades(Vec<(&'a CourseGradeCounts, usize)>),
+}
+
+fn ranked_course_candidates<'a>(
+    candidates: &[CourseCandidate],
+    sort: SongSort,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &'a HashMap<String, CourseGradeCounts>,
+) -> RankedCourseCandidates<'a> {
+    static EMPTY_GRADE_COUNTS: CourseGradeCounts = [0; 19];
+    match sort {
+        SongSort::MostPlays | SongSort::FewestPlays => RankedCourseCandidates::Plays(
+            candidates
+                .iter()
+                .enumerate()
+                .map(|(index, candidate)| {
+                    (
+                        song_play_counts
+                            .get(candidate.song_key())
+                            .copied()
+                            .unwrap_or(0),
+                        index,
+                    )
+                })
+                .collect(),
+        ),
+        SongSort::TopGrades | SongSort::LowestGrades => RankedCourseCandidates::Grades(
+            candidates
+                .iter()
+                .enumerate()
+                .map(|(index, candidate)| {
+                    (
+                        song_grade_counts
+                            .get(candidate.song_key())
+                            .unwrap_or(&EMPTY_GRADE_COUNTS),
+                        index,
+                    )
+                })
+                .collect(),
+        ),
+    }
+}
+
+fn compare_ranked_course_candidates<T: Ord>(
+    left: &(T, usize),
+    right: &(T, usize),
+    candidates: &[CourseCandidate],
+    descending: bool,
+) -> std::cmp::Ordering {
+    let order = if descending {
+        right.0.cmp(&left.0)
+    } else {
+        left.0.cmp(&right.0)
+    };
+    order.then(
+        candidates[left.1]
+            .source_index
+            .cmp(&candidates[right.1].source_index),
+    )
+}
+
+fn select_ranked_course_candidate(
+    ranked: &mut RankedCourseCandidates<'_>,
+    candidates: &[CourseCandidate],
+    sort: SongSort,
+    pick: usize,
+) -> usize {
+    let descending = matches!(sort, SongSort::MostPlays | SongSort::TopGrades);
+    match ranked {
+        RankedCourseCandidates::Plays(ranked) => {
+            ranked.select_nth_unstable_by(pick, |left, right| {
+                compare_ranked_course_candidates(left, right, candidates, descending)
+            });
+            ranked[pick].1
+        }
+        RankedCourseCandidates::Grades(ranked) => {
+            ranked.select_nth_unstable_by(pick, |left, right| {
+                compare_ranked_course_candidates(left, right, candidates, descending)
+            });
+            ranked[pick].1
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sort_ranked_course_candidates(
+    ranked: &mut RankedCourseCandidates<'_>,
+    candidates: &[CourseCandidate],
+    sort: SongSort,
+) {
+    let descending = matches!(sort, SongSort::MostPlays | SongSort::TopGrades);
+    match ranked {
+        RankedCourseCandidates::Plays(ranked) => ranked.sort_unstable_by(|left, right| {
+            compare_ranked_course_candidates(left, right, candidates, descending)
+        }),
+        RankedCourseCandidates::Grades(ranked) => ranked.sort_unstable_by(|left, right| {
+            compare_ranked_course_candidates(left, right, candidates, descending)
+        }),
+    }
+}
+
+fn selected_course_candidate_index(
+    candidates: &[CourseCandidate],
+    sort: SongSort,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+) -> Option<usize> {
+    if pick >= candidates.len() {
+        return None;
+    }
+    let mut ranked =
+        ranked_course_candidates(candidates, sort, song_play_counts, song_grade_counts);
+    Some(select_ranked_course_candidate(
+        &mut ranked,
+        candidates,
+        sort,
+        pick,
+    ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sorted_course_candidate_index(
+    candidates: &[CourseCandidate],
+    sort: SongSort,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+) -> Option<usize> {
+    if pick >= candidates.len() {
+        return None;
+    }
+    let mut ranked =
+        ranked_course_candidates(candidates, sort, song_play_counts, song_grade_counts);
+    sort_ranked_course_candidates(&mut ranked, candidates, sort);
+    Some(match ranked {
+        RankedCourseCandidates::Plays(ranked) => ranked[pick].1,
+        RankedCourseCandidates::Grades(ranked) => ranked[pick].1,
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn sort_course_candidates(
     candidates: &mut [CourseCandidate],
     sort: SongSort,
@@ -874,6 +1024,15 @@ fn course_candidates_checksum(candidates: &CourseCandidates) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+fn course_candidate_checksum(candidate: &CourseCandidate) -> u64 {
+    (candidate.source_index as u64)
+        .rotate_left(17)
+        .wrapping_add(candidate.chart_indices.start as u64)
+        .rotate_left(17)
+        .wrapping_add(candidate.chart_indices.end as u64)
+}
+
+#[cfg(feature = "bench-support")]
 #[must_use]
 pub fn benchmark_course_chart_indices_reference(
     songs: &[Arc<SongData>],
@@ -948,6 +1107,123 @@ pub fn benchmark_course_sort(
         song_grade_counts,
     );
     course_candidates_checksum(&candidates)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_course_pick_repeated_lookups(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+    sort: SongSort,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+) -> u64 {
+    let mut candidates = course_candidates(songs, entry, chart_type);
+    sort_course_candidates(
+        &mut candidates.items,
+        sort,
+        song_play_counts,
+        song_grade_counts,
+    );
+    candidates
+        .items
+        .get(pick)
+        .cloned()
+        .as_ref()
+        .map_or(u64::MAX, course_candidate_checksum)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_course_pick_cached_sort(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+    sort: SongSort,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+) -> u64 {
+    let candidates = course_candidates(songs, entry, chart_type);
+    sorted_course_candidate_index(
+        &candidates.items,
+        sort,
+        pick,
+        song_play_counts,
+        song_grade_counts,
+    )
+    .and_then(|index| candidates.items.get(index).cloned())
+    .as_ref()
+    .map_or(u64::MAX, course_candidate_checksum)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_course_pick_selected(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+    sort: SongSort,
+    pick: usize,
+    song_play_counts: &HashMap<String, u32>,
+    song_grade_counts: &HashMap<String, CourseGradeCounts>,
+) -> u64 {
+    let candidates = course_candidates(songs, entry, chart_type);
+    selected_course_candidate_index(
+        &candidates.items,
+        sort,
+        pick,
+        song_play_counts,
+        song_grade_counts,
+    )
+    .and_then(|index| candidates.items.get(index).cloned())
+    .as_ref()
+    .map_or(u64::MAX, course_candidate_checksum)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_course_candidate_clone(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+    iterations: usize,
+) -> u64 {
+    let template = course_candidates(songs, entry, chart_type).items;
+    for candidate in &template {
+        black_box_course_song_key(candidate);
+    }
+    let mut checksum = 0u64;
+    for iteration in 0..iterations {
+        let candidates = template.clone();
+        let candidate = candidates[iteration % candidates.len()].clone();
+        checksum = checksum.rotate_left(9) ^ course_candidate_checksum(&candidate);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_course_candidate_move(
+    songs: &[Arc<SongData>],
+    entry: &CourseEntry,
+    chart_type: &str,
+    iterations: usize,
+) -> u64 {
+    let template = course_candidates(songs, entry, chart_type).items;
+    for candidate in &template {
+        black_box_course_song_key(candidate);
+    }
+    let mut checksum = 0u64;
+    for iteration in 0..iterations {
+        let mut candidates = template.clone();
+        let index = iteration % candidates.len();
+        let candidate = candidates.swap_remove(index);
+        checksum = checksum.rotate_left(9) ^ course_candidate_checksum(&candidate);
+    }
+    checksum
 }
 
 #[cfg(feature = "bench-support")]
@@ -2043,7 +2319,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_course_song_keys_preserve_every_sort_order() {
+    fn ranked_course_selection_preserves_every_sort_pick() {
         let songs: Vec<_> = (0..12)
             .map(|index| {
                 song_with_charts(
@@ -2084,21 +2360,49 @@ mod tests {
         ] {
             let candidates = course_candidates(&songs, &entry, "dance-single");
             let mut reference = candidates.clone();
-            let mut optimized = candidates;
             sort_course_candidates_reference(&mut reference.items, sort, &plays, &grades);
-            sort_course_candidates(&mut optimized.items, sort, &plays, &grades);
-            assert_eq!(
-                optimized
-                    .items
-                    .iter()
-                    .map(CourseCandidate::song_key)
-                    .collect::<Vec<_>>(),
-                reference
-                    .items
-                    .iter()
-                    .map(CourseCandidate::song_key)
-                    .collect::<Vec<_>>()
+            for pick in 0..reference.items.len() {
+                let cached_sort =
+                    sorted_course_candidate_index(&candidates.items, sort, pick, &plays, &grades)
+                        .expect("cached full sort pick");
+                let selected =
+                    selected_course_candidate_index(&candidates.items, sort, pick, &plays, &grades)
+                        .expect("partial selection pick");
+                let expected = reference.items[pick].source_index;
+                assert_eq!(candidates.items[cached_sort].source_index, expected);
+                assert_eq!(candidates.items[selected].source_index, expected);
+
+                let mut moved = candidates.items.clone();
+                let chosen = pick_course_candidate(
+                    &mut moved,
+                    Some(sort),
+                    pick,
+                    &plays,
+                    &grades,
+                    0,
+                    Path::new("course.crs"),
+                    0,
+                )
+                .expect("moved course pick");
+                assert_eq!(chosen.source_index, expected);
+                assert_eq!(moved.len() + 1, candidates.items.len());
+            }
+
+            let mut out_of_range = candidates.items.clone();
+            assert!(
+                pick_course_candidate(
+                    &mut out_of_range,
+                    Some(sort),
+                    candidates.items.len(),
+                    &plays,
+                    &grades,
+                    0,
+                    Path::new("course.crs"),
+                    0,
+                )
+                .is_none()
             );
+            assert_eq!(out_of_range.len(), candidates.items.len());
         }
     }
 
@@ -2191,7 +2495,7 @@ mod tests {
     fn grade_sorts_compare_best_grade_counts_first() {
         let a = song_with_charts("Pack/A/song.ssc", vec![test_chart("Hard", 7, true, "a")]);
         let b = song_with_charts("Pack/B/song.ssc", vec![test_chart("Hard", 8, true, "b")]);
-        let mut candidates = vec![course_candidate(&a, 0), course_candidate(&b, 1)];
+        let candidates = vec![course_candidate(&a, 0), course_candidate(&b, 1)];
         let mut a_grades = CourseGradeCounts::default();
         a_grades[1] = 1;
         let mut b_grades = CourseGradeCounts::default();
@@ -2202,7 +2506,7 @@ mod tests {
         ]);
 
         let top = pick_course_candidate(
-            &mut candidates,
+            &mut candidates.clone(),
             Some(SongSort::TopGrades),
             0,
             &HashMap::new(),

@@ -1,9 +1,11 @@
 use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 use deadsync_simfile::course::{
     CourseEntry, CourseGradeCounts, CourseSong, Difficulty, SongSort, StepsSpec,
+    benchmark_course_candidate_clone, benchmark_course_candidate_move,
     benchmark_course_chart_indices, benchmark_course_chart_indices_reference,
-    benchmark_course_repeats, benchmark_course_repeats_reference, benchmark_course_sort,
-    benchmark_course_sort_reference, song_unique_key,
+    benchmark_course_pick_cached_sort, benchmark_course_pick_repeated_lookups,
+    benchmark_course_pick_selected, benchmark_course_repeats, benchmark_course_repeats_reference,
+    benchmark_course_sort, benchmark_course_sort_reference, song_unique_key,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -16,8 +18,9 @@ use std::time::Instant;
 #[global_allocator]
 static ALLOC: CountingAlloc = CountingAlloc::new();
 
-const SONGS: usize = 512;
+const SONGS: usize = 2_048;
 const SAMPLES: usize = 21;
+const TAKE_BATCH: usize = 4_096;
 
 struct CountingAlloc {
     enabled: AtomicBool,
@@ -162,7 +165,7 @@ fn measure(mut operation: impl FnMut() -> u64) -> Row {
     }
 }
 
-fn print_pair(title: &str, old: &Row, new: &Row, require_less_churn: bool) {
+fn print_pair(title: &str, items: usize, old: &Row, new: &Row, require_less_churn: bool) {
     assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
     assert!(
         new.median_ns < old.median_ns,
@@ -204,9 +207,9 @@ fn print_pair(title: &str, old: &Row, new: &Row, require_less_churn: bool) {
         );
     }
 
-    println!("\n{title} ({SONGS} candidates)");
-    print_row("old", old);
-    print_row("new", new);
+    println!("\n{title} ({items} candidates)");
+    print_row("old", items, old);
+    print_row("new", items, new);
     println!(
         "  change: {:>7.2}% median  {:>7.2}% cycles  {:>7.2}% throughput  \
          {:>7.2}% p95  {:>7.2}% allocs  {:>7.2}% churn",
@@ -215,21 +218,21 @@ fn print_pair(title: &str, old: &Row, new: &Row, require_less_churn: bool) {
             old.median_cycles.unwrap_or(f64::NAN),
             new.median_cycles.unwrap_or(f64::NAN),
         ),
-        change(throughput(old), throughput(new)),
+        change(throughput(items, old), throughput(items, new)),
         change(old.p95_ns, new.p95_ns),
         change(old.alloc.allocs as f64, new.alloc.allocs as f64),
         change(old.alloc.churn() as f64, new.alloc.churn() as f64),
     );
 }
 
-fn print_row(label: &str, row: &Row) {
+fn print_row(label: &str, items: usize, row: &Row) {
     println!(
         "  {label:<3} {:>11.0} ns  {:>11.0} cycles  {:>11.0} p95 ns  \
          {:>8.3} Mcandidate/s  {:>6} allocs  {:>5} reallocs  {:>6} frees  {:>10} churn B",
         row.median_ns,
         row.median_cycles.unwrap_or(f64::NAN),
         row.p95_ns,
-        throughput(row) / 1e6,
+        throughput(items, row) / 1e6,
         row.alloc.allocs,
         row.alloc.reallocs,
         row.alloc.frees,
@@ -237,8 +240,8 @@ fn print_row(label: &str, row: &Row) {
     );
 }
 
-fn throughput(row: &Row) -> f64 {
-    SONGS as f64 * 1e9 / row.median_ns
+fn throughput(items: usize, row: &Row) -> f64 {
+    items as f64 * 1e9 / row.median_ns
 }
 
 fn change(old: f64, new: f64) -> f64 {
@@ -261,14 +264,24 @@ fn main() {
             )
         })
         .collect();
-    let grades = HashMap::<String, CourseGradeCounts>::new();
+    let grades: HashMap<_, _> = songs
+        .iter()
+        .enumerate()
+        .map(|(index, song)| {
+            let mut counts = CourseGradeCounts::default();
+            for (grade, count) in counts.iter_mut().enumerate() {
+                *count = ((index.wrapping_mul(97) + grade * 31) % 23) as u32;
+            }
+            (song_unique_key(song), counts)
+        })
+        .collect();
     let selected: Vec<_> = songs.iter().map(|song| song_unique_key(song)).collect();
 
     let old = measure(|| {
         benchmark_course_chart_indices_reference(black_box(&songs), &entry, "dance-single")
     });
     let new = measure(|| benchmark_course_chart_indices(black_box(&songs), &entry, "dance-single"));
-    print_pair("shared matching-chart storage", &old, &new, false);
+    print_pair("shared matching-chart storage", SONGS, &old, &new, false);
 
     let old = measure(|| {
         benchmark_course_sort_reference(
@@ -290,7 +303,7 @@ fn main() {
             &grades,
         )
     });
-    print_pair("cached course-song sort keys", &old, &new, true);
+    print_pair("cached course-song sort keys", SONGS, &old, &new, true);
 
     let old = measure(|| {
         benchmark_course_repeats_reference(
@@ -308,7 +321,101 @@ fn main() {
             black_box(&selected),
         )
     });
-    print_pair("clone-free endless-course rollover", &old, &new, true);
+    print_pair(
+        "clone-free endless-course rollover",
+        SONGS,
+        &old,
+        &new,
+        true,
+    );
+
+    let pick = 0;
+    let old = measure(|| {
+        benchmark_course_pick_repeated_lookups(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::MostPlays,
+            pick,
+            black_box(&plays),
+            &grades,
+        )
+    });
+    let new = measure(|| {
+        benchmark_course_pick_cached_sort(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::MostPlays,
+            pick,
+            black_box(&plays),
+            &grades,
+        )
+    });
+    print_pair("precomputed compact play ranks", SONGS, &old, &new, false);
+
+    let old = measure(|| {
+        benchmark_course_pick_repeated_lookups(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::TopGrades,
+            pick,
+            &plays,
+            black_box(&grades),
+        )
+    });
+    let new = measure(|| {
+        benchmark_course_pick_cached_sort(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::TopGrades,
+            pick,
+            &plays,
+            black_box(&grades),
+        )
+    });
+    print_pair("precomputed compact grade ranks", SONGS, &old, &new, false);
+
+    let old = measure(|| {
+        benchmark_course_pick_cached_sort(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::MostPlays,
+            pick,
+            black_box(&plays),
+            &grades,
+        )
+    });
+    let new = measure(|| {
+        benchmark_course_pick_selected(
+            black_box(&songs),
+            &entry,
+            "dance-single",
+            SongSort::MostPlays,
+            pick,
+            black_box(&plays),
+            &grades,
+        )
+    });
+    print_pair("partial ranked course selection", SONGS, &old, &new, false);
+
+    let one_song = &songs[..1];
+    let old = measure(|| {
+        benchmark_course_candidate_clone(black_box(one_song), &entry, "dance-single", TAKE_BATCH)
+    });
+    let new = measure(|| {
+        benchmark_course_candidate_move(black_box(one_song), &entry, "dance-single", TAKE_BATCH)
+    });
+    print_pair(
+        "move selected course candidate",
+        TAKE_BATCH,
+        &old,
+        &new,
+        true,
+    );
 }
 
 fn fixture_entry() -> CourseEntry {
