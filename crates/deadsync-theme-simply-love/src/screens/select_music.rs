@@ -61,7 +61,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
-use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
+use deadsync_simfile::bpm::{BpmTimeline, beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use deadsync_simfile::playlist::{
     PlaylistEntry, PlaylistSongLookup, PlaylistSongSource,
     normalize_song_path as normalize_lobby_song_path, song_pack_and_dir_name,
@@ -703,7 +703,17 @@ fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) ->
     match entry_opt {
         Some(MusicWheelEntry::Song(song)) => preview_song_sec(state).map_or_else(
             || state.session_elapsed * song.max_bpm.max(1.0) as f32 / 60.0,
-            |sec| beat_at_sec(song, sec) as f32,
+            |sec| {
+                if state
+                    .cached_song
+                    .as_ref()
+                    .is_some_and(|cached| Arc::ptr_eq(cached, song))
+                {
+                    state.cached_bpm_timeline.beat_at_sec(sec) as f32
+                } else {
+                    beat_at_sec(song, sec) as f32
+                }
+            },
         ),
         _ => state.session_elapsed * 2.5, // 150 BPM fallback
     }
@@ -1982,6 +1992,9 @@ pub struct State {
 
     // Caches to avoid O(N) ops in hot paths
     cached_song: Option<Arc<SongData>>,
+    /// Parsed once when the selected song changes, then queried without
+    /// allocation by the per-frame selection animation.
+    cached_bpm_timeline: BpmTimeline,
     cached_chart_type: &'static str,
     cached_steps_index_p1: usize,
     cached_steps_index_p2: usize,
@@ -2206,6 +2219,9 @@ fn ensure_chart_cache_for_song(
     if song_changed || type_changed {
         state.cached_standard_chart_ixs = song.standard_chart_indices(chart_type);
         state.cached_edits = None;
+    }
+    if song_changed {
+        state.cached_bpm_timeline = BpmTimeline::new(&song.normalized_bpms);
     }
 
     let rebuild_edits = state
@@ -4226,6 +4242,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
+        cached_bpm_timeline: BpmTimeline::default(),
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
         cached_steps_index_p2: usize::MAX,
@@ -4480,6 +4497,7 @@ pub fn init_placeholder() -> State {
         lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
+        cached_bpm_timeline: BpmTimeline::default(),
         cached_chart_type: "",
         cached_steps_index_p1: usize::MAX,
         cached_steps_index_p2: usize::MAX,
@@ -17698,6 +17716,37 @@ mod tests {
         assert!(
             state.unlock_downloads_available,
             "unchanged download availability stays retained"
+        );
+    }
+
+    #[test]
+    fn selection_animation_reuses_cached_bpm_timeline() {
+        let mut state = init_placeholder();
+        let mut song = (*test_song("timing cache")).clone();
+        song.normalized_bpms = "0=120,16=180,48=90,96=200".to_string();
+        song.max_bpm = 200.0;
+        let song = Arc::new(song);
+        state.entries = vec![super::MusicWheelEntry::Song(song.clone())];
+        state.selected_index = 0;
+        state.currently_playing_preview_start_sec = Some(0.0);
+        state.currently_playing_preview_length_sec = Some(30.0);
+        state.audio_playback.music_position_seconds = 18.75;
+
+        super::ensure_chart_cache_for_song(&mut state, &song, "dance-single", false);
+
+        let expected = deadsync_simfile::bpm::beat_at_sec_from_bpms(
+            &song.normalized_bpms,
+            state.audio_playback.music_position_seconds,
+        ) as f32;
+        assert_eq!(
+            super::sl_selection_anim_beat(state.entries.first(), &state),
+            expected
+        );
+        assert!(
+            state
+                .cached_song
+                .as_ref()
+                .is_some_and(|cached| Arc::ptr_eq(cached, &song))
         );
     }
 
