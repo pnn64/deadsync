@@ -49,11 +49,18 @@ pub type SlSettings = HashMap<String, String>;
 
 /// Parse a Simply Love boolean (`true`/`false`, also tolerating `1`/`0`).
 fn sl_bool(map: &SlSettings, key: &str) -> Option<bool> {
-    let raw = map.get(key)?.trim();
-    match raw.to_ascii_lowercase().as_str() {
-        "true" | "1" => Some(true),
-        "false" | "0" => Some(false),
-        _ => None,
+    parse_sl_bool(map.get(key)?)
+}
+
+#[inline]
+fn parse_sl_bool(raw: &str) -> Option<bool> {
+    let raw = raw.trim();
+    if raw == "1" || raw.eq_ignore_ascii_case("true") {
+        Some(true)
+    } else if raw == "0" || raw.eq_ignore_ascii_case("false") {
+        Some(false)
+    } else {
+        None
     }
 }
 
@@ -77,17 +84,13 @@ fn sl_enum<T: FromStr>(map: &SlSettings, key: &str) -> Option<T> {
 /// Parse a signed integer out of a value that may carry trailing units, e.g.
 /// Simply Love stores `Mini` as `"50%"`.
 fn leading_i32(raw: &str) -> Option<i32> {
-    let mut digits = String::new();
-    for (i, ch) in raw.trim().chars().enumerate() {
-        if ch == '-' && i == 0 {
-            digits.push(ch);
-        } else if ch.is_ascii_digit() {
-            digits.push(ch);
-        } else {
-            break;
-        }
+    let raw = raw.trim();
+    let bytes = raw.as_bytes();
+    let mut end = usize::from(bytes.first() == Some(&b'-'));
+    while end < bytes.len() && bytes[end].is_ascii_digit() {
+        end += 1;
     }
-    digits.parse::<i32>().ok()
+    raw[..end].parse::<i32>().ok()
 }
 
 /// Build a [`ScrollSpeedSetting`] from Simply Love's `SpeedModType` +
@@ -106,41 +109,106 @@ fn scroll_speed_from_sl(map: &SlSettings) -> Option<ScrollSpeedSetting> {
     }
 }
 
-/// Normalise one `PlayerOptionsString` token: drop whitespace, lowercase.
-fn normalize_token(token: &str) -> String {
-    token
+const PLAYER_OPTION_STACK_BYTES: usize = 64;
+
+#[derive(Clone, Copy)]
+enum ParsedPlayerOptionToken {
+    Scroll(ScrollOption),
+    Turn(TurnOption),
+    Ignore,
+}
+
+/// Normalise a common ASCII player-option token in stack storage. Long or
+/// non-ASCII tokens retain the original Unicode whitespace behavior via the
+/// uncommon owned fallback.
+fn with_normalized_player_token<R>(token: &str, use_token: impl FnOnce(&str) -> R) -> R {
+    if token.is_ascii() {
+        let mut bytes = [0u8; PLAYER_OPTION_STACK_BYTES];
+        let mut len = 0;
+        let mut overflowed = false;
+        for byte in token.bytes().filter(|byte| !byte.is_ascii_whitespace()) {
+            if len == PLAYER_OPTION_STACK_BYTES {
+                overflowed = true;
+                break;
+            }
+            bytes[len] = byte.to_ascii_lowercase();
+            len += 1;
+        }
+        if !overflowed {
+            let normalized = std::str::from_utf8(&bytes[..len])
+                .expect("ASCII player option token must remain valid UTF-8");
+            return use_token(normalized);
+        }
+    }
+
+    let normalized: String = token
         .chars()
-        .filter(|c| !c.is_whitespace())
-        .map(|c| c.to_ascii_lowercase())
-        .collect()
+        .filter(|ch| !ch.is_whitespace())
+        .map(|ch| ch.to_ascii_lowercase())
+        .collect();
+    use_token(&normalized)
+}
+
+/// Apply the same ASCII-alphanumeric compaction as `TurnOption::from_str`
+/// without constructing an error string for unrelated engine modifiers.
+fn with_compact_player_token<R>(token: &str, use_token: impl FnOnce(&str) -> R) -> R {
+    let mut bytes = [0u8; PLAYER_OPTION_STACK_BYTES];
+    let mut len = 0;
+    for byte in token.bytes().filter(u8::is_ascii_alphanumeric) {
+        if len == PLAYER_OPTION_STACK_BYTES {
+            let compact: String = token
+                .bytes()
+                .filter(u8::is_ascii_alphanumeric)
+                .map(|byte| byte.to_ascii_lowercase() as char)
+                .collect();
+            return use_token(&compact);
+        }
+        bytes[len] = byte.to_ascii_lowercase();
+        len += 1;
+    }
+    let compact = std::str::from_utf8(&bytes[..len])
+        .expect("ASCII player option token must remain valid UTF-8");
+    use_token(compact)
+}
+
+fn parse_player_option_token(token: &str) -> ParsedPlayerOptionToken {
+    with_normalized_player_token(token, |normalized| match normalized {
+        "reverse" => ParsedPlayerOptionToken::Scroll(ScrollOption::Reverse),
+        "split" => ParsedPlayerOptionToken::Scroll(ScrollOption::Split),
+        "alternate" => ParsedPlayerOptionToken::Scroll(ScrollOption::Alternate),
+        "cross" => ParsedPlayerOptionToken::Scroll(ScrollOption::Cross),
+        "centered" => ParsedPlayerOptionToken::Scroll(ScrollOption::Centered),
+        _ => with_compact_player_token(normalized, |compact| match compact {
+            "mirror" => ParsedPlayerOptionToken::Turn(TurnOption::Mirror),
+            "left" => ParsedPlayerOptionToken::Turn(TurnOption::Left),
+            "right" => ParsedPlayerOptionToken::Turn(TurnOption::Right),
+            "lrmirror" => ParsedPlayerOptionToken::Turn(TurnOption::LRMirror),
+            "udmirror" => ParsedPlayerOptionToken::Turn(TurnOption::UDMirror),
+            "shuffle" => ParsedPlayerOptionToken::Turn(TurnOption::Shuffle),
+            "blender" | "supershuffle" => ParsedPlayerOptionToken::Turn(TurnOption::Blender),
+            "random" | "hypershuffle" => ParsedPlayerOptionToken::Turn(TurnOption::Random),
+            _ => ParsedPlayerOptionToken::Ignore,
+        }),
+    })
+}
+
+fn parse_player_options_string(raw: &str) -> (ScrollOption, Option<TurnOption>) {
+    let mut scroll = ScrollOption::empty();
+    let mut turn = None;
+    for token in raw.split(',') {
+        match parse_player_option_token(token) {
+            ParsedPlayerOptionToken::Scroll(option) => scroll = scroll.union(option),
+            ParsedPlayerOptionToken::Turn(option) => turn = Some(option),
+            ParsedPlayerOptionToken::Ignore => {}
+        }
+    }
+    (scroll, turn)
 }
 
 /// Apply the turn + scroll modifiers encoded in the engine
 /// `PlayerOptionsString` (comma separated, e.g. `"1.5x, reverse, mirror"`).
 fn apply_player_options_string(options: &mut PlayerOptionsData, raw: &str) {
-    let mut scroll = ScrollOption::empty();
-    let mut turn: Option<TurnOption> = None;
-
-    for token in raw.split(',') {
-        let tok = normalize_token(token);
-        if tok.is_empty() {
-            continue;
-        }
-        match tok.as_str() {
-            "reverse" => scroll = scroll.union(ScrollOption::Reverse),
-            "split" => scroll = scroll.union(ScrollOption::Split),
-            "alternate" => scroll = scroll.union(ScrollOption::Alternate),
-            "cross" => scroll = scroll.union(ScrollOption::Cross),
-            "centered" => scroll = scroll.union(ScrollOption::Centered),
-            other => {
-                if let Ok(parsed) = other.parse::<TurnOption>()
-                    && parsed != TurnOption::None
-                {
-                    turn = Some(parsed);
-                }
-            }
-        }
-    }
+    let (scroll, turn) = parse_player_options_string(raw);
 
     if let Some(t) = turn {
         options.turn_option = t;
@@ -373,6 +441,159 @@ fn apply_bool_toggles(out: &mut PlayerOptionsData, map: &SlSettings) {
     set_bool!("ErrorMSDisplay" => error_ms_display);
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_sl_bool_reference(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn leading_i32_reference(raw: &str) -> Option<i32> {
+    let mut digits = String::new();
+    for (index, ch) in raw.trim().chars().enumerate() {
+        if (ch == '-' && index == 0) || ch.is_ascii_digit() {
+            digits.push(ch);
+        } else {
+            break;
+        }
+    }
+    digits.parse::<i32>().ok()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_player_options_string_reference(raw: &str) -> (ScrollOption, Option<TurnOption>) {
+    let mut scroll = ScrollOption::empty();
+    let mut turn = None;
+    for token in raw.split(',') {
+        let normalized: String = token
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .map(|ch| ch.to_ascii_lowercase())
+            .collect();
+        if normalized.is_empty() {
+            continue;
+        }
+        match normalized.as_str() {
+            "reverse" => scroll = scroll.union(ScrollOption::Reverse),
+            "split" => scroll = scroll.union(ScrollOption::Split),
+            "alternate" => scroll = scroll.union(ScrollOption::Alternate),
+            "cross" => scroll = scroll.union(ScrollOption::Cross),
+            "centered" => scroll = scroll.union(ScrollOption::Centered),
+            other => {
+                if let Ok(parsed) = other.parse::<TurnOption>()
+                    && parsed != TurnOption::None
+                {
+                    turn = Some(parsed);
+                }
+            }
+        }
+    }
+    (scroll, turn)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::*;
+
+    fn mix(checksum: u64, index: usize, value: u64) -> u64 {
+        checksum
+            .rotate_left(7)
+            .wrapping_add(value)
+            .wrapping_add(index as u64)
+    }
+
+    fn bool_checksum(values: &[String], mut parse: impl FnMut(&str) -> Option<bool>) -> u64 {
+        values
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, value)| {
+                let parsed = match parse(value) {
+                    Some(false) => 1,
+                    Some(true) => 2,
+                    None => 3,
+                };
+                mix(checksum, index, parsed)
+            })
+    }
+
+    fn integer_checksum(values: &[String], mut parse: impl FnMut(&str) -> Option<i32>) -> u64 {
+        values
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, value)| {
+                let parsed = parse(value)
+                    .map(|value| u64::from(value as u32))
+                    .unwrap_or(u64::MAX);
+                mix(checksum, index, parsed)
+            })
+    }
+
+    fn turn_code(turn: Option<TurnOption>) -> u64 {
+        match turn {
+            None => 0,
+            Some(TurnOption::None) => 1,
+            Some(TurnOption::Mirror) => 2,
+            Some(TurnOption::Left) => 3,
+            Some(TurnOption::Right) => 4,
+            Some(TurnOption::LRMirror) => 5,
+            Some(TurnOption::UDMirror) => 6,
+            Some(TurnOption::Shuffle) => 7,
+            Some(TurnOption::Blender) => 8,
+            Some(TurnOption::Random) => 9,
+        }
+    }
+
+    fn scroll_code(scroll: ScrollOption) -> u64 {
+        u64::from(scroll.contains(ScrollOption::Reverse))
+            | (u64::from(scroll.contains(ScrollOption::Split)) << 1)
+            | (u64::from(scroll.contains(ScrollOption::Alternate)) << 2)
+            | (u64::from(scroll.contains(ScrollOption::Cross)) << 3)
+            | (u64::from(scroll.contains(ScrollOption::Centered)) << 4)
+    }
+
+    fn player_options_checksum(
+        values: &[String],
+        mut parse: impl FnMut(&str) -> (ScrollOption, Option<TurnOption>),
+    ) -> u64 {
+        values
+            .iter()
+            .enumerate()
+            .fold(0, |checksum, (index, value)| {
+                let (scroll, turn) = parse(value);
+                let parsed = scroll_code(scroll) | (turn_code(turn) << 32);
+                mix(checksum, index, parsed)
+            })
+    }
+
+    pub fn parse_booleans_allocating(values: &[String]) -> u64 {
+        bool_checksum(values, parse_sl_bool_reference)
+    }
+
+    pub fn parse_booleans_direct(values: &[String]) -> u64 {
+        bool_checksum(values, parse_sl_bool)
+    }
+
+    pub fn parse_integers_allocating(values: &[String]) -> u64 {
+        integer_checksum(values, leading_i32_reference)
+    }
+
+    pub fn parse_integers_borrowed(values: &[String]) -> u64 {
+        integer_checksum(values, leading_i32)
+    }
+
+    pub fn parse_player_options_allocating(values: &[String]) -> u64 {
+        player_options_checksum(values, parse_player_options_string_reference)
+    }
+
+    pub fn parse_player_options_stack(values: &[String]) -> u64 {
+        player_options_checksum(values, parse_player_options_string)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,6 +603,52 @@ mod tests {
             .iter()
             .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
             .collect()
+    }
+
+    #[test]
+    fn allocation_free_scalar_parsers_match_owned_references() {
+        for raw in [
+            "true", " TRUE ", "TrUe", "false", " FaLsE ", "1", "0", "yes", "", "trüe",
+        ] {
+            assert_eq!(parse_sl_bool(raw), parse_sl_bool_reference(raw), "{raw:?}");
+        }
+
+        for raw in [
+            "50%",
+            " -25 ms ",
+            "0",
+            "2147483647x",
+            "-2147483648x",
+            "2147483648",
+            "-",
+            "+12",
+            "12.5",
+            "１２",
+            "",
+        ] {
+            assert_eq!(leading_i32(raw), leading_i32_reference(raw), "{raw:?}");
+        }
+    }
+
+    #[test]
+    fn stack_player_option_parser_matches_allocating_reference() {
+        let cases = [
+            String::new(),
+            "1.5x, Reverse, Mirror, Overhead".to_owned(),
+            "split, alternate, cross, centered, left".to_owned(),
+            "super shuffle, hyper shuffle, LR Mirror, UD_Mirror".to_owned(),
+            "m-ir_ror, r e v e r s e, unknown".to_owned(),
+            "Üm-ir_ror, reverse".to_owned(),
+            format!("{}, mirror", "unrecognized".repeat(8)),
+            format!("{}right", " ".repeat(80)),
+        ];
+        for raw in cases {
+            assert_eq!(
+                parse_player_options_string(&raw),
+                parse_player_options_string_reference(&raw),
+                "{raw:?}"
+            );
+        }
     }
 
     #[test]
