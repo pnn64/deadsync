@@ -1,6 +1,9 @@
 use deadsync_theme_simply_love::i18n;
+use deadsync_theme_simply_love::screens::components::select_music::lobby_overlay::LobbyOverlayAppendBenchmark;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
-    ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark, SongSearchOverlayAppendBenchmark,
+    DownloadsOverlayAppendBenchmark, LeaderboardOverlayAppendBenchmark,
+    ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
+    SongSearchOverlayAppendBenchmark,
 };
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
 use deadsync_theme_simply_love::screens::options::{
@@ -434,6 +437,51 @@ fn main() {
         search.actor_count(),
         &old_search,
         &new_search,
+        false,
+    );
+
+    let lobby = LobbyOverlayAppendBenchmark::new();
+    let mut old_lobby_actors = Vec::with_capacity(64);
+    let mut new_lobby_actors = Vec::with_capacity(64);
+    let (old_lobby, new_lobby) = sample_pair(
+        || measure(|| lobby.legacy_frame(&mut old_lobby_actors)),
+        || measure(|| lobby.direct_frame(&mut new_lobby_actors)),
+    );
+    report_pair(
+        "lobby browser actor staging",
+        lobby.actor_count(),
+        &old_lobby,
+        &new_lobby,
+        false,
+    );
+
+    let leaderboard = LeaderboardOverlayAppendBenchmark::new();
+    let mut old_leaderboard_actors = Vec::with_capacity(128);
+    let mut new_leaderboard_actors = Vec::with_capacity(128);
+    let (old_leaderboard, new_leaderboard) = sample_pair(
+        || measure(|| leaderboard.legacy_frame(&mut old_leaderboard_actors)),
+        || measure(|| leaderboard.direct_frame(&mut new_leaderboard_actors)),
+    );
+    report_pair(
+        "leaderboard actor staging",
+        leaderboard.actor_count(),
+        &old_leaderboard,
+        &new_leaderboard,
+        false,
+    );
+
+    let downloads = DownloadsOverlayAppendBenchmark::new();
+    let mut old_downloads_actors = Vec::with_capacity(32);
+    let mut new_downloads_actors = Vec::with_capacity(32);
+    let (old_downloads, new_downloads) = sample_pair(
+        || measure(|| downloads.legacy_frame(&mut old_downloads_actors)),
+        || measure(|| downloads.direct_frame(&mut new_downloads_actors)),
+    );
+    report_pair(
+        "download list actor staging",
+        downloads.actor_count(),
+        &old_downloads,
+        &new_downloads,
         false,
     );
 }

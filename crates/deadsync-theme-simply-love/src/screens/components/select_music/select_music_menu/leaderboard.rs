@@ -358,16 +358,26 @@ fn leaderboard_icon_bounce_offset(elapsed: f32, dir: f32) -> f32 {
     dir * 10.0 * phase
 }
 
-#[must_use]
-pub fn build_leaderboard_overlay(
+pub fn push_leaderboard_overlay(
+    actors: &mut Vec<Actor>,
     state: &LeaderboardOverlayState,
     machine_font: MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let LeaderboardOverlayState::Visible(overlay) = state else {
-        return None;
+        return false;
     };
 
-    let mut actors = Vec::new();
+    let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
+    actors.reserve(if joined_count <= 1 { 76 } else { 124 });
+    push_leaderboard_overlay_unreserved(actors, overlay, machine_font);
+    true
+}
+
+fn push_leaderboard_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &LeaderboardOverlayStateData,
+    machine_font: MachineFont,
+) {
     let overlay_elapsed = overlay.elapsed;
     let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
     let pane_width = if joined_count <= 1 {
@@ -686,8 +696,93 @@ pub fn build_leaderboard_overlay(
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
         );
     }
+}
 
-    Some(actors)
+/// Stable old/new fixture for a populated dual-player leaderboard batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct LeaderboardOverlayAppendBenchmark {
+    state: LeaderboardOverlayState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl LeaderboardOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        fn side(prefix: &str) -> LeaderboardSideState {
+            let entries = (0..GS_LEADERBOARD_NUM_ENTRIES)
+                .map(|index| score_data::LeaderboardEntry {
+                    rank: index as u32 + 1,
+                    name: format!("{prefix} Player {index:02}"),
+                    machine_tag: None,
+                    score: 9_900.0 - index as f64 * 7.5,
+                    date: "2026-08-30 12:00:00".to_string(),
+                    is_rival: index == 3,
+                    is_self: index == 7,
+                    is_fail: index == 11,
+                })
+                .collect();
+            LeaderboardSideState {
+                joined: true,
+                panes: vec![score_data::LeaderboardPane {
+                    name: "GrooveStats".to_string(),
+                    entries,
+                    is_ex: false,
+                    disabled: false,
+                    personalized: true,
+                    arrowcloud_kind: None,
+                }],
+                show_icons: true,
+                scorebox: ScoreboxSideView {
+                    joined: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+        }
+
+        Self {
+            state: LeaderboardOverlayState::Visible(Box::new(LeaderboardOverlayStateData {
+                elapsed: 0.375,
+                p1: side("P1"),
+                p2: side("P2"),
+            })),
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(128);
+        push_leaderboard_overlay(&mut actors, &self.state, MachineFont::Mega);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let LeaderboardOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        let mut staged = Vec::new();
+        push_leaderboard_overlay_unreserved(&mut staged, overlay, MachineFont::Mega);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_leaderboard_overlay(out, &self.state, MachineFont::Mega);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for LeaderboardOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

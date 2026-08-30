@@ -157,16 +157,32 @@ const fn download_size(bytes: u64) -> (&'static str, u64) {
     }
 }
 
-#[must_use]
-pub fn build_downloads_overlay(
+pub fn push_downloads_overlay(
+    actors: &mut Vec<Actor>,
     state: &DownloadsOverlayState,
     active_color_index: i32,
     snapshots: &[SelectMusicDownloadView],
     machine_font: MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let DownloadsOverlayState::Visible(overlay) = state else {
-        return None;
+        return false;
     };
+    actors.reserve(if snapshots.is_empty() {
+        7
+    } else {
+        6 + snapshots.len().min(DOWNLOADS_VIEW_ROWS) * 4
+    });
+    push_downloads_overlay_unreserved(actors, overlay, active_color_index, snapshots, machine_font);
+    true
+}
+
+fn push_downloads_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &DownloadsOverlayStateData,
+    active_color_index: i32,
+    snapshots: &[SelectMusicDownloadView],
+    machine_font: MachineFont,
+) {
     let finished = snapshots
         .iter()
         .filter(|snapshot| snapshot.complete)
@@ -175,7 +191,6 @@ pub fn build_downloads_overlay(
         .iter()
         .any(|snapshot| snapshot.complete && snapshot.error_message.is_some());
     let total = snapshots.len();
-    let mut actors = Vec::new();
     let center_x = screen_center_x();
     let center_y = screen_center_y();
     let fill = color::decorative_rgba(active_color_index);
@@ -241,7 +256,7 @@ pub fn build_downloads_overlay(
             z(DOWNLOADS_Z + 3):
             horizalign(center)
         ));
-        return Some(actors);
+        return;
     }
 
     let start = overlay
@@ -310,8 +325,80 @@ pub fn build_downloads_overlay(
             z(DOWNLOADS_Z + 2)
         ));
     }
+}
 
-    Some(actors)
+/// Stable old/new fixture for a populated download-list actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct DownloadsOverlayAppendBenchmark {
+    state: DownloadsOverlayState,
+    snapshots: Vec<SelectMusicDownloadView>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl DownloadsOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let snapshots = (0..8)
+            .map(|index| SelectMusicDownloadView {
+                name: format!("Benchmark Pack {index:02}"),
+                current_bytes: (index as u64 + 1) * 384 * 1024,
+                total_bytes: 4 * 1024 * 1024,
+                complete: index < 2,
+                error_message: (index == 1).then(|| "network timeout".to_string()),
+            })
+            .collect();
+        Self {
+            state: show_downloads_overlay(),
+            snapshots,
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(32);
+        push_downloads_overlay(
+            &mut actors,
+            &self.state,
+            2,
+            &self.snapshots,
+            MachineFont::Mega,
+        );
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let DownloadsOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        let mut staged = Vec::new();
+        push_downloads_overlay_unreserved(
+            &mut staged,
+            overlay,
+            2,
+            &self.snapshots,
+            MachineFont::Mega,
+        );
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_downloads_overlay(out, &self.state, 2, &self.snapshots, MachineFont::Mega);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for DownloadsOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

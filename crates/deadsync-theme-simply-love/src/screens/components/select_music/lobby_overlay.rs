@@ -512,23 +512,61 @@ pub fn handle_raw_key(
     InputOutcome::None
 }
 
-#[must_use]
-pub fn build_overlay(
+pub fn push_overlay(
+    actors: &mut Vec<Actor>,
     state: &OverlayState,
     active_color_index: i32,
     snapshot: &lobby_data::Snapshot,
     reconnect_status_text: Option<&str>,
     machine_font: MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let OverlayState::Visible(overlay) = state else {
-        return None;
+        return false;
     };
 
+    actors.reserve(overlay_actor_capacity(overlay, snapshot));
+    push_overlay_unreserved(
+        actors,
+        overlay,
+        active_color_index,
+        snapshot,
+        reconnect_status_text,
+        machine_font,
+    );
+    true
+}
+
+fn overlay_actor_capacity(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> usize {
+    const ROOT_ACTORS: usize = 6;
+    if let Some(joined) = snapshot.joined_lobby.as_ref() {
+        return ROOT_ACTORS
+            + 8
+            + usize::from(joined.song_info.is_some())
+            + joined.players.len().max(1);
+    }
+    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
+        return ROOT_ACTORS + 1;
+    }
+    let visible_lobbies = snapshot
+        .available_lobbies
+        .len()
+        .saturating_sub(overlay.browse_scroll)
+        .min(VISIBLE_LOBBY_ROWS);
+    ROOT_ACTORS + 11 + visible_lobbies * 4 + usize::from(overlay.password_prompt.is_some()) * 19
+}
+
+fn push_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &OverlayStateData,
+    active_color_index: i32,
+    snapshot: &lobby_data::Snapshot,
+    reconnect_status_text: Option<&str>,
+    machine_font: MachineFont,
+) {
     let center_x = screen_center_x();
     let center_y = screen_center_y();
     let fill = color::decorative_rgba(active_color_index);
     let select_color = color::simply_love_rgba(active_color_index);
-    let mut actors = Vec::new();
 
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -587,7 +625,7 @@ pub fn build_overlay(
             &select_color,
             machine_font,
         ));
-        return Some(actors);
+        return;
     }
 
     match snapshot.connection {
@@ -602,7 +640,7 @@ pub fn build_overlay(
                 z(OVERLAY_Z + 3):
                 horizalign(center)
             ));
-            return Some(actors);
+            return;
         }
         lobby_data::ConnectionState::Connecting => {
             actors.push(act!(text:
@@ -615,7 +653,7 @@ pub fn build_overlay(
                 z(OVERLAY_Z + 3):
                 horizalign(center)
             ));
-            return Some(actors);
+            return;
         }
         lobby_data::ConnectionState::Connected => {}
     }
@@ -637,7 +675,6 @@ pub fn build_overlay(
             machine_font,
         ));
     }
-    Some(actors)
 }
 
 fn build_browse_overlay(
@@ -1456,6 +1493,113 @@ fn password_prompt_value(prompt: &PasswordPromptState) -> String {
     prompt.value.clone()
 }
 
+/// Stable old/new fixture for the populated lobby-overlay actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct LobbyOverlayAppendBenchmark {
+    state: OverlayState,
+    snapshot: lobby_data::Snapshot,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl LobbyOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut state = show_overlay();
+        let OverlayState::Visible(overlay) = &mut state else {
+            unreachable!("show_overlay always returns a visible overlay");
+        };
+        overlay.browse_index = 2;
+        overlay.password_prompt = Some(begin_password_prompt_join("LOCKED-ROOM"));
+        let snapshot = lobby_data::Snapshot {
+            connection: lobby_data::ConnectionState::Connected,
+            available_lobbies: (0..VISIBLE_LOBBY_ROWS)
+                .map(|index| lobby_data::PublicLobby {
+                    code: format!("BENCH-{index:02}"),
+                    player_count: index + 1,
+                    is_password_protected: index % 2 == 0,
+                })
+                .collect(),
+            ..Default::default()
+        };
+        Self { state, snapshot }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(64);
+        push_overlay(
+            &mut actors,
+            &self.state,
+            1,
+            &self.snapshot,
+            Some("Connected"),
+            MachineFont::Mega,
+        );
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let OverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        let mut staged = Vec::new();
+        push_overlay_unreserved(
+            &mut staged,
+            overlay,
+            1,
+            &self.snapshot,
+            Some("Connected"),
+            MachineFont::Mega,
+        );
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_overlay(
+            out,
+            &self.state,
+            1,
+            &self.snapshot,
+            Some("Connected"),
+            MachineFont::Mega,
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for LobbyOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1476,5 +1620,20 @@ mod tests {
         assert!(take_pending_sounds(&mut state).is_empty());
         assert_eq!(SoundCue::Change.asset_path(), "assets/sounds/change.ogg");
         assert_eq!(SoundCue::Boom.asset_path(), "assets/sounds/boom.ogg");
+    }
+
+    #[test]
+    fn direct_overlay_append_matches_legacy_batch() {
+        crate::assets::i18n::init_for_tests();
+        let fixture = LobbyOverlayAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(64);
+        let mut direct = Vec::with_capacity(64);
+
+        let legacy_checksum = fixture.legacy_frame(&mut legacy);
+        let direct_checksum = fixture.direct_frame(&mut direct);
+
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), fixture.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

@@ -43,7 +43,8 @@ fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
 #[cfg(test)]
 mod overlay_staging_tests {
     use super::{
-        Actor, ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
+        Actor, DownloadsOverlayAppendBenchmark, LeaderboardOverlayAppendBenchmark,
+        ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
         SongSearchOverlayAppendBenchmark,
     };
 
@@ -96,6 +97,32 @@ mod overlay_staging_tests {
         let direct_checksum = search.direct_frame(&mut direct);
         assert_same(
             search.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+
+        let leaderboard = LeaderboardOverlayAppendBenchmark::new();
+        legacy = Vec::with_capacity(128);
+        direct = Vec::with_capacity(128);
+        let legacy_checksum = leaderboard.legacy_frame(&mut legacy);
+        let direct_checksum = leaderboard.direct_frame(&mut direct);
+        assert_same(
+            leaderboard.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+
+        let downloads = DownloadsOverlayAppendBenchmark::new();
+        legacy = Vec::with_capacity(32);
+        direct = Vec::with_capacity(32);
+        let legacy_checksum = downloads.legacy_frame(&mut legacy);
+        let direct_checksum = downloads.direct_frame(&mut direct);
+        assert_same(
+            downloads.actor_count(),
             legacy_checksum,
             direct_checksum,
             &legacy,

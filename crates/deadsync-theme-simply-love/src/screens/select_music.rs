@@ -14974,14 +14974,14 @@ pub fn push_actors(
         ));
         return;
     }
-    if let Some(lobby_overlay) = lobby_overlay::build_overlay(
+    if lobby_overlay::push_overlay(
+        actors,
         &state.lobby_overlay,
         state.active_color_index,
         &state.lobby_view.snapshot,
         state.lobby_view.reconnect_status_text.as_deref(),
         state.policy.machine_font,
     ) {
-        actors.extend(lobby_overlay);
         return;
     }
 
@@ -15017,19 +15017,18 @@ pub fn push_actors(
         );
     }
 
-    if let Some(leaderboard_overlay) =
-        select_music_menu::build_leaderboard_overlay(&state.leaderboard, state.policy.machine_font)
-    {
-        actors.extend(leaderboard_overlay);
-    }
-    if let Some(downloads_overlay) = select_music_menu::build_downloads_overlay(
+    select_music_menu::push_leaderboard_overlay(
+        actors,
+        &state.leaderboard,
+        state.policy.machine_font,
+    );
+    select_music_menu::push_downloads_overlay(
+        actors,
         &state.downloads_overlay,
         state.active_color_index,
         &state.downloads,
         state.policy.machine_font,
-    ) {
-        actors.extend(downloads_overlay);
-    }
+    );
     if let Some(shop_overlay) = select_music_menu::build_srpg_shop_overlay(
         &state.srpg_shop_overlay,
         &state.srpg_shop_snapshot,
