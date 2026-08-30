@@ -1,4 +1,7 @@
 use deadsync_theme_simply_love::i18n;
+use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
+    ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark, SongSearchOverlayAppendBenchmark,
+};
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
 use deadsync_theme_simply_love::screens::options::{
     OptionsModalAppendBenchmark, OptionsOverlayHotBenchmark, PackSyncOverlayBenchmark,
@@ -386,6 +389,51 @@ fn main() {
         modals.palette_actor_count(),
         &old_palette,
         &new_palette,
+        false,
+    );
+
+    let menu = SelectMusicMenuOverlayBenchmark::new();
+    let mut old_menu_actors = Vec::with_capacity(40);
+    let mut new_menu_actors = Vec::with_capacity(40);
+    let (old_menu, new_menu) = sample_pair(
+        || measure(|| menu.legacy_frame(&mut old_menu_actors)),
+        || measure(|| menu.direct_frame(&mut new_menu_actors)),
+    );
+    report_pair(
+        "Select Music menu actor staging",
+        menu.actor_count(),
+        &old_menu,
+        &new_menu,
+        false,
+    );
+
+    let replay = ReplayOverlayAppendBenchmark::new();
+    let mut old_replay_actors = Vec::with_capacity(73);
+    let mut new_replay_actors = Vec::with_capacity(73);
+    let (old_replay, new_replay) = sample_pair(
+        || measure(|| replay.legacy_frame(&mut old_replay_actors)),
+        || measure(|| replay.direct_frame(&mut new_replay_actors)),
+    );
+    report_pair(
+        "replay selector actor staging",
+        replay.actor_count(),
+        &old_replay,
+        &new_replay,
+        false,
+    );
+
+    let search = SongSearchOverlayAppendBenchmark::new();
+    let mut old_search_actors = Vec::with_capacity(48);
+    let mut new_search_actors = Vec::with_capacity(48);
+    let (old_search, new_search) = sample_pair(
+        || measure(|| search.legacy_frame(&mut old_search_actors)),
+        || measure(|| search.direct_frame(&mut new_search_actors)),
+    );
+    report_pair(
+        "song search actor staging",
+        search.actor_count(),
+        &old_search,
+        &new_search,
         false,
     );
 }

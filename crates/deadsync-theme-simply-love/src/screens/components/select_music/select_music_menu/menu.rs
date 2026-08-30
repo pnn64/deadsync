@@ -364,9 +364,12 @@ pub struct RenderParams<'a> {
     pub selected_color: [f32; 4],
 }
 
-#[must_use]
-pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
-    let mut actors = Vec::new();
+pub fn push_overlay(actors: &mut Vec<Actor>, p: RenderParams<'_>) {
+    actors.reserve(4 + WHEEL_SLOTS * 4);
+    push_overlay_unreserved(actors, p);
+}
+
+fn push_overlay_unreserved(actors: &mut Vec<Actor>, p: RenderParams<'_>) {
     let cx = screen_center_x();
     let cy = screen_center_y();
     let clip_rect = [
@@ -430,19 +433,9 @@ pub fn build_overlay(p: RenderParams<'_>) -> Vec<Actor> {
                 .rem_euclid(p.entries.len() as isize)) as usize;
             let entry = &p.entries[entry_idx];
 
-            render_row(
-                &mut actors,
-                entry,
-                slot_pos,
-                cx,
-                cy,
-                &clip_rect,
-                p.machine_font,
-            );
+            render_row(actors, entry, slot_pos, cx, cy, &clip_rect, p.machine_font);
         }
     }
-
-    actors
 }
 
 fn render_row(
@@ -663,6 +656,80 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
         lerp_scalar(a[2], b[2], t),
         lerp_scalar(a[3], b[3], t),
     ]
+}
+
+/// Stable old/new fixture for the Select Music action-menu actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SelectMusicMenuOverlayBenchmark {
+    entries: Vec<Entry>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SelectMusicMenuOverlayBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let entries = (0..12)
+            .map(|index| {
+                if index % 4 == 0 {
+                    Entry::CategoryHeader {
+                        category: Category::Sorts,
+                        label: "Benchmark Category",
+                    }
+                } else {
+                    Entry::StandaloneItem(Item {
+                        top_label: deadlib_present::actors::TextContent::Static("Benchmark Action"),
+                        bottom_label: deadlib_present::actors::TextContent::Static("Select Music"),
+                        action: Action::SongSearch,
+                    })
+                }
+            })
+            .collect();
+        Self { entries }
+    }
+
+    fn params(&self) -> RenderParams<'_> {
+        RenderParams {
+            machine_font: MachineFont::Mega,
+            entries: &self.entries,
+            selected_index: 5,
+            prev_selected_index: 4,
+            last_move_dir: 1,
+            focus_anim_elapsed: FOCUS_TWEEN_SECONDS,
+            selected_color: [0.8, 0.2, 0.4, 1.0],
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(4 + WHEEL_SLOTS * 4);
+        push_overlay(&mut actors, self.params());
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::new();
+        push_overlay_unreserved(&mut staged, self.params());
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_overlay(out, self.params());
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SelectMusicMenuOverlayBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

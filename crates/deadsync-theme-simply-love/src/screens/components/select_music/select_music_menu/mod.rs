@@ -7,9 +7,11 @@ pub mod srpg_shop;
 
 pub use downloads::*;
 pub use leaderboard::*;
+#[cfg(any(test, feature = "bench-support"))]
+pub use menu::SelectMusicMenuOverlayBenchmark;
 pub use menu::{
     CategoryItemLists as MenuLists, Entry, FOCUS_TWEEN_SECONDS, InputOutcome, RenderParams,
-    VisibleState as MenuState, build_overlay, handle_input, move_selection, open,
+    VisibleState as MenuState, handle_input, move_selection, open, push_overlay,
 };
 pub use replay::*;
 pub use song_search::*;
@@ -18,6 +20,89 @@ pub use srpg_shop::*;
 use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
 use std::sync::Arc;
+
+#[cfg(any(test, feature = "bench-support"))]
+fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
+#[cfg(test)]
+mod overlay_staging_tests {
+    use super::{
+        Actor, ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
+        SongSearchOverlayAppendBenchmark,
+    };
+
+    fn assert_same(
+        expected_count: usize,
+        legacy_checksum: u64,
+        direct_checksum: u64,
+        legacy: &[Actor],
+        direct: &[Actor],
+    ) {
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), expected_count);
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn direct_select_music_overlay_append_matches_legacy_batches() {
+        crate::assets::i18n::init_for_tests();
+
+        let menu = SelectMusicMenuOverlayBenchmark::new();
+        let mut legacy = Vec::with_capacity(40);
+        let mut direct = Vec::with_capacity(40);
+        let legacy_checksum = menu.legacy_frame(&mut legacy);
+        let direct_checksum = menu.direct_frame(&mut direct);
+        assert_same(
+            menu.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+
+        let replay = ReplayOverlayAppendBenchmark::new();
+        legacy = Vec::with_capacity(73);
+        direct = Vec::with_capacity(73);
+        let legacy_checksum = replay.legacy_frame(&mut legacy);
+        let direct_checksum = replay.direct_frame(&mut direct);
+        assert_same(
+            replay.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+
+        let search = SongSearchOverlayAppendBenchmark::new();
+        legacy = Vec::with_capacity(48);
+        direct = Vec::with_capacity(48);
+        let legacy_checksum = search.legacy_frame(&mut legacy);
+        let direct_checksum = search.direct_frame(&mut direct);
+        assert_same(
+            search.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {

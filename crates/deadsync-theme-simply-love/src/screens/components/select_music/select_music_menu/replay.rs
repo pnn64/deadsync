@@ -174,17 +174,26 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
     }
 }
 
-#[must_use]
-pub fn build_replay_overlay(
+pub fn push_replay_overlay(
+    actors: &mut Vec<Actor>,
     state: &ReplayOverlayState,
     active_color_index: i32,
     machine_font: MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let ReplayOverlayState::Visible(overlay) = state else {
-        return None;
+        return false;
     };
+    actors.reserve(8 + replay_total_items(overlay).min(GS_LEADERBOARD_NUM_ENTRIES) * 5);
+    push_replay_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+    true
+}
 
-    let mut actors = Vec::new();
+fn push_replay_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &ReplayOverlayStateData,
+    active_color_index: i32,
+    machine_font: MachineFont,
+) {
     let pane_width = GS_LEADERBOARD_PANE_WIDTH_SINGLE;
     let pane_cx = screen_center_x();
     let pane_cy = screen_center_y() + GS_LEADERBOARD_PANE_CENTER_Y;
@@ -273,11 +282,11 @@ pub fn build_replay_overlay(
         let selected = row_idx == overlay.selected_index;
         if selected {
             actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(pane_cx, y):
-                zoomto(pane_width, GS_LEADERBOARD_ROW_HEIGHT):
-                diffuse(selected_color[0], selected_color[1], selected_color[2], 1.0):
-                z(GS_LEADERBOARD_Z + 5)
+                        align(0.5, 0.5):
+                        xy(pane_cx, y):
+                        zoomto(pane_width, GS_LEADERBOARD_ROW_HEIGHT):
+                        diffuse(selected_color[0], selected_color[1], selected_color[2], 1.0):
+                        z(GS_LEADERBOARD_Z + 5)
             ));
         }
 
@@ -376,6 +385,72 @@ pub fn build_replay_overlay(
         z(GS_LEADERBOARD_Z + 8):
         horizalign(center)
     ));
+}
 
-    Some(actors)
+/// Stable old/new fixture for the replay-selector actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ReplayOverlayAppendBenchmark {
+    state: ReplayOverlayState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReplayOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let entries = (0..13)
+            .map(|index| score_data::MachineReplayEntry {
+                rank: index + 1,
+                name: format!("P{:02}", index + 1),
+                score: 99_500.0 - index as f64 * 125.0,
+                date: format!("2026-08-{:02}", index + 1),
+                is_fail: index == 11,
+                replay_beat0_time_ns: 0,
+                replay: Vec::new(),
+            })
+            .collect();
+        let mut state = begin_replay_overlay(entries);
+        let ReplayOverlayState::Visible(overlay) = &mut state else {
+            unreachable!("replay benchmark always starts visible");
+        };
+        overlay.selected_index = 6;
+        overlay.prev_selected_index = 5;
+        Self { state }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(73);
+        let visible = push_replay_overlay(&mut actors, &self.state, 2, MachineFont::Mega);
+        debug_assert!(visible);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let ReplayOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("replay benchmark stays visible");
+        };
+        let mut staged = Vec::new();
+        push_replay_overlay_unreserved(&mut staged, overlay, 2, MachineFont::Mega);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let visible = push_replay_overlay(out, &self.state, 2, MachineFont::Mega);
+        debug_assert!(visible);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ReplayOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }

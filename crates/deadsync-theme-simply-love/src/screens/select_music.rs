@@ -14878,13 +14878,13 @@ pub fn push_actors(
         return;
     }
 
-    if let Some(song_search_overlay) = select_music_menu::build_song_search_overlay(
+    if select_music_menu::push_song_search_overlay(
+        actors,
         &state.song_search,
         state.active_color_index,
         state.policy.machine_font,
         asset_manager,
     ) {
-        actors.extend(song_search_overlay);
         return;
     }
     if let Some(overlay) = state.profile_switch_overlay.as_ref() {
@@ -14904,12 +14904,12 @@ pub fn push_actors(
         ));
         return;
     }
-    if let Some(replay_overlay) = select_music_menu::build_replay_overlay(
+    if select_music_menu::push_replay_overlay(
+        actors,
         &state.replay_overlay,
         state.active_color_index,
         state.policy.machine_font,
     ) {
-        actors.extend(replay_overlay);
         return;
     }
     if pack_sync::push_overlay(
@@ -15003,7 +15003,8 @@ pub fn push_actors(
     }
 
     if let select_music_menu::State::Visible(ref menu_state) = state.select_music_menu {
-        actors.extend(select_music_menu::build_overlay(
+        select_music_menu::push_overlay(
+            actors,
             select_music_menu::RenderParams {
                 machine_font: state.policy.machine_font,
                 entries: &menu_state.cached_entries,
@@ -15013,7 +15014,7 @@ pub fn push_actors(
                 focus_anim_elapsed: menu_state.focus_anim_elapsed,
                 selected_color: color::simply_love_rgba(state.active_color_index),
             },
-        ));
+        );
     }
 
     if let Some(leaderboard_overlay) =

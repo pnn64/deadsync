@@ -783,16 +783,16 @@ fn cmp_ascii_ci(a: &str, b: &str) -> std::cmp::Ordering {
         .cmp(b.bytes().map(|c| c.to_ascii_lowercase()))
 }
 
-/// Build the overlay actors, or `None` when the search is hidden.
-#[must_use]
-pub fn build_song_search_overlay(
+/// Append the overlay actors, returning whether the search is visible.
+pub fn push_song_search_overlay(
+    actors: &mut Vec<Actor>,
     state: &SongSearchState,
     active_color_index: i32,
     machine_font: MachineFont,
     asset_manager: &AssetManager,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let SongSearchState::Open(open) = state else {
-        return None;
+        return false;
     };
 
     let cx = screen_center_x();
@@ -807,7 +807,7 @@ pub fn build_song_search_overlay(
     const GRAY: [f32; 4] = color::rgba_hex("#808080");
     const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
-    let mut actors = Vec::with_capacity(48);
+    actors.reserve(48);
 
     // Dim behind the modal.
     actors.push(act!(quad:
@@ -1016,7 +1016,80 @@ pub fn build_song_search_overlay(
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 
-    Some(actors)
+    true
+}
+
+/// Stable old/new fixture for the song-search actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SongSearchOverlayAppendBenchmark {
+    state: SongSearchState,
+    assets: AssetManager,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SongSearchOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let matches = (0..SONG_SEARCH_MAX_RESULTS)
+            .map(|index| SongSearchMatch::Pack {
+                name: Arc::from(format!("Benchmark Pack {index:02}")),
+                song_count: 20 + index,
+                score: 1_000 - index as i32,
+            })
+            .collect();
+        Self {
+            state: SongSearchState::Open(SongSearchOpen {
+                query: String::new(),
+                scope: SongSearchScope::Pack,
+                matches,
+                selected_index: 3,
+                blink_t: 0.25,
+                chart_type: "dance-single",
+                request_generation: 1,
+                matches_generation: 1,
+                has_result: true,
+            }),
+            assets: AssetManager::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(48);
+        let visible =
+            push_song_search_overlay(&mut actors, &self.state, 2, MachineFont::Mega, &self.assets);
+        debug_assert!(visible);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(48);
+        let visible =
+            push_song_search_overlay(&mut staged, &self.state, 2, MachineFont::Mega, &self.assets);
+        debug_assert!(visible);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let visible =
+            push_song_search_overlay(out, &self.state, 2, MachineFont::Mega, &self.assets);
+        debug_assert!(visible);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SongSearchOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
