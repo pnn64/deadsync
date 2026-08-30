@@ -805,7 +805,7 @@ pub fn push_actors(
     );
 
     // Top Bar
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         visual_policy,
         title: &state.labels.screen_title,
         title_placement: ScreenBarTitlePlacement::Left,

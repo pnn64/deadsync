@@ -2962,7 +2962,7 @@ pub fn push_actors(
     let ui_start = actors.len();
     let header_font = machine_font_key(visual_policy.machine_font, FontRole::Header);
     let title = tr("ScreenTitles", "ManageProfiles");
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build_cached(screen_bar::ScreenBarParams {
         visual_policy,
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left,

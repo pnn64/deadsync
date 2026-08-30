@@ -210,7 +210,7 @@ pub fn push_actors(
     // 2) Bars (top + bottom)
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
     let title = tr("ScreenTitles", "SelectAColor");
-    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build_cached(screen_bar::ScreenBarParams {
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left, // big title on the left
         position: ScreenBarPosition::Top,

@@ -37,7 +37,7 @@ pub fn push(
     let (right_text, right_avatar) =
         player_params(&players[1], insert_card.as_ref(), press_start.as_ref());
     let event_mode = tr("Common", "EventMode");
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,

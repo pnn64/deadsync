@@ -4454,7 +4454,7 @@ fn push_system_profile_footer(
         }
     };
     presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
-        actors.push(screen_bar::build_no_background(ScreenBarParams {
+        actors.push(screen_bar::build_no_background_cached(ScreenBarParams {
             visual_policy,
             title: "",
             title_placement: screen_bar::ScreenBarTitlePlacement::Center,

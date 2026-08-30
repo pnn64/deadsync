@@ -802,19 +802,21 @@ pub fn push_actors(
     } else {
         "INSERT COIN"
     };
-    actors.push(screen_bar::build_title_menu(screen_bar::ScreenBarParams {
-        visual_policy,
-        title: footer_title,
-        title_placement: screen_bar::ScreenBarTitlePlacement::Center,
-        position: screen_bar::ScreenBarPosition::Bottom,
-        transparent: true,
-        left_text: Some(footer_prompt),
-        center_text: None,
-        right_text: Some(footer_prompt),
-        left_avatar: None,
-        right_avatar: None,
-        fg_color: footer_fg,
-    }));
+    actors.push(screen_bar::build_title_menu_cached(
+        screen_bar::ScreenBarParams {
+            visual_policy,
+            title: footer_title,
+            title_placement: screen_bar::ScreenBarTitlePlacement::Center,
+            position: screen_bar::ScreenBarPosition::Bottom,
+            transparent: true,
+            left_text: Some(footer_prompt),
+            center_text: None,
+            right_text: Some(footer_prompt),
+            left_avatar: None,
+            right_avatar: None,
+            fg_color: footer_fg,
+        },
+    ));
 
     let status_alpha = alpha_multiplier * secondary_alpha;
     let mut status_next_y = STATUS_BASE_Y;

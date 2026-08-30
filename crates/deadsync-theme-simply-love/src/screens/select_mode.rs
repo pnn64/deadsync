@@ -378,7 +378,7 @@ pub fn push_actors(
 
     let mut text = state.text.borrow_mut();
     text.sync();
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         visual_policy,
         title: &text.title,
         title_placement: ScreenBarTitlePlacement::Left,

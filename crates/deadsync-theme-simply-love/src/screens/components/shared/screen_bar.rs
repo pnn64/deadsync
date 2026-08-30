@@ -69,7 +69,7 @@ pub struct ScreenBarParams<'a> {
     pub visual_policy: SimplyLoveVisualPolicyView,
 }
 
-struct CachedSelectMusicBar {
+struct CachedScreenBar {
     title: Arc<str>,
     title_placement: ScreenBarTitlePlacement,
     transparent: bool,
@@ -84,7 +84,7 @@ struct CachedSelectMusicBar {
     actor: Actor,
 }
 
-impl CachedSelectMusicBar {
+impl CachedScreenBar {
     fn matches(&self, params: ScreenBarParams<'_>) -> bool {
         self.title.as_ref() == params.title
             && self.title_placement == params.title_placement
@@ -122,8 +122,12 @@ impl CachedSelectMusicBar {
 }
 
 thread_local! {
-    static SELECT_MUSIC_BAR_CACHE: RefCell<[Option<CachedSelectMusicBar>; 2]> =
-        const { RefCell::new([None, None]) };
+    // One bounded entry for each context/position pair. Only the active screen
+    // normally touches a slot, so unchanged frames are an Arc clone and key
+    // comparison. Screen/config transitions replace the relevant entry in
+    // place; there is no growth, eviction work, or background destruction.
+    static SCREEN_BAR_CACHE: RefCell<[Option<CachedScreenBar>; 8]> =
+        const { RefCell::new([None, None, None, None, None, None, None, None]) };
 }
 
 #[inline(always)]
@@ -173,16 +177,37 @@ pub fn build(params: ScreenBarParams) -> Actor {
 
 #[must_use]
 pub fn build_shared(params: ScreenBarParams) -> Actor {
-    shared_frame(build_with_context(params, ScreenBarContext::Normal))
+    build_cached(params)
 }
 
 #[must_use]
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
-    let slot = match params.position {
+    build_cached_with_context(params, ScreenBarContext::SelectMusic)
+}
+
+/// Retains a normal screen bar across unchanged frames.
+///
+/// The cache is deliberately bounded to one entry per context/position pair.
+/// A hit performs no allocation; a miss synchronously replaces the old actor
+/// tree on the game thread.
+#[must_use]
+pub fn build_cached(params: ScreenBarParams) -> Actor {
+    build_cached_with_context(params, ScreenBarContext::Normal)
+}
+
+fn build_cached_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
+    let context_slot = match context {
+        ScreenBarContext::Normal => 0,
+        ScreenBarContext::SelectMusic => 1,
+        ScreenBarContext::NoBackground => 2,
+        ScreenBarContext::TitleMenu => 3,
+    };
+    let position_slot = match params.position {
         ScreenBarPosition::Top => 0,
         ScreenBarPosition::Bottom => 1,
     };
-    SELECT_MUSIC_BAR_CACHE.with(|cache| {
+    let slot = context_slot * 2 + position_slot;
+    SCREEN_BAR_CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
         if let Some(cached) = cache[slot].as_ref()
             && cached.matches(params)
@@ -190,8 +215,8 @@ pub fn build_select_music(params: ScreenBarParams) -> Actor {
             return cached.actor.clone();
         }
 
-        let actor = shared_frame(build_with_context(params, ScreenBarContext::SelectMusic));
-        cache[slot] = Some(CachedSelectMusicBar::new(params, actor.clone()));
+        let actor = shared_frame(build_with_context(params, context));
+        cache[slot] = Some(CachedScreenBar::new(params, actor.clone()));
         actor
     })
 }
@@ -225,9 +250,21 @@ pub fn build_title_menu(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::TitleMenu)
 }
 
+/// Retains a title-menu screen bar across unchanged frames.
+#[must_use]
+pub fn build_title_menu_cached(params: ScreenBarParams) -> Actor {
+    build_cached_with_context(params, ScreenBarContext::TitleMenu)
+}
+
 #[must_use]
 pub fn build_no_background(params: ScreenBarParams) -> Actor {
     build_with_context(params, ScreenBarContext::NoBackground)
+}
+
+/// Retains a background-free screen bar across unchanged frames.
+#[must_use]
+pub fn build_no_background_cached(params: ScreenBarParams) -> Actor {
+    build_cached_with_context(params, ScreenBarContext::NoBackground)
 }
 
 fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Actor {
@@ -397,6 +434,57 @@ mod tests {
         }
     }
 
+    fn assert_cached_frame_matches(legacy: Actor, cached: Actor, repeated: Actor) -> Arc<[Actor]> {
+        let Actor::Frame {
+            align: legacy_align,
+            offset: legacy_offset,
+            size: legacy_size,
+            children: legacy_children,
+            background: legacy_background,
+            z: legacy_z,
+        } = legacy
+        else {
+            panic!("legacy screen bar should be a frame");
+        };
+        let Actor::SharedFrame {
+            align: cached_align,
+            offset: cached_offset,
+            size: cached_size,
+            children: cached_children,
+            background: cached_background,
+            z: cached_z,
+            tint,
+            blend,
+        } = cached
+        else {
+            panic!("cached screen bar should be shared");
+        };
+        let Actor::SharedFrame {
+            children: repeated_children,
+            ..
+        } = repeated
+        else {
+            panic!("repeated screen bar should be shared");
+        };
+
+        assert_eq!(legacy_align, cached_align);
+        assert_eq!(legacy_offset, cached_offset);
+        assert_eq!(format!("{legacy_size:?}"), format!("{cached_size:?}"));
+        assert_eq!(legacy_z, cached_z);
+        assert_eq!(
+            format!("{legacy_children:?}"),
+            format!("{:?}", cached_children.as_ref())
+        );
+        assert_eq!(
+            format!("{legacy_background:?}"),
+            format!("{cached_background:?}")
+        );
+        assert_eq!(tint, [1.0; 4]);
+        assert_eq!(blend, None);
+        assert!(Arc::ptr_eq(&cached_children, &repeated_children));
+        cached_children
+    }
+
     #[test]
     fn no_background_bar_has_no_frame_background() {
         let actor = build_no_background(empty_bar_params());
@@ -514,5 +602,50 @@ mod tests {
             panic!("changed screen bar should be shared");
         };
         assert!(!Arc::ptr_eq(&cached_children, &changed_children));
+    }
+
+    #[test]
+    fn cached_normal_bar_matches_legacy_and_reuses_actor_tree() {
+        let mut params = empty_bar_params();
+        params.title = "Normal cache title";
+        params.left_text = Some("Player One");
+        params.right_text = Some("Player Two");
+        let children =
+            assert_cached_frame_matches(build(params), build_cached(params), build_cached(params));
+
+        params.title = "Normal cache changed";
+        let Actor::SharedFrame {
+            children: changed_children,
+            ..
+        } = build_cached(params)
+        else {
+            panic!("changed normal bar should be shared");
+        };
+        assert!(!Arc::ptr_eq(&children, &changed_children));
+    }
+
+    #[test]
+    fn cached_no_background_bar_matches_legacy_and_reuses_actor_tree() {
+        let mut params = empty_bar_params();
+        params.left_text = Some("Player One");
+        params.right_text = Some("Player Two");
+        assert_cached_frame_matches(
+            build_no_background(params),
+            build_no_background_cached(params),
+            build_no_background_cached(params),
+        );
+    }
+
+    #[test]
+    fn cached_title_menu_bar_matches_legacy_and_reuses_actor_tree() {
+        let mut params = empty_bar_params();
+        params.title = "Title menu cache";
+        params.left_text = Some("PRESS START");
+        params.right_text = Some("PRESS START");
+        assert_cached_frame_matches(
+            build_title_menu(params),
+            build_title_menu_cached(params),
+            build_title_menu_cached(params),
+        );
     }
 }

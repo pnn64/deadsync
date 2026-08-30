@@ -2004,7 +2004,7 @@ pub fn push_actors(
 
     let fg = [1.0, 1.0, 1.0, 1.0];
     let title = tr("ScreenTitles", "SelectProfile");
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,
@@ -2027,7 +2027,7 @@ pub fn push_actors(
         (true, true) => (None, None),
     };
     let event_mode = tr("Common", "EventMode");
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         title: &event_mode,
         title_placement: ScreenBarTitlePlacement::Center,
         position: ScreenBarPosition::Bottom,

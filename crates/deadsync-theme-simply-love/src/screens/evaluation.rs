@@ -5325,7 +5325,7 @@ pub fn push_actors(
     );
 
     // 2. Top Bar
-    actors.push(screen_bar::build(ScreenBarParams {
+    actors.push(screen_bar::build_cached(ScreenBarParams {
         visual_policy,
         title: "EVALUATION",
         title_placement: ScreenBarTitlePlacement::Left,
@@ -6862,7 +6862,7 @@ pub fn push_actors(
             profile_data::PlayerSide::P2 => (None, p2_footer_text, None, p2_footer_avatar),
         }
     };
-    actors.push(screen_bar::build_no_background(ScreenBarParams {
+    actors.push(screen_bar::build_no_background_cached(ScreenBarParams {
         visual_policy,
         title: "",
         title_placement: screen_bar::ScreenBarTitlePlacement::Center,
