@@ -261,7 +261,7 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
                 .to_string();
             keys.groovestats_is_pad_player = ini
                 .get("GrooveStats", "IsPadPlayer")
-                .map(|s| parse_bool(&s))
+                .map(parse_bool)
                 .unwrap_or(false);
         }
     }
@@ -289,7 +289,10 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
         && ini.load(&path).is_ok()
         && let Some(section) = ini.get_section("Simply Love")
     {
-        return section.clone();
+        return section
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
     }
     HashMap::new()
 }

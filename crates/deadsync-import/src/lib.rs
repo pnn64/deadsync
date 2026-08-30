@@ -5,7 +5,11 @@
 //! local profiles or mutate global game state; root import orchestration owns
 //! that boundary.
 
+#[cfg(not(feature = "bench-support"))]
 mod ini;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod ini;
 
 pub mod app_runtime;
 pub mod detect;
