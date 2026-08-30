@@ -3,7 +3,7 @@ use crate::views::{TimingHealth, VisibleStutterSample};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
-use deadlib_render_core::BackendType;
+use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
 use std::cell::RefCell;
 use std::fmt::{self, Write};
 use std::sync::Arc;
@@ -13,8 +13,114 @@ const DEBUG_OVERLAY_Z: i16 = 32020;
 
 thread_local! {
     static STATS_TEXT_CACHE: RefCell<TextCache<(u32, u32, u8)>> = RefCell::new(text_cache_with_capacity(256));
+    static TIMING_TEXT_CACHE: RefCell<TextCache<TimingTextKey>> = RefCell::new(text_cache_with_capacity(256));
     static STUTTER_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(1024));
     static STUTTER_LINE_CACHE: RefCell<TextCache<(u32, u32, u32)>> = RefCell::new(text_cache_with_capacity(2048));
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct AudioTimingTextKey {
+    backend: &'static str,
+    requested_output_mode: &'static str,
+    fallback_from_native: bool,
+    timing_clock: &'static str,
+    timing_quality: &'static str,
+    sample_rate_hz: u32,
+    device_period_ns: u64,
+    stream_latency_ns: u64,
+    buffer_frames: u32,
+    padding_frames: u32,
+    queued_frames: u32,
+    estimated_output_delay_ns: u64,
+    clock_fallback_count: u64,
+    timing_sanity_failure_count: u64,
+    underrun_count: u64,
+}
+
+impl From<crate::views::AudioTimingView> for AudioTimingTextKey {
+    fn from(audio: crate::views::AudioTimingView) -> Self {
+        Self {
+            backend: audio.backend,
+            requested_output_mode: audio.requested_output_mode,
+            fallback_from_native: audio.fallback_from_native,
+            timing_clock: audio.timing_clock,
+            timing_quality: audio.timing_quality,
+            sample_rate_hz: audio.sample_rate_hz,
+            device_period_ns: audio.device_period_ns,
+            stream_latency_ns: audio.stream_latency_ns,
+            buffer_frames: audio.buffer_frames,
+            padding_frames: audio.padding_frames,
+            queued_frames: audio.queued_frames,
+            estimated_output_delay_ns: audio.estimated_output_delay_ns,
+            clock_fallback_count: audio.clock_fallback_count,
+            timing_sanity_failure_count: audio.timing_sanity_failure_count,
+            underrun_count: audio.underrun_count,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct TimingTextKey {
+    interval_ns: u64,
+    display_error_bits: u32,
+    display_catching_up: bool,
+    present_mode: u8,
+    display_clock: u8,
+    host_clock: u8,
+    in_flight_images: u8,
+    waited_for_image: bool,
+    applied_back_pressure: bool,
+    queue_idle_waited: bool,
+    suboptimal: bool,
+    submitted_present_id: u32,
+    completed_present_id: u32,
+    calibration_error_ns: u64,
+    host_mapped: bool,
+    audio: Option<AudioTimingTextKey>,
+}
+
+#[inline(always)]
+const fn present_mode_key(mode: PresentModeTrace) -> u8 {
+    match mode {
+        PresentModeTrace::Unknown => 0,
+        PresentModeTrace::Fifo => 1,
+        PresentModeTrace::FifoRelaxed => 2,
+        PresentModeTrace::Mailbox => 3,
+        PresentModeTrace::Immediate => 4,
+    }
+}
+
+#[inline(always)]
+const fn clock_domain_key(clock: ClockDomainTrace) -> u8 {
+    match clock {
+        ClockDomainTrace::Unknown => 0,
+        ClockDomainTrace::Device => 1,
+        ClockDomainTrace::Monotonic => 2,
+        ClockDomainTrace::MonotonicRaw => 3,
+        ClockDomainTrace::Qpc => 4,
+    }
+}
+
+#[inline(always)]
+fn timing_text_key(timing: TimingHealth) -> TimingTextKey {
+    TimingTextKey {
+        interval_ns: timing.interval_ns,
+        display_error_bits: timing.display_error_ms.to_bits(),
+        display_catching_up: timing.display_catching_up,
+        present_mode: present_mode_key(timing.present_mode),
+        display_clock: clock_domain_key(timing.display_clock),
+        host_clock: clock_domain_key(timing.host_clock),
+        in_flight_images: timing.in_flight_images,
+        waited_for_image: timing.waited_for_image,
+        applied_back_pressure: timing.applied_back_pressure,
+        queue_idle_waited: timing.queue_idle_waited,
+        suboptimal: timing.suboptimal,
+        submitted_present_id: timing.submitted_present_id,
+        completed_present_id: timing.completed_present_id,
+        calibration_error_ns: timing.calibration_error_ns,
+        host_mapped: timing.host_mapped,
+        audio: timing.audio.map(Into::into),
+    }
 }
 
 #[inline(always)]
@@ -107,6 +213,20 @@ fn timing_text(timing: TimingHealth) -> String {
     text
 }
 
+/// Thread-lifetime, bounded telemetry text interning. Exact source bits form
+/// the key, so cache hits preserve formatting byte-for-byte. The cache never
+/// evicts, stops admitting entries at `TEXT_CACHE_LIMIT`, and drops with the
+/// presentation thread; stable telemetry frames only clone an `Arc` handle.
+#[inline(always)]
+fn retained_timing_text(timing: TimingHealth) -> Arc<str> {
+    cached_text(
+        &TIMING_TEXT_CACHE,
+        timing_text_key(timing),
+        TEXT_CACHE_LIMIT,
+        || timing_text(timing),
+    )
+}
+
 /// Stats overlay: base FPS block plus optional timing-health block, top-right, miso, white.
 pub fn push(
     actors: &mut Vec<Actor>,
@@ -134,7 +254,7 @@ pub fn push(
         z(DEBUG_OVERLAY_Z)
     ));
     if let Some(timing) = timing {
-        let timing_text = timing_text(timing);
+        let timing_text = retained_timing_text(timing);
         actors.push(act!(text:
             align(1.0, 0.0):
             xy(w + MARGIN_X, MARGIN_Y + TIMING_OFFSET_Y):
@@ -301,10 +421,17 @@ pub fn benchmark_timing_text_legacy(timing: TimingHealth) -> String {
     legacy_timing_text(timing)
 }
 
+/// Exact owned-string implementation used immediately before retained telemetry text.
 #[cfg(any(test, feature = "bench-support"))]
 #[must_use]
-pub fn benchmark_timing_text_current(timing: TimingHealth) -> String {
+pub fn benchmark_timing_text_prepass(timing: TimingHealth) -> String {
     timing_text(timing)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn benchmark_timing_text_current(timing: TimingHealth) -> Arc<str> {
+    retained_timing_text(timing)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -374,12 +501,33 @@ mod tests {
     #[test]
     fn one_pass_timing_text_matches_legacy_output() {
         for timing in [timing(false), timing(true)] {
-            assert_eq!(timing_text(timing), legacy_timing_text(timing));
+            assert_eq!(
+                retained_timing_text(timing).as_ref(),
+                legacy_timing_text(timing)
+            );
         }
         let mut zero = timing(false);
         zero.interval_ns = 0;
         zero.calibration_error_ns = 0;
-        assert_eq!(timing_text(zero), legacy_timing_text(zero));
+        assert_eq!(
+            retained_timing_text(zero).as_ref(),
+            legacy_timing_text(zero)
+        );
+    }
+
+    #[test]
+    fn timing_text_reuses_exact_sources_and_refreshes_changed_values() {
+        let source = timing(true);
+        let first = retained_timing_text(source);
+        let repeated = retained_timing_text(source);
+        assert!(Arc::ptr_eq(&first, &repeated));
+
+        let mut changed = source;
+        changed.audio.as_mut().unwrap().underrun_count += 1;
+        let refreshed = retained_timing_text(changed);
+        assert!(!Arc::ptr_eq(&first, &refreshed));
+        assert_ne!(first.as_ref(), refreshed.as_ref());
+        assert_eq!(refreshed.as_ref(), legacy_timing_text(changed));
     }
 
     #[test]

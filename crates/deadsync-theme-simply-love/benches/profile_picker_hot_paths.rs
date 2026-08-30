@@ -231,6 +231,9 @@ fn report_pair(title: &str, items: usize, old: &[Sample], new: &[Sample]) {
             mean(new, |sample| sample.alloc.churn_bytes()),
         ),
     );
+    assert!(new.iter().all(|sample| sample.alloc.allocs == 0));
+    assert!(new.iter().all(|sample| sample.alloc.reallocs == 0));
+    assert!(new.iter().all(|sample| sample.alloc.frees == 0));
 }
 
 fn main() {
@@ -261,6 +264,19 @@ fn main() {
         || measure(|| benchmark.direct_actor_staging(&mut new_actors)),
     );
     report_pair("profile-box actor staging", 56, &old_staging, &new_staging);
+
+    let mut old_overlay = Vec::with_capacity(128);
+    let mut new_overlay = Vec::with_capacity(128);
+    let (old_static_sources, new_static_sources) = sample_pair(
+        || measure(|| benchmark.legacy_static_payload_overlay_frame(&mut old_overlay)),
+        || measure(|| benchmark.direct_overlay_frame(&mut new_overlay)),
+    );
+    report_pair(
+        "profile static presentation payloads",
+        benchmark.render_actor_count(),
+        &old_static_sources,
+        &new_static_sources,
+    );
 }
 
 #[cfg(windows)]

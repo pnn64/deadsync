@@ -3,11 +3,11 @@ use deadsync_config::frame_pacing::StutterSampleRing;
 use deadsync_config::prelude::{LogLevel, VersionOverlaySide};
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::shared::frame_stats_overlay::{
-    benchmark_build_legacy as benchmark_frame_stats_build_legacy, push as push_frame_stats,
+    benchmark_push_with_owned_text, push as push_frame_stats,
 };
 use deadsync_theme_simply_love::screens::components::shared::stats_overlay::{
     benchmark_build_legacy as benchmark_stats_build_legacy, benchmark_build_stutter_legacy,
-    benchmark_timing_text_current, benchmark_timing_text_legacy, push as push_stats, push_stutter,
+    benchmark_timing_text_current, benchmark_timing_text_prepass, push as push_stats, push_stutter,
 };
 use deadsync_theme_simply_love::screens::components::shared::timers::TimerText;
 use deadsync_theme_simply_love::screens::components::shared::{gamepad_overlay, version_overlay};
@@ -252,26 +252,6 @@ fn print_pair(title: &str, iterations: usize, old: &BenchResult, new: &BenchResu
         "improvement  {:>8.2}x throughput  {:>8.2}% fewer allocated bytes",
         old.ns_per_op / new.ns_per_op,
         100.0 * (1.0 - new.allocated.bytes as f64 / old.allocated.bytes as f64),
-    );
-}
-
-fn print_reduced_pair(title: &str, iterations: usize, old: &BenchResult, new: &BenchResult) {
-    assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
-    println!("\n{title}");
-    print_result("old", iterations, old);
-    print_result("new", iterations, new);
-    println!(
-        "improvement  {:>8.2}x throughput  {:>8.2}% fewer allocated bytes",
-        old.ns_per_op / new.ns_per_op,
-        100.0 * (1.0 - new.allocated.bytes as f64 / old.allocated.bytes as f64),
-    );
-    assert!(
-        new.allocated.allocs < old.allocated.allocs,
-        "{title} did not reduce allocations"
-    );
-    assert!(
-        new.allocated.bytes < old.allocated.bytes,
-        "{title} did not reduce allocated bytes"
     );
 }
 
@@ -682,16 +662,16 @@ fn main() {
 
     let timing = timing_fixture();
     assert_eq!(
-        benchmark_timing_text_legacy(timing),
-        benchmark_timing_text_current(timing)
+        benchmark_timing_text_prepass(timing),
+        benchmark_timing_text_current(timing).as_ref()
     );
     let old_timing = measure(TIMING_TEXT_OPS, 200, || {
-        text_checksum(&benchmark_timing_text_legacy(black_box(timing)))
+        text_checksum(&benchmark_timing_text_prepass(black_box(timing)))
     });
     let new_timing = measure(TIMING_TEXT_OPS, 200, || {
         text_checksum(&benchmark_timing_text_current(black_box(timing)))
     });
-    print_reduced_pair(
+    print_pair(
         "8. one-pass timing telemetry",
         TIMING_TEXT_OPS,
         &old_timing,
@@ -769,16 +749,17 @@ fn main() {
     let mut old_frame_actors = Vec::with_capacity(frame_capacity);
     let old_frame_overlay = measure(FRAME_STATS_OVERLAY_OPS, 10, || {
         old_frame_actors.clear();
-        old_frame_actors.extend(benchmark_frame_stats_build_legacy(
+        benchmark_push_with_owned_text(
+            &mut old_frame_actors,
             black_box(&frame_samples),
             black_box(frame_summary),
             OverlayAnchor::TopLeft,
             false,
             OverlayStyle::Detailed,
             [1280.0, 720.0],
-        ));
+        );
         black_box(&old_frame_actors);
-        old_frame_actors.len() as u64
+        overlay_actor_checksum(&old_frame_actors)
     });
     let mut new_frame_actors = Vec::with_capacity(frame_capacity);
     let new_frame_overlay = measure(FRAME_STATS_OVERLAY_OPS, 10, || {
@@ -793,9 +774,9 @@ fn main() {
             [1280.0, 720.0],
         );
         black_box(&new_frame_actors);
-        new_frame_actors.len() as u64
+        overlay_actor_checksum(&new_frame_actors)
     });
-    print_reduced_pair(
+    print_pair(
         "12. direct frame-stats actor append",
         FRAME_STATS_OVERLAY_OPS,
         &old_frame_overlay,

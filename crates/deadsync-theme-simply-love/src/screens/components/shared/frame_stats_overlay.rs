@@ -3,9 +3,86 @@ use crate::views::{
     FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle,
     frame_histogram as histogram,
 };
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 const DEBUG_OVERLAY_Z: i16 = 32030;
+const TEXT_CACHE_LIMIT: usize = 1024;
+
+// Each readout owns a separate bounded, presentation-thread cache because
+// its source fields change at different rates. Entries never evict, new keys
+// stop being admitted at `TEXT_CACHE_LIMIT`, and all storage drops with the
+// thread. Stable summaries clone `Arc` handles without formatting or heap
+// churn; changing telemetry still produces exact fresh text.
+thread_local! {
+    static SUMMARY_TEXT_CACHE: RefCell<TextCache<SummaryTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static LOAD_TEXT_CACHE: RefCell<TextCache<LoadTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static STUTTER_TEXT_CACHE: RefCell<TextCache<StutterTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static DISPLAY_TEXT_CACHE: RefCell<TextCache<DisplayTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static AUDIO_TEXT_CACHE: RefCell<TextCache<AudioTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static COMPACT_TEXT_CACHE: RefCell<TextCache<CompactTextKey>> = RefCell::new(text_cache_with_capacity(128));
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct SummaryTextKey {
+    fps_bits: u32,
+    avg_frame_us: u32,
+    frame_jitter_us: u32,
+    p99_frame_us: u32,
+    spike_hold_us: u32,
+    target_frame_us: u32,
+    show_p99: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct LoadTextKey {
+    cpu_work_us: u32,
+    gpu_wait_us: u32,
+    avg_frame_us: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct StutterTextKey {
+    over_budget_count: u32,
+    catch_up_count: u32,
+    spike_hold_us: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct DisplayTextKey {
+    in_gameplay: bool,
+    display_error_bits: u32,
+    display_error_p99_bits: u32,
+    display_error_jitter_us: u32,
+    display_catching_up: bool,
+    show_p99: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct AudioTextKey {
+    callback_gap_bits: u32,
+    underruns: u64,
+    output_delay_bits: u32,
+    queued_frames: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct CompactTextKey {
+    fps_bits: u32,
+    avg_frame_us: u32,
+    frame_jitter_us: u32,
+    p99_frame_us: u32,
+    spike_hold_us: u32,
+    in_gameplay: bool,
+    display_error_bits: u32,
+    display_catching_up: bool,
+    audio_underruns: u64,
+    audio_output_delay_bits: u32,
+    audio_callback_gap_bits: u32,
+    show_p99: bool,
+}
 
 /// Gap between the panel and the nearest screen edge (logical px).
 const MARGIN: f32 = 16.0;
@@ -591,7 +668,7 @@ fn audio_text(summary: &FrameStatsSummary) -> String {
 }
 
 /// Push a left-aligned miso text block at `(x, y)`.
-fn push_text_block(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, text: String) {
+fn push_text_block(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, text: TextContent) {
     actors.push(act!(text:
         align(0.0, 0.0):
         xy(x, y):
@@ -642,13 +719,104 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
     text
 }
 
+#[inline(always)]
+fn retained_summary_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str> {
+    let key = SummaryTextKey {
+        fps_bits: summary.fps.to_bits(),
+        avg_frame_us: summary.avg_frame_us,
+        frame_jitter_us: summary.frame_jitter_us,
+        p99_frame_us: summary.p99_frame_us,
+        spike_hold_us: summary.spike_hold_us,
+        target_frame_us: summary.target_frame_us,
+        show_p99,
+    };
+    cached_text(&SUMMARY_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        summary_text(summary, show_p99)
+    })
+}
+
+#[inline(always)]
+fn retained_load_text(summary: &FrameStatsSummary) -> Arc<str> {
+    let key = LoadTextKey {
+        cpu_work_us: summary.cpu_work_us,
+        gpu_wait_us: summary.gpu_wait_us,
+        avg_frame_us: summary.avg_frame_us,
+    };
+    cached_text(&LOAD_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        load_text(summary)
+    })
+}
+
+#[inline(always)]
+fn retained_stutter_text(summary: &FrameStatsSummary) -> Arc<str> {
+    let key = StutterTextKey {
+        over_budget_count: summary.over_budget_count,
+        catch_up_count: summary.catch_up_count,
+        spike_hold_us: summary.spike_hold_us,
+    };
+    cached_text(&STUTTER_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        stutter_text(summary)
+    })
+}
+
+#[inline(always)]
+fn retained_display_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str> {
+    let key = DisplayTextKey {
+        in_gameplay: summary.in_gameplay,
+        display_error_bits: summary.display_error_ms.to_bits(),
+        display_error_p99_bits: summary.display_error_p99_ms.to_bits(),
+        display_error_jitter_us: summary.display_error_jitter_us,
+        display_catching_up: summary.display_catching_up,
+        show_p99,
+    };
+    cached_text(&DISPLAY_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        display_text(summary, show_p99)
+    })
+}
+
+#[inline(always)]
+fn retained_audio_text(summary: &FrameStatsSummary) -> Arc<str> {
+    let key = AudioTextKey {
+        callback_gap_bits: summary.audio_callback_gap_ms.to_bits(),
+        underruns: summary.audio_underruns,
+        output_delay_bits: summary.audio_output_delay_ms.to_bits(),
+        queued_frames: summary.audio_queued_frames,
+    };
+    cached_text(&AUDIO_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        audio_text(summary)
+    })
+}
+
+#[inline(always)]
+fn retained_compact_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str> {
+    let key = CompactTextKey {
+        fps_bits: summary.fps.to_bits(),
+        avg_frame_us: summary.avg_frame_us,
+        frame_jitter_us: summary.frame_jitter_us,
+        p99_frame_us: summary.p99_frame_us,
+        spike_hold_us: summary.spike_hold_us,
+        in_gameplay: summary.in_gameplay,
+        display_error_bits: summary.display_error_ms.to_bits(),
+        display_catching_up: summary.display_catching_up,
+        audio_underruns: summary.audio_underruns,
+        audio_output_delay_bits: summary.audio_output_delay_ms.to_bits(),
+        audio_callback_gap_bits: summary.audio_callback_gap_ms.to_bits(),
+        show_p99,
+    };
+    cached_text(&COMPACT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
+        compact_readout_text(summary, show_p99)
+    })
+}
+
 /// Append frame-statistics overlay actors anchored at `anchor`. Full mode draws a
 /// rolling per-phase stacked column graph (with idle, await-GPU and event-marker overlays),
 /// a jitter histogram, and a multi-line sync-health readout. Compact mode (2 players) drops
 /// the histogram for a small graph plus a two-line inline readout so it covers less of
 /// either notefield. `style` selects the presentation: `Detailed` shows the histogram and
 /// p99 readouts; `Minimal` drops both (the graph is the jitter display). The caller-owned
-/// actor buffer retains its allocation across frames; there is no per-sample heap work.
+/// actor buffer retains its allocation across frames. Readout text is interned
+/// in bounded presentation-thread caches, so unchanged telemetry frames do no
+/// formatting or heap work.
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -660,6 +828,29 @@ pub fn push(
     compact: bool,
     style: OverlayStyle,
     screen_size: [f32; 2],
+) {
+    push_with_text_storage(
+        actors,
+        samples,
+        summary,
+        anchor,
+        compact,
+        style,
+        screen_size,
+        true,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_with_text_storage(
+    actors: &mut Vec<Actor>,
+    samples: &[FrameStatsSample],
+    summary: FrameStatsSummary,
+    anchor: OverlayAnchor,
+    compact: bool,
+    style: OverlayStyle,
+    screen_size: [f32; 2],
+    retain_text: bool,
 ) {
     let [screen_w, screen_h] = screen_size;
     let show_p99 = style.show_p99();
@@ -674,21 +865,33 @@ pub fn push(
     // Build the full-mode data-cell strings up front so the data block is sized to the
     // tallest cell that's actually rendered (varies by style + gameplay/menu), leaving no
     // fixed over-budget margin below the text. Skipped entirely in compact mode.
-    let data_cells: Option<[String; DATA_COLS]> = if compact {
+    let data_cells: Option<[TextContent; DATA_COLS]> = if compact {
         None
+    } else if retain_text {
+        Some([
+            retained_summary_text(&summary, show_p99).into(),
+            retained_load_text(&summary).into(),
+            retained_stutter_text(&summary).into(),
+            retained_display_text(&summary, show_p99).into(),
+            retained_audio_text(&summary).into(),
+        ])
     } else {
         Some([
-            summary_text(&summary, show_p99),
-            load_text(&summary),
-            stutter_text(&summary),
-            display_text(&summary, show_p99),
-            audio_text(&summary),
+            summary_text(&summary, show_p99).into(),
+            load_text(&summary).into(),
+            stutter_text(&summary).into(),
+            display_text(&summary, show_p99).into(),
+            audio_text(&summary).into(),
         ])
     };
     let data_h = match &data_cells {
         None => 0.0,
         Some(cells) => {
-            let max_lines = cells.iter().map(|s| line_count(s)).max().unwrap_or(0);
+            let max_lines = cells
+                .iter()
+                .map(|text| line_count(text.as_str()))
+                .max()
+                .unwrap_or(0);
             data_block_h(max_lines)
         }
     };
@@ -697,8 +900,8 @@ pub fn push(
         None => [0.0; DATA_COLS],
         Some(cells) => {
             let mut w = [0.0; DATA_COLS];
-            for (i, c) in cells.iter().enumerate() {
-                w[i] = data_cell_width(c);
+            for (i, text) in cells.iter().enumerate() {
+                w[i] = data_cell_width(text.as_str());
             }
             w
         }
@@ -761,7 +964,11 @@ pub fn push(
 
     if compact {
         // Compact: a single inline readout beside the small graph (mirrored when right-anchored).
-        let text = compact_readout_text(&summary, show_p99);
+        let text = if retain_text {
+            TextContent::Shared(retained_compact_text(&summary, show_p99))
+        } else {
+            TextContent::Owned(compact_readout_text(&summary, show_p99))
+        };
         let text_y = layout.text_y - PANEL_PAD;
         if layout.text_right {
             actors.push(act!(text:
@@ -809,7 +1016,7 @@ pub fn benchmark_build_legacy(
     screen_size: [f32; 2],
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(samples.len() * 7 + HISTOGRAM_BINS + 16);
-    push(
+    push_with_text_storage(
         &mut actors,
         samples,
         summary,
@@ -817,13 +1024,59 @@ pub fn benchmark_build_legacy(
         compact,
         style,
         screen_size,
+        false,
     );
     actors
+}
+
+/// Exact direct-append path used immediately before the readout strings were retained.
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+pub fn benchmark_push_with_owned_text(
+    actors: &mut Vec<Actor>,
+    samples: &[FrameStatsSample],
+    summary: FrameStatsSummary,
+    anchor: OverlayAnchor,
+    compact: bool,
+    style: OverlayStyle,
+    screen_size: [f32; 2],
+) {
+    push_with_text_storage(
+        actors,
+        samples,
+        summary,
+        anchor,
+        compact,
+        style,
+        screen_size,
+        false,
+    );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn normalize_text_storage(actors: &mut [Actor]) {
+        for actor in actors {
+            if let Actor::Text { content, .. } = actor {
+                *content = TextContent::Owned(content.as_str().to_owned());
+            }
+        }
+    }
+
+    fn shared_texts(actors: &[Actor]) -> Vec<Arc<str>> {
+        actors
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::Text {
+                    content: TextContent::Shared(text),
+                    ..
+                } => Some(Arc::clone(text)),
+                _ => None,
+            })
+            .collect()
+    }
 
     fn sample_summary() -> FrameStatsSummary {
         FrameStatsSummary {
@@ -1102,7 +1355,7 @@ mod tests {
             catching_up: true,
             ..FrameStatsSample::empty()
         }];
-        let expected = benchmark_build_legacy(
+        let mut expected = benchmark_build_legacy(
             &samples,
             sample_summary(),
             OverlayAnchor::TopRight,
@@ -1120,6 +1373,69 @@ mod tests {
             OverlayStyle::Detailed,
             [854.0, 480.0],
         );
+        normalize_text_storage(&mut expected);
+        normalize_text_storage(&mut actual);
         assert_eq!(format!("{actual:#?}"), format!("{expected:#?}"));
+    }
+
+    #[test]
+    fn retained_readouts_reuse_unchanged_cells_and_refresh_changed_cell() {
+        let samples = [FrameStatsSample::empty()];
+        let summary = sample_summary();
+        let mut actors = Vec::new();
+        push(
+            &mut actors,
+            &samples,
+            summary,
+            OverlayAnchor::TopLeft,
+            false,
+            OverlayStyle::Detailed,
+            [854.0, 480.0],
+        );
+        let first = shared_texts(&actors);
+        assert_eq!(first.len(), DATA_COLS);
+
+        actors.clear();
+        push(
+            &mut actors,
+            &samples,
+            summary,
+            OverlayAnchor::TopLeft,
+            false,
+            OverlayStyle::Detailed,
+            [854.0, 480.0],
+        );
+        let repeated = shared_texts(&actors);
+        assert!(
+            first
+                .iter()
+                .zip(&repeated)
+                .all(|(old, new)| Arc::ptr_eq(old, new))
+        );
+
+        let mut changed = summary;
+        changed.audio_underruns += 1;
+        actors.clear();
+        push(
+            &mut actors,
+            &samples,
+            changed,
+            OverlayAnchor::TopLeft,
+            false,
+            OverlayStyle::Detailed,
+            [854.0, 480.0],
+        );
+        let refreshed = shared_texts(&actors);
+        assert!(
+            first[..DATA_COLS - 1]
+                .iter()
+                .zip(&refreshed[..DATA_COLS - 1])
+                .all(|(old, new)| Arc::ptr_eq(old, new))
+        );
+        assert!(!Arc::ptr_eq(
+            &first[DATA_COLS - 1],
+            &refreshed[DATA_COLS - 1]
+        ));
+        assert!(refreshed[DATA_COLS - 1].contains("underruns 1"));
     }
 }

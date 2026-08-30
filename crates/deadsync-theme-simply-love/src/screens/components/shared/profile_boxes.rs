@@ -11,6 +11,8 @@ use crate::views::ProfilePickerView;
 use deadsync_assets::noteskin::{self, Noteskin};
 
 use deadlib_present::actors::{self, Actor};
+#[cfg(test)]
+use deadlib_present::actors::{SpriteSource, TextContent};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render_core::BlendMode;
@@ -102,6 +104,7 @@ struct Choice {
     recent_mods: Arc<str>,
     noteskin: profile_data::NoteSkin,
     judgment: profile_data::JudgmentGraphic,
+    judgment_texture: Option<&'static str>,
 }
 
 pub struct State {
@@ -123,6 +126,10 @@ pub struct State {
     /// never evicts, and drops with the picker. Ordinary frames clone geometry
     /// handles while still evaluating the animated draw state every frame.
     model_mesh_cache: RefCell<ModelMeshCache>,
+    /// Marker-expanded translations retained for this picker lifetime. Language
+    /// changes rebuild screens, so render frames only clone these handles.
+    join_text: Arc<str>,
+    waiting_text: Arc<str>,
     p1_preview_noteskin: Option<Arc<Noteskin>>,
     p2_preview_noteskin: Option<Arc<Noteskin>>,
     preview_time: f32,
@@ -312,6 +319,10 @@ fn build_choices(
         guest.mini_indicator,
         &guest.noteskin,
     );
+    let guest_judgment_texture = assets::resolve_texture_choice(
+        guest.judgment.texture_key(),
+        assets::judgment_texture_choices(),
+    );
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
         display_name: tr("SelectProfile", "GuestLabel"),
@@ -320,6 +331,7 @@ fn build_choices(
         recent_mods: guest_mods.into(),
         noteskin: guest.noteskin,
         judgment: guest.judgment,
+        judgment_texture: guest_judgment_texture,
     });
     for profile in profiles {
         let recent_mods = format_recent_mods(
@@ -327,6 +339,10 @@ fn build_choices(
             profile.scroll_option,
             profile.mini_indicator,
             &profile.noteskin,
+        );
+        let judgment_texture = assets::resolve_texture_choice(
+            profile.judgment.texture_key(),
+            assets::judgment_texture_choices(),
         );
         out.push(Choice {
             kind: profile_data::ActiveProfile::Local { id: profile.id },
@@ -336,6 +352,7 @@ fn build_choices(
             recent_mods: recent_mods.into(),
             noteskin: profile.noteskin,
             judgment: profile.judgment,
+            judgment_texture,
         });
     }
     out
@@ -352,6 +369,16 @@ fn selected_index_for(choices: &[Choice], active: profile_data::ActiveProfile) -
             })
             .unwrap_or(0),
     }
+}
+
+fn prepared_translation(section: &str, key: &str) -> Arc<str> {
+    let text = tr(section, key);
+    if !text.as_bytes().contains(&b'&') {
+        return text;
+    }
+    deadlib_present::font::replace_markers(text.as_ref())
+        .into_owned()
+        .into()
 }
 
 fn init_with_profiles(
@@ -386,6 +413,8 @@ fn init_with_profiles(
         bg: visual_style_bg::State::new(),
         noteskin_cache,
         model_mesh_cache: RefCell::new(ModelMeshCache::with_capacity(8)),
+        join_text: prepared_translation("SelectProfile", "JoinText"),
+        waiting_text: prepared_translation("SelectProfile", "WaitingText"),
         p1_preview_noteskin: None,
         p2_preview_noteskin: None,
         preview_time: 0.0,
@@ -1365,6 +1394,7 @@ fn push_scroller_frame(
     col_overlay: [f32; 4],
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     mut model_mesh_cache: Option<&mut ModelMeshCache>,
+    retain_static_payloads: bool,
 ) {
     // Simply Love parity:
     // - Frame bg uses PlayerColor(P1) => SL.Colors[ActiveColorIndex]
@@ -1496,13 +1526,24 @@ fn push_scroller_frame(
             let texture = visual_policy.assets.select_color;
             let zoom = AVATAR_HEART_ZOOM
                 * (566.0 / visual_policy.assets.select_color_size[1].max(1) as f32);
-            out.push(act!(sprite(texture):
-                align(0.0, 0.0):
-                xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
-                zoom(zoom):
-                diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
-                z(104)
-            ));
+            let actor = if retain_static_payloads {
+                act!(sprite_static(texture):
+                    align(0.0, 0.0):
+                    xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
+                    zoom(zoom):
+                    diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
+                    z(104)
+                )
+            } else {
+                act!(sprite(texture):
+                    align(0.0, 0.0):
+                    xy(avatar_x + AVATAR_HEART_X, avatar_y + AVATAR_HEART_Y):
+                    zoom(zoom):
+                    diffuse(1.0, 1.0, 1.0, 0.9 * inner_alpha):
+                    z(104)
+                )
+            };
+            out.push(actor);
 
             let label = if is_guest {
                 tr("SelectProfile", "GuestLabel")
@@ -1738,24 +1779,40 @@ fn push_scroller_frame(
             }
         }
 
-        let judgment_texture = selected.and_then(|c| {
-            assets::resolve_texture_choice(
-                c.judgment.texture_key(),
-                assets::judgment_texture_choices(),
-            )
+        let judgment_texture = selected.and_then(|choice| {
+            if retain_static_payloads {
+                choice.judgment_texture
+            } else {
+                assets::resolve_texture_choice(
+                    choice.judgment.texture_key(),
+                    assets::judgment_texture_choices(),
+                )
+            }
         });
 
         if let Some(texture) = judgment_texture {
             let jd_x = INFO_W.mul_add(0.61, info_x0);
             let jd_y = preview_y - 10.0;
-            out.push(act!(sprite(texture):
-                align(0.5, 0.5):
-                xy(jd_x, jd_y):
-                setstate(0):
-                zoom(0.160):
-                diffusealpha(inner_alpha):
-                z(104)
-            ));
+            let actor = if retain_static_payloads {
+                act!(sprite_static(texture):
+                    align(0.5, 0.5):
+                    xy(jd_x, jd_y):
+                    setstate(0):
+                    zoom(0.160):
+                    diffusealpha(inner_alpha):
+                    z(104)
+                )
+            } else {
+                act!(sprite(texture):
+                    align(0.5, 0.5):
+                    xy(jd_x, jd_y):
+                    setstate(0):
+                    zoom(0.160):
+                    diffusealpha(inner_alpha):
+                    z(104)
+                )
+            };
+            out.push(actor);
         }
 
         let mut mods_actor = act!(text:
@@ -1790,6 +1847,7 @@ fn push_box_actors(
         alpha_multiplier,
         visual_policy,
         Some(&mut model_mesh_cache),
+        true,
     );
 }
 
@@ -1800,6 +1858,7 @@ fn push_box_actors_with_model_cache(
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     mut model_mesh_cache: Option<&mut ModelMeshCache>,
+    retain_static_payloads: bool,
 ) {
     if alpha_multiplier <= 0.0 {
         return;
@@ -1859,13 +1918,20 @@ fn push_box_actors_with_model_cache(
             col_overlay,
             visual_policy,
             model_mesh_cache.as_deref_mut(),
+            retain_static_payloads,
         );
         for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
         }
 
         let join_start = actors.len();
-        let join_text = if state.p1_ready {
+        let join_text = if retain_static_payloads {
+            Arc::clone(if state.p1_ready {
+                &state.waiting_text
+            } else {
+                &state.join_text
+            })
+        } else if state.p1_ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
@@ -1945,13 +2011,20 @@ fn push_box_actors_with_model_cache(
             col_overlay,
             visual_policy,
             model_mesh_cache,
+            retain_static_payloads,
         );
         for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
         }
 
         let join_start = actors.len();
-        let join_text = if state.p2_ready {
+        let join_text = if retain_static_payloads {
+            Arc::clone(if state.p2_ready {
+                &state.waiting_text
+            } else {
+                &state.join_text
+            })
+        } else if state.p2_ready {
             tr("SelectProfile", "WaitingText")
         } else {
             tr("SelectProfile", "JoinText")
@@ -2068,6 +2141,7 @@ fn get_box_actors_with_z_legacy_model_geometry(
         alpha_multiplier,
         visual_policy,
         None,
+        true,
     );
     if z_offset != 0 {
         for actor in &mut actors {
@@ -2075,6 +2149,35 @@ fn get_box_actors_with_z_legacy_model_geometry(
         }
     }
     actors
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_box_actors_with_z_legacy_static_payloads(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+    z_offset: i16,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
+    let start = actors.len();
+    actors.reserve(96);
+    let mut model_mesh_cache = state.model_mesh_cache.borrow_mut();
+    model_mesh_cache.begin_frame();
+    push_box_actors_with_model_cache(
+        actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+        Some(&mut model_mesh_cache),
+        false,
+    );
+    if z_offset != 0 {
+        for actor in &mut actors[start..] {
+            apply_z_offset(actor, z_offset);
+        }
+    }
 }
 
 pub fn push_actors(
@@ -2327,6 +2430,20 @@ impl ProfilePickerHotBenchmark {
         std::hint::black_box(&*out);
         actor_checksum(out)
     }
+
+    pub fn legacy_static_payload_overlay_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_box_actors_with_z_legacy_static_payloads(
+            out,
+            &self.render_state,
+            &self.asset_manager,
+            1.0,
+            1451,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        std::hint::black_box(&*out);
+        actor_checksum(out)
+    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -2350,23 +2467,31 @@ fn actor_checksum(actors: &[Actor]) -> u64 {
 }
 
 #[cfg(test)]
-fn normalize_model_geometry_cache_keys(actors: &mut [Actor]) {
+fn normalize_storage_and_model_cache_identity(actors: &mut [Actor]) {
     for actor in actors {
         match actor {
+            Actor::Sprite { source, .. } => {
+                if let SpriteSource::TextureStatic(key) = source {
+                    *source = SpriteSource::Texture(Arc::from(*key));
+                }
+            }
             Actor::TexturedMesh { geom_cache_key, .. }
             | Actor::ReusableTexturedMesh { geom_cache_key, .. } => {
                 *geom_cache_key = deadlib_render_core::INVALID_TMESH_CACHE_KEY;
             }
+            Actor::Text { content, .. } => {
+                *content = TextContent::Owned(content.as_str().to_owned());
+            }
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
-                normalize_model_geometry_cache_keys(children);
+                normalize_storage_and_model_cache_identity(children);
             }
             Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
                 if let Some(children) = Arc::get_mut(children) {
-                    normalize_model_geometry_cache_keys(children);
+                    normalize_storage_and_model_cache_identity(children);
                 }
             }
             Actor::Shadow { child, .. } => {
-                normalize_model_geometry_cache_keys(std::slice::from_mut(child));
+                normalize_storage_and_model_cache_identity(std::slice::from_mut(child));
             }
             _ => {}
         }
@@ -2504,8 +2629,8 @@ mod tests {
             benchmark.direct_overlay_frame(&mut direct)
         );
         assert_eq!(legacy.len(), benchmark.render_actor_count());
-        normalize_model_geometry_cache_keys(&mut legacy);
-        normalize_model_geometry_cache_keys(&mut direct);
+        normalize_storage_and_model_cache_identity(&mut legacy);
+        normalize_storage_and_model_cache_identity(&mut direct);
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
 
         let stats = benchmark.render_state.model_mesh_cache.borrow().stats();
@@ -2516,5 +2641,13 @@ mod tests {
             repeated.misses == stats.misses,
             "stable render must not rebuild model geometry"
         );
+
+        assert_eq!(
+            benchmark.legacy_static_payload_overlay_frame(&mut legacy),
+            benchmark.direct_overlay_frame(&mut direct)
+        );
+        normalize_storage_and_model_cache_identity(&mut legacy);
+        normalize_storage_and_model_cache_identity(&mut direct);
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }
