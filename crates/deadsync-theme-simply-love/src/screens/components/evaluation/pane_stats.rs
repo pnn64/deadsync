@@ -4,7 +4,7 @@ use crate::assets::i18n::{LookupKey, lookup_key};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
 use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
@@ -12,6 +12,7 @@ use deadlib_present::space::screen_center_y;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::timing::WindowCounts;
+use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 
 use super::utils::pane_origin_x;
@@ -19,6 +20,108 @@ use super::utils::pane_origin_x;
 // Simply Love metrics.ini [RollingNumbersEvaluation]: ApproachSeconds=1
 const ROLLING_NUMBERS_APPROACH_SECONDS: f32 = 1.0;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
+
+#[derive(Clone, Copy, PartialEq)]
+struct StatsPaneCacheKey {
+    controller: profile_data::PlayerSide,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+    font_address: usize,
+    font_count: usize,
+    language_revision: u64,
+}
+
+type SettledStatsPane = Option<(StatsPaneCacheKey, Arc<[Actor]>)>;
+
+/// Immutable judgment/radar values and three bounded settled-pane actor caches.
+#[derive(Clone)]
+pub(crate) struct StatsPanePresentation {
+    judgment_counts: [u32; 6],
+    window_counts: WindowCounts,
+    window_counts_10ms: WindowCounts,
+    disabled_timing_windows: [bool; 5],
+    radar: [(u32, u32); 4],
+    settled: RefCell<[SettledStatsPane; 3]>,
+}
+
+impl StatsPanePresentation {
+    pub(crate) fn new(score: &ScoreInfo) -> Self {
+        Self {
+            judgment_counts: JUDGMENT_ORDER.map(|grade| score.judgment_count(grade)),
+            window_counts: score.window_counts,
+            window_counts_10ms: score.window_counts_10ms,
+            disabled_timing_windows: score.disabled_timing_windows,
+            radar: [
+                (score.hands_achieved, score.hands_total),
+                (score.holds_held, score.holds_total),
+                (score.mines_avoided, score.mines_total),
+                (score.rolls_held, score.rolls_total),
+            ],
+            settled: RefCell::new(std::array::from_fn(|_| None)),
+        }
+    }
+
+    fn cached_settled(
+        &self,
+        pane: EvalPane,
+        controller: profile_data::PlayerSide,
+        asset_manager: &AssetManager,
+        machine_font: MachineFont,
+        palette: JudgmentPalette,
+    ) -> Arc<[Actor]> {
+        let index = stats_pane_index(pane).expect("settled stats cache only accepts stats panes");
+        let (font_address, font_count) = stats_font_key(asset_manager, machine_font);
+        let key = StatsPaneCacheKey {
+            controller,
+            machine_font,
+            palette,
+            font_address,
+            font_count,
+            language_revision: crate::i18n::revision(),
+        };
+        if let Some((_, children)) = self.settled.borrow()[index]
+            .as_ref()
+            .filter(|(cached, _)| *cached == key)
+        {
+            return Arc::clone(children);
+        }
+
+        let mut children = Vec::new();
+        push_stats_actors(
+            &mut children,
+            self,
+            pane,
+            controller,
+            asset_manager,
+            ROLLING_NUMBERS_APPROACH_SECONDS,
+            machine_font,
+            palette,
+        );
+        let children = Arc::from(children);
+        self.settled.borrow_mut()[index] = Some((key, Arc::clone(&children)));
+        children
+    }
+}
+
+#[inline(always)]
+const fn stats_pane_index(pane: EvalPane) -> Option<usize> {
+    match pane {
+        EvalPane::Standard => Some(0),
+        EvalPane::FaPlus => Some(1),
+        EvalPane::HardEx => Some(2),
+        _ => None,
+    }
+}
+
+fn stats_font_key(asset_manager: &AssetManager, machine_font: MachineFont) -> (usize, usize) {
+    let address = asset_manager
+        .with_font(
+            machine_font_key(machine_font, FontRole::ScreenEval),
+            |font| std::ptr::from_ref(font) as usize,
+        )
+        .unwrap_or(0);
+    (address, asset_manager.fonts().len())
+}
 
 #[inline(always)]
 pub(crate) const fn rolling_numbers_approach_seconds() -> f32 {
@@ -201,15 +304,17 @@ const fn radar_row_offset(show_hands_row: bool) -> f32 {
     if show_hands_row { 0.0 } else { 1.0 }
 }
 
-pub(crate) fn build_stats_pane_with_palette(
-    score_info: &ScoreInfo,
+#[allow(clippy::too_many_arguments)]
+fn push_stats_actors(
+    out: &mut Vec<Actor>,
+    presentation: &StatsPanePresentation,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
     asset_manager: &AssetManager,
     elapsed_s: f32,
     machine_font: MachineFont,
     palette: JudgmentPalette,
-) -> Vec<Actor> {
+) {
     let cy = screen_center_y();
 
     let pane_origin_x = pane_origin_x(controller);
@@ -224,11 +329,11 @@ pub(crate) fn build_stats_pane_with_palette(
     let show_fa_plus_pane = matches!(pane, EvalPane::FaPlus | EvalPane::HardEx);
     let show_10ms_blue = matches!(pane, EvalPane::HardEx);
     let wc = if show_10ms_blue {
-        score_info.window_counts_10ms
+        presentation.window_counts_10ms
     } else {
-        score_info.window_counts
+        presentation.window_counts
     };
-    let judgment_counts = JUDGMENT_ORDER.map(|grade| score_info.judgment_count(grade));
+    let judgment_counts = presentation.judgment_counts;
     let show_standard_judgments = !show_fa_plus_pane;
     let show_hands_row = show_hands_row_for_pane(pane);
 
@@ -252,7 +357,7 @@ pub(crate) fn build_stats_pane_with_palette(
 
     let digits_needed = decimal_digits(max_judgment_count);
     let digits_to_fmt = digits_needed.max(4);
-    let mut actors = Vec::with_capacity(actor_capacity(
+    out.reserve(actor_capacity(
         show_fa_plus_pane,
         show_10ms_blue,
         show_hands_row,
@@ -282,7 +387,7 @@ pub(crate) fn build_stats_pane_with_palette(
             for (i, role) in STANDARD_ROLES.iter().copied().enumerate() {
                 let target_count = judgment_counts[i];
                 let count = rolling_number_value(target_count, elapsed_s);
-                let disabled = standard_row_disabled(score_info.disabled_timing_windows, i);
+                let disabled = standard_row_disabled(presentation.disabled_timing_windows, i);
                 let bright_color = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
@@ -296,7 +401,7 @@ pub(crate) fn build_stats_pane_with_palette(
 
                 // Label
                 let label_local_y = (i as f32).mul_add(28.0, -16.0);
-                actors.push(act!(text: font("miso"): settext(judgment_label_text(i)):
+                out.push(act!(text: font("miso"): settext(judgment_label_text(i)):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
@@ -314,7 +419,7 @@ pub(crate) fn build_stats_pane_with_palette(
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(*digit)):
+                    out.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -339,7 +444,7 @@ pub(crate) fn build_stats_pane_with_palette(
 
             for (i, (label_idx, bright_color, dim_color, count)) in rows.iter().enumerate() {
                 let count = rolling_number_value(*count, elapsed_s);
-                let disabled = split_row_disabled(score_info.disabled_timing_windows, i);
+                let disabled = split_row_disabled(presentation.disabled_timing_windows, i);
                 let bright_color = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
@@ -354,13 +459,13 @@ pub(crate) fn build_stats_pane_with_palette(
                 // Original Lua uses 1-based indexing: y = i*26 - 46.
                 // Our rows are 0-based, so use (i+1) here.
                 let label_local_y = (i as f32 + 1.0).mul_add(26.0, -46.0);
-                actors.push(act!(text: font("miso"): settext(judgment_label_text(*label_idx)):
+                out.push(act!(text: font("miso"): settext(judgment_label_text(*label_idx)):
                     align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y):
                     maxwidth(76.0): zoom(label_zoom): horizalign(right):
                     diffuse(bright_color[0], bright_color[1], bright_color[2], bright_color[3]): z(101)
                 ));
                 if show_10ms_blue && i == 0 {
-                    actors.push(act!(text: font("miso"): settext(TEN_MS_TEXT.clone()):
+                    out.push(act!(text: font("miso"): settext(TEN_MS_TEXT.clone()):
                         align(1.0, 0.5):
                         xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y + 10.0):
                         maxwidth(76.0): zoom(sublabel_zoom): horizalign(right):
@@ -381,7 +486,7 @@ pub(crate) fn build_stats_pane_with_palette(
                     let index_from_right = digits_to_fmt - 1 - char_idx;
                     let cell_right_x = (index_from_right as f32).mul_add(-digit_width, number_base_x);
 
-                    actors.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(*digit)):
+                    out.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(*digit)):
                         align(1.0, 0.5): xy(cell_right_x, number_final_y): zoom(final_numbers_zoom):
                         diffuse(color[0], color[1], color[2], color[3]): z(101)
                     ));
@@ -391,10 +496,10 @@ pub(crate) fn build_stats_pane_with_palette(
 
         // --- RADAR LABELS & NUMBERS ---
         let radar_categories = [
-            (0, score_info.hands_achieved, score_info.hands_total),
-            (1, score_info.holds_held, score_info.holds_total),
-            (2, score_info.mines_avoided, score_info.mines_total),
-            (3, score_info.rolls_held, score_info.rolls_total),
+            (0, presentation.radar[0].0, presentation.radar[0].1),
+            (1, presentation.radar[1].0, presentation.radar[1].1),
+            (2, presentation.radar[2].0, presentation.radar[2].1),
+            (3, presentation.radar[3].0, presentation.radar[3].1),
         ];
         let radar_start_index = radar_start_index(show_hands_row);
         let radar_categories = &radar_categories[radar_start_index..];
@@ -412,7 +517,7 @@ pub(crate) fn build_stats_pane_with_palette(
                 90.0
             };
             let label_local_y = sl_row.mul_add(28.0, 41.0);
-            actors.push(act!(text: font("miso"): settext(radar_label_text(label_idx)):
+            out.push(act!(text: font("miso"): settext(radar_label_text(label_idx)):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)
             ));
 
@@ -445,7 +550,7 @@ pub(crate) fn build_stats_pane_with_palette(
                 let x_pos = (char_idx_from_right as f32).mul_add(-digit_width, achieved_anchor_x);
                 let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
+                out.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(x_pos, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));
@@ -474,7 +579,7 @@ pub(crate) fn build_stats_pane_with_palette(
                 let color = if is_dim { GRAY_POSSIBLE } else { white_color };
                 let digit_idx = 2 - char_idx_from_right;
 
-                actors.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
+                out.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(digit_text(digits[digit_idx])):
                     align(1.0, 0.5): xy(cursor_x, number_final_y): zoom(final_numbers_zoom):
                     diffuse(color[0], color[1], color[2], color[3]): z(101)
                 ));
@@ -483,14 +588,178 @@ pub(crate) fn build_stats_pane_with_palette(
 
             // 2. Draw slash
             // Moved 1px to the right for visual parity
-            actors.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
+            out.push(act!(text: font(machine_font_key(machine_font, FontRole::ScreenEval)): settext(SLASH_TEXT.clone()):
                 align(1.0, 0.5): xy(cursor_x + 0.5, number_final_y): zoom(final_numbers_zoom):
                 diffuse(GRAY_POSSIBLE[0], GRAY_POSSIBLE[1], GRAY_POSSIBLE[2], GRAY_POSSIBLE[3]): z(101)
             ));
         }
     }));
+}
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_stats_pane_with_palette(
+    out: &mut Vec<Actor>,
+    presentation: &StatsPanePresentation,
+    pane: EvalPane,
+    controller: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    elapsed_s: f32,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) {
+    if elapsed_s < ROLLING_NUMBERS_APPROACH_SECONDS {
+        push_stats_actors(
+            out,
+            presentation,
+            pane,
+            controller,
+            asset_manager,
+            elapsed_s,
+            machine_font,
+            palette,
+        );
+        return;
+    }
+
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children: presentation.cached_settled(
+            pane,
+            controller,
+            asset_manager,
+            machine_font,
+            palette,
+        ),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn build_stats_pane_legacy(
+    presentation: &StatsPanePresentation,
+    pane: EvalPane,
+    controller: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    elapsed_s: f32,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) -> Vec<Actor> {
+    let mut actors = Vec::new();
+    push_stats_actors(
+        &mut actors,
+        presentation,
+        pane,
+        controller,
+        asset_manager,
+        elapsed_s,
+        machine_font,
+        palette,
+    );
     actors
+}
+
+/// Stable old/new fixture for settled judgment/radar actor trees.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct StatsPaneCacheBenchmark {
+    presentation: StatsPanePresentation,
+    assets: AssetManager,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl StatsPaneCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let presentation = StatsPanePresentation {
+            judgment_counts: [12_345, 2_345, 345, 45, 5, 1],
+            window_counts: WindowCounts {
+                w0: 10_000,
+                w1: 2_000,
+                w2: 300,
+                w3: 40,
+                w4: 5,
+                w5: 1,
+                miss: 2,
+            },
+            window_counts_10ms: WindowCounts {
+                w0: 9_000,
+                w1: 3_000,
+                w2: 300,
+                w3: 40,
+                w4: 5,
+                w5: 1,
+                miss: 2,
+            },
+            disabled_timing_windows: [false; 5],
+            radar: [(12, 14), (48, 50), (18, 20), (6, 8)],
+            settled: RefCell::new(std::array::from_fn(|_| None)),
+        };
+        let assets = super::benchmark_asset_manager();
+        let _ = presentation.cached_settled(
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &assets,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        Self {
+            presentation,
+            assets,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_stats_pane_legacy(
+            &self.presentation,
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &self.assets,
+            ROLLING_NUMBERS_APPROACH_SECONDS,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_stats_pane_with_palette(
+            out,
+            &self.presentation,
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &self.assets,
+            ROLLING_NUMBERS_APPROACH_SECONDS,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for StatsPaneCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_checksum(actors: &[Actor]) -> u64 {
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    let stats = deadlib_present::actors::actor_tree_stats(semantic_actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
 }
 
 #[cfg(test)]
@@ -508,5 +777,83 @@ mod tests {
         assert_eq!(radar_rows_for_pane(false), 3);
         assert_eq!(radar_row_offset(true), 0.0);
         assert_eq!(radar_row_offset(false), 1.0);
+    }
+
+    #[test]
+    fn rolling_stats_remain_direct_and_match_legacy() {
+        let fixture = StatsPaneCacheBenchmark::new();
+        let legacy = build_stats_pane_legacy(
+            &fixture.presentation,
+            EvalPane::Standard,
+            profile_data::PlayerSide::P2,
+            &fixture.assets,
+            0.5,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        let mut direct = Vec::new();
+        push_stats_pane_with_palette(
+            &mut direct,
+            &fixture.presentation,
+            EvalPane::Standard,
+            profile_data::PlayerSide::P2,
+            &fixture.assets,
+            0.5,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn settled_stats_match_legacy_and_reuse_the_shared_slice() {
+        let fixture = StatsPaneCacheBenchmark::new();
+        let legacy = build_stats_pane_legacy(
+            &fixture.presentation,
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &fixture.assets,
+            ROLLING_NUMBERS_APPROACH_SECONDS,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        let mut retained = Vec::new();
+        push_stats_pane_with_palette(
+            &mut retained,
+            &fixture.presentation,
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &fixture.assets,
+            ROLLING_NUMBERS_APPROACH_SECONDS,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        let [
+            Actor::SharedFrame {
+                children,
+                align,
+                offset,
+                tint,
+                blend,
+                ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected a settled shared frame");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        assert_eq!(*align, [0.0, 0.0]);
+        assert_eq!(*offset, [0.0, 0.0]);
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let repeated = fixture.presentation.cached_settled(
+            EvalPane::HardEx,
+            profile_data::PlayerSide::P1,
+            &fixture.assets,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        );
+        assert!(Arc::ptr_eq(children, &repeated));
     }
 }

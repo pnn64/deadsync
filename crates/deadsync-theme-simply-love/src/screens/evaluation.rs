@@ -2555,6 +2555,7 @@ pub struct State {
     nice_scores: [bool; MAX_PLAYERS],
     result_text: [ResultText; MAX_PLAYERS],
     percentage_text: [Option<eval_panes::PercentageText>; MAX_PLAYERS],
+    stats_presentation: [Option<eval_panes::StatsPanePresentation>; MAX_PLAYERS],
     timing_pane_text: [Option<eval_panes::TimingPaneText>; MAX_PLAYERS],
     machine_records_text: [Option<eval_panes::MachineRecordsPaneText>; MAX_PLAYERS],
     qr_presentation: [Option<eval_panes::QrPanePresentation>; MAX_PLAYERS],
@@ -2564,6 +2565,8 @@ pub struct State {
     favorites: [bool; MAX_PLAYERS],
     fail_stream_progress: [Option<(u32, u32)>; MAX_PLAYERS],
     pub event_progress: [Vec<score_data::EventProgress>; MAX_PLAYERS],
+    event_progress_revision: [u64; MAX_PLAYERS],
+    event_actor_cache: RefCell<eval_panes::EventActorCache>,
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     /// Screen-owned immutable mesh, warmed during evaluation initialization so
     /// graph-pane changes only share its vertex payload.
@@ -2642,6 +2645,7 @@ impl Clone for State {
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
             percentage_text: self.percentage_text.clone(),
+            stats_presentation: self.stats_presentation.clone(),
             timing_pane_text: self.timing_pane_text.clone(),
             machine_records_text: self.machine_records_text.clone(),
             qr_presentation: self.qr_presentation.clone(),
@@ -2651,6 +2655,8 @@ impl Clone for State {
             favorites: self.favorites,
             fail_stream_progress: self.fail_stream_progress,
             event_progress: self.event_progress.clone(),
+            event_progress_revision: self.event_progress_revision,
+            event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
             density_graph_mesh: self.density_graph_mesh.clone(),
             life_graph_mesh: self.life_graph_mesh.clone(),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
@@ -3303,6 +3309,11 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             .as_ref()
             .map(eval_panes::PercentageText::new)
     });
+    let stats_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::StatsPanePresentation::new)
+    });
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3344,6 +3355,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         nice_scores,
         result_text,
         percentage_text,
+        stats_presentation,
         timing_pane_text,
         machine_records_text,
         qr_presentation,
@@ -3353,6 +3365,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress,
         event_progress: std::array::from_fn(|_| Vec::new()),
+        event_progress_revision: [0; MAX_PLAYERS],
+        event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
         timing_hist_mesh,
@@ -3595,6 +3609,11 @@ pub fn init_from_score_info(
             .as_ref()
             .map(eval_panes::PercentageText::new)
     });
+    let stats_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::StatsPanePresentation::new)
+    });
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3636,6 +3655,7 @@ pub fn init_from_score_info(
         nice_scores,
         result_text,
         percentage_text,
+        stats_presentation,
         timing_pane_text,
         machine_records_text,
         qr_presentation,
@@ -3645,6 +3665,8 @@ pub fn init_from_score_info(
         favorites: [false; MAX_PLAYERS],
         fail_stream_progress: [None; MAX_PLAYERS],
         event_progress: std::array::from_fn(|_| Vec::new()),
+        event_progress_revision: [0; MAX_PLAYERS],
+        event_actor_cache: RefCell::new(eval_panes::EventActorCache::default()),
         density_graph_mesh,
         life_graph_mesh,
         timing_hist_mesh,
@@ -3730,10 +3752,13 @@ fn sync_submit_event_progress(state: &mut State) {
         if progress.is_empty() {
             continue;
         }
-        found_new |= state.event_progress[player_idx].is_empty();
+        let was_empty = state.event_progress[player_idx].is_empty();
+        found_new |= was_empty;
         let page_count = event_overlay_page_count(progress.as_slice());
-        if state.event_progress[player_idx].is_empty() {
+        if was_empty {
             state.event_overlay_page[player_idx] = 0;
+            state.event_progress_revision[player_idx] =
+                state.event_progress_revision[player_idx].wrapping_add(1);
         } else if state.event_overlay_page[player_idx] >= page_count {
             state.event_overlay_page[player_idx] = page_count - 1;
         }
@@ -3982,6 +4007,9 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
         state.groovestats_service = service;
     }
     if let Some(submissions) = view.submissions {
+        for revision in &mut state.event_progress_revision {
+            *revision = revision.wrapping_add(1);
+        }
         state.submissions = submissions;
     }
     if let Some(scoreboxes) = view.scoreboxes {
@@ -5927,12 +5955,16 @@ pub fn push_actors(
             if progress.is_empty() {
                 continue;
             }
-            actors.extend(eval_panes::build_event_progress_boxes(
+            eval_panes::push_cached_event_progress_boxes(
+                actors,
+                &mut state.event_actor_cache.borrow_mut(),
+                player_idx,
+                state.event_progress_revision[player_idx],
                 asset_manager,
                 side,
                 !play_style.is_versus(),
                 progress,
-            ));
+            );
         }
     }
 
@@ -6090,15 +6122,19 @@ pub fn push_actors(
                     ));
                 }
                 EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {
-                    actors.extend(eval_panes::build_stats_pane_with_palette(
-                        si,
+                    let Some(presentation) = state.stats_presentation[player_idx].as_ref() else {
+                        continue;
+                    };
+                    eval_panes::push_stats_pane_with_palette(
+                        actors,
+                        presentation,
                         pane,
                         controller,
                         asset_manager,
                         state.screen_elapsed,
                         policy.machine_font,
                         state.context.players[player_idx].judgment_palette,
-                    ));
+                    );
                 }
                 EvalPane::TestInput => {
                     let game = if play_style.is_pump() {
@@ -6867,14 +6903,18 @@ pub fn push_actors(
             .flatten()
             .next()
             .map(|si| si.song.as_ref());
-        actors.extend(eval_panes::build_event_overlay(
+        eval_panes::push_cached_event_overlay(
+            actors,
+            &mut state.event_actor_cache.borrow_mut(),
+            state.event_progress_revision,
+            state.event_overlay_page,
             asset_manager,
             !play_style.is_versus(),
             overlay_song,
             policy.translated_titles,
             panels.as_slice(),
             policy.machine_font,
-        ));
+        );
     }
 }
 

@@ -10,6 +10,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_chart::SongData;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use std::sync::Arc;
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
@@ -34,6 +35,81 @@ const TIER_BRONZE: [f32; 4] = color::rgba_hex("#966832");
 const TIER_SILVER: [f32; 4] = color::rgba_hex("#A1AEC1");
 const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
 const TIER_PRISMATIC: [f32; 4] = color::rgba_hex("#8731D2");
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct EventFontKey {
+    font_count: usize,
+    miso: usize,
+    wendy: usize,
+    machine_header: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct UpperEventCacheKey {
+    revision: u64,
+    side: profile_data::PlayerSide,
+    single_player: bool,
+    fonts: EventFontKey,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct OverlayEventCacheKey {
+    revisions: [u64; 2],
+    pages: [usize; 2],
+    sides: [Option<profile_data::PlayerSide>; 2],
+    panel_count: u8,
+    single_player: bool,
+    translated_titles: bool,
+    machine_font: MachineFont,
+    song_address: usize,
+    fonts: EventFontKey,
+}
+
+/// Screen-lifetime, bounded actor caches for event progress and its overlay.
+pub(crate) struct EventActorCache {
+    upper: [Option<(UpperEventCacheKey, Arc<[Actor]>)>; 2],
+    overlay: Option<(OverlayEventCacheKey, Arc<[Actor]>)>,
+}
+
+impl Default for EventActorCache {
+    fn default() -> Self {
+        Self {
+            upper: std::array::from_fn(|_| None),
+            overlay: None,
+        }
+    }
+}
+
+fn font_address(asset_manager: &AssetManager, name: &str) -> usize {
+    asset_manager
+        .with_font(name, |font| std::ptr::from_ref(font) as usize)
+        .unwrap_or(0)
+}
+
+fn event_font_key(asset_manager: &AssetManager, machine_font: MachineFont) -> EventFontKey {
+    EventFontKey {
+        font_count: asset_manager.fonts().len(),
+        miso: font_address(asset_manager, "miso"),
+        wendy: font_address(asset_manager, UPPER_HEADER_FONT),
+        machine_header: font_address(
+            asset_manager,
+            crate::assets::machine_font_key(machine_font, FontRole::Header),
+        ),
+    }
+}
+
+fn push_shared_root(out: &mut Vec<Actor>, children: Arc<[Actor]>) {
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children,
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
 
 #[inline(always)]
 const fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
@@ -1191,12 +1267,294 @@ pub fn build_event_overlay(
     actors
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_cached_event_progress_boxes(
+    out: &mut Vec<Actor>,
+    cache: &mut EventActorCache,
+    player_index: usize,
+    revision: u64,
+    asset_manager: &AssetManager,
+    side: profile_data::PlayerSide,
+    single_player: bool,
+    progress: &[score_data::EventProgress],
+) {
+    if progress.is_empty() || player_index >= cache.upper.len() {
+        return;
+    }
+    let key = UpperEventCacheKey {
+        revision,
+        side,
+        single_player,
+        fonts: event_font_key(asset_manager, MachineFont::Wendy),
+    };
+    let slot = &mut cache.upper[player_index];
+    if !slot.as_ref().is_some_and(|(cached, _)| *cached == key) {
+        *slot = Some((
+            key,
+            Arc::from(build_event_progress_boxes(
+                asset_manager,
+                side,
+                single_player,
+                progress,
+            )),
+        ));
+    }
+    push_shared_root(
+        out,
+        Arc::clone(&slot.as_ref().expect("upper event cache was populated").1),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_cached_event_overlay(
+    out: &mut Vec<Actor>,
+    cache: &mut EventActorCache,
+    revisions: [u64; 2],
+    pages: [usize; 2],
+    asset_manager: &AssetManager,
+    single_player: bool,
+    song: Option<&SongData>,
+    translated_titles: bool,
+    panels: &[(profile_data::PlayerSide, &score_data::EventProgress, usize)],
+    machine_font: MachineFont,
+) {
+    if panels.is_empty() {
+        return;
+    }
+    let mut sides = [None; 2];
+    for (slot, (side, _, _)) in sides.iter_mut().zip(panels) {
+        *slot = Some(*side);
+    }
+    let key = OverlayEventCacheKey {
+        revisions,
+        pages,
+        sides,
+        panel_count: panels.len().min(u8::MAX as usize) as u8,
+        single_player,
+        translated_titles,
+        machine_font,
+        song_address: song.map_or(0, |song| std::ptr::from_ref(song) as usize),
+        fonts: event_font_key(asset_manager, machine_font),
+    };
+    if !cache
+        .overlay
+        .as_ref()
+        .is_some_and(|(cached, _)| *cached == key)
+    {
+        cache.overlay = Some((
+            key,
+            Arc::from(build_event_overlay(
+                asset_manager,
+                single_player,
+                song,
+                translated_titles,
+                panels,
+                machine_font,
+            )),
+        ));
+    }
+    push_shared_root(
+        out,
+        Arc::clone(
+            &cache
+                .overlay
+                .as_ref()
+                .expect("event overlay cache was populated")
+                .1,
+        ),
+    );
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_progress() -> Vec<score_data::EventProgress> {
+    let leaderboard = (1..=OVERLAY_LB_ROWS as u32)
+        .map(|rank| score_data::LeaderboardEntry {
+            rank,
+            name: format!("PLAYER{rank:02}"),
+            machine_tag: None,
+            score: 10_000.0 - f64::from(rank) * 7.5,
+            date: "2026-08-30".into(),
+            is_rival: rank == 2,
+            is_self: rank == 5,
+            is_fail: rank == 13,
+        })
+        .collect();
+    vec![
+        score_data::EventProgress {
+            kind: score_data::EventProgressKind::Itl,
+            name: "ITL Online 2026".into(),
+            score_hundredths: 9_876,
+            score_delta_hundredths: 25,
+            current_points: 1_250,
+            point_delta: 50,
+            current_ranking_points: 700,
+            ranking_delta: 12,
+            current_song_points: 450,
+            song_delta: 30,
+            current_ex_points: 1_900,
+            ex_delta: 45,
+            current_total_points: 8_500,
+            total_delta: 87,
+            total_passes: 4,
+            overlay_pages: vec![score_data::EventOverlayPage::Leaderboard(leaderboard)],
+            ..Default::default()
+        },
+        score_data::EventProgress {
+            kind: score_data::EventProgressKind::Srpg,
+            name: "Stamina RPG 10".into(),
+            score_hundredths: 9_432,
+            score_delta_hundredths: 17,
+            rate_hundredths: Some(125),
+            rate_delta_hundredths: Some(5),
+            overlay_pages: vec![score_data::EventOverlayPage::Text(
+                "Quest complete! Earned 250 gold and unlocked a new title.".into(),
+            )],
+            ..Default::default()
+        },
+    ]
+}
+
+/// Stable old/new fixture for compact event-progress boxes.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct EventProgressCacheBenchmark {
+    assets: AssetManager,
+    progress: Vec<score_data::EventProgress>,
+    cache: EventActorCache,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl EventProgressCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut fixture = Self {
+            assets: super::benchmark_asset_manager(),
+            progress: benchmark_progress(),
+            cache: EventActorCache::default(),
+        };
+        let mut warm = Vec::new();
+        let _ = fixture.retained_frame(&mut warm);
+        fixture
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&mut self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_event_progress_boxes(
+            &self.assets,
+            profile_data::PlayerSide::P1,
+            true,
+            &self.progress,
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&mut self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_cached_event_progress_boxes(
+            out,
+            &mut self.cache,
+            0,
+            1,
+            &self.assets,
+            profile_data::PlayerSide::P1,
+            true,
+            &self.progress,
+        );
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for EventProgressCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Stable old/new fixture for the full event overlay actor tree.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct EventOverlayCacheBenchmark {
+    assets: AssetManager,
+    progress: Vec<score_data::EventProgress>,
+    cache: EventActorCache,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl EventOverlayCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut fixture = Self {
+            assets: super::benchmark_asset_manager(),
+            progress: benchmark_progress(),
+            cache: EventActorCache::default(),
+        };
+        let mut warm = Vec::new();
+        let _ = fixture.retained_frame(&mut warm);
+        fixture
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&mut self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let panels = [
+            (profile_data::PlayerSide::P1, &self.progress[0], 0),
+            (profile_data::PlayerSide::P2, &self.progress[1], 0),
+        ];
+        out.extend(build_event_overlay(
+            &self.assets,
+            false,
+            None,
+            false,
+            &panels,
+            MachineFont::Mega,
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&mut self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let panels = [
+            (profile_data::PlayerSide::P1, &self.progress[0], 0),
+            (profile_data::PlayerSide::P2, &self.progress[1], 0),
+        ];
+        push_cached_event_overlay(
+            out,
+            &mut self.cache,
+            [1, 1],
+            [0, 0],
+            &self.assets,
+            false,
+            None,
+            false,
+            &panels,
+            MachineFont::Mega,
+        );
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for EventOverlayCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_checksum(actors: &[Actor]) -> u64 {
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    let stats = deadlib_present::actors::actor_tree_stats(semantic_actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        BODY_FALLBACK_HEIGHT, BODY_FALLBACK_SPACING, OVERLAY_ROW_HEIGHT, UPPER_ROW_HEIGHT,
-        body_layout_with_measure, header_layout_with_measure,
-    };
+    use super::*;
 
     #[test]
     fn long_achievement_titles_wrap_without_shrinking_body_text() {
@@ -1271,5 +1629,97 @@ mod tests {
         );
         assert_eq!(layout.zoom, 0.5);
         assert_eq!(layout.text, "ITL 2026\nDoubles");
+    }
+
+    #[test]
+    fn retained_progress_boxes_match_legacy_and_reuse_the_shared_slice() {
+        let mut fixture = EventProgressCacheBenchmark::new();
+        let legacy = build_event_progress_boxes(
+            &fixture.assets,
+            profile_data::PlayerSide::P1,
+            true,
+            &fixture.progress,
+        );
+        let mut retained = Vec::new();
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children,
+                align,
+                offset,
+                tint,
+                blend,
+                ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained progress boxes in one shared frame");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        assert_eq!(*align, [0.0, 0.0]);
+        assert_eq!(*offset, [0.0, 0.0]);
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let children = Arc::clone(children);
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained progress boxes in one shared frame");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
+    }
+
+    #[test]
+    fn retained_event_overlay_matches_legacy_and_reuses_the_shared_slice() {
+        let mut fixture = EventOverlayCacheBenchmark::new();
+        let panels = [
+            (profile_data::PlayerSide::P1, &fixture.progress[0], 0),
+            (profile_data::PlayerSide::P2, &fixture.progress[1], 0),
+        ];
+        let legacy = build_event_overlay(
+            &fixture.assets,
+            false,
+            None,
+            false,
+            &panels,
+            MachineFont::Mega,
+        );
+        let mut retained = Vec::new();
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children,
+                align,
+                offset,
+                tint,
+                blend,
+                ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained event overlay in one shared frame");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+        assert_eq!(*align, [0.0, 0.0]);
+        assert_eq!(*offset, [0.0, 0.0]);
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let children = Arc::clone(children);
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained event overlay in one shared frame");
+        };
+        assert!(Arc::ptr_eq(&children, repeated));
     }
 }

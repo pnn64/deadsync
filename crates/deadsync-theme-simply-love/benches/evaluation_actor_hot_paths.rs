@@ -4,11 +4,13 @@ use deadsync_profile::PlayerSide;
 use deadsync_score::Grade;
 use deadsync_theme_simply_love::screens::components::evaluation::{
     eval_grades::{self, EvalGradeParams},
+    event_progress::{EventOverlayCacheBenchmark, EventProgressCacheBenchmark},
     pane_gs_records::OnlineRecordsPaneCacheBenchmark,
     pane_machine_records::MachineRecordsPaneCacheBenchmark,
     pane_modifiers::{benchmark_build_modifiers_pane, benchmark_push_modifiers_pane},
     pane_percentage::PercentagePaneAppendBenchmark,
     pane_qr::QrPaneCacheBenchmark,
+    pane_stats::StatsPaneCacheBenchmark,
     pane_timing::TimingPaneAppendBenchmark,
     pane_timing_arrows::TimingArrowsPaneAppendBenchmark,
 };
@@ -491,6 +493,66 @@ fn machine_records_pane_benchmark() {
     );
 }
 
+fn stats_pane_benchmark() {
+    let fixture = StatsPaneCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "retained settled judgment/radar actor tree",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+}
+
+fn event_progress_benchmark() {
+    let mut fixture = EventProgressCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "retained compact event-progress actor tree",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+}
+
+fn event_overlay_benchmark() {
+    let mut fixture = EventOverlayCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "retained full event-overlay actor tree",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+}
+
 #[cfg(target_arch = "x86")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: the fence and timestamp instructions require no memory operands.
@@ -515,6 +577,7 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    deadsync_theme_simply_love::i18n::init_for_tests();
     grade_benchmark();
     modifiers_benchmark();
     lobby_benchmark();
@@ -524,4 +587,7 @@ fn main() {
     qr_pane_benchmark();
     online_records_pane_benchmark();
     machine_records_pane_benchmark();
+    stats_pane_benchmark();
+    event_progress_benchmark();
+    event_overlay_benchmark();
 }
