@@ -288,7 +288,10 @@ fn direct_options_modal_append_matches_legacy_batches() {
         benchmark.direct_download_frame(&mut direct)
     );
     assert_eq!(legacy.len(), benchmark.download_actor_count());
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+        panic!("retained pack browser should use one shared frame");
+    };
+    assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
 
     legacy = Vec::with_capacity(96);
     direct = Vec::with_capacity(96);
@@ -298,6 +301,40 @@ fn direct_options_modal_append_matches_legacy_batches() {
     );
     assert_eq!(legacy.len(), benchmark.palette_actor_count());
     assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+}
+
+#[test]
+fn retained_pack_browser_reuses_and_tracks_caret_phase() {
+    crate::assets::i18n::init_for_tests();
+    let mut benchmark = OptionsModalAppendBenchmark::new();
+    let mut retained = Vec::with_capacity(1);
+    let _ = benchmark.direct_download_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("retained pack browser should use one shared frame");
+    };
+    let first = Arc::clone(children);
+
+    retained.clear();
+    let _ = benchmark.direct_download_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("stable pack browser should remain shared");
+    };
+    assert!(Arc::ptr_eq(&first, children));
+
+    benchmark.advance_download_caret(0.5);
+    retained.clear();
+    let _ = benchmark.direct_download_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("changed pack-browser caret should rebuild a shared frame");
+    };
+    assert!(!Arc::ptr_eq(&first, children));
+
+    let mut immediate = Vec::with_capacity(80);
+    let _ = benchmark.legacy_download_frame(&mut immediate);
+    assert_eq!(
+        format!("{immediate:#?}"),
+        format!("{:#?}", children.as_ref())
+    );
 }
 
 fn updater_view() -> SimplyLoveUpdaterView {

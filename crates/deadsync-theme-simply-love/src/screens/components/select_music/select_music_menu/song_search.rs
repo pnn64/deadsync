@@ -13,6 +13,7 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::fuzzy;
 use crate::screens::select_music::MusicWheelEntry;
 use deadlib_present::actors::Actor;
@@ -23,6 +24,7 @@ use deadsync_simfile::song_search::{
     SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
     song_search_difficulties_text,
 };
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -200,6 +202,28 @@ pub struct SongSearchOpen {
     /// Set once the first ranking result has been applied, so the overlay only
     /// shows "No matches" after a real result (not during the initial frame).
     pub has_result: bool,
+    presentation: RefCell<Option<SongSearchPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SongSearchPresentationKey {
+    scope: SongSearchScope,
+    selected_index: usize,
+    matches_generation: u64,
+    has_result: bool,
+    caret_on: bool,
+    chart_type: &'static str,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct SongSearchPresentation {
+    key: SongSearchPresentationKey,
+    query: Box<str>,
+    children: Arc<[Actor]>,
 }
 
 #[derive(Clone, Debug)]
@@ -235,6 +259,7 @@ pub const fn begin_song_search() -> SongSearchState {
         request_generation: 0,
         matches_generation: 0,
         has_result: false,
+        presentation: RefCell::new(None),
     })
 }
 
@@ -795,6 +820,52 @@ pub fn push_song_search_overlay(
         return false;
     };
 
+    let key = SongSearchPresentationKey {
+        scope: open.scope,
+        selected_index: open.selected_index,
+        matches_generation: open.matches_generation,
+        has_result: open.has_result,
+        caret_on: open.blink_t < CURSOR_BLINK_PERIOD * 0.5,
+        chart_type: open.chart_type,
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = open
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key && presentation.query.as_ref() == open.query)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(48);
+        push_song_search_overlay_unreserved(
+            &mut children,
+            open,
+            active_color_index,
+            machine_font,
+            asset_manager,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *open.presentation.borrow_mut() = Some(SongSearchPresentation {
+            key,
+            query: open.query.clone().into_boxed_str(),
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    push_retained_overlay(actors, children);
+    true
+}
+
+fn push_song_search_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    open: &SongSearchOpen,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    asset_manager: &AssetManager,
+) {
     let cx = screen_center_x();
     let cy = screen_center_y();
     let panel_w = 380.0_f32.min(screen_width() * 0.92);
@@ -806,8 +877,6 @@ pub fn push_song_search_overlay(
     const FOCUS_BG: [f32; 4] = color::rgba_hex("#333333");
     const GRAY: [f32; 4] = color::rgba_hex("#808080");
     const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-
-    actors.reserve(48);
 
     // Dim behind the modal.
     actors.push(act!(quad:
@@ -1015,8 +1084,6 @@ pub fn push_song_search_overlay(
         maxwidth(panel_w - 20.0):
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
-
-    true
 }
 
 /// Stable old/new fixture for the song-search actor batch.
@@ -1048,6 +1115,7 @@ impl SongSearchOverlayAppendBenchmark {
                 request_generation: 1,
                 matches_generation: 1,
                 has_result: true,
+                presentation: RefCell::new(None),
             }),
             assets: AssetManager::new(),
         }
@@ -1055,21 +1123,21 @@ impl SongSearchOverlayAppendBenchmark {
 
     #[must_use]
     pub fn actor_count(&self) -> usize {
+        let SongSearchState::Open(open) = &self.state else {
+            unreachable!("song-search fixture is open");
+        };
         let mut actors = Vec::with_capacity(48);
-        let visible =
-            push_song_search_overlay(&mut actors, &self.state, 2, MachineFont::Mega, &self.assets);
-        debug_assert!(visible);
+        push_song_search_overlay_unreserved(&mut actors, open, 2, MachineFont::Mega, &self.assets);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(48);
-        let visible =
-            push_song_search_overlay(&mut staged, &self.state, 2, MachineFont::Mega, &self.assets);
-        debug_assert!(visible);
-        out.extend(staged);
+        let SongSearchState::Open(open) = &self.state else {
+            unreachable!("song-search fixture is open");
+        };
+        push_song_search_overlay_unreserved(out, open, 2, MachineFont::Mega, &self.assets);
         std::hint::black_box(&*out);
         super::overlay_actor_checksum(out)
     }
@@ -1097,6 +1165,77 @@ mod tests {
     use super::*;
     use deadsync_chart::{ChartData, SongData};
     use std::path::PathBuf;
+
+    #[test]
+    fn retained_search_tree_matches_immediate_reuses_selection_and_caret() {
+        crate::assets::i18n::init_for_tests();
+        let mut fixture = SongSearchOverlayAppendBenchmark::new();
+        let mut immediate = Vec::with_capacity(48);
+        let _ = fixture.legacy_frame(&mut immediate);
+
+        let mut retained = Vec::with_capacity(1);
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("retained song-search overlay should use one shared frame");
+        };
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+        let first = Arc::clone(children);
+
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("stable song-search overlay should remain shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        let SongSearchState::Open(open) = &mut fixture.state else {
+            unreachable!("song-search fixture is open");
+        };
+        open.selected_index += 1;
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed song-search overlay should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+
+        let SongSearchState::Open(open) = &mut fixture.state else {
+            unreachable!("song-search fixture is open");
+        };
+        open.query = "no matching completion".to_owned();
+        open.blink_t = 0.0;
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("visible search caret should remain retained");
+        };
+        let caret_on = Arc::clone(children);
+
+        assert!(update_song_search(&mut fixture.state, 0.6));
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed search caret should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&caret_on, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+    }
 
     fn test_chart(meter: u32) -> ChartData {
         ChartData {

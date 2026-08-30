@@ -9,7 +9,7 @@ use deadlib_present::actors::{Actor, SizeSpec};
 use std::sync::Arc;
 
 /// Appends one immutable overlay tree while keeping its children shared.
-pub(super) fn push_retained_overlay(actors: &mut Vec<Actor>, children: Arc<[Actor]>) {
+pub(crate) fn push_retained_overlay(actors: &mut Vec<Actor>, children: Arc<[Actor]>) {
     actors.reserve(1);
     actors.push(Actor::SharedFrame {
         align: [0.0, 0.0],

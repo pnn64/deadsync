@@ -76,6 +76,32 @@ pub(super) struct DownloadPacksOverlayData {
     /// simply presents the pack as downloadable. It is dropped on close, needs
     /// no eviction or destruction work, and gives O(1) ordinary-frame checks.
     installed_names: HashSet<String>,
+    presentation_revision: u64,
+    presentation: RefCell<Option<DownloadPacksPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DownloadPacksPresentationKey {
+    revision: u64,
+    cursor_on: bool,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct DownloadPacksPresentation {
+    key: DownloadPacksPresentationKey,
+    snapshot: Arc<Snapshot>,
+    children: Arc<[Actor]>,
+}
+
+impl DownloadPacksOverlayData {
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -119,6 +145,8 @@ pub(super) fn show_overlay(
         confirm: None,
         local_message: None,
         installed_names: installed_pack_names(installed_packs),
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
     };
     rebuild_substyles(&mut data, snapshot, None);
     rebuild_results(&mut data, snapshot, None);
@@ -133,7 +161,11 @@ pub(super) fn update_overlay(state: &mut DownloadPacksOverlayState, dt: f32) -> 
     let DownloadPacksOverlayState::Visible(data) = state else {
         return false;
     };
+    let cursor_was_on = data.blink_t < CURSOR_PERIOD * 0.5;
     data.blink_t = (data.blink_t + dt.max(0.0)) % CURSOR_PERIOD;
+    if cursor_was_on != (data.blink_t < CURSOR_PERIOD * 0.5) {
+        data.invalidate_presentation();
+    }
     true
 }
 
@@ -172,6 +204,9 @@ pub(super) fn update_browser(state: &mut State, dt: f32) -> bool {
         return false;
     }
     if repeat_nav_hold(&mut state.download_packs_overlay, dt) == InputOutcome::Changed {
+        if let DownloadPacksOverlayState::Visible(data) = &mut state.download_packs_overlay {
+            data.invalidate_presentation();
+        }
         queue_sfx(state, "assets/sounds/change.ogg");
     }
     true
@@ -183,6 +218,7 @@ pub(super) fn sync_installed_packs(
 ) {
     if let DownloadPacksOverlayState::Visible(data) = state {
         data.installed_names = installed_pack_names(installed_packs);
+        data.invalidate_presentation();
     }
 }
 
@@ -412,6 +448,11 @@ fn handle_raw_shortcut(
 }
 
 fn apply_outcome(state: &mut State, outcome: InputOutcome) -> ThemeEffect {
+    if outcome != InputOutcome::None
+        && let DownloadPacksOverlayState::Visible(data) = &mut state.download_packs_overlay
+    {
+        data.invalidate_presentation();
+    }
     match outcome {
         InputOutcome::None | InputOutcome::Edited => {}
         InputOutcome::Changed | InputOutcome::Closed => {
@@ -910,13 +951,55 @@ pub(super) fn push_overlay(
         return false;
     };
     let snapshot = &state.stepmaniaonline_snapshot;
+    let key = DownloadPacksPresentationKey {
+        revision: data.presentation_revision,
+        cursor_on: data.blink_t < CURSOR_PERIOD * 0.5,
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = data
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| {
+            presentation.key == key && Arc::ptr_eq(&presentation.snapshot, snapshot)
+        })
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(80);
+        push_overlay_unreserved(
+            &mut children,
+            data,
+            snapshot,
+            active_color_index,
+            machine_font,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *data.presentation.borrow_mut() = Some(DownloadPacksPresentation {
+            key,
+            snapshot: Arc::clone(snapshot),
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(out, children);
+    true
+}
+
+pub(super) fn push_overlay_unreserved(
+    out: &mut Vec<Actor>,
+    data: &DownloadPacksOverlayData,
+    snapshot: &Snapshot,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) {
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();
     let cy = screen_center_y();
     let header_font = machine_font_key(machine_font, FontRole::Header);
     let bold_font = machine_font_key(machine_font, FontRole::Bold);
-    out.reserve(80);
-
     out.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()):
         diffuse(0.0, 0.0, 0.0, 0.90): z(Z)
@@ -995,7 +1078,6 @@ pub(super) fn push_overlay(
     if let Some(confirm) = data.confirm.as_ref() {
         push_confirmation(out, confirm, accent, cx, cy, header_font, bold_font);
     }
-    true
 }
 
 fn push_search(
@@ -1574,6 +1656,8 @@ mod tests {
             confirm: None,
             local_message: None,
             installed_names: HashSet::new(),
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         }
     }
 

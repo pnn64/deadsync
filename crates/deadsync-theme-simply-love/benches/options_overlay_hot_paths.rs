@@ -377,11 +377,11 @@ fn main() {
         || measure(|| modals.direct_download_frame(&mut new_download_actors)),
     );
     report_pair(
-        "pack download actor staging",
+        "retained pack download browser tree",
         modals.download_actor_count(),
         &old_download,
         &new_download,
-        false,
+        true,
     );
 
     let mut old_palette_actors = Vec::with_capacity(96);
@@ -436,11 +436,11 @@ fn main() {
         || measure(|| search.direct_frame(&mut new_search_actors)),
     );
     report_pair(
-        "song search actor staging",
+        "retained song search tree",
         search.actor_count(),
         &old_search,
         &new_search,
-        false,
+        true,
     );
 
     let lobby = LobbyOverlayAppendBenchmark::new();
@@ -554,11 +554,11 @@ fn main() {
         || measure(|| shop.direct_frame(&mut new_shop_actors)),
     );
     report_pair(
-        "SRPG shop actor staging",
+        "retained SRPG shop tree",
         shop.actor_count(),
         &old_shop,
         &new_shop,
-        false,
+        true,
     );
 
     let profile = ProfilePickerHotBenchmark::new();

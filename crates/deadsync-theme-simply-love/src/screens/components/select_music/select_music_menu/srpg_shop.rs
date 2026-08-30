@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -8,7 +9,9 @@ use deadsync_online::srpg_shop::{
     SRPG_SHOP_IDS, SrpgShop, SrpgShopItem, SrpgShopItemKind, SrpgShopPhase, SrpgShopSnapshot,
 };
 use deadsync_profile::PlayerSide;
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 const Z: i16 = 1490;
 const PANEL_W: f32 = 620.0;
@@ -81,12 +84,36 @@ pub struct SrpgShopOverlayStateData {
     queued: HashSet<String>,
     confirm: Option<PurchaseConfirm>,
     local_message: Option<String>,
+    presentation_revision: u64,
+    presentation: RefCell<Option<SrpgShopPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SrpgShopPresentationKey {
+    revision: u64,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct SrpgShopPresentation {
+    key: SrpgShopPresentationKey,
+    snapshot: Arc<SrpgShopSnapshot>,
+    children: Arc<[Actor]>,
+}
+
+impl SrpgShopOverlayStateData {
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum SrpgShopOverlayState {
     Hidden,
-    Visible(SrpgShopOverlayStateData),
+    Visible(Box<SrpgShopOverlayStateData>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,14 +146,16 @@ pub struct SrpgShopDownload {
 
 #[must_use]
 pub fn show_srpg_shop_overlay(side: PlayerSide) -> SrpgShopOverlayState {
-    SrpgShopOverlayState::Visible(SrpgShopOverlayStateData {
+    SrpgShopOverlayState::Visible(Box::new(SrpgShopOverlayStateData {
         side,
         shop_index: 0,
         item_indices: [0; 4],
         queued: HashSet::new(),
         confirm: None,
         local_message: None,
-    })
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
+    }))
 }
 
 pub fn hide_srpg_shop_overlay(state: &mut SrpgShopOverlayState) {
@@ -137,13 +166,16 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
     let SrpgShopOverlayState::Visible(overlay) = state else {
         return;
     };
+    let mut presentation_changed = false;
     for (index, shop_id) in SRPG_SHOP_IDS.into_iter().enumerate() {
         let len = snapshot
             .shops
             .iter()
             .find(|shop| shop.id == shop_id)
             .map_or(0, |shop| shop.items.len());
-        overlay.item_indices[index] = overlay.item_indices[index].min(len);
+        let clamped = overlay.item_indices[index].min(len);
+        presentation_changed |= clamped != overlay.item_indices[index];
+        overlay.item_indices[index] = clamped;
     }
     if snapshot.phase == SrpgShopPhase::Ready
         && overlay
@@ -151,10 +183,14 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
             .as_deref()
             .is_some_and(|message| message.starts_with("Purchasing "))
     {
+        presentation_changed |= overlay.local_message != snapshot.message;
         overlay.local_message.clone_from(&snapshot.message);
     }
     if snapshot.phase != SrpgShopPhase::Ready {
-        overlay.confirm = None;
+        presentation_changed |= overlay.confirm.take().is_some();
+    }
+    if presentation_changed {
+        overlay.invalidate_presentation();
     }
 }
 
@@ -169,7 +205,11 @@ pub fn move_srpg_shop_selection(
     let SrpgShopOverlayState::Visible(overlay) = state else {
         return false;
     };
-    move_item(overlay, snapshot, delta) == SrpgShopInputOutcome::ChangedSelection
+    let changed = move_item(overlay, snapshot, delta) == SrpgShopInputOutcome::ChangedSelection;
+    if changed {
+        overlay.invalidate_presentation();
+    }
+    changed
 }
 
 pub fn page_srpg_shop_selection(
@@ -197,6 +237,7 @@ pub fn page_srpg_shop_selection(
     }
     *selected = next;
     overlay.local_message = None;
+    overlay.invalidate_presentation();
     true
 }
 
@@ -211,6 +252,7 @@ pub fn handle_srpg_shop_input(
     let SrpgShopOverlayState::Visible(overlay) = state else {
         return SrpgShopInputOutcome::None;
     };
+    overlay.invalidate_presentation();
 
     if overlay.confirm.is_some() {
         return handle_confirm_input(overlay, event.action);
@@ -423,14 +465,38 @@ fn active_shop<'a>(
 pub fn push_srpg_shop_overlay(
     actors: &mut Vec<Actor>,
     state: &SrpgShopOverlayState,
-    snapshot: &SrpgShopSnapshot,
+    snapshot: &Arc<SrpgShopSnapshot>,
     machine_font: MachineFont,
 ) -> bool {
     let SrpgShopOverlayState::Visible(overlay) = state else {
         return false;
     };
-    actors.reserve(48);
-    push_srpg_shop_overlay_unreserved(actors, overlay, snapshot, machine_font);
+    let key = SrpgShopPresentationKey {
+        revision: overlay.presentation_revision,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| {
+            presentation.key == key && Arc::ptr_eq(&presentation.snapshot, snapshot)
+        })
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(48);
+        push_srpg_shop_overlay_unreserved(&mut children, overlay, snapshot, machine_font);
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(SrpgShopPresentation {
+            key,
+            snapshot: Arc::clone(snapshot),
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    push_retained_overlay(actors, children);
     true
 }
 
@@ -916,7 +982,7 @@ fn format_number(value: u64) -> String {
 #[cfg(any(test, feature = "bench-support"))]
 pub struct SrpgShopOverlayAppendBenchmark {
     state: SrpgShopOverlayState,
-    snapshot: SrpgShopSnapshot,
+    snapshot: Arc<SrpgShopSnapshot>,
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -945,7 +1011,7 @@ impl SrpgShopOverlayAppendBenchmark {
                 download_url: Some(format!("https://example.test/unlock-{index}.zip")),
             })
             .collect();
-        let snapshot = SrpgShopSnapshot {
+        let snapshot = Arc::new(SrpgShopSnapshot {
             phase: SrpgShopPhase::Ready,
             shops: vec![SrpgShop {
                 id: SRPG_SHOP_IDS[0],
@@ -953,14 +1019,17 @@ impl SrpgShopOverlayAppendBenchmark {
                 items,
             }],
             message: None,
-        };
+        });
         Self { state, snapshot }
     }
 
     #[must_use]
     pub fn actor_count(&self) -> usize {
+        let SrpgShopOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("shop fixture is visible");
+        };
         let mut actors = Vec::with_capacity(64);
-        push_srpg_shop_overlay(&mut actors, &self.state, &self.snapshot, MachineFont::Mega);
+        push_srpg_shop_overlay_unreserved(&mut actors, overlay, &self.snapshot, MachineFont::Mega);
         actors.len()
     }
 
@@ -970,9 +1039,7 @@ impl SrpgShopOverlayAppendBenchmark {
         let SrpgShopOverlayState::Visible(overlay) = &self.state else {
             unreachable!("shop fixture is visible");
         };
-        let mut staged = Vec::with_capacity(48);
-        push_srpg_shop_overlay_unreserved(&mut staged, overlay, &self.snapshot, MachineFont::Mega);
-        out.extend(staged);
+        push_srpg_shop_overlay_unreserved(out, overlay, &self.snapshot, MachineFont::Mega);
         std::hint::black_box(&*out);
         super::overlay_actor_checksum(out)
     }
@@ -998,6 +1065,68 @@ mod tests {
     use super::*;
     use deadsync_core::input::InputSource;
     use std::time::Instant;
+
+    #[test]
+    fn retained_shop_tree_matches_immediate_reuses_snapshot_and_selection() {
+        let mut fixture = SrpgShopOverlayAppendBenchmark::new();
+        let mut immediate = Vec::with_capacity(64);
+        let _ = fixture.legacy_frame(&mut immediate);
+
+        let mut retained = Vec::with_capacity(1);
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("retained SRPG shop should use one shared frame");
+        };
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+        let first = Arc::clone(children);
+
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("stable SRPG shop should remain shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        let mut snapshot = fixture.snapshot.as_ref().clone();
+        snapshot.shops[0].balance += 1;
+        fixture.snapshot = Arc::new(snapshot);
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed SRPG shop should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+
+        let snapshot_children = Arc::clone(children);
+        assert!(move_srpg_shop_selection(
+            &mut fixture.state,
+            &fixture.snapshot,
+            1
+        ));
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed SRPG selection should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&snapshot_children, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+    }
 
     fn input(action: VirtualAction) -> InputEvent {
         let now = Instant::now();

@@ -1658,10 +1658,17 @@ fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn modal_actor_checksum(actors: &[Actor]) -> u64 {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
         let value = match actor {
             Actor::Text { content, z, .. } => overlay_text_checksum(u64::from(*z as u16), content),
             Actor::Frame { children, z, .. } => {
+                modal_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            Actor::SharedFrame { children, z, .. } => {
                 modal_actor_checksum(children) ^ u64::from(*z as u16)
             }
             _ => 1,
@@ -1815,29 +1822,35 @@ impl OptionsModalAppendBenchmark {
 
     #[must_use]
     pub fn download_actor_count(&self) -> usize {
+        let DownloadPacksOverlayState::Visible(data) = &self.downloads.download_packs_overlay
+        else {
+            unreachable!("download fixture is visible");
+        };
         let mut actors = Vec::with_capacity(80);
-        let visible = super::download_packs::push_overlay(
+        super::download_packs::push_overlay_unreserved(
             &mut actors,
-            &self.downloads,
+            data,
+            &self.downloads.stepmaniaonline_snapshot,
             2,
             crate::config::MachineFont::Mega,
         );
-        debug_assert!(visible);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_download_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(80);
-        let visible = super::download_packs::push_overlay(
-            &mut staged,
-            &self.downloads,
+        let DownloadPacksOverlayState::Visible(data) = &self.downloads.download_packs_overlay
+        else {
+            unreachable!("download fixture is visible");
+        };
+        super::download_packs::push_overlay_unreserved(
+            out,
+            data,
+            &self.downloads.stepmaniaonline_snapshot,
             2,
             crate::config::MachineFont::Mega,
         );
-        debug_assert!(visible);
-        out.extend(staged);
         std::hint::black_box(&*out);
         modal_actor_checksum(out)
     }
@@ -1854,6 +1867,12 @@ impl OptionsModalAppendBenchmark {
         debug_assert!(visible);
         std::hint::black_box(&*out);
         modal_actor_checksum(out)
+    }
+
+    pub fn advance_download_caret(&mut self, dt: f32) {
+        let visible =
+            super::download_packs::update_overlay(&mut self.downloads.download_packs_overlay, dt);
+        debug_assert!(visible);
     }
 
     #[must_use]
