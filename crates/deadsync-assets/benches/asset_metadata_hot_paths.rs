@@ -2,8 +2,8 @@ use deadlib_assets::{
     parse_texture_hints, strip_sprite_hints, texture_hint_doubleres, texture_hint_is_default,
 };
 use deadsync_assets::dynamic_media::{
-    gameplay_media_key_set, gameplay_media_paths, path_texture_key, replace_texture_key_set,
-    texture_key_set,
+    TextureKeySetReconciler, gameplay_media_key_set, gameplay_media_paths, path_texture_key,
+    replace_texture_key_set, texture_key_set,
 };
 use deadsync_chart::{
     SongBackgroundChange, SongBackgroundChangeTarget, SongData, SongForegroundChange,
@@ -446,21 +446,6 @@ fn legacy_gameplay_media_paths<'a>(
     paths
 }
 
-fn legacy_gameplay_media_key_set(
-    song: &SongData,
-    gameplay_changes: &[SongBackgroundChange],
-) -> FxHashSet<String> {
-    let capacity = 1usize
-        .saturating_add(gameplay_changes.len())
-        .saturating_add(song.background_layer2_changes.len())
-        .saturating_add(song.foreground_changes.len());
-    let mut keys = Vec::with_capacity(capacity);
-    visit_fixture_paths(song, gameplay_changes, |path| {
-        keys.push(path_texture_key(path));
-    });
-    keys.into_iter().collect()
-}
-
 fn path_list_checksum(paths: Vec<&PathBuf>) -> u64 {
     paths.into_iter().fold(0_u64, |checksum, path| {
         checksum
@@ -484,20 +469,20 @@ fn replacement_fixture(start: usize, count: usize) -> FxHashSet<String> {
     keys
 }
 
-fn legacy_replace_texture_key_set(
-    current: &mut FxHashSet<String>,
-    next: FxHashSet<String>,
-) -> Vec<String> {
-    let stale = current.difference(&next).cloned().collect();
-    *current = next;
-    stale
-}
-
-fn reconciliation_checksum(stale: Vec<String>, current: &FxHashSet<String>) -> u64 {
+fn reconciliation_checksum<I, S>(stale: I, current: &FxHashSet<String>) -> u64
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     stale.into_iter().fold(
         key_set_checksum(current) ^ 0x9E37_79B9_7F4A_7C15,
-        |checksum, key| checksum.wrapping_add(string_checksum(&key).rotate_left(31)),
+        |checksum, key| checksum.wrapping_add(string_checksum(key.as_ref()).rotate_left(31)),
     )
+}
+
+fn recycle_stale(keys: &mut TextureKeySetReconciler, mut stale: Vec<String>) {
+    stale.clear();
+    keys.recycle_stale(stale);
 }
 
 fn main() {
@@ -508,14 +493,6 @@ fn main() {
 
     let paths = media_paths();
     let old_media = measure(MEDIA_BUILD_OPS, paths.len(), || {
-        let keys = legacy_texture_key_set(black_box(&paths));
-        let hits = paths
-            .iter()
-            .filter(|path| keys.contains(path.to_string_lossy().as_ref()))
-            .count();
-        ((keys.len() as u64) << 32) | hits as u64
-    });
-    let new_media = measure(MEDIA_BUILD_OPS, paths.len(), || {
         let keys = texture_key_set(black_box(paths.iter()));
         let hits = paths
             .iter()
@@ -523,9 +500,30 @@ fn main() {
             .count();
         ((keys.len() as u64) << 32) | hits as u64
     });
+    let mut reconciled_media = TextureKeySetReconciler::default();
+    for _ in 0..2 {
+        let stale = reconciled_media.reconcile_paths(paths.iter(), |_| {});
+        recycle_stale(&mut reconciled_media, stale);
+    }
+    let new_media = measure(MEDIA_BUILD_OPS, paths.len(), || {
+        let stale = reconciled_media.reconcile_paths(black_box(paths.iter()), |_| {});
+        let hits = paths
+            .iter()
+            .filter(|path| reconciled_media.contains(path.to_string_lossy().as_ref()))
+            .count();
+        let checksum = ((reconciled_media.len() as u64) << 32) | hits as u64;
+        recycle_stale(&mut reconciled_media, stale);
+        checksum
+    });
     assert_eq!(old_media.checksum, new_media.checksum);
+    assert_zero_churn("settled dynamic-media reconciliation", &new_media);
+    assert_faster(
+        "settled dynamic-media reconciliation",
+        &old_media,
+        &new_media,
+    );
     print_pair(
-        "dynamic-media key reconciliation (256 paths)",
+        "settled dynamic-media reconciliation (256 paths)",
         &old_media,
         &new_media,
     );
@@ -577,20 +575,32 @@ fn main() {
     );
 
     let old_keys = measure(GAMEPLAY_MEDIA_OPS, media_count, || {
-        key_set_checksum(&legacy_gameplay_media_key_set(
-            black_box(&song),
-            black_box(&gameplay_changes),
-        ))
-    });
-    let new_keys = measure(GAMEPLAY_MEDIA_OPS, media_count, || {
         key_set_checksum(&gameplay_media_key_set(
             black_box(&song),
             black_box(&gameplay_changes),
         ))
     });
+    let mut reconciled_gameplay = TextureKeySetReconciler::default();
+    for _ in 0..2 {
+        let stale = reconciled_gameplay.reconcile_gameplay_media(&song, &gameplay_changes);
+        recycle_stale(&mut reconciled_gameplay, stale);
+    }
+    let new_keys = measure(GAMEPLAY_MEDIA_OPS, media_count, || {
+        let stale = reconciled_gameplay
+            .reconcile_gameplay_media(black_box(&song), black_box(&gameplay_changes));
+        let checksum = key_set_checksum(reconciled_gameplay.keys());
+        recycle_stale(&mut reconciled_gameplay, stale);
+        checksum
+    });
     assert_eq!(old_keys.checksum, new_keys.checksum);
+    assert_zero_churn("settled gameplay-media reconciliation", &new_keys);
+    assert_faster(
+        "settled gameplay-media reconciliation",
+        &old_keys,
+        &new_keys,
+    );
     print_pair(
-        "direct gameplay-media key set (577 paths)",
+        "settled gameplay-media reconciliation (577 paths)",
         &old_keys,
         &new_keys,
     );
@@ -598,7 +608,7 @@ fn main() {
     const RECONCILE_OPS: usize = 64;
     const RECONCILE_KEYS: usize = 512;
     let first = replacement_fixture(0, RECONCILE_KEYS);
-    let second = replacement_fixture(384, RECONCILE_KEYS);
+    let second = replacement_fixture(128, RECONCILE_KEYS);
     let mut old_current = first.clone();
     let mut old_second = true;
     let old_replace = measure(RECONCILE_OPS, RECONCILE_KEYS, || {
@@ -608,24 +618,55 @@ fn main() {
             first.clone()
         };
         old_second = !old_second;
-        let stale = legacy_replace_texture_key_set(&mut old_current, next);
-        reconciliation_checksum(stale, &old_current)
+        let stale = replace_texture_key_set(&mut old_current, next);
+        reconciliation_checksum(
+            deadlib_assets::dynamic::dedupe_dynamic_keys(stale),
+            &old_current,
+        )
     });
-    let mut new_current = first.clone();
+    let first_paths = (0..RECONCILE_KEYS)
+        .map(|index| {
+            PathBuf::from(format!(
+                "Songs/Bench/reconcile/very-long-texture-key-{index:04}.png"
+            ))
+        })
+        .collect::<Vec<_>>();
+    let second_paths = (128..128 + RECONCILE_KEYS)
+        .map(|index| {
+            PathBuf::from(format!(
+                "Songs/Bench/reconcile/very-long-texture-key-{index:04}.png"
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut reconciled = TextureKeySetReconciler::default();
+    for _ in 0..2 {
+        let stale = reconciled.reconcile_paths(first_paths.iter(), |_| {});
+        recycle_stale(&mut reconciled, stale);
+    }
     let mut new_second = true;
     let new_replace = measure(RECONCILE_OPS, RECONCILE_KEYS, || {
-        let next = if new_second {
-            second.clone()
+        let paths = if new_second {
+            &second_paths
         } else {
-            first.clone()
+            &first_paths
         };
         new_second = !new_second;
-        let stale = replace_texture_key_set(&mut new_current, next);
-        reconciliation_checksum(stale, &new_current)
+        let stale = reconciled.reconcile_paths(paths.iter(), |_| {});
+        let checksum = reconciliation_checksum(stale.iter(), reconciled.keys());
+        recycle_stale(&mut reconciled, stale);
+        checksum
     });
     assert_eq!(old_replace.checksum, new_replace.checksum);
+    assert_faster(
+        "overlapping stale-key reconciliation",
+        &old_replace,
+        &new_replace,
+    );
+    assert!(new_replace.alloc.allocs < old_replace.alloc.allocs);
+    assert_eq!(new_replace.alloc.reallocs, 0);
+    assert!(new_replace.alloc.churn() < old_replace.alloc.churn());
     print_pair(
-        "move-based stale-key reconciliation (512 keys)",
+        "overlapping stale-key reconciliation (512 keys, 128 changed)",
         &old_replace,
         &new_replace,
     );
@@ -711,6 +752,28 @@ fn main() {
         &old_strip,
         &new_strip,
     );
+}
+
+fn assert_zero_churn(title: &str, row: &Row) {
+    assert_eq!(row.alloc.allocs, 0, "{title} allocated");
+    assert_eq!(row.alloc.reallocs, 0, "{title} reallocated");
+    assert_eq!(row.alloc.frees, 0, "{title} freed allocations");
+    assert_eq!(row.alloc.churn(), 0, "{title} churned memory");
+}
+
+fn assert_faster(title: &str, old: &Row, new: &Row) {
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title} latency regressed: old={} ns new={} ns",
+        old.median_ns,
+        new.median_ns
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{title} cycle count regressed: old={old_cycles} new={new_cycles}"
+        );
+    }
 }
 
 fn print_pair(name: &str, old: &Row, new: &Row) {

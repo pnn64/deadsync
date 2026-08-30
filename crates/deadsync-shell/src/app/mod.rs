@@ -8264,13 +8264,11 @@ impl App {
                         &gs.background_changes,
                         gs.song_lua_visuals(),
                     );
-                    self.dynamic_media.set_gameplay_background_keys(
+                    self.dynamic_media.set_gameplay_background_paths(
                         &mut self.asset_manager,
                         backend,
-                        deadsync_assets::dynamic_media::gameplay_media_key_set(
-                            gs.song(),
-                            &gs.background_changes,
-                        ),
+                        gs.song(),
+                        &gs.background_changes,
                     );
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
@@ -8709,13 +8707,11 @@ impl App {
                         &gs.background_changes,
                         gs.song_lua_visuals(),
                     );
-                    self.dynamic_media.set_gameplay_background_keys(
+                    self.dynamic_media.set_gameplay_background_paths(
                         &mut self.asset_manager,
                         backend,
-                        deadsync_assets::dynamic_media::gameplay_media_key_set(
-                            gs.song(),
-                            &gs.background_changes,
-                        ),
+                        gs.song(),
+                        &gs.background_changes,
                     );
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,

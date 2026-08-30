@@ -6,18 +6,19 @@ use deadsync_assets::AssetManager;
 use deadsync_assets::dynamic_media::{
     BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
     DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,
-    SongLuaVideoPrepResult, create_cdtitle_texture, create_inserted_banner_texture,
-    dynamic_video_path_in_set, path_texture_key, prepare_banner_video, prepare_gameplay_background,
-    prepare_song_lua_video, replace_texture_key_set, retire_dynamic_background_state,
-    retire_dynamic_video_state, retire_video_player, set_banner_texture_for_path,
-    set_image_background_texture, set_video_background_poster_texture,
+    SongLuaVideoPrepResult, TextureKeySetReconciler, create_cdtitle_texture,
+    create_inserted_banner_texture, dynamic_video_path_in_set, path_texture_key,
+    prepare_banner_video, prepare_gameplay_background, prepare_song_lua_video,
+    retire_dynamic_background_state, retire_dynamic_video_state, retire_video_player,
+    set_banner_texture_for_path, set_image_background_texture, set_video_background_poster_texture,
     set_video_background_texture, start_background_video,
 };
 use deadsync_assets::media_cache;
+use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use log::{debug, warn};
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::{
     borrow::Cow,
@@ -499,11 +500,11 @@ pub struct DynamicMedia {
     current_dynamic_cdtitle: Option<(Arc<str>, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: FxHashSet<String>,
-    wheel_item_background_keys: FxHashSet<String>,
+    wheel_item_background_keys: TextureKeySetReconciler,
     current_dynamic_background: Option<DynamicBackgroundState>,
     active_song_lua_videos: FxHashMap<String, SongLuaVideoState>,
     failed_song_lua_video_keys: FxHashSet<String>,
-    gameplay_background_keys: FxHashSet<String>,
+    gameplay_background_keys: TextureKeySetReconciler,
     pending_gameplay_background_preps: FxHashSet<String>,
     gameplay_background_prep:
         MediaPrepWorker<GameplayBackgroundPrepJob, GameplayBackgroundPrepResult>,
@@ -529,11 +530,11 @@ impl DynamicMedia {
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: FxHashSet::default(),
-            wheel_item_background_keys: FxHashSet::default(),
+            wheel_item_background_keys: TextureKeySetReconciler::default(),
             current_dynamic_background: None,
             active_song_lua_videos: FxHashMap::default(),
             failed_song_lua_video_keys: FxHashSet::default(),
-            gameplay_background_keys: FxHashSet::default(),
+            gameplay_background_keys: TextureKeySetReconciler::default(),
             pending_gameplay_background_preps: FxHashSet::default(),
             gameplay_background_prep: MediaPrepWorker::new(
                 "gameplay-background-prep",
@@ -588,7 +589,7 @@ impl DynamicMedia {
             keys.push(key);
         }
         keys.extend(self.dynamic_pack_banner_keys.drain());
-        keys.extend(self.wheel_item_background_keys.drain());
+        keys.extend(self.wheel_item_background_keys.take_keys());
         if let Some(state) = self.current_dynamic_background.take() {
             keys.push(retire_dynamic_background_state(state));
         }
@@ -597,7 +598,7 @@ impl DynamicMedia {
             key
         }));
         keys.extend(self.failed_song_lua_video_keys.drain());
-        keys.extend(self.gameplay_background_keys.drain());
+        keys.extend(self.gameplay_background_keys.take_keys());
         self.pending_gameplay_background_preps.clear();
         self.failed_gameplay_background_key = None;
         self.clear_gameplay_background_results();
@@ -731,18 +732,15 @@ impl DynamicMedia {
         backend: &mut Backend,
         paths: Vec<PathBuf>,
     ) {
-        let mut desired = FxHashSet::with_capacity_and_hasher(paths.len(), FxBuildHasher);
-        for path in paths {
-            let key = path.to_string_lossy().into_owned();
-            if desired.insert(key) {
-                media_cache::ensure_banner_texture(assets, backend, &path);
-            }
-        }
-
-        let release_keys = replace_texture_key_set(&mut self.wheel_item_background_keys, desired);
-        for key in dynamic::dedupe_dynamic_keys(release_keys) {
+        let mut release_keys =
+            self.wheel_item_background_keys
+                .reconcile_paths(paths.iter(), |path| {
+                    media_cache::ensure_banner_texture(assets, backend, path);
+                });
+        for key in release_keys.drain(..) {
             self.release_texture_key(assets, backend, key);
         }
+        self.wheel_item_background_keys.recycle_stale(release_keys);
     }
 
     pub fn set_banner(
@@ -1260,16 +1258,20 @@ impl DynamicMedia {
         }
     }
 
-    pub fn set_gameplay_background_keys(
+    pub fn set_gameplay_background_paths(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-        keys: FxHashSet<String>,
+        song: &SongData,
+        gameplay_background_changes: &[SongBackgroundChange],
     ) {
-        let stale = replace_texture_key_set(&mut self.gameplay_background_keys, keys);
-        for key in stale {
+        let mut stale = self
+            .gameplay_background_keys
+            .reconcile_gameplay_media(song, gameplay_background_changes);
+        for key in stale.drain(..) {
             self.release_texture_key(assets, backend, key);
         }
+        self.gameplay_background_keys.recycle_stale(stale);
     }
 
     pub fn clear_gameplay_backgrounds(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
@@ -1283,7 +1285,7 @@ impl DynamicMedia {
         }
         self.reset_pending_gameplay_background();
         self.failed_gameplay_background_key = None;
-        for key in std::mem::take(&mut self.gameplay_background_keys) {
+        for key in self.gameplay_background_keys.take_keys() {
             self.release_texture_key(assets, backend, key);
         }
     }
@@ -2053,7 +2055,11 @@ mod tests {
         let key = "queued-bg.mp4".to_string();
 
         assets.reserve_texture_handle(key.clone());
-        media.gameplay_background_keys.insert(key.clone());
+        let paths = [PathBuf::from(&key)];
+        let stale = media
+            .gameplay_background_keys
+            .reconcile_paths(paths.iter(), |_| {});
+        media.gameplay_background_keys.recycle_stale(stale);
 
         let removed = media.take_releasable_texture(&mut assets, &key);
 

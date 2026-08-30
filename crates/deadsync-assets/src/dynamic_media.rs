@@ -112,6 +112,128 @@ pub fn replace_texture_key_set(
     stale
 }
 
+/// Reusable ownership boundary for texture keys that change as a set.
+///
+/// The current and scratch hash tables alternate roles so their bucket
+/// allocations survive reconciliation. Keys retained by the next request are
+/// moved between those tables without rebuilding their strings. Removed keys
+/// are returned in a reusable vector that the owner can recycle after
+/// destroying their textures. The owner supplies all paths for one logical
+/// request from one thread; this type performs no synchronization or I/O.
+/// Capacity is bounded by the largest reconciled request and destruction
+/// occurs when that owner drops the reconciler.
+#[derive(Default)]
+pub struct TextureKeySetReconciler {
+    current: FxHashSet<String>,
+    scratch: FxHashSet<String>,
+    stale: Vec<String>,
+}
+
+impl TextureKeySetReconciler {
+    #[inline(always)]
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.current.len()
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.current.is_empty()
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn contains(&self, key: &str) -> bool {
+        self.current.contains(key)
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn keys(&self) -> &FxHashSet<String> {
+        &self.current
+    }
+
+    fn begin(&mut self, capacity: usize) {
+        self.scratch.clear();
+        self.scratch.reserve(capacity);
+        self.stale.clear();
+    }
+
+    fn insert_path(&mut self, path: &Path) -> bool {
+        let borrowed = path.to_string_lossy();
+        if self.scratch.contains(borrowed.as_ref()) {
+            return false;
+        }
+        let key = self
+            .current
+            .take(borrowed.as_ref())
+            .unwrap_or_else(|| borrowed.into_owned());
+        self.scratch.insert(key);
+        true
+    }
+
+    fn finish(&mut self) -> Vec<String> {
+        self.stale.extend(self.current.drain());
+        std::mem::swap(&mut self.current, &mut self.scratch);
+        std::mem::take(&mut self.stale)
+    }
+
+    /// Reconcile an arbitrary path set and visit each unique requested path.
+    ///
+    /// The returned stale keys remain unique because the source is a set. Call
+    /// [`Self::recycle_stale`] after consuming them to retain the vector's
+    /// allocation for the next change.
+    #[must_use]
+    pub fn reconcile_paths<'a, I>(
+        &mut self,
+        paths: I,
+        mut visit_unique: impl FnMut(&'a PathBuf),
+    ) -> Vec<String>
+    where
+        I: IntoIterator<Item = &'a PathBuf>,
+    {
+        let paths = paths.into_iter();
+        let capacity = paths.size_hint().1.unwrap_or(paths.size_hint().0);
+        self.begin(capacity);
+        for path in paths {
+            if self.insert_path(path) {
+                visit_unique(path);
+            }
+        }
+        self.finish()
+    }
+
+    /// Reconcile every gameplay-owned background and foreground media path.
+    #[must_use]
+    pub fn reconcile_gameplay_media(
+        &mut self,
+        song: &SongData,
+        gameplay_background_changes: &[SongBackgroundChange],
+    ) -> Vec<String> {
+        self.begin(gameplay_media_path_capacity(
+            song,
+            gameplay_background_changes,
+        ));
+        for_each_gameplay_media_path(song, gameplay_background_changes, |path| {
+            self.insert_path(path);
+        });
+        self.finish()
+    }
+
+    /// Return an emptied stale-key vector so its capacity can be reused.
+    pub fn recycle_stale(&mut self, mut stale: Vec<String>) {
+        stale.clear();
+        self.stale = stale;
+    }
+
+    /// Move all current keys out during owner teardown.
+    #[must_use]
+    pub fn take_keys(&mut self) -> FxHashSet<String> {
+        std::mem::take(&mut self.current)
+    }
+}
+
 #[must_use]
 pub fn dynamic_video_path_in_set(path: &Path, desired_paths: &[&Path]) -> bool {
     dynamic::is_dynamic_video_path(path)
@@ -637,6 +759,83 @@ mod tests {
         assert_eq!(current.len(), 2);
         assert!(current.contains("a.png"));
         assert!(current.contains("b.png"));
+    }
+
+    #[test]
+    fn texture_key_reconciler_moves_retained_strings_and_dedupes_paths() {
+        let first = [PathBuf::from("a.png"), PathBuf::from("b.png")];
+        let mut keys = TextureKeySetReconciler::default();
+        let stale = keys.reconcile_paths(first.iter(), |_| {});
+        keys.recycle_stale(stale);
+        let retained_ptr = keys.current.get("a.png").unwrap().as_ptr();
+
+        let second = [
+            PathBuf::from("a.png"),
+            PathBuf::from("c.png"),
+            PathBuf::from("a.png"),
+        ];
+        let mut visited = Vec::new();
+        let mut stale = keys.reconcile_paths(second.iter(), |path| visited.push(path.clone()));
+
+        assert_eq!(visited, [PathBuf::from("a.png"), PathBuf::from("c.png")]);
+        assert_eq!(stale, ["b.png"]);
+        assert_eq!(keys.current.len(), 2);
+        assert_eq!(keys.current.get("a.png").unwrap().as_ptr(), retained_ptr);
+        assert!(keys.current.contains("c.png"));
+        stale.clear();
+        keys.recycle_stale(stale);
+    }
+
+    #[test]
+    fn gameplay_reconciler_matches_direct_key_set() {
+        let mut song = test_song();
+        song.background_path = Some(PathBuf::from("base.png"));
+        song.foreground_changes.push(SongForegroundChange {
+            start_beat: 16.0,
+            path: "fg.png".into(),
+        });
+        let changes = vec![{
+            let mut change =
+                SongBackgroundChange::new(4.0, SongBackgroundChangeTarget::File("game.png".into()));
+            change.file2 = Some("mask.png".into());
+            change
+        }];
+        let expected = gameplay_media_key_set(&song, &changes);
+        let mut actual = TextureKeySetReconciler::default();
+
+        let stale = actual.reconcile_gameplay_media(&song, &changes);
+
+        assert!(stale.is_empty());
+        assert_eq!(actual.keys(), &expected);
+    }
+
+    #[test]
+    fn texture_key_reconciler_recycles_tables_and_stale_buffer() {
+        let first = (0..32)
+            .map(|index| PathBuf::from(format!("first-{index:02}.png")))
+            .collect::<Vec<_>>();
+        let second = (16..48)
+            .map(|index| PathBuf::from(format!("first-{index:02}.png")))
+            .collect::<Vec<_>>();
+        let mut keys = TextureKeySetReconciler::default();
+        let stale = keys.reconcile_paths(first.iter(), |_| {});
+        keys.recycle_stale(stale);
+        let mut stale = keys.reconcile_paths(second.iter(), |_| {});
+        let stale_capacity = stale.capacity();
+        stale.clear();
+        keys.recycle_stale(stale);
+        let table_capacities = (keys.current.capacity(), keys.scratch.capacity());
+
+        let mut stale = keys.reconcile_paths(first.iter(), |_| {});
+
+        assert_eq!(stale.len(), 16);
+        assert_eq!(stale.capacity(), stale_capacity);
+        assert_eq!(
+            (keys.scratch.capacity(), keys.current.capacity()),
+            table_capacities
+        );
+        stale.clear();
+        keys.recycle_stale(stale);
     }
 
     #[test]
