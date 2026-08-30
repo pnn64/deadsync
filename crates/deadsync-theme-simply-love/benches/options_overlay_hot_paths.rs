@@ -1,8 +1,8 @@
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
 use deadsync_theme_simply_love::screens::options::{
-    OptionsOverlayHotBenchmark, PackSyncOverlayBenchmark, ReplayGainOverlayBenchmark,
-    ScoreImportOverlayBenchmark,
+    OptionsModalAppendBenchmark, OptionsOverlayHotBenchmark, PackSyncOverlayBenchmark,
+    ReplayGainOverlayBenchmark, ScoreImportOverlayBenchmark,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -343,6 +343,49 @@ fn main() {
         pack_sync.actor_count(),
         &old_pack,
         &new_pack,
+        false,
+    );
+
+    let modals = OptionsModalAppendBenchmark::new();
+    let mut old_reload_actors = Vec::with_capacity(7);
+    let mut new_reload_actors = Vec::with_capacity(7);
+    let (old_reload, new_reload) = sample_pair(
+        || measure(|| modals.legacy_reload_frame(&mut old_reload_actors)),
+        || measure(|| modals.direct_reload_frame(&mut new_reload_actors)),
+    );
+    report_pair(
+        "library reload actor staging",
+        modals.reload_actor_count(),
+        &old_reload,
+        &new_reload,
+        false,
+    );
+
+    let mut old_download_actors = Vec::with_capacity(80);
+    let mut new_download_actors = Vec::with_capacity(80);
+    let (old_download, new_download) = sample_pair(
+        || measure(|| modals.legacy_download_frame(&mut old_download_actors)),
+        || measure(|| modals.direct_download_frame(&mut new_download_actors)),
+    );
+    report_pair(
+        "pack download actor staging",
+        modals.download_actor_count(),
+        &old_download,
+        &new_download,
+        false,
+    );
+
+    let mut old_palette_actors = Vec::with_capacity(96);
+    let mut new_palette_actors = Vec::with_capacity(96);
+    let (old_palette, new_palette) = sample_pair(
+        || measure(|| modals.legacy_palette_frame(&mut old_palette_actors)),
+        || measure(|| modals.direct_palette_frame(&mut new_palette_actors)),
+    );
+    report_pair(
+        "judgment palette actor staging",
+        modals.palette_actor_count(),
+        &old_palette,
+        &new_palette,
         false,
     );
 }

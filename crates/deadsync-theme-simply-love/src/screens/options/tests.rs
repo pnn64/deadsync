@@ -267,6 +267,39 @@ fn retained_confirm_text_and_direct_staging_match_legacy_frames() {
     assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
 }
 
+#[test]
+fn direct_options_modal_append_matches_legacy_batches() {
+    crate::assets::i18n::init_for_tests();
+    let benchmark = OptionsModalAppendBenchmark::new();
+
+    let mut legacy = Vec::with_capacity(7);
+    let mut direct = Vec::with_capacity(7);
+    assert_eq!(
+        benchmark.legacy_reload_frame(&mut legacy),
+        benchmark.direct_reload_frame(&mut direct)
+    );
+    assert_eq!(legacy.len(), benchmark.reload_actor_count());
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+    legacy = Vec::with_capacity(80);
+    direct = Vec::with_capacity(80);
+    assert_eq!(
+        benchmark.legacy_download_frame(&mut legacy),
+        benchmark.direct_download_frame(&mut direct)
+    );
+    assert_eq!(legacy.len(), benchmark.download_actor_count());
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+    legacy = Vec::with_capacity(96);
+    direct = Vec::with_capacity(96);
+    assert_eq!(
+        benchmark.legacy_palette_frame(&mut legacy),
+        benchmark.direct_palette_frame(&mut direct)
+    );
+    assert_eq!(legacy.len(), benchmark.palette_actor_count());
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+}
+
 fn updater_view() -> SimplyLoveUpdaterView {
     SimplyLoveUpdaterView::default()
 }

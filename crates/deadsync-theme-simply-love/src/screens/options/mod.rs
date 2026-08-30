@@ -119,7 +119,7 @@ pub use download_packs::sync_stepmaniaonline;
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
 #[cfg(any(test, feature = "bench-support"))]
-pub use render::OptionsOverlayHotBenchmark;
+pub use render::{OptionsModalAppendBenchmark, OptionsOverlayHotBenchmark};
 pub use render::{
     clear_description_layout_cache, clear_render_cache, get_actors, push_actors,
     sync_updater_panels,

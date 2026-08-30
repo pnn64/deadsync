@@ -130,10 +130,11 @@ pub(super) fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
     (reload.line2.clone(), reload.line3.clone())
 }
 
-pub(super) fn build_reload_overlay_actors(
+pub(super) fn push_reload_overlay_actors(
+    out: &mut Vec<Actor>,
     reload: &ReloadUiState,
     active_color_index: i32,
-) -> Vec<Actor> {
+) {
     let (done, total, progress) = reload_progress(reload);
     let elapsed = reload.started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {
@@ -163,7 +164,7 @@ pub(super) fn build_reload_overlay_actors(
     let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
-    let mut out: Vec<Actor> = Vec::with_capacity(7);
+    out.reserve(7);
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -269,5 +270,4 @@ pub(super) fn build_reload_overlay_actors(
             z(301)
         ));
     }
-    out
 }

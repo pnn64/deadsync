@@ -900,13 +900,14 @@ fn pack_is_installed(
     installed_names.contains(&canonical_pack_name(&sanitized))
 }
 
-pub(super) fn build_overlay(
+pub(super) fn push_overlay(
+    out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let DownloadPacksOverlayState::Visible(data) = &state.download_packs_overlay else {
-        return None;
+        return false;
     };
     let snapshot = &state.stepmaniaonline_snapshot;
     let accent = color::simply_love_rgba(active_color_index);
@@ -914,7 +915,7 @@ pub(super) fn build_overlay(
     let cy = screen_center_y();
     let header_font = machine_font_key(machine_font, FontRole::Header);
     let bold_font = machine_font_key(machine_font, FontRole::Bold);
-    let mut out = Vec::with_capacity(80);
+    out.reserve(80);
 
     out.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0): zoomto(screen_width(), screen_height()):
@@ -961,32 +962,25 @@ pub(super) fn build_overlay(
         zoom(0.66): diffuse(0.72, 0.72, 0.76, 1.0): z(Z + 6): horizalign(right)
     ));
 
-    push_search(&mut out, data, accent, cx, cy, bold_font);
-    push_substyle_buttons(&mut out, data, accent, cx, cy, bold_font);
+    push_search(out, data, accent, cx, cy, bold_font);
+    push_substyle_buttons(out, data, accent, cx, cy, bold_font);
     match snapshot.phase {
         CatalogPhase::Idle | CatalogPhase::Loading => {
             let message = snapshot
                 .message
                 .clone()
                 .unwrap_or_else(|| tr("OptionsDownloadPacks", "Loading").to_string());
-            push_status(&mut out, &message, [1.0, 1.0, 1.0, 1.0], cx, cy, bold_font);
+            push_status(out, &message, [1.0, 1.0, 1.0, 1.0], cx, cy, bold_font);
         }
         CatalogPhase::Error => {
             let message = snapshot
                 .message
                 .clone()
                 .unwrap_or_else(|| tr("OptionsDownloadPacks", "LoadError").to_string());
-            push_status(
-                &mut out,
-                &message,
-                [1.0, 0.43, 0.34, 1.0],
-                cx,
-                cy,
-                bold_font,
-            );
+            push_status(out, &message, [1.0, 0.43, 0.34, 1.0], cx, cy, bold_font);
         }
         CatalogPhase::Ready if data.results.is_empty() => push_status(
-            &mut out,
+            out,
             tr("OptionsDownloadPacks", "Empty").as_ref(),
             [0.85, 0.85, 0.88, 1.0],
             cx,
@@ -994,14 +988,14 @@ pub(super) fn build_overlay(
             bold_font,
         ),
         CatalogPhase::Ready => {
-            push_catalog(&mut out, data, snapshot, accent, cx, cy, bold_font);
+            push_catalog(out, data, snapshot, accent, cx, cy, bold_font);
         }
     }
-    push_footer(&mut out, data, snapshot, accent, cx, cy);
+    push_footer(out, data, snapshot, accent, cx, cy);
     if let Some(confirm) = data.confirm.as_ref() {
-        push_confirmation(&mut out, confirm, accent, cx, cy, header_font, bold_font);
+        push_confirmation(out, confirm, accent, cx, cy, header_font, bold_font);
     }
-    Some(out)
+    true
 }
 
 fn push_search(

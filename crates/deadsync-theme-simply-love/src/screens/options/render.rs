@@ -621,29 +621,35 @@ pub fn push_actors(
     }
 
     if let Some(reload) = &state.reload_ui {
-        let mut ui_actors = build_reload_overlay_actors(reload, state.active_color_index);
-        for actor in &mut ui_actors {
+        let ui_start = actors.len();
+        push_reload_overlay_actors(actors, reload, state.active_color_index);
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
-    if let Some(mut ui_actors) =
-        build_overlay(state, state.active_color_index, visual_policy.machine_font)
-    {
-        for actor in &mut ui_actors {
+    let ui_start = actors.len();
+    if push_overlay(
+        actors,
+        state,
+        state.active_color_index,
+        visual_policy.machine_font,
+    ) {
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
-    if let Some(mut ui_actors) =
-        build_judgment_palette_overlay(state, state.active_color_index, visual_policy.machine_font)
-    {
-        for actor in &mut ui_actors {
+    let ui_start = actors.len();
+    if push_judgment_palette_overlay(
+        actors,
+        state,
+        state.active_color_index,
+        visual_policy.machine_font,
+    ) {
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
     if let Some(score_import) = &state.score_import_ui {
@@ -1648,4 +1654,255 @@ fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
             checksum.rotate_left(3) ^ 1
         }
     })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn modal_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => overlay_text_checksum(u64::from(*z as u16), content),
+            Actor::Frame { children, z, .. } => {
+                modal_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_app_paths() -> AppPathsView {
+    let path = |value: &str| deadsync_theme::views::AppPathView {
+        path: value.into(),
+        display: value.to_owned(),
+    };
+    AppPathsView {
+        data: path("/data"),
+        cache: path("/cache"),
+        songs: path("/data/songs"),
+        courses: path("/data/courses"),
+        profiles: path("/data/save/profiles"),
+        screenshots: path("/data/save/screenshots"),
+        log_file: path("/data/deadsync.log"),
+        config_file: path("/data/deadsync.ini"),
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_options_state() -> State {
+    super::state::init(OptionsInitView {
+        config: config::Config::default(),
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
+        updater_capabilities: SimplyLoveUpdaterCapabilities {
+            app_update: true,
+            ffmpeg_install: true,
+        },
+        app_paths: benchmark_app_paths(),
+        audio: AudioOptionsView::default(),
+        graphics: deadsync_theme::views::GraphicsOptionsView {
+            software_thread_choices: vec![0, 1, 2],
+            ..deadsync_theme::views::GraphicsOptionsView::default()
+        },
+        song_packs: Vec::new(),
+        pack_sync: OptionsPackSyncView::default(),
+        noteskins: deadsync_theme::views::NoteskinCatalogView {
+            names: vec![deadsync_profile::NoteSkin::DEFAULT_NAME.to_owned()],
+        },
+        machine_player_options: deadsync_profile::PlayerOptionsData::default(),
+        smx_assignment: deadsync_theme::views::SmxAssignmentView::default(),
+        smx_gifs: deadsync_theme::views::SmxGifCatalogView::default(),
+        score_import_profiles: Vec::new(),
+        bookkeeping: crate::views::BookkeepingView::default(),
+    })
+}
+
+/// Stable old/new fixtures for the three remaining Options modal staging
+/// buffers: library reload, pack downloads, and judgment palettes.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct OptionsModalAppendBenchmark {
+    reload: ReloadUiState,
+    downloads: State,
+    palettes: State,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl OptionsModalAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let reload = ReloadUiState {
+            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
+            line2: "Benchmark Pack".to_owned(),
+            line3: "Benchmark Song".to_owned(),
+            songs_done: 0,
+            songs_total: 0,
+            courses_done: 0,
+            courses_total: 0,
+            done: false,
+            started_at: Instant::now(),
+        };
+
+        let mut downloads = benchmark_options_state();
+        let catalog = (0..18)
+            .map(|index| {
+                deadsync_online::stepmaniaonline::PackInfo::new(
+                    index + 1,
+                    format!("Benchmark Pack {index:02}"),
+                    24 + index as u32,
+                    128_000_000 + index * 1_000_000,
+                    None,
+                    None,
+                    Some(if index % 2 == 0 { "tech" } else { "stamina" }.to_owned()),
+                    None,
+                )
+            })
+            .collect::<Vec<_>>();
+        let snapshot = deadsync_online::stepmaniaonline::Snapshot {
+            phase: deadsync_online::stepmaniaonline::CatalogPhase::Ready,
+            catalog: Arc::from(catalog),
+            revision: 1,
+            message: None,
+            installs: Vec::new(),
+        };
+        super::download_packs::show_overlay(&mut downloads.download_packs_overlay, &snapshot, &[]);
+        downloads.stepmaniaonline_snapshot = Arc::new(snapshot);
+
+        let mut palettes = benchmark_options_state();
+        let base = palettes.judgment_palettes.palettes[0].clone();
+        for index in 1..8 {
+            let mut entry = base.clone();
+            entry.id = format!("benchmark-{index}");
+            entry.name = format!("Benchmark Palette {index}");
+            entry.built_in = false;
+            palettes.judgment_palettes.palettes.push(entry);
+        }
+        palettes.judgment_palette_overlay = JudgmentPaletteOverlayState::Browser {
+            selected: 4,
+            blink_t: 0.0,
+            message: None,
+        };
+
+        Self {
+            reload,
+            downloads,
+            palettes,
+        }
+    }
+
+    #[must_use]
+    pub fn reload_actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(7);
+        super::reload::push_reload_overlay_actors(&mut actors, &self.reload, 2);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_reload_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(7);
+        super::reload::push_reload_overlay_actors(&mut staged, &self.reload, 2);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_reload_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        super::reload::push_reload_overlay_actors(out, &self.reload, 2);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn download_actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(80);
+        let visible = super::download_packs::push_overlay(
+            &mut actors,
+            &self.downloads,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_download_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(80);
+        let visible = super::download_packs::push_overlay(
+            &mut staged,
+            &self.downloads,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_download_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let visible = super::download_packs::push_overlay(
+            out,
+            &self.downloads,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn palette_actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(96);
+        let visible = super::judgment_palettes::push_judgment_palette_overlay(
+            &mut actors,
+            &self.palettes,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_palette_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(96);
+        let visible = super::judgment_palettes::push_judgment_palette_overlay(
+            &mut staged,
+            &self.palettes,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_palette_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let visible = super::judgment_palettes::push_judgment_palette_overlay(
+            out,
+            &self.palettes,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        debug_assert!(visible);
+        std::hint::black_box(&*out);
+        modal_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for OptionsModalAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }

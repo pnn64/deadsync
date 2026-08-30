@@ -599,21 +599,22 @@ fn commit_name(state: &mut State) -> ThemeEffect {
     }
 }
 
-pub(super) fn build_judgment_palette_overlay(
+pub(super) fn push_judgment_palette_overlay(
+    out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     if !judgment_palette_overlay_visible(&state.judgment_palette_overlay) {
-        return None;
+        return false;
     }
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();
     let cy = screen_center_y();
     let header_font = machine_font_key(machine_font, FontRole::Header);
     let bold_font = machine_font_key(machine_font, FontRole::Bold);
-    let mut out = Vec::with_capacity(96);
-    push_panel(&mut out, accent, cx, cy);
+    out.reserve(96);
+    push_panel(out, accent, cx, cy);
     out.push(act!(text:
         font(header_font): settext(tr("JudgmentPalettes", "Title")):
         align(0.0, 0.5): xy(PANEL_W.mul_add(-0.5, cx) + 18.0, cy - 188.0):
@@ -624,7 +625,7 @@ pub(super) fn build_judgment_palette_overlay(
         JudgmentPaletteOverlayState::Browser {
             selected, message, ..
         } => push_browser(
-            &mut out,
+            out,
             state,
             *selected,
             message.as_deref(),
@@ -642,7 +643,7 @@ pub(super) fn build_judgment_palette_overlay(
             blink_t,
             message,
         } => push_editor(
-            &mut out,
+            out,
             state,
             palette_id,
             *selected,
@@ -661,9 +662,9 @@ pub(super) fn build_judgment_palette_overlay(
             choice,
             ..
         } => {
-            push_browser(&mut out, state, 0, None, accent, cx, cy, bold_font);
+            push_browser(out, state, 0, None, accent, cx, cy, bold_font);
             push_delete_confirm(
-                &mut out,
+                out,
                 palette_name,
                 *choice,
                 accent,
@@ -675,7 +676,7 @@ pub(super) fn build_judgment_palette_overlay(
         }
         JudgmentPaletteOverlayState::Hidden => {}
     }
-    Some(out)
+    true
 }
 
 fn push_panel(out: &mut Vec<Actor>, accent: [f32; 4], cx: f32, cy: f32) {
