@@ -9,6 +9,11 @@ name = "xml_parser_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "resolver_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

@@ -15,15 +15,15 @@ use std::hash::{Hash, Hasher};
 use deadsync_chart::{SongData, SongPack};
 
 #[derive(PartialEq, Eq)]
-struct SongKey {
-    pack: String,
-    folder: String,
+struct SongKey<'a> {
+    pack: &'a str,
+    folder: &'a str,
 }
 
-impl Hash for SongKey {
+impl Hash for SongKey<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_ascii_case_insensitive(&self.pack, state);
-        hash_ascii_case_insensitive(&self.folder, state);
+        hash_ascii_case_insensitive(self.pack, state);
+        hash_ascii_case_insensitive(self.folder, state);
     }
 }
 
@@ -39,9 +39,9 @@ impl Hash for SongKeyRef<'_> {
     }
 }
 
-impl Equivalent<SongKey> for SongKeyRef<'_> {
-    fn equivalent(&self, key: &SongKey) -> bool {
-        self.pack.eq_ignore_ascii_case(&key.pack) && self.folder.eq_ignore_ascii_case(&key.folder)
+impl Equivalent<SongKey<'_>> for SongKeyRef<'_> {
+    fn equivalent(&self, key: &SongKey<'_>) -> bool {
+        self.pack.eq_ignore_ascii_case(key.pack) && self.folder.eq_ignore_ascii_case(key.folder)
     }
 }
 
@@ -55,8 +55,8 @@ fn hash_ascii_case_insensitive<H: Hasher>(value: &str, state: &mut H) {
 /// Builds a fast lookup over the scanned song library and resolves `ITGmania`
 /// score keys to `DeadSync` chart hashes.
 pub struct ChartResolver<'a> {
-    /// `(pack_lower, song_folder_lower)` → song.
-    by_song: HashMap<SongKey, &'a SongData, FxBuildHasher>,
+    /// Borrowed, ASCII-case-insensitive `(pack, song_folder)` lookup.
+    by_song: HashMap<SongKey<'a>, &'a SongData, FxBuildHasher>,
 }
 
 /// Outcome of resolving a single `<Steps>` entry.
@@ -74,19 +74,19 @@ impl<'a> ChartResolver<'a> {
     /// Builds the resolver from the scanned packs.
     #[must_use]
     pub fn build(packs: &'a [SongPack]) -> Self {
-        let mut by_song = HashMap::with_hasher(FxBuildHasher);
+        let mut by_song =
+            HashMap::with_capacity_and_hasher(resolver_entry_capacity(packs), FxBuildHasher);
         for pack in packs {
-            let pack_keys = pack_keys(pack);
-            for song in &pack.songs {
-                if let Some(folder) = song_folder_name(song) {
-                    let folder_lc = folder.to_ascii_lowercase();
-                    for pk in &pack_keys {
+            for pack_key in pack_keys(pack) {
+                for song in &pack.songs {
+                    let song: &'a SongData = song.as_ref();
+                    if let Some(folder) = song_folder_name(song) {
                         by_song
                             .entry(SongKey {
-                                pack: pk.clone(),
-                                folder: folder_lc.clone(),
+                                pack: pack_key,
+                                folder,
                             })
-                            .or_insert(song.as_ref());
+                            .or_insert(song);
                     }
                 }
             }
@@ -186,19 +186,27 @@ fn pick_edit<'a>(
     None
 }
 
-/// All case-folded keys a pack can be addressed by (folder name).
-fn pack_keys(pack: &SongPack) -> Vec<String> {
-    let mut keys = Vec::with_capacity(2);
-    if !pack.group_name.is_empty() {
-        keys.push(pack.group_name.to_ascii_lowercase());
-    }
-    if let Some(dir_name) = pack.directory.file_name().and_then(|s| s.to_str()) {
-        let lc = dir_name.to_ascii_lowercase();
-        if !keys.contains(&lc) {
-            keys.push(lc);
-        }
-    }
-    keys
+/// Borrowed keys a pack can be addressed by (group and folder name).
+fn pack_keys(pack: &SongPack) -> impl Iterator<Item = &str> {
+    let group = (!pack.group_name.is_empty()).then_some(pack.group_name.as_str());
+    let directory = pack
+        .directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|directory| group.is_none_or(|group| !directory.eq_ignore_ascii_case(group)));
+    group.into_iter().chain(directory)
+}
+
+fn resolver_entry_capacity(packs: &[SongPack]) -> usize {
+    packs.iter().fold(0usize, |capacity, pack| {
+        let aliases = pack_keys(pack).count();
+        let songs = pack
+            .songs
+            .iter()
+            .filter(|song| song_folder_name(song).is_some())
+            .count();
+        capacity.saturating_add(aliases.saturating_mul(songs))
+    })
 }
 
 /// The song's on-disk folder name (the parent directory of its simfile).
@@ -255,10 +263,195 @@ fn nested_song_dir_parts(dir: &str) -> Option<(&str, &str)> {
     Some((pack, song))
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::*;
+
+    #[derive(PartialEq, Eq)]
+    struct OwnedScalarKey {
+        pack: String,
+        folder: String,
+    }
+
+    impl Hash for OwnedScalarKey {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            hash_ascii_case_insensitive_scalar(&self.pack, state);
+            hash_ascii_case_insensitive_scalar(&self.folder, state);
+        }
+    }
+
+    #[derive(PartialEq, Eq)]
+    struct BorrowedPackKey<'a> {
+        pack: &'a str,
+        folder: String,
+    }
+
+    impl Hash for BorrowedPackKey<'_> {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            hash_ascii_case_insensitive_scalar(self.pack, state);
+            hash_ascii_case_insensitive_scalar(&self.folder, state);
+        }
+    }
+
+    fn hash_ascii_case_insensitive_scalar<H: Hasher>(value: &str, state: &mut H) {
+        value.len().hash(state);
+        for byte in value.bytes() {
+            byte.to_ascii_lowercase().hash(state);
+        }
+    }
+
+    fn owned_pack_keys(pack: &SongPack) -> Vec<String> {
+        let mut keys = Vec::with_capacity(2);
+        if !pack.group_name.is_empty() {
+            keys.push(pack.group_name.to_ascii_lowercase());
+        }
+        if let Some(directory) = pack.directory.file_name().and_then(|name| name.to_str()) {
+            let directory = directory.to_ascii_lowercase();
+            if !keys.contains(&directory) {
+                keys.push(directory);
+            }
+        }
+        keys
+    }
+
+    fn checksum<K, S>(map: &HashMap<K, &SongData, S>) -> u64 {
+        map.values().fold(map.len() as u64, |checksum, song| {
+            checksum.wrapping_add((song.title.len() as u64).wrapping_mul(1_000_003))
+        })
+    }
+
+    fn build_owned(packs: &[SongPack], reserve: bool) -> u64 {
+        let mut by_song = if reserve {
+            HashMap::with_capacity_and_hasher(resolver_entry_capacity(packs), FxBuildHasher)
+        } else {
+            HashMap::with_hasher(FxBuildHasher)
+        };
+        for pack in packs {
+            let pack_keys = owned_pack_keys(pack);
+            for song in &pack.songs {
+                if let Some(folder) = song_folder_name(song) {
+                    let folder = folder.to_ascii_lowercase();
+                    for pack_key in &pack_keys {
+                        by_song
+                            .entry(OwnedScalarKey {
+                                pack: pack_key.clone(),
+                                folder: folder.clone(),
+                            })
+                            .or_insert(song.as_ref());
+                    }
+                }
+            }
+        }
+        checksum(&by_song)
+    }
+
+    pub fn build_unreserved_owned(packs: &[SongPack]) -> u64 {
+        build_owned(packs, false)
+    }
+
+    pub fn build_reserved_owned(packs: &[SongPack]) -> u64 {
+        build_owned(packs, true)
+    }
+
+    pub fn build_reserved_borrowed_pack(packs: &[SongPack]) -> u64 {
+        let mut by_song =
+            HashMap::with_capacity_and_hasher(resolver_entry_capacity(packs), FxBuildHasher);
+        for pack in packs {
+            for pack_key in pack_keys(pack) {
+                for song in &pack.songs {
+                    if let Some(folder) = song_folder_name(song) {
+                        by_song
+                            .entry(BorrowedPackKey {
+                                pack: pack_key,
+                                folder: folder.to_ascii_lowercase(),
+                            })
+                            .or_insert(song.as_ref());
+                    }
+                }
+            }
+        }
+        checksum(&by_song)
+    }
+
+    pub fn build_reserved_borrowed_all(packs: &[SongPack]) -> u64 {
+        let resolver = ChartResolver::build(packs);
+        checksum(&resolver.by_song)
+    }
+
+    pub const fn owned_key_bytes() -> usize {
+        std::mem::size_of::<OwnedScalarKey>()
+    }
+
+    pub const fn borrowed_key_bytes() -> usize {
+        std::mem::size_of::<SongKey<'static>>()
+    }
+
+    pub const fn borrowed_pack_key_bytes() -> usize {
+        std::mem::size_of::<BorrowedPackKey<'static>>()
+    }
+
+    pub fn entry_count(packs: &[SongPack]) -> usize {
+        resolver_entry_capacity(packs)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
+    use std::{path::PathBuf, sync::Arc};
+
+    fn song_at(path: &str, title: &str) -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from(path),
+            title: title.to_owned(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            translit_artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            first_second: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts: Vec::new(),
+        })
+    }
+
+    fn pack(group: &str, directory: &str, songs: Vec<Arc<SongData>>) -> SongPack {
+        SongPack {
+            group_name: group.to_owned(),
+            name: group.to_owned(),
+            sort_title: group.to_owned(),
+            translit_title: String::new(),
+            series: String::new(),
+            folder_series: String::new(),
+            year: 0,
+            sync_pref: deadsync_chart::SyncPref::Default,
+            directory: PathBuf::from(directory),
+            banner_path: None,
+            songs,
+        }
+    }
 
     #[test]
     fn normalizes_typical_dirs() {
@@ -297,6 +490,87 @@ mod tests {
         assert_eq!(normalize_song_dir("Songs/"), None);
         assert_eq!(normalize_song_dir("Songs/JustAPack/"), None);
         assert_eq!(normalize_song_dir(""), None);
+    }
+
+    #[test]
+    fn resolver_capacity_counts_valid_songs_and_distinct_aliases() {
+        let packs = [
+            pack(
+                "Display Pack",
+                "Songs/Folder Pack",
+                vec![
+                    song_at("Songs/Folder Pack/One/chart.ssc", "One"),
+                    song_at("Songs/Folder Pack/Two/chart.ssc", "Two"),
+                    song_at("chart.ssc", "Missing folder"),
+                ],
+            ),
+            pack(
+                "Same Pack",
+                "Songs/sAmE pAcK",
+                vec![song_at("Songs/Same Pack/Three/chart.ssc", "Three")],
+            ),
+        ];
+        assert_eq!(resolver_entry_capacity(&packs), 5);
+        assert_eq!(ChartResolver::build(&packs).by_song.len(), 5);
+    }
+
+    #[test]
+    fn resolver_pack_aliases_borrow_catalog_storage() {
+        let packs = [pack(
+            "Display Pack",
+            "Songs/Folder Pack",
+            vec![song_at("Songs/Folder Pack/Song One/chart.ssc", "One")],
+        )];
+        let group_ptr = packs[0].group_name.as_ptr();
+        let directory_ptr = packs[0]
+            .directory
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap()
+            .as_ptr();
+        let resolver = ChartResolver::build(&packs);
+        let group_key = resolver
+            .by_song
+            .keys()
+            .find(|key| key.pack == "Display Pack")
+            .unwrap();
+        let directory_key = resolver
+            .by_song
+            .keys()
+            .find(|key| key.pack == "Folder Pack")
+            .unwrap();
+        assert_eq!(group_key.pack.as_ptr(), group_ptr);
+        assert_eq!(directory_key.pack.as_ptr(), directory_ptr);
+        assert_eq!(
+            resolver
+                .resolve_song("songs/DISPLAY PACK/song one")
+                .map(|song| song.title.as_str()),
+            Some("One")
+        );
+    }
+
+    #[test]
+    fn resolver_song_folders_borrow_catalog_storage() {
+        let packs = [pack(
+            "Display Pack",
+            "Songs/Folder Pack",
+            vec![song_at("Songs/Folder Pack/Song One/chart.ssc", "One")],
+        )];
+        let folder = song_folder_name(packs[0].songs[0].as_ref()).unwrap();
+        let folder_ptr = folder.as_ptr();
+        let resolver = ChartResolver::build(&packs);
+        assert!(
+            resolver
+                .by_song
+                .keys()
+                .all(|key| key.folder.as_ptr() == folder_ptr)
+        );
+        assert_eq!(
+            resolver
+                .resolve_song("folder pack/SONG ONE")
+                .map(|song| song.title.as_str()),
+            Some("One")
+        );
     }
 
     fn chart(diff: &str, desc: &str, name: &str, hash: &str) -> deadsync_chart::ChartData {
