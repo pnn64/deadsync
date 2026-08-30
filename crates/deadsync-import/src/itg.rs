@@ -181,18 +181,73 @@ fn extract_guid(s: &str) -> Option<String> {
 /// Reads up to `cap` bytes from the head of `path` as lossy UTF-8.
 fn read_head(path: &Path, cap: u64) -> Option<String> {
     let file = fs::File::open(path).ok()?;
-    let mut buf = Vec::new();
-    file.take(cap).read_to_end(&mut buf).ok()?;
-    Some(String::from_utf8_lossy(&buf).into_owned())
+    let capacity = file
+        .metadata()
+        .ok()
+        .map(|metadata| bounded_capacity(metadata.len(), cap))
+        .unwrap_or(0);
+    read_limited_to_string_with::<_, true, true>(file, cap, capacity)
 }
 
 /// Decompresses up to `cap` bytes from the head of a gzip file as lossy UTF-8.
 fn read_gz_head(path: &Path, cap: u64) -> Option<String> {
     let bytes = fs::read(path).ok()?;
     let decoder = flate2::read::GzDecoder::new(&bytes[..]);
-    let mut buf = Vec::new();
-    decoder.take(cap).read_to_end(&mut buf).ok()?;
-    Some(String::from_utf8_lossy(&buf).into_owned())
+    let capacity = gzip_output_capacity(&bytes).min(cap_as_usize(cap));
+    read_limited_to_string_with::<_, true, true>(decoder, cap, capacity)
+}
+
+fn cap_as_usize(cap: u64) -> usize {
+    usize::try_from(cap).unwrap_or(usize::MAX)
+}
+
+fn bounded_capacity(source_len: u64, cap: u64) -> usize {
+    cap_as_usize(source_len.min(cap))
+}
+
+fn read_limited_to_string_with<R: Read, const RESERVE: bool, const REUSE_UTF8: bool>(
+    reader: R,
+    cap: u64,
+    capacity: usize,
+) -> Option<String> {
+    let mut bytes = if RESERVE {
+        Vec::with_capacity(capacity)
+    } else {
+        Vec::new()
+    };
+    reader.take(cap).read_to_end(&mut bytes).ok()?;
+    Some(if REUSE_UTF8 {
+        match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
+        }
+    } else {
+        String::from_utf8_lossy(&bytes).into_owned()
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn decode_plain_head_with<const RESERVE: bool, const REUSE_UTF8: bool>(
+    bytes: &[u8],
+    cap: u64,
+) -> Option<String> {
+    read_limited_to_string_with::<_, RESERVE, REUSE_UTF8>(
+        std::io::Cursor::new(bytes),
+        cap,
+        bounded_capacity(bytes.len() as u64, cap),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn decode_gzip_head_with<const RESERVE: bool, const REUSE_UTF8: bool>(
+    bytes: &[u8],
+    cap: u64,
+) -> Option<String> {
+    read_limited_to_string_with::<_, RESERVE, REUSE_UTF8>(
+        flate2::read::GzDecoder::new(bytes),
+        cap,
+        gzip_output_capacity(bytes).min(cap_as_usize(cap)),
+    )
 }
 
 /// Reads an entire `ITGmania` local profile directory into an [`ItgSource`].
@@ -910,6 +965,41 @@ pub mod bench_support {
         checksum(&parse_song_scores_with::<true, true, true>(root))
     }
 
+    pub fn plain_head_unreserved_copy(bytes: &[u8], cap: u64) -> u64 {
+        gzip_checksum(
+            &decode_plain_head_with::<false, false>(bytes, cap)
+                .expect("benchmark plain head must decode"),
+        )
+    }
+
+    pub fn plain_head_reserved_copy(bytes: &[u8], cap: u64) -> u64 {
+        gzip_checksum(
+            &decode_plain_head_with::<true, false>(bytes, cap)
+                .expect("benchmark plain head must decode"),
+        )
+    }
+
+    pub fn plain_head_reserved_reuse(bytes: &[u8], cap: u64) -> u64 {
+        gzip_checksum(
+            &decode_plain_head_with::<true, true>(bytes, cap)
+                .expect("benchmark plain head must decode"),
+        )
+    }
+
+    pub fn gzip_head_unreserved_copy(bytes: &[u8], cap: u64) -> u64 {
+        gzip_checksum(
+            &decode_gzip_head_with::<false, false>(bytes, cap)
+                .expect("benchmark gzip head must decode"),
+        )
+    }
+
+    pub fn gzip_head_reserved_copy(bytes: &[u8], cap: u64) -> u64 {
+        gzip_checksum(
+            &decode_gzip_head_with::<true, false>(bytes, cap)
+                .expect("benchmark gzip head must decode"),
+        )
+    }
+
     fn gzip_checksum(text: &str) -> u64 {
         text.as_bytes()
             .iter()
@@ -1180,6 +1270,49 @@ mod tests {
             assert_eq!(gzip_output_capacity(&compressed), bytes.len());
         }
         assert_eq!(gzip_output_capacity(&[1, 2, 3]), 0);
+    }
+
+    #[test]
+    fn optimized_head_readers_match_unreserved_copying_reference() {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+        use std::io::Write as _;
+
+        let fixtures = [
+            b"<Stats><Guid>valid UTF-8 profile</Guid></Stats>".to_vec(),
+            b"<Stats><Guid>invalid \xF6 byte</Guid></Stats>".to_vec(),
+        ];
+        for bytes in fixtures {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+            encoder.write_all(&bytes).expect("compress head fixture");
+            let compressed = encoder.finish().expect("finish head fixture");
+            for cap in [0, 1, 17, bytes.len() as u64, bytes.len() as u64 + 10] {
+                let plain_reference =
+                    decode_plain_head_with::<false, false>(&bytes, cap).expect("plain reference");
+                assert_eq!(
+                    decode_plain_head_with::<true, false>(&bytes, cap)
+                        .expect("reserved plain head"),
+                    plain_reference
+                );
+                assert_eq!(
+                    decode_plain_head_with::<true, true>(&bytes, cap).expect("reused plain head"),
+                    plain_reference
+                );
+
+                let gzip_reference = decode_gzip_head_with::<false, false>(&compressed, cap)
+                    .expect("gzip reference");
+                assert_eq!(
+                    decode_gzip_head_with::<true, false>(&compressed, cap)
+                        .expect("reserved gzip head"),
+                    gzip_reference
+                );
+                assert_eq!(
+                    decode_gzip_head_with::<true, true>(&compressed, cap)
+                        .expect("reused gzip head"),
+                    gzip_reference
+                );
+            }
+        }
     }
 
     fn assert_song_scores_eq(expected: &[ItgSongScores], actual: &[ItgSongScores]) {

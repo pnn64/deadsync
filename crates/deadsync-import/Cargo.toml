@@ -39,6 +39,11 @@ name = "options_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "guid_head_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 
