@@ -591,22 +591,32 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
     ));
 }
 
-#[must_use]
-pub fn build_test_input_screen_content(
+pub fn push_test_input_screen_content(
+    actors: &mut Vec<Actor>,
     state: &State,
     game: GameFlag,
     _active_color_index: i32,
     machine_font: MachineFont,
     select_returns: bool,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(96);
+) {
+    actors.reserve(96);
+    push_test_input_screen_content_unreserved(actors, state, game, machine_font, select_returns);
+}
+
+fn push_test_input_screen_content_unreserved(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    machine_font: MachineFont,
+    select_returns: bool,
+) {
     let cx = screen_center_x();
     let cy = screen_center_y() - 20.0;
     let pad_spacing = 150.0;
     let player_label_font = Some(machine_font_key(machine_font, FontRole::Header));
 
     push_pad(
-        &mut actors,
+        actors,
         state,
         game,
         PlayerSlot::P1,
@@ -618,7 +628,7 @@ pub fn build_test_input_screen_content(
         20.0,
     );
     push_pad(
-        &mut actors,
+        actors,
         state,
         game,
         PlayerSlot::P2,
@@ -662,9 +672,7 @@ pub fn build_test_input_screen_content(
         z(30)
     ));
 
-    push_polling_readout(&mut actors, state, 30.0);
-
-    actors
+    push_polling_readout(actors, state, 30.0);
 }
 
 /// Build a `TestInput` pad for use inside an evaluation pane (SL `ScreenEvaluation` Pane6 parity).
@@ -986,6 +994,51 @@ impl SelectMusicTestInputAppendBenchmark {
         std::hint::black_box(&*out);
         overlay_actor_checksum(out)
     }
+
+    #[must_use]
+    pub fn screen_actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(96);
+        push_test_input_screen_content(
+            &mut actors,
+            &self.state,
+            GameFlag::Dance,
+            0,
+            MachineFont::Mega,
+            true,
+        );
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_screen_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(96);
+        push_test_input_screen_content_unreserved(
+            &mut staged,
+            &self.state,
+            GameFlag::Dance,
+            MachineFont::Mega,
+            true,
+        );
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_screen_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_test_input_screen_content(
+            out,
+            &self.state,
+            GameFlag::Dance,
+            0,
+            MachineFont::Mega,
+            true,
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -1031,6 +1084,12 @@ mod tests {
 
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), fixture.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+        let legacy_checksum = fixture.legacy_screen_frame(&mut legacy);
+        let direct_checksum = fixture.direct_screen_frame(&mut direct);
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), fixture.screen_actor_count());
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 

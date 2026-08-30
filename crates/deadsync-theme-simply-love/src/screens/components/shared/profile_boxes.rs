@@ -1939,7 +1939,32 @@ fn push_box_actors(
     }
 }
 
-pub fn get_box_actors_with_z(
+pub fn push_box_actors_with_z(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+    z_offset: i16,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) {
+    let start = actors.len();
+    actors.reserve(96);
+    push_box_actors(
+        actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+    );
+    if z_offset != 0 {
+        for actor in &mut actors[start..] {
+            apply_z_offset(actor, z_offset);
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn get_box_actors_with_z(
     state: &State,
     asset_manager: &AssetManager,
     alpha_multiplier: f32,
@@ -1947,18 +1972,14 @@ pub fn get_box_actors_with_z(
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(96);
-    push_box_actors(
+    push_box_actors_with_z(
         &mut actors,
         state,
         asset_manager,
         alpha_multiplier,
+        z_offset,
         visual_policy,
     );
-    if z_offset != 0 {
-        for actor in &mut actors {
-            apply_z_offset(actor, z_offset);
-        }
-    }
     actors
 }
 
@@ -2056,6 +2077,8 @@ pub struct ProfilePickerHotBenchmark {
     noteskin: profile_data::NoteSkin,
     recent_mods: Arc<str>,
     staged_actors: Vec<Actor>,
+    render_state: State,
+    asset_manager: AssetManager,
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -2080,6 +2103,22 @@ impl ProfilePickerHotBenchmark {
                 )
             })
             .collect();
+        let mut picker = ProfilePickerView::default();
+        picker.profiles.push(crate::views::ProfilePickerEntryView {
+            id: "benchmark-profile".to_string(),
+            display_name: display_name.clone(),
+            speed_mod: speed_mod.clone(),
+            avatar_key: Some(avatar_key.clone()),
+            total_songs_played: 1_234,
+            scroll_option: scroll,
+            mini_indicator,
+            noteskin: noteskin.clone(),
+            judgment: profile_data::JudgmentGraphic::new("Love"),
+        });
+        picker.default_profiles[0] = profile_data::ActiveProfile::Local {
+            id: "benchmark-profile".to_string(),
+        };
+        picker.three_key_navigation = true;
         Self {
             shared_display_name: Arc::from(display_name.as_str()),
             shared_avatar_key: Arc::from(avatar_key.as_str()),
@@ -2091,6 +2130,8 @@ impl ProfilePickerHotBenchmark {
             noteskin,
             recent_mods,
             staged_actors,
+            render_state: init(picker),
+            asset_manager: AssetManager::new(),
         }
     }
 
@@ -2149,6 +2190,47 @@ impl ProfilePickerHotBenchmark {
         for _ in 0..2 {
             out.extend(self.staged_actors.iter().cloned());
         }
+        actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn render_actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(128);
+        push_box_actors_with_z(
+            &mut actors,
+            &self.render_state,
+            &self.asset_manager,
+            1.0,
+            1451,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        actors.len()
+    }
+
+    pub fn legacy_overlay_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(get_box_actors_with_z(
+            &self.render_state,
+            &self.asset_manager,
+            1.0,
+            1451,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        ));
+        std::hint::black_box(&*out);
+        actor_checksum(out)
+    }
+
+    pub fn direct_overlay_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_box_actors_with_z(
+            out,
+            &self.render_state,
+            &self.asset_manager,
+            1.0,
+            1451,
+            crate::views::SimplyLoveVisualPolicyView::default(),
+        );
+        std::hint::black_box(&*out);
         actor_checksum(out)
     }
 }
@@ -2295,5 +2377,14 @@ mod tests {
             benchmark.direct_actor_staging(&mut direct)
         );
         assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
+
+        legacy = Vec::with_capacity(128);
+        direct = Vec::with_capacity(128);
+        assert_eq!(
+            benchmark.legacy_overlay_frame(&mut legacy),
+            benchmark.direct_overlay_frame(&mut direct)
+        );
+        assert_eq!(legacy.len(), benchmark.render_actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

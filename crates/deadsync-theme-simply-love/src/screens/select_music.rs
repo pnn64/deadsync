@@ -15034,13 +15034,14 @@ pub fn push_actors(
             diffuse(0.0, 0.0, 0.0, 0.8):
             z(1450)
         ));
-        actors.extend(profile_boxes::get_box_actors_with_z(
+        profile_boxes::push_box_actors_with_z(
+            actors,
             overlay,
             asset_manager,
             1.0,
             1451,
             visual_policy,
-        ));
+        );
         return;
     }
     if select_music_menu::push_replay_overlay(

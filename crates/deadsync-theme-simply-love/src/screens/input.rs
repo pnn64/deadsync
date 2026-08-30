@@ -411,13 +411,14 @@ pub fn push_actors(
         },
     );
 
-    actors.extend(test_input::build_test_input_screen_content(
+    test_input::push_test_input_screen_content(
+        actors,
         &state.test_input,
         game,
         state.active_color_index,
         visual_policy.machine_font,
         state.dedicated_three_key_nav,
-    ));
+    );
 }
 
 pub fn get_actors(state: &State) -> Vec<Actor> {

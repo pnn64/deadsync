@@ -525,7 +525,7 @@ pub fn push_overlay(
     };
 
     actors.reserve(overlay_actor_capacity(overlay, snapshot));
-    push_overlay_unreserved(
+    push_overlay_unreserved::<false>(
         actors,
         overlay,
         active_color_index,
@@ -555,7 +555,7 @@ fn overlay_actor_capacity(overlay: &OverlayStateData, snapshot: &lobby_data::Sna
     ROOT_ACTORS + 11 + visible_lobbies * 4 + usize::from(overlay.password_prompt.is_some()) * 19
 }
 
-fn push_overlay_unreserved(
+fn push_overlay_unreserved<const STAGE_NESTED: bool>(
     actors: &mut Vec<Actor>,
     overlay: &OverlayStateData,
     active_color_index: i32,
@@ -617,14 +617,15 @@ fn push_overlay_unreserved(
     ));
 
     if let Some(joined) = snapshot.joined_lobby.as_ref() {
-        actors.extend(build_joined_overlay(
+        append_joined_overlay::<STAGE_NESTED>(
+            actors,
             center_x,
             center_y,
             joined,
             overlay.joined_action_index,
             &select_color,
             machine_font,
-        ));
+        );
         return;
     }
 
@@ -658,35 +659,70 @@ fn push_overlay_unreserved(
         lobby_data::ConnectionState::Connected => {}
     }
 
-    actors.extend(build_browse_overlay(
+    append_browse_overlay::<STAGE_NESTED>(
+        actors,
         center_x,
         center_y,
         overlay,
         snapshot,
         &select_color,
         machine_font,
-    ));
+    );
     if let Some(prompt) = overlay.password_prompt.as_ref() {
-        actors.extend(build_password_prompt(
+        append_password_prompt::<STAGE_NESTED>(
+            actors,
             center_x,
             center_y,
             prompt,
             &select_color,
             machine_font,
-        ));
+        );
     }
 }
 
-fn build_browse_overlay(
+fn append_browse_overlay<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
     center_x: f32,
     center_y: f32,
     overlay: &OverlayStateData,
     snapshot: &lobby_data::Snapshot,
     select_color: &[f32; 4],
     machine_font: MachineFont,
-) -> Vec<Actor> {
-    let mut actors = Vec::new();
+) {
+    if STAGE_NESTED {
+        let mut staged = Vec::new();
+        push_browse_overlay::<STAGE_NESTED>(
+            &mut staged,
+            center_x,
+            center_y,
+            overlay,
+            snapshot,
+            select_color,
+            machine_font,
+        );
+        actors.extend(staged);
+    } else {
+        push_browse_overlay::<STAGE_NESTED>(
+            actors,
+            center_x,
+            center_y,
+            overlay,
+            snapshot,
+            select_color,
+            machine_font,
+        );
+    }
+}
 
+fn push_browse_overlay<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    center_y: f32,
+    overlay: &OverlayStateData,
+    snapshot: &lobby_data::Snapshot,
+    select_color: &[f32; 4],
+    machine_font: MachineFont,
+) {
     actors.push(act!(text:
         font("miso"):
         settext("Available Lobbies"):
@@ -708,14 +744,15 @@ fn build_browse_overlay(
         let row_index = overlay.browse_scroll + slot;
         let selected = overlay.browse_index == row_index;
         let row_y = (slot as f32).mul_add(LOBBY_ROW_STEP, center_y + LOBBY_LIST_Y);
-        actors.extend(build_box_row(
+        append_box_row::<STAGE_NESTED>(
+            actors,
             center_x + LOBBY_LIST_X,
             row_y,
             LOBBY_ROW_W,
             LOBBY_ROW_H,
             selected,
             select_color,
-        ));
+        );
         actors.push(act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
             settext(lobby.code.clone()):
@@ -776,14 +813,15 @@ fn build_browse_overlay(
         let index = snapshot.available_lobbies.len() + slot;
         let selected = overlay.browse_index == index;
         let row_y = (slot as f32).mul_add(ACTION_BUTTON_STEP, center_y - 66.0);
-        actors.extend(build_box_row(
+        append_box_row::<STAGE_NESTED>(
+            actors,
             center_x + ACTION_PANEL_X,
             row_y,
             ACTION_BUTTON_W,
             ACTION_BUTTON_H,
             selected,
             select_color,
-        ));
+        );
         actors.push(act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
             settext(*label):
@@ -795,19 +833,51 @@ fn build_browse_overlay(
             horizalign(center)
         ));
     }
-
-    actors
 }
 
-fn build_joined_overlay(
+fn append_joined_overlay<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
     center_x: f32,
     center_y: f32,
     joined: &lobby_data::JoinedLobby,
     selected_action_index: usize,
     select_color: &[f32; 4],
     machine_font: MachineFont,
-) -> Vec<Actor> {
-    let mut actors = Vec::new();
+) {
+    if STAGE_NESTED {
+        let mut staged = Vec::new();
+        push_joined_overlay::<STAGE_NESTED>(
+            &mut staged,
+            center_x,
+            center_y,
+            joined,
+            selected_action_index,
+            select_color,
+            machine_font,
+        );
+        actors.extend(staged);
+    } else {
+        push_joined_overlay::<STAGE_NESTED>(
+            actors,
+            center_x,
+            center_y,
+            joined,
+            selected_action_index,
+            select_color,
+            machine_font,
+        );
+    }
+}
+
+fn push_joined_overlay<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    center_y: f32,
+    joined: &lobby_data::JoinedLobby,
+    selected_action_index: usize,
+    select_color: &[f32; 4],
+    machine_font: MachineFont,
+) {
     actors.push(act!(text:
         font("miso"):
         settext("Joined Lobby"):
@@ -881,14 +951,15 @@ fn build_joined_overlay(
     for (slot, label) in actions.iter().enumerate() {
         let selected = selected_action_index == slot;
         let row_y = (slot as f32).mul_add(ACTION_BUTTON_STEP, center_y - 24.0);
-        actors.extend(build_box_row(
+        append_box_row::<STAGE_NESTED>(
+            actors,
             center_x + ACTION_PANEL_X,
             row_y,
             ACTION_BUTTON_W,
             ACTION_BUTTON_H,
             selected,
             select_color,
-        ));
+        );
         actors.push(act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
             settext(*label):
@@ -900,8 +971,6 @@ fn build_joined_overlay(
             horizalign(center)
         ));
     }
-
-    actors
 }
 
 fn joined_song_info_text(joined: &lobby_data::JoinedLobby) -> Option<String> {
@@ -956,14 +1025,45 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
     out
 }
 
-fn build_password_prompt(
+fn append_password_prompt<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
     center_x: f32,
     center_y: f32,
     prompt: &PasswordPromptState,
     select_color: &[f32; 4],
     machine_font: MachineFont,
-) -> Vec<Actor> {
-    let mut actors = Vec::new();
+) {
+    if STAGE_NESTED {
+        let mut staged = Vec::new();
+        push_password_prompt::<STAGE_NESTED>(
+            &mut staged,
+            center_x,
+            center_y,
+            prompt,
+            select_color,
+            machine_font,
+        );
+        actors.extend(staged);
+    } else {
+        push_password_prompt::<STAGE_NESTED>(
+            actors,
+            center_x,
+            center_y,
+            prompt,
+            select_color,
+            machine_font,
+        );
+    }
+}
+
+fn push_password_prompt<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
+    center_x: f32,
+    center_y: f32,
+    prompt: &PasswordPromptState,
+    select_color: &[f32; 4],
+    machine_font: MachineFont,
+) {
     let title = password_prompt_title(prompt);
     let hint = password_prompt_hint(prompt);
     let value = password_prompt_value(prompt);
@@ -982,14 +1082,15 @@ fn build_password_prompt(
         diffuse(0.08, 0.08, 0.08, 0.98):
         z(OVERLAY_Z + 6)
     ));
-    actors.extend(build_box_row(
+    append_box_row::<STAGE_NESTED>(
+        actors,
         center_x,
         center_y + PASSWORD_PROMPT_VALUE_Y,
         PASSWORD_PROMPT_VALUE_W,
         PASSWORD_PROMPT_VALUE_H,
         false,
         select_color,
-    ));
+    );
     actors.push(act!(text:
         font("miso"):
         settext(title):
@@ -1057,39 +1158,55 @@ fn build_password_prompt(
             horizalign(center)
         ));
     }
-    push_password_prompt_footer(&mut actors, center_x, center_y, machine_font);
-    actors
+    push_password_prompt_footer(actors, center_x, center_y, machine_font);
 }
 
-fn build_box_row(
+fn append_box_row<const STAGE_NESTED: bool>(
+    actors: &mut Vec<Actor>,
     x: f32,
     y: f32,
     width: f32,
     height: f32,
     selected: bool,
     select_color: &[f32; 4],
-) -> Vec<Actor> {
+) {
+    if STAGE_NESTED {
+        let mut staged = Vec::with_capacity(2);
+        push_box_row(&mut staged, x, y, width, height, selected, select_color);
+        actors.extend(staged);
+    } else {
+        push_box_row(actors, x, y, width, height, selected, select_color);
+    }
+}
+
+fn push_box_row(
+    actors: &mut Vec<Actor>,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    selected: bool,
+    select_color: &[f32; 4],
+) {
     let border = if selected {
         [select_color[0], select_color[1], select_color[2], 1.0]
     } else {
         [1.0, 1.0, 1.0, 1.0]
     };
-    vec![
-        act!(quad:
-            align(0.5, 0.5):
-            xy(x, y):
-            zoomto(width, height):
-            diffuse(border[0], border[1], border[2], border[3]):
-            z(OVERLAY_Z + 3)
-        ),
-        act!(quad:
-            align(0.5, 0.5):
-            xy(x, y):
-            zoomto(width - 2.0, height - 2.0):
-            diffuse(0.0, 0.0, 0.0, 1.0):
-            z(OVERLAY_Z + 3)
-        ),
-    ]
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(x, y):
+        zoomto(width, height):
+        diffuse(border[0], border[1], border[2], border[3]):
+        z(OVERLAY_Z + 3)
+    ));
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy(x, y):
+        zoomto(width - 2.0, height - 2.0):
+        diffuse(0.0, 0.0, 0.0, 1.0):
+        z(OVERLAY_Z + 3)
+    ));
 }
 
 fn push_password_prompt_footer(
@@ -1545,7 +1662,7 @@ impl LobbyOverlayAppendBenchmark {
             unreachable!("benchmark overlay is visible");
         };
         let mut staged = Vec::new();
-        push_overlay_unreserved(
+        push_overlay_unreserved::<true>(
             &mut staged,
             overlay,
             1,
@@ -1554,6 +1671,24 @@ impl LobbyOverlayAppendBenchmark {
             MachineFont::Mega,
         );
         out.extend(staged);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn nested_legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let OverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        push_overlay_unreserved::<true>(
+            out,
+            overlay,
+            1,
+            &self.snapshot,
+            Some("Connected"),
+            MachineFont::Mega,
+        );
         std::hint::black_box(&*out);
         overlay_actor_checksum(out)
     }

@@ -5,6 +5,7 @@ use deadsync_theme_simply_love::screens::components::select_music::select_music_
     ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
     SongSearchOverlayAppendBenchmark, SrpgShopOverlayAppendBenchmark,
 };
+use deadsync_theme_simply_love::screens::components::shared::profile_boxes::ProfilePickerHotBenchmark;
 use deadsync_theme_simply_love::screens::components::shared::test_input::SelectMusicTestInputAppendBenchmark;
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
 use deadsync_theme_simply_love::screens::options::{
@@ -457,6 +458,20 @@ fn main() {
         false,
     );
 
+    let mut old_lobby_nested_actors = Vec::with_capacity(64);
+    let mut new_lobby_nested_actors = Vec::with_capacity(64);
+    let (old_lobby_nested, new_lobby_nested) = sample_pair(
+        || measure(|| lobby.nested_legacy_frame(&mut old_lobby_nested_actors)),
+        || measure(|| lobby.direct_frame(&mut new_lobby_nested_actors)),
+    );
+    report_pair(
+        "lobby nested actor staging",
+        lobby.actor_count(),
+        &old_lobby_nested,
+        &new_lobby_nested,
+        false,
+    );
+
     let leaderboard = LeaderboardOverlayAppendBenchmark::new();
     let mut old_leaderboard_actors = Vec::with_capacity(128);
     let mut new_leaderboard_actors = Vec::with_capacity(128);
@@ -502,6 +517,20 @@ fn main() {
         false,
     );
 
+    let mut old_input_screen_actors = Vec::with_capacity(96);
+    let mut new_input_screen_actors = Vec::with_capacity(96);
+    let (old_input_screen, new_input_screen) = sample_pair(
+        || measure(|| test_input.legacy_screen_frame(&mut old_input_screen_actors)),
+        || measure(|| test_input.direct_screen_frame(&mut new_input_screen_actors)),
+    );
+    report_pair(
+        "Test Input screen actor staging",
+        test_input.screen_actor_count(),
+        &old_input_screen,
+        &new_input_screen,
+        false,
+    );
+
     let sync = SyncOverlayAppendBenchmark::new();
     let mut old_sync_actors = Vec::with_capacity(48);
     let mut new_sync_actors = Vec::with_capacity(48);
@@ -529,6 +558,21 @@ fn main() {
         shop.actor_count(),
         &old_shop,
         &new_shop,
+        false,
+    );
+
+    let profile = ProfilePickerHotBenchmark::new();
+    let mut old_profile_actors = Vec::with_capacity(128);
+    let mut new_profile_actors = Vec::with_capacity(128);
+    let (old_profile, new_profile) = sample_pair(
+        || measure(|| profile.legacy_overlay_frame(&mut old_profile_actors)),
+        || measure(|| profile.direct_overlay_frame(&mut new_profile_actors)),
+    );
+    report_pair(
+        "profile switch actor staging",
+        profile.render_actor_count(),
+        &old_profile,
+        &new_profile,
         false,
     );
 }
