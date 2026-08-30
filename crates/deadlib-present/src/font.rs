@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fs;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{BuildHasher, DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -341,34 +341,41 @@ static FONT_CHAR_ALIAS_TABLE: &[(&str, AliasValue)] = &[
     ("auxback", AliasValue::Internal),
 ];
 
-static FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<&'static str, char>> = OnceLock::new();
+type FontCharAliasMap = HashMap<&'static str, char, FxBuildHasher>;
+
+static FONT_CHAR_ALIAS_MAP: OnceLock<FontCharAliasMap> = OnceLock::new();
 thread_local! {
     static FONT_LOAD_STACK: RefCell<Vec<PathBuf>> = const { RefCell::new(Vec::new()) };
 }
 
-#[inline(always)]
-fn font_char_alias_map() -> &'static HashMap<&'static str, char> {
-    FONT_CHAR_ALIAS_MAP.get_or_init(|| {
-        let mut map = HashMap::with_capacity(FONT_CHAR_ALIAS_TABLE.len() + 2);
-        map.insert("default", FONT_DEFAULT_CHAR);
-        map.insert("invalid", char::REPLACEMENT_CHARACTER);
+fn build_font_char_alias_map<S>() -> HashMap<&'static str, char, S>
+where
+    S: BuildHasher + Default,
+{
+    let mut map = HashMap::with_capacity_and_hasher(FONT_CHAR_ALIAS_TABLE.len() + 2, S::default());
+    map.insert("default", FONT_DEFAULT_CHAR);
+    map.insert("invalid", char::REPLACEMENT_CHARACTER);
 
-        let mut next_internal = INTERNAL_ALIAS_START;
-        for &(name, value) in FONT_CHAR_ALIAS_TABLE {
-            let cp = match value {
-                AliasValue::Codepoint(cp) => cp,
-                AliasValue::Internal => {
-                    let cp = next_internal;
-                    next_internal = next_internal.saturating_add(1);
-                    cp
-                }
-            };
-            if let Some(ch) = char::from_u32(cp) {
-                map.insert(name, ch);
+    let mut next_internal = INTERNAL_ALIAS_START;
+    for &(name, value) in FONT_CHAR_ALIAS_TABLE {
+        let cp = match value {
+            AliasValue::Codepoint(cp) => cp,
+            AliasValue::Internal => {
+                let cp = next_internal;
+                next_internal = next_internal.saturating_add(1);
+                cp
             }
+        };
+        if let Some(ch) = char::from_u32(cp) {
+            map.insert(name, ch);
         }
-        map
-    })
+    }
+    map
+}
+
+#[inline(always)]
+fn font_char_alias_map() -> &'static FontCharAliasMap {
+    FONT_CHAR_ALIAS_MAP.get_or_init(build_font_char_alias_map)
 }
 
 #[inline(always)]
@@ -395,8 +402,111 @@ fn lookup_font_char_alias(spec: &str) -> Option<char> {
     map.get(key.to_ascii_lowercase().as_str()).copied()
 }
 
-#[inline(always)]
-fn replace_entity_markers(text: &str) -> Cow<'_, str> {
+fn marker_value(spec: &str) -> Option<char> {
+    let bytes = spec.as_bytes();
+    let (radix, digits) = match bytes {
+        [b'#', digits @ ..] if !digits.is_empty() && digits.iter().all(u8::is_ascii_digit) => {
+            (10, digits)
+        }
+        [b'x' | b'X', digits @ ..]
+            if !digits.is_empty() && digits.iter().all(u8::is_ascii_hexdigit) =>
+        {
+            (16, digits)
+        }
+        _ => return lookup_font_char_alias(spec),
+    };
+    let digits = std::str::from_utf8(digits).ok()?;
+    let value = u32::from_str_radix(digits, radix).unwrap_or(0);
+    Some(char::from_u32(value).unwrap_or(char::REPLACEMENT_CHARACTER))
+}
+
+/// Replace StepMania-style text markers:
+/// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
+/// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
+#[must_use]
+pub fn replace_markers(text: &str) -> Cow<'_, str> {
+    let bytes = text.as_bytes();
+    let Some(mut marker_start) = bytes.iter().position(|&byte| byte == b'&') else {
+        return Cow::Borrowed(text);
+    };
+
+    let mut copied_through = 0usize;
+    let mut out = None::<String>;
+
+    while marker_start < bytes.len() {
+        let mut marker_end = marker_start + 1;
+        while marker_end < bytes.len() {
+            match bytes[marker_end] {
+                b'&' => break,
+                b';' => {
+                    if let Some(value) = marker_value(&text[marker_start + 1..marker_end]) {
+                        let output = out.get_or_insert_with(|| String::with_capacity(text.len()));
+                        output.push_str(&text[copied_through..marker_start]);
+                        output.push(value);
+                        copied_through = marker_end + 1;
+                    }
+                    break;
+                }
+                _ => marker_end += 1,
+            }
+        }
+
+        if marker_end == bytes.len() {
+            break;
+        }
+        let search_from = if bytes[marker_end] == b'&' {
+            marker_end
+        } else {
+            marker_end + 1
+        };
+        let Some(next) = bytes[search_from..].iter().position(|&byte| byte == b'&') else {
+            break;
+        };
+        marker_start = search_from + next;
+    }
+
+    if let Some(mut out) = out {
+        out.push_str(&text[copied_through..]);
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+static COMMITTED_FONT_CHAR_ALIAS_MAP: OnceLock<HashMap<&'static str, char>> = OnceLock::new();
+
+#[cfg(any(test, feature = "bench-support"))]
+fn committed_font_char_alias_map() -> &'static HashMap<&'static str, char> {
+    COMMITTED_FONT_CHAR_ALIAS_MAP.get_or_init(build_font_char_alias_map)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn committed_lookup_font_char_alias(spec: &str) -> Option<char> {
+    let key = spec.trim();
+    if key.is_empty() {
+        return None;
+    }
+    let map = committed_font_char_alias_map();
+    if !key.as_bytes().iter().any(u8::is_ascii_uppercase) {
+        return map.get(key).copied();
+    }
+
+    let mut lowered = [0u8; 64];
+    if key.len() <= lowered.len() {
+        for (dst, src) in lowered.iter_mut().zip(key.as_bytes()) {
+            *dst = src.to_ascii_lowercase();
+        }
+        return std::str::from_utf8(&lowered[..key.len()])
+            .ok()
+            .and_then(|key| map.get(key).copied());
+    }
+
+    map.get(key.to_ascii_lowercase().as_str()).copied()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn committed_replace_entity_markers(text: &str) -> Cow<'_, str> {
     if !text.as_bytes().contains(&b'&') {
         return Cow::Borrowed(text);
     }
@@ -439,7 +549,7 @@ fn replace_entity_markers(text: &str) -> Cow<'_, str> {
         };
 
         let elem = &text[i_start + 1..i_end];
-        if let Some(ch) = lookup_font_char_alias(elem) {
+        if let Some(ch) = committed_lookup_font_char_alias(elem) {
             out.push(ch);
         } else {
             out.push_str(&text[i_start..=i_end]);
@@ -450,8 +560,8 @@ fn replace_entity_markers(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
-#[inline(always)]
-fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
+#[cfg(any(test, feature = "bench-support"))]
+fn committed_replace_unicode_markers(text: &str) -> Cow<'_, str> {
     if !text.contains("&#") && !text.contains("&x") && !text.contains("&X") {
         return Cow::Borrowed(text);
     }
@@ -511,22 +621,35 @@ fn replace_unicode_markers(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
-/// Replace StepMania-style text markers:
-/// - `&NAME;` (`FontCharAliases` like `&START;`, `&MENULEFT;`)
-/// - `&#NNNN;` (decimal) and `&xNNNN;` (hex) Unicode markers
-#[must_use]
-pub fn replace_markers(text: &str) -> Cow<'_, str> {
+#[cfg(any(test, feature = "bench-support"))]
+fn committed_replace_markers(text: &str) -> Cow<'_, str> {
     if !text.as_bytes().contains(&b'&') {
         return Cow::Borrowed(text);
     }
 
-    let t = replace_unicode_markers(text);
-    match t {
-        Cow::Borrowed(s) => replace_entity_markers(s),
-        Cow::Owned(s) => match replace_entity_markers(&s) {
-            Cow::Borrowed(_) => Cow::Owned(s),
-            Cow::Owned(s2) => Cow::Owned(s2),
+    let text = committed_replace_unicode_markers(text);
+    match text {
+        Cow::Borrowed(text) => committed_replace_entity_markers(text),
+        Cow::Owned(text) => match committed_replace_entity_markers(&text) {
+            Cow::Borrowed(_) => Cow::Owned(text),
+            Cow::Owned(replaced) => Cow::Owned(replaced),
         },
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{committed_replace_markers, replace_markers};
+    use std::borrow::Cow;
+
+    #[must_use]
+    pub fn replace_markers_old(text: &str) -> Cow<'_, str> {
+        committed_replace_markers(text)
+    }
+
+    #[must_use]
+    pub fn replace_markers_new(text: &str) -> Cow<'_, str> {
+        replace_markers(text)
     }
 }
 
@@ -3009,6 +3132,100 @@ mod tests {
             replace_markers("Press &START; &#9654;").as_ref(),
             format!("Press {lower} \u{25B6}")
         );
+    }
+
+    #[test]
+    fn fused_marker_parser_matches_committed_behavior() {
+        let cases = [
+            "",
+            "plain text",
+            "Rock & Roll",
+            "trailing &",
+            "&&START;",
+            "&START;&x2605;&#9654;",
+            "Press & START ; then &menuleft;",
+            "unknown &missing; marker",
+            "malformed &#; &x; &#12z; &x12g;",
+            "unterminated &START and &#9654",
+            "nested &bad&START; marker",
+            "overflow &#999999999999999999999; &xFFFFFFFFFFFFFFFF;",
+            "invalid scalars &#55296; &#1114112;",
+            "nul &#000; &x0000;",
+            "Unicode caf\u{e9} \u{65e5}\u{672c} &BLACKSTAR;",
+        ];
+
+        for text in cases {
+            assert_eq!(
+                replace_markers(text).as_ref(),
+                committed_replace_markers(text).as_ref(),
+                "marker replacement diverged for {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn fast_alias_map_matches_every_committed_alias() {
+        for name in FONT_CHAR_ALIAS_TABLE
+            .iter()
+            .map(|(name, _)| *name)
+            .chain(["default", "invalid"])
+        {
+            assert_eq!(
+                lookup_font_char_alias(name),
+                committed_lookup_font_char_alias(name),
+                "lowercase alias diverged for {name:?}"
+            );
+            let uppercase = name.to_ascii_uppercase();
+            assert_eq!(
+                lookup_font_char_alias(&uppercase),
+                committed_lookup_font_char_alias(&uppercase),
+                "uppercase alias diverged for {name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_ampersands_remain_borrowed() {
+        for text in ["Rock & Roll", "unknown &missing; marker", "trailing &"] {
+            assert!(matches!(replace_markers(text), Cow::Borrowed(_)));
+            assert_eq!(replace_markers(text).as_ref(), text);
+        }
+    }
+
+    #[test]
+    fn fused_marker_parser_exhaustively_matches_marker_fragments() {
+        let fragments = [
+            "",
+            "text",
+            "\u{e9}",
+            "&",
+            ";",
+            "&&",
+            "&;",
+            "&START;",
+            "& start ;",
+            "&missing;",
+            "&#65;",
+            "&#0;",
+            "&#12z;",
+            "&x41;",
+            "&X2605;",
+            "&xZZ;",
+            "&bad&START;",
+        ];
+
+        for first in fragments {
+            for second in fragments {
+                for third in fragments {
+                    let text = format!("{first}{second}{third}");
+                    assert_eq!(
+                        replace_markers(&text).as_ref(),
+                        committed_replace_markers(&text).as_ref(),
+                        "marker replacement diverged for {text:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

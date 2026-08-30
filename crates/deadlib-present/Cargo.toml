@@ -28,3 +28,8 @@ harness = false
 name = "frame_lookup_hot_paths"
 harness = false
 required-features = ["bench-support"]
+
+[[bench]]
+name = "marker_replacement_hot_paths"
+harness = false
+required-features = ["bench-support"]
