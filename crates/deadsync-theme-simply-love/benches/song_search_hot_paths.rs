@@ -434,16 +434,16 @@ fn filter_checksum(songs: &[Arc<SongData>], reference: bool) -> u64 {
     checksum
 }
 
-fn typo_fallback_checksum(songs: &[Arc<SongData>], reference: bool) -> u64 {
+fn fuzzy_score_checksum(songs: &[Arc<SongData>], query_text: &str, reference: bool) -> u64 {
     let mut checksum = 0u64;
     if reference {
-        let query = prepare_query_reference("sonf");
+        let query = prepare_query_reference(query_text);
         for song in songs {
             let score = best_match_score_reference(&query, &song.title, &[]);
             checksum = checksum.rotate_left(3) ^ score.map_or(u64::MAX, |value| value as u64);
         }
     } else {
-        let query = prepare_query("sonf");
+        let query = prepare_query(query_text);
         for song in songs {
             let score = best_match_score(&query, &song.title, &[]);
             checksum = checksum.rotate_left(3) ^ score.map_or(u64::MAX, |value| value as u64);
@@ -458,8 +458,22 @@ fn main() {
     let (pack_wheel, _) = catalog(512, 1);
     let pack_index = build_song_search_index(&pack_wheel);
 
-    let old = measure(2, || typo_fallback_checksum(black_box(&songs), true));
-    let new = measure(2, || typo_fallback_checksum(black_box(&songs), false));
+    let old = measure(5, || {
+        fuzzy_score_checksum(black_box(&songs), black_box("song"), true)
+    });
+    let new = measure(5, || {
+        fuzzy_score_checksum(black_box(&songs), black_box("song"), false)
+    });
+    let title = "ASCII subsequence scoring (3,072 songs)";
+    print_pair(title, &old, &new);
+    assert_strict_improvement(title, &old, &new);
+
+    let old = measure(2, || {
+        fuzzy_score_checksum(black_box(&songs), black_box("sonf"), true)
+    });
+    let new = measure(2, || {
+        fuzzy_score_checksum(black_box(&songs), black_box("sonf"), false)
+    });
     let title = "typo fallback (3,072 songs, one-edit query)";
     print_pair(title, &old, &new);
     assert_strict_improvement(title, &old, &new);

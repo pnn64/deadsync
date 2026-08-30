@@ -22,6 +22,9 @@ const GAP_PENALTY_MAX: i32 = 10;
 /// Alias hits rank below a direct label hit of equal quality.
 const ALIAS_PENALTY: i32 = 30;
 const TYPO_BASE: i32 = 40;
+/// Most interactive queries stay inline; longer input spills without changing
+/// the public behavior of the matcher.
+const QUERY_STACK_CAPACITY: usize = 32;
 /// Keeps the typo fallback on the stack for every query accepted by song
 /// search, including the trailing DP cell.
 const EDIT_DISTANCE_STACK_CAPACITY: usize = 96;
@@ -85,18 +88,29 @@ pub fn fold_diacritics(text: &str) -> Cow<'_, str> {
     }
 }
 
-/// A query folded once per keystroke, kept in both forms the two passes need.
-#[derive(Clone, Debug, Default)]
+/// A query folded once per keystroke, with short character sequences inline.
+#[derive(Clone, Debug)]
 pub struct Query {
-    chars: Vec<char>,
+    chars: SmallVec<[char; QUERY_STACK_CAPACITY]>,
     ascii: bool,
+    empty: bool,
+}
+
+impl Default for Query {
+    fn default() -> Self {
+        Self {
+            chars: SmallVec::new(),
+            ascii: true,
+            empty: true,
+        }
+    }
 }
 
 impl Query {
     #[inline(always)]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.chars.is_empty()
+        self.empty
     }
 
     /// Folded characters, for direct [`subsequence_score`] calls.
@@ -110,9 +124,18 @@ impl Query {
 /// Prepare a query once per keystroke for reuse across the whole catalog.
 #[must_use]
 pub fn prepare_query(query: &str) -> Query {
-    let chars = query_chars(query);
+    let chars: SmallVec<[char; QUERY_STACK_CAPACITY]> = fold_diacritics(query)
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .map(fold)
+        .collect();
     let ascii = chars.iter().all(char::is_ascii);
-    Query { chars, ascii }
+    let empty = chars.is_empty();
+    Query {
+        chars,
+        ascii,
+        empty,
+    }
 }
 
 /// Folded query characters, computed once per keystroke and reused per candidate.
@@ -135,10 +158,10 @@ pub fn query_chars(query: &str) -> Vec<char> {
 /// [`prepare_query`].
 #[must_use]
 pub fn best_match_score(query: &Query, label: &str, aliases: &[&str]) -> Option<i32> {
-    let mut best = subsequence_score(&query.chars, label);
+    let mut best = subsequence_score_prepared(query, label);
 
     for alias in aliases {
-        if let Some(score) = subsequence_score(&query.chars, alias) {
+        if let Some(score) = subsequence_score_prepared(query, alias) {
             let adjusted = score - ALIAS_PENALTY;
             best = Some(best.map_or(adjusted, |b| b.max(adjusted)));
         }
@@ -149,6 +172,76 @@ pub fn best_match_score(query: &Query, label: &str, aliases: &[&str]) -> Option<
     }
 
     best
+}
+
+#[inline]
+fn subsequence_score_prepared(query: &Query, candidate: &str) -> Option<i32> {
+    if query.ascii && candidate.is_ascii() {
+        subsequence_score_ascii(&query.chars, candidate.as_bytes())
+    } else {
+        subsequence_score(&query.chars, candidate)
+    }
+}
+
+/// Byte-specialized scorer for the overwhelmingly common ASCII catalog path.
+/// Candidate byte offsets and character offsets are identical here, so it
+/// preserves the generic scorer's ordering without UTF-8 decoding or Unicode
+/// classification in the inner loop.
+fn subsequence_score_ascii(query: &[char], candidate: &[u8]) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+
+    let mut score = 0i32;
+    let mut qi = 0usize;
+    let mut prev_match: Option<usize> = None;
+    let mut first_match: Option<usize> = None;
+    let mut prev_char: Option<u8> = None;
+
+    for (pos, &ch) in candidate.iter().enumerate() {
+        if char::from(ch.to_ascii_lowercase()) == query[qi] {
+            if first_match.is_none() {
+                first_match = Some(pos);
+            }
+            if let Some(prev) = prev_match {
+                if pos == prev + 1 {
+                    score += CONTIGUOUS_BONUS;
+                } else {
+                    score -= ((pos - prev - 1) as i32).min(GAP_PENALTY_MAX);
+                }
+            }
+            let boundary = match prev_char {
+                None => true,
+                Some(pc) => {
+                    !pc.is_ascii_alphanumeric()
+                        || (pc.is_ascii_lowercase() && ch.is_ascii_uppercase())
+                }
+            };
+            if boundary {
+                score += BOUNDARY_BONUS;
+            }
+            prev_match = Some(pos);
+            qi += 1;
+            // The full byte length is already known, so the unmatched suffix
+            // cannot affect scoring once the query has been consumed.
+            if qi == query.len() {
+                break;
+            }
+        }
+        prev_char = Some(ch);
+    }
+
+    if qi != query.len() {
+        return None;
+    }
+
+    let first = first_match.unwrap_or(0);
+    if first == 0 {
+        score += PREFIX_BONUS;
+    }
+    score -= first as i32;
+    score -= (candidate.len() as i32) / 8;
+    Some(score)
 }
 
 /// Subsequence match + score; `None` unless every query char appears in order.
@@ -261,7 +354,11 @@ pub fn folded_prefix_len(query: &str, candidate: &str) -> Option<usize> {
 /// in length are skipped before paying for the comparison. Lengths count chars,
 /// not bytes, or multi-byte labels look several times longer than they are.
 fn typo_score(query: &Query, candidate: &str) -> Option<i32> {
-    let qlen = query.chars.len();
+    typo_score_parts(&query.chars, query.ascii, candidate)
+}
+
+fn typo_score_parts(query: &[char], query_ascii: bool, candidate: &str) -> Option<i32> {
+    let qlen = query.len();
     if qlen == 0 {
         return None;
     }
@@ -269,13 +366,13 @@ fn typo_score(query: &Query, candidate: &str) -> Option<i32> {
 
     let mut best_distance: Option<usize> = None;
     for word in std::iter::once(candidate).chain(candidate.split_whitespace()) {
-        let distance = if query.ascii && word.is_ascii() {
+        let distance = if query_ascii && word.is_ascii() {
             let bytes = word.as_bytes();
             if bytes.len().abs_diff(qlen) > threshold {
                 continue;
             }
             bounded_levenshtein_by(qlen, bytes.len(), threshold, |qi, wi| {
-                query.chars[qi] == char::from(bytes[wi].to_ascii_lowercase())
+                query[qi] == char::from(bytes[wi].to_ascii_lowercase())
             })
         } else {
             // Candidate titles are already diacritic-folded. Case-fold into an
@@ -288,7 +385,7 @@ fn typo_score(query: &Query, candidate: &str) -> Option<i32> {
                 continue;
             }
             bounded_levenshtein_by(qlen, word_folded.len(), threshold, |qi, wi| {
-                query.chars[qi] == word_folded[wi]
+                query[qi] == word_folded[wi]
             })
         };
         let Some(distance) = distance else {
@@ -362,13 +459,12 @@ fn bounded_levenshtein_by(
     (row[b_len] <= limit).then_some(row[b_len])
 }
 
-/// The committed pre-optimization query representation, retained so the
-/// guarded benchmark can compare the new implementation with its exact old
-/// allocation and CPU behavior.
+/// The committed 0.5.925 query representation, retained so the guarded
+/// benchmark can compare this pass with its exact allocation and CPU behavior.
 #[cfg(any(test, feature = "bench-support"))]
 pub struct ReferenceQuery {
     chars: Vec<char>,
-    text: String,
+    ascii: bool,
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -384,8 +480,8 @@ impl ReferenceQuery {
 #[must_use]
 pub fn prepare_query_reference(query: &str) -> ReferenceQuery {
     let chars = query_chars(query);
-    let text = chars.iter().collect();
-    ReferenceQuery { chars, text }
+    let ascii = chars.iter().all(char::is_ascii);
+    ReferenceQuery { chars, ascii }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -405,37 +501,10 @@ pub fn best_match_score_reference(
     }
 
     if best.is_none() {
-        best = typo_score_reference(query, label);
+        best = typo_score_parts(&query.chars, query.ascii, label);
     }
 
     best
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn typo_score_reference(query: &ReferenceQuery, candidate: &str) -> Option<i32> {
-    let qlen = query.chars.len();
-    if qlen == 0 {
-        return None;
-    }
-    let threshold = (qlen / 3).max(1);
-
-    let mut best_distance: Option<usize> = None;
-    for word in std::iter::once(candidate).chain(candidate.split_whitespace()) {
-        let wlen = word.chars().count();
-        if wlen + threshold < qlen || wlen > qlen + threshold {
-            continue;
-        }
-        let word_folded: String = word.chars().map(fold).collect();
-        let distance = strsim::levenshtein(&query.text, &word_folded);
-        best_distance = Some(best_distance.map_or(distance, |b| b.min(distance)));
-        if best_distance == Some(0) {
-            break;
-        }
-    }
-    match best_distance {
-        Some(distance) if distance <= threshold => Some(TYPO_BASE - distance as i32),
-        _ => None,
-    }
 }
 
 #[cfg(test)]
@@ -593,8 +662,36 @@ mod tests {
     }
 
     #[test]
+    fn ascii_fast_path_matches_unicode_scorer() {
+        const QUERIES: [&str; 8] = ["", "song", "csr", "ab", "ABC", "spdm", "zzz", "123"];
+        const LABELS: [&str; 10] = [
+            "",
+            "Catalog Song 0042 Remix 11",
+            "CamelCaseRun",
+            "a---b trailing suffix",
+            "ABC",
+            "Speed Mod",
+            "under_score_123",
+            "no match",
+            "song with a deliberately long suffix",
+            "123 Start",
+        ];
+
+        for query in QUERIES {
+            let prepared = prepare_query(query);
+            for label in LABELS {
+                assert_eq!(
+                    subsequence_score_prepared(&prepared, label),
+                    subsequence_score(prepared.chars(), label),
+                    "query={query:?}, label={label:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
     fn optimized_matcher_matches_committed_reference() {
-        const QUERIES: [&str; 9] = [
+        const QUERIES: [&str; 10] = [
             "",
             "sonf",
             "prespective",
@@ -604,8 +701,9 @@ mod tests {
             "скол",
             "速度",
             "xylophone",
+            "abcdefghijklmnopqrstuvwxyz0123456789",
         ];
-        const LABELS: [&str; 9] = [
+        const LABELS: [&str; 10] = [
             "Catalog Song 0042 Remix 11",
             "Perspective",
             "Action",
@@ -615,6 +713,7 @@ mod tests {
             "Butterfly",
             "Speed Mod",
             "A Very Long Unrelated Candidate",
+            "abcdefghijklmnopqrstuvwxyz0123456789",
         ];
 
         for query in QUERIES {
