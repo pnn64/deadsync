@@ -9,7 +9,31 @@ pub(super) struct SyncPackSelection {
 #[derive(Clone, Debug)]
 pub(super) struct SyncPackConfirmState {
     pub(super) selection: SyncPackSelection,
+    pub(super) prompt: Arc<str>,
     pub(super) active_choice: u8, // 0 = Yes, 1 = No
+}
+
+impl SyncPackConfirmState {
+    pub(super) fn new(selection: SyncPackSelection) -> Self {
+        let prompt = Arc::from(format_sync_pack_confirm_prompt(&selection));
+        Self {
+            selection,
+            prompt,
+            active_choice: 1,
+        }
+    }
+}
+
+pub(super) fn format_sync_pack_confirm_prompt(selection: &SyncPackSelection) -> String {
+    let target = if selection.pack_group.is_none() {
+        "ALL files"
+    } else {
+        selection.pack_label.as_str()
+    };
+    format!(
+        "Sync {target}?\nThis will analyze every matching simfile here in Options.\n\
+         You can review offsets and confidence before saving.\n\nStart now?"
+    )
 }
 
 pub(super) fn selected_sync_pack_selection(state: &State) -> SyncPackSelection {

@@ -13,7 +13,7 @@ use deadlib_present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
 
 use super::update_overlay::{
-    InputOutcome, PanelContent, format_eta, format_size, format_speed, render_panel,
+    InputOutcome, PanelContent, format_eta, format_size, format_speed, push_panel,
 };
 
 /// Compile actor-ready panel content when the `FFmpeg` phase changes.
@@ -24,11 +24,15 @@ pub(crate) fn prepare(phase: &FfmpegPhase) -> Option<PanelContent> {
     Some(panel_content(phase))
 }
 
-/// Build the actor list from retained content, or no actors when idle.
-pub(crate) fn build(content: Option<&PanelContent>, active_color_index: i32) -> Vec<Actor> {
-    content.map_or_else(Vec::new, |content| {
-        render_panel(content, active_color_index)
-    })
+/// Append the retained panel directly, or do nothing when idle.
+pub(crate) fn push(
+    actors: &mut Vec<Actor>,
+    content: Option<&PanelContent>,
+    active_color_index: i32,
+) {
+    if let Some(content) = content {
+        push_panel(actors, content, active_color_index);
+    }
 }
 
 /// Map a [`FfmpegPhase`] to renderable [`PanelContent`].
@@ -252,7 +256,9 @@ mod tests {
 
     fn build_phase(phase: &FfmpegPhase, active_color_index: i32) -> Vec<Actor> {
         let content = prepare(phase);
-        build(content.as_ref(), active_color_index)
+        let mut actors = Vec::new();
+        push(&mut actors, content.as_ref(), active_color_index);
+        actors
     }
 
     fn press(action: VirtualAction) -> InputEvent {

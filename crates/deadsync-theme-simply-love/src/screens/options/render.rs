@@ -528,12 +528,13 @@ pub(super) fn submenu_cursor_dest(
     Some((center_x, row_mid_y, ring_w, ring_h))
 }
 
-pub(super) fn build_yes_no_confirm_overlay(
-    prompt_text: String,
+pub(super) fn push_yes_no_confirm_overlay(
+    actors: &mut Vec<Actor>,
+    prompt_text: &Arc<str>,
     active_choice: u8,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Vec<Actor> {
+) {
     let w = screen_width();
     let h = screen_height();
     let cx = w * 0.5;
@@ -544,33 +545,33 @@ pub(super) fn build_yes_no_confirm_overlay(
     let cursor_x = [yes_x, no_x][active_choice.min(1) as usize];
     let cursor_color = color::simply_love_rgba(active_color_index);
 
-    vec![
-        act!(quad:
+    actors.reserve(5);
+    actors.push(act!(quad:
             align(0.0, 0.0):
             xy(0.0, 0.0):
             zoomto(w, h):
             diffuse(0.0, 0.0, 0.0, 0.9):
             z(700)
-        ),
-        act!(quad:
+    ));
+    actors.push(act!(quad:
             align(0.5, 0.5):
             xy(cursor_x, answer_y):
             setsize(145.0, 40.0):
             diffuse(cursor_color[0], cursor_color[1], cursor_color[2], 1.0):
             z(701)
-        ),
-        act!(text:
+    ));
+    actors.push(act!(text:
             align(0.5, 0.5):
             xy(cx, cy - 65.0):
             font("miso"):
             zoom(0.95):
             maxwidth(w - 90.0):
-            settext(prompt_text):
+            settext(Arc::clone(prompt_text)):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(702):
             horizalign(center)
-        ),
-        act!(text:
+    ));
+    actors.push(act!(text:
             align(0.5, 0.5):
             xy(yes_x, answer_y):
             font(machine_font_key(machine_font, FontRole::Header)):
@@ -579,8 +580,8 @@ pub(super) fn build_yes_no_confirm_overlay(
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(702):
             horizalign(center)
-        ),
-        act!(text:
+    ));
+    actors.push(act!(text:
             align(0.5, 0.5):
             xy(no_x, answer_y):
             font(machine_font_key(machine_font, FontRole::Header)):
@@ -589,8 +590,7 @@ pub(super) fn build_yes_no_confirm_overlay(
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(702):
             horizalign(center)
-        ),
-    ]
+    ));
 }
 
 pub fn push_actors(
@@ -1469,58 +1469,22 @@ pub fn push_actors(
         );
     }
     if let Some(confirm) = &state.score_import_confirm {
-        let endpoint = confirm.selection.endpoint;
-        let profile_name = if confirm.selection.profile.display_name.is_empty() {
-            confirm.selection.profile.id.as_str()
-        } else {
-            confirm.selection.profile.display_name.as_str()
-        };
-        let only_missing = if confirm.selection.only_missing_gs_scores {
-            "Yes"
-        } else {
-            "No"
-        };
-        let pace_lines = match endpoint {
-            score_data::ScoreImportEndpoint::ArrowCloud => {
-                "Uses the bulk endpoint (up to 1000 charts per request),\n\
-                 so a full library typically completes in under a minute.\n\
-                 Spamming APIs can be problematic."
-            }
-            _ => {
-                "Rate limit is hard-capped at 3 requests per second.\n\
-                 For many charts this can take more than one hour.\n\
-                 Spamming APIs can be problematic."
-            }
-        };
-        let prompt_text = format!(
-            "Import ALL packs for {} / {}?\nOnly missing scores: {}.\n{}\n\nStart now?",
-            endpoint.display_name(),
-            profile_name,
-            only_missing,
-            pace_lines,
-        );
-        actors.extend(build_yes_no_confirm_overlay(
-            prompt_text,
+        push_yes_no_confirm_overlay(
+            actors,
+            &confirm.prompt,
             confirm.active_choice,
             state.active_color_index,
             visual_policy.machine_font,
-        ));
+        );
     }
     if let Some(confirm) = &state.sync_pack_confirm {
-        let prompt_text = format!(
-            "Sync {}?\nThis will analyze every matching simfile here in Options.\nYou can review offsets and confidence before saving.\n\nStart now?",
-            if confirm.selection.pack_group.is_none() {
-                "ALL files"
-            } else {
-                confirm.selection.pack_label.as_str()
-            }
-        );
-        actors.extend(build_yes_no_confirm_overlay(
-            prompt_text,
+        push_yes_no_confirm_overlay(
+            actors,
+            &confirm.prompt,
             confirm.active_choice,
             state.active_color_index,
             visual_policy.machine_font,
-        ));
+        );
     }
 
     let combined_alpha = alpha_multiplier * state.content_alpha;
@@ -1528,14 +1492,16 @@ pub fn push_actors(
         actor.mul_alpha(combined_alpha);
     }
 
-    actors.extend(crate::screens::components::shared::update_overlay::build(
+    crate::screens::components::shared::update_overlay::push(
+        actors,
         state.update_panel.as_ref(),
         state.active_color_index,
-    ));
-    actors.extend(crate::screens::components::shared::ffmpeg_overlay::build(
+    );
+    crate::screens::components::shared::ffmpeg_overlay::push(
+        actors,
         state.ffmpeg_panel.as_ref(),
         state.active_color_index,
-    ));
+    );
 }
 
 pub fn sync_updater_panels(
@@ -1571,4 +1537,116 @@ pub fn get_actors(
         crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
+}
+
+/// Stable-frame old/new fixture for retained Options confirmation text and
+/// direct confirmation-actor append.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct OptionsOverlayHotBenchmark {
+    score_selection: ScoreImportSelection,
+    sync_selection: SyncPackSelection,
+    score_prompt: Arc<str>,
+    sync_prompt: Arc<str>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl OptionsOverlayHotBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let score_selection = ScoreImportSelection {
+            endpoint: score_data::ScoreImportEndpoint::ArrowCloud,
+            profile: crate::SimplyLoveScoreImportProfile {
+                id: "benchmark-profile".to_owned(),
+                display_name: "Benchmark Player".to_owned(),
+                groovestats_api_key: String::new(),
+                groovestats_username: String::new(),
+                arrowcloud_api_key: String::new(),
+            },
+            pack_groups: Vec::new(),
+            pack_label: "All Packs".to_owned(),
+            only_missing_gs_scores: true,
+        };
+        let sync_selection = SyncPackSelection {
+            pack_group: None,
+            pack_label: "All Packs".to_owned(),
+        };
+        let score_prompt = Arc::from(format_score_import_confirm_prompt(&score_selection));
+        let sync_prompt = Arc::from(format_sync_pack_confirm_prompt(&sync_selection));
+        Self {
+            score_selection,
+            sync_selection,
+            score_prompt,
+            sync_prompt,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_prompt_frame(&self) -> u64 {
+        let score = format_score_import_confirm_prompt(&self.score_selection);
+        let sync = format_sync_pack_confirm_prompt(&self.sync_selection);
+        overlay_text_checksum(overlay_text_checksum(0, &score), &sync)
+    }
+
+    #[must_use]
+    pub fn retained_prompt_frame(&self) -> u64 {
+        let score = Arc::clone(&self.score_prompt);
+        let sync = Arc::clone(&self.sync_prompt);
+        overlay_text_checksum(overlay_text_checksum(0, &score), &sync)
+    }
+
+    #[must_use]
+    pub fn legacy_confirm_frame(&self, actors: &mut Vec<Actor>) -> u64 {
+        actors.clear();
+        let mut staged = Vec::with_capacity(5);
+        push_yes_no_confirm_overlay(
+            &mut staged,
+            &self.score_prompt,
+            1,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        actors.extend(staged);
+        std::hint::black_box(&*actors);
+        overlay_actor_checksum(actors)
+    }
+
+    #[must_use]
+    pub fn direct_confirm_frame(&self, actors: &mut Vec<Actor>) -> u64 {
+        actors.clear();
+        push_yes_no_confirm_overlay(
+            actors,
+            &self.score_prompt,
+            1,
+            2,
+            crate::config::MachineFont::Mega,
+        );
+        std::hint::black_box(&*actors);
+        overlay_actor_checksum(actors)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for OptionsOverlayHotBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn overlay_text_checksum(checksum: u64, text: &str) -> u64 {
+    text.bytes()
+        .fold(checksum ^ text.len() as u64, |hash, byte| {
+            hash.rotate_left(7) ^ u64::from(byte)
+        })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        if let Actor::Text { content, z, .. } = actor {
+            overlay_text_checksum(checksum.rotate_left(5) ^ (*z as u16 as u64), content)
+        } else {
+            checksum.rotate_left(3) ^ 1
+        }
+    })
 }

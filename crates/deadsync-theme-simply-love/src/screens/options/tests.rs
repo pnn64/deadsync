@@ -250,6 +250,23 @@ fn options_select_color_actors_keep_static_texture_sources() {
     );
 }
 
+#[test]
+fn retained_confirm_text_and_direct_staging_match_legacy_frames() {
+    let benchmark = OptionsOverlayHotBenchmark::new();
+    assert_eq!(
+        benchmark.legacy_prompt_frame(),
+        benchmark.retained_prompt_frame()
+    );
+
+    let mut legacy = Vec::with_capacity(5);
+    let mut direct = Vec::with_capacity(5);
+    assert_eq!(
+        benchmark.legacy_confirm_frame(&mut legacy),
+        benchmark.direct_confirm_frame(&mut direct)
+    );
+    assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
+}
+
 fn updater_view() -> SimplyLoveUpdaterView {
     SimplyLoveUpdaterView::default()
 }

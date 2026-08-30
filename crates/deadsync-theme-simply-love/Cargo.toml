@@ -83,6 +83,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "options_overlay_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "song_search_hot_paths"
 harness = false
 required-features = ["bench-support"]

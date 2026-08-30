@@ -2021,10 +2021,8 @@ pub(super) fn activate_current_selection(
                             if let Some(selection) = selected_score_import_selection(state) {
                                 if selection.pack_groups.is_empty() {
                                     clear_navigation_holds(state);
-                                    state.score_import_confirm = Some(ScoreImportConfirmState {
-                                        selection,
-                                        active_choice: 1,
-                                    });
+                                    state.score_import_confirm =
+                                        Some(ScoreImportConfirmState::new(selection));
                                 } else {
                                     begin_score_import(state, selection);
                                 }
@@ -2050,10 +2048,7 @@ pub(super) fn activate_current_selection(
                     let selection = selected_sync_pack_selection(state);
                     if selection.pack_group.is_none() {
                         clear_navigation_holds(state);
-                        state.sync_pack_confirm = Some(SyncPackConfirmState {
-                            selection,
-                            active_choice: 1,
-                        });
+                        state.sync_pack_confirm = Some(SyncPackConfirmState::new(selection));
                     } else {
                         begin_pack_sync(state, selection);
                     }

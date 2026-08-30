@@ -2,7 +2,7 @@
 //!
 //! The overlay renders only when the action state is non-Idle. Options
 //! retains prepared [`PanelContent`] until the shell publishes a new phase;
-//! [`build`] borrows that actor-ready presentation, while [`handle_input`]
+//! [`push`] borrows that actor-ready presentation, while [`handle_input`]
 //! continues to inspect the current phase.
 //!
 //! Layout (centred):
@@ -75,7 +75,7 @@ impl InputOutcome {
 /// Pre-computed text/layout content for one modal panel.  Decouples the
 /// phase-specific string selection (per overlay) from the shared panel
 /// rendering, so multiple overlays (self-update, ffmpeg install) can
-/// reuse the exact same geometry / styling via [`render_panel`].
+/// reuse the exact same geometry / styling via [`push_panel`].
 pub(crate) struct PanelContent {
     /// Large heading at the top of the panel.
     title: TextContent,
@@ -125,8 +125,8 @@ impl PanelContent {
 /// Render a modal panel from pre-computed [`PanelContent`].  Always draws
 /// the dim backdrop, bordered panel, title/body/footer and (optionally) a
 /// progress bar and spinner.  Shared by the self-update and ffmpeg overlays.
-pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(8);
+pub(super) fn push_panel(actors: &mut Vec<Actor>, content: &PanelContent, active_color_index: i32) {
+    actors.reserve(8);
 
     // 1) full-screen dim
     let mut dim = color::rgba_hex("#000000");
@@ -231,8 +231,6 @@ pub(super) fn render_panel(content: &PanelContent, active_color_index: i32) -> V
     if content.show_spinner {
         actors.push(spinner_actor(cx, cy + 60.0));
     }
-
-    actors
 }
 
 /// Compile actor-ready panel content when the updater phase changes.
@@ -254,10 +252,81 @@ pub(crate) fn prepare(phase: &ActionPhase) -> Option<PanelContent> {
     ))
 }
 
-/// Build the actor list from retained content, or no actors when idle.
-pub(crate) fn build(content: Option<&PanelContent>, active_color_index: i32) -> Vec<Actor> {
-    content.map_or_else(Vec::new, |content| {
-        render_panel(content, active_color_index)
+/// Append the retained panel directly, or do nothing when idle.
+pub(crate) fn push(
+    actors: &mut Vec<Actor>,
+    content: Option<&PanelContent>,
+    active_color_index: i32,
+) {
+    if let Some(content) = content {
+        push_panel(actors, content, active_color_index);
+    }
+}
+
+/// Old/new actor-staging fixture for the retained updater panel. The legacy
+/// side models the former temporary `Vec` handoff; the current side appends
+/// into caller-owned frame storage.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct PanelAppendBenchmark {
+    content: PanelContent,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl PanelAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            content: PanelContent::new(
+                "Update available".to_owned(),
+                Some("v9.9.9".to_owned()),
+                vec![
+                    "A new DeadSync release is ready.".to_owned(),
+                    "Install it now?".to_owned(),
+                ],
+                "Press Start to continue".to_owned(),
+                None,
+                false,
+            ),
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, actors: &mut Vec<Actor>) -> u64 {
+        actors.clear();
+        let mut staged = Vec::with_capacity(8);
+        push_panel(&mut staged, &self.content, 2);
+        actors.extend(staged);
+        std::hint::black_box(&*actors);
+        panel_actor_checksum(actors)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, actors: &mut Vec<Actor>) -> u64 {
+        actors.clear();
+        push_panel(actors, &self.content, 2);
+        std::hint::black_box(&*actors);
+        panel_actor_checksum(actors)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for PanelAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn panel_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        if let Actor::Text { content, z, .. } = actor {
+            content.bytes().fold(
+                checksum.rotate_left(5) ^ (*z as u16 as u64) ^ content.len() as u64,
+                |hash, byte| hash.rotate_left(7) ^ u64::from(byte),
+            )
+        } else {
+            checksum.rotate_left(3) ^ 1
+        }
     })
 }
 
@@ -716,9 +785,24 @@ fn format_sha256_short(raw: Option<&str>) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn direct_panel_append_matches_temporary_staging() {
+        let benchmark = PanelAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(8);
+        let mut direct = Vec::with_capacity(8);
+
+        assert_eq!(
+            benchmark.legacy_frame(&mut legacy),
+            benchmark.direct_frame(&mut direct)
+        );
+        assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
+    }
+
     fn build_phase(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
         let content = prepare(phase);
-        build(content.as_ref(), active_color_index)
+        let mut actors = Vec::new();
+        push(&mut actors, content.as_ref(), active_color_index);
+        actors
     }
 
     fn sample_release() -> crate::views::SimplyLoveReleaseView {

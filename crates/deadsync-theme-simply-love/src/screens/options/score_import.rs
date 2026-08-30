@@ -355,7 +355,52 @@ pub(super) fn build_score_import_overlay_actors(
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportConfirmState {
     pub(super) selection: ScoreImportSelection,
+    pub(super) prompt: Arc<str>,
     pub(super) active_choice: u8, // 0 = Yes, 1 = No
+}
+
+impl ScoreImportConfirmState {
+    pub(super) fn new(selection: ScoreImportSelection) -> Self {
+        let prompt = Arc::from(format_score_import_confirm_prompt(&selection));
+        Self {
+            selection,
+            prompt,
+            active_choice: 1,
+        }
+    }
+}
+
+pub(super) fn format_score_import_confirm_prompt(selection: &ScoreImportSelection) -> String {
+    let endpoint = selection.endpoint;
+    let profile_name = if selection.profile.display_name.is_empty() {
+        selection.profile.id.as_str()
+    } else {
+        selection.profile.display_name.as_str()
+    };
+    let only_missing = if selection.only_missing_gs_scores {
+        "Yes"
+    } else {
+        "No"
+    };
+    let pace_lines = match endpoint {
+        score_data::ScoreImportEndpoint::ArrowCloud => {
+            "Uses the bulk endpoint (up to 1000 charts per request),\n\
+             so a full library typically completes in under a minute.\n\
+             Spamming APIs can be problematic."
+        }
+        _ => {
+            "Rate limit is hard-capped at 3 requests per second.\n\
+             For many charts this can take more than one hour.\n\
+             Spamming APIs can be problematic."
+        }
+    };
+    format!(
+        "Import ALL packs for {} / {}?\nOnly missing scores: {}.\n{}\n\nStart now?",
+        endpoint.display_name(),
+        profile_name,
+        only_missing,
+        pace_lines,
+    )
 }
 
 #[inline(always)]
