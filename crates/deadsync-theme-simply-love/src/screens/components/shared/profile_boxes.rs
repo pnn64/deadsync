@@ -16,9 +16,12 @@ use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render_core::BlendMode;
 use deadsync_config::prelude::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_notefield::noteskin_model_actor;
+use deadsync_notefield::{
+    ModelMeshCache, noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
+};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -115,6 +118,11 @@ pub struct State {
     three_key_navigation: bool,
     bg: visual_style_bg::State,
     noteskin_cache: NoteskinCache,
+    /// Picker-lifetime model geometry retained by stable noteskin slot ID.
+    /// The cache grows only when a newly selected profile introduces a model,
+    /// never evicts, and drops with the picker. Ordinary frames clone geometry
+    /// handles while still evaluating the animated draw state every frame.
+    model_mesh_cache: RefCell<ModelMeshCache>,
     p1_preview_noteskin: Option<Arc<Noteskin>>,
     p2_preview_noteskin: Option<Arc<Noteskin>>,
     preview_time: f32,
@@ -377,6 +385,7 @@ fn init_with_profiles(
         three_key_navigation,
         bg: visual_style_bg::State::new(),
         noteskin_cache,
+        model_mesh_cache: RefCell::new(ModelMeshCache::with_capacity(8)),
         p1_preview_noteskin: None,
         p2_preview_noteskin: None,
         preview_time: 0.0,
@@ -1355,6 +1364,7 @@ fn push_scroller_frame(
     border_rgba: [f32; 4],
     col_overlay: [f32; 4],
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    mut model_mesh_cache: Option<&mut ModelMeshCache>,
 ) {
     // Simply Love parity:
     // - Frame bg uses PlayerColor(P1) => SL.Colors[ActiveColorIndex]
@@ -1610,18 +1620,36 @@ fn push_scroller_frame(
                         BlendMode::Alpha
                     };
                     let z = 104 + layer_idx as i32;
-                    if let Some(model_actor) = noteskin_model_actor(
-                        note_slot,
-                        layer_center,
-                        size,
-                        uv,
-                        -note_slot.def.rotation_deg as f32,
-                        preview_time,
-                        preview_beat,
-                        color,
-                        blend,
-                        z as i16,
-                    ) {
+                    let model_actor = model_mesh_cache.as_deref_mut().map_or_else(
+                        || {
+                            noteskin_model_actor_from_draw(
+                                note_slot,
+                                draw,
+                                layer_center,
+                                size,
+                                uv,
+                                -note_slot.def.rotation_deg as f32,
+                                color,
+                                blend,
+                                z as i16,
+                            )
+                        },
+                        |cache| {
+                            noteskin_model_actor_from_draw_cached(
+                                note_slot,
+                                draw,
+                                layer_center,
+                                size,
+                                uv,
+                                -note_slot.def.rotation_deg as f32,
+                                color,
+                                blend,
+                                z as i16,
+                                cache,
+                            )
+                        },
+                    );
+                    if let Some(model_actor) = model_actor {
                         out.push(model_actor);
                     } else if draw.blend_add {
                         out.push(act!(sprite(note_slot.texture_key_shared()):
@@ -1664,18 +1692,37 @@ fn push_scroller_frame(
                     PREVIEW_SCALE
                 };
                 let preview_size = [width * scale, target_height];
-                if let Some(model_actor) = noteskin_model_actor(
-                    note_slot,
-                    center,
-                    preview_size,
-                    uv,
-                    -note_slot.def.rotation_deg as f32,
-                    preview_time,
-                    preview_beat,
-                    [1.0, 1.0, 1.0, inner_alpha],
-                    BlendMode::Alpha,
-                    104,
-                ) {
+                let draw = note_slot.model_draw_at(preview_time, preview_beat);
+                let model_actor = model_mesh_cache.map_or_else(
+                    || {
+                        noteskin_model_actor_from_draw(
+                            note_slot,
+                            draw,
+                            center,
+                            preview_size,
+                            uv,
+                            -note_slot.def.rotation_deg as f32,
+                            [1.0, 1.0, 1.0, inner_alpha],
+                            BlendMode::Alpha,
+                            104,
+                        )
+                    },
+                    |cache| {
+                        noteskin_model_actor_from_draw_cached(
+                            note_slot,
+                            draw,
+                            center,
+                            preview_size,
+                            uv,
+                            -note_slot.def.rotation_deg as f32,
+                            [1.0, 1.0, 1.0, inner_alpha],
+                            BlendMode::Alpha,
+                            104,
+                            cache,
+                        )
+                    },
+                );
+                if let Some(model_actor) = model_actor {
                     out.push(model_actor);
                 } else {
                     out.push(act!(sprite(note_slot.texture_key_shared()):
@@ -1734,6 +1781,26 @@ fn push_box_actors(
     alpha_multiplier: f32,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let mut model_mesh_cache = state.model_mesh_cache.borrow_mut();
+    model_mesh_cache.begin_frame();
+    push_box_actors_with_model_cache(
+        actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+        Some(&mut model_mesh_cache),
+    );
+}
+
+fn push_box_actors_with_model_cache(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+    mut model_mesh_cache: Option<&mut ModelMeshCache>,
+) {
     if alpha_multiplier <= 0.0 {
         return;
     }
@@ -1791,6 +1858,7 @@ fn push_box_actors(
             border_rgba,
             col_overlay,
             visual_policy,
+            model_mesh_cache.as_deref_mut(),
         );
         for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
@@ -1876,6 +1944,7 @@ fn push_box_actors(
             border_rgba,
             col_overlay,
             visual_policy,
+            model_mesh_cache,
         );
         for a in &mut actors[scroller_start..] {
             a.mul_alpha(if show_scroller { 1.0 } else { 0.0 });
@@ -1963,7 +2032,7 @@ pub fn push_box_actors_with_z(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn get_box_actors_with_z(
     state: &State,
     asset_manager: &AssetManager,
@@ -1980,6 +2049,31 @@ fn get_box_actors_with_z(
         z_offset,
         visual_policy,
     );
+    actors
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn get_box_actors_with_z_legacy_model_geometry(
+    state: &State,
+    asset_manager: &AssetManager,
+    alpha_multiplier: f32,
+    z_offset: i16,
+    visual_policy: crate::views::SimplyLoveVisualPolicyView,
+) -> Vec<Actor> {
+    let mut actors = Vec::with_capacity(96);
+    push_box_actors_with_model_cache(
+        &mut actors,
+        state,
+        asset_manager,
+        alpha_multiplier,
+        visual_policy,
+        None,
+    );
+    if z_offset != 0 {
+        for actor in &mut actors {
+            apply_z_offset(actor, z_offset);
+        }
+    }
     actors
 }
 
@@ -2209,7 +2303,7 @@ impl ProfilePickerHotBenchmark {
 
     pub fn legacy_overlay_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        out.extend(get_box_actors_with_z(
+        out.extend(get_box_actors_with_z_legacy_model_geometry(
             &self.render_state,
             &self.asset_manager,
             1.0,
@@ -2251,7 +2345,32 @@ fn text_checksum(text: &str) -> u64 {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn actor_checksum(actors: &[Actor]) -> u64 {
-    actors.len() as u64
+    let stats = actors::actor_tree_stats(actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
+}
+
+#[cfg(test)]
+fn normalize_model_geometry_cache_keys(actors: &mut [Actor]) {
+    for actor in actors {
+        match actor {
+            Actor::TexturedMesh { geom_cache_key, .. }
+            | Actor::ReusableTexturedMesh { geom_cache_key, .. } => {
+                *geom_cache_key = deadlib_render_core::INVALID_TMESH_CACHE_KEY;
+            }
+            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+                normalize_model_geometry_cache_keys(children);
+            }
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+                if let Some(children) = Arc::get_mut(children) {
+                    normalize_model_geometry_cache_keys(children);
+                }
+            }
+            Actor::Shadow { child, .. } => {
+                normalize_model_geometry_cache_keys(std::slice::from_mut(child));
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2385,6 +2504,17 @@ mod tests {
             benchmark.direct_overlay_frame(&mut direct)
         );
         assert_eq!(legacy.len(), benchmark.render_actor_count());
+        normalize_model_geometry_cache_keys(&mut legacy);
+        normalize_model_geometry_cache_keys(&mut direct);
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+        let stats = benchmark.render_state.model_mesh_cache.borrow().stats();
+        assert!(stats.misses > 0, "first render should warm model geometry");
+        let _ = benchmark.direct_overlay_frame(&mut direct);
+        let repeated = benchmark.render_state.model_mesh_cache.borrow().stats();
+        assert!(
+            repeated.misses == stats.misses,
+            "stable render must not rebuild model geometry"
+        );
     }
 }

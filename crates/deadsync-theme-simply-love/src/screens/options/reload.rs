@@ -10,6 +10,24 @@ pub(super) struct ReloadUiState {
     pub(super) courses_total: usize,
     pub(super) done: bool,
     pub(super) started_at: Instant,
+    /// One game-thread-owned initialization-tree entry. It is used only while
+    /// total work is unknown (and therefore no elapsed speed is displayed),
+    /// replaced by worker/color/viewport changes, and dropped with the modal.
+    presentation_revision: u64,
+    presentation: RefCell<Option<ReloadPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ReloadPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct ReloadPresentation {
+    key: ReloadPresentationKey,
+    children: Arc<[Actor]>,
 }
 
 impl ReloadUiState {
@@ -24,7 +42,15 @@ impl ReloadUiState {
             courses_total: 0,
             done: false,
             started_at: Instant::now(),
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         }
+    }
+
+    #[inline(always)]
+    pub(super) fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
     }
 }
 
@@ -68,6 +94,7 @@ pub fn sync_reload_events(
         return;
     };
     for event in events {
+        reload.invalidate_presentation();
         match event {
             crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
                 reload.phase = phase;
@@ -131,6 +158,43 @@ pub(super) fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
 }
 
 pub(super) fn push_reload_overlay_actors(
+    out: &mut Vec<Actor>,
+    reload: &ReloadUiState,
+    active_color_index: i32,
+) {
+    let (_, total, _) = reload_progress(reload);
+    // Once progress is known, the elapsed speed string is genuinely dynamic.
+    // Before that point the complete initialization tree is stable.
+    if total > 0 {
+        push_reload_overlay_actors_unreserved(out, reload, active_color_index);
+        return;
+    }
+    let key = ReloadPresentationKey {
+        revision: reload.presentation_revision,
+        active_color_index,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = reload
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(7);
+        push_reload_overlay_actors_unreserved(&mut children, reload, active_color_index);
+        let children = Arc::<[Actor]>::from(children);
+        *reload.presentation.borrow_mut() = Some(ReloadPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(out, children);
+}
+
+pub(super) fn push_reload_overlay_actors_unreserved(
     out: &mut Vec<Actor>,
     reload: &ReloadUiState,
     active_color_index: i32,

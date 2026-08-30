@@ -279,7 +279,10 @@ fn direct_options_modal_append_matches_legacy_batches() {
         benchmark.direct_reload_frame(&mut direct)
     );
     assert_eq!(legacy.len(), benchmark.reload_actor_count());
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+        panic!("retained reload initialization should use one shared frame");
+    };
+    assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
 
     legacy = Vec::with_capacity(80);
     direct = Vec::with_capacity(80);
@@ -304,6 +307,32 @@ fn direct_options_modal_append_matches_legacy_batches() {
         panic!("retained palette browser should use one shared frame");
     };
     assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
+}
+
+#[test]
+fn retained_reload_initialization_reuses_and_tracks_events() {
+    crate::assets::i18n::init_for_tests();
+    let mut benchmark = OptionsModalAppendBenchmark::new();
+    let mut retained = Vec::with_capacity(1);
+    let old_checksum = benchmark.direct_reload_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("retained reload initialization should use one shared frame");
+    };
+    let first = Arc::clone(children);
+
+    let _ = benchmark.direct_reload_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("stable reload initialization should remain shared");
+    };
+    assert!(Arc::ptr_eq(&first, children));
+
+    benchmark.advance_reload_fixture();
+    let new_checksum = benchmark.direct_reload_frame(&mut retained);
+    let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+        panic!("changed reload initialization should rebuild a shared frame");
+    };
+    assert!(!Arc::ptr_eq(&first, children));
+    assert_ne!(old_checksum, new_checksum);
 }
 
 #[test]

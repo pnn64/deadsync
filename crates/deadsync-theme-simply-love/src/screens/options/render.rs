@@ -1736,17 +1736,9 @@ pub struct OptionsModalAppendBenchmark {
 impl OptionsModalAppendBenchmark {
     #[must_use]
     pub fn new() -> Self {
-        let reload = ReloadUiState {
-            phase: crate::views::SimplyLoveContentReloadPhase::Songs,
-            line2: "Benchmark Pack".to_owned(),
-            line3: "Benchmark Song".to_owned(),
-            songs_done: 0,
-            songs_total: 0,
-            courses_done: 0,
-            courses_total: 0,
-            done: false,
-            started_at: Instant::now(),
-        };
+        let mut reload = ReloadUiState::new();
+        reload.line2 = "Benchmark Pack".to_owned();
+        reload.line3 = "Benchmark Song".to_owned();
 
         let mut downloads = benchmark_options_state();
         let catalog = (0..18)
@@ -1798,16 +1790,14 @@ impl OptionsModalAppendBenchmark {
     #[must_use]
     pub fn reload_actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(7);
-        super::reload::push_reload_overlay_actors(&mut actors, &self.reload, 2);
+        super::reload::push_reload_overlay_actors_unreserved(&mut actors, &self.reload, 2);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_reload_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(7);
-        super::reload::push_reload_overlay_actors(&mut staged, &self.reload, 2);
-        out.extend(staged);
+        super::reload::push_reload_overlay_actors_unreserved(out, &self.reload, 2);
         std::hint::black_box(&*out);
         modal_actor_checksum(out)
     }
@@ -1818,6 +1808,12 @@ impl OptionsModalAppendBenchmark {
         super::reload::push_reload_overlay_actors(out, &self.reload, 2);
         std::hint::black_box(&*out);
         modal_actor_checksum(out)
+    }
+
+    pub fn advance_reload_fixture(&mut self) {
+        self.reload.phase = crate::views::SimplyLoveContentReloadPhase::Artwork;
+        self.reload.line2 = "Updated reload source".to_owned();
+        self.reload.invalidate_presentation();
     }
 
     #[must_use]

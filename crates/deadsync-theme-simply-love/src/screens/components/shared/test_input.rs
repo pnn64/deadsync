@@ -74,6 +74,57 @@ pub struct State {
     buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
     unmapped: UnmappedTracker,
     event_rate: EventRateTracker,
+    /// Game-thread-owned one-entry presentations for the two full-screen Test
+    /// Input surfaces. Input/readout changes invalidate both; viewport or
+    /// layout changes replace the relevant entry. They never evict and drop
+    /// with the screen state.
+    presentation_revision: u64,
+    select_music_presentation: RefCell<Option<SelectMusicPresentation>>,
+    screen_presentation: RefCell<Option<TestInputScreenPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SelectMusicPresentationKey {
+    revision: u64,
+    game: GameFlag,
+    active_color_index: i32,
+    show_p1: bool,
+    show_p2: bool,
+    pad_spacing_bits: u32,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct SelectMusicPresentation {
+    key: SelectMusicPresentationKey,
+    children: Arc<[Actor]>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TestInputScreenPresentationKey {
+    revision: u64,
+    game: GameFlag,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    select_returns: bool,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct TestInputScreenPresentation {
+    key: TestInputScreenPresentationKey,
+    children: Arc<[Actor]>,
+}
+
+impl State {
+    #[inline(always)]
+    fn invalidate_presentations(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.select_music_presentation.get_mut().take();
+        self.screen_presentation.get_mut().take();
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -429,7 +480,13 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) {
     if let Some(player) = player_from_action(ev.action)
         && let Some(btn) = logical_button_from_action(ev.action)
     {
-        state.buttons_held.insert((player, btn), ev.pressed);
+        let changed = state
+            .buttons_held
+            .insert((player, btn), ev.pressed)
+            .is_none_or(|was_pressed| was_pressed != ev.pressed);
+        if changed {
+            state.invalidate_presentations();
+        }
     }
 }
 
@@ -437,6 +494,7 @@ pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     use deadsync_input::PadEvent as PE;
 
     state.event_rate.record_pad(pad_event);
+    state.invalidate_presentations();
 
     let (key, pressed_opt, axis_value_opt) = match pad_event {
         PE::Dir {
@@ -492,6 +550,7 @@ pub fn apply_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
         return;
     }
     state.event_rate.record_key(key_event);
+    state.invalidate_presentations();
     let mapped = with_keymap(|km| km.raw_key_event_mapped(key_event));
     if mapped {
         return;
@@ -796,12 +855,42 @@ pub fn push_test_input_screen_content(
     actors: &mut Vec<Actor>,
     state: &State,
     game: GameFlag,
-    _active_color_index: i32,
+    active_color_index: i32,
     machine_font: MachineFont,
     select_returns: bool,
 ) {
-    actors.reserve(96);
-    push_test_input_screen_content_unreserved(actors, state, game, machine_font, select_returns);
+    let key = TestInputScreenPresentationKey {
+        revision: state.presentation_revision,
+        game,
+        active_color_index,
+        machine_font,
+        select_returns,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = state
+        .screen_presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(96);
+        push_test_input_screen_content_unreserved(
+            &mut children,
+            state,
+            game,
+            machine_font,
+            select_returns,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *state.screen_presentation.borrow_mut() = Some(TestInputScreenPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(actors, children);
 }
 
 fn push_test_input_screen_content_unreserved(
@@ -1071,13 +1160,45 @@ pub fn push_select_music_overlay(
     actors: &mut Vec<Actor>,
     state: &State,
     game: GameFlag,
-    _active_color_index: i32,
+    active_color_index: i32,
     show_p1: bool,
     show_p2: bool,
     pad_spacing: f32,
 ) {
-    actors.reserve(96);
-    push_select_music_overlay_unreserved(actors, state, game, show_p1, show_p2, pad_spacing);
+    let key = SelectMusicPresentationKey {
+        revision: state.presentation_revision,
+        game,
+        active_color_index,
+        show_p1,
+        show_p2,
+        pad_spacing_bits: pad_spacing.to_bits(),
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = state
+        .select_music_presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(96);
+        push_select_music_overlay_unreserved(
+            &mut children,
+            state,
+            game,
+            show_p1,
+            show_p2,
+            pad_spacing,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *state.select_music_presentation.borrow_mut() = Some(SelectMusicPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(actors, children);
 }
 
 fn push_select_music_overlay_unreserved(
@@ -1168,11 +1289,10 @@ impl SelectMusicTestInputAppendBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(96);
-        push_select_music_overlay(
+        push_select_music_overlay_unreserved(
             &mut actors,
             &self.state,
             GameFlag::Dance,
-            0,
             true,
             true,
             125.0,
@@ -1183,16 +1303,7 @@ impl SelectMusicTestInputAppendBenchmark {
     #[must_use]
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(96);
-        push_select_music_overlay_unreserved(
-            &mut staged,
-            &self.state,
-            GameFlag::Dance,
-            true,
-            true,
-            125.0,
-        );
-        out.extend(staged);
+        push_select_music_overlay_unreserved(out, &self.state, GameFlag::Dance, true, true, 125.0);
         std::hint::black_box(&*out);
         overlay_actor_checksum(out)
     }
@@ -1208,11 +1319,10 @@ impl SelectMusicTestInputAppendBenchmark {
     #[must_use]
     pub fn screen_actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(96);
-        push_test_input_screen_content(
+        push_test_input_screen_content_unreserved(
             &mut actors,
             &self.state,
             GameFlag::Dance,
-            0,
             MachineFont::Mega,
             true,
         );
@@ -1222,15 +1332,13 @@ impl SelectMusicTestInputAppendBenchmark {
     #[must_use]
     pub fn legacy_screen_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(96);
         push_test_input_screen_content_unreserved(
-            &mut staged,
+            out,
             &self.state,
             GameFlag::Dance,
             MachineFont::Mega,
             true,
         );
-        out.extend(staged);
         std::hint::black_box(&*out);
         overlay_actor_checksum(out)
     }
@@ -1534,21 +1642,47 @@ fn presentation_text_checksum(text: &str) -> u64 {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, z, .. } => content
-                .as_str()
-                .bytes()
-                .fold(u64::from(*z as u16), |hash, byte| {
-                    hash.rotate_left(7) ^ u64::from(byte)
-                }),
-            Actor::Frame { children, z, .. } => {
-                overlay_actor_checksum(children) ^ u64::from(*z as u16)
-            }
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
+    let semantic_actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
+    semantic_actors
+        .iter()
+        .fold(semantic_actors.len() as u64, |checksum, actor| {
+            let value = match actor {
+                Actor::Sprite {
+                    source,
+                    tint,
+                    offset,
+                    z,
+                    ..
+                } => {
+                    let texture = source.texture_key().unwrap_or("");
+                    let texture_hash = texture.bytes().fold(texture.len() as u64, |hash, byte| {
+                        hash.rotate_left(7) ^ u64::from(byte)
+                    });
+                    texture_hash
+                        ^ u64::from(tint[3].to_bits()).rotate_left(13)
+                        ^ u64::from(offset[0].to_bits()).rotate_left(23)
+                        ^ u64::from(offset[1].to_bits()).rotate_left(31)
+                        ^ u64::from(*z as u16)
+                }
+                Actor::Text { content, z, .. } => content
+                    .as_str()
+                    .bytes()
+                    .fold(u64::from(*z as u16), |hash, byte| {
+                        hash.rotate_left(7) ^ u64::from(byte)
+                    }),
+                Actor::Frame { children, z, .. } => {
+                    overlay_actor_checksum(children) ^ u64::from(*z as u16)
+                }
+                Actor::SharedFrame { children, z, .. } => {
+                    overlay_actor_checksum(children) ^ u64::from(*z as u16)
+                }
+                _ => 1,
+            };
+            checksum.rotate_left(11) ^ value
+        })
 }
 
 #[cfg(test)]
@@ -1568,13 +1702,72 @@ mod tests {
 
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), fixture.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("expected retained Select Music Test Input actors");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
 
         let legacy_checksum = fixture.legacy_screen_frame(&mut legacy);
         let direct_checksum = fixture.direct_screen_frame(&mut direct);
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), fixture.screen_actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("expected retained Test Input screen actors");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
+    }
+
+    #[test]
+    fn test_input_presentations_reuse_and_invalidate_on_input() {
+        let mut fixture = SelectMusicTestInputAppendBenchmark::new();
+        let mut actors = Vec::with_capacity(96);
+        let old_checksum = fixture.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected retained Select Music Test Input actors");
+        };
+        let old = Arc::clone(children);
+        let _ = fixture.direct_frame(&mut actors);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = actors.as_slice()
+        else {
+            panic!("expected retained Select Music Test Input actors");
+        };
+        assert!(Arc::ptr_eq(&old, repeated));
+
+        let now = Instant::now();
+        apply_virtual_input(
+            &mut fixture.state,
+            &InputEvent::new(
+                VirtualAction::p1_left,
+                0,
+                false,
+                deadsync_core::input::InputSource::Keyboard,
+                now,
+                0,
+                now,
+                now,
+            ),
+        );
+        let new_checksum = fixture.direct_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected retained Select Music Test Input actors");
+        };
+        assert!(!Arc::ptr_eq(&old, children));
+        assert_ne!(old_checksum, new_checksum);
+
+        let _ = fixture.direct_screen_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected retained Test Input screen actors");
+        };
+        let screen = Arc::clone(children);
+        let _ = fixture.direct_screen_frame(&mut actors);
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("expected retained Test Input screen actors");
+        };
+        assert!(Arc::ptr_eq(&screen, children));
     }
 
     #[test]

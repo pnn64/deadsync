@@ -367,7 +367,7 @@ fn main() {
         modals.reload_actor_count(),
         &old_reload,
         &new_reload,
-        false,
+        true,
     );
 
     let mut old_download_actors = Vec::with_capacity(80);
@@ -514,7 +514,7 @@ fn main() {
         test_input.actor_count(),
         &old_test_input,
         &new_test_input,
-        false,
+        true,
     );
 
     let mut old_input_screen_actors = Vec::with_capacity(96);
@@ -528,7 +528,7 @@ fn main() {
         test_input.screen_actor_count(),
         &old_input_screen,
         &new_input_screen,
-        false,
+        true,
     );
 
     let sync = SyncOverlayAppendBenchmark::new();
