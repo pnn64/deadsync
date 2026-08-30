@@ -1,12 +1,13 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_config::prelude::GameFlag;
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
+use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -79,6 +80,8 @@ pub struct State {
 struct UnmappedTracker {
     held: HashMap<UnmappedKey, bool>,
     axis_value: HashMap<UnmappedKey, f32>,
+    revision: u64,
+    active_lines_cache: RefCell<Option<(u64, Arc<[Arc<str>]>)>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -93,6 +96,8 @@ enum UnmappedKey {
 struct EventRateTracker {
     stats: HashMap<EventStreamKey, EventStreamStats>,
     active_stream: Option<EventStreamKey>,
+    source_cache: RefCell<Option<(EventStreamKey, Arc<str>)>>,
+    summary_cache: RefCell<Option<((u32, u32), Arc<str>)>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -251,14 +256,49 @@ impl EventRateTracker {
         self.stats.entry(stream).or_default().record(key, time);
     }
 
-    fn readout(&self) -> Option<(String, u32, u32)> {
+    fn readout_values(&self) -> Option<(EventStreamKey, u32, u32)> {
         let stream = self.active_stream?;
         let stats = self.stats.get(&stream)?;
-        let label = match stream {
-            EventStreamKey::Keyboard => "Keyboard".to_owned(),
-            EventStreamKey::Pad { dev } => format!("Gamepad {dev}"),
-        };
-        Some((label, stats.latest_hz, stats.max_hz()))
+        Some((stream, stats.latest_hz, stats.max_hz()))
+    }
+
+    #[cfg(test)]
+    fn readout(&self) -> Option<(String, u32, u32)> {
+        let (stream, latest_hz, max_hz) = self.readout_values()?;
+        Some((event_source_label(stream), latest_hz, max_hz))
+    }
+
+    fn source_text(&self, stream: EventStreamKey) -> Arc<str> {
+        if let Some((cached_stream, text)) = self.source_cache.borrow().as_ref()
+            && *cached_stream == stream
+        {
+            return Arc::clone(text);
+        }
+
+        let text = Arc::from(event_source_label(stream));
+        *self.source_cache.borrow_mut() = Some((stream, Arc::clone(&text)));
+        text
+    }
+
+    fn summary_text(&self, latest_hz: u32, max_hz: u32) -> Arc<str> {
+        let key = (latest_hz, max_hz);
+        if let Some((cached_key, text)) = self.summary_cache.borrow().as_ref()
+            && *cached_key == key
+        {
+            return Arc::clone(text);
+        }
+
+        let text = Arc::from(format_event_rate_summary(latest_hz, max_hz));
+        *self.summary_cache.borrow_mut() = Some((key, Arc::clone(&text)));
+        text
+    }
+}
+
+#[inline(always)]
+fn event_source_label(stream: EventStreamKey) -> String {
+    match stream {
+        EventStreamKey::Keyboard => "Keyboard".to_owned(),
+        EventStreamKey::Pad { dev } => format!("Gamepad {dev}"),
     }
 }
 
@@ -270,21 +310,39 @@ fn format_hz(hz: u32) -> String {
     format!("{hz} Hz")
 }
 
+#[inline(always)]
+fn format_event_rate_summary(latest_hz: u32, max_hz: u32) -> String {
+    format!(
+        "{} latest / {} max",
+        format_hz(latest_hz),
+        format_hz(max_hz)
+    )
+}
+
 impl UnmappedTracker {
     #[inline(always)]
     fn set(&mut self, key: UnmappedKey, pressed: bool) {
-        self.held.insert(key, pressed);
+        let was_pressed = self.held.insert(key, pressed).unwrap_or(false);
+        if was_pressed != pressed {
+            self.revision = self.revision.wrapping_add(1);
+        }
     }
 
     #[inline(always)]
     fn set_axis(&mut self, key: UnmappedKey, value: f32) {
-        self.axis_value.insert(key, value);
-        self.held
-            .insert(key, value.abs() >= UNMAPPED_AXIS_HELD_THRESHOLD);
+        let value_changed = self
+            .axis_value
+            .insert(key, value)
+            .is_none_or(|old| old.to_bits() != value.to_bits());
+        let pressed = value.abs() >= UNMAPPED_AXIS_HELD_THRESHOLD;
+        let was_pressed = self.held.insert(key, pressed).unwrap_or(false);
+        if was_pressed != pressed || (pressed && value_changed) {
+            self.revision = self.revision.wrapping_add(1);
+        }
     }
 
     #[inline(always)]
-    fn active_lines(&self) -> Vec<String> {
+    fn active_lines_legacy(&self) -> Vec<String> {
         let mut out = Vec::new();
         for (k, pressed) in &self.held {
             if !*pressed {
@@ -306,6 +364,23 @@ impl UnmappedTracker {
         }
         out.sort();
         out
+    }
+
+    fn active_lines(&self) -> Arc<[Arc<str>]> {
+        if let Some((revision, lines)) = self.active_lines_cache.borrow().as_ref()
+            && *revision == self.revision
+        {
+            return Arc::clone(lines);
+        }
+
+        // One bounded snapshot is retained by `State`; unchanged render frames only clone Arcs.
+        let lines: Arc<[Arc<str>]> = self
+            .active_lines_legacy()
+            .into_iter()
+            .map(Arc::from)
+            .collect();
+        *self.active_lines_cache.borrow_mut() = Some((self.revision, Arc::clone(&lines)));
+        lines
     }
 }
 
@@ -627,10 +702,16 @@ fn push_pad_scaled_with_texture_policy(
 }
 
 fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
-    let (rate_source, latest_hz, max_hz) = state
-        .event_rate
-        .readout()
-        .unwrap_or_else(|| ("Waiting for raw input".to_owned(), 0, 0));
+    let (rate_source, rate_summary) = match state.event_rate.readout_values() {
+        Some((stream, latest_hz, max_hz)) => (
+            TextContent::Shared(state.event_rate.source_text(stream)),
+            TextContent::Shared(state.event_rate.summary_text(latest_hz, max_hz)),
+        ),
+        None => (
+            TextContent::Static("Waiting for raw input"),
+            TextContent::Static("0 Hz latest / 0 Hz max"),
+        ),
+    };
 
     actors.push(act!(text:
         font("miso"):
@@ -654,13 +735,61 @@ fn push_polling_readout(actors: &mut Vec<Actor>, state: &State, z: f32) {
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(format!("{} latest / {} max", format_hz(latest_hz), format_hz(max_hz))):
+        settext(rate_summary):
         align(1.0, 1.0):
         xy(screen_width() - 20.0, screen_height() - 20.0):
         zoom(0.72):
         horizalign(right):
         z(z)
     ));
+}
+
+fn push_unmapped_lines(actors: &mut Vec<Actor>, tracker: &UnmappedTracker, cx: f32, cy: f32) {
+    let lines = tracker.active_lines();
+    if lines.is_empty() {
+        return;
+    }
+
+    let start_y = cy + 112.0;
+    let line_h = 16.0;
+    for (i, line) in lines.iter().enumerate() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(Arc::clone(line)):
+            align(0.5, 0.0):
+            xy(cx, (i as f32).mul_add(line_h, start_y)):
+            zoom(0.8):
+            horizalign(center):
+            z(30)
+        ));
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_unmapped_lines_legacy(
+    actors: &mut Vec<Actor>,
+    tracker: &UnmappedTracker,
+    cx: f32,
+    cy: f32,
+) {
+    let lines = tracker.active_lines_legacy();
+    if lines.is_empty() {
+        return;
+    }
+
+    let start_y = cy + 112.0;
+    let line_h = 16.0;
+    for (i, line) in lines.iter().enumerate() {
+        actors.push(act!(text:
+            font("miso"):
+            settext(line.clone()):
+            align(0.5, 0.0):
+            xy(cx, (i as f32).mul_add(line_h, start_y)):
+            zoom(0.8):
+            horizalign(center):
+            z(30)
+        ));
+    }
 }
 
 pub fn push_test_input_screen_content(
@@ -712,22 +841,7 @@ fn push_test_input_screen_content_unreserved(
         20.0,
     );
 
-    let lines = state.unmapped.active_lines();
-    if !lines.is_empty() {
-        let start_y = cy + 112.0;
-        let line_h = 16.0;
-        for (i, line) in lines.iter().enumerate() {
-            actors.push(act!(text:
-                font("miso"):
-                settext(line.clone()):
-                align(0.5, 0.0):
-                xy(cx, (i as f32).mul_add(line_h, start_y)):
-                zoom(0.8):
-                horizalign(center):
-                z(30)
-            ));
-        }
-    }
+    push_unmapped_lines(actors, &state.unmapped, cx, cy);
 
     let return_hint = if select_returns {
         "Hold &SELECT; to return to Options."
@@ -1285,6 +1399,139 @@ impl Default for EvaluationTestInputBenchmark {
     }
 }
 
+/// Stable old/new fixture for Test Input's retained diagnostic presentations.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct TestInputReadoutBenchmark {
+    event_rate: EventRateTracker,
+    unmapped: UnmappedTracker,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl TestInputReadoutBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let stream = EventStreamKey::Pad { dev: 7 };
+        let mut stats = EventStreamStats {
+            latest_hz: 777,
+            ..EventStreamStats::default()
+        };
+        stats.hz_samples.extend([500, 777, 1001]);
+
+        let mut event_rate = EventRateTracker::default();
+        event_rate.stats.insert(stream, stats);
+        event_rate.active_stream = Some(stream);
+        let (_, latest_hz, max_hz) = event_rate
+            .readout_values()
+            .expect("benchmark event-rate readout");
+        std::hint::black_box(event_rate.source_text(stream));
+        std::hint::black_box(event_rate.summary_text(latest_hz, max_hz));
+
+        let mut unmapped = UnmappedTracker::default();
+        unmapped.set(
+            UnmappedKey::Keyboard {
+                code: KeyCode::KeyA,
+            },
+            true,
+        );
+        unmapped.set(
+            UnmappedKey::RawButton {
+                dev: 7,
+                code_u32: 0xDEAD_BEEF,
+            },
+            true,
+        );
+        unmapped.set_axis(
+            UnmappedKey::RawAxis {
+                dev: 7,
+                code_u32: 0x1234_5678,
+            },
+            0.875,
+        );
+        std::hint::black_box(unmapped.active_lines());
+
+        Self {
+            event_rate,
+            unmapped,
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_source_frame(&self) -> u64 {
+        let (stream, _, _) = self
+            .event_rate
+            .readout_values()
+            .expect("benchmark event-rate readout");
+        let text = event_source_label(std::hint::black_box(stream));
+        presentation_text_checksum(std::hint::black_box(&text))
+    }
+
+    #[must_use]
+    pub fn cached_source_frame(&self) -> u64 {
+        let (stream, _, _) = self
+            .event_rate
+            .readout_values()
+            .expect("benchmark event-rate readout");
+        let text = self.event_rate.source_text(std::hint::black_box(stream));
+        presentation_text_checksum(std::hint::black_box(text.as_ref()))
+    }
+
+    #[must_use]
+    pub fn legacy_summary_frame(&self) -> u64 {
+        let (_, latest_hz, max_hz) = self
+            .event_rate
+            .readout_values()
+            .expect("benchmark event-rate readout");
+        let text = format_event_rate_summary(
+            std::hint::black_box(latest_hz),
+            std::hint::black_box(max_hz),
+        );
+        presentation_text_checksum(std::hint::black_box(&text))
+    }
+
+    #[must_use]
+    pub fn cached_summary_frame(&self) -> u64 {
+        let (_, latest_hz, max_hz) = self
+            .event_rate
+            .readout_values()
+            .expect("benchmark event-rate readout");
+        let text = self.event_rate.summary_text(
+            std::hint::black_box(latest_hz),
+            std::hint::black_box(max_hz),
+        );
+        presentation_text_checksum(std::hint::black_box(text.as_ref()))
+    }
+
+    #[must_use]
+    pub fn legacy_unmapped_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_unmapped_lines_legacy(out, &self.unmapped, 320.0, 220.0);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn cached_unmapped_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_unmapped_lines(out, &self.unmapped, 320.0, 220.0);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for TestInputReadoutBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn presentation_text_checksum(text: &str) -> u64 {
+    text.bytes().fold(text.len() as u64, |hash, byte| {
+        hash.rotate_left(7) ^ u64::from(byte)
+    })
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
@@ -1540,5 +1787,76 @@ mod tests {
     fn caps_display_above_one_thousand_hz() {
         assert_eq!(format_hz(1000), "1000 Hz");
         assert_eq!(format_hz(1001), ">1000 Hz");
+    }
+
+    #[test]
+    fn retained_event_source_matches_legacy_and_refreshes_on_stream_change() {
+        let pad = EventStreamKey::Pad { dev: 12 };
+        let mut tracker = EventRateTracker::default();
+        tracker.stats.insert(pad, EventStreamStats::default());
+        tracker.active_stream = Some(pad);
+
+        let legacy = tracker.readout().expect("legacy readout").0;
+        let cached = tracker.source_text(pad);
+        let cached_again = tracker.source_text(pad);
+        assert_eq!(cached.as_ref(), legacy);
+        assert!(Arc::ptr_eq(&cached, &cached_again));
+
+        tracker
+            .stats
+            .insert(EventStreamKey::Keyboard, EventStreamStats::default());
+        tracker.active_stream = Some(EventStreamKey::Keyboard);
+        let refreshed = tracker.source_text(EventStreamKey::Keyboard);
+        assert_eq!(refreshed.as_ref(), "Keyboard");
+        assert!(!Arc::ptr_eq(&cached, &refreshed));
+    }
+
+    #[test]
+    fn retained_polling_summary_matches_legacy_and_refreshes_on_rate_change() {
+        let tracker = EventRateTracker::default();
+        let legacy = format_event_rate_summary(777, 1001);
+        let cached = tracker.summary_text(777, 1001);
+        let cached_again = tracker.summary_text(777, 1001);
+        assert_eq!(cached.as_ref(), legacy);
+        assert_eq!(cached.as_ref(), "777 Hz latest / >1000 Hz max");
+        assert!(Arc::ptr_eq(&cached, &cached_again));
+
+        let refreshed = tracker.summary_text(500, 1000);
+        assert_eq!(refreshed.as_ref(), "500 Hz latest / 1000 Hz max");
+        assert!(!Arc::ptr_eq(&cached, &refreshed));
+    }
+
+    #[test]
+    fn retained_unmapped_lines_match_legacy_sorting_and_invalidate_on_change() {
+        let axis = UnmappedKey::RawAxis {
+            dev: 3,
+            code_u32: 0x1234_5678,
+        };
+        let mut tracker = UnmappedTracker::default();
+        tracker.set(
+            UnmappedKey::Keyboard {
+                code: KeyCode::KeyA,
+            },
+            true,
+        );
+        tracker.set_axis(axis, 0.75);
+
+        let legacy = tracker.active_lines_legacy();
+        let cached = tracker.active_lines();
+        let cached_again = tracker.active_lines();
+        assert_eq!(
+            cached.iter().map(AsRef::as_ref).collect::<Vec<_>>(),
+            legacy.iter().map(String::as_str).collect::<Vec<_>>()
+        );
+        assert!(Arc::ptr_eq(&cached, &cached_again));
+
+        tracker.set_axis(axis, -0.875);
+        let refreshed = tracker.active_lines();
+        assert!(!Arc::ptr_eq(&cached, &refreshed));
+        assert!(
+            refreshed
+                .iter()
+                .any(|line| line.contains("(-0.875) (not mapped)"))
+        );
     }
 }

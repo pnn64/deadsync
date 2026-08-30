@@ -18,7 +18,9 @@ use deadsync_theme_simply_love::screens::components::evaluation::{
 use deadsync_theme_simply_love::screens::components::shared::lobby_hud::{
     CachedRenderParams, LobbyHudCache, benchmark_push_cloned_cached_panel, push_cached_panel,
 };
-use deadsync_theme_simply_love::screens::components::shared::test_input::EvaluationTestInputBenchmark;
+use deadsync_theme_simply_love::screens::components::shared::test_input::{
+    EvaluationTestInputBenchmark, TestInputReadoutBenchmark,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -280,6 +282,47 @@ fn test_input_benchmarks() {
     });
     report_pair(
         "direct Evaluation Test Input panel append",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    let readout = TestInputReadoutBenchmark::new();
+    let old = measure(TEST_INPUT_FRAMES, || readout.legacy_source_frame());
+    let new = measure(TEST_INPUT_FRAMES, || readout.cached_source_frame());
+    report_pair(
+        "retained Test Input event source",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    let old = measure(TEST_INPUT_FRAMES, || readout.legacy_summary_frame());
+    let new = measure(TEST_INPUT_FRAMES, || readout.cached_summary_frame());
+    report_pair(
+        "retained Test Input polling summary",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    let mut legacy_lines = Vec::with_capacity(3);
+    let mut cached_lines = Vec::with_capacity(3);
+    assert_eq!(
+        readout.legacy_unmapped_frame(&mut legacy_lines),
+        readout.cached_unmapped_frame(&mut cached_lines),
+    );
+    let old = measure(TEST_INPUT_FRAMES, || {
+        readout.legacy_unmapped_frame(&mut legacy_lines)
+    });
+    let new = measure(TEST_INPUT_FRAMES, || {
+        readout.cached_unmapped_frame(&mut cached_lines)
+    });
+    report_pair(
+        "retained Test Input unmapped lines",
         TEST_INPUT_FRAMES,
         &old,
         &new,
