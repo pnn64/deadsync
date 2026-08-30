@@ -18,6 +18,7 @@ use deadsync_theme_simply_love::screens::components::evaluation::{
 use deadsync_theme_simply_love::screens::components::shared::lobby_hud::{
     CachedRenderParams, LobbyHudCache, benchmark_push_cloned_cached_panel, push_cached_panel,
 };
+use deadsync_theme_simply_love::screens::components::shared::test_input::EvaluationTestInputBenchmark;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -30,6 +31,7 @@ const GRADE_FRAMES: usize = 200_000;
 const MODIFIER_FRAMES: usize = 500_000;
 const LOBBY_FRAMES: usize = 30_000;
 const PANE_FRAMES: usize = 50_000;
+const TEST_INPUT_FRAMES: usize = 100_000;
 const SAMPLE_OPS: usize = 500;
 
 struct CountingAlloc {
@@ -239,6 +241,50 @@ fn percent_change(old: f64, new: f64) -> f64 {
 
 fn actor_count_checksum(actors: &[Actor]) -> u64 {
     actors.len() as u64
+}
+
+fn test_input_benchmarks() {
+    let fixture = EvaluationTestInputBenchmark::new();
+
+    let mut old_out = Vec::with_capacity(10);
+    let mut new_out = Vec::with_capacity(10);
+    let old = measure(TEST_INPUT_FRAMES, || {
+        fixture.legacy_texture_frame(&mut old_out)
+    });
+    let new = measure(TEST_INPUT_FRAMES, || {
+        fixture.cached_texture_frame(&mut new_out)
+    });
+    report_pair(
+        "shared Test Input texture keys",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    let old = measure(TEST_INPUT_FRAMES, || fixture.staged_pad_frame(&mut old_out));
+    let new = measure(TEST_INPUT_FRAMES, || fixture.direct_pad_frame(&mut new_out));
+    report_pair(
+        "direct Evaluation Test Input pad append",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+
+    let old = measure(TEST_INPUT_FRAMES, || {
+        fixture.staged_panel_frame(&mut old_out)
+    });
+    let new = measure(TEST_INPUT_FRAMES, || {
+        fixture.direct_panel_frame(&mut new_out)
+    });
+    report_pair(
+        "direct Evaluation Test Input panel append",
+        TEST_INPUT_FRAMES,
+        &old,
+        &new,
+        true,
+    );
 }
 
 fn grade_benchmark() {
@@ -597,4 +643,5 @@ fn main() {
     stats_pane_benchmark();
     event_progress_benchmark();
     event_overlay_benchmark();
+    test_input_benchmarks();
 }

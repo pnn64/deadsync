@@ -6199,28 +6199,31 @@ pub fn push_actors(
                         let pad_scale = 0.75_f32 * panel_scale;
                         let pad_half = test_input::evaluation_pad_half_width(pad_scale);
                         let gap = pad_half + 6.0;
-                        actors.extend(test_input::build_evaluation_pad(
+                        test_input::push_evaluation_pad(
+                            actors,
                             &state.test_input_state,
                             game,
                             test_input::PlayerSlot::P1,
                             pane_ox - gap,
                             panel_center_y,
                             pad_scale,
-                        ));
-                        actors.extend(test_input::build_evaluation_pad(
+                        );
+                        test_input::push_evaluation_pad(
+                            actors,
                             &state.test_input_state,
                             game,
                             test_input::PlayerSlot::P2,
                             pane_ox + gap,
                             panel_center_y,
                             pad_scale,
-                        ));
+                        );
                     } else {
                         let slot = match controller {
                             profile_data::PlayerSide::P1 => test_input::PlayerSlot::P1,
                             profile_data::PlayerSide::P2 => test_input::PlayerSlot::P2,
                         };
-                        actors.extend(test_input::build_evaluation_panel(
+                        test_input::push_evaluation_panel(
+                            actors,
                             &state.test_input_state,
                             game,
                             slot,
@@ -6231,7 +6234,7 @@ pub fn push_actors(
                             title,
                             body_font,
                             instructions,
-                        ));
+                        );
                     }
                 }
             }

@@ -8,6 +8,7 @@ use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
 use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
@@ -15,6 +16,38 @@ const SORT_MENU_DIM_ALPHA: f32 = 0.875;
 const SORT_MENU_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const EVENT_RATE_HISTORY: usize = 64;
 const MAX_DISPLAY_HZ: u32 = 1000;
+
+/// Process-lifetime table for the seven immutable bundled Test Input textures.
+/// It is initialized synchronously on the first game-thread render, never
+/// grows or evicts, and releases its entries only at process teardown. Hot
+/// frames clone the retained `Arc<str>` handles instead of allocating keys.
+struct TestInputTextureKeys {
+    dance: Arc<str>,
+    pump: Arc<str>,
+    highlight: Arc<str>,
+    buttons: Arc<str>,
+    highlight_green: Arc<str>,
+    highlight_red: Arc<str>,
+    highlight_arrow: Arc<str>,
+}
+
+fn test_input_texture_keys() -> &'static TestInputTextureKeys {
+    static KEYS: OnceLock<TestInputTextureKeys> = OnceLock::new();
+    KEYS.get_or_init(|| TestInputTextureKeys {
+        dance: Arc::from("test_input/dance.png"),
+        pump: Arc::from("test_input/pump.png"),
+        highlight: Arc::from("test_input/highlight.png"),
+        buttons: Arc::from("test_input/buttons.png"),
+        highlight_green: Arc::from("test_input/highlightgreen.png"),
+        highlight_red: Arc::from("test_input/highlightred.png"),
+        highlight_arrow: Arc::from("test_input/highlightarrow.png"),
+    })
+}
+
+#[inline(always)]
+fn texture_key(shared: Option<&Arc<str>>, legacy: &'static str) -> Arc<str> {
+    shared.map_or_else(|| Arc::from(legacy), Arc::clone)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogicalButton {
@@ -445,6 +478,39 @@ fn push_pad_scaled(
     z: f32,
     scale: f32,
 ) {
+    push_pad_scaled_with_texture_policy(
+        actors,
+        state,
+        game,
+        slot,
+        pad_x,
+        pad_y,
+        show_menu_buttons,
+        show_player_label,
+        player_label_font,
+        z,
+        scale,
+        true,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline]
+fn push_pad_scaled_with_texture_policy(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    slot: PlayerSlot,
+    pad_x: f32,
+    pad_y: f32,
+    show_menu_buttons: bool,
+    show_player_label: bool,
+    player_label_font: Option<&'static str>,
+    z: f32,
+    scale: f32,
+    reuse_texture_keys: bool,
+) {
+    let textures = reuse_texture_keys.then(test_input_texture_keys);
     let arrow_h_offset = 67.0_f32 * scale;
     let arrow_v_offset = 68.0_f32 * scale;
     let sprite_zoom = 0.8_f32 * scale;
@@ -455,18 +521,22 @@ fn push_pad_scaled(
     let menu_x_offset = 37.0_f32 * scale;
 
     actors.push(match game {
-        GameFlag::Dance => act!(sprite("test_input/dance.png"):
-            align(0.5, 0.5):
-            xy(pad_x, pad_y):
-            zoom(sprite_zoom):
-            z(z)
-        ),
-        GameFlag::Pump => act!(sprite("test_input/pump.png"):
-            align(0.5, 0.5):
-            xy(pad_x, pad_y):
-            zoom(sprite_zoom):
-            z(z)
-        ),
+        GameFlag::Dance => {
+            act!(sprite(texture_key(textures.map(|keys| &keys.dance), "test_input/dance.png")):
+                align(0.5, 0.5):
+                xy(pad_x, pad_y):
+                zoom(sprite_zoom):
+                z(z)
+            )
+        }
+        GameFlag::Pump => {
+            act!(sprite(texture_key(textures.map(|keys| &keys.pump), "test_input/pump.png")):
+                align(0.5, 0.5):
+                xy(pad_x, pad_y):
+                zoom(sprite_zoom):
+                z(z)
+            )
+        }
     });
 
     if show_player_label && let Some(player_label_font) = player_label_font {
@@ -503,7 +573,7 @@ fn push_pad_scaled(
         ],
     };
     for &(button, offset_x, offset_y) in highlights {
-        actors.push(act!(sprite("test_input/highlight.png"):
+        actors.push(act!(sprite(texture_key(textures.map(|keys| &keys.highlight), "test_input/highlight.png")):
             align(0.5, 0.5):
             xy(pad_x + offset_x, pad_y + offset_y):
             zoom(sprite_zoom):
@@ -517,27 +587,29 @@ fn push_pad_scaled(
     }
 
     let button_zoom = 0.5_f32 * scale;
-    actors.push(act!(sprite("test_input/buttons.png"):
-        align(0.5, 0.5):
-        xy(pad_x, buttons_y):
-        zoom(button_zoom):
-        z(z)
-    ));
-    actors.push(act!(sprite("test_input/highlightgreen.png"):
+    actors.push(
+        act!(sprite(texture_key(textures.map(|keys| &keys.buttons), "test_input/buttons.png")):
+            align(0.5, 0.5):
+            xy(pad_x, buttons_y):
+            zoom(button_zoom):
+            z(z)
+        ),
+    );
+    actors.push(act!(sprite(texture_key(textures.map(|keys| &keys.highlight_green), "test_input/highlightgreen.png")):
         align(0.5, 0.5):
         xy(pad_x, start_y):
         zoom(button_zoom):
         diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Start)):
         z(z + 1.0)
     ));
-    actors.push(act!(sprite("test_input/highlightred.png"):
+    actors.push(act!(sprite(texture_key(textures.map(|keys| &keys.highlight_red), "test_input/highlightred.png")):
         align(0.5, 0.5):
         xy(pad_x, select_y):
         zoom(button_zoom):
         diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::Select)):
         z(z + 1.0)
     ));
-    actors.push(act!(sprite("test_input/highlightarrow.png"):
+    actors.push(act!(sprite(texture_key(textures.map(|keys| &keys.highlight_arrow), "test_input/highlightarrow.png")):
         align(0.5, 0.5):
         xy(pad_x - menu_x_offset, menu_y):
         zoom(button_zoom):
@@ -545,7 +617,7 @@ fn push_pad_scaled(
         diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, LogicalButton::MenuLeft)):
         z(z + 1.0)
     ));
-    actors.push(act!(sprite("test_input/highlightarrow.png"):
+    actors.push(act!(sprite(texture_key(textures.map(|keys| &keys.highlight_arrow), "test_input/highlightarrow.png")):
         align(0.5, 0.5):
         xy(pad_x + menu_x_offset, menu_y):
         zoom(button_zoom):
@@ -688,20 +760,24 @@ pub fn build_evaluation_pad(
     scale: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(6);
-    push_pad_scaled(
-        &mut actors,
-        state,
-        game,
-        slot,
-        pad_x,
-        pad_y,
-        false,
-        false,
-        None,
-        100.0,
-        scale,
-    );
+    push_evaluation_pad(&mut actors, state, game, slot, pad_x, pad_y, scale);
     actors
+}
+
+/// Append a `TestInput` evaluation pad directly to an existing actor batch.
+pub fn push_evaluation_pad(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    slot: PlayerSlot,
+    pad_x: f32,
+    pad_y: f32,
+    scale: f32,
+) {
+    actors.reserve(6);
+    push_pad_scaled(
+        actors, state, game, slot, pad_x, pad_y, false, false, None, 100.0, scale,
+    );
 }
 
 /// Approximate visual half-width of a pad rendered by `build_evaluation_pad` at the given scale.
@@ -767,12 +843,44 @@ pub fn build_evaluation_panel(
     anchor_y: f32,
     scale: f32,
     title_font: &'static str,
-    title: std::sync::Arc<str>,
+    title: Arc<str>,
     body_font: &'static str,
-    instructions: std::sync::Arc<str>,
+    instructions: Arc<str>,
 ) -> Vec<Actor> {
-    use eval_panel_layout::*;
     let mut actors = Vec::with_capacity(10);
+    push_evaluation_panel(
+        &mut actors,
+        state,
+        game,
+        slot,
+        anchor_x,
+        anchor_y,
+        scale,
+        title_font,
+        title,
+        body_font,
+        instructions,
+    );
+    actors
+}
+
+/// Append a complete `TestInput` evaluation panel to an existing actor batch.
+#[allow(clippy::too_many_arguments)]
+pub fn push_evaluation_panel(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    slot: PlayerSlot,
+    anchor_x: f32,
+    anchor_y: f32,
+    scale: f32,
+    title_font: &'static str,
+    title: Arc<str>,
+    body_font: &'static str,
+    instructions: Arc<str>,
+) {
+    use eval_panel_layout::*;
+    actors.reserve(10);
 
     // Convert a panel-local (x_right, y_down) point in logical px to screen-space actor coords.
     let map = |local_x: f32, local_y_from_top: f32| -> (f32, f32) {
@@ -793,17 +901,7 @@ pub fn build_evaluation_panel(
     };
     let pad_scale = PAD_LOGICAL_SCALE * scale;
     push_pad_scaled(
-        &mut actors,
-        state,
-        game,
-        slot,
-        pad_x,
-        pad_y,
-        false,
-        false,
-        None,
-        100.0,
-        pad_scale,
+        actors, state, game, slot, pad_x, pad_y, false, false, None, 100.0, pad_scale,
     );
 
     let (text_x, title_y) = map(TEXT_LEFT_X, TITLE_TOP_Y);
@@ -853,8 +951,6 @@ pub fn build_evaluation_panel(
         vertspacing(BODY_LINE_SPACING):
         z(100.0)
     ));
-
-    actors
 }
 
 pub fn push_select_music_overlay(
@@ -1048,6 +1144,147 @@ impl Default for SelectMusicTestInputAppendBenchmark {
     }
 }
 
+/// Stable old/new fixture for Evaluation's live Test Input pane.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct EvaluationTestInputBenchmark {
+    state: State,
+    title: Arc<str>,
+    instructions: Arc<str>,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl EvaluationTestInputBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        // Warm the bounded static texture table outside measured frames.
+        std::hint::black_box(test_input_texture_keys());
+        let mut state = State::default();
+        state
+            .buttons_held
+            .insert((PlayerSlot::P1, LogicalButton::Center), true);
+        Self {
+            state,
+            title: Arc::from("Test Input"),
+            instructions: Arc::from("Step on the panels to test your input."),
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_texture_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.reserve(6);
+        push_pad_scaled_with_texture_policy(
+            out,
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            320.0,
+            240.0,
+            false,
+            false,
+            None,
+            100.0,
+            0.75,
+            false,
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn cached_texture_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_evaluation_pad(
+            out,
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            320.0,
+            240.0,
+            0.75,
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn staged_pad_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_evaluation_pad(
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            320.0,
+            240.0,
+            0.75,
+        ));
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_pad_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_evaluation_pad(
+            out,
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            320.0,
+            240.0,
+            0.75,
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn staged_panel_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_evaluation_panel(
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            175.0,
+            150.0,
+            1.0,
+            "miso",
+            Arc::clone(&self.title),
+            "miso",
+            Arc::clone(&self.instructions),
+        ));
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_panel_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_evaluation_panel(
+            out,
+            &self.state,
+            GameFlag::Pump,
+            PlayerSlot::P1,
+            175.0,
+            150.0,
+            1.0,
+            "miso",
+            Arc::clone(&self.title),
+            "miso",
+            Arc::clone(&self.instructions),
+        );
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for EvaluationTestInputBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
@@ -1091,6 +1328,45 @@ mod tests {
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), fixture.screen_actor_count());
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn shared_test_input_texture_keys_match_legacy_actors() {
+        let fixture = EvaluationTestInputBenchmark::new();
+        let mut legacy = Vec::with_capacity(10);
+        let mut cached = Vec::with_capacity(10);
+
+        assert_eq!(
+            fixture.legacy_texture_frame(&mut legacy),
+            fixture.cached_texture_frame(&mut cached)
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{cached:#?}"));
+    }
+
+    #[test]
+    fn direct_evaluation_pad_append_matches_staged_batch() {
+        let fixture = EvaluationTestInputBenchmark::new();
+        let mut staged = Vec::with_capacity(10);
+        let mut direct = Vec::with_capacity(10);
+
+        assert_eq!(
+            fixture.staged_pad_frame(&mut staged),
+            fixture.direct_pad_frame(&mut direct)
+        );
+        assert_eq!(format!("{staged:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn direct_evaluation_panel_append_matches_staged_batch() {
+        let fixture = EvaluationTestInputBenchmark::new();
+        let mut staged = Vec::with_capacity(10);
+        let mut direct = Vec::with_capacity(10);
+
+        assert_eq!(
+            fixture.staged_panel_frame(&mut staged),
+            fixture.direct_panel_frame(&mut direct)
+        );
+        assert_eq!(format!("{staged:#?}"), format!("{direct:#?}"));
     }
 
     #[test]
