@@ -35,13 +35,13 @@ pub use event_progress::build_event_overlay;
 pub use event_progress::build_event_progress_boxes;
 pub use pane_column::{build_column_judgments_pane, build_column_judgments_pane_with_palette};
 pub(crate) use pane_gs_records::{
-    OnlineRecordsPresentation, build_arrowcloud_records_pane, build_gs_ex_records_pane,
-    build_gs_records_pane, build_itl_records_pane, build_srpg_records_pane,
+    OnlineRecordsPresentation, push_arrowcloud_records_pane, push_gs_ex_records_pane,
+    push_gs_records_pane, push_itl_records_pane, push_srpg_records_pane,
 };
-pub(crate) use pane_machine_records::{MachineRecordsPaneText, build_machine_records_pane};
+pub(crate) use pane_machine_records::{MachineRecordsPaneText, push_machine_records_pane};
 pub use pane_modifiers::{build_modifiers_pane, push_modifiers_pane};
 pub(crate) use pane_percentage::{PercentageText, push_pane_percentage_display_with_palette};
-pub(crate) use pane_qr::{QrPanePresentation, build_gs_qr_pane};
+pub(crate) use pane_qr::{QrPanePresentation, push_gs_qr_pane};
 pub(crate) use pane_stats::build_stats_pane_with_palette;
 pub(crate) use pane_timing::{TimingPaneText, push_timing_pane_with_palette};
 pub(crate) use pane_timing_arrows::{TimingArrowsText, push_timing_arrows_pane};

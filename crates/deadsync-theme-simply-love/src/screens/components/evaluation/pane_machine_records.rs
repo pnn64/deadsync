@@ -1,7 +1,10 @@
+use std::cell::RefCell;
+use std::sync::Arc;
+
 use crate::act;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
+use deadlib_present::{anim, color};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
@@ -33,10 +36,7 @@ fn machine_record_highlight_color(
     active_color_index: i32,
     elapsed_s: f32,
 ) -> [f32; 4] {
-    let base = match side {
-        profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
-        profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
-    };
+    let base = machine_record_highlight_base(side, active_color_index);
     let phase = ((elapsed_s / MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS) * std::f32::consts::TAU)
         .sin()
         .mul_add(0.5, 0.5);
@@ -47,6 +47,39 @@ fn machine_record_highlight_color(
         base[2].mul_add(inv, phase),
         1.0,
     ]
+}
+
+#[inline(always)]
+fn machine_record_highlight_base(
+    side: profile_data::PlayerSide,
+    active_color_index: i32,
+) -> [f32; 4] {
+    match side {
+        profile_data::PlayerSide::P1 => color::simply_love_rgba(active_color_index),
+        profile_data::PlayerSide::P2 => color::simply_love_rgba(active_color_index - 2),
+    }
+}
+
+fn machine_record_highlight_effect(
+    side: profile_data::PlayerSide,
+    active_color_index: i32,
+) -> anim::EffectState {
+    let base = machine_record_highlight_base(side, active_color_index);
+    anim::EffectState {
+        mode: anim::EffectMode::DiffuseShift,
+        color1: [1.0; 4],
+        color2: [base[0], base[1], base[2], 1.0],
+        period: MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS,
+        offset: -MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS * 0.25,
+        timing: [
+            MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS * 0.5,
+            0.0,
+            MACHINE_RECORD_HIGHLIGHT_PERIOD_SECONDS * 0.5,
+            0.0,
+            0.0,
+        ],
+        ..anim::EffectState::default()
+    }
 }
 
 #[derive(Clone)]
@@ -93,13 +126,21 @@ impl MachineRecordRowText {
 
 /// Fixed actor-ready rows retained for one Evaluation result player.
 ///
-/// Initialization compiles exactly ten rows. Actor frames clone bounded inline,
-/// static, or shared payloads and only recompute the animated highlight color.
-/// There are no live misses, growth, eviction, locking, or background work.
+/// Initialization compiles exactly ten rows. The first actor frame for the
+/// current player/color pair compiles one immutable child slice; later frames
+/// only clone its `Arc`. A changed pair replaces that single bounded cache.
+/// Highlight animation is evaluated by the renderer from actor time.
 #[derive(Clone)]
 pub(crate) struct MachineRecordsPaneText {
     rows: [MachineRecordRowText; MACHINE_RECORD_ROWS],
     split: bool,
+    children: RefCell<Option<(MachineRecordsCacheKey, Arc<[Actor]>)>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MachineRecordsCacheKey {
+    controller: profile_data::PlayerSide,
+    active_color_index: i32,
 }
 
 impl MachineRecordsPaneText {
@@ -143,78 +184,150 @@ impl MachineRecordsPaneText {
                 )
             }
         });
-        Self { rows, split }
+        Self {
+            rows,
+            split,
+            children: RefCell::new(None),
+        }
     }
+
+    fn cached_children(
+        &self,
+        controller: profile_data::PlayerSide,
+        active_color_index: i32,
+    ) -> Arc<[Actor]> {
+        let key = MachineRecordsCacheKey {
+            controller,
+            active_color_index,
+        };
+        if let Some((_, children)) = self
+            .children
+            .borrow()
+            .as_ref()
+            .filter(|(cached, _)| *cached == key)
+        {
+            return Arc::clone(children);
+        }
+
+        let children = Arc::from(build_machine_records_children(
+            self,
+            controller,
+            active_color_index,
+            None,
+        ));
+        *self.children.borrow_mut() = Some((key, Arc::clone(&children)));
+        children
+    }
+}
+
+fn with_text_effect(mut actor: Actor, effect: anim::EffectState) -> Actor {
+    let Actor::Text {
+        effect: actor_effect,
+        ..
+    } = &mut actor
+    else {
+        unreachable!("machine-record rows contain text actors")
+    };
+    *actor_effect = effect;
+    actor
+}
+
+#[derive(Clone, Copy)]
+struct MachineRecordRowLayout {
+    rank_x: f32,
+    name_x: f32,
+    score_x: f32,
+    date_x: f32,
+    text_zoom: f32,
 }
 
 fn push_machine_record_row(
     children: &mut Vec<Actor>,
     text: &MachineRecordRowText,
     y: f32,
-    rank_x: f32,
-    name_x: f32,
-    score_x: f32,
-    date_x: f32,
-    text_zoom: f32,
+    layout: MachineRecordRowLayout,
     col: [f32; 4],
+    effect: anim::EffectState,
 ) {
-    children.push(act!(text:
-        font("miso"):
-        settext(text.rank.clone()):
-        align(1.0, 0.5):
-        xy(rank_x, y):
-        zoom(text_zoom):
-        z(101):
-        diffuse(col[0], col[1], col[2], col[3]):
-        horizalign(right)
+    children.push(with_text_effect(
+        act!(text:
+            font("miso"):
+            settext(text.rank.clone()):
+            align(1.0, 0.5):
+            xy(layout.rank_x, y):
+            zoom(layout.text_zoom):
+            z(101):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(right)
+        ),
+        effect,
     ));
-    children.push(act!(text:
-        font("miso"):
-        settext(text.name.clone()):
-        align(0.0, 0.5):
-        xy(name_x, y):
-        zoom(text_zoom):
-        z(101):
-        diffuse(col[0], col[1], col[2], col[3]):
-        horizalign(left)
+    children.push(with_text_effect(
+        act!(text:
+            font("miso"):
+            settext(text.name.clone()):
+            align(0.0, 0.5):
+            xy(layout.name_x, y):
+            zoom(layout.text_zoom):
+            z(101):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ),
+        effect,
     ));
-    children.push(act!(text:
-        font("miso"):
-        settext(text.score.clone()):
-        align(0.0, 0.5):
-        xy(score_x, y):
-        zoom(text_zoom):
-        z(101):
-        diffuse(col[0], col[1], col[2], col[3]):
-        horizalign(left)
+    children.push(with_text_effect(
+        act!(text:
+            font("miso"):
+            settext(text.score.clone()):
+            align(0.0, 0.5):
+            xy(layout.score_x, y):
+            zoom(layout.text_zoom):
+            z(101):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ),
+        effect,
     ));
-    children.push(act!(text:
-        font("miso"):
-        settext(text.date.clone()):
-        align(0.0, 0.5):
-        xy(date_x, y):
-        zoom(text_zoom):
-        z(101):
-        diffuse(col[0], col[1], col[2], col[3]):
-        horizalign(left)
+    children.push(with_text_effect(
+        act!(text:
+            font("miso"):
+            settext(text.date.clone()):
+            align(0.0, 0.5):
+            xy(layout.date_x, y):
+            zoom(layout.text_zoom):
+            z(101):
+            diffuse(col[0], col[1], col[2], col[3]):
+            horizalign(left)
+        ),
+        effect,
     ));
 }
 
-pub(crate) fn build_machine_records_pane(
+fn build_machine_records_children(
     text: &MachineRecordsPaneText,
     controller: profile_data::PlayerSide,
     active_color_index: i32,
-    elapsed_s: f32,
+    baked_elapsed_s: Option<f32>,
 ) -> Vec<Actor> {
-    let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
     let pane_zoom = 0.8_f32;
-    let rank_x = -120.0 * pane_zoom;
-    let name_x = -110.0 * pane_zoom;
-    let score_x = -24.0 * pane_zoom;
-    let date_x = 50.0 * pane_zoom;
-    let text_zoom = pane_zoom;
-    let hl = machine_record_highlight_color(controller, active_color_index, elapsed_s);
+    let layout = MachineRecordRowLayout {
+        rank_x: -120.0 * pane_zoom,
+        name_x: -110.0 * pane_zoom,
+        score_x: -24.0 * pane_zoom,
+        date_x: 50.0 * pane_zoom,
+        text_zoom: pane_zoom,
+    };
+    let (hl, highlight_effect) = if let Some(elapsed_s) = baked_elapsed_s {
+        (
+            machine_record_highlight_color(controller, active_color_index, elapsed_s),
+            anim::EffectState::default(),
+        )
+    } else {
+        (
+            [1.0; 4],
+            machine_record_highlight_effect(controller, active_color_index),
+        )
+    };
 
     let mut children = Vec::with_capacity(MACHINE_RECORD_ROWS * 4 + 1);
 
@@ -226,12 +339,9 @@ pub(crate) fn build_machine_records_pane(
                 &mut children,
                 &text.rows[i],
                 (i as f32).mul_add(row_height, first_row_y),
-                rank_x,
-                name_x,
-                score_x,
-                date_x,
-                text_zoom,
+                layout,
                 [1.0, 1.0, 1.0, 1.0],
+                anim::EffectState::default(),
             );
         }
 
@@ -249,16 +359,18 @@ pub(crate) fn build_machine_records_pane(
         for i in 0..MACHINE_RECORD_SPLIT_PERSONAL_ROWS {
             let row = &text.rows[MACHINE_RECORD_SPLIT_MACHINE_ROWS + i];
             let col = if row.highlight { hl } else { [1.0; 4] };
+            let effect = if row.highlight {
+                highlight_effect
+            } else {
+                anim::EffectState::default()
+            };
             push_machine_record_row(
                 &mut children,
                 row,
                 (i as f32).mul_add(row_height, first_personal_row_y),
-                rank_x,
-                name_x,
-                score_x,
-                date_x,
-                text_zoom,
+                layout,
                 col,
+                effect,
             );
         }
     } else {
@@ -266,28 +378,127 @@ pub(crate) fn build_machine_records_pane(
         let first_row_y = row_height;
         for (row_idx, row) in text.rows.iter().enumerate() {
             let col = if row.highlight { hl } else { [1.0; 4] };
+            let effect = if row.highlight {
+                highlight_effect
+            } else {
+                anim::EffectState::default()
+            };
             push_machine_record_row(
                 &mut children,
                 row,
                 (row_idx as f32).mul_add(row_height, first_row_y),
-                rank_x,
-                name_x,
-                score_x,
-                date_x,
-                text_zoom,
+                layout,
                 col,
+                effect,
             );
         }
     }
 
-    vec![Actor::Frame {
+    children
+}
+
+pub(crate) fn push_machine_records_pane(
+    out: &mut Vec<Actor>,
+    text: &MachineRecordsPaneText,
+    controller: profile_data::PlayerSide,
+    active_color_index: i32,
+) {
+    out.push(Actor::SharedFrame {
         align: [0.5, 0.5],
-        offset: [pane_origin_x, pane_origin_y],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         background: None,
         z: 101,
-        children,
+        children: text.cached_children(controller, active_color_index),
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_machine_records_pane_legacy(
+    text: &MachineRecordsPaneText,
+    controller: profile_data::PlayerSide,
+    active_color_index: i32,
+    elapsed_s: f32,
+) -> Vec<Actor> {
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 101,
+        children: build_machine_records_children(
+            text,
+            controller,
+            active_color_index,
+            Some(elapsed_s),
+        ),
     }]
+}
+
+/// Stable old/new fixture for retained machine-record actor trees.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct MachineRecordsPaneCacheBenchmark {
+    text: MachineRecordsPaneText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl MachineRecordsPaneCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let machine = [score_data::LeaderboardEntry {
+            rank: 1,
+            name: "AAA".into(),
+            machine_tag: None,
+            score: 9_876.5,
+            date: "2026-08-30".into(),
+            is_rival: false,
+            is_self: true,
+            is_fail: false,
+        }];
+        let text = MachineRecordsPaneText::from_records(&machine, Some(1), &[], None, false);
+        let _ = text.cached_children(profile_data::PlayerSide::P1, 3);
+        Self { text }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_machine_records_pane_legacy(
+            &self.text,
+            profile_data::PlayerSide::P1,
+            3,
+            0.375,
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_machine_records_pane(out, &self.text, profile_data::PlayerSide::P1, 3);
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for MachineRecordsPaneCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_checksum(actors: &[Actor]) -> u64 {
+    let stats = deadlib_present::actors::actor_tree_stats(actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
 }
 
 #[cfg(test)]
@@ -359,5 +570,76 @@ mod tests {
             panic!("oversized record dates should use shared text");
         };
         assert!(Arc::ptr_eq(source, clone));
+    }
+
+    #[test]
+    fn retained_machine_records_match_legacy_tree_without_a_highlight() {
+        let text = MachineRecordsPaneText::from_records(&[], None, &[], None, false);
+        let legacy =
+            build_machine_records_pane_legacy(&text, profile_data::PlayerSide::P2, 7, 0.375);
+        let mut retained = Vec::new();
+        push_machine_records_pane(&mut retained, &text, profile_data::PlayerSide::P2, 7);
+
+        let [
+            Actor::Frame {
+                align: old_align,
+                offset: old_offset,
+                size: old_size,
+                background: old_background,
+                z: old_z,
+                children: old_children,
+            },
+        ] = legacy.as_slice()
+        else {
+            panic!("expected legacy frame");
+        };
+        let [
+            Actor::SharedFrame {
+                align,
+                offset,
+                size,
+                background,
+                z,
+                children,
+                tint,
+                blend,
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained frame");
+        };
+        assert_eq!(old_align, align);
+        assert_eq!(old_offset, offset);
+        assert_eq!(format!("{old_size:?}"), format!("{size:?}"));
+        assert_eq!(format!("{old_background:?}"), format!("{background:?}"));
+        assert_eq!(old_z, z);
+        assert_eq!(format!("{old_children:#?}"), format!("{children:#?}"));
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let repeated = text.cached_children(profile_data::PlayerSide::P2, 7);
+        assert!(Arc::ptr_eq(children, &repeated));
+    }
+
+    #[test]
+    fn retained_highlight_effect_matches_the_legacy_sine_pulse() {
+        let effect = machine_record_highlight_effect(profile_data::PlayerSide::P1, 3);
+        for elapsed in [0.0, 0.125, 0.5, 1.0, 4.0 / 3.0, 2.25] {
+            let percent = anim::effect_mix(effect, elapsed, elapsed).expect("diffuse shift");
+            let mix = anim::glowshift_mix(percent);
+            let rendered: [f32; 4] = std::array::from_fn(|channel| {
+                (effect.color1[channel] - effect.color2[channel])
+                    .mul_add(mix, effect.color2[channel])
+            });
+            let legacy = machine_record_highlight_color(profile_data::PlayerSide::P1, 3, elapsed);
+            for channel in 0..4 {
+                assert!(
+                    (rendered[channel] - legacy[channel]).abs() <= 1.0e-6,
+                    "elapsed={elapsed} channel={channel}: rendered={} legacy={}",
+                    rendered[channel],
+                    legacy[channel],
+                );
+            }
+        }
     }
 }

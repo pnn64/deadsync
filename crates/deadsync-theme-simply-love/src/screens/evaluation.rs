@@ -6030,41 +6030,47 @@ pub fn push_actors(
                 }
                 EvalPane::QrCode => {
                     if let Some(presentation) = state.qr_presentation[player_idx].as_ref() {
-                        actors.extend(eval_panes::build_gs_qr_pane(
+                        eval_panes::push_gs_qr_pane(
+                            actors,
                             presentation,
                             controller,
                             policy.machine_font,
-                        ));
+                        );
                     }
                 }
-                EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
+                EvalPane::GrooveStats => eval_panes::push_gs_records_pane(
+                    actors,
                     controller,
                     &state.online_records[player_idx],
-                )),
-                EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
+                ),
+                EvalPane::GrooveStatsEx => eval_panes::push_gs_ex_records_pane(
+                    actors,
                     controller,
                     &state.online_records[player_idx],
-                )),
-                EvalPane::Srpg => actors.extend(eval_panes::build_srpg_records_pane(
+                ),
+                EvalPane::Srpg => eval_panes::push_srpg_records_pane(
+                    actors,
                     controller,
                     &state.online_records[player_idx],
-                )),
-                EvalPane::Itl => actors.extend(eval_panes::build_itl_records_pane(
+                ),
+                EvalPane::Itl => eval_panes::push_itl_records_pane(
+                    actors,
                     controller,
                     &state.online_records[player_idx],
-                )),
-                EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
+                ),
+                EvalPane::ArrowCloud => eval_panes::push_arrowcloud_records_pane(
+                    actors,
                     controller,
                     &state.online_records[player_idx],
-                )),
+                ),
                 EvalPane::MachineRecords => {
                     if let Some(text) = state.machine_records_text[player_idx].as_ref() {
-                        actors.extend(eval_panes::build_machine_records_pane(
+                        eval_panes::push_machine_records_pane(
+                            actors,
                             text,
                             controller,
                             state.active_color_index,
-                            state.screen_elapsed,
-                        ));
+                        );
                     }
                 }
                 EvalPane::Column => {

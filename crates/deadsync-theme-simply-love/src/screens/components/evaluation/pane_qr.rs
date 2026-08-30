@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::sync::Arc;
+
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
@@ -46,14 +49,15 @@ fn push_qr(
 
 /// Immutable score text, help copy, and QR geometry retained by Evaluation.
 ///
-/// Initialization performs all formatting, joining, and QR encoding. Actor
-/// frames only clone bounded/shared payloads and the prepared geometry `Arc`.
+/// Initialization performs all formatting, joining, and QR encoding. Each font
+/// variant compiles its immutable actor slice once, then frames clone its `Arc`.
 #[derive(Clone)]
 pub(crate) struct QrPanePresentation {
     score: TextContent,
     help: TextContent,
     qr: Option<qr_code::PreparedQrCode>,
     valid: bool,
+    children: RefCell<[Option<Arc<[Actor]>>; 2]>,
 }
 
 impl QrPanePresentation {
@@ -91,17 +95,27 @@ impl QrPanePresentation {
             help,
             qr: qr_content.and_then(|content| qr_code::prepare(content, GS_QR_SIZE)),
             valid,
+            children: RefCell::new([None, None]),
         }
+    }
+
+    fn cached_children(&self, machine_font: MachineFont) -> Arc<[Actor]> {
+        let index = match machine_font {
+            MachineFont::Wendy => 0,
+            MachineFont::Mega => 1,
+        };
+        if let Some(children) = self.children.borrow()[index].as_ref() {
+            return Arc::clone(children);
+        }
+
+        let built = Arc::from(build_qr_children(self, machine_font));
+        let mut cache = self.children.borrow_mut();
+        let children = cache[index].get_or_insert(built);
+        Arc::clone(children)
     }
 }
 
-pub(crate) fn build_gs_qr_pane(
-    presentation: &QrPanePresentation,
-    controller: profile_data::PlayerSide,
-    machine_font: MachineFont,
-) -> Vec<Actor> {
-    let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
+fn build_qr_children(presentation: &QrPanePresentation, machine_font: MachineFont) -> Vec<Actor> {
     let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
     let score_w = 70.0;
     let score_h = 28.0;
@@ -188,14 +202,104 @@ pub(crate) fn build_gs_qr_pane(
         }
     }
 
-    vec![Actor::Frame {
+    children
+}
+
+pub(crate) fn push_gs_qr_pane(
+    out: &mut Vec<Actor>,
+    presentation: &QrPanePresentation,
+    controller: profile_data::PlayerSide,
+    machine_font: MachineFont,
+) {
+    out.push(Actor::SharedFrame {
         align: [0.5, 0.5],
-        offset: [pane_origin_x, pane_origin_y],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         background: None,
         z: 101,
-        children,
+        children: presentation.cached_children(machine_font),
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_gs_qr_pane_legacy(
+    presentation: &QrPanePresentation,
+    controller: profile_data::PlayerSide,
+    machine_font: MachineFont,
+) -> Vec<Actor> {
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 101,
+        children: build_qr_children(presentation, machine_font),
     }]
+}
+
+/// Stable old/new fixture for retained QR-pane actor trees.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct QrPaneCacheBenchmark {
+    presentation: QrPanePresentation,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl QrPaneCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let presentation = QrPanePresentation::from_parts(
+            0.98765,
+            true,
+            &[],
+            Some("https://example.com/QR/benchmark-score"),
+        );
+        let _ = presentation.cached_children(MachineFont::Mega);
+        Self { presentation }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_gs_qr_pane_legacy(
+            &self.presentation,
+            profile_data::PlayerSide::P1,
+            MachineFont::Mega,
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_gs_qr_pane(
+            out,
+            &self.presentation,
+            profile_data::PlayerSide::P1,
+            MachineFont::Mega,
+        );
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for QrPaneCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_checksum(actors: &[Actor]) -> u64 {
+    let stats = deadlib_present::actors::actor_tree_stats(actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
 }
 
 #[cfg(test)]
@@ -264,5 +368,67 @@ mod tests {
         assert!(std::sync::Arc::ptr_eq(source, clone));
         assert!(presentation.qr.is_some());
         assert!(!presentation.valid);
+    }
+
+    #[test]
+    fn retained_qr_pane_matches_legacy_tree_and_reuses_children() {
+        let presentation = QrPanePresentation::from_parts(
+            0.98765,
+            false,
+            &["Autoplay was used".into(), "Chart is unsupported".into()],
+            None,
+        );
+        let legacy = build_gs_qr_pane_legacy(
+            &presentation,
+            profile_data::PlayerSide::P2,
+            MachineFont::Mega,
+        );
+        let mut retained = Vec::new();
+        push_gs_qr_pane(
+            &mut retained,
+            &presentation,
+            profile_data::PlayerSide::P2,
+            MachineFont::Mega,
+        );
+
+        let [
+            Actor::Frame {
+                align: old_align,
+                offset: old_offset,
+                size: old_size,
+                background: old_background,
+                z: old_z,
+                children: old_children,
+            },
+        ] = legacy.as_slice()
+        else {
+            panic!("expected legacy frame");
+        };
+        let [
+            Actor::SharedFrame {
+                align,
+                offset,
+                size,
+                background,
+                z,
+                children,
+                tint,
+                blend,
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained frame");
+        };
+        assert_eq!(old_align, align);
+        assert_eq!(old_offset, offset);
+        assert_eq!(format!("{old_size:?}"), format!("{size:?}"));
+        assert_eq!(format!("{old_background:?}"), format!("{background:?}"));
+        assert_eq!(old_z, z);
+        assert_eq!(format!("{old_children:#?}"), format!("{children:#?}"));
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let repeated = presentation.cached_children(MachineFont::Mega);
+        assert!(Arc::ptr_eq(children, &repeated));
     }
 }

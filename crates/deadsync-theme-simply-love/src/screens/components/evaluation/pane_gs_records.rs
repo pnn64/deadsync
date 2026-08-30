@@ -1,3 +1,6 @@
+use std::cell::OnceCell;
+use std::sync::Arc;
+
 use crate::act;
 use crate::screens::components::shared::gs_scorebox::{
     entries_with_local_self_state, srpg_logo_texture_key,
@@ -199,6 +202,7 @@ impl RecordsRow {
 struct RecordsPanePresentation {
     kind: RecordsPaneKind,
     rows: [RecordsRow; GS_RECORD_ROWS],
+    children: OnceCell<Arc<[Actor]>>,
 }
 
 impl RecordsPanePresentation {
@@ -206,6 +210,7 @@ impl RecordsPanePresentation {
         let mut presentation = Self {
             kind,
             rows: std::array::from_fn(|_| RecordsRow::placeholder()),
+            children: OnceCell::new(),
         };
         let status = match runtime.leaderboards.as_ref() {
             None => Some(GS_ERROR_DISABLED),
@@ -241,6 +246,13 @@ impl RecordsPanePresentation {
         }
         presentation
     }
+
+    fn cached_children(&self) -> Arc<[Actor]> {
+        Arc::clone(
+            self.children
+                .get_or_init(|| Arc::from(build_records_children(self))),
+        )
+    }
 }
 
 /// Five actor-ready online panes replaced atomically with each shell snapshot.
@@ -273,12 +285,7 @@ impl Default for OnlineRecordsPresentation {
     }
 }
 
-fn build_records_pane(
-    controller: profile_data::PlayerSide,
-    presentation: &RecordsPanePresentation,
-) -> Vec<Actor> {
-    let pane_origin_x = pane_origin_x(controller);
-    let pane_origin_y = deadlib_present::space::screen_center_y() - 62.0;
+fn build_records_children(presentation: &RecordsPanePresentation) -> Vec<Actor> {
     let pane_zoom = 0.8_f32;
     let row_height = 22.0 * pane_zoom;
     let first_row_y = row_height;
@@ -345,58 +352,145 @@ fn build_records_pane(
         ));
     }
 
-    vec![Actor::Frame {
+    children
+}
+
+fn push_records_pane(
+    out: &mut Vec<Actor>,
+    controller: profile_data::PlayerSide,
+    presentation: &RecordsPanePresentation,
+) {
+    out.push(Actor::SharedFrame {
         align: [0.5, 0.5],
-        offset: [pane_origin_x, pane_origin_y],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         background: None,
         z: 101,
-        children,
+        children: presentation.cached_children(),
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_records_pane_legacy(
+    controller: profile_data::PlayerSide,
+    presentation: &RecordsPanePresentation,
+) -> Vec<Actor> {
+    vec![Actor::Frame {
+        align: [0.5, 0.5],
+        offset: [
+            pane_origin_x(controller),
+            deadlib_present::space::screen_center_y() - 62.0,
+        ],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        background: None,
+        z: 101,
+        children: build_records_children(presentation),
     }]
 }
 
-pub(crate) fn build_gs_records_pane(
+pub(crate) fn push_gs_records_pane(
+    out: &mut Vec<Actor>,
     controller: profile_data::PlayerSide,
     presentation: &OnlineRecordsPresentation,
-) -> Vec<Actor> {
-    build_records_pane(
+) {
+    push_records_pane(
+        out,
         controller,
         presentation.pane(RecordsPaneKind::GrooveStatsItg),
     )
 }
 
-pub(crate) fn build_gs_ex_records_pane(
+pub(crate) fn push_gs_ex_records_pane(
+    out: &mut Vec<Actor>,
     controller: profile_data::PlayerSide,
     presentation: &OnlineRecordsPresentation,
-) -> Vec<Actor> {
-    build_records_pane(
+) {
+    push_records_pane(
+        out,
         controller,
         presentation.pane(RecordsPaneKind::GrooveStatsEx),
     )
 }
 
-pub(crate) fn build_itl_records_pane(
+pub(crate) fn push_itl_records_pane(
+    out: &mut Vec<Actor>,
     controller: profile_data::PlayerSide,
     presentation: &OnlineRecordsPresentation,
-) -> Vec<Actor> {
-    build_records_pane(controller, presentation.pane(RecordsPaneKind::ItlEx))
+) {
+    push_records_pane(out, controller, presentation.pane(RecordsPaneKind::ItlEx))
 }
 
-pub(crate) fn build_srpg_records_pane(
+pub(crate) fn push_srpg_records_pane(
+    out: &mut Vec<Actor>,
     controller: profile_data::PlayerSide,
     presentation: &OnlineRecordsPresentation,
-) -> Vec<Actor> {
-    build_records_pane(controller, presentation.pane(RecordsPaneKind::Srpg))
+) {
+    push_records_pane(out, controller, presentation.pane(RecordsPaneKind::Srpg))
 }
 
-pub(crate) fn build_arrowcloud_records_pane(
+pub(crate) fn push_arrowcloud_records_pane(
+    out: &mut Vec<Actor>,
     controller: profile_data::PlayerSide,
     presentation: &OnlineRecordsPresentation,
-) -> Vec<Actor> {
-    build_records_pane(
+) {
+    push_records_pane(
+        out,
         controller,
         presentation.pane(RecordsPaneKind::ArrowCloudHardEx),
     )
+}
+
+/// Stable old/new fixture for retained online-record actor trees.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct OnlineRecordsPaneCacheBenchmark {
+    presentation: OnlineRecordsPresentation,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl OnlineRecordsPaneCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let presentation = OnlineRecordsPresentation::default();
+        let _ = presentation
+            .pane(RecordsPaneKind::GrooveStatsItg)
+            .cached_children();
+        Self { presentation }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_records_pane_legacy(
+            profile_data::PlayerSide::P1,
+            self.presentation.pane(RecordsPaneKind::GrooveStatsItg),
+        ));
+        actor_tree_checksum(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_gs_records_pane(out, profile_data::PlayerSide::P1, &self.presentation);
+        actor_tree_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for OnlineRecordsPaneCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_checksum(actors: &[Actor]) -> u64 {
+    let stats = deadlib_present::actors::actor_tree_stats(actors);
+    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
 }
 
 #[cfg(test)]
@@ -540,5 +634,72 @@ mod tests {
             panic!("oversized online names should use shared text");
         };
         assert!(Arc::ptr_eq(source, clone));
+    }
+
+    #[test]
+    fn retained_online_records_match_legacy_tree_and_reuse_children() {
+        let runtime = ScoreboxSideView {
+            leaderboards: Some(score_data::CachedPlayerLeaderboardData::ready(
+                score_data::PlayerLeaderboardData {
+                    panes: vec![score_data::LeaderboardPane {
+                        name: "GrooveStats".into(),
+                        entries: vec![entry(1, "AAA", true, false)],
+                        is_ex: false,
+                        disabled: false,
+                        personalized: true,
+                        arrowcloud_kind: None,
+                    }],
+                    srpg_self_score: None,
+                    itl_self_score: None,
+                    itl_self_rank: None,
+                },
+            )),
+            ..Default::default()
+        };
+        let presentation = OnlineRecordsPresentation::new(&runtime);
+        let pane = presentation.pane(RecordsPaneKind::GrooveStatsItg);
+        let legacy = build_records_pane_legacy(profile_data::PlayerSide::P2, pane);
+        let mut retained = Vec::new();
+        push_gs_records_pane(&mut retained, profile_data::PlayerSide::P2, &presentation);
+
+        let [
+            Actor::Frame {
+                align: old_align,
+                offset: old_offset,
+                size: old_size,
+                background: old_background,
+                z: old_z,
+                children: old_children,
+            },
+        ] = legacy.as_slice()
+        else {
+            panic!("expected legacy frame");
+        };
+        let [
+            Actor::SharedFrame {
+                align,
+                offset,
+                size,
+                background,
+                z,
+                children,
+                tint,
+                blend,
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected retained frame");
+        };
+        assert_eq!(old_align, align);
+        assert_eq!(old_offset, offset);
+        assert_eq!(format!("{old_size:?}"), format!("{size:?}"));
+        assert_eq!(format!("{old_background:?}"), format!("{background:?}"));
+        assert_eq!(old_z, z);
+        assert_eq!(format!("{old_children:#?}"), format!("{children:#?}"));
+        assert_eq!(*tint, [1.0; 4]);
+        assert_eq!(*blend, None);
+
+        let repeated = pane.cached_children();
+        assert!(Arc::ptr_eq(children, &repeated));
     }
 }

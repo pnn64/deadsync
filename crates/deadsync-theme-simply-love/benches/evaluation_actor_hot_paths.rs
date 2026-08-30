@@ -4,8 +4,11 @@ use deadsync_profile::PlayerSide;
 use deadsync_score::Grade;
 use deadsync_theme_simply_love::screens::components::evaluation::{
     eval_grades::{self, EvalGradeParams},
+    pane_gs_records::OnlineRecordsPaneCacheBenchmark,
+    pane_machine_records::MachineRecordsPaneCacheBenchmark,
     pane_modifiers::{benchmark_build_modifiers_pane, benchmark_push_modifiers_pane},
     pane_percentage::PercentagePaneAppendBenchmark,
+    pane_qr::QrPaneCacheBenchmark,
     pane_timing::TimingPaneAppendBenchmark,
     pane_timing_arrows::TimingArrowsPaneAppendBenchmark,
 };
@@ -434,6 +437,60 @@ fn timing_arrows_pane_benchmark() {
     );
 }
 
+fn qr_pane_benchmark() {
+    let fixture = QrPaneCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair("retained QR pane actor tree", PANE_FRAMES, &old, &new, true);
+}
+
+fn online_records_pane_benchmark() {
+    let fixture = OnlineRecordsPaneCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "retained online-records actor tree",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+}
+
+fn machine_records_pane_benchmark() {
+    let fixture = MachineRecordsPaneCacheBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.legacy_frame(&mut legacy),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "retained machine-records actor tree",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
+    );
+}
+
 #[cfg(target_arch = "x86")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: the fence and timestamp instructions require no memory operands.
@@ -464,4 +521,7 @@ fn main() {
     percentage_pane_benchmark();
     timing_pane_benchmark();
     timing_arrows_pane_benchmark();
+    qr_pane_benchmark();
+    online_records_pane_benchmark();
+    machine_records_pane_benchmark();
 }
