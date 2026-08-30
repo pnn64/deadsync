@@ -7,13 +7,25 @@ use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing::{ArrowTimingBucket, ArrowTimingStats};
 
+#[cfg(any(test, feature = "bench-support"))]
 use super::pane_column::build_pane3_arrow_preview;
+use super::pane_column::{pane3_arrow_preview_capacity, push_pane3_arrow_preview};
 use super::utils::pane_origin_x;
 
 const LEFT_FOOT_RGBA: [f32; 4] = color::rgba_hex("#FF3030");
 const RIGHT_FOOT_RGBA: [f32; 4] = color::rgba_hex("#3070FF");
 const LABEL_RGBA: [f32; 4] = color::rgba_hex("#A0A0A0");
 const VALUE_RGBA: [f32; 4] = color::rgba_hex("#FFFFFF");
+const TIMING_ARROWS_TABLE_ACTORS: usize = 37;
+
+fn timing_arrows_child_capacity(noteskin: Option<&deadsync_assets::noteskin::Noteskin>) -> usize {
+    TIMING_ARROWS_TABLE_ACTORS
+        + noteskin.map_or(0, |noteskin| {
+            (0..4)
+                .map(|col_idx| pane3_arrow_preview_capacity(noteskin, col_idx))
+                .sum()
+        })
+}
 
 #[derive(Clone)]
 pub(crate) struct TimingArrowsText {
@@ -64,13 +76,21 @@ fn cell_text(bucket: &ArrowTimingBucket, row: usize) -> TextContent {
 /// Builds the per-arrow timing pane: a small table that breaks down
 /// `# Steps`, `Mean Abs`, `Mean`, `Stddev*3`, and `Max` for each of the four
 /// arrow directions plus the player's left and right foot.
-pub(crate) fn build_timing_arrows_pane(
-    score_info: &ScoreInfo,
+fn timing_arrows_pane_actor(
+    noteskin: Option<&deadsync_assets::noteskin::Noteskin>,
     text: &TimingArrowsText,
     controller: profile_data::PlayerSide,
     preview_elapsed: f32,
     machine_font: MachineFont,
-) -> Vec<Actor> {
+    child_capacity: usize,
+    mut append_preview: impl FnMut(
+        &mut Vec<Actor>,
+        &deadsync_assets::noteskin::Noteskin,
+        usize,
+        [f32; 2],
+        f32,
+    ),
+) -> Actor {
     let pane_width: f32 = 300.0;
     let pane_height: f32 = 180.0;
 
@@ -78,7 +98,7 @@ pub(crate) fn build_timing_arrows_pane(
     let frame_x = pane_width.mul_add(-0.5, pane_origin_x);
     let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
-    let mut children = Vec::new();
+    let mut children = Vec::with_capacity(child_capacity);
 
     // Layout: 6 data columns + a row-label gutter.
     let label_col_width: f32 = 64.0;
@@ -101,16 +121,15 @@ pub(crate) fn build_timing_arrows_pane(
 
     // Column headers: noteskin arrow previews for ←/↓/↑/→ (20% larger
     // than the column-judgments pane to give the table room to breathe).
-    if let Some(ns) = score_info.noteskin.as_ref() {
+    if let Some(ns) = noteskin {
         for col_idx in 0..4 {
-            children.extend(build_pane3_arrow_preview(
+            append_preview(
+                &mut children,
                 ns,
                 col_idx,
                 [col_centers[col_idx], header_y],
-                None,
                 preview_elapsed,
-                1.2,
-            ));
+            );
         }
     }
 
@@ -156,14 +175,146 @@ pub(crate) fn build_timing_arrows_pane(
         }
     }
 
-    vec![Actor::Frame {
+    Actor::Frame {
         align: [0.0, 0.0],
         offset: [frame_x, frame_y],
         size: [SizeSpec::Px(pane_width), SizeSpec::Px(pane_height)],
         children,
         background: None,
         z: 101,
-    }]
+    }
+}
+
+/// Appends the per-arrow timing pane with one pre-sized child allocation.
+pub(crate) fn push_timing_arrows_pane(
+    out: &mut Vec<Actor>,
+    score_info: &ScoreInfo,
+    text: &TimingArrowsText,
+    controller: profile_data::PlayerSide,
+    preview_elapsed: f32,
+    machine_font: MachineFont,
+) {
+    let noteskin = score_info.noteskin.as_deref();
+    out.push(timing_arrows_pane_actor(
+        noteskin,
+        text,
+        controller,
+        preview_elapsed,
+        machine_font,
+        timing_arrows_child_capacity(noteskin),
+        |children, noteskin, col_idx, center, elapsed| {
+            push_pane3_arrow_preview(children, noteskin, col_idx, center, None, elapsed, 1.2);
+        },
+    ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_timing_arrows_pane_legacy(
+    noteskin: Option<&deadsync_assets::noteskin::Noteskin>,
+    text: &TimingArrowsText,
+    controller: profile_data::PlayerSide,
+    preview_elapsed: f32,
+    machine_font: MachineFont,
+) -> Vec<Actor> {
+    vec![timing_arrows_pane_actor(
+        noteskin,
+        text,
+        controller,
+        preview_elapsed,
+        machine_font,
+        0,
+        |children, noteskin, col_idx, center, elapsed| {
+            children.extend(build_pane3_arrow_preview(
+                noteskin, col_idx, center, None, elapsed, 1.2,
+            ));
+        },
+    )]
+}
+
+/// Stable old/new fixture for the populated per-arrow timing pane.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct TimingArrowsPaneAppendBenchmark {
+    noteskin: deadsync_assets::noteskin::Noteskin,
+    text: TimingArrowsText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl TimingArrowsPaneAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let bucket = ArrowTimingBucket {
+            count: 123,
+            stats: deadsync_rules::timing::TimingStats {
+                mean_abs_ms: 12.345,
+                mean_ms: -3.5,
+                stddev_ms: 2.25,
+                max_abs_ms: 20.0,
+            },
+        };
+        let text = TimingArrowsText::new(&ArrowTimingStats {
+            per_column: vec![bucket; 4],
+            left_foot: bucket,
+            right_foot: bucket,
+        })
+        .expect("four columns have timing-arrow presentation");
+        let noteskin = deadsync_assets::noteskin::load_itg_default(&deadsync_noteskin::Style {
+            num_cols: 4,
+            num_players: 1,
+        })
+        .expect("bundled dance noteskin should load");
+        Self { noteskin, text }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_timing_arrows_pane_legacy(
+            Some(&self.noteskin),
+            &self.text,
+            profile_data::PlayerSide::P1,
+            1.25,
+            MachineFont::Mega,
+        ));
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let noteskin = Some(&self.noteskin);
+        out.push(timing_arrows_pane_actor(
+            noteskin,
+            &self.text,
+            profile_data::PlayerSide::P1,
+            1.25,
+            MachineFont::Mega,
+            timing_arrows_child_capacity(noteskin),
+            |children, noteskin, col_idx, center, elapsed| {
+                push_pane3_arrow_preview(children, noteskin, col_idx, center, None, elapsed, 1.2);
+            },
+        ));
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for TimingArrowsPaneAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_count(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |count, actor| {
+        count
+            + match actor {
+                Actor::Frame { children, .. } => actor_tree_count(children),
+                _ => 1,
+            }
+    })
 }
 
 #[cfg(test)]
@@ -236,5 +387,18 @@ mod tests {
         assert_eq!(text.cells[1][0].as_str(), format!("{:.2}", f32::MAX));
         assert!(matches!(text.cells[1][0], TextContent::Shared(_)));
         assert!(TimingArrowsText::new(&ArrowTimingStats::default()).is_none());
+    }
+
+    #[test]
+    fn direct_timing_arrows_append_matches_legacy_batch() {
+        let fixture = TimingArrowsPaneAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(1);
+        let mut direct = Vec::with_capacity(1);
+
+        assert_eq!(
+            fixture.legacy_frame(&mut legacy),
+            fixture.direct_frame(&mut direct)
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

@@ -715,21 +715,35 @@ const PANE3_PREVIEW_BPM: f32 = 120.0;
 const PANE3_PREVIEW_TARGET_ARROW_PX: f32 = 64.0;
 const PANE3_PREVIEW_ZOOM: f32 = 0.4;
 
-/// Renders a single column's tap-note preview (4th-quantized) using the
+#[inline]
+pub(crate) fn pane3_arrow_preview_capacity(
+    noteskin: &deadsync_assets::noteskin::Noteskin,
+    col_idx: usize,
+) -> usize {
+    let note_idx = col_idx
+        .saturating_mul(NUM_QUANTIZATIONS)
+        .saturating_add(Quantization::Q4th as usize);
+    noteskin.note_layers.get(note_idx).map_or_else(
+        || usize::from(noteskin.notes.get(note_idx).is_some()),
+        |layers| layers.len(),
+    )
+}
+
+/// Appends a single column's tap-note preview (4th-quantized) using the
 /// supplied noteskin. Lives next to the pane-3 implementation so the
 /// per-arrow timing pane can show identical icons without duplicating the
 /// rendering logic. `arrow_color` of `None` uses the noteskin's natural
 /// tints; `Some(rgba)` recolors the arrow to a solid tint (used by the
 /// glow-on-judge effect in pane 3).
-pub(crate) fn build_pane3_arrow_preview(
+pub(crate) fn push_pane3_arrow_preview(
+    actors: &mut Vec<Actor>,
     noteskin: &deadsync_assets::noteskin::Noteskin,
     col_idx: usize,
     center: [f32; 2],
     arrow_color: Option<[f32; 4]>,
     preview_elapsed: f32,
     scale_multiplier: f32,
-) -> Vec<Actor> {
-    let mut actors: Vec<Actor> = Vec::new();
+) {
     let preview_time = preview_elapsed.max(0.0);
     let preview_beat = preview_time * (PANE3_PREVIEW_BPM / 60.0);
 
@@ -866,7 +880,7 @@ pub(crate) fn build_pane3_arrow_preview(
     } else if let Some(slot) = noteskin.notes.get(note_idx) {
         let draw = slot.model_draw_at(elapsed, beat);
         if !draw.visible {
-            return actors;
+            return;
         }
         let frame = slot.frame_index_from_phase(note_uv_phase);
         let uv_elapsed = if slot.model.is_some() {
@@ -879,7 +893,7 @@ pub(crate) fn build_pane3_arrow_preview(
         let w = size[0].max(0.0);
         let h = size[1].max(0.0);
         if w <= 0.0 || h <= 0.0 {
-            return actors;
+            return;
         }
         let scale = (PANE3_PREVIEW_TARGET_ARROW_PX * effective_zoom) / h.max(1.0);
         let final_size = [w * scale, h * scale];
@@ -943,6 +957,27 @@ pub(crate) fn build_pane3_arrow_preview(
             }
         }
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub(crate) fn build_pane3_arrow_preview(
+    noteskin: &deadsync_assets::noteskin::Noteskin,
+    col_idx: usize,
+    center: [f32; 2],
+    arrow_color: Option<[f32; 4]>,
+    preview_elapsed: f32,
+    scale_multiplier: f32,
+) -> Vec<Actor> {
+    let mut actors = Vec::new();
+    push_pane3_arrow_preview(
+        &mut actors,
+        noteskin,
+        col_idx,
+        center,
+        arrow_color,
+        preview_elapsed,
+        scale_multiplier,
+    );
     actors
 }
 

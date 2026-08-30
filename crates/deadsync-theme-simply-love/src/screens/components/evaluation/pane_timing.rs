@@ -171,8 +171,8 @@ const fn timing_bands_ms(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn build_timing_pane_with_palette(
-    score_info: &ScoreInfo,
+fn timing_pane_actor(
+    worst_window_ms: f32,
     text: &TimingPaneText,
     timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
     controller: profile_data::PlayerSide,
@@ -180,7 +180,8 @@ pub(crate) fn build_timing_pane_with_palette(
     transparent: bool,
     machine_font: MachineFont,
     palette: JudgmentPalette,
-) -> Vec<Actor> {
+    child_capacity: usize,
+) -> Actor {
     let pane_width: f32 = 300.0;
     let pane_height: f32 = 180.0;
     let topbar_height: f32 = 26.0;
@@ -190,7 +191,7 @@ pub(crate) fn build_timing_pane_with_palette(
     let frame_x = pane_width.mul_add(-0.5, pane_origin_x);
     let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
-    let mut children = Vec::new();
+    let mut children = Vec::with_capacity(child_capacity);
     const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");
     let topbar_alpha = eval_style_alpha(transparent, 1.0, 0.5);
     let early_alpha = eval_style_alpha(transparent, 1.0, 0.5);
@@ -230,8 +231,7 @@ pub(crate) fn build_timing_pane_with_palette(
     let bottom_bar_center_y = pane_height - (bottombar_height / 2.0_f32);
     let timing_windows: [f32; 5] = timing::effective_windows_ms(); // ms, with +1.5ms
     let (judgment_bands, band_count) = timing_bands_ms(scale, timing_windows, palette);
-    let legend_span_ms =
-        super::eval_graphs::timing_display_window_ms(score_info.histogram.worst_window_ms, scale);
+    let legend_span_ms = super::eval_graphs::timing_display_window_ms(worst_window_ms, scale);
 
     for (i, band) in judgment_bands.iter().take(band_count).enumerate() {
         if band.start_ms >= legend_span_ms {
@@ -314,14 +314,142 @@ pub(crate) fn build_timing_pane_with_palette(
         ));
     }
 
-    vec![Actor::Frame {
+    Actor::Frame {
         align: [0.0, 0.0],
         offset: [frame_x, frame_y],
         size: [SizeSpec::Px(pane_width), SizeSpec::Px(pane_height)],
         children,
         background: None,
         z: 101,
-    }]
+    }
+}
+
+/// Appends the aggregate timing pane without staging its outer actor list.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_timing_pane_with_palette(
+    out: &mut Vec<Actor>,
+    score_info: &ScoreInfo,
+    text: &TimingPaneText,
+    timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
+    controller: profile_data::PlayerSide,
+    scale: TimingHistogramScale,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) {
+    // Five fixed chrome actors, thirteen HardEx legend labels, one mesh,
+    // and eight statistic labels/values.
+    const TIMING_PANE_CHILD_CAPACITY: usize = 27;
+    out.push(timing_pane_actor(
+        score_info.histogram.worst_window_ms,
+        text,
+        timing_hist_mesh,
+        controller,
+        scale,
+        transparent,
+        machine_font,
+        palette,
+        TIMING_PANE_CHILD_CAPACITY,
+    ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn build_timing_pane_legacy(
+    worst_window_ms: f32,
+    text: &TimingPaneText,
+    timing_hist_mesh: Option<&Arc<[MeshVertex]>>,
+    controller: profile_data::PlayerSide,
+    scale: TimingHistogramScale,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) -> Vec<Actor> {
+    vec![timing_pane_actor(
+        worst_window_ms,
+        text,
+        timing_hist_mesh,
+        controller,
+        scale,
+        transparent,
+        machine_font,
+        palette,
+        0,
+    )]
+}
+
+/// Stable old/new fixture for aggregate timing-pane allocation churn.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct TimingPaneAppendBenchmark {
+    text: TimingPaneText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl TimingPaneAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            text: TimingPaneText::from_timing(timing::TimingStats {
+                mean_abs_ms: 12.345,
+                mean_ms: -3.5,
+                stddev_ms: 2.25,
+                max_abs_ms: 180.0,
+            }),
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_timing_pane_legacy(
+            180.0,
+            &self.text,
+            None,
+            profile_data::PlayerSide::P1,
+            TimingHistogramScale::HardEx,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        ));
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.push(timing_pane_actor(
+            180.0,
+            &self.text,
+            None,
+            profile_data::PlayerSide::P1,
+            TimingHistogramScale::HardEx,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+            27,
+        ));
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for TimingPaneAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_count(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |count, actor| {
+        count
+            + match actor {
+                Actor::Frame { children, .. } => actor_tree_count(children),
+                _ => 1,
+            }
+    })
 }
 
 #[cfg(test)]
@@ -364,5 +492,18 @@ mod tests {
             panic!("oversized timing values should use shared text");
         };
         assert!(Arc::ptr_eq(text, clone));
+    }
+
+    #[test]
+    fn direct_timing_append_matches_legacy_batch() {
+        let fixture = TimingPaneAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(1);
+        let mut direct = Vec::with_capacity(1);
+
+        assert_eq!(
+            fixture.legacy_frame(&mut legacy),
+            fixture.direct_frame(&mut direct)
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

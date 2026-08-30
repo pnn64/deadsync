@@ -5968,7 +5968,8 @@ pub fn push_actors(
             };
 
             if let Some(text) = state.percentage_text[player_idx].as_ref() {
-                actors.extend(eval_panes::build_pane_percentage_display_with_palette(
+                eval_panes::push_pane_percentage_display_with_palette(
+                    actors,
                     si,
                     text,
                     pane,
@@ -5976,11 +5977,12 @@ pub fn push_actors(
                     policy.transparent_panels,
                     policy.machine_font,
                     state.context.players[player_idx].judgment_palette,
-                ));
+                );
             }
 
             match pane {
-                EvalPane::Timing => actors.extend(eval_panes::build_timing_pane_with_palette(
+                EvalPane::Timing => eval_panes::push_timing_pane_with_palette(
+                    actors,
                     si,
                     timing_text,
                     state.timing_hist_mesh[player_idx].as_ref(),
@@ -5989,8 +5991,9 @@ pub fn push_actors(
                     policy.transparent_panels,
                     policy.machine_font,
                     state.context.players[player_idx].judgment_palette,
-                )),
-                EvalPane::TimingEx => actors.extend(eval_panes::build_timing_pane_with_palette(
+                ),
+                EvalPane::TimingEx => eval_panes::push_timing_pane_with_palette(
+                    actors,
                     si,
                     timing_text,
                     state.timing_hist_mesh_ex[player_idx].as_ref(),
@@ -5999,9 +6002,10 @@ pub fn push_actors(
                     policy.transparent_panels,
                     policy.machine_font,
                     state.context.players[player_idx].judgment_palette,
-                )),
+                ),
                 EvalPane::TimingHardEx => {
-                    actors.extend(eval_panes::build_timing_pane_with_palette(
+                    eval_panes::push_timing_pane_with_palette(
+                        actors,
                         si,
                         timing_text,
                         state.timing_hist_mesh_hard_ex[player_idx].as_ref(),
@@ -6010,17 +6014,18 @@ pub fn push_actors(
                         policy.transparent_panels,
                         policy.machine_font,
                         state.context.players[player_idx].judgment_palette,
-                    ));
+                    );
                 }
                 EvalPane::TimingArrows => {
                     if let Some(text) = state.timing_arrows_text[player_idx].as_ref() {
-                        actors.extend(eval_panes::build_timing_arrows_pane(
+                        eval_panes::push_timing_arrows_pane(
+                            actors,
                             si,
                             text,
                             controller,
                             state.screen_elapsed,
                             policy.machine_font,
-                        ));
+                        );
                     }
                 }
                 EvalPane::QrCode => {

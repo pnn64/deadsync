@@ -40,8 +40,8 @@ pub(crate) use pane_gs_records::{
 };
 pub(crate) use pane_machine_records::{MachineRecordsPaneText, build_machine_records_pane};
 pub use pane_modifiers::{build_modifiers_pane, push_modifiers_pane};
-pub(crate) use pane_percentage::{PercentageText, build_pane_percentage_display_with_palette};
+pub(crate) use pane_percentage::{PercentageText, push_pane_percentage_display_with_palette};
 pub(crate) use pane_qr::{QrPanePresentation, build_gs_qr_pane};
 pub(crate) use pane_stats::build_stats_pane_with_palette;
-pub(crate) use pane_timing::{TimingPaneText, build_timing_pane_with_palette};
-pub(crate) use pane_timing_arrows::{TimingArrowsText, build_timing_arrows_pane};
+pub(crate) use pane_timing::{TimingPaneText, push_timing_pane_with_palette};
+pub(crate) use pane_timing_arrows::{TimingArrowsText, push_timing_arrows_pane};

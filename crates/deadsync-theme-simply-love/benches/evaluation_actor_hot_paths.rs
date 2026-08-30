@@ -5,6 +5,9 @@ use deadsync_score::Grade;
 use deadsync_theme_simply_love::screens::components::evaluation::{
     eval_grades::{self, EvalGradeParams},
     pane_modifiers::{benchmark_build_modifiers_pane, benchmark_push_modifiers_pane},
+    pane_percentage::PercentagePaneAppendBenchmark,
+    pane_timing::TimingPaneAppendBenchmark,
+    pane_timing_arrows::TimingArrowsPaneAppendBenchmark,
 };
 use deadsync_theme_simply_love::screens::components::shared::lobby_hud::{
     CachedRenderParams, LobbyHudCache, RenderParams, build_panel, push_cached_panel,
@@ -21,6 +24,7 @@ static ALLOC: CountingAlloc = CountingAlloc::new();
 const GRADE_FRAMES: usize = 200_000;
 const MODIFIER_FRAMES: usize = 500_000;
 const LOBBY_FRAMES: usize = 30_000;
+const PANE_FRAMES: usize = 50_000;
 const SAMPLE_OPS: usize = 500;
 
 struct CountingAlloc {
@@ -373,6 +377,63 @@ fn lobby_benchmark() {
     );
 }
 
+fn percentage_pane_benchmark() {
+    let fixture = PercentagePaneAppendBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut direct = Vec::with_capacity(1);
+    let _ = fixture.legacy_frame(&mut legacy);
+    let _ = fixture.direct_frame(&mut direct);
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    report_pair(
+        "percentage pane actor staging",
+        PANE_FRAMES,
+        &old,
+        &new,
+        false,
+    );
+}
+
+fn timing_pane_benchmark() {
+    let fixture = TimingPaneAppendBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut direct = Vec::with_capacity(1);
+    let _ = fixture.legacy_frame(&mut legacy);
+    let _ = fixture.direct_frame(&mut direct);
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    report_pair(
+        "aggregate timing pane actor staging",
+        PANE_FRAMES,
+        &old,
+        &new,
+        false,
+    );
+}
+
+fn timing_arrows_pane_benchmark() {
+    let fixture = TimingArrowsPaneAppendBenchmark::new();
+    let mut legacy = Vec::with_capacity(1);
+    let mut direct = Vec::with_capacity(1);
+    let _ = fixture.legacy_frame(&mut legacy);
+    let _ = fixture.direct_frame(&mut direct);
+    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+
+    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
+    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    report_pair(
+        "per-arrow timing pane actor staging",
+        PANE_FRAMES,
+        &old,
+        &new,
+        false,
+    );
+}
+
 #[cfg(target_arch = "x86")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: the fence and timestamp instructions require no memory operands.
@@ -400,4 +461,7 @@ fn main() {
     grade_benchmark();
     modifiers_benchmark();
     lobby_benchmark();
+    percentage_pane_benchmark();
+    timing_pane_benchmark();
+    timing_arrows_pane_benchmark();
 }

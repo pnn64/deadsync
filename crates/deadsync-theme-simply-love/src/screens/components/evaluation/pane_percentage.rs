@@ -49,15 +49,18 @@ const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> 
     }
 }
 
-pub(crate) fn build_pane_percentage_display_with_palette(
-    score_info: &ScoreInfo,
+#[allow(clippy::too_many_arguments)]
+fn pane_percentage_actor(
+    show_ex_score: bool,
+    column_count: usize,
     text: &PercentageText,
     pane: EvalPane,
     controller: profile_data::PlayerSide,
     transparent: bool,
     machine_font: MachineFont,
     palette: JudgmentPalette,
-) -> Vec<Actor> {
+    child_capacity: usize,
+) -> Option<Actor> {
     if matches!(
         pane,
         EvalPane::Timing
@@ -72,11 +75,11 @@ pub(crate) fn build_pane_percentage_display_with_palette(
             | EvalPane::ArrowCloud
             | EvalPane::TestInput
     ) {
-        return vec![];
+        return None;
     }
 
     let pane_origin_x = if pane == EvalPane::Column {
-        pane3_origin_x(controller, score_info.column_judgments.len())
+        pane3_origin_x(controller, column_count)
     } else {
         pane_origin_x(controller)
     };
@@ -101,7 +104,7 @@ pub(crate) fn build_pane_percentage_display_with_palette(
 
     let mut frame_x = pane_origin_x;
     let mut frame_y = cy - 26.0;
-    let mut children: Vec<Actor> = Vec::new();
+    let mut children = Vec::with_capacity(child_capacity);
 
     match pane {
         EvalPane::Timing => {}
@@ -138,12 +141,12 @@ pub(crate) fn build_pane_percentage_display_with_palette(
         EvalPane::FaPlus => {
             let ex_color = palette.color(Role::FantasticBlue);
             let white = [1.0, 1.0, 1.0, 1.0];
-            let (main_text, main_color, bottom_label, bottom_text, bottom_color) =
-                if score_info.show_ex_score {
-                    (text.ex.clone(), ex_color, "ITG", text.score.clone(), white)
-                } else {
-                    (text.score.clone(), white, "EX", text.ex.clone(), ex_color)
-                };
+            let (main_text, main_color, bottom_label, bottom_text, bottom_color) = if show_ex_score
+            {
+                (text.ex.clone(), ex_color, "ITG", text.score.clone(), white)
+            } else {
+                (text.score.clone(), white, "EX", text.ex.clone(), ex_color)
+            };
             children.push(act!(quad:
                 align(bg_align_x, 0.5):
                 xy(bg_x, 14.0):
@@ -251,14 +254,143 @@ pub(crate) fn build_pane_percentage_display_with_palette(
         }
     }
 
-    vec![Actor::Frame {
+    Some(Actor::Frame {
         align: [0.5, 0.5],
         offset: [frame_x, frame_y],
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
         background: None,
         z: 102,
         children,
-    }]
+    })
+}
+
+/// Appends the percentage pane without allocating a temporary outer actor list.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_pane_percentage_display_with_palette(
+    out: &mut Vec<Actor>,
+    score_info: &ScoreInfo,
+    text: &PercentageText,
+    pane: EvalPane,
+    controller: profile_data::PlayerSide,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) {
+    if let Some(actor) = pane_percentage_actor(
+        score_info.show_ex_score,
+        score_info.column_judgments.len(),
+        text,
+        pane,
+        controller,
+        transparent,
+        machine_font,
+        palette,
+        4,
+    ) {
+        out.push(actor);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[allow(clippy::too_many_arguments)]
+fn build_pane_percentage_legacy(
+    show_ex_score: bool,
+    column_count: usize,
+    text: &PercentageText,
+    pane: EvalPane,
+    controller: profile_data::PlayerSide,
+    transparent: bool,
+    machine_font: MachineFont,
+    palette: JudgmentPalette,
+) -> Vec<Actor> {
+    pane_percentage_actor(
+        show_ex_score,
+        column_count,
+        text,
+        pane,
+        controller,
+        transparent,
+        machine_font,
+        palette,
+        0,
+    )
+    .into_iter()
+    .collect()
+}
+
+/// Stable old/new fixture for percentage-pane actor staging.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct PercentagePaneAppendBenchmark {
+    text: PercentageText,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl PercentagePaneAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            text: PercentageText {
+                score: percent_text(98.76),
+                ex: percent_text(99.12),
+                hard_ex: percent_text(97.54),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_pane_percentage_legacy(
+            true,
+            4,
+            &self.text,
+            EvalPane::FaPlus,
+            profile_data::PlayerSide::P1,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+        ));
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        if let Some(actor) = pane_percentage_actor(
+            true,
+            4,
+            &self.text,
+            EvalPane::FaPlus,
+            profile_data::PlayerSide::P1,
+            false,
+            MachineFont::Mega,
+            JudgmentPalette::default(),
+            4,
+        ) {
+            out.push(actor);
+        }
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for PercentagePaneAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_tree_count(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |count, actor| {
+        count
+            + match actor {
+                Actor::Frame { children, .. } => actor_tree_count(children),
+                _ => 1,
+            }
+    })
 }
 
 #[cfg(test)]
@@ -285,5 +417,18 @@ mod tests {
             panic!("oversized percentages should use shared text");
         };
         assert!(std::sync::Arc::ptr_eq(&text, &clone));
+    }
+
+    #[test]
+    fn direct_percentage_append_matches_legacy_batch() {
+        let fixture = PercentagePaneAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(1);
+        let mut direct = Vec::with_capacity(1);
+
+        assert_eq!(
+            fixture.legacy_frame(&mut legacy),
+            fixture.direct_frame(&mut direct)
+        );
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }
