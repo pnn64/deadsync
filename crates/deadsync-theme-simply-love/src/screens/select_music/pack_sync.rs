@@ -2,12 +2,13 @@ use super::*;
 use crate::screens::pack_sync as shared_pack_sync;
 use deadsync_profile as profile_data;
 
-pub(super) fn build_overlay(
+pub(super) fn push_overlay(
+    actors: &mut Vec<Actor>,
     state: &crate::screens::pack_sync::OverlayState,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
-    shared_pack_sync::build_overlay(state, active_color_index, machine_font)
+) -> bool {
+    shared_pack_sync::push_overlay(actors, state, active_color_index, machine_font)
 }
 
 pub(super) fn hide_overlay(state: &mut State) {

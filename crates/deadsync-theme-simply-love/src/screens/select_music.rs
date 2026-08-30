@@ -14912,12 +14912,12 @@ pub fn push_actors(
         actors.extend(replay_overlay);
         return;
     }
-    if let Some(pack_sync_overlay) = pack_sync::build_overlay(
+    if pack_sync::push_overlay(
+        actors,
         &state.pack_sync_overlay,
         state.active_color_index,
         state.policy.machine_font,
     ) {
-        actors.extend(pack_sync_overlay);
         return;
     }
     if let Some(sync_overlay) = build_sync_overlay(

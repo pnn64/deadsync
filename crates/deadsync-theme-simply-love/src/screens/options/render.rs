@@ -647,32 +647,31 @@ pub fn push_actors(
         return;
     }
     if let Some(score_import) = &state.score_import_ui {
-        let mut ui_actors =
-            build_score_import_overlay_actors(score_import, state.active_color_index);
-        for actor in &mut ui_actors {
+        let ui_start = actors.len();
+        push_score_import_overlay_actors(actors, score_import, state.active_color_index);
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
     if let Some(apply_rg) = &state.apply_replaygain_ui {
-        let mut ui_actors =
-            build_apply_replaygain_overlay_actors(apply_rg, state.active_color_index);
-        for actor in &mut ui_actors {
+        let ui_start = actors.len();
+        push_apply_replaygain_overlay_actors(actors, apply_rg, state.active_color_index);
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
-    if let Some(mut ui_actors) = shared_pack_sync::build_overlay(
+    let ui_start = actors.len();
+    if shared_pack_sync::push_overlay(
+        actors,
         &state.pack_sync_overlay,
         state.active_color_index,
         visual_policy.machine_font,
     ) {
-        for actor in &mut ui_actors {
+        for actor in &mut actors[ui_start..] {
             actor.mul_alpha(alpha_multiplier);
         }
-        actors.extend(ui_actors);
         return;
     }
 

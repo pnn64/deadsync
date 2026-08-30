@@ -157,10 +157,11 @@ pub(super) fn score_import_progress(score_import: &ScoreImportUiState) -> (usize
     (done, total, progress)
 }
 
-pub(super) fn build_score_import_overlay_actors(
+pub(super) fn push_score_import_overlay_actors(
+    out: &mut Vec<Actor>,
     score_import: &ScoreImportUiState,
     active_color_index: i32,
-) -> Vec<Actor> {
+) {
     let (done, total, progress) = score_import_progress(score_import);
     let elapsed = score_import.started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {
@@ -236,7 +237,7 @@ pub(super) fn build_score_import_overlay_actors(
     let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
-    let mut out: Vec<Actor> = Vec::with_capacity(8);
+    out.reserve(8);
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -349,7 +350,109 @@ pub(super) fn build_score_import_overlay_actors(
             z(301)
         ));
     }
-    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn score_overlay_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                score_overlay_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
+/// Stable completed-import frame used to compare the former temporary actor
+/// batch with direct append into the screen-owned actor list.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ScoreImportOverlayBenchmark {
+    ui: ScoreImportUiState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ScoreImportOverlayBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            ui: ScoreImportUiState {
+                endpoint: score_data::ScoreImportEndpoint::ArrowCloud,
+                profile_name: "Benchmark Player".to_owned(),
+                pack_label: "Benchmark Pack Collection".to_owned(),
+                total_charts: 384,
+                processed_charts: 384,
+                displayed_done: 384.0,
+                imported_scores: 321,
+                missing_scores: 61,
+                failed_requests: 2,
+                detail_line: String::new(),
+                done: true,
+                done_message: "Score import benchmark complete".to_owned(),
+                done_since: None,
+                started_at: Instant::now(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(8);
+        push_score_import_overlay_actors(&mut actors, &self.ui, 2);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(8);
+        push_score_import_overlay_actors(&mut staged, &self.ui, 2);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        score_overlay_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_score_import_overlay_actors(out, &self.ui, 2);
+        std::hint::black_box(&*out);
+        score_overlay_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ScoreImportOverlayBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod overlay_staging_tests {
+    use super::*;
+
+    #[test]
+    fn direct_score_import_append_matches_legacy_batch() {
+        crate::assets::i18n::init_for_tests();
+        let benchmark = ScoreImportOverlayBenchmark::new();
+        let mut legacy = Vec::with_capacity(8);
+        let mut direct = Vec::with_capacity(8);
+
+        assert_eq!(
+            benchmark.legacy_frame(&mut legacy),
+            benchmark.direct_frame(&mut direct)
+        );
+        assert_eq!(legacy.len(), benchmark.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
 }
 
 #[derive(Clone, Debug)]

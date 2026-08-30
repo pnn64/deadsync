@@ -1,6 +1,9 @@
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
-use deadsync_theme_simply_love::screens::options::OptionsOverlayHotBenchmark;
+use deadsync_theme_simply_love::screens::options::{
+    OptionsOverlayHotBenchmark, PackSyncOverlayBenchmark, ReplayGainOverlayBenchmark,
+    ScoreImportOverlayBenchmark,
+};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -201,13 +204,31 @@ fn percent_change(old: f64, new: f64) -> f64 {
     (new / old - 1.0) * 100.0
 }
 
-fn report_pair(title: &str, items: usize, old: &[Sample], new: &[Sample]) {
+fn report_pair(
+    title: &str,
+    items: usize,
+    old: &[Sample],
+    new: &[Sample],
+    require_zero_alloc: bool,
+) {
     assert_eq!(old[0].checksum, new[0].checksum, "{title} behavior differs");
     assert!(old.iter().all(|sample| sample.checksum == old[0].checksum));
     assert!(new.iter().all(|sample| sample.checksum == new[0].checksum));
-    assert!(new.iter().all(|sample| sample.alloc.allocs == 0));
-    assert!(new.iter().all(|sample| sample.alloc.reallocs == 0));
-    assert!(new.iter().all(|sample| sample.alloc.frees == 0));
+    if require_zero_alloc {
+        assert!(new.iter().all(|sample| sample.alloc.allocs == 0));
+        assert!(new.iter().all(|sample| sample.alloc.reallocs == 0));
+        assert!(new.iter().all(|sample| sample.alloc.frees == 0));
+    } else {
+        assert!(
+            mean(new, |sample| sample.alloc.allocs) < mean(old, |sample| sample.alloc.allocs),
+            "{title} did not reduce allocations"
+        );
+        assert!(
+            mean(new, |sample| sample.alloc.churn_bytes())
+                < mean(old, |sample| sample.alloc.churn_bytes()),
+            "{title} did not reduce allocator churn"
+        );
+    }
     let mut old_p50 = old.iter().map(|sample| sample.ns).collect::<Vec<_>>();
     let mut new_p50 = new.iter().map(|sample| sample.ns).collect::<Vec<_>>();
     let mut old_p95 = old_p50.clone();
@@ -248,6 +269,7 @@ fn main() {
         2,
         &old_prompt,
         &new_prompt,
+        true,
     );
 
     let mut old_confirm_actors = Vec::with_capacity(5);
@@ -256,7 +278,13 @@ fn main() {
         || measure(|| options.legacy_confirm_frame(&mut old_confirm_actors)),
         || measure(|| options.direct_confirm_frame(&mut new_confirm_actors)),
     );
-    report_pair("confirmation actor staging", 5, &old_confirm, &new_confirm);
+    report_pair(
+        "confirmation actor staging",
+        5,
+        &old_confirm,
+        &new_confirm,
+        true,
+    );
 
     let panel = PanelAppendBenchmark::new();
     let mut old_panel_actors = Vec::with_capacity(8);
@@ -265,7 +293,58 @@ fn main() {
         || measure(|| panel.legacy_frame(&mut old_panel_actors)),
         || measure(|| panel.direct_frame(&mut new_panel_actors)),
     );
-    report_pair("updater panel actor staging", 8, &old_panel, &new_panel);
+    report_pair(
+        "updater panel actor staging",
+        8,
+        &old_panel,
+        &new_panel,
+        true,
+    );
+
+    let score_import = ScoreImportOverlayBenchmark::new();
+    let mut old_score_actors = Vec::with_capacity(8);
+    let mut new_score_actors = Vec::with_capacity(8);
+    let (old_score, new_score) = sample_pair(
+        || measure(|| score_import.legacy_frame(&mut old_score_actors)),
+        || measure(|| score_import.direct_frame(&mut new_score_actors)),
+    );
+    report_pair(
+        "score import actor staging",
+        score_import.actor_count(),
+        &old_score,
+        &new_score,
+        false,
+    );
+
+    let replaygain = ReplayGainOverlayBenchmark::new();
+    let mut old_replaygain_actors = Vec::with_capacity(8);
+    let mut new_replaygain_actors = Vec::with_capacity(8);
+    let (old_replaygain, new_replaygain) = sample_pair(
+        || measure(|| replaygain.legacy_frame(&mut old_replaygain_actors)),
+        || measure(|| replaygain.direct_frame(&mut new_replaygain_actors)),
+    );
+    report_pair(
+        "ReplayGain actor staging",
+        replaygain.actor_count(),
+        &old_replaygain,
+        &new_replaygain,
+        false,
+    );
+
+    let pack_sync = PackSyncOverlayBenchmark::new();
+    let mut old_pack_actors = Vec::with_capacity(96);
+    let mut new_pack_actors = Vec::with_capacity(96);
+    let (old_pack, new_pack) = sample_pair(
+        || measure(|| pack_sync.legacy_frame(&mut old_pack_actors)),
+        || measure(|| pack_sync.direct_frame(&mut new_pack_actors)),
+    );
+    report_pair(
+        "pack sync actor staging",
+        pack_sync.actor_count(),
+        &old_pack,
+        &new_pack,
+        false,
+    );
 }
 
 #[cfg(windows)]

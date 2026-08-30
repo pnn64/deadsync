@@ -86,10 +86,12 @@ mod reload;
 pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
-#[cfg(any(test, feature = "bench-support"))]
-pub use score_import::ScoreImportPickerBenchmark;
 use score_import::*;
+#[cfg(any(test, feature = "bench-support"))]
+pub use score_import::{ScoreImportOverlayBenchmark, ScoreImportPickerBenchmark};
 mod apply_replaygain;
+#[cfg(any(test, feature = "bench-support"))]
+pub use apply_replaygain::ReplayGainOverlayBenchmark;
 use apply_replaygain::*;
 mod pack_sync;
 pub(crate) mod qr_login;
@@ -111,6 +113,8 @@ mod render;
 use render::*;
 
 // Public API re-exports
+#[cfg(any(test, feature = "bench-support"))]
+pub use crate::screens::pack_sync::PackSyncOverlayBenchmark;
 pub use download_packs::sync_stepmaniaonline;
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;

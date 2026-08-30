@@ -128,10 +128,11 @@ fn apply_replaygain_progress(ui: &ApplyReplayGainUiState) -> (usize, usize, f32)
     (done, total, progress)
 }
 
-pub(super) fn build_apply_replaygain_overlay_actors(
+pub(super) fn push_apply_replaygain_overlay_actors(
+    out: &mut Vec<Actor>,
     ui: &ApplyReplayGainUiState,
     active_color_index: i32,
-) -> Vec<Actor> {
+) {
     let (done, total, progress) = apply_replaygain_progress(ui);
     let elapsed = ui.started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {
@@ -192,7 +193,7 @@ pub(super) fn build_apply_replaygain_overlay_actors(
     let bar_cy = screen_height().mul_add(0.5, 34.0);
     let fill_w = (bar_w - 4.0) * progress.clamp(0.0, 1.0);
 
-    let mut out: Vec<Actor> = Vec::with_capacity(8);
+    out.reserve(8);
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -302,5 +303,102 @@ pub(super) fn build_apply_replaygain_overlay_actors(
         horizalign(center):
         z(301)
     ));
-    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn replaygain_overlay_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                replaygain_overlay_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
+}
+
+/// Stable completed-analysis frame used to compare the former temporary actor
+/// batch with direct append into the screen-owned actor list.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ReplayGainOverlayBenchmark {
+    ui: ApplyReplayGainUiState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReplayGainOverlayBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            ui: ApplyReplayGainUiState {
+                total: 512,
+                done: 512,
+                displayed_done: 512.0,
+                line2: String::new(),
+                line3: String::new(),
+                finished: true,
+                cancelled: false,
+                cancel_requested: false,
+                started_at: Instant::now(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(8);
+        push_apply_replaygain_overlay_actors(&mut actors, &self.ui, 2);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(8);
+        push_apply_replaygain_overlay_actors(&mut staged, &self.ui, 2);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        replaygain_overlay_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_apply_replaygain_overlay_actors(out, &self.ui, 2);
+        std::hint::black_box(&*out);
+        replaygain_overlay_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ReplayGainOverlayBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod overlay_staging_tests {
+    use super::*;
+
+    #[test]
+    fn direct_replaygain_append_matches_legacy_batch() {
+        crate::assets::i18n::init_for_tests();
+        let benchmark = ReplayGainOverlayBenchmark::new();
+        let mut legacy = Vec::with_capacity(8);
+        let mut direct = Vec::with_capacity(8);
+
+        assert_eq!(
+            benchmark.legacy_frame(&mut legacy),
+            benchmark.direct_frame(&mut direct)
+        );
+        assert_eq!(legacy.len(), benchmark.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
 }
