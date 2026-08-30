@@ -370,7 +370,7 @@ fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
     let root = xml::parse(&content).map_err(ItgReadError::Xml)?;
     let (current_combo, guid) = parse_general_data(&root);
     Ok(ItgStatsData {
-        songs: parse_song_scores(&root),
+        songs: parse_song_scores_owned(root),
         current_combo,
         guid,
     })
@@ -394,10 +394,45 @@ fn parse_general_data(root: &XmlNode) -> (u32, String) {
 
 fn read_gz_to_string(path: &Path) -> Result<String, std::io::Error> {
     let bytes = fs::read(path)?;
-    let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
-    let mut out = Vec::new();
+    decode_gz_to_string_with::<true, true>(&bytes)
+}
+
+fn decode_gz_to_string_with<const RESERVE_OUTPUT: bool, const REUSE_UTF8: bool>(
+    bytes: &[u8],
+) -> Result<String, std::io::Error> {
+    let mut decoder = flate2::read::GzDecoder::new(bytes);
+    let mut out = if RESERVE_OUTPUT {
+        Vec::with_capacity(gzip_output_capacity(bytes))
+    } else {
+        Vec::new()
+    };
     decoder.read_to_end(&mut out)?;
-    Ok(String::from_utf8_lossy(&out).into_owned())
+    if REUSE_UTF8 {
+        Ok(match String::from_utf8(out) {
+            Ok(text) => text,
+            Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
+        })
+    } else {
+        Ok(String::from_utf8_lossy(&out).into_owned())
+    }
+}
+
+fn gzip_output_capacity(bytes: &[u8]) -> usize {
+    const MAX_PREALLOC_BYTES: usize = 512 * 1024 * 1024;
+    const MAX_COMPRESSION_RATIO: usize = 128;
+
+    if bytes.len() < 4 {
+        return 0;
+    }
+    let footer = &bytes[bytes.len() - 4..];
+    let reported = u32::from_le_bytes(
+        footer
+            .try_into()
+            .expect("four-byte gzip footer slice must convert to an array"),
+    ) as usize;
+    reported
+        .min(bytes.len().saturating_mul(MAX_COMPRESSION_RATIO))
+        .min(MAX_PREALLOC_BYTES)
 }
 
 /// Extracts `<SongScores>` from a parsed `Stats.xml` root (`<Stats>`).
@@ -457,8 +492,14 @@ pub fn parse_song_scores(root: &XmlNode) -> Vec<ItgSongScores> {
 fn parse_high_score(node: &XmlNode) -> ImportedHighScore {
     let tap = node.child("TapNoteScores");
     let hold = node.child("HoldNoteScores");
-    let tap_count = |name: &str| tap.and_then(|t| t.child_parse::<u32>(name)).unwrap_or(0);
-    let hold_count = |name: &str| hold.and_then(|h| h.child_parse::<u32>(name)).unwrap_or(0);
+    let tap_count = |name: &str| {
+        tap.and_then(|scores| scores.child_parse::<u32>(name))
+            .unwrap_or(0)
+    };
+    let hold_count = |name: &str| {
+        hold.and_then(|scores| scores.child_parse::<u32>(name))
+            .unwrap_or(0)
+    };
 
     ImportedHighScore {
         grade: node.child_text("Grade").to_string(),
@@ -477,6 +518,301 @@ fn parse_high_score(node: &XmlNode) -> ImportedHighScore {
         missed_hold: hold_count("MissedHold"),
         survive_seconds: node.child_parse::<f32>("SurviveSeconds").unwrap_or(0.0),
         modifiers: node.child_text("Modifiers").to_string(),
+    }
+}
+
+fn parse_tap_judgments_once(node: &XmlNode, score: &mut ImportedHighScore) {
+    const W1: u16 = 1 << 0;
+    const W2: u16 = 1 << 1;
+    const W3: u16 = 1 << 2;
+    const W4: u16 = 1 << 3;
+    const W5: u16 = 1 << 4;
+    const MISS: u16 = 1 << 5;
+    const HIT_MINE: u16 = 1 << 6;
+    const AVOID_MINE: u16 = 1 << 7;
+
+    let mut seen = 0u16;
+    for child in &node.children {
+        let value = || child.text.trim().parse().unwrap_or(0);
+        match child.tag.as_str() {
+            "W1" if seen & W1 == 0 => {
+                seen |= W1;
+                score.w1 = value();
+            }
+            "W2" if seen & W2 == 0 => {
+                seen |= W2;
+                score.w2 = value();
+            }
+            "W3" if seen & W3 == 0 => {
+                seen |= W3;
+                score.w3 = value();
+            }
+            "W4" if seen & W4 == 0 => {
+                seen |= W4;
+                score.w4 = value();
+            }
+            "W5" if seen & W5 == 0 => {
+                seen |= W5;
+                score.w5 = value();
+            }
+            "Miss" if seen & MISS == 0 => {
+                seen |= MISS;
+                score.miss = value();
+            }
+            "HitMine" if seen & HIT_MINE == 0 => {
+                seen |= HIT_MINE;
+                score.hit_mine = value();
+            }
+            "AvoidMine" if seen & AVOID_MINE == 0 => {
+                seen |= AVOID_MINE;
+                score.avoid_mine = value();
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_hold_judgments_once(node: &XmlNode, score: &mut ImportedHighScore) {
+    const HELD: u8 = 1 << 0;
+    const LET_GO: u8 = 1 << 1;
+    const MISSED_HOLD: u8 = 1 << 2;
+
+    let mut seen = 0u8;
+    for child in &node.children {
+        let value = || child.text.trim().parse().unwrap_or(0);
+        match child.tag.as_str() {
+            "Held" if seen & HELD == 0 => {
+                seen |= HELD;
+                score.held = value();
+            }
+            "LetGo" if seen & LET_GO == 0 => {
+                seen |= LET_GO;
+                score.let_go = value();
+            }
+            "MissedHold" if seen & MISSED_HOLD == 0 => {
+                seen |= MISSED_HOLD;
+                score.missed_hold = value();
+            }
+            _ => {}
+        }
+    }
+}
+
+fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
+    let song_scores = if root.tag == "SongScores" {
+        root
+    } else {
+        match root
+            .children
+            .into_iter()
+            .find(|child| child.tag == "SongScores")
+        {
+            Some(song_scores) => song_scores,
+            None => return Vec::new(),
+        }
+    };
+
+    let mut out = Vec::new();
+    for song in song_scores.children {
+        if song.tag != "Song" {
+            continue;
+        }
+        let XmlNode {
+            attrs, children, ..
+        } = song;
+        let dir = take_first_attr(attrs, "Dir");
+        if dir.is_empty() {
+            continue;
+        }
+
+        let mut steps_list = Vec::new();
+        for steps in children {
+            if steps.tag != "Steps" {
+                continue;
+            }
+            let XmlNode {
+                attrs, children, ..
+            } = steps;
+            let (steps_type, difficulty, description) = take_steps_attrs(attrs);
+            if steps_type.is_empty() || difficulty.is_empty() {
+                continue;
+            }
+            let Some(list) = children
+                .into_iter()
+                .find(|child| child.tag == "HighScoreList")
+            else {
+                continue;
+            };
+            let mut high_scores = Vec::new();
+            for high_score in list.children {
+                if high_score.tag == "HighScore" {
+                    high_scores.push(parse_high_score_owned(high_score));
+                }
+            }
+            if high_scores.is_empty() {
+                continue;
+            }
+            steps_list.push(ItgStepsScores {
+                steps_type,
+                difficulty,
+                description,
+                high_scores,
+            });
+        }
+        if !steps_list.is_empty() {
+            out.push(ItgSongScores {
+                dir,
+                steps: steps_list,
+            });
+        }
+    }
+    out
+}
+
+fn take_first_attr(attrs: Vec<(String, String)>, name: &str) -> String {
+    attrs
+        .into_iter()
+        .find_map(|(key, value)| (key == name).then_some(value))
+        .unwrap_or_default()
+}
+
+fn take_steps_attrs(attrs: Vec<(String, String)>) -> (String, String, String) {
+    let mut steps_type = None;
+    let mut difficulty = None;
+    let mut description = None;
+    for (key, value) in attrs {
+        match key.as_str() {
+            "StepsType" if steps_type.is_none() => steps_type = Some(value),
+            "Difficulty" if difficulty.is_none() => difficulty = Some(value),
+            "Description" if description.is_none() => description = Some(value),
+            _ => {}
+        }
+    }
+    (
+        steps_type.unwrap_or_default(),
+        difficulty.unwrap_or_default(),
+        description.unwrap_or_default(),
+    )
+}
+
+fn parse_high_score_owned(node: XmlNode) -> ImportedHighScore {
+    const GRADE: u8 = 1 << 0;
+    const PERCENT_DP: u8 = 1 << 1;
+    const DATE_TIME: u8 = 1 << 2;
+    const SURVIVE_SECONDS: u8 = 1 << 3;
+    const MODIFIERS: u8 = 1 << 4;
+    const TAP: u8 = 1 << 5;
+    const HOLD: u8 = 1 << 6;
+
+    let mut score = ImportedHighScore::default();
+    let mut seen = 0u8;
+    for child in node.children {
+        match child.tag.as_str() {
+            "Grade" if seen & GRADE == 0 => {
+                seen |= GRADE;
+                score.grade = child.text;
+            }
+            "PercentDP" if seen & PERCENT_DP == 0 => {
+                seen |= PERCENT_DP;
+                score.percent_dp = child.text.trim().parse().unwrap_or(0.0);
+            }
+            "DateTime" if seen & DATE_TIME == 0 => {
+                seen |= DATE_TIME;
+                score.date_time = child.text;
+            }
+            "SurviveSeconds" if seen & SURVIVE_SECONDS == 0 => {
+                seen |= SURVIVE_SECONDS;
+                score.survive_seconds = child.text.trim().parse().unwrap_or(0.0);
+            }
+            "Modifiers" if seen & MODIFIERS == 0 => {
+                seen |= MODIFIERS;
+                score.modifiers = child.text;
+            }
+            "TapNoteScores" if seen & TAP == 0 => {
+                seen |= TAP;
+                parse_tap_judgments_once(&child, &mut score);
+            }
+            "HoldNoteScores" if seen & HOLD == 0 => {
+                seen |= HOLD;
+                parse_hold_judgments_once(&child, &mut score);
+            }
+            _ => {}
+        }
+    }
+    score
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::*;
+
+    fn checksum(songs: &[ItgSongScores]) -> u64 {
+        songs.iter().fold(0u64, |sum, song| {
+            song.steps
+                .iter()
+                .fold(sum.wrapping_add(song.dir.len() as u64), |sum, steps| {
+                    steps.high_scores.iter().fold(
+                        sum.wrapping_add(steps.steps_type.len() as u64)
+                            .wrapping_add((steps.difficulty.len() as u64) << 8)
+                            .wrapping_add((steps.description.len() as u64) << 16),
+                        |sum, score| {
+                            sum.wrapping_add(score.grade.len() as u64)
+                                .wrapping_add(score.percent_dp.to_bits())
+                                .wrapping_add((score.date_time.len() as u64) << 24)
+                                .wrapping_add(u64::from(score.w1))
+                                .wrapping_add(u64::from(score.w2) << 4)
+                                .wrapping_add(u64::from(score.w3) << 8)
+                                .wrapping_add(u64::from(score.w4) << 12)
+                                .wrapping_add(u64::from(score.w5) << 16)
+                                .wrapping_add(u64::from(score.miss) << 20)
+                                .wrapping_add(u64::from(score.hit_mine) << 24)
+                                .wrapping_add(u64::from(score.avoid_mine) << 28)
+                                .wrapping_add(u64::from(score.held) << 32)
+                                .wrapping_add(u64::from(score.let_go) << 36)
+                                .wrapping_add(u64::from(score.missed_hold) << 40)
+                                .wrapping_add(u64::from(score.survive_seconds.to_bits()))
+                                .wrapping_add((score.modifiers.len() as u64) << 48)
+                        },
+                    )
+                })
+        })
+    }
+
+    pub fn borrowed_from_owned(root: XmlNode) -> u64 {
+        checksum(&parse_song_scores(&root))
+    }
+
+    pub fn consumed(root: XmlNode) -> u64 {
+        checksum(&parse_song_scores_owned(root))
+    }
+
+    fn gzip_checksum(text: &str) -> u64 {
+        text.as_bytes()
+            .iter()
+            .take(32)
+            .chain(text.as_bytes().iter().rev().take(32))
+            .fold(text.len() as u64, |sum, byte| {
+                sum.rotate_left(5).wrapping_add(u64::from(*byte))
+            })
+    }
+
+    fn gzip_stage<const RESERVE_OUTPUT: bool, const REUSE_UTF8: bool>(bytes: &[u8]) -> u64 {
+        let text = decode_gz_to_string_with::<RESERVE_OUTPUT, REUSE_UTF8>(bytes)
+            .expect("benchmark gzip fixture must decode");
+        gzip_checksum(&text)
+    }
+
+    pub fn gzip_unreserved_copy(bytes: &[u8]) -> u64 {
+        gzip_stage::<false, false>(bytes)
+    }
+
+    pub fn gzip_reserved_copy(bytes: &[u8]) -> u64 {
+        gzip_stage::<true, false>(bytes)
+    }
+
+    pub fn gzip_reserved_reuse(bytes: &[u8]) -> u64 {
+        gzip_stage::<true, true>(bytes)
     }
 }
 
@@ -591,6 +927,88 @@ mod tests {
         let edit = &song.steps[1];
         assert_eq!(edit.difficulty, "Edit");
         assert_eq!(edit.description, "My Edit");
+    }
+
+    #[test]
+    fn optimized_song_score_extraction_matches_reference_semantics() {
+        let root = xml::parse(SAMPLE_STATS).expect("xml");
+        assert_song_scores_eq(
+            &parse_song_scores(&root),
+            &parse_song_scores_owned(root.clone()),
+        );
+
+        let duplicate_fields = xml::parse(
+            r#"<SongScores>
+                <Song Dir="Songs/Pack/Song/">
+                    <Steps StepsType="dance-single" Difficulty="Hard">
+                        <HighScoreList>
+                            <HighScore>
+                                <Grade>Tier02</Grade><Grade>Failed</Grade>
+                                <PercentDP>0.98</PercentDP><PercentDP>invalid</PercentDP>
+                                <DateTime>2025-01-02 03:04:05</DateTime>
+                                <TapNoteScores><W1>321</W1><W1>999</W1><Miss>4</Miss></TapNoteScores>
+                                <HoldNoteScores><Held>12</Held><Held>99</Held><LetGo>2</LetGo></HoldNoteScores>
+                                <SurviveSeconds>45.5</SurviveSeconds>
+                                <Modifiers>1.2xMusic</Modifiers>
+                            </HighScore>
+                        </HighScoreList>
+                    </Steps>
+                </Song>
+            </SongScores>"#,
+        )
+        .expect("xml");
+        let reference = parse_song_scores(&duplicate_fields);
+        assert_song_scores_eq(
+            &reference,
+            &parse_song_scores_owned(duplicate_fields.clone()),
+        );
+        let score = &reference[0].steps[0].high_scores[0];
+        assert_eq!(score.grade, "Tier02");
+        assert_eq!(score.w1, 321);
+        assert_eq!(score.held, 12);
+    }
+
+    #[test]
+    fn optimized_gzip_decode_matches_reference_for_valid_and_invalid_utf8() {
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+        use std::io::Write as _;
+
+        for bytes in [
+            &b"<Stats><Guid>valid UTF-8</Guid></Stats>"[..],
+            &b"<Stats><Guid>invalid \xF6 byte</Guid></Stats>"[..],
+        ] {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+            encoder.write_all(bytes).expect("compress fixture");
+            let compressed = encoder.finish().expect("finish fixture");
+            let reference =
+                decode_gz_to_string_with::<false, false>(&compressed).expect("reference decode");
+            assert_eq!(
+                decode_gz_to_string_with::<true, false>(&compressed).expect("reserved decode"),
+                reference
+            );
+            assert_eq!(
+                decode_gz_to_string_with::<true, true>(&compressed).expect("reused decode"),
+                reference
+            );
+            assert_eq!(gzip_output_capacity(&compressed), bytes.len());
+        }
+        assert_eq!(gzip_output_capacity(&[1, 2, 3]), 0);
+    }
+
+    fn assert_song_scores_eq(expected: &[ItgSongScores], actual: &[ItgSongScores]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual_song, expected_song) in actual.iter().zip(expected) {
+            assert_eq!(actual_song.dir, expected_song.dir);
+            assert_eq!(actual_song.steps.len(), expected_song.steps.len());
+            for (actual_steps, expected_steps) in actual_song.steps.iter().zip(&expected_song.steps)
+            {
+                assert_eq!(actual_steps.steps_type, expected_steps.steps_type);
+                assert_eq!(actual_steps.difficulty, expected_steps.difficulty);
+                assert_eq!(actual_steps.description, expected_steps.description);
+                assert_eq!(actual_steps.high_scores, expected_steps.high_scores);
+            }
+        }
     }
 
     #[test]
