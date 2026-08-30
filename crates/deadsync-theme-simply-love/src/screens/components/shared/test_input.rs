@@ -849,16 +849,27 @@ pub fn build_evaluation_panel(
     actors
 }
 
-#[must_use]
-pub fn build_select_music_overlay(
+pub fn push_select_music_overlay(
+    actors: &mut Vec<Actor>,
     state: &State,
     game: GameFlag,
     _active_color_index: i32,
     show_p1: bool,
     show_p2: bool,
     pad_spacing: f32,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(96);
+) {
+    actors.reserve(96);
+    push_select_music_overlay_unreserved(actors, state, game, show_p1, show_p2, pad_spacing);
+}
+
+fn push_select_music_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    show_p1: bool,
+    show_p2: bool,
+    pad_spacing: f32,
+) {
     let cx = screen_center_x();
     // SL parity: overlay/TestInput.lua places pad AF at y = _screen.cy + 50, then
     // _modules/TestInput Pad/default.lua places the pad art at y = -80 inside that AF.
@@ -875,7 +886,7 @@ pub fn build_select_music_overlay(
 
     if show_p1 {
         push_pad(
-            &mut actors,
+            actors,
             state,
             game,
             PlayerSlot::P1,
@@ -889,7 +900,7 @@ pub fn build_select_music_overlay(
     }
     if show_p2 {
         push_pad(
-            &mut actors,
+            actors,
             state,
             game,
             PlayerSlot::P2,
@@ -913,9 +924,94 @@ pub fn build_select_music_overlay(
         horizalign(center)
     ));
 
-    push_polling_readout(&mut actors, state, 1453.0);
+    push_polling_readout(actors, state, 1453.0);
+}
 
-    actors
+/// Stable old/new fixture for the two-player Select Music Test Input batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SelectMusicTestInputAppendBenchmark {
+    state: State,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SelectMusicTestInputAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut state = State::default();
+        state
+            .buttons_held
+            .insert((PlayerSlot::P1, LogicalButton::Left), true);
+        state
+            .buttons_held
+            .insert((PlayerSlot::P2, LogicalButton::Start), true);
+        Self { state }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(96);
+        push_select_music_overlay(
+            &mut actors,
+            &self.state,
+            GameFlag::Dance,
+            0,
+            true,
+            true,
+            125.0,
+        );
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let mut staged = Vec::with_capacity(96);
+        push_select_music_overlay_unreserved(
+            &mut staged,
+            &self.state,
+            GameFlag::Dance,
+            true,
+            true,
+            125.0,
+        );
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_select_music_overlay(out, &self.state, GameFlag::Dance, 0, true, true, 125.0);
+        std::hint::black_box(&*out);
+        overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SelectMusicTestInputAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
 }
 
 #[cfg(test)]
@@ -923,6 +1019,20 @@ mod tests {
     use super::*;
     use deadsync_input::{PadCode, PadId};
     use std::time::Duration;
+
+    #[test]
+    fn direct_select_music_append_matches_legacy_batch() {
+        let fixture = SelectMusicTestInputAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(96);
+        let mut direct = Vec::with_capacity(96);
+
+        let legacy_checksum = fixture.legacy_frame(&mut legacy);
+        let direct_checksum = fixture.direct_frame(&mut direct);
+
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), fixture.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
 
     #[test]
     fn test_input_pad_tracks_active_game() {

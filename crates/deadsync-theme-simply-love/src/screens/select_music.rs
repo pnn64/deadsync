@@ -6586,12 +6586,22 @@ impl NullOrDieOverlayRefresh {
     }
 }
 
-fn build_null_or_die_overlay(
+fn push_null_or_die_overlay(
+    actors: &mut Vec<Actor>,
     overlay: &NullOrDieOverlayData,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
-    let mut actors = Vec::with_capacity(36);
+) {
+    actors.reserve(36);
+    push_null_or_die_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+}
+
+fn push_null_or_die_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &NullOrDieOverlayData,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) {
     let pane_w = widescale(520.0, 640.0);
     let pane_h = 430.0;
     let pane_cx = screen_center_x();
@@ -7040,31 +7050,43 @@ fn build_null_or_die_overlay(
             ));
         }
     }
-    Some(actors)
 }
 
-fn build_sync_overlay(
+fn push_sync_overlay(
+    actors: &mut Vec<Actor>,
     state: &SyncOverlayState,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     match state {
-        SyncOverlayState::Hidden => None,
+        SyncOverlayState::Hidden => false,
         SyncOverlayState::NullOrDie(overlay) => {
-            build_null_or_die_overlay(overlay, active_color_index, machine_font)
+            push_null_or_die_overlay(actors, overlay, active_color_index, machine_font);
+            true
         }
         SyncOverlayState::Manual(overlay) => {
-            build_manual_sync_overlay(overlay, active_color_index, machine_font)
+            push_manual_sync_overlay(actors, overlay, active_color_index, machine_font);
+            true
         }
     }
 }
 
-fn build_manual_sync_overlay(
+fn push_manual_sync_overlay(
+    actors: &mut Vec<Actor>,
     overlay: &ManualSyncOverlayData,
     active_color_index: i32,
     machine_font: crate::config::MachineFont,
-) -> Option<Vec<Actor>> {
-    let mut actors = Vec::with_capacity(22);
+) {
+    actors.reserve(22);
+    push_manual_sync_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+}
+
+fn push_manual_sync_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &ManualSyncOverlayData,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) {
     let accent = color::simply_love_rgba(active_color_index);
     let pane_w = widescale(520.0, 640.0);
     let pane_h = 440.0;
@@ -7179,8 +7201,125 @@ fn build_manual_sync_overlay(
         z(SYNC_OVERLAY_Z + 4):
         horizalign(center)
     ));
+}
 
-    Some(actors)
+/// Stable old/new fixture for a populated automatic-sync actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SyncOverlayAppendBenchmark {
+    state: SyncOverlayState,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SyncOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let cols = 3;
+        let digest_rows = 3;
+        Self {
+            state: SyncOverlayState::NullOrDie(Box::new(NullOrDieOverlayData {
+                simfile_path: PathBuf::from("Songs/Benchmark/song.ssc"),
+                song_title: "Benchmark Sync Song".to_string(),
+                chart_label: "Challenge 16".to_string(),
+                kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
+                kernel_type: crate::SimplyLoveSyncKernel::Rising,
+                graph_mode: SyncGraphMode::PostKernelFingerprint,
+                graph_orientation: GraphOrientation::Vertical,
+                graph_origin: GraphOrigin::Bottom,
+                confidence_threshold: 0.8,
+                cols,
+                freq_rows: 0,
+                total_beats: digest_rows,
+                digest_rows,
+                times_ms: vec![-12.0, 0.0, 12.0],
+                freq_domain: Vec::new(),
+                beat_digest: vec![0.1, 0.3, 0.7, 0.2, 0.8, 0.4, 0.1, 0.5, 0.2],
+                digest_col_sums: Vec::new(),
+                post_rows: digest_rows,
+                post_kernel: vec![0.2, 0.4, 0.6, 0.3, 0.9, 0.5, 0.1, 0.4, 0.2],
+                convolution: vec![0.15, 0.95, 0.25],
+                curve_mesh: None,
+                edge_discard: 0,
+                beats_processed: digest_rows,
+                preview_bias_ms: None,
+                final_bias_ms: Some(-4.25),
+                final_confidence: Some(0.93),
+                result_cached: false,
+                phase: NullOrDieOverlayPhase::Ready,
+                phase_changed_at: Instant::now(),
+                error_text: None,
+                manual_delta_seconds: 0.002,
+                nav_held_dir: None,
+                nav_held_since: None,
+                nav_last_tick_at: None,
+                nav_last_sfx_at: None,
+                confirm_selection: Some(ConfirmAction::Confirm),
+            })),
+        }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(48);
+        push_sync_overlay(
+            &mut actors,
+            &self.state,
+            3,
+            crate::config::MachineFont::Mega,
+        );
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let SyncOverlayState::NullOrDie(overlay) = &self.state else {
+            unreachable!("sync fixture uses automatic sync");
+        };
+        let mut staged = Vec::with_capacity(36);
+        push_null_or_die_overlay_unreserved(
+            &mut staged,
+            overlay,
+            3,
+            crate::config::MachineFont::Mega,
+        );
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        select_music_overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_sync_overlay(out, &self.state, 3, crate::config::MachineFont::Mega);
+        std::hint::black_box(&*out);
+        select_music_overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SyncOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn select_music_overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    actors.iter().fold(actors.len() as u64, |checksum, actor| {
+        let value = match actor {
+            Actor::Text { content, z, .. } => content
+                .as_str()
+                .bytes()
+                .fold(u64::from(*z as u16), |hash, byte| {
+                    hash.rotate_left(7) ^ u64::from(byte)
+                }),
+            Actor::Frame { children, z, .. } => {
+                select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            _ => 1,
+        };
+        checksum.rotate_left(11) ^ value
+    })
 }
 
 /// Carry the song-search request counter over from the screen being replaced.
@@ -14920,12 +15059,12 @@ pub fn push_actors(
     ) {
         return;
     }
-    if let Some(sync_overlay) = build_sync_overlay(
+    if push_sync_overlay(
+        actors,
         &state.sync_overlay,
         state.active_color_index,
         state.policy.machine_font,
     ) {
-        actors.extend(sync_overlay);
         return;
     }
     if state.pad_config_overlay_visible {
@@ -14960,7 +15099,8 @@ pub fn push_actors(
                 profile_data::PlayerSide::P2 => show_p2 = true,
             }
         }
-        actors.extend(test_input::build_select_music_overlay(
+        test_input::push_select_music_overlay(
+            actors,
             &state.test_input_overlay,
             if play_style.is_pump() {
                 GameFlag::Pump
@@ -14971,7 +15111,7 @@ pub fn push_actors(
             show_p1,
             show_p2,
             pad_spacing,
-        ));
+        );
         return;
     }
     if lobby_overlay::push_overlay(
@@ -15029,13 +15169,12 @@ pub fn push_actors(
         &state.downloads,
         state.policy.machine_font,
     );
-    if let Some(shop_overlay) = select_music_menu::build_srpg_shop_overlay(
+    select_music_menu::push_srpg_shop_overlay(
+        actors,
         &state.srpg_shop_overlay,
         &state.srpg_shop_snapshot,
         state.policy.machine_font,
-    ) {
-        actors.extend(shop_overlay);
-    }
+    );
 
     let lobby_status_text = select_music_lobby_status_text(state);
     if let Some(text) = lobby_status_text {
@@ -16609,6 +16748,12 @@ mod tests {
             nav_last_sfx_at: None,
             confirm_selection: None,
         }
+    }
+
+    fn render_null_or_die_overlay(overlay: &super::NullOrDieOverlayData) -> Vec<Actor> {
+        let mut actors = Vec::with_capacity(36);
+        super::push_null_or_die_overlay(&mut actors, overlay, 0, crate::config::MachineFont::Wendy);
+        actors
     }
 
     fn test_song_in_pack(pack: &str, song_dir: &str, title: &str) -> Arc<SongData> {
@@ -19586,9 +19731,7 @@ mod tests {
     #[test]
     fn sync_overlay_shows_streamed_heat_while_running() {
         let overlay = test_running_sync_overlay();
-        let actors =
-            super::build_null_or_die_overlay(&overlay, 0, crate::config::MachineFont::Wendy)
-                .unwrap();
+        let actors = render_null_or_die_overlay(&overlay);
         let heat_alpha = actors.iter().find_map(|actor| match actor {
             deadlib_present::actors::Actor::Sprite { source, tint, .. }
                 if source.texture_key() == Some(super::SYNC_HEAT_TEXTURE_KEY) =>
@@ -19677,8 +19820,7 @@ mod tests {
         let mut overlay = test_running_sync_overlay();
         overlay.total_beats = 10;
         let marker_ys = |overlay: &super::NullOrDieOverlayData| {
-            super::build_null_or_die_overlay(overlay, 0, crate::config::MachineFont::Wendy)
-                .unwrap()
+            render_null_or_die_overlay(overlay)
                 .into_iter()
                 .filter_map(|actor| match actor {
                     deadlib_present::actors::Actor::Text { offset, z, .. }
@@ -19699,6 +19841,21 @@ mod tests {
         let top = marker_ys(&overlay);
         assert_eq!(top.len(), 3);
         assert!(top[0] < top[1] && top[1] < top[2]);
+    }
+
+    #[test]
+    fn direct_sync_overlay_append_matches_legacy_batch() {
+        crate::assets::i18n::init_for_tests();
+        let fixture = super::SyncOverlayAppendBenchmark::new();
+        let mut legacy = Vec::with_capacity(48);
+        let mut direct = Vec::with_capacity(48);
+
+        let legacy_checksum = fixture.legacy_frame(&mut legacy);
+        let direct_checksum = fixture.direct_frame(&mut direct);
+
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), fixture.actor_count());
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 
     #[test]

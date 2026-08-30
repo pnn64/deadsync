@@ -420,16 +420,26 @@ fn active_shop<'a>(
     snapshot.shops.iter().find(|shop| shop.id == shop_id)
 }
 
-#[must_use]
-pub fn build_srpg_shop_overlay(
+pub fn push_srpg_shop_overlay(
+    actors: &mut Vec<Actor>,
     state: &SrpgShopOverlayState,
     snapshot: &SrpgShopSnapshot,
     machine_font: MachineFont,
-) -> Option<Vec<Actor>> {
+) -> bool {
     let SrpgShopOverlayState::Visible(overlay) = state else {
-        return None;
+        return false;
     };
-    let mut actors = Vec::with_capacity(48);
+    actors.reserve(48);
+    push_srpg_shop_overlay_unreserved(actors, overlay, snapshot, machine_font);
+    true
+}
+
+fn push_srpg_shop_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &SrpgShopOverlayStateData,
+    snapshot: &SrpgShopSnapshot,
+    machine_font: MachineFont,
+) {
     let cx = screen_center_x();
     let cy = screen_center_y();
     let meta = SHOPS[overlay.shop_index];
@@ -462,9 +472,9 @@ pub fn build_srpg_shop_overlay(
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(center)
     ));
 
-    push_tabs(&mut actors, overlay.shop_index, cx, cy, bold_font);
+    push_tabs(actors, overlay.shop_index, cx, cy, bold_font);
     push_shop_heading(
-        &mut actors,
+        actors,
         active_shop(overlay, snapshot),
         meta,
         cx,
@@ -473,7 +483,7 @@ pub fn build_srpg_shop_overlay(
     );
     match snapshot.phase {
         SrpgShopPhase::Idle | SrpgShopPhase::Loading => push_status(
-            &mut actors,
+            actors,
             snapshot
                 .message
                 .as_deref()
@@ -484,7 +494,7 @@ pub fn build_srpg_shop_overlay(
             bold_font,
         ),
         SrpgShopPhase::Error => push_status(
-            &mut actors,
+            actors,
             snapshot
                 .message
                 .as_deref()
@@ -495,14 +505,13 @@ pub fn build_srpg_shop_overlay(
             bold_font,
         ),
         SrpgShopPhase::Ready | SrpgShopPhase::Purchasing => {
-            push_catalog(&mut actors, overlay, snapshot, meta, cx, cy, bold_font);
+            push_catalog(actors, overlay, snapshot, meta, cx, cy, bold_font);
         }
     }
-    push_footer(&mut actors, snapshot.phase, cx, cy);
+    push_footer(actors, snapshot.phase, cx, cy);
     if let Some(confirm) = overlay.confirm.as_ref() {
-        push_confirmation(&mut actors, confirm, meta, cx, cy, header_font, bold_font);
+        push_confirmation(actors, confirm, meta, cx, cy, header_font, bold_font);
     }
-    Some(actors)
 }
 
 fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32, bold_font: &'static str) {
@@ -901,6 +910,87 @@ fn format_number(value: u64) -> String {
         out.push(ch);
     }
     out
+}
+
+/// Stable old/new fixture for a populated SRPG shop actor batch.
+#[cfg(any(test, feature = "bench-support"))]
+pub struct SrpgShopOverlayAppendBenchmark {
+    state: SrpgShopOverlayState,
+    snapshot: SrpgShopSnapshot,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl SrpgShopOverlayAppendBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        let SrpgShopOverlayState::Visible(overlay) = &mut state else {
+            unreachable!("shop fixture is visible");
+        };
+        overlay.item_indices[0] = 3;
+        let items = (0..8)
+            .map(|index| SrpgShopItem {
+                item_id: format!("item-{index}"),
+                kind: SrpgShopItemKind::Song,
+                name: format!("Benchmark Unlock {index:02}"),
+                description: "A representative SRPG unlock description.".to_string(),
+                effect: "Unlocks one benchmark song.".to_string(),
+                cost: Some(1_000 + index as u64 * 125),
+                difficulty: Some(12 + index),
+                bpm: Some(160 + index * 5),
+                type_id: 1,
+                owned: index % 3 != 0,
+                site_downloaded: false,
+                downloaded: index == 2,
+                download_url: Some(format!("https://example.test/unlock-{index}.zip")),
+            })
+            .collect();
+        let snapshot = SrpgShopSnapshot {
+            phase: SrpgShopPhase::Ready,
+            shops: vec![SrpgShop {
+                id: SRPG_SHOP_IDS[0],
+                balance: 12_345,
+                items,
+            }],
+            message: None,
+        };
+        Self { state, snapshot }
+    }
+
+    #[must_use]
+    pub fn actor_count(&self) -> usize {
+        let mut actors = Vec::with_capacity(64);
+        push_srpg_shop_overlay(&mut actors, &self.state, &self.snapshot, MachineFont::Mega);
+        actors.len()
+    }
+
+    #[must_use]
+    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        let SrpgShopOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("shop fixture is visible");
+        };
+        let mut staged = Vec::with_capacity(48);
+        push_srpg_shop_overlay_unreserved(&mut staged, overlay, &self.snapshot, MachineFont::Mega);
+        out.extend(staged);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_srpg_shop_overlay(out, &self.state, &self.snapshot, MachineFont::Mega);
+        std::hint::black_box(&*out);
+        super::overlay_actor_checksum(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for SrpgShopOverlayAppendBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

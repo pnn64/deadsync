@@ -45,7 +45,7 @@ mod overlay_staging_tests {
     use super::{
         Actor, DownloadsOverlayAppendBenchmark, LeaderboardOverlayAppendBenchmark,
         ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
-        SongSearchOverlayAppendBenchmark,
+        SongSearchOverlayAppendBenchmark, SrpgShopOverlayAppendBenchmark,
     };
 
     fn assert_same(
@@ -123,6 +123,19 @@ mod overlay_staging_tests {
         let direct_checksum = downloads.direct_frame(&mut direct);
         assert_same(
             downloads.actor_count(),
+            legacy_checksum,
+            direct_checksum,
+            &legacy,
+            &direct,
+        );
+
+        let shop = SrpgShopOverlayAppendBenchmark::new();
+        legacy = Vec::with_capacity(64);
+        direct = Vec::with_capacity(64);
+        let legacy_checksum = shop.legacy_frame(&mut legacy);
+        let direct_checksum = shop.direct_frame(&mut direct);
+        assert_same(
+            shop.actor_count(),
             legacy_checksum,
             direct_checksum,
             &legacy,

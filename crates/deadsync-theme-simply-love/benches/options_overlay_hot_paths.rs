@@ -3,13 +3,15 @@ use deadsync_theme_simply_love::screens::components::select_music::lobby_overlay
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
     DownloadsOverlayAppendBenchmark, LeaderboardOverlayAppendBenchmark,
     ReplayOverlayAppendBenchmark, SelectMusicMenuOverlayBenchmark,
-    SongSearchOverlayAppendBenchmark,
+    SongSearchOverlayAppendBenchmark, SrpgShopOverlayAppendBenchmark,
 };
+use deadsync_theme_simply_love::screens::components::shared::test_input::SelectMusicTestInputAppendBenchmark;
 use deadsync_theme_simply_love::screens::components::shared::update_overlay::PanelAppendBenchmark;
 use deadsync_theme_simply_love::screens::options::{
     OptionsModalAppendBenchmark, OptionsOverlayHotBenchmark, PackSyncOverlayBenchmark,
     ReplayGainOverlayBenchmark, ScoreImportOverlayBenchmark,
 };
+use deadsync_theme_simply_love::screens::select_music::SyncOverlayAppendBenchmark;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -482,6 +484,51 @@ fn main() {
         downloads.actor_count(),
         &old_downloads,
         &new_downloads,
+        false,
+    );
+
+    let test_input = SelectMusicTestInputAppendBenchmark::new();
+    let mut old_test_input_actors = Vec::with_capacity(96);
+    let mut new_test_input_actors = Vec::with_capacity(96);
+    let (old_test_input, new_test_input) = sample_pair(
+        || measure(|| test_input.legacy_frame(&mut old_test_input_actors)),
+        || measure(|| test_input.direct_frame(&mut new_test_input_actors)),
+    );
+    report_pair(
+        "Test Input actor staging",
+        test_input.actor_count(),
+        &old_test_input,
+        &new_test_input,
+        false,
+    );
+
+    let sync = SyncOverlayAppendBenchmark::new();
+    let mut old_sync_actors = Vec::with_capacity(48);
+    let mut new_sync_actors = Vec::with_capacity(48);
+    let (old_sync, new_sync) = sample_pair(
+        || measure(|| sync.legacy_frame(&mut old_sync_actors)),
+        || measure(|| sync.direct_frame(&mut new_sync_actors)),
+    );
+    report_pair(
+        "automatic sync actor staging",
+        sync.actor_count(),
+        &old_sync,
+        &new_sync,
+        false,
+    );
+
+    let shop = SrpgShopOverlayAppendBenchmark::new();
+    let mut old_shop_actors = Vec::with_capacity(64);
+    let mut new_shop_actors = Vec::with_capacity(64);
+    let (old_shop, new_shop) = sample_pair(
+        || measure(|| shop.legacy_frame(&mut old_shop_actors)),
+        || measure(|| shop.direct_frame(&mut new_shop_actors)),
+    );
+    report_pair(
+        "SRPG shop actor staging",
+        shop.actor_count(),
+        &old_shop,
+        &new_shop,
         false,
     );
 }
