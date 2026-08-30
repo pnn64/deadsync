@@ -421,11 +421,11 @@ fn main() {
         || measure(|| replay.direct_frame(&mut new_replay_actors)),
     );
     report_pair(
-        "replay selector actor staging",
+        "retained replay selector tree",
         replay.actor_count(),
         &old_replay,
         &new_replay,
-        false,
+        true,
     );
 
     let search = SongSearchOverlayAppendBenchmark::new();
@@ -451,11 +451,11 @@ fn main() {
         || measure(|| lobby.direct_frame(&mut new_lobby_actors)),
     );
     report_pair(
-        "lobby browser actor staging",
+        "retained lobby browser tree",
         lobby.actor_count(),
         &old_lobby,
         &new_lobby,
-        false,
+        true,
     );
 
     let mut old_lobby_nested_actors = Vec::with_capacity(64);
@@ -469,7 +469,7 @@ fn main() {
         lobby.actor_count(),
         &old_lobby_nested,
         &new_lobby_nested,
-        false,
+        true,
     );
 
     let leaderboard = LeaderboardOverlayAppendBenchmark::new();
@@ -495,11 +495,11 @@ fn main() {
         || measure(|| downloads.direct_frame(&mut new_downloads_actors)),
     );
     report_pair(
-        "download list actor staging",
+        "retained download list tree",
         downloads.actor_count(),
         &old_downloads,
         &new_downloads,
-        false,
+        true,
     );
 
     let test_input = SelectMusicTestInputAppendBenchmark::new();

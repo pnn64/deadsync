@@ -1,12 +1,15 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::loading_bar;
 use crate::views::SelectMusicDownloadView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 const DOWNLOADS_Z: i16 = 1480;
 const DOWNLOADS_PANEL_W: f32 = 520.0;
@@ -29,6 +32,23 @@ const DOWNLOADS_DIM_ALPHA: f32 = 0.875;
 #[derive(Clone, Debug)]
 pub struct DownloadsOverlayStateData {
     scroll_index: usize,
+    presentation: RefCell<Option<DownloadsPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DownloadsPresentationKey {
+    scroll_index: usize,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct DownloadsPresentation {
+    key: DownloadsPresentationKey,
+    snapshots: Box<[SelectMusicDownloadView]>,
+    children: Arc<[Actor]>,
 }
 
 #[derive(Clone, Debug)]
@@ -50,11 +70,14 @@ const fn downloads_scroll_limit(total: usize) -> usize {
 
 #[must_use]
 pub const fn show_downloads_overlay() -> DownloadsOverlayState {
-    DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 0 })
+    DownloadsOverlayState::Visible(DownloadsOverlayStateData {
+        scroll_index: 0,
+        presentation: RefCell::new(None),
+    })
 }
 
 #[inline(always)]
-pub const fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
+pub fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
     *state = DownloadsOverlayState::Hidden;
 }
 
@@ -167,12 +190,44 @@ pub fn push_downloads_overlay(
     let DownloadsOverlayState::Visible(overlay) = state else {
         return false;
     };
-    actors.reserve(if snapshots.is_empty() {
+    let capacity = if snapshots.is_empty() {
         7
     } else {
         6 + snapshots.len().min(DOWNLOADS_VIEW_ROWS) * 4
+    };
+    let key = DownloadsPresentationKey {
+        scroll_index: overlay.scroll_index,
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| {
+            presentation.key == key && presentation.snapshots.as_ref() == snapshots
+        })
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(capacity);
+        push_downloads_overlay_unreserved(
+            &mut children,
+            overlay,
+            active_color_index,
+            snapshots,
+            machine_font,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(DownloadsPresentation {
+            key,
+            snapshots: snapshots.to_vec().into_boxed_slice(),
+            children: Arc::clone(&children),
+        });
+        children
     });
-    push_downloads_overlay_unreserved(actors, overlay, active_color_index, snapshots, machine_font);
+    push_retained_overlay(actors, children);
     true
 }
 
@@ -355,10 +410,13 @@ impl DownloadsOverlayAppendBenchmark {
 
     #[must_use]
     pub fn actor_count(&self) -> usize {
+        let DownloadsOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
         let mut actors = Vec::with_capacity(32);
-        push_downloads_overlay(
+        push_downloads_overlay_unreserved(
             &mut actors,
-            &self.state,
+            overlay,
             2,
             &self.snapshots,
             MachineFont::Mega,
@@ -372,15 +430,7 @@ impl DownloadsOverlayAppendBenchmark {
         let DownloadsOverlayState::Visible(overlay) = &self.state else {
             unreachable!("benchmark overlay is visible");
         };
-        let mut staged = Vec::new();
-        push_downloads_overlay_unreserved(
-            &mut staged,
-            overlay,
-            2,
-            &self.snapshots,
-            MachineFont::Mega,
-        );
-        out.extend(staged);
+        push_downloads_overlay_unreserved(out, overlay, 2, &self.snapshots, MachineFont::Mega);
         std::hint::black_box(&*out);
         super::overlay_actor_checksum(out)
     }
@@ -407,7 +457,10 @@ mod tests {
 
     #[test]
     fn scroll_uses_prepared_download_count() {
-        let mut overlay = DownloadsOverlayStateData { scroll_index: 0 };
+        let mut overlay = DownloadsOverlayStateData {
+            scroll_index: 0,
+            presentation: RefCell::new(None),
+        };
 
         assert!(downloads_shift(&mut overlay, 1, DOWNLOADS_VIEW_ROWS + 2));
         assert_eq!(overlay.scroll_index, 1);
@@ -418,8 +471,10 @@ mod tests {
 
     #[test]
     fn update_clamps_scroll_after_prepared_rows_shrink() {
-        let mut state =
-            DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 3 });
+        let mut state = DownloadsOverlayState::Visible(DownloadsOverlayStateData {
+            scroll_index: 3,
+            presentation: RefCell::new(None),
+        });
 
         update_downloads_overlay(&mut state, 2);
 
@@ -427,5 +482,45 @@ mod tests {
             panic!("downloads overlay should stay visible");
         };
         assert_eq!(overlay.scroll_index, 0);
+    }
+
+    #[test]
+    fn retained_download_tree_matches_immediate_reuses_and_tracks_progress() {
+        let mut fixture = DownloadsOverlayAppendBenchmark::new();
+        let mut immediate = Vec::with_capacity(32);
+        let _ = fixture.legacy_frame(&mut immediate);
+
+        let mut retained = Vec::with_capacity(1);
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("retained downloads overlay should use one shared frame");
+        };
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+        let first = Arc::clone(children);
+
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("stable downloads overlay should remain shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        fixture.snapshots[2].current_bytes += 1024;
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed downloads overlay should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
     }
 }

@@ -1,11 +1,14 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 pub const REPLAY_FOCUS_TWEEN_SECONDS: f32 = 0.1;
 pub const REPLAY_INPUT_LOCK_SECONDS: f32 = 0.15;
@@ -21,11 +24,35 @@ const GS_LEADERBOARD_Z: i16 = 1480;
 
 #[derive(Clone, Debug)]
 pub struct ReplayOverlayStateData {
-    pub entries: Vec<score_data::MachineReplayEntry>,
-    pub selected_index: usize,
-    pub prev_selected_index: usize,
-    pub focus_anim_elapsed: f32,
-    pub input_lock: f32,
+    entries: Vec<score_data::MachineReplayEntry>,
+    selected_index: usize,
+    prev_selected_index: usize,
+    focus_anim_elapsed: f32,
+    input_lock: f32,
+    presentation_revision: u64,
+    presentation: RefCell<Option<ReplayPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ReplayPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct ReplayPresentation {
+    key: ReplayPresentationKey,
+    children: Arc<[Actor]>,
+}
+
+impl ReplayOverlayStateData {
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -64,6 +91,8 @@ pub const fn begin_replay_overlay(
         prev_selected_index: 0,
         focus_anim_elapsed: REPLAY_FOCUS_TWEEN_SECONDS,
         input_lock: REPLAY_INPUT_LOCK_SECONDS,
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
     })
 }
 
@@ -113,6 +142,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
             overlay.prev_selected_index = old;
             overlay.selected_index = next;
             overlay.focus_anim_elapsed = 0.0;
+            overlay.invalidate_presentation();
             ReplayInputOutcome::ChangedSelection
         }
         VirtualAction::p1_down
@@ -135,6 +165,7 @@ pub fn handle_replay_input(state: &mut ReplayOverlayState, ev: &InputEvent) -> R
             overlay.prev_selected_index = old;
             overlay.selected_index = next;
             overlay.focus_anim_elapsed = 0.0;
+            overlay.invalidate_presentation();
             ReplayInputOutcome::ChangedSelection
         }
         VirtualAction::p1_start | VirtualAction::p2_start => {
@@ -183,8 +214,31 @@ pub fn push_replay_overlay(
     let ReplayOverlayState::Visible(overlay) = state else {
         return false;
     };
-    actors.reserve(8 + replay_total_items(overlay).min(GS_LEADERBOARD_NUM_ENTRIES) * 5);
-    push_replay_overlay_unreserved(actors, overlay, active_color_index, machine_font);
+    let key = ReplayPresentationKey {
+        revision: overlay.presentation_revision,
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children =
+            Vec::with_capacity(8 + replay_total_items(overlay).min(GS_LEADERBOARD_NUM_ENTRIES) * 5);
+        push_replay_overlay_unreserved(&mut children, overlay, active_color_index, machine_font);
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(ReplayPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    push_retained_overlay(actors, children);
     true
 }
 
@@ -419,9 +473,11 @@ impl ReplayOverlayAppendBenchmark {
 
     #[must_use]
     pub fn actor_count(&self) -> usize {
+        let ReplayOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("replay benchmark stays visible");
+        };
         let mut actors = Vec::with_capacity(73);
-        let visible = push_replay_overlay(&mut actors, &self.state, 2, MachineFont::Mega);
-        debug_assert!(visible);
+        push_replay_overlay_unreserved(&mut actors, overlay, 2, MachineFont::Mega);
         actors.len()
     }
 
@@ -431,9 +487,7 @@ impl ReplayOverlayAppendBenchmark {
         let ReplayOverlayState::Visible(overlay) = &self.state else {
             unreachable!("replay benchmark stays visible");
         };
-        let mut staged = Vec::new();
-        push_replay_overlay_unreserved(&mut staged, overlay, 2, MachineFont::Mega);
-        out.extend(staged);
+        push_replay_overlay_unreserved(out, overlay, 2, MachineFont::Mega);
         std::hint::black_box(&*out);
         super::overlay_actor_checksum(out)
     }
@@ -452,5 +506,55 @@ impl ReplayOverlayAppendBenchmark {
 impl Default for ReplayOverlayAppendBenchmark {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_replay_tree_matches_immediate_reuses_and_invalidates() {
+        let mut fixture = ReplayOverlayAppendBenchmark::new();
+        let mut immediate = Vec::with_capacity(73);
+        let _ = fixture.legacy_frame(&mut immediate);
+
+        let mut retained = Vec::with_capacity(1);
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("retained replay overlay should use one shared frame");
+        };
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
+        let first = Arc::clone(children);
+
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("stable replay overlay should remain shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        let ReplayOverlayState::Visible(overlay) = &mut fixture.state else {
+            unreachable!("replay benchmark stays visible");
+        };
+        overlay.prev_selected_index = overlay.selected_index;
+        overlay.selected_index += 1;
+        overlay.invalidate_presentation();
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed replay overlay should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        immediate.clear();
+        let _ = fixture.legacy_frame(&mut immediate);
+        assert_eq!(
+            format!("{immediate:#?}"),
+            format!("{:#?}", children.as_ref())
+        );
     }
 }

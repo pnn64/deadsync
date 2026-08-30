@@ -1,12 +1,15 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
+use std::cell::RefCell;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const DIM_ALPHA: f32 = 0.875;
@@ -231,6 +234,32 @@ pub struct OverlayStateData {
     notice_text: Option<String>,
     notice_time_left: f32,
     pending_sounds: Vec<SoundCue>,
+    presentation_revision: u64,
+    presentation: RefCell<Option<LobbyPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LobbyPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct LobbyPresentation {
+    key: LobbyPresentationKey,
+    snapshot: Arc<lobby_data::Snapshot>,
+    reconnect_status_text: Option<Box<str>>,
+    children: Arc<[Actor]>,
+}
+
+impl OverlayStateData {
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+        self.presentation.get_mut().take();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -283,6 +312,8 @@ pub fn show_overlay() -> OverlayState {
         notice_text: None,
         notice_time_left: 0.0,
         pending_sounds: Vec::new(),
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
     }))
 }
 
@@ -302,6 +333,14 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32, snapshot: &lobby_data::
     let OverlayState::Visible(overlay) = state else {
         return;
     };
+    let before = (
+        overlay.browse_index,
+        overlay.browse_scroll,
+        overlay.joined_action_index,
+        overlay.password_prompt.is_some(),
+        overlay.notice_text.is_some(),
+    );
+    let mut presentation_changed = false;
 
     match snapshot.joined_lobby.as_ref() {
         Some(_) => {
@@ -318,7 +357,9 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32, snapshot: &lobby_data::
     if let Some(prompt) = overlay.password_prompt.as_mut() {
         if update_password_prompt_hold(prompt) {
             overlay.pending_sounds.push(SoundCue::Change);
+            presentation_changed = true;
         }
+        presentation_changed |= prompt.wheel.anim_elapsed.is_some();
         prompt.wheel.update(dt);
     }
 
@@ -326,7 +367,18 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32, snapshot: &lobby_data::
         overlay.notice_time_left = (overlay.notice_time_left - dt.max(0.0)).max(0.0);
         if overlay.notice_time_left <= 0.0 {
             overlay.notice_text = None;
+            presentation_changed = true;
         }
+    }
+    let after = (
+        overlay.browse_index,
+        overlay.browse_scroll,
+        overlay.joined_action_index,
+        overlay.password_prompt.is_some(),
+        overlay.notice_text.is_some(),
+    );
+    if presentation_changed || before != after {
+        overlay.invalidate_presentation();
     }
 }
 
@@ -340,11 +392,15 @@ pub fn handle_input(
     };
 
     if overlay.password_prompt.is_some() {
+        if ev.pressed {
+            overlay.invalidate_presentation();
+        }
         return handle_password_prompt_input(overlay, ev);
     }
     if !ev.pressed {
         return InputOutcome::None;
     }
+    overlay.invalidate_presentation();
 
     if snapshot.joined_lobby.is_some() {
         match ev.action {
@@ -516,7 +572,7 @@ pub fn push_overlay(
     actors: &mut Vec<Actor>,
     state: &OverlayState,
     active_color_index: i32,
-    snapshot: &lobby_data::Snapshot,
+    snapshot: &Arc<lobby_data::Snapshot>,
     reconnect_status_text: Option<&str>,
     machine_font: MachineFont,
 ) -> bool {
@@ -524,15 +580,43 @@ pub fn push_overlay(
         return false;
     };
 
-    actors.reserve(overlay_actor_capacity(overlay, snapshot));
-    push_overlay_unreserved::<false>(
-        actors,
-        overlay,
+    let key = LobbyPresentationKey {
+        revision: overlay.presentation_revision,
         active_color_index,
-        snapshot,
-        reconnect_status_text,
         machine_font,
-    );
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| {
+            presentation.key == key
+                && Arc::ptr_eq(&presentation.snapshot, snapshot)
+                && presentation.reconnect_status_text.as_deref() == reconnect_status_text
+        })
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(overlay_actor_capacity(overlay, snapshot));
+        push_overlay_unreserved::<false>(
+            &mut children,
+            overlay,
+            active_color_index,
+            snapshot,
+            reconnect_status_text,
+            machine_font,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(LobbyPresentation {
+            key,
+            snapshot: Arc::clone(snapshot),
+            reconnect_status_text: reconnect_status_text.map(Box::<str>::from),
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    push_retained_overlay(actors, children);
     true
 }
 
@@ -1614,7 +1698,7 @@ fn password_prompt_value(prompt: &PasswordPromptState) -> String {
 #[cfg(any(test, feature = "bench-support"))]
 pub struct LobbyOverlayAppendBenchmark {
     state: OverlayState,
-    snapshot: lobby_data::Snapshot,
+    snapshot: Arc<lobby_data::Snapshot>,
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -1627,7 +1711,7 @@ impl LobbyOverlayAppendBenchmark {
         };
         overlay.browse_index = 2;
         overlay.password_prompt = Some(begin_password_prompt_join("LOCKED-ROOM"));
-        let snapshot = lobby_data::Snapshot {
+        let snapshot = Arc::new(lobby_data::Snapshot {
             connection: lobby_data::ConnectionState::Connected,
             available_lobbies: (0..VISIBLE_LOBBY_ROWS)
                 .map(|index| lobby_data::PublicLobby {
@@ -1637,16 +1721,19 @@ impl LobbyOverlayAppendBenchmark {
                 })
                 .collect(),
             ..Default::default()
-        };
+        });
         Self { state, snapshot }
     }
 
     #[must_use]
     pub fn actor_count(&self) -> usize {
+        let OverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
         let mut actors = Vec::with_capacity(64);
-        push_overlay(
+        push_overlay_unreserved::<false>(
             &mut actors,
-            &self.state,
+            overlay,
             1,
             &self.snapshot,
             Some("Connected"),
@@ -1661,16 +1748,14 @@ impl LobbyOverlayAppendBenchmark {
         let OverlayState::Visible(overlay) = &self.state else {
             unreachable!("benchmark overlay is visible");
         };
-        let mut staged = Vec::new();
-        push_overlay_unreserved::<true>(
-            &mut staged,
+        push_overlay_unreserved::<false>(
+            out,
             overlay,
             1,
             &self.snapshot,
             Some("Connected"),
             MachineFont::Mega,
         );
-        out.extend(staged);
         std::hint::black_box(&*out);
         overlay_actor_checksum(out)
     }
@@ -1718,6 +1803,10 @@ impl Default for LobbyOverlayAppendBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
         let value = match actor {
             Actor::Text { content, z, .. } => content
@@ -1727,6 +1816,9 @@ fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
                     hash.rotate_left(7) ^ u64::from(byte)
                 }),
             Actor::Frame { children, z, .. } => {
+                overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            Actor::SharedFrame { children, z, .. } => {
                 overlay_actor_checksum(children) ^ u64::from(*z as u16)
             }
             _ => 1,
@@ -1758,17 +1850,42 @@ mod tests {
     }
 
     #[test]
-    fn direct_overlay_append_matches_legacy_batch() {
+    fn retained_overlay_matches_immediate_reuses_and_tracks_snapshot_changes() {
         crate::assets::i18n::init_for_tests();
-        let fixture = LobbyOverlayAppendBenchmark::new();
+        let mut fixture = LobbyOverlayAppendBenchmark::new();
         let mut legacy = Vec::with_capacity(64);
-        let mut direct = Vec::with_capacity(64);
+        let mut retained = Vec::with_capacity(1);
 
         let legacy_checksum = fixture.legacy_frame(&mut legacy);
-        let direct_checksum = fixture.direct_frame(&mut direct);
+        let retained_checksum = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("retained lobby overlay should use one shared frame");
+        };
 
-        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy_checksum, retained_checksum);
         assert_eq!(legacy.len(), fixture.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
+        let first = Arc::clone(children);
+
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("stable lobby overlay should remain shared");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        let mut snapshot = fixture.snapshot.as_ref().clone();
+        snapshot.available_lobbies[0].player_count += 1;
+        fixture.snapshot = Arc::new(snapshot);
+        retained.clear();
+        let _ = fixture.direct_frame(&mut retained);
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("changed lobby overlay should rebuild a shared frame");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        legacy.clear();
+        let _ = fixture.legacy_frame(&mut legacy);
+        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
     }
 }

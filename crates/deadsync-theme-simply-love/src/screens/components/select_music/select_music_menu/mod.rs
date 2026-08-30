@@ -23,6 +23,10 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "bench-support"))]
 fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
         let value = match actor {
             Actor::Text { content, z, .. } => content
@@ -32,6 +36,9 @@ fn overlay_actor_checksum(actors: &[Actor]) -> u64 {
                     hash.rotate_left(7) ^ u64::from(byte)
                 }),
             Actor::Frame { children, z, .. } => {
+                overlay_actor_checksum(children) ^ u64::from(*z as u16)
+            }
+            Actor::SharedFrame { children, z, .. } => {
                 overlay_actor_checksum(children) ^ u64::from(*z as u16)
             }
             _ => 1,
@@ -55,8 +62,13 @@ mod overlay_staging_tests {
         legacy: &[Actor],
         direct: &[Actor],
     ) {
+        let direct = match direct {
+            [Actor::SharedFrame { children, .. }] => children.as_ref(),
+            _ => direct,
+        };
         assert_eq!(legacy_checksum, direct_checksum);
         assert_eq!(legacy.len(), expected_count);
+        assert_eq!(direct.len(), expected_count);
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 
