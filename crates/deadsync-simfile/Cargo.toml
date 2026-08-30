@@ -23,6 +23,11 @@ name = "bpm_timeline_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "course_candidate_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 
