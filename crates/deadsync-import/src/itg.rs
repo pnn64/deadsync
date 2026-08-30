@@ -5,12 +5,14 @@
 //! into plain Rust structs. Mapping into `DeadSync` types happens in the
 //! root import orchestration layer and in `deadsync_score::import`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use deadsync_score::ImportedHighScore;
+use rustc_hash::FxBuildHasher;
 
 use super::xml::{self, XmlNode};
 use crate::ini::SimpleIni;
@@ -298,8 +300,46 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
 /// the favorited song paths. Order is preserved and duplicates are removed.
 #[must_use]
 pub fn parse_favorites_text(text: &str) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    let mut out = Vec::new();
+    parse_favorites_borrowed(text)
+}
+
+fn favorite_capacity_hint(text: &str) -> usize {
+    const SAMPLE_BYTES: usize = 4 * 1024;
+
+    if text.is_empty() {
+        return 0;
+    }
+    let mut sample_len = text.len().min(SAMPLE_BYTES);
+    while !text.is_char_boundary(sample_len) {
+        sample_len -= 1;
+    }
+    let candidates = text[..sample_len]
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !trimmed.is_empty() && !trimmed.starts_with("---")
+        })
+        .count();
+    if candidates == 0 {
+        return 1;
+    }
+    text.len()
+        .saturating_mul(candidates)
+        .div_ceil(sample_len)
+        .max(1)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_favorites_owned_with<S: std::hash::BuildHasher + Default, const RESERVE: bool>(
+    text: &str,
+) -> Vec<String> {
+    let capacity = if RESERVE {
+        favorite_capacity_hint(text)
+    } else {
+        0
+    };
+    let mut seen = HashSet::with_capacity_and_hasher(capacity, S::default());
+    let mut out = Vec::with_capacity(capacity);
     for line in text.lines() {
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with("---") {
@@ -307,6 +347,42 @@ pub fn parse_favorites_text(text: &str) -> Vec<String> {
         }
         if seen.insert(trimmed.to_ascii_lowercase()) {
             out.push(trimmed.to_string());
+        }
+    }
+    out
+}
+
+#[derive(Clone, Copy)]
+struct AsciiCaseless<'a>(&'a str);
+
+impl PartialEq for AsciiCaseless<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq_ignore_ascii_case(other.0)
+    }
+}
+
+impl Eq for AsciiCaseless<'_> {}
+
+impl Hash for AsciiCaseless<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.len().hash(state);
+        for byte in self.0.bytes() {
+            byte.to_ascii_lowercase().hash(state);
+        }
+    }
+}
+
+fn parse_favorites_borrowed(text: &str) -> Vec<String> {
+    let capacity = favorite_capacity_hint(text);
+    let mut seen = HashSet::with_capacity_and_hasher(capacity, FxBuildHasher);
+    let mut out = Vec::with_capacity(capacity);
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("---") {
+            continue;
+        }
+        if seen.insert(AsciiCaseless(trimmed)) {
+            out.push(trimmed.to_owned());
         }
     }
     out
@@ -814,6 +890,37 @@ pub mod bench_support {
     pub fn gzip_reserved_reuse(bytes: &[u8]) -> u64 {
         gzip_stage::<true, true>(bytes)
     }
+
+    fn favorite_checksum(favorites: &[String]) -> u64 {
+        favorites.iter().fold(0u64, |checksum, favorite| {
+            favorite.bytes().fold(
+                checksum.rotate_left(7).wrapping_add(favorite.len() as u64),
+                |checksum, byte| checksum.rotate_left(5).wrapping_add(u64::from(byte)),
+            )
+        })
+    }
+
+    pub fn favorites_unreserved(text: &str) -> u64 {
+        favorite_checksum(&parse_favorites_owned_with::<
+            std::collections::hash_map::RandomState,
+            false,
+        >(text))
+    }
+
+    pub fn favorites_reserved(text: &str) -> u64 {
+        favorite_checksum(&parse_favorites_owned_with::<
+            std::collections::hash_map::RandomState,
+            true,
+        >(text))
+    }
+
+    pub fn favorites_fast_hash(text: &str) -> u64 {
+        favorite_checksum(&parse_favorites_owned_with::<FxBuildHasher, true>(text))
+    }
+
+    pub fn favorites_borrowed(text: &str) -> u64 {
+        favorite_checksum(&parse_favorites_borrowed(text))
+    }
 }
 
 fn parse_bool(s: &str) -> bool {
@@ -1024,7 +1131,7 @@ mod tests {
 
     #[test]
     fn parses_favorites_skipping_headers_and_dupes() {
-        let text = "---My Stamina Playlist\nPack A/Song One\n\nPack B/Song Two\n---Another Section\nPack A/Song One\n  Pack C/Song Three  \n";
+        let text = "---My Stamina Playlist\nPack A/Song One\n\nPack B/Song Two\n---Another Section\npack a/SONG ONE\n  Pack C/Song Three  \nPäck/Über\nPÄCK/ÜBER\n";
         let favs = parse_favorites_text(text);
         assert_eq!(
             favs,
@@ -1032,7 +1139,13 @@ mod tests {
                 "Pack A/Song One".to_string(),
                 "Pack B/Song Two".to_string(),
                 "Pack C/Song Three".to_string(),
+                "Päck/Über".to_string(),
+                "PÄCK/ÜBER".to_string(),
             ]
+        );
+        assert_eq!(
+            favs,
+            parse_favorites_owned_with::<std::collections::hash_map::RandomState, false>(text)
         );
     }
 
