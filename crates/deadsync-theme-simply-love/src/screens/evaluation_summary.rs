@@ -629,7 +629,8 @@ fn build_player_stats(
     }
 
     // Letter grade
-    out.extend(eval_grades::actors(
+    eval_grades::push_actors(
+        &mut out,
         p.grade,
         eval_grades::EvalGradeParams {
             x: grade_x,
@@ -639,7 +640,7 @@ fn build_player_stats(
             elapsed,
             ..Default::default()
         },
-    ));
+    );
 
     // Judgment numbers: W0..W5, Miss
     let wc = p.window_counts;

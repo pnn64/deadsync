@@ -707,6 +707,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 #[inline(always)]
 fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
     let st = star_transform(s, p);
@@ -723,6 +724,19 @@ fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
 }
 
 #[inline(always)]
+fn push_star_actors(out: &mut Vec<Actor>, s: StarDef, p: EvalGradeParams) {
+    let st = star_transform(s, p);
+    let seed = star_seed(s);
+    out.push(base_star_actor(st, p, seed));
+    if let Some(actor) = affluent_actor(st, p, seed) {
+        out.push(actor);
+    }
+    if let Some(actor) = goldstar_actor(st, p) {
+        out.push(actor);
+    }
+}
+
+#[inline(always)]
 const fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     match grade {
         score_data::Grade::Quint => Some(&STARS_QUINT),
@@ -734,6 +748,7 @@ const fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 #[must_use]
 pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
     if let Some(stars) = stars_for(grade) {
@@ -751,6 +766,24 @@ pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
         zoom(p.zoom * LETTER_ZOOM):
         z(p.z)
     )]
+}
+
+/// Appends the evaluation grade without allocating intermediate actor lists.
+pub fn push_actors(out: &mut Vec<Actor>, grade: score_data::Grade, p: EvalGradeParams) {
+    if let Some(stars) = stars_for(grade) {
+        out.reserve(stars.len().saturating_mul(3));
+        for star in stars.iter().copied() {
+            push_star_actors(out, star, p);
+        }
+        return;
+    }
+
+    out.push(act!(sprite_static(letter_tex(grade)):
+        align(0.5, 0.5):
+        xy(p.x, p.y):
+        zoom(p.zoom * LETTER_ZOOM):
+        z(p.z)
+    ));
 }
 
 #[cfg(test)]
@@ -800,6 +833,28 @@ mod tests {
             Actor::Sprite { source, tint, .. } if source.texture_key() == Some(key) => Some(*tint),
             _ => None,
         })
+    }
+
+    #[test]
+    fn direct_append_matches_legacy_for_letters_and_all_star_grades() {
+        for grade in [
+            score_data::Grade::Failed,
+            score_data::Grade::Tier04,
+            score_data::Grade::Tier03,
+            score_data::Grade::Tier02,
+            score_data::Grade::Tier01,
+            score_data::Grade::Quint,
+        ] {
+            let params = EvalGradeParams {
+                elapsed: 10.0,
+                easter_eggs: false,
+                ..EvalGradeParams::default()
+            };
+            let legacy = actors(grade, params);
+            let mut direct = Vec::with_capacity(legacy.len());
+            push_actors(&mut direct, grade, params);
+            assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        }
     }
 
     #[test]

@@ -48,6 +48,7 @@ struct LobbyHudSnapshot {
     status_text: Option<Box<str>>,
     joined_sides: [bool; 2],
     player_side: PlayerSide,
+    z: i16,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -80,6 +81,7 @@ impl LobbyHudSnapshot {
             && self.status_text.as_deref() == params.status_text
             && self.joined_sides == params.joined_sides
             && self.player_side == params.player_side
+            && self.z == params.z
     }
 
     fn from_params(params: &CachedRenderParams<'_>) -> Self {
@@ -101,6 +103,7 @@ impl LobbyHudSnapshot {
             status_text: params.status_text.map(Into::into),
             joined_sides: params.joined_sides,
             player_side: params.player_side,
+            z: params.z,
         }
     }
 }
@@ -137,18 +140,19 @@ fn percent_value_matches(left: Option<f32>, right: Option<f32>) -> bool {
 ///
 /// The application thread owns one instance for each screen that uses it. Its
 /// lifetime is one screen visit and its capacity is exactly one snapshot plus
-/// one rendered text block. It is populated on first render and rebuilt only
+/// one immutable two-actor panel. It is populated on first render and rebuilt only
 /// when the lobby, status, language-facing text inputs, or placement inputs
-/// change. A hit performs bounded player comparisons and two actor pushes with
-/// no allocation; there is no eviction, synchronization, or live-frame
-/// pruning. Replaced strings are freed on an external lobby-state change, and
-/// the final snapshot is freed with the screen. Hit and miss counters provide
-/// runtime instrumentation. Worst-case boundary work sorts and formats the
-/// current lobby's finite player list once.
+/// change. A hit performs bounded player comparisons and clones two actors while
+/// retaining the formatted text. The actor clone currently performs one small
+/// allocation; there is no eviction, synchronization, or live-frame pruning.
+/// Replaced strings are freed on an external lobby-state change, and the final
+/// snapshot is freed with the screen. Hit and miss counters provide runtime
+/// instrumentation. Worst-case boundary work sorts and formats the current
+/// lobby's finite player list once.
 #[derive(Default)]
 pub struct LobbyHudCache {
     snapshot: Option<LobbyHudSnapshot>,
-    body_text: Arc<str>,
+    panel: Arc<[Actor]>,
     stats: LobbyHudCacheStats,
 }
 
@@ -164,24 +168,50 @@ impl LobbyHudCache {
         self.stats
     }
 
-    fn body_text(&mut self, params: &CachedRenderParams<'_>) -> Arc<str> {
+    fn panel(&mut self, params: &CachedRenderParams<'_>) -> Arc<[Actor]> {
         if self
             .snapshot
             .as_ref()
             .is_some_and(|snapshot| snapshot.matches(params))
         {
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return Arc::clone(&self.body_text);
+            return Arc::clone(&self.panel);
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
-        self.body_text = Arc::from(build_body_text(
+        let body_text: Arc<str> = Arc::from(build_body_text(
             params.joined,
             params.screen_name,
             params.show_song_info,
             params.status_text,
         ));
+        let placement =
+            panel_placement(params.screen_name, params.joined_sides, params.player_side);
+        let width = panel_width(params.screen_name, placement);
+        let x = display_x(placement, width);
+        let y = screen_center_y();
+        let height = screen_height();
+        self.panel = Arc::from([
+            act!(quad:
+                align(0.5, 0.5):
+                xy(x, y):
+                zoomto(width, height):
+                diffuse(0.0, 0.0, 0.0, PANEL_BG_ALPHA):
+                z(params.z)
+            ),
+            act!(text:
+                font("miso"):
+                settext(body_text):
+                align(0.5, 0.5):
+                xy(x, y):
+                zoom(PANEL_TEXT_ZOOM):
+                maxwidth(width - 16.0):
+                diffuse(1.0, 1.0, 0.0, 1.0):
+                z(params.z + 1):
+                horizalign(center)
+            ),
+        ]);
         self.snapshot = Some(LobbyHudSnapshot::from_params(params));
-        Arc::clone(&self.body_text)
+        Arc::clone(&self.panel)
     }
 }
 
@@ -226,31 +256,8 @@ pub fn push_cached_panel(
     cache: &mut LobbyHudCache,
     params: CachedRenderParams<'_>,
 ) {
-    let placement = panel_placement(params.screen_name, params.joined_sides, params.player_side);
-    let width = panel_width(params.screen_name, placement);
-    let body_text = cache.body_text(&params);
-    let x = display_x(placement, width);
-    let y = screen_center_y();
-    let height = screen_height();
-
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(x, y):
-        zoomto(width, height):
-        diffuse(0.0, 0.0, 0.0, PANEL_BG_ALPHA):
-        z(params.z)
-    ));
-    actors.push(act!(text:
-        font("miso"):
-        settext(body_text):
-        align(0.5, 0.5):
-        xy(x, y):
-        zoom(PANEL_TEXT_ZOOM):
-        maxwidth(width - 16.0):
-        diffuse(1.0, 1.0, 0.0, 1.0):
-        z(params.z + 1):
-        horizalign(center)
-    ));
+    let panel = cache.panel(&params);
+    actors.extend(panel.iter().cloned());
 }
 
 fn build_body_text(

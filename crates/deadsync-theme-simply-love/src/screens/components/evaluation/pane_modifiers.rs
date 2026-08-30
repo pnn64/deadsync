@@ -21,12 +21,41 @@ pub fn build_modifiers_pane(
     )
 }
 
+/// Appends the modifiers bar directly into the screen's retained actor buffer.
+pub fn push_modifiers_pane(
+    out: &mut Vec<Actor>,
+    score_info: &ScoreInfo,
+    bar_center_x: f32,
+    bar_width: f32,
+    transparent: bool,
+) {
+    push_modifiers_pane_with_text(
+        out,
+        Arc::clone(&score_info.mods_text),
+        bar_center_x,
+        bar_width,
+        transparent,
+    );
+}
+
 fn build_modifiers_pane_with_text(
     mods_text: Arc<str>,
     bar_center_x: f32,
     bar_width: f32,
     transparent: bool,
 ) -> Vec<Actor> {
+    let mut out = Vec::with_capacity(2);
+    push_modifiers_pane_with_text(&mut out, mods_text, bar_center_x, bar_width, transparent);
+    out
+}
+
+fn push_modifiers_pane_with_text(
+    out: &mut Vec<Actor>,
+    mods_text: Arc<str>,
+    bar_center_x: f32,
+    bar_width: f32,
+    transparent: bool,
+) {
     let frame_center_y = deadlib_present::space::screen_center_y() + 200.5;
     let font_zoom = 0.7;
 
@@ -37,29 +66,41 @@ fn build_modifiers_pane_with_text(
 
     let bg = color::rgba_hex("#1E282F");
     let bg_alpha = eval_style_alpha(transparent, 1.0, 0.75);
-    vec![
-        act!(quad:
-            align(0.5, 0.5):
-            xy(bar_center_x, frame_center_y):
-            zoomto(bar_width, 26.0):
-            diffuse(bg[0], bg[1], bg[2], bg_alpha):
-            z(101)
-        ),
-        act!(text:
-            font("miso"):
-            settext(mods_text):
-            align(0.0, 0.0):
-            xy(text_x, text_y):
-            zoom(font_zoom):
-            z(102):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        ),
-    ]
+    out.reserve(2);
+    out.push(act!(quad:
+        align(0.5, 0.5):
+        xy(bar_center_x, frame_center_y):
+        zoomto(bar_width, 26.0):
+        diffuse(bg[0], bg[1], bg[2], bg_alpha):
+        z(101)
+    ));
+    out.push(act!(text:
+        font("miso"):
+        settext(mods_text):
+        align(0.0, 0.0):
+        xy(text_x, text_y):
+        zoom(font_zoom):
+        z(102):
+        diffuse(1.0, 1.0, 1.0, 1.0)
+    ));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_build_modifiers_pane(text: Arc<str>) -> Vec<Actor> {
+    build_modifiers_pane_with_text(text, 320.0, 300.0, false)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn benchmark_push_modifiers_pane(out: &mut Vec<Actor>, text: Arc<str>) {
+    push_modifiers_pane_with_text(out, text, 320.0, 300.0, false);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::build_modifiers_pane_with_text;
+    use super::{build_modifiers_pane_with_text, push_modifiers_pane_with_text};
     use deadlib_present::actors::Actor;
     use std::sync::Arc;
 
@@ -78,5 +119,14 @@ mod tests {
             panic!("expected a text actor in the modifiers pane");
         };
         assert_eq!(content.as_str(), "M700, 40% Mini, Overhead, cel");
+    }
+
+    #[test]
+    fn direct_append_matches_legacy_modifiers_bar() {
+        let text = Arc::<str>::from("M700, 40% Mini, Overhead, cel");
+        let legacy = build_modifiers_pane_with_text(Arc::clone(&text), 320.0, 300.0, false);
+        let mut direct = Vec::with_capacity(legacy.len());
+        push_modifiers_pane_with_text(&mut direct, text, 320.0, 300.0, false);
+        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

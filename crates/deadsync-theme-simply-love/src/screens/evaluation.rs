@@ -2597,6 +2597,8 @@ pub struct State {
     online_records: [eval_panes::OnlineRecordsPresentation; MAX_PLAYERS],
     groovestats_service: SimplyLoveGrooveStatsService,
     lobby_view: SimplyLoveLobbyRuntimeView,
+    lobby_hud_cache: RefCell<lobby_hud::LobbyHudCache>,
+    lobby_hud_status_scratch: RefCell<String>,
     lobby_disconnect_hold_p1: Option<Instant>,
     lobby_disconnect_hold_p2: Option<Instant>,
     event_overlay_page: [usize; MAX_PLAYERS],
@@ -2680,6 +2682,8 @@ impl Clone for State {
             online_records: self.online_records.clone(),
             groovestats_service: self.groovestats_service,
             lobby_view: self.lobby_view.clone(),
+            lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
+            lobby_hud_status_scratch: RefCell::new(String::new()),
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
             lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
             event_overlay_page: self.event_overlay_page,
@@ -3380,6 +3384,8 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         online_records: Default::default(),
         groovestats_service: SimplyLoveGrooveStatsService::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
+        lobby_hud_status_scratch: RefCell::new(String::new()),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -3670,6 +3676,8 @@ pub fn init_from_score_info(
         online_records: Default::default(),
         groovestats_service: SimplyLoveGrooveStatsService::default(),
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
+        lobby_hud_status_scratch: RefCell::new(String::new()),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -4186,36 +4194,40 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn evaluation_lobby_lock_text(state: &State) -> Option<String> {
+fn evaluation_lobby_lock_text(state: &State) -> Option<&str> {
     let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
     if joined.players.len() <= local_lobby_player_count(state) {
         return None;
     }
     if let Some(text) = state.lobby_view.reconnect_status_text.as_ref() {
-        return Some(text.clone());
+        return Some(text.as_str());
     }
     joined
         .players
         .iter()
         .any(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"))
-        .then(|| "Waiting for players to finish gameplay...".to_string())
+        .then_some("Waiting for players to finish gameplay...")
 }
 
-fn evaluation_lobby_status_text(state: &State) -> Option<String> {
-    let mut text = evaluation_lobby_lock_text(state)?;
-    let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+fn evaluation_lobby_status_text_into<'a>(state: &State, text: &'a mut String) -> Option<&'a str> {
+    let lock_text = evaluation_lobby_lock_text(state)?;
+    text.clear();
+    text.push_str(lock_text);
+    text.push('\n');
+    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+        use std::fmt::Write as _;
+
         let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
-        format!(
+        let _ = write!(
+            text,
             "Continue holding &START; for {remaining} more second{} to disconnect...",
             if remaining == 1 { "" } else { "s" }
-        )
+        );
     } else {
-        "Hold &START; to disconnect from the lobby.".to_string()
-    };
-    text.push('\n');
-    text.push_str(prompt.as_str());
-    Some(text)
+        text.push_str("Hold &START; to disconnect from the lobby.");
+    }
+    Some(text.as_str())
 }
 
 pub fn submission_retry_available(state: &State) -> bool {
@@ -5545,7 +5557,8 @@ pub fn push_actors(
             }
 
             // Letter Grade
-            actors.extend(eval_grades::actors(
+            eval_grades::push_actors(
+                actors,
                 si.grade,
                 eval_grades::EvalGradeParams {
                     x: 70.0f32.mul_add(dir, upper_origin_x),
@@ -5556,7 +5569,7 @@ pub fn push_actors(
                     taunt: eval_grades::grade_star_taunt_from_counts(si.judgment_counts),
                     easter_eggs: policy.machine_easter_eggs,
                 },
-            ));
+            );
 
             // Difficulty Text and Meter Block
             {
@@ -6156,21 +6169,23 @@ pub fn push_actors(
                 (1, screen_center_x() + 155.0),
             ] {
                 if let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) {
-                    actors.extend(eval_panes::build_modifiers_pane(
+                    eval_panes::push_modifiers_pane(
+                        actors,
                         si,
                         center_x,
                         graph_width,
                         policy.transparent_panels,
-                    ));
+                    );
                 }
             }
         } else if let Some(si) = state.score_info.first().and_then(|s| s.as_ref()) {
-            actors.extend(eval_panes::build_modifiers_pane(
+            eval_panes::push_modifiers_pane(
+                actors,
                 si,
                 screen_center_x(),
                 graph_width,
                 policy.transparent_panels,
-            ));
+            );
         }
     }
 
@@ -6793,15 +6808,22 @@ pub fn push_actors(
     ));
 
     if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
-        actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
-            screen_name: "ScreenEvaluationStage",
-            joined,
-            z: 121,
-            show_song_info: false,
-            status_text: evaluation_lobby_status_text(state),
-            joined_sides: std::array::from_fn(|idx| state.context.players[idx].joined),
-            player_side: state.context.player_side,
-        }));
+        let mut status_scratch = state.lobby_hud_status_scratch.borrow_mut();
+        let status_text = evaluation_lobby_status_text_into(state, &mut status_scratch);
+        let mut cache = state.lobby_hud_cache.borrow_mut();
+        lobby_hud::push_cached_panel(
+            actors,
+            &mut cache,
+            lobby_hud::CachedRenderParams {
+                screen_name: "ScreenEvaluationStage",
+                joined,
+                z: 121,
+                show_song_info: false,
+                status_text,
+                joined_sides: std::array::from_fn(|idx| state.context.players[idx].joined),
+                player_side: state.context.player_side,
+            },
+        );
     }
 
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
