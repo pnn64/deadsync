@@ -1,7 +1,9 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
-use deadlib_present::actors::{Actor, InlineU32Text, TextContent};
+use deadlib_present::actors::{
+    Actor, InlineU32Text, SharedActorFrameScratch, SizeSpec, TextContent,
+};
 use deadlib_present::color;
 use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
@@ -12,6 +14,7 @@ use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
 use image::{Rgba, RgbaImage};
+use std::cell::RefCell;
 use std::hash::Hasher;
 use twox_hash::XxHash64;
 
@@ -20,6 +23,56 @@ use super::utils::{arrow_breakdown_rgba, pane3_origin_x};
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 const PANE3_SINGLE_WIDTH: f32 = 230.0;
 const PANE3_DOUBLE_WIDTH: f32 = 520.0;
+
+#[derive(Clone, Copy)]
+struct ColumnPaneInputs<'a> {
+    columns: &'a [ColumnJudgments],
+    noteskin: Option<&'a deadsync_assets::noteskin::Noteskin>,
+    show_fa_plus_rows: bool,
+    track_early_judgments: bool,
+    disabled_timing_windows: [bool; 5],
+}
+
+impl<'a> ColumnPaneInputs<'a> {
+    fn from_score(score_info: &'a ScoreInfo) -> Self {
+        Self {
+            columns: &score_info.column_judgments,
+            noteskin: score_info.noteskin.as_deref(),
+            show_fa_plus_rows: score_info.show_fa_plus_window && score_info.show_fa_plus_pane,
+            track_early_judgments: score_info.track_early_judgments,
+            disabled_timing_windows: score_info.disabled_timing_windows,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ColumnPanePresentation {
+    scratch: RefCell<SharedActorFrameScratch>,
+}
+
+impl ColumnPanePresentation {
+    pub(crate) fn new(score_info: &ScoreInfo) -> Self {
+        Self::from_inputs(ColumnPaneInputs::from_score(score_info))
+    }
+
+    fn from_inputs(inputs: ColumnPaneInputs<'_>) -> Self {
+        Self {
+            scratch: RefCell::new(SharedActorFrameScratch::with_capacity(
+                column_pane_actor_capacity(inputs),
+            )),
+        }
+    }
+}
+
+impl Clone for ColumnPanePresentation {
+    fn clone(&self) -> Self {
+        Self {
+            scratch: RefCell::new(SharedActorFrameScratch::with_capacity(
+                self.scratch.borrow().capacity(),
+            )),
+        }
+    }
+}
 
 #[inline(always)]
 const fn pane3_width(num_cols: usize) -> f32 {
@@ -189,6 +242,35 @@ const STANDARD_ROWS: [RowInfo; 6] = [
     },
 ];
 
+fn column_pane_actor_capacity(inputs: ColumnPaneInputs<'_>) -> usize {
+    let rows = if inputs.show_fa_plus_rows {
+        FA_PLUS_ROWS.as_slice()
+    } else {
+        STANDARD_ROWS.as_slice()
+    };
+    let early_rows = rows.iter().filter(|row| row.show_early).count();
+    let label_annotations = if inputs.track_early_judgments {
+        early_rows + 2
+    } else {
+        0
+    };
+    let per_column_annotations = if inputs.track_early_judgments {
+        early_rows
+    } else {
+        0
+    };
+    let previews = inputs.noteskin.map_or(0, |noteskin| {
+        (0..inputs.columns.len())
+            .map(|col_idx| pane3_arrow_preview_capacity(noteskin, col_idx))
+            .sum()
+    });
+    rows.len()
+        + label_annotations
+        + 1
+        + inputs.columns.len() * (rows.len() + per_column_annotations + 2 + 1)
+        + previews
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct RowCounts {
     count: u32,
@@ -285,13 +367,58 @@ pub fn build_column_judgments_pane_with_palette(
     arrow_glow_active: bool,
     palette: JudgmentPalette,
 ) -> Vec<Actor> {
-    let num_cols = score_info.column_judgments.len();
+    build_column_judgments_pane_from_inputs(
+        ColumnPaneInputs::from_score(score_info),
+        controller,
+        player_side,
+        asset_manager,
+        preview_elapsed,
+        arrow_glow_active,
+        palette,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_column_judgments_pane_from_inputs(
+    inputs: ColumnPaneInputs<'_>,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
+    palette: JudgmentPalette,
+) -> Vec<Actor> {
+    let mut actors = Vec::new();
+    push_column_judgments_pane_from_inputs(
+        &mut actors,
+        inputs,
+        controller,
+        player_side,
+        asset_manager,
+        preview_elapsed,
+        arrow_glow_active,
+        palette,
+    );
+    actors
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_column_judgments_pane_from_inputs(
+    actors: &mut Vec<Actor>,
+    inputs: ColumnPaneInputs<'_>,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
+    palette: JudgmentPalette,
+) {
+    let num_cols = inputs.columns.len();
     if num_cols == 0 {
-        return vec![];
+        return;
     }
 
-    let show_fa_plus_rows = score_info.show_fa_plus_window && score_info.show_fa_plus_pane;
-    let rows = if show_fa_plus_rows {
+    let rows = if inputs.show_fa_plus_rows {
         FA_PLUS_ROWS.as_slice()
     } else {
         STANDARD_ROWS.as_slice()
@@ -324,7 +451,6 @@ pub fn build_column_judgments_pane_with_palette(
             -28.0
         };
 
-    let mut actors = Vec::new();
     const PREVIEW_BPM: f32 = 120.0;
     let preview_time = preview_elapsed.max(0.0);
     let preview_beat = preview_time * (PREVIEW_BPM / 60.0);
@@ -341,7 +467,7 @@ pub fn build_column_judgments_pane_with_palette(
             // Row labels
             for (row_idx, row) in rows.iter().enumerate() {
                 let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
-                let row_color = if row_disabled(score_info.disabled_timing_windows, row.kind) {
+                let row_color = if row_disabled(inputs.disabled_timing_windows, row.kind) {
                     DISABLED_WINDOW_RGBA
                 } else {
                     palette.color(row.role)
@@ -356,7 +482,7 @@ pub fn build_column_judgments_pane_with_palette(
                     z(101)
                 ));
 
-                if score_info.track_early_judgments && row.show_early {
+                if inputs.track_early_judgments && row.show_early {
                     let label_width =
                         font::measure_line_width_logical(miso_font, row.label, all_fonts) as f32
                             * label_zoom;
@@ -404,7 +530,7 @@ pub fn build_column_judgments_pane_with_palette(
 
             // Columns: arrows + per-row counts
             for col_idx in 0..num_cols {
-                let cj = score_info.column_judgments[col_idx];
+                let cj = inputs.columns[col_idx];
                 let col_center_x = (col_idx as f32 + 1.0).mul_add(col_width, base_x);
 
                 // Measure the widest main count so side annotations clear every row.
@@ -427,7 +553,7 @@ pub fn build_column_judgments_pane_with_palette(
                 let arrow_color = arrow_glow_active.then(|| arrow_breakdown_rgba(col_idx));
 
                 // Noteskin preview arrow (Tap Note, Q4th) above the column.
-                if let Some(ns) = score_info.noteskin.as_ref() {
+                if let Some(ns) = inputs.noteskin {
                     let note_idx = col_idx
                         .saturating_mul(NUM_QUANTIZATIONS)
                         .saturating_add(Quantization::Q4th as usize);
@@ -646,7 +772,7 @@ pub fn build_column_judgments_pane_with_palette(
                 for (row_idx, row) in rows.iter().enumerate() {
                     let counts = column_row_counts(cj, row.kind);
                     let y = labels_frame_y + (row_idx as f32 + 1.0).mul_add(row_height, 0.0);
-                    let row_color = if row_disabled(score_info.disabled_timing_windows, row.kind) {
+                    let row_color = if row_disabled(inputs.disabled_timing_windows, row.kind) {
                         DISABLED_WINDOW_RGBA
                     } else {
                         [1.0; 4]
@@ -660,7 +786,7 @@ pub fn build_column_judgments_pane_with_palette(
                         z(101)
                     ));
 
-                    if score_info.track_early_judgments
+                    if inputs.track_early_judgments
                         && let Some(early) = counts.early
                     {
                         actors.push(act!(text: font("miso"): settext(TextContent::inline_u32(early)):
@@ -674,7 +800,7 @@ pub fn build_column_judgments_pane_with_palette(
                     }
 
                     if let Some(early_all) = counts.early_all {
-                        if score_info.track_early_judgments {
+                        if inputs.track_early_judgments {
                             actors.push(act!(text: font("miso"): settext(TextContent::inline_u32(early_all)):
                                 align(-1.0, 0.5):
                                 xy(col_center_x - 1.0, y + all_y_offset):
@@ -707,8 +833,72 @@ pub fn build_column_judgments_pane_with_palette(
             }
         })
     });
+}
 
-    actors
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_cached_column_judgments_pane_with_palette(
+    out: &mut Vec<Actor>,
+    presentation: &ColumnPanePresentation,
+    score_info: &ScoreInfo,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
+    palette: JudgmentPalette,
+) {
+    push_cached_column_judgments_pane_from_inputs(
+        out,
+        presentation,
+        ColumnPaneInputs::from_score(score_info),
+        controller,
+        player_side,
+        asset_manager,
+        preview_elapsed,
+        arrow_glow_active,
+        palette,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_cached_column_judgments_pane_from_inputs(
+    out: &mut Vec<Actor>,
+    presentation: &ColumnPanePresentation,
+    inputs: ColumnPaneInputs<'_>,
+    controller: profile_data::PlayerSide,
+    player_side: profile_data::PlayerSide,
+    asset_manager: &AssetManager,
+    preview_elapsed: f32,
+    arrow_glow_active: bool,
+    palette: JudgmentPalette,
+) {
+    let source = presentation
+        .scratch
+        .borrow_mut()
+        .refill([0.0, 0.0], |actors| {
+            push_column_judgments_pane_from_inputs(
+                actors,
+                inputs,
+                controller,
+                player_side,
+                asset_manager,
+                preview_elapsed,
+                arrow_glow_active,
+                palette,
+            );
+        });
+    if let Some(children) = source {
+        out.push(Actor::SharedFrame {
+            align: [0.0, 0.0],
+            offset: [0.0, 0.0],
+            size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+            children,
+            background: None,
+            z: 0,
+            tint: [1.0; 4],
+            blend: None,
+        });
+    }
 }
 
 const PANE3_PREVIEW_BPM: f32 = 120.0;
@@ -981,12 +1171,131 @@ pub(crate) fn build_pane3_arrow_preview(
     actors
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+pub struct ColumnPaneCacheBenchmark {
+    columns: [ColumnJudgments; 4],
+    noteskin: deadsync_assets::noteskin::Noteskin,
+    presentation: ColumnPanePresentation,
+    asset_manager: AssetManager,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ColumnPaneCacheBenchmark {
+    #[must_use]
+    pub fn new() -> Self {
+        let columns = std::array::from_fn(|index| ColumnJudgments {
+            w0: 100 + index as u32,
+            w1: 200 + index as u32,
+            w2: 30 + index as u32,
+            w3: 4 + index as u32,
+            w4: 2,
+            w5: 1,
+            miss: index as u32,
+            early_w1: 80,
+            early_w2: 12,
+            early_w3: 2,
+            early_w4: 1,
+            early_w5: 1,
+            early_total_w4: 3,
+            early_total_w5: 2,
+            held_miss: index as u32,
+            ..ColumnJudgments::default()
+        });
+        let noteskin = deadsync_assets::noteskin::load_itg_default(&deadsync_noteskin::Style {
+            num_cols: 4,
+            num_players: 1,
+        })
+        .expect("bundled dance noteskin should load");
+        let inputs = ColumnPaneInputs {
+            columns: &columns,
+            noteskin: Some(&noteskin),
+            show_fa_plus_rows: true,
+            track_early_judgments: true,
+            disabled_timing_windows: [false; 5],
+        };
+        let presentation = ColumnPanePresentation::from_inputs(inputs);
+        let fixture = Self {
+            columns,
+            noteskin,
+            presentation,
+            asset_manager: super::benchmark_asset_manager(),
+        };
+        let mut warm = Vec::with_capacity(1);
+        let _ = fixture.retained_frame(&mut warm);
+        fixture
+    }
+
+    fn inputs(&self) -> ColumnPaneInputs<'_> {
+        ColumnPaneInputs {
+            columns: &self.columns,
+            noteskin: Some(&self.noteskin),
+            show_fa_plus_rows: true,
+            track_early_judgments: true,
+            disabled_timing_windows: [false; 5],
+        }
+    }
+
+    #[must_use]
+    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        out.extend(build_column_judgments_pane_from_inputs(
+            self.inputs(),
+            profile_data::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
+            &self.asset_manager,
+            1.25,
+            false,
+            JudgmentPalette::default(),
+        ));
+        std::hint::black_box(&*out);
+        column_actor_count(out)
+    }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_cached_column_judgments_pane_from_inputs(
+            out,
+            &self.presentation,
+            self.inputs(),
+            profile_data::PlayerSide::P1,
+            profile_data::PlayerSide::P1,
+            &self.asset_manager,
+            1.25,
+            false,
+            JudgmentPalette::default(),
+        );
+        std::hint::black_box(&*out);
+        column_actor_count(out)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl Default for ColumnPaneCacheBenchmark {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn column_actor_count(actors: &[Actor]) -> u64 {
+    actors
+        .iter()
+        .map(|actor| match actor {
+            Actor::Frame { children, .. } => column_actor_count(children),
+            Actor::SharedFrame { children, .. } => column_actor_count(children),
+            _ => 1,
+        })
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
-        FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, STANDARD_ROWS,
-        build_pane3_arrow_preview, column_row_counts, pane3_width, row_disabled,
+        ColumnPaneCacheBenchmark, FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts,
+        RowKind, STANDARD_ROWS, build_pane3_arrow_preview, column_row_counts, pane3_width,
+        row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::actors::Actor;
@@ -994,6 +1303,7 @@ mod tests {
     use deadsync_assets::noteskin::load_itg_default;
     use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
+    use std::sync::Arc;
 
     #[test]
     fn static_column_rows_preserve_judgment_order_and_labels() {
@@ -1177,5 +1487,45 @@ mod tests {
             })
         };
         assert_ne!(first_uv(&at_start), first_uv(&at_next_frame));
+    }
+
+    #[test]
+    fn retained_column_pane_matches_direct_and_reuses_its_buffer() {
+        let fixture = ColumnPaneCacheBenchmark::new();
+        let mut direct = Vec::new();
+        let mut retained = Vec::with_capacity(1);
+        assert_eq!(
+            fixture.direct_frame(&mut direct),
+            fixture.retained_frame(&mut retained),
+        );
+        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
+            panic!("expected retained column pane in one shared frame");
+        };
+        let [
+            Actor::Frame {
+                children: retained_actors,
+                ..
+            },
+        ] = children.as_ref()
+        else {
+            panic!("expected reusable identity frame inside column pane");
+        };
+        assert_eq!(format!("{direct:#?}"), format!("{retained_actors:#?}"));
+
+        let source_ptr = Arc::as_ptr(children).cast::<()>() as usize;
+        retained.clear();
+        let _ = fixture.retained_frame(&mut retained);
+        let [
+            Actor::SharedFrame {
+                children: repeated, ..
+            },
+        ] = retained.as_slice()
+        else {
+            panic!("expected repeated retained column pane");
+        };
+        assert_eq!(source_ptr, Arc::as_ptr(repeated).cast::<()>() as usize);
+        let stats = fixture.presentation.scratch.borrow().stats();
+        assert_eq!(stats.growths, 0);
+        assert_eq!(stats.replacements, 0);
     }
 }

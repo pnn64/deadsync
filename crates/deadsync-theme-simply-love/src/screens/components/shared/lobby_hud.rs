@@ -1,5 +1,5 @@
 use crate::act;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_online::lobbies;
 use deadsync_profile::PlayerSide;
@@ -142,9 +142,9 @@ fn percent_value_matches(left: Option<f32>, right: Option<f32>) -> bool {
 /// lifetime is one screen visit and its capacity is exactly one snapshot plus
 /// one immutable two-actor panel. It is populated on first render and rebuilt only
 /// when the lobby, status, language-facing text inputs, or placement inputs
-/// change. A hit performs bounded player comparisons and clones two actors while
-/// retaining the formatted text. The actor clone currently performs one small
-/// allocation; there is no eviction, synchronization, or live-frame pruning.
+/// change. A hit performs bounded player comparisons and shares one immutable
+/// two-actor slice without cloning the wide actor values. There is no eviction,
+/// synchronization, or live-frame pruning.
 /// Replaced strings are freed on an external lobby-state change, and the final
 /// snapshot is freed with the screen. Hit and miss counters provide runtime
 /// instrumentation. Worst-case boundary work sorts and formats the current
@@ -252,6 +252,24 @@ pub fn build_panel(params: RenderParams<'_>) -> Vec<Actor> {
 }
 
 pub fn push_cached_panel(
+    actors: &mut Vec<Actor>,
+    cache: &mut LobbyHudCache,
+    params: CachedRenderParams<'_>,
+) {
+    actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        children: cache.panel(&params),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_push_cloned_cached_panel(
     actors: &mut Vec<Actor>,
     cache: &mut LobbyHudCache,
     params: CachedRenderParams<'_>,
@@ -546,8 +564,15 @@ mod tests {
         );
     }
 
+    fn panel_actors(actors: &[Actor]) -> &[Actor] {
+        match actors {
+            [Actor::SharedFrame { children, .. }] => children,
+            _ => actors,
+        }
+    }
+
     fn panel_text(actors: &[Actor]) -> &TextContent {
-        match actors.get(1) {
+        match panel_actors(actors).get(1) {
             Some(Actor::Text { content, .. }) => content,
             other => panic!("expected lobby text actor, got {other:?}"),
         }
@@ -581,7 +606,7 @@ mod tests {
         };
 
         push_cached_panel(&mut cached, &mut cache, params());
-        assert_eq!(cached.len(), legacy.len());
+        assert_eq!(panel_actors(&cached).len(), legacy.len());
         assert_eq!(panel_text(&cached).as_str(), panel_text(&legacy).as_str());
         let first_text = match panel_text(&cached) {
             TextContent::Shared(text) => Arc::clone(text),
@@ -595,7 +620,17 @@ mod tests {
             other => panic!("expected shared cached text, got {other:?}"),
         };
         assert!(Arc::ptr_eq(&first_text, second_text));
-        assert_eq!(cache.stats(), LobbyHudCacheStats { hits: 1, misses: 1 });
+        let [Actor::SharedFrame { children, .. }] = cached.as_slice() else {
+            panic!("expected cached lobby panel in one shared frame");
+        };
+        let first_panel = Arc::clone(children);
+        cached.clear();
+        push_cached_panel(&mut cached, &mut cache, params());
+        let [Actor::SharedFrame { children, .. }] = cached.as_slice() else {
+            panic!("expected cached lobby panel in one shared frame");
+        };
+        assert!(Arc::ptr_eq(&first_panel, children));
+        assert_eq!(cache.stats(), LobbyHudCacheStats { hits: 2, misses: 1 });
     }
 
     #[test]

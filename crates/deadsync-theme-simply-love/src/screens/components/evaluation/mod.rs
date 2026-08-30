@@ -97,6 +97,9 @@ pub use event_progress::build_event_progress_boxes;
 pub(crate) use event_progress::{
     EventActorCache, push_cached_event_overlay, push_cached_event_progress_boxes,
 };
+pub(crate) use pane_column::{
+    ColumnPanePresentation, push_cached_column_judgments_pane_with_palette,
+};
 pub use pane_column::{build_column_judgments_pane, build_column_judgments_pane_with_palette};
 pub(crate) use pane_gs_records::{
     OnlineRecordsPresentation, push_arrowcloud_records_pane, push_gs_ex_records_pane,

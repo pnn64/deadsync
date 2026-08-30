@@ -5,6 +5,7 @@ use deadsync_score::Grade;
 use deadsync_theme_simply_love::screens::components::evaluation::{
     eval_grades::{self, EvalGradeParams},
     event_progress::{EventOverlayCacheBenchmark, EventProgressCacheBenchmark},
+    pane_column::ColumnPaneCacheBenchmark,
     pane_gs_records::OnlineRecordsPaneCacheBenchmark,
     pane_machine_records::MachineRecordsPaneCacheBenchmark,
     pane_modifiers::ModifiersPaneCacheBenchmark,
@@ -15,7 +16,7 @@ use deadsync_theme_simply_love::screens::components::evaluation::{
     pane_timing_arrows::TimingArrowsPaneAppendBenchmark,
 };
 use deadsync_theme_simply_love::screens::components::shared::lobby_hud::{
-    CachedRenderParams, LobbyHudCache, RenderParams, build_panel, push_cached_panel,
+    CachedRenderParams, LobbyHudCache, benchmark_push_cloned_cached_panel, push_cached_panel,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -305,6 +306,10 @@ fn lobby_player(index: usize) -> LobbyPlayer {
 }
 
 fn lobby_text(actors: &[Actor]) -> &str {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     match actors.get(1) {
         Some(Actor::Text { content, .. }) => content.as_str(),
         other => panic!("expected lobby text actor, got {other:?}"),
@@ -319,17 +324,9 @@ fn lobby_benchmark() {
         players: (0..12).map(lobby_player).collect(),
         song_info: None,
     };
-    let mut legacy = build_panel(RenderParams {
-        screen_name: "ScreenEvaluationStage",
-        joined: &joined,
-        z: 121,
-        show_song_info: false,
-        status_text: Some(STATUS.to_string()),
-        joined_sides: [true, false],
-        player_side: PlayerSide::P1,
-    });
     let mut cache = LobbyHudCache::default();
-    let mut cached = Vec::with_capacity(2);
+    let mut direct = Vec::with_capacity(2);
+    let mut retained = Vec::with_capacity(1);
     let cached_params = || CachedRenderParams {
         screen_name: "ScreenEvaluationStage",
         joined: &joined,
@@ -339,27 +336,19 @@ fn lobby_benchmark() {
         joined_sides: [true, false],
         player_side: PlayerSide::P1,
     };
-    push_cached_panel(&mut cached, &mut cache, cached_params());
-    assert_eq!(legacy.len(), cached.len());
-    assert_eq!(lobby_text(&legacy), lobby_text(&cached));
+    benchmark_push_cloned_cached_panel(&mut direct, &mut cache, cached_params());
+    push_cached_panel(&mut retained, &mut cache, cached_params());
+    assert_eq!(lobby_text(&direct), lobby_text(&retained));
 
     let old = measure(LOBBY_FRAMES, || {
-        legacy.clear();
-        legacy.extend(build_panel(RenderParams {
-            screen_name: "ScreenEvaluationStage",
-            joined: &joined,
-            z: 121,
-            show_song_info: false,
-            status_text: Some(STATUS.to_string()),
-            joined_sides: [true, false],
-            player_side: PlayerSide::P1,
-        }));
-        (actor_count_checksum(black_box(&legacy)) << 32) | lobby_text(&legacy).len() as u64
+        direct.clear();
+        benchmark_push_cloned_cached_panel(&mut direct, &mut cache, cached_params());
+        (2_u64 << 32) | lobby_text(&direct).len() as u64
     });
     let new = measure(LOBBY_FRAMES, || {
-        cached.clear();
-        push_cached_panel(&mut cached, &mut cache, cached_params());
-        (actor_count_checksum(black_box(&cached)) << 32) | lobby_text(&cached).len() as u64
+        retained.clear();
+        push_cached_panel(&mut retained, &mut cache, cached_params());
+        (2_u64 << 32) | lobby_text(&retained).len() as u64
     });
     assert_eq!(
         cache.stats().misses,
@@ -367,11 +356,11 @@ fn lobby_benchmark() {
         "stable lobby cache unexpectedly missed"
     );
     report_pair(
-        "cached evaluation lobby HUD",
+        "shared evaluation lobby HUD",
         LOBBY_FRAMES,
         &old,
         &new,
-        false,
+        true,
     );
 }
 
@@ -418,20 +407,41 @@ fn timing_pane_benchmark() {
 
 fn timing_arrows_pane_benchmark() {
     let fixture = TimingArrowsPaneAppendBenchmark::new();
-    let mut legacy = Vec::with_capacity(1);
     let mut direct = Vec::with_capacity(1);
-    let _ = fixture.legacy_frame(&mut legacy);
-    let _ = fixture.direct_frame(&mut direct);
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let mut retained = Vec::with_capacity(8);
+    assert_eq!(
+        fixture.direct_frame(&mut direct),
+        fixture.retained_frame(&mut retained),
+    );
 
-    let old = measure(PANE_FRAMES, || fixture.legacy_frame(&mut legacy));
-    let new = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let old = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
     report_pair(
-        "per-arrow timing pane actor staging",
+        "retained per-arrow timing table",
         PANE_FRAMES,
         &old,
         &new,
-        false,
+        true,
+    );
+}
+
+fn column_pane_benchmark() {
+    let fixture = ColumnPaneCacheBenchmark::new();
+    let mut direct = Vec::with_capacity(96);
+    let mut retained = Vec::with_capacity(1);
+    assert_eq!(
+        fixture.direct_frame(&mut direct),
+        fixture.retained_frame(&mut retained),
+    );
+
+    let old = measure(PANE_FRAMES, || fixture.direct_frame(&mut direct));
+    let new = measure(PANE_FRAMES, || fixture.retained_frame(&mut retained));
+    report_pair(
+        "reused column-judgment actor buffer",
+        PANE_FRAMES,
+        &old,
+        &new,
+        true,
     );
 }
 
@@ -580,6 +590,7 @@ fn main() {
     percentage_pane_benchmark();
     timing_pane_benchmark();
     timing_arrows_pane_benchmark();
+    column_pane_benchmark();
     qr_pane_benchmark();
     online_records_pane_benchmark();
     machine_records_pane_benchmark();

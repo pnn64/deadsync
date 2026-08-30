@@ -2556,6 +2556,7 @@ pub struct State {
     result_text: [ResultText; MAX_PLAYERS],
     percentage_text: [Option<eval_panes::PercentageText>; MAX_PLAYERS],
     modifiers_presentation: [Option<eval_panes::ModifiersPanePresentation>; MAX_PLAYERS],
+    column_presentation: [Option<eval_panes::ColumnPanePresentation>; MAX_PLAYERS],
     stats_presentation: [Option<eval_panes::StatsPanePresentation>; MAX_PLAYERS],
     timing_pane_text: [Option<eval_panes::TimingPaneText>; MAX_PLAYERS],
     machine_records_text: [Option<eval_panes::MachineRecordsPaneText>; MAX_PLAYERS],
@@ -2647,6 +2648,7 @@ impl Clone for State {
             result_text: self.result_text.clone(),
             percentage_text: self.percentage_text.clone(),
             modifiers_presentation: self.modifiers_presentation.clone(),
+            column_presentation: self.column_presentation.clone(),
             stats_presentation: self.stats_presentation.clone(),
             timing_pane_text: self.timing_pane_text.clone(),
             machine_records_text: self.machine_records_text.clone(),
@@ -3316,6 +3318,11 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
             .as_ref()
             .map(eval_panes::ModifiersPanePresentation::new)
     });
+    let column_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::ColumnPanePresentation::new)
+    });
     let stats_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3363,6 +3370,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         result_text,
         percentage_text,
         modifiers_presentation,
+        column_presentation,
         stats_presentation,
         timing_pane_text,
         machine_records_text,
@@ -3622,6 +3630,11 @@ pub fn init_from_score_info(
             .as_ref()
             .map(eval_panes::ModifiersPanePresentation::new)
     });
+    let column_presentation = std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(eval_panes::ColumnPanePresentation::new)
+    });
     let stats_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3669,6 +3682,7 @@ pub fn init_from_score_info(
         result_text,
         percentage_text,
         modifiers_presentation,
+        column_presentation,
         stats_presentation,
         timing_pane_text,
         machine_records_text,
@@ -6125,15 +6139,19 @@ pub fn push_actors(
                     } else {
                         player_side
                     };
-                    actors.extend(eval_panes::build_column_judgments_pane_with_palette(
-                        si,
-                        controller,
-                        pane3_player_side,
-                        asset_manager,
-                        state.screen_elapsed,
-                        state.active_graph[controller_idx] == EvalGraphPane::Arrow,
-                        state.context.players[player_idx].judgment_palette,
-                    ));
+                    if let Some(presentation) = state.column_presentation[player_idx].as_ref() {
+                        eval_panes::push_cached_column_judgments_pane_with_palette(
+                            actors,
+                            presentation,
+                            si,
+                            controller,
+                            pane3_player_side,
+                            asset_manager,
+                            state.screen_elapsed,
+                            state.active_graph[controller_idx] == EvalGraphPane::Arrow,
+                            state.context.players[player_idx].judgment_palette,
+                        );
+                    }
                 }
                 EvalPane::Standard | EvalPane::FaPlus | EvalPane::HardEx => {
                     let Some(presentation) = state.stats_presentation[player_idx].as_ref() else {

@@ -6,6 +6,8 @@ use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing::{ArrowTimingBucket, ArrowTimingStats};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 #[cfg(any(test, feature = "bench-support"))]
 use super::pane_column::build_pane3_arrow_preview;
@@ -17,6 +19,9 @@ const RIGHT_FOOT_RGBA: [f32; 4] = color::rgba_hex("#3070FF");
 const LABEL_RGBA: [f32; 4] = color::rgba_hex("#A0A0A0");
 const VALUE_RGBA: [f32; 4] = color::rgba_hex("#FFFFFF");
 const TIMING_ARROWS_TABLE_ACTORS: usize = 37;
+const PANE_WIDTH: f32 = 300.0;
+const PANE_HEIGHT: f32 = 180.0;
+const HEADER_Y: f32 = 24.0;
 
 fn timing_arrows_child_capacity(noteskin: Option<&deadsync_assets::noteskin::Noteskin>) -> usize {
     TIMING_ARROWS_TABLE_ACTORS
@@ -30,6 +35,7 @@ fn timing_arrows_child_capacity(noteskin: Option<&deadsync_assets::noteskin::Not
 #[derive(Clone)]
 pub(crate) struct TimingArrowsText {
     cells: [[TextContent; 6]; 5],
+    cached_table: RefCell<Option<(MachineFont, Arc<[Actor]>)>>,
 }
 
 impl TimingArrowsText {
@@ -49,7 +55,22 @@ impl TimingArrowsText {
             cells: std::array::from_fn(|row| {
                 std::array::from_fn(|column| cell_text(buckets[column], row))
             }),
+            cached_table: RefCell::new(None),
         })
+    }
+
+    fn cached_table(&self, machine_font: MachineFont) -> Arc<[Actor]> {
+        if let Some((_, actors)) = self
+            .cached_table
+            .borrow()
+            .as_ref()
+            .filter(|(cached_font, _)| *cached_font == machine_font)
+        {
+            return Arc::clone(actors);
+        }
+        let actors = Arc::from(build_timing_arrows_table(self, machine_font));
+        *self.cached_table.borrow_mut() = Some((machine_font, Arc::clone(&actors)));
+        actors
     }
 }
 
@@ -185,7 +206,55 @@ fn timing_arrows_pane_actor(
     }
 }
 
-/// Appends the per-arrow timing pane with one pre-sized child allocation.
+fn build_timing_arrows_table(text: &TimingArrowsText, machine_font: MachineFont) -> Vec<Actor> {
+    let Actor::Frame { children, .. } = timing_arrows_pane_actor(
+        None,
+        text,
+        profile_data::PlayerSide::P1,
+        0.0,
+        machine_font,
+        TIMING_ARROWS_TABLE_ACTORS,
+        |_, _, _, _, _| {},
+    ) else {
+        unreachable!("timing-arrow builder always returns one frame");
+    };
+    children
+}
+
+#[inline(always)]
+fn timing_arrows_frame_offset(controller: profile_data::PlayerSide) -> [f32; 2] {
+    [
+        PANE_WIDTH.mul_add(-0.5, pane_origin_x(controller)),
+        deadlib_present::space::screen_center_y() - 56.0,
+    ]
+}
+
+#[inline(always)]
+fn timing_arrows_column_centers() -> [f32; 4] {
+    let data_area_left = 64.0_f32;
+    let col_step = (PANE_WIDTH - 6.0 - data_area_left) / 6.0;
+    [
+        col_step.mul_add(0.5, data_area_left),
+        col_step.mul_add(1.5, data_area_left),
+        col_step.mul_add(2.5, data_area_left),
+        col_step.mul_add(3.5, data_area_left),
+    ]
+}
+
+fn promote_timing_arrow_previews(actors: &mut [Actor]) {
+    for actor in actors {
+        let z = match actor {
+            Actor::Sprite { z, .. } | Actor::TexturedMesh { z, .. } => z,
+            other => {
+                debug_assert!(false, "unexpected timing-arrow preview actor: {other:?}");
+                continue;
+            }
+        };
+        *z = z.saturating_add(101);
+    }
+}
+
+/// Appends animated previews directly and shares the immutable 37-actor table.
 pub(crate) fn push_timing_arrows_pane(
     out: &mut Vec<Actor>,
     score_info: &ScoreInfo,
@@ -194,18 +263,50 @@ pub(crate) fn push_timing_arrows_pane(
     preview_elapsed: f32,
     machine_font: MachineFont,
 ) {
-    let noteskin = score_info.noteskin.as_deref();
-    out.push(timing_arrows_pane_actor(
-        noteskin,
+    push_retained_timing_arrows_pane(
+        out,
+        score_info.noteskin.as_deref(),
         text,
         controller,
         preview_elapsed,
         machine_font,
-        timing_arrows_child_capacity(noteskin),
-        |children, noteskin, col_idx, center, elapsed| {
-            push_pane3_arrow_preview(children, noteskin, col_idx, center, None, elapsed, 1.2);
-        },
-    ));
+    );
+}
+
+fn push_retained_timing_arrows_pane(
+    out: &mut Vec<Actor>,
+    noteskin: Option<&deadsync_assets::noteskin::Noteskin>,
+    text: &TimingArrowsText,
+    controller: profile_data::PlayerSide,
+    preview_elapsed: f32,
+    machine_font: MachineFont,
+) {
+    let [frame_x, frame_y] = timing_arrows_frame_offset(controller);
+    if let Some(noteskin) = noteskin {
+        for (col_idx, center_x) in timing_arrows_column_centers().into_iter().enumerate() {
+            let start = out.len();
+            push_pane3_arrow_preview(
+                out,
+                noteskin,
+                col_idx,
+                [frame_x + center_x, frame_y + HEADER_Y],
+                None,
+                preview_elapsed,
+                1.2,
+            );
+            promote_timing_arrow_previews(&mut out[start..]);
+        }
+    }
+    out.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [frame_x, frame_y],
+        size: [SizeSpec::Px(PANE_WIDTH), SizeSpec::Px(PANE_HEIGHT)],
+        children: text.cached_table(machine_font),
+        background: None,
+        z: 101,
+        tint: [1.0; 4],
+        blend: None,
+    });
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -262,6 +363,7 @@ impl TimingArrowsPaneAppendBenchmark {
             num_players: 1,
         })
         .expect("bundled dance noteskin should load");
+        let _ = text.cached_table(MachineFont::Mega);
         Self { noteskin, text }
     }
 
@@ -297,6 +399,21 @@ impl TimingArrowsPaneAppendBenchmark {
         std::hint::black_box(&*out);
         actor_tree_count(out)
     }
+
+    #[must_use]
+    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
+        out.clear();
+        push_retained_timing_arrows_pane(
+            out,
+            Some(&self.noteskin),
+            &self.text,
+            profile_data::PlayerSide::P1,
+            1.25,
+            MachineFont::Mega,
+        );
+        std::hint::black_box(&*out);
+        actor_tree_count(out)
+    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -308,13 +425,14 @@ impl Default for TimingArrowsPaneAppendBenchmark {
 
 #[cfg(any(test, feature = "bench-support"))]
 fn actor_tree_count(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |count, actor| {
-        count
-            + match actor {
-                Actor::Frame { children, .. } => actor_tree_count(children),
-                _ => 1,
-            }
-    })
+    actors
+        .iter()
+        .map(|actor| match actor {
+            Actor::Frame { children, .. } => actor_tree_count(children),
+            Actor::SharedFrame { children, .. } => actor_tree_count(children),
+            _ => 1,
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -400,5 +518,72 @@ mod tests {
             fixture.direct_frame(&mut direct)
         );
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    }
+
+    #[test]
+    fn retained_timing_arrows_match_direct_and_reuse_the_table() {
+        let fixture = TimingArrowsPaneAppendBenchmark::new();
+        let mut direct = Vec::with_capacity(1);
+        let mut retained = Vec::with_capacity(8);
+        assert_eq!(
+            fixture.direct_frame(&mut direct),
+            fixture.retained_frame(&mut retained),
+        );
+
+        let [
+            Actor::Frame {
+                offset,
+                size,
+                children: direct_children,
+                ..
+            },
+        ] = direct.as_slice()
+        else {
+            panic!("expected direct timing arrows in one frame");
+        };
+        let Some(Actor::SharedFrame {
+            offset: retained_offset,
+            size: retained_size,
+            children: table,
+            ..
+        }) = retained.last()
+        else {
+            panic!("expected retained timing-arrow table");
+        };
+        assert_eq!(offset, retained_offset);
+        assert_eq!(format!("{size:?}"), format!("{retained_size:?}"));
+        assert_eq!(table.len(), TIMING_ARROWS_TABLE_ACTORS);
+        let preview_count = direct_children.len() - table.len();
+        assert_eq!(retained.len(), preview_count + 1);
+        assert_eq!(
+            format!("{:#?}", &direct_children[preview_count..]),
+            format!("{:#?}", table.as_ref()),
+        );
+        let preview_layout = |actor: &Actor| match actor {
+            Actor::Sprite { offset, z, .. } | Actor::TexturedMesh { offset, z, .. } => {
+                (*offset, *z)
+            }
+            other => panic!("unexpected timing-arrow preview actor: {other:?}"),
+        };
+        for (direct_actor, retained_actor) in direct_children[..preview_count]
+            .iter()
+            .zip(&retained[..preview_count])
+        {
+            let (direct_offset, direct_z) = preview_layout(direct_actor);
+            let (retained_offset, retained_z) = preview_layout(retained_actor);
+            assert!((retained_offset[0] - (direct_offset[0] + offset[0])).abs() < 0.001);
+            assert!((retained_offset[1] - (direct_offset[1] + offset[1])).abs() < 0.001);
+            assert_eq!(retained_z, direct_z.saturating_add(101));
+        }
+
+        let table_ptr = Arc::as_ptr(table).cast::<()>() as usize;
+        let _ = fixture.retained_frame(&mut retained);
+        let Some(Actor::SharedFrame {
+            children: repeated, ..
+        }) = retained.last()
+        else {
+            panic!("expected repeated retained timing-arrow table");
+        };
+        assert_eq!(table_ptr, Arc::as_ptr(repeated).cast::<()>() as usize);
     }
 }
