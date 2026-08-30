@@ -35,6 +35,89 @@ pub(super) enum JudgmentPaletteOverlayState {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct JudgmentPalettePresentationKey {
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+pub(super) struct JudgmentPalettePresentation {
+    key: JudgmentPalettePresentationKey,
+    overlay: JudgmentPaletteOverlayState,
+    catalog: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
+    children: Arc<[Actor]>,
+}
+
+fn judgment_palette_overlay_render_eq(
+    left: &JudgmentPaletteOverlayState,
+    right: &JudgmentPaletteOverlayState,
+) -> bool {
+    match (left, right) {
+        (JudgmentPaletteOverlayState::Hidden, JudgmentPaletteOverlayState::Hidden) => true,
+        (
+            JudgmentPaletteOverlayState::Browser {
+                selected: left_selected,
+                message: left_message,
+                ..
+            },
+            JudgmentPaletteOverlayState::Browser {
+                selected: right_selected,
+                message: right_message,
+                ..
+            },
+        ) => left_selected == right_selected && left_message == right_message,
+        (
+            JudgmentPaletteOverlayState::Editor {
+                palette_id: left_palette_id,
+                selected: left_selected,
+                channel_focus: left_channel_focus,
+                editing_name: left_editing_name,
+                name_buffer: left_name_buffer,
+                blink_t: left_blink_t,
+                message: left_message,
+            },
+            JudgmentPaletteOverlayState::Editor {
+                palette_id: right_palette_id,
+                selected: right_selected,
+                channel_focus: right_channel_focus,
+                editing_name: right_editing_name,
+                name_buffer: right_name_buffer,
+                blink_t: right_blink_t,
+                message: right_message,
+            },
+        ) => {
+            left_palette_id == right_palette_id
+                && left_selected == right_selected
+                && left_channel_focus == right_channel_focus
+                && left_editing_name == right_editing_name
+                && left_name_buffer == right_name_buffer
+                && left_message == right_message
+                && (!left_editing_name
+                    || (*left_blink_t < CURSOR_PERIOD * 0.5)
+                        == (*right_blink_t < CURSOR_PERIOD * 0.5))
+        }
+        (
+            JudgmentPaletteOverlayState::ConfirmDelete {
+                palette_id: left_palette_id,
+                palette_name: left_palette_name,
+                choice: left_choice,
+            },
+            JudgmentPaletteOverlayState::ConfirmDelete {
+                palette_id: right_palette_id,
+                palette_name: right_palette_name,
+                choice: right_choice,
+            },
+        ) => {
+            left_palette_id == right_palette_id
+                && left_palette_name == right_palette_name
+                && left_choice == right_choice
+        }
+        _ => false,
+    }
+}
+
 #[inline(always)]
 pub(super) const fn judgment_palette_overlay_visible(
     overlay: &JudgmentPaletteOverlayState,
@@ -608,12 +691,57 @@ pub(super) fn push_judgment_palette_overlay(
     if !judgment_palette_overlay_visible(&state.judgment_palette_overlay) {
         return false;
     }
+    let key = JudgmentPalettePresentationKey {
+        active_color_index,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = state
+        .judgment_palette_presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| {
+            presentation.key == key
+                && judgment_palette_overlay_render_eq(
+                    &presentation.overlay,
+                    &state.judgment_palette_overlay,
+                )
+                && presentation.catalog == state.judgment_palettes
+        })
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(96);
+        push_judgment_palette_overlay_unreserved(
+            &mut children,
+            state,
+            active_color_index,
+            machine_font,
+        );
+        let children = Arc::<[Actor]>::from(children);
+        *state.judgment_palette_presentation.borrow_mut() = Some(JudgmentPalettePresentation {
+            key,
+            overlay: state.judgment_palette_overlay.clone(),
+            catalog: state.judgment_palettes.clone(),
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(out, children);
+    true
+}
+
+pub(super) fn push_judgment_palette_overlay_unreserved(
+    out: &mut Vec<Actor>,
+    state: &State,
+    active_color_index: i32,
+    machine_font: crate::config::MachineFont,
+) {
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();
     let cy = screen_center_y();
     let header_font = machine_font_key(machine_font, FontRole::Header);
     let bold_font = machine_font_key(machine_font, FontRole::Bold);
-    out.reserve(96);
     push_panel(out, accent, cx, cy);
     out.push(act!(text:
         font(header_font): settext(tr("JudgmentPalettes", "Title")):
@@ -676,7 +804,6 @@ pub(super) fn push_judgment_palette_overlay(
         }
         JudgmentPaletteOverlayState::Hidden => {}
     }
-    true
 }
 
 fn push_panel(out: &mut Vec<Actor>, accent: [f32; 4], cx: f32, cy: f32) {

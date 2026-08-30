@@ -72,6 +72,17 @@ mod overlay_staging_tests {
         assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 
+    fn flattened_actor_count(actors: &[Actor]) -> usize {
+        actors
+            .iter()
+            .map(|actor| match actor {
+                Actor::SharedFrame { children, .. } => flattened_actor_count(children),
+                Actor::Frame { children, .. } => flattened_actor_count(children),
+                _ => 1,
+            })
+            .sum()
+    }
+
     #[test]
     fn direct_select_music_overlay_append_matches_legacy_batches() {
         crate::assets::i18n::init_for_tests();
@@ -120,13 +131,9 @@ mod overlay_staging_tests {
         direct = Vec::with_capacity(128);
         let legacy_checksum = leaderboard.legacy_frame(&mut legacy);
         let direct_checksum = leaderboard.direct_frame(&mut direct);
-        assert_same(
-            leaderboard.actor_count(),
-            legacy_checksum,
-            direct_checksum,
-            &legacy,
-            &direct,
-        );
+        assert_eq!(legacy_checksum, direct_checksum);
+        assert_eq!(legacy.len(), leaderboard.actor_count());
+        assert_eq!(flattened_actor_count(&direct), leaderboard.actor_count());
 
         let downloads = DownloadsOverlayAppendBenchmark::new();
         legacy = Vec::with_capacity(32);

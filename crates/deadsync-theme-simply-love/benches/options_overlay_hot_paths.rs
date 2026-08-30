@@ -348,11 +348,11 @@ fn main() {
         || measure(|| pack_sync.direct_frame(&mut new_pack_actors)),
     );
     report_pair(
-        "pack sync actor staging",
+        "retained pack sync progress tree",
         pack_sync.actor_count(),
         &old_pack,
         &new_pack,
-        false,
+        true,
     );
 
     let modals = OptionsModalAppendBenchmark::new();
@@ -391,11 +391,11 @@ fn main() {
         || measure(|| modals.direct_palette_frame(&mut new_palette_actors)),
     );
     report_pair(
-        "judgment palette actor staging",
+        "retained judgment palette tree",
         modals.palette_actor_count(),
         &old_palette,
         &new_palette,
-        false,
+        true,
     );
 
     let menu = SelectMusicMenuOverlayBenchmark::new();
@@ -480,11 +480,11 @@ fn main() {
         || measure(|| leaderboard.direct_frame(&mut new_leaderboard_actors)),
     );
     report_pair(
-        "leaderboard actor staging",
+        "retained leaderboard static tree",
         leaderboard.actor_count(),
         &old_leaderboard,
         &new_leaderboard,
-        false,
+        true,
     );
 
     let downloads = DownloadsOverlayAppendBenchmark::new();

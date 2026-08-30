@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
 use crate::views::{
     ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
@@ -11,6 +12,8 @@ use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
+use std::cell::RefCell;
+use std::sync::Arc;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
@@ -47,11 +50,34 @@ pub struct LeaderboardSideState {
     scorebox: ScoreboxSideView,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LeaderboardPresentationKey {
+    revision: u64,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+#[derive(Debug)]
+struct LeaderboardPresentation {
+    key: LeaderboardPresentationKey,
+    children: Arc<[Actor]>,
+}
+
 #[derive(Debug)]
 pub struct LeaderboardOverlayStateData {
     elapsed: f32,
     p1: LeaderboardSideState,
     p2: LeaderboardSideState,
+    presentation_revision: u64,
+    presentation: RefCell<Option<LeaderboardPresentation>>,
+}
+
+impl LeaderboardOverlayStateData {
+    #[inline(always)]
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+    }
 }
 
 #[derive(Debug)]
@@ -239,6 +265,8 @@ pub fn show_leaderboard_overlay(
             elapsed: 0.0,
             p1,
             p2,
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         },
     )))
 }
@@ -273,6 +301,7 @@ pub fn sync_leaderboard_overlay(
     if overlay.p2.joined {
         apply_leaderboard_side_view(&mut overlay.p2, p2);
     }
+    overlay.invalidate_presentation();
 }
 
 #[inline(always)]
@@ -312,21 +341,25 @@ pub fn handle_leaderboard_input(
     match ev.action {
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             if overlay.p1.joined && leaderboard_shift(&mut overlay.p1, -1) {
+                overlay.invalidate_presentation();
                 return LeaderboardInputOutcome::ChangedPane;
             }
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             if overlay.p1.joined && leaderboard_shift(&mut overlay.p1, 1) {
+                overlay.invalidate_presentation();
                 return LeaderboardInputOutcome::ChangedPane;
             }
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
             if overlay.p2.joined && leaderboard_shift(&mut overlay.p2, -1) {
+                overlay.invalidate_presentation();
                 return LeaderboardInputOutcome::ChangedPane;
             }
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
             if overlay.p2.joined && leaderboard_shift(&mut overlay.p2, 1) {
+                overlay.invalidate_presentation();
                 return LeaderboardInputOutcome::ChangedPane;
             }
         }
@@ -366,14 +399,35 @@ pub fn push_leaderboard_overlay(
     let LeaderboardOverlayState::Visible(overlay) = state else {
         return false;
     };
-
-    let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
-    actors.reserve(if joined_count <= 1 { 76 } else { 124 });
-    push_leaderboard_overlay_unreserved(actors, overlay, machine_font);
+    let key = LeaderboardPresentationKey {
+        revision: overlay.presentation_revision,
+        machine_font,
+        screen_width_bits: screen_width().to_bits(),
+        screen_height_bits: screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
+        let mut children = Vec::with_capacity(if joined_count <= 1 { 73 } else { 118 });
+        push_leaderboard_overlay_unreserved::<false>(&mut children, overlay, machine_font);
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(LeaderboardPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    push_retained_overlay(actors, children);
+    push_leaderboard_overlay_icons(actors, overlay);
     true
 }
 
-fn push_leaderboard_overlay_unreserved(
+fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
     actors: &mut Vec<Actor>,
     overlay: &LeaderboardOverlayStateData,
     machine_font: MachineFont,
@@ -642,41 +696,15 @@ fn push_leaderboard_overlay_unreserved(
             }
         }
 
-        if !side.loading && side.error_text.is_none() && side.show_icons {
-            let icon_y = GS_LEADERBOARD_ROW_HEIGHT
-                .mul_add(-0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(0.5, pane_cy));
-            let left_dx = leaderboard_icon_bounce_offset(overlay_elapsed, 1.0);
-            let right_dx = leaderboard_icon_bounce_offset(overlay_elapsed, -1.0);
-            actors.push(act!(text:
-                font("miso"):
-                settext("&MENULEFT;"):
-                align(0.5, 0.5):
-                xy(center_x - pane_width * 0.5 + 10.0 + left_dx, icon_y):
-                zoom(1.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(GS_LEADERBOARD_Z + 8):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext(GS_LEADERBOARD_MORE_TEXT):
-                align(0.5, 0.5):
-                xy(center_x, icon_y):
-                zoom(1.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(GS_LEADERBOARD_Z + 8):
-                horizalign(center)
-            ));
-            actors.push(act!(text:
-                font("miso"):
-                settext("&MENURiGHT;"):
-                align(0.5, 0.5):
-                xy(center_x + pane_width * 0.5 - 10.0 + right_dx, icon_y):
-                zoom(1.0):
-                diffuse(1.0, 1.0, 1.0, 1.0):
-                z(GS_LEADERBOARD_Z + 8):
-                horizalign(center)
-            ));
+        if INCLUDE_ICONS {
+            push_leaderboard_panel_icons::<true>(
+                actors,
+                side,
+                center_x,
+                pane_width,
+                pane_cy,
+                overlay_elapsed,
+            );
         }
     };
 
@@ -694,6 +722,127 @@ fn push_leaderboard_overlay_unreserved(
         draw_panel(
             &overlay.p2,
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
+        );
+    }
+}
+
+fn push_leaderboard_panel_icons<const USE_NAMED_ALIASES: bool>(
+    actors: &mut Vec<Actor>,
+    side: &LeaderboardSideState,
+    center_x: f32,
+    pane_width: f32,
+    pane_cy: f32,
+    elapsed: f32,
+) {
+    if side.loading || side.error_text.is_some() || !side.show_icons {
+        return;
+    }
+    let icon_y =
+        GS_LEADERBOARD_ROW_HEIGHT.mul_add(-0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(0.5, pane_cy));
+    let left_dx = leaderboard_icon_bounce_offset(elapsed, 1.0);
+    let right_dx = leaderboard_icon_bounce_offset(elapsed, -1.0);
+    if USE_NAMED_ALIASES {
+        actors.push(act!(text:
+            font("miso"):
+            settext("&MENULEFT;"):
+            align(0.5, 0.5):
+            xy(center_x - pane_width * 0.5 + 10.0 + left_dx, icon_y):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GS_LEADERBOARD_Z + 8):
+            horizalign(center)
+        ));
+    } else {
+        actors.push(act!(text:
+            font("miso"):
+            settext("\u{e00b}"):
+            align(0.5, 0.5):
+            xy(center_x - pane_width * 0.5 + 10.0 + left_dx, icon_y):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GS_LEADERBOARD_Z + 8):
+            horizalign(center)
+        ));
+    }
+    actors.push(act!(text:
+        font("miso"):
+        settext(GS_LEADERBOARD_MORE_TEXT):
+        align(0.5, 0.5):
+        xy(center_x, icon_y):
+        zoom(1.0):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(GS_LEADERBOARD_Z + 8):
+        horizalign(center)
+    ));
+    if USE_NAMED_ALIASES {
+        actors.push(act!(text:
+            font("miso"):
+            settext("&MENURiGHT;"):
+            align(0.5, 0.5):
+            xy(center_x + pane_width * 0.5 - 10.0 + right_dx, icon_y):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GS_LEADERBOARD_Z + 8):
+            horizalign(center)
+        ));
+    } else {
+        actors.push(act!(text:
+            font("miso"):
+            settext("\u{e00c}"):
+            align(0.5, 0.5):
+            xy(center_x + pane_width * 0.5 - 10.0 + right_dx, icon_y):
+            zoom(1.0):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(GS_LEADERBOARD_Z + 8):
+            horizalign(center)
+        ));
+    }
+}
+
+fn push_leaderboard_overlay_icons(actors: &mut Vec<Actor>, overlay: &LeaderboardOverlayStateData) {
+    let joined_count = usize::from(overlay.p1.joined) + usize::from(overlay.p2.joined);
+    let pane_width = if joined_count <= 1 {
+        GS_LEADERBOARD_PANE_WIDTH_SINGLE
+    } else {
+        GS_LEADERBOARD_PANE_WIDTH_MULTI
+    };
+    let pane_cy = screen_center_y() + GS_LEADERBOARD_PANE_CENTER_Y;
+    if joined_count <= 1 {
+        if overlay.p1.joined {
+            push_leaderboard_panel_icons::<false>(
+                actors,
+                &overlay.p1,
+                screen_center_x(),
+                pane_width,
+                pane_cy,
+                overlay.elapsed,
+            );
+        } else if overlay.p2.joined {
+            push_leaderboard_panel_icons::<false>(
+                actors,
+                &overlay.p2,
+                screen_center_x(),
+                pane_width,
+                pane_cy,
+                overlay.elapsed,
+            );
+        }
+    } else {
+        push_leaderboard_panel_icons::<false>(
+            actors,
+            &overlay.p1,
+            screen_center_x() - GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            pane_width,
+            pane_cy,
+            overlay.elapsed,
+        );
+        push_leaderboard_panel_icons::<false>(
+            actors,
+            &overlay.p2,
+            screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
+            pane_width,
+            pane_cy,
+            overlay.elapsed,
         );
     }
 }
@@ -745,6 +894,8 @@ impl LeaderboardOverlayAppendBenchmark {
                 elapsed: 0.375,
                 p1: side("P1"),
                 p2: side("P2"),
+                presentation_revision: 0,
+                presentation: RefCell::new(None),
             })),
         }
     }
@@ -752,7 +903,10 @@ impl LeaderboardOverlayAppendBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(128);
-        push_leaderboard_overlay(&mut actors, &self.state, MachineFont::Mega);
+        let LeaderboardOverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        push_leaderboard_overlay_unreserved::<true>(&mut actors, overlay, MachineFont::Mega);
         actors.len()
     }
 
@@ -762,11 +916,9 @@ impl LeaderboardOverlayAppendBenchmark {
         let LeaderboardOverlayState::Visible(overlay) = &self.state else {
             unreachable!("benchmark overlay is visible");
         };
-        let mut staged = Vec::new();
-        push_leaderboard_overlay_unreserved(&mut staged, overlay, MachineFont::Mega);
-        out.extend(staged);
+        push_leaderboard_overlay_unreserved::<true>(out, overlay, MachineFont::Mega);
         std::hint::black_box(&*out);
-        super::overlay_actor_checksum(out)
+        leaderboard_actor_checksum(out)
     }
 
     #[must_use]
@@ -774,8 +926,39 @@ impl LeaderboardOverlayAppendBenchmark {
         out.clear();
         push_leaderboard_overlay(out, &self.state, MachineFont::Mega);
         std::hint::black_box(&*out);
-        super::overlay_actor_checksum(out)
+        leaderboard_actor_checksum(out)
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn leaderboard_actor_checksum(actors: &[Actor]) -> u64 {
+    fn fold(actors: &[Actor], count: &mut u64, checksum: &mut u64) {
+        for actor in actors {
+            match actor {
+                Actor::SharedFrame { children, .. } => fold(children, count, checksum),
+                Actor::Frame { children, .. } => fold(children, count, checksum),
+                Actor::Text { content, z, .. } => {
+                    *count += 1;
+                    let value = content
+                        .as_str()
+                        .bytes()
+                        .fold(u64::from(*z as u16), |hash, byte| {
+                            hash.rotate_left(7) ^ u64::from(byte)
+                        });
+                    *checksum = checksum.wrapping_add(value.rotate_left(13));
+                }
+                _ => {
+                    *count += 1;
+                    *checksum = checksum.wrapping_add(1);
+                }
+            }
+        }
+    }
+
+    let mut count = 0;
+    let mut checksum = 0;
+    fold(actors, &mut count, &mut checksum);
+    checksum ^ count.rotate_left(29)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -788,6 +971,13 @@ impl Default for LeaderboardOverlayAppendBenchmark {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn retained_children(actors: &[Actor]) -> Arc<[Actor]> {
+        let Some(Actor::SharedFrame { children, .. }) = actors.first() else {
+            panic!("retained leaderboard must begin with one shared frame");
+        };
+        Arc::clone(children)
+    }
 
     fn entry(rank: u32, name: &str) -> score_data::LeaderboardEntry {
         score_data::LeaderboardEntry {
@@ -814,6 +1004,64 @@ mod tests {
         };
 
         assert!(should_show_overlay_pane(&pane));
+    }
+
+    #[test]
+    fn retained_leaderboard_reuses_static_tree_while_icons_animate_and_data_invalidates() {
+        let mut benchmark = LeaderboardOverlayAppendBenchmark::new();
+        let LeaderboardOverlayState::Visible(overlay) = &benchmark.state else {
+            unreachable!();
+        };
+        let mut expected_static = Vec::with_capacity(128);
+        push_leaderboard_overlay_unreserved::<false>(
+            &mut expected_static,
+            overlay,
+            MachineFont::Mega,
+        );
+        let mut expected_icons = Vec::with_capacity(6);
+        push_leaderboard_overlay_icons(&mut expected_icons, overlay);
+
+        let mut first = Vec::with_capacity(8);
+        assert!(push_leaderboard_overlay(
+            &mut first,
+            &benchmark.state,
+            MachineFont::Mega,
+        ));
+        let first_children = retained_children(&first);
+        assert_eq!(
+            format!("{:#?}", first_children.as_ref()),
+            format!("{expected_static:#?}")
+        );
+        assert_eq!(
+            format!("{:#?}", &first[1..]),
+            format!("{expected_icons:#?}")
+        );
+
+        update_leaderboard_overlay(&mut benchmark.state, 0.125);
+        let mut animated = Vec::with_capacity(8);
+        assert!(push_leaderboard_overlay(
+            &mut animated,
+            &benchmark.state,
+            MachineFont::Mega,
+        ));
+        let animated_children = retained_children(&animated);
+        assert!(Arc::ptr_eq(&first_children, &animated_children));
+        assert_ne!(
+            format!("{:#?}", &first[1..]),
+            format!("{:#?}", &animated[1..])
+        );
+
+        sync_leaderboard_overlay(&mut benchmark.state, SelectMusicLeaderboardView::default());
+        let mut refreshed = Vec::with_capacity(8);
+        assert!(push_leaderboard_overlay(
+            &mut refreshed,
+            &benchmark.state,
+            MachineFont::Mega,
+        ));
+        assert!(!Arc::ptr_eq(
+            &animated_children,
+            &retained_children(&refreshed)
+        ));
     }
 
     #[test]

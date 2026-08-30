@@ -11,6 +11,7 @@ use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_simfile::sync_offset::{SongOffsetSyncChange, quantize_sync_offset_seconds};
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -95,6 +96,29 @@ pub struct OverlayStateData {
     owner: crate::SimplyLoveSyncOwner,
     current_row: Option<usize>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
+    presentation_revision: u64,
+    presentation: RefCell<Option<PackSyncPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PackSyncPresentationKey {
+    revision: u64,
+    active_color_index: i32,
+    machine_font: MachineFont,
+    screen_width_bits: u32,
+    screen_height_bits: u32,
+}
+
+struct PackSyncPresentation {
+    key: PackSyncPresentationKey,
+    children: Arc<[Actor]>,
+}
+
+impl OverlayStateData {
+    #[inline(always)]
+    fn invalidate_presentation(&mut self) {
+        self.presentation_revision = self.presentation_revision.wrapping_add(1);
+    }
 }
 
 struct OverlayText {
@@ -304,7 +328,39 @@ pub fn push_overlay(
     let OverlayState::Visible(overlay) = state else {
         return false;
     };
+    let key = PackSyncPresentationKey {
+        revision: overlay.presentation_revision,
+        active_color_index,
+        machine_font,
+        screen_width_bits: deadlib_present::space::screen_width().to_bits(),
+        screen_height_bits: deadlib_present::space::screen_height().to_bits(),
+    };
+    let cached = overlay
+        .presentation
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut children = Vec::with_capacity(96);
+        push_overlay_unreserved(&mut children, overlay, active_color_index, machine_font);
+        let children = Arc::<[Actor]>::from(children);
+        *overlay.presentation.borrow_mut() = Some(PackSyncPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    crate::screens::components::select_music::push_retained_overlay(actors, children);
+    true
+}
 
+fn push_overlay_unreserved(
+    actors: &mut Vec<Actor>,
+    overlay: &OverlayStateData,
+    active_color_index: i32,
+    machine_font: MachineFont,
+) {
     let pane_w = widescale(580.0, 760.0);
     let pane_h = 470.0;
     let pane_cx = screen_center_x();
@@ -328,7 +384,6 @@ pub fn push_overlay(
     let result_x = pane_right - 28.0;
     let row_top = pane_top + 138.0;
 
-    actors.reserve(96);
     actors.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -600,12 +655,14 @@ pub fn push_overlay(
             }
         }
     }
-
-    true
 }
 
 #[cfg(any(test, feature = "bench-support"))]
 fn pack_overlay_checksum(actors: &[Actor]) -> u64 {
+    let actors = match actors {
+        [Actor::SharedFrame { children, .. }] => children.as_ref(),
+        _ => actors,
+    };
     actors.iter().fold(actors.len() as u64, |checksum, actor| {
         let value = match actor {
             Actor::Text { content, z, .. } => content
@@ -669,6 +726,8 @@ impl PackSyncOverlayBenchmark {
                 owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
                 current_row: Some(3),
                 menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+                presentation_revision: 0,
+                presentation: RefCell::new(None),
             })),
         }
     }
@@ -676,18 +735,20 @@ impl PackSyncOverlayBenchmark {
     #[must_use]
     pub fn actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(96);
-        let visible = push_overlay(&mut actors, &self.state, 2, MachineFont::Mega);
-        debug_assert!(visible);
+        let OverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        push_overlay_unreserved(&mut actors, overlay, 2, MachineFont::Mega);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(96);
-        let visible = push_overlay(&mut staged, &self.state, 2, MachineFont::Mega);
-        debug_assert!(visible);
-        out.extend(staged);
+        let OverlayState::Visible(overlay) = &self.state else {
+            unreachable!("benchmark overlay is visible");
+        };
+        push_overlay_unreserved(out, overlay, 2, MachineFont::Mega);
         std::hint::black_box(&*out);
         pack_overlay_checksum(out)
     }
@@ -753,6 +814,8 @@ pub fn begin(
         owner,
         current_row: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        presentation_revision: 0,
+        presentation: RefCell::new(None),
     }));
     Some(crate::SimplyLoveSyncRequest::StartAnalysis {
         owner,
@@ -948,6 +1011,9 @@ pub fn handle_input(
     }
 
     if play_change {
+        if let OverlayState::Visible(overlay) = state {
+            overlay.invalidate_presentation();
+        }
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
     if play_start {
@@ -1379,6 +1445,7 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
     if phase_changed || overlay.scroll_index != previous_scroll {
         refresh_pagination_text(overlay);
     }
+    overlay.invalidate_presentation();
 }
 
 #[cfg(test)]
@@ -1390,10 +1457,12 @@ mod tests {
         row_disposition,
     };
     use crate::screens::ThemeEffect;
-    use deadlib_present::actors::TextContent;
+    use deadlib_present::actors::{Actor, TextContent};
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputEvent, VirtualAction};
+    use std::cell::RefCell;
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
     use std::time::Instant;
 
     fn pack_row(bias_ms: f64, confidence: f64) -> RowState {
@@ -1436,12 +1505,81 @@ mod tests {
             owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
             current_row: None,
             menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
+            presentation_revision: 0,
+            presentation: RefCell::new(None),
         }))
     }
 
     fn press(action: VirtualAction) -> InputEvent {
         let now = Instant::now();
         InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
+    }
+
+    #[test]
+    fn pack_sync_presentation_reuses_stable_tree_and_rebuilds_for_progress_events() {
+        let mut state = overlay(OverlayPhase::Running);
+        let mut first = Vec::with_capacity(1);
+        assert!(super::push_overlay(
+            &mut first,
+            &state,
+            2,
+            crate::config::MachineFont::Mega,
+        ));
+        let Actor::SharedFrame {
+            children: first_children,
+            ..
+        } = &first[0]
+        else {
+            panic!("pack sync should render one retained tree");
+        };
+        let first_children = Arc::clone(first_children);
+
+        let mut stable = Vec::with_capacity(1);
+        assert!(super::push_overlay(
+            &mut stable,
+            &state,
+            2,
+            crate::config::MachineFont::Mega,
+        ));
+        let Actor::SharedFrame {
+            children: stable_children,
+            ..
+        } = &stable[0]
+        else {
+            panic!("pack sync should remain retained");
+        };
+        assert!(Arc::ptr_eq(&first_children, stable_children));
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowBeat {
+                index: 0,
+                beats_processed: 65,
+                total_beats: 128,
+            },
+        );
+        let mut changed = Vec::with_capacity(1);
+        assert!(super::push_overlay(
+            &mut changed,
+            &state,
+            2,
+            crate::config::MachineFont::Mega,
+        ));
+        let Actor::SharedFrame {
+            children: changed_children,
+            ..
+        } = &changed[0]
+        else {
+            panic!("pack sync should render one retained tree");
+        };
+        assert!(!Arc::ptr_eq(&first_children, changed_children));
+
+        let OverlayState::Visible(data) = &state else {
+            unreachable!();
+        };
+        let mut immediate = Vec::with_capacity(96);
+        super::push_overlay_unreserved(&mut immediate, data, 2, crate::config::MachineFont::Mega);
+        assert_eq!(format!("{changed_children:#?}"), format!("{immediate:#?}"));
     }
 
     #[test]
@@ -1608,7 +1746,10 @@ mod tests {
             benchmark.direct_frame(&mut direct)
         );
         assert_eq!(legacy.len(), benchmark.actor_count());
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+            panic!("retained pack sync should use one shared frame");
+        };
+        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
     }
 
     #[test]

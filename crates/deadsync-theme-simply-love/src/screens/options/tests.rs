@@ -300,7 +300,10 @@ fn direct_options_modal_append_matches_legacy_batches() {
         benchmark.direct_palette_frame(&mut direct)
     );
     assert_eq!(legacy.len(), benchmark.palette_actor_count());
-    assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
+    let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
+        panic!("retained palette browser should use one shared frame");
+    };
+    assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
 }
 
 #[test]
@@ -1059,6 +1062,74 @@ fn judgment_palette_default_row_uses_catalog_and_emits_full_catalog_request() {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::JudgmentPalettes(catalog))
             if catalog.default_palette_id == custom_id
     ));
+}
+
+#[test]
+fn judgment_palette_presentation_reuses_stable_browser_and_rebuilds_on_selection() {
+    let mut state = init();
+    show_judgment_palette_overlay(&mut state);
+
+    let mut first = Vec::with_capacity(1);
+    assert!(push_judgment_palette_overlay(
+        &mut first,
+        &state,
+        2,
+        crate::config::MachineFont::Mega,
+    ));
+    let Actor::SharedFrame {
+        children: first_children,
+        ..
+    } = &first[0]
+    else {
+        panic!("palette browser should render one retained tree");
+    };
+    let first_children = Arc::clone(first_children);
+
+    assert!(update_judgment_palette_overlay(&mut state, 0.2).is_some());
+    let mut blink = Vec::with_capacity(1);
+    assert!(push_judgment_palette_overlay(
+        &mut blink,
+        &state,
+        2,
+        crate::config::MachineFont::Mega,
+    ));
+    let Actor::SharedFrame {
+        children: blink_children,
+        ..
+    } = &blink[0]
+    else {
+        panic!("palette browser should remain retained");
+    };
+    assert!(Arc::ptr_eq(&first_children, blink_children));
+
+    assert!(
+        handle_judgment_palette_input(&mut state, &input_event(VirtualAction::p1_down, true),)
+            .is_some()
+    );
+    let mut changed = Vec::with_capacity(1);
+    assert!(push_judgment_palette_overlay(
+        &mut changed,
+        &state,
+        2,
+        crate::config::MachineFont::Mega,
+    ));
+    let Actor::SharedFrame {
+        children: changed_children,
+        ..
+    } = &changed[0]
+    else {
+        panic!("palette browser should render one retained tree");
+    };
+    assert!(!Arc::ptr_eq(&first_children, changed_children));
+
+    let mut immediate = Vec::with_capacity(96);
+    push_judgment_palette_overlay_unreserved(
+        &mut immediate,
+        &state,
+        2,
+        crate::config::MachineFont::Mega,
+    );
+    assert_eq!(format!("{changed_children:#?}"), format!("{immediate:#?}"));
 }
 
 #[test]

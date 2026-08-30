@@ -1878,28 +1878,24 @@ impl OptionsModalAppendBenchmark {
     #[must_use]
     pub fn palette_actor_count(&self) -> usize {
         let mut actors = Vec::with_capacity(96);
-        let visible = super::judgment_palettes::push_judgment_palette_overlay(
+        super::judgment_palettes::push_judgment_palette_overlay_unreserved(
             &mut actors,
             &self.palettes,
             2,
             crate::config::MachineFont::Mega,
         );
-        debug_assert!(visible);
         actors.len()
     }
 
     #[must_use]
     pub fn legacy_palette_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
-        let mut staged = Vec::with_capacity(96);
-        let visible = super::judgment_palettes::push_judgment_palette_overlay(
-            &mut staged,
+        super::judgment_palettes::push_judgment_palette_overlay_unreserved(
+            out,
             &self.palettes,
             2,
             crate::config::MachineFont::Mega,
         );
-        debug_assert!(visible);
-        out.extend(staged);
         std::hint::black_box(&*out);
         modal_actor_checksum(out)
     }
