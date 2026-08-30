@@ -6,7 +6,7 @@
 //! `ITGmania`'s output and keeps us from pulling in a heavyweight XML dependency.
 
 /// A parsed XML element node.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct XmlNode {
     pub tag: String,
     pub attrs: Vec<(String, String)>,
@@ -76,19 +76,28 @@ impl std::error::Error for XmlError {}
 
 /// Parses an XML document and returns its single root element.
 pub fn parse(input: &str) -> Result<XmlNode, XmlError> {
+    parse_with::<true, true, true>(input)
+}
+
+fn parse_with<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>(
+    input: &str,
+) -> Result<XmlNode, XmlError> {
     let bytes = input.as_bytes();
-    let mut p = Parser { b: bytes, i: 0 };
+    let mut p = Parser::<DIRECT_TEXT, SKIP_CLOSING_NAME, TRIM_IN_PLACE> { b: bytes, i: 0 };
     p.skip_prolog()?;
     let root = p.parse_element()?;
     Ok(root)
 }
 
-struct Parser<'a> {
+struct Parser<'a, const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>
+{
     b: &'a [u8],
     i: usize,
 }
 
-impl Parser<'_> {
+impl<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>
+    Parser<'_, DIRECT_TEXT, SKIP_CLOSING_NAME, TRIM_IN_PLACE>
+{
     #[inline]
     fn peek(&self) -> Option<u8> {
         self.b.get(self.i).copied()
@@ -208,14 +217,23 @@ impl Parser<'_> {
                         }
                     } else if self.starts_with("</") {
                         self.i += 2;
-                        let _close = self.read_name();
+                        if SKIP_CLOSING_NAME {
+                            self.skip_name();
+                        } else {
+                            let _close = self.read_name();
+                        }
                         self.skip_ws();
                         if self.peek() == Some(b'>') {
                             self.i += 1;
                         } else {
                             return Err(XmlError::Malformed("end tag"));
                         }
-                        node.text = text.trim().to_string();
+                        if TRIM_IN_PLACE {
+                            trim_string_in_place(&mut text);
+                            node.text = text;
+                        } else {
+                            node.text = text.trim().to_string();
+                        }
                         return Ok(node);
                     } else {
                         let child = self.parse_element()?;
@@ -232,7 +250,11 @@ impl Parser<'_> {
                         self.i += 1;
                     }
                     let raw = &self.b[start..self.i];
-                    text.push_str(&decode_entities(&String::from_utf8_lossy(raw)));
+                    if DIRECT_TEXT {
+                        append_decoded_entities(&mut text, utf8_subslice(raw));
+                    } else {
+                        text.push_str(&decode_entities(&String::from_utf8_lossy(raw)));
+                    }
                 }
             }
         }
@@ -247,6 +269,15 @@ impl Parser<'_> {
             self.i += 1;
         }
         String::from_utf8_lossy(&self.b[start..self.i]).into_owned()
+    }
+
+    fn skip_name(&mut self) {
+        while let Some(c) = self.peek() {
+            if c.is_ascii_whitespace() || c == b'>' || c == b'/' || c == b'=' {
+                break;
+            }
+            self.i += 1;
+        }
     }
 
     fn read_attr_value(&mut self) -> Result<String, XmlError> {
@@ -268,6 +299,23 @@ impl Parser<'_> {
     }
 }
 
+#[inline]
+fn utf8_subslice(bytes: &[u8]) -> &str {
+    // Parser spans begin and end at ASCII XML delimiters inside the original
+    // valid `&str`, so both indices are UTF-8 character boundaries.
+    unsafe { std::str::from_utf8_unchecked(bytes) }
+}
+
+fn trim_string_in_place(text: &mut String) {
+    let trimmed = text.trim();
+    let start = trimmed.as_ptr() as usize - text.as_ptr() as usize;
+    let end = start + trimmed.len();
+    text.truncate(end);
+    if start != 0 {
+        drop(text.drain(..start));
+    }
+}
+
 fn find_sub(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
@@ -277,10 +325,17 @@ fn find_sub(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// Decodes the five predefined XML entities and numeric character references.
 fn decode_entities(s: &str) -> String {
-    if !s.contains('&') {
-        return s.to_string();
-    }
     let mut out = String::with_capacity(s.len());
+    append_decoded_entities(&mut out, s);
+    out
+}
+
+fn append_decoded_entities(out: &mut String, s: &str) {
+    if !s.contains('&') {
+        out.push_str(s);
+        return;
+    }
+    out.reserve(s.len());
     let bytes = s.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
@@ -308,7 +363,32 @@ fn decode_entities(s: &str) -> String {
         out.push_str(&s[i..end]);
         i = end;
     }
-    out
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use super::{XmlError, XmlNode, parse_with};
+
+    pub fn parse_old(input: &str) -> Result<XmlNode, XmlError> {
+        parse_with::<false, false, false>(input)
+    }
+
+    pub fn parse_direct_text(input: &str) -> Result<XmlNode, XmlError> {
+        parse_with::<true, false, false>(input)
+    }
+
+    pub fn parse_skipped_closing_names(input: &str) -> Result<XmlNode, XmlError> {
+        parse_with::<false, true, false>(input)
+    }
+
+    pub fn parse_trimmed_in_place(input: &str) -> Result<XmlNode, XmlError> {
+        parse_with::<false, false, true>(input)
+    }
+
+    pub fn parse_new(input: &str) -> Result<XmlNode, XmlError> {
+        parse_with::<true, true, true>(input)
+    }
 }
 
 fn decode_numeric_entity(entity: &str) -> Option<char> {
@@ -387,5 +467,47 @@ mod tests {
         let xml = "<l><h>1</h><h>2</h><h>3</h></l>";
         let root = parse(xml).expect("parse");
         assert_eq!(root.children_named("h").count(), 3);
+    }
+
+    #[test]
+    fn direct_entity_decode_matches_owned_decode_and_reuses_capacity() {
+        let input = "plain café &amp; tea &#x2615; &unknown;";
+        let expected = decode_entities(input);
+        let mut actual = String::with_capacity(input.len() * 2);
+        let allocation = actual.as_ptr();
+        append_decoded_entities(&mut actual, input);
+        assert_eq!(actual, expected);
+        assert_eq!(actual.as_ptr(), allocation);
+    }
+
+    #[test]
+    fn optimized_parser_matches_legacy_parser() {
+        let xml = r#"<Stats label="A &amp; B">
+            prefix &lt; <Empty></Empty   >
+            <Score id="1">  café &#x2615;  </Score>
+            <Score id="2"><![CDATA[  raw & text  ]]></Score>
+            suffix &unknown;
+        </Stats   >"#;
+        let legacy = parse_with::<false, false, false>(xml).expect("legacy parse");
+        let optimized = parse(xml).expect("optimized parse");
+        assert_eq!(optimized, legacy);
+    }
+
+    #[test]
+    fn trim_in_place_preserves_storage_and_unicode_boundaries() {
+        let mut text = String::with_capacity(64);
+        text.push_str(" \n\t café ☕ \r\n ");
+        let allocation = text.as_ptr();
+        let capacity = text.capacity();
+        trim_string_in_place(&mut text);
+        assert_eq!(text, "café ☕");
+        assert_eq!(text.as_ptr(), allocation);
+        assert_eq!(text.capacity(), capacity);
+
+        text.clear();
+        text.push_str(" \t\n ");
+        trim_string_in_place(&mut text);
+        assert!(text.is_empty());
+        assert_eq!(text.as_ptr(), allocation);
     }
 }
