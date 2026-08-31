@@ -102,6 +102,9 @@ enum AccelYPath {
     BoostOnly,
     BrakeOnly,
     ExpandOnly,
+    WaveOnly,
+    BoomerangOnly,
+    BoostBrakeOnly,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -243,6 +246,9 @@ pub(crate) fn accel_y_cache(elapsed: f32, accel: AccelYParams) -> AccelYCache {
         (true, false, false, false, false) => AccelYPath::BoostOnly,
         (false, true, false, false, false) => AccelYPath::BrakeOnly,
         (false, false, false, true, false) => AccelYPath::ExpandOnly,
+        (false, false, true, false, false) => AccelYPath::WaveOnly,
+        (false, false, false, false, true) => AccelYPath::BoomerangOnly,
+        (true, true, false, false, false) => AccelYPath::BoostBrakeOnly,
         _ => AccelYPath::General,
     };
     AccelYCache { expand_scale, path }
@@ -356,6 +362,27 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (raw_y + adjust, true);
         }
         AccelYPath::ExpandOnly => return (raw_y * cache.expand_scale, true),
+        AccelYPath::WaveOnly => {
+            let y = (accel.wave * WAVE_MOD_MAGNITUDE)
+                .mul_add((raw_y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), raw_y);
+            return (y, true);
+        }
+        AccelYPath::BoomerangOnly => {
+            let before_peak = raw_y < screen_height * 0.75;
+            let y = 1.5f32.mul_add(raw_y, -raw_y * raw_y / screen_height);
+            return (y, before_peak);
+        }
+        AccelYPath::BoostBrakeOnly => {
+            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boost_adjust =
+                (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+            let boosted_y = raw_y + boost_adjust;
+            let scale = sm_scale(boosted_y, 0.0, effect_height, 0.0, 1.0);
+            let braked = boosted_y * scale;
+            let brake_adjust = (accel.brake * (braked - boosted_y))
+                .clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
+            return (boosted_y + brake_adjust, true);
+        }
         AccelYPath::General => {}
     }
     apply_accel_y_general(raw_y, effect_height, screen_height, accel, cache)
@@ -911,6 +938,46 @@ mod common_note_transform_tests {
             },
             AccelYParams {
                 expand: 0.75,
+                ..AccelYParams::default()
+            },
+        ];
+        for accel in cases {
+            for elapsed in [0.0, 0.125, 3.25, 81.75] {
+                let cache = accel_y_cache(elapsed, accel);
+                for raw_y in [
+                    -64.0,
+                    -0.0,
+                    0.0,
+                    32.0,
+                    160.0,
+                    384.0,
+                    640.0,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    let reference = apply_accel_y_with_peak(raw_y, elapsed, 480.0, 720.0, accel);
+                    let cached = apply_accel_y_with_peak_cached(raw_y, 480.0, 720.0, accel, cache);
+                    assert_eq!(cached.0.to_bits(), reference.0.to_bits());
+                    assert_eq!(cached.1, reference.1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn wave_boomerang_and_boost_brake_paths_match_per_note_reference_math() {
+        let cases = [
+            AccelYParams {
+                wave: 0.4,
+                ..AccelYParams::default()
+            },
+            AccelYParams {
+                boomerang: 0.3,
+                ..AccelYParams::default()
+            },
+            AccelYParams {
+                boost: 0.35,
+                brake: 0.2,
                 ..AccelYParams::default()
             },
         ];
@@ -1919,7 +1986,7 @@ pub mod transform_cache_bench_support {
         (1.0 + visible_adjust).clamp(0.0, 1.0)
     }
 
-    fn single_accel_old(evaluations: usize, accel: AccelYParams) -> u64 {
+    fn accel_path_old(evaluations: usize, accel: AccelYParams) -> u64 {
         let accel = black_box(accel);
         let cache = black_box(accel_y_cache(black_box(37.25), accel));
         let mut checksum = 0_u64;
@@ -1939,7 +2006,7 @@ pub mod transform_cache_bench_support {
         checksum
     }
 
-    fn single_accel_new(evaluations: usize, accel: AccelYParams) -> u64 {
+    fn accel_path_new(evaluations: usize, accel: AccelYParams) -> u64 {
         let accel = black_box(accel);
         let cache = black_box(accel_y_cache(black_box(37.25), accel));
         let mut checksum = 0_u64;
@@ -1961,7 +2028,7 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn boost_only_old(evaluations: usize) -> u64 {
-        single_accel_old(
+        accel_path_old(
             evaluations,
             AccelYParams {
                 boost: 0.35,
@@ -1972,7 +2039,7 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn boost_only_new(evaluations: usize) -> u64 {
-        single_accel_new(
+        accel_path_new(
             evaluations,
             AccelYParams {
                 boost: 0.35,
@@ -1983,7 +2050,7 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn brake_only_old(evaluations: usize) -> u64 {
-        single_accel_old(
+        accel_path_old(
             evaluations,
             AccelYParams {
                 brake: 0.2,
@@ -1994,7 +2061,7 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn brake_only_new(evaluations: usize) -> u64 {
-        single_accel_new(
+        accel_path_new(
             evaluations,
             AccelYParams {
                 brake: 0.2,
@@ -2005,7 +2072,7 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn expand_only_old(evaluations: usize) -> u64 {
-        single_accel_old(
+        accel_path_old(
             evaluations,
             AccelYParams {
                 expand: 0.75,
@@ -2016,10 +2083,78 @@ pub mod transform_cache_bench_support {
 
     #[must_use]
     pub fn expand_only_new(evaluations: usize) -> u64 {
-        single_accel_new(
+        accel_path_new(
             evaluations,
             AccelYParams {
                 expand: 0.75,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn wave_only_old(evaluations: usize) -> u64 {
+        accel_path_old(
+            evaluations,
+            AccelYParams {
+                wave: 0.4,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn wave_only_new(evaluations: usize) -> u64 {
+        accel_path_new(
+            evaluations,
+            AccelYParams {
+                wave: 0.4,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn boomerang_only_old(evaluations: usize) -> u64 {
+        accel_path_old(
+            evaluations,
+            AccelYParams {
+                boomerang: 0.3,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn boomerang_only_new(evaluations: usize) -> u64 {
+        accel_path_new(
+            evaluations,
+            AccelYParams {
+                boomerang: 0.3,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn boost_brake_old(evaluations: usize) -> u64 {
+        accel_path_old(
+            evaluations,
+            AccelYParams {
+                boost: 0.35,
+                brake: 0.2,
+                ..AccelYParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn boost_brake_new(evaluations: usize) -> u64 {
+        accel_path_new(
+            evaluations,
+            AccelYParams {
+                boost: 0.35,
+                brake: 0.2,
                 ..AccelYParams::default()
             },
         )
