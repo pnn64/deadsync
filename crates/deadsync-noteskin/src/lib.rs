@@ -29,6 +29,9 @@ pub use draw::{
     model_effect_mix, model_glow_at, model_glow_with_draw, model_texture_uv_params,
     model_texture_uv_params_cached,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use explosion::explosion_bench_support;
 pub use explosion::{
     ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState, GlowEffect,
     itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,

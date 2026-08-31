@@ -1,8 +1,8 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, model_draw_bench_support, receptor_bench_support,
-    sprite_math_bench_support, uv_color_bench_support,
+    NotePartTextureTranslate, explosion_bench_support, model_draw_bench_support,
+    receptor_bench_support, sprite_math_bench_support, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -481,6 +481,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_EXPLOSION_ONLY").is_some() {
+        run_uv_case(
+            "noteskin canonical explosion fade",
+            explosion_bench_support::canonical_fade_state_old,
+            explosion_bench_support::canonical_fade_state_new,
+        );
+        run_uv_case(
+            "noteskin opaque-white explosion glow",
+            explosion_bench_support::opaque_white_glow_old,
+            explosion_bench_support::opaque_white_glow_new,
+        );
+        run_uv_case(
+            "noteskin constant binary-color explosion glow",
+            explosion_bench_support::constant_binary_glow_old,
+            explosion_bench_support::constant_binary_glow_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_RECEPTOR_MODEL_ONLY").is_some() {
         run_uv_case(
             "noteskin discarded model effect timing",

@@ -49,6 +49,11 @@ pub struct GlowEffect {
 
 impl GlowEffect {
     fn color_at(&self, time: f32, base_alpha: f32) -> [f32; 4] {
+        self.color_at_impl(time, base_alpha, true)
+    }
+
+    #[inline(always)]
+    fn color_at_impl(&self, time: f32, base_alpha: f32, optimized: bool) -> [f32; 4] {
         if self.period <= f32::EPSILON || base_alpha <= f32::EPSILON {
             return [0.0, 0.0, 0.0, 0.0];
         }
@@ -56,6 +61,27 @@ impl GlowEffect {
         let phase = (time / self.period).rem_euclid(1.0);
         if !phase.is_finite() {
             return [0.0, 0.0, 0.0, 0.0];
+        }
+
+        const OPAQUE_WHITE: [f32; 4] = [1.0; 4];
+        if optimized
+            && base_alpha.is_finite()
+            && self.color1 == OPAQUE_WHITE
+            && self.color2 == OPAQUE_WHITE
+        {
+            return [1.0, 1.0, 1.0, base_alpha];
+        }
+
+        if optimized
+            && self.color1 == self.color2
+            && self
+                .color1
+                .iter()
+                .all(|channel| *channel == 0.0 || *channel == 1.0)
+        {
+            let mut color = self.color1;
+            color[3] *= base_alpha;
+            return color;
         }
 
         let percent_between = ((phase + 0.25) * std::f32::consts::TAU)
@@ -140,6 +166,17 @@ impl ExplosionAnimation {
 
     #[must_use]
     pub fn state_at(&self, time: f32) -> ExplosionVisualState {
+        self.state_at_impl(time, true)
+    }
+
+    fn state_at_impl(&self, time: f32, optimized: bool) -> ExplosionVisualState {
+        if optimized
+            && time.is_finite()
+            && let Some(state) = self.canonical_fade_state_at(time)
+        {
+            return state;
+        }
+
         let mut elapsed = time;
         let mut current = self.initial;
 
@@ -232,6 +269,185 @@ impl ExplosionAnimation {
             rotation_z: current.rotation_z,
             visible: current.visible,
         }
+    }
+
+    fn canonical_fade_state_at(&self, time: f32) -> Option<ExplosionVisualState> {
+        let [segment] = self.segments.as_slice() else {
+            return None;
+        };
+        let target_color = segment.end_color?;
+        if self.glow.is_some()
+            || !matches!(segment.tween, TweenType::Linear)
+            || self.initial.zoom != 1.0
+            || self.initial.color != [1.0; 4]
+            || self.initial.rotation_z.to_bits() != 0.0_f32.to_bits()
+            || !self.initial.visible
+            || segment.start.zoom != 1.0
+            || segment.start.color != [1.0; 4]
+            || segment.start.rotation_z.to_bits() != 0.0_f32.to_bits()
+            || !segment.start.visible
+            || segment.end_zoom != Some(1.0)
+            || target_color[0] != 1.0
+            || target_color[1] != 1.0
+            || target_color[2] != 1.0
+            || segment
+                .end_rotation_z
+                .is_some_and(|rotation_z| rotation_z.to_bits() != 0.0_f32.to_bits())
+            || !matches!(segment.end_visible, None | Some(true))
+        {
+            return None;
+        }
+
+        let duration = segment.duration.max(0.0);
+        if duration <= 0.0 || time > duration {
+            return Some(ExplosionVisualState {
+                zoom: 1.0,
+                diffuse: [1.0, 1.0, 1.0, target_color[3].clamp(0.0, 1.0)],
+                glow: [0.0; 4],
+                rotation_z: 0.0,
+                visible: true,
+            });
+        }
+
+        let progress = (time / duration).clamp(0.0, 1.0);
+        let eased = segment.tween.ease(progress);
+        let alpha = (target_color[3] - 1.0).mul_add(eased, 1.0);
+        Some(ExplosionVisualState {
+            zoom: 1.0,
+            diffuse: [1.0, 1.0, 1.0, alpha.clamp(0.0, 1.0)],
+            glow: [0.0; 4],
+            rotation_z: 0.0,
+            visible: true,
+        })
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl GlowEffect {
+    fn color_at_legacy(&self, time: f32, base_alpha: f32) -> [f32; 4] {
+        self.color_at_impl(time, base_alpha, false)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ExplosionAnimation {
+    fn state_at_legacy(&self, time: f32) -> ExplosionVisualState {
+        self.state_at_impl(time, false)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod explosion_bench_support {
+    use std::hint::black_box;
+    use std::sync::OnceLock;
+
+    use super::{ExplosionAnimation, ExplosionVisualState, GlowEffect};
+
+    #[inline(always)]
+    fn color_checksum(color: [f32; 4], checksum: u64) -> u64 {
+        color.into_iter().fold(checksum, |checksum, channel| {
+            checksum
+                .wrapping_add(u64::from(channel.to_bits()))
+                .rotate_left(7)
+        })
+    }
+
+    #[inline(always)]
+    fn state_checksum(state: ExplosionVisualState, checksum: u64) -> u64 {
+        let checksum = color_checksum(state.diffuse, checksum);
+        let checksum = color_checksum(state.glow, checksum);
+        checksum
+            .wrapping_add(u64::from(state.zoom.to_bits()))
+            .rotate_left(7)
+            .wrapping_add(u64::from(state.rotation_z.to_bits()))
+            .rotate_left(7)
+            .wrapping_add(u64::from(state.visible))
+    }
+
+    fn glow_colors(evaluations: usize, glow: GlowEffect, optimized: bool) -> u64 {
+        let glow = black_box(glow);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 65_535) as f32 * 0.000_976_562_5);
+            let color = if optimized {
+                glow.color_at(time, 0.75)
+            } else {
+                glow.color_at_legacy(time, 0.75)
+            };
+            checksum = color_checksum(black_box(color), checksum);
+        }
+        checksum
+    }
+
+    fn animation_states(evaluations: usize, optimized: bool) -> u64 {
+        static ANIMATION: OnceLock<ExplosionAnimation> = OnceLock::new();
+        let animation = black_box(ANIMATION.get_or_init(ExplosionAnimation::default));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 255) as f32 * (0.3 / 255.0));
+            let state = if optimized {
+                animation.state_at(time)
+            } else {
+                animation.state_at_legacy(time)
+            };
+            checksum = state_checksum(black_box(state), checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn canonical_fade_state_old(evaluations: usize) -> u64 {
+        animation_states(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn canonical_fade_state_new(evaluations: usize) -> u64 {
+        animation_states(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn opaque_white_glow_old(evaluations: usize) -> u64 {
+        glow_colors(
+            evaluations,
+            GlowEffect {
+                period: 0.5,
+                color1: [1.0; 4],
+                color2: [1.0; 4],
+            },
+            false,
+        )
+    }
+
+    #[must_use]
+    pub fn opaque_white_glow_new(evaluations: usize) -> u64 {
+        glow_colors(
+            evaluations,
+            GlowEffect {
+                period: 0.5,
+                color1: [1.0; 4],
+                color2: [1.0; 4],
+            },
+            true,
+        )
+    }
+
+    fn constant_binary_glow() -> GlowEffect {
+        GlowEffect {
+            period: 0.5,
+            color1: [1.0, 0.0, 1.0, 0.0],
+            color2: [1.0, 0.0, 1.0, 0.0],
+        }
+    }
+
+    #[must_use]
+    pub fn constant_binary_glow_old(evaluations: usize) -> u64 {
+        glow_colors(evaluations, constant_binary_glow(), false)
+    }
+
+    #[must_use]
+    pub fn constant_binary_glow_new(evaluations: usize) -> u64 {
+        glow_colors(evaluations, constant_binary_glow(), true)
     }
 }
 
@@ -932,6 +1148,107 @@ pub fn itg_direct_tap_explosion_layers<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_visual_bits_eq(actual: ExplosionVisualState, expected: ExplosionVisualState) {
+        assert_eq!(actual.zoom.to_bits(), expected.zoom.to_bits());
+        assert_eq!(
+            actual.diffuse.map(f32::to_bits),
+            expected.diffuse.map(f32::to_bits)
+        );
+        assert_eq!(
+            actual.glow.map(f32::to_bits),
+            expected.glow.map(f32::to_bits)
+        );
+        assert_eq!(actual.rotation_z.to_bits(), expected.rotation_z.to_bits());
+        assert_eq!(actual.visible, expected.visible);
+    }
+
+    #[test]
+    fn canonical_fade_state_matches_legacy_evaluator() {
+        let animations = [ExplosionAnimation::default(), parse_explosion_animation("")];
+
+        for animation in &animations {
+            for tick in -2_048..=2_048 {
+                let time = tick as f32 / 1_024.0;
+                assert_visual_bits_eq(animation.state_at(time), animation.state_at_legacy(time));
+            }
+            for time in [
+                -f32::MAX,
+                -0.0,
+                0.0,
+                f32::MAX,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                assert_visual_bits_eq(animation.state_at(time), animation.state_at_legacy(time));
+            }
+        }
+    }
+
+    #[test]
+    fn opaque_white_glow_matches_legacy_curve() {
+        let glow = GlowEffect {
+            period: 0.5,
+            color1: [1.0; 4],
+            color2: [1.0; 4],
+        };
+        for tick in -16_384..=16_384 {
+            let time = tick as f32 / 1_024.0;
+            assert_eq!(
+                glow.color_at(time, 0.75).map(f32::to_bits),
+                glow.color_at_legacy(time, 0.75).map(f32::to_bits),
+            );
+        }
+        for time in [
+            -f32::MAX,
+            -0.0,
+            0.0,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            for base_alpha in [0.0, f32::EPSILON, 0.5, 1.0, f32::INFINITY, f32::NAN] {
+                assert_eq!(
+                    glow.color_at(time, base_alpha).map(f32::to_bits),
+                    glow.color_at_legacy(time, base_alpha).map(f32::to_bits),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn constant_binary_glow_matches_legacy_curve() {
+        let glow = GlowEffect {
+            period: 0.5,
+            color1: [1.0, 0.0, 1.0, 0.0],
+            color2: [1.0, 0.0, 1.0, 0.0],
+        };
+        for tick in -16_384..=16_384 {
+            let time = tick as f32 / 1_024.0;
+            assert_eq!(
+                glow.color_at(time, 0.75).map(f32::to_bits),
+                glow.color_at_legacy(time, 0.75).map(f32::to_bits),
+            );
+        }
+        for time in [
+            -f32::MAX,
+            -0.0,
+            0.0,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            for base_alpha in [0.0, f32::EPSILON, 0.5, 1.0, f32::INFINITY, f32::NAN] {
+                assert_eq!(
+                    glow.color_at(time, base_alpha).map(f32::to_bits),
+                    glow.color_at_legacy(time, base_alpha).map(f32::to_bits),
+                );
+            }
+        }
+    }
 
     #[test]
     fn parse_explosion_animation_builds_tween_segments() {
