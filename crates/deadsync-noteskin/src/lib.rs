@@ -41,6 +41,9 @@ pub use receptor::{
     ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,
     itg_receptor_pulse_command, itg_receptor_reverse_behaviors, itg_receptor_visuals,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use runtime::uv_color_bench_support;
 pub use runtime::{
     HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgReceptorColumn,
     ItgResolvedSprite, ItgRuntimeColumns, ItgTapNoteColumn, NoteskinRuntime, TapExplosion,

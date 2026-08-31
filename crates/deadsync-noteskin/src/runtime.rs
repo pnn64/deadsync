@@ -2700,13 +2700,20 @@ fn part_uv_translation_inner(
             let note_type = beat_to_note_type_index(note_beat) as f32;
             note_type.clamp(0.0, (count - 1) as f32)
         }
-        NoteColorType::Progress => (note_beat * countf).ceil() % countf,
+        NoteColorType::Progress => integral_color_remainder((note_beat * countf).ceil(), count),
         NoteColorType::ProgressAlternate => {
             let mut scaled = note_beat * countf;
-            if scaled - (scaled as i64 as f32) == 0.0 {
+            let in_fast_integer_range =
+                scaled.is_finite() && scaled.abs() < 9_223_372_036_854_775_808.0;
+            let is_integer = if in_fast_integer_range {
+                scaled == scaled.trunc()
+            } else {
+                scaled - (scaled as i64 as f32) == 0.0
+            };
+            if is_integer {
                 scaled += countf - 1.0;
             }
-            scaled.ceil() % countf
+            integral_color_remainder(scaled.ceil(), count)
         }
     };
     let add = if is_addition {
@@ -2721,26 +2728,173 @@ fn part_uv_translation_inner(
 }
 
 #[inline(always)]
+fn integral_color_remainder(value: f32, count: i32) -> f32 {
+    if value == 0.0 {
+        return value;
+    }
+    if count <= 16_777_216 && value >= i32::MIN as f32 && value < 2_147_483_648.0 {
+        let remainder = (value as i32) % count;
+        if remainder == 0 && value.is_sign_negative() {
+            -0.0
+        } else {
+            remainder as f32
+        }
+    } else {
+        value % count as f32
+    }
+}
+
+const NOTE_TYPE_BY_48TH: [u8; 48] = [
+    0, 8, 8, 7, 6, 8, 5, 8, 4, 7, 8, 8, 3, 8, 8, 7, 2, 8, 5, 8, 6, 7, 8, 8, 1, 8, 8, 7, 6, 8, 5, 8,
+    2, 7, 8, 8, 3, 8, 8, 7, 4, 8, 5, 8, 6, 7, 8, 8,
+];
+
+#[inline(always)]
 fn beat_to_note_type_index(beat: f32) -> i32 {
     let row = (beat * 48.0).round() as i32;
-    if row.rem_euclid(48) == 0 {
-        0
-    } else if row.rem_euclid(24) == 0 {
-        1
-    } else if row.rem_euclid(16) == 0 {
-        2
-    } else if row.rem_euclid(12) == 0 {
-        3
-    } else if row.rem_euclid(8) == 0 {
-        4
-    } else if row.rem_euclid(6) == 0 {
-        5
-    } else if row.rem_euclid(4) == 0 {
-        6
-    } else if row.rem_euclid(3) == 0 {
-        7
-    } else {
-        8
+    i32::from(NOTE_TYPE_BY_48TH[row.rem_euclid(48) as usize])
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod uv_color_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    fn beat_to_note_type_index_legacy(beat: f32) -> i32 {
+        let row = (beat * 48.0).round() as i32;
+        if row.rem_euclid(48) == 0 {
+            0
+        } else if row.rem_euclid(24) == 0 {
+            1
+        } else if row.rem_euclid(16) == 0 {
+            2
+        } else if row.rem_euclid(12) == 0 {
+            3
+        } else if row.rem_euclid(8) == 0 {
+            4
+        } else if row.rem_euclid(6) == 0 {
+            5
+        } else if row.rem_euclid(4) == 0 {
+            6
+        } else if row.rem_euclid(3) == 0 {
+            7
+        } else {
+            8
+        }
+    }
+
+    fn translation_legacy(
+        note_beat: f32,
+        metrics: NotePartTextureTranslate,
+        is_addition: bool,
+    ) -> [f32; 2] {
+        let count = metrics.note_color_count.max(1);
+        let countf = count as f32;
+        let color = match metrics.note_color_type {
+            NoteColorType::Denominator => {
+                let note_type = beat_to_note_type_index_legacy(note_beat) as f32;
+                note_type.clamp(0.0, (count - 1) as f32)
+            }
+            NoteColorType::Progress => (note_beat * countf).ceil() % countf,
+            NoteColorType::ProgressAlternate => {
+                let mut scaled = note_beat * countf;
+                if scaled - (scaled as i64 as f32) == 0.0 {
+                    scaled += countf - 1.0;
+                }
+                scaled.ceil() % countf
+            }
+        };
+        let add = if is_addition {
+            metrics.addition_offset
+        } else {
+            [0.0, 0.0]
+        };
+        [
+            metrics.note_color_spacing[0].mul_add(color, add[0]),
+            metrics.note_color_spacing[1].mul_add(color, add[1]),
+        ]
+    }
+
+    fn checksum(translation: [f32; 2], checksum: u64) -> u64 {
+        checksum
+            .wrapping_add(u64::from(translation[0].to_bits()))
+            .rotate_left(7)
+            .wrapping_add(u64::from(translation[1].to_bits()))
+    }
+
+    fn run(
+        evaluations: usize,
+        note_color_type: NoteColorType,
+        legacy: bool,
+        beat: impl Fn(usize) -> f32,
+    ) -> u64 {
+        let metrics = black_box(NotePartTextureTranslate {
+            addition_offset: [0.125, -0.25],
+            note_color_spacing: [0.0625, 0.125],
+            note_color_count: 8,
+            note_color_type,
+        });
+        let mut out = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box(beat(index));
+            let translation = if legacy {
+                translation_legacy(note_beat, metrics, index & 1 != 0)
+            } else {
+                part_uv_translation_inner(note_beat, metrics, index & 1 != 0)
+            };
+            out = checksum(translation, out);
+        }
+        out
+    }
+
+    #[must_use]
+    pub fn denominator_legacy(evaluations: usize) -> u64 {
+        run(evaluations, NoteColorType::Denominator, true, |index| {
+            (index as i32 % 8_192 - 4_096) as f32 / 48.0
+        })
+    }
+
+    #[must_use]
+    pub fn denominator_current(evaluations: usize) -> u64 {
+        run(evaluations, NoteColorType::Denominator, false, |index| {
+            (index as i32 % 8_192 - 4_096) as f32 / 48.0
+        })
+    }
+
+    #[must_use]
+    pub fn progress_legacy(evaluations: usize) -> u64 {
+        run(evaluations, NoteColorType::Progress, true, |index| {
+            (index as i32 % 4_096 - 2_048) as f32 * 0.007_812_5
+        })
+    }
+
+    #[must_use]
+    pub fn progress_current(evaluations: usize) -> u64 {
+        run(evaluations, NoteColorType::Progress, false, |index| {
+            (index as i32 % 4_096 - 2_048) as f32 * 0.007_812_5
+        })
+    }
+
+    #[must_use]
+    pub fn progress_alternate_legacy(evaluations: usize) -> u64 {
+        run(
+            evaluations,
+            NoteColorType::ProgressAlternate,
+            true,
+            |index| (index as i32 % 4_096 - 2_048) as f32 * 0.031_25,
+        )
+    }
+
+    #[must_use]
+    pub fn progress_alternate_current(evaluations: usize) -> u64 {
+        run(
+            evaluations,
+            NoteColorType::ProgressAlternate,
+            false,
+            |index| (index as i32 % 4_096 - 2_048) as f32 * 0.031_25,
+        )
     }
 }
 
@@ -2774,13 +2928,68 @@ mod tests {
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
     };
     use crate::{
-        ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteDisplayMetrics,
-        NotePartAnimation, NotePartTextureTranslate, ReceptorGlowBehavior, ReceptorIdleGlow,
-        ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior, ReceptorStepBehaviors, Style,
-        TweenType, actor, compiled, itg,
+        ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteColorType,
+        NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, ReceptorGlowBehavior,
+        ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior,
+        ReceptorStepBehaviors, Style, TweenType, actor, compiled, itg,
     };
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
+
+    fn beat_to_note_type_index_legacy(beat: f32) -> i32 {
+        let row = (beat * 48.0).round() as i32;
+        if row.rem_euclid(48) == 0 {
+            0
+        } else if row.rem_euclid(24) == 0 {
+            1
+        } else if row.rem_euclid(16) == 0 {
+            2
+        } else if row.rem_euclid(12) == 0 {
+            3
+        } else if row.rem_euclid(8) == 0 {
+            4
+        } else if row.rem_euclid(6) == 0 {
+            5
+        } else if row.rem_euclid(4) == 0 {
+            6
+        } else if row.rem_euclid(3) == 0 {
+            7
+        } else {
+            8
+        }
+    }
+
+    fn part_uv_translation_legacy(
+        note_beat: f32,
+        metrics: NotePartTextureTranslate,
+        is_addition: bool,
+    ) -> [f32; 2] {
+        let count = metrics.note_color_count.max(1);
+        let countf = count as f32;
+        let color = match metrics.note_color_type {
+            NoteColorType::Denominator => {
+                let note_type = beat_to_note_type_index_legacy(note_beat) as f32;
+                note_type.clamp(0.0, (count - 1) as f32)
+            }
+            NoteColorType::Progress => (note_beat * countf).ceil() % countf,
+            NoteColorType::ProgressAlternate => {
+                let mut scaled = note_beat * countf;
+                if scaled - (scaled as i64 as f32) == 0.0 {
+                    scaled += countf - 1.0;
+                }
+                scaled.ceil() % countf
+            }
+        };
+        let add = if is_addition {
+            metrics.addition_offset
+        } else {
+            [0.0, 0.0]
+        };
+        [
+            metrics.note_color_spacing[0].mul_add(color, add[0]),
+            metrics.note_color_spacing[1].mul_add(color, add[1]),
+        ]
+    }
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct Slot(u8);
@@ -5060,6 +5269,110 @@ mod tests {
             runtime.part_uv_translation(NoteAnimPart::Tap, 0.25, true),
             [1.75, 3.5]
         );
+    }
+
+    #[test]
+    fn optimized_uv_color_math_matches_legacy_reference() {
+        for row in -4_096..=4_096 {
+            let beat = row as f32 / 48.0;
+            assert_eq!(
+                super::beat_to_note_type_index(beat),
+                beat_to_note_type_index_legacy(beat)
+            );
+        }
+        for beat in [
+            -f32::MAX,
+            -1_000_000.25,
+            -0.0,
+            0.0,
+            1_000_000.25,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            assert_eq!(
+                super::beat_to_note_type_index(beat),
+                beat_to_note_type_index_legacy(beat)
+            );
+        }
+
+        for note_color_type in [NoteColorType::Progress, NoteColorType::ProgressAlternate] {
+            for note_color_count in [1, 2, 3, 8, 12] {
+                let metrics = NotePartTextureTranslate {
+                    addition_offset: [0.125, -0.25],
+                    note_color_spacing: [0.0625, 0.125],
+                    note_color_count,
+                    note_color_type,
+                };
+                for tick in -4_096..=4_096 {
+                    let beat = tick as f32 / 64.0;
+                    let old = part_uv_translation_legacy(beat, metrics, tick & 1 != 0);
+                    let new = super::part_uv_translation_inner(beat, metrics, tick & 1 != 0);
+                    assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
+                }
+            }
+        }
+
+        let beats = [
+            -f32::MAX,
+            -1_000_000.25,
+            -128.0,
+            -8.0,
+            -7.875,
+            -1.0,
+            -0.875,
+            -0.125,
+            -0.0,
+            0.0,
+            0.125,
+            0.25,
+            0.333_333_34,
+            0.5,
+            0.875,
+            1.0,
+            7.875,
+            8.0,
+            128.0,
+            1_000_000.25,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for note_color_type in [
+            NoteColorType::Denominator,
+            NoteColorType::Progress,
+            NoteColorType::ProgressAlternate,
+        ] {
+            for note_color_count in [
+                i32::MIN,
+                -1,
+                0,
+                1,
+                2,
+                3,
+                8,
+                12,
+                16_777_216,
+                16_777_217,
+                i32::MAX,
+            ] {
+                let metrics = NotePartTextureTranslate {
+                    addition_offset: [0.125, -0.25],
+                    note_color_spacing: [0.0625, 0.125],
+                    note_color_count,
+                    note_color_type,
+                };
+                for beat in beats {
+                    for is_addition in [false, true] {
+                        let old = part_uv_translation_legacy(beat, metrics, is_addition);
+                        let new = super::part_uv_translation_inner(beat, metrics, is_addition);
+                        assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
+                    }
+                }
+            }
+        }
     }
 
     #[test]

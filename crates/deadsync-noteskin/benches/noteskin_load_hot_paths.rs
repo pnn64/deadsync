@@ -1,7 +1,7 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate,
+    NotePartTextureTranslate, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -208,6 +208,31 @@ fn change(old: f64, new: f64) -> f64 {
         return if new == 0.0 { 0.0 } else { f64::INFINITY };
     }
     (new / old - 1.0) * 100.0
+}
+
+fn run_uv_case(title: &str, old_op: fn(usize) -> u64, new_op: fn(usize) -> u64) {
+    const UV_EVALUATIONS: usize = 8_192;
+    const UV_OPERATIONS: usize = 64;
+    assert_eq!(
+        old_op(UV_EVALUATIONS),
+        new_op(UV_EVALUATIONS),
+        "{title} behavior diverged before measurement"
+    );
+    let old = measure(UV_OPERATIONS, UV_EVALUATIONS, || old_op(UV_EVALUATIONS));
+    let new = measure(UV_OPERATIONS, UV_EVALUATIONS, || new_op(UV_EVALUATIONS));
+    print_pair(title, &old, &new);
+    assert_eq!(old.alloc.churn(), 0, "{title} legacy path allocated");
+    assert_eq!(new.alloc.churn(), 0, "{title} current path allocated");
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title} median latency did not improve"
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{title} median CPU cycles did not improve"
+        );
+    }
 }
 
 fn fixture() -> String {
@@ -455,6 +480,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_UV_COLOR_ONLY").is_some() {
+        run_uv_case(
+            "noteskin denominator color lookup",
+            uv_color_bench_support::denominator_legacy,
+            uv_color_bench_support::denominator_current,
+        );
+        run_uv_case(
+            "noteskin progress color wrapping",
+            uv_color_bench_support::progress_legacy,
+            uv_color_bench_support::progress_current,
+        );
+        run_uv_case(
+            "noteskin alternate-progress color wrapping",
+            uv_color_bench_support::progress_alternate_legacy,
+            uv_color_bench_support::progress_alternate_current,
+        );
+        return;
+    }
     let raw = fixture();
     let queries = [
         ("", "GlobalOnly"),
