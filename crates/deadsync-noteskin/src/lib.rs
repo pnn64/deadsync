@@ -40,6 +40,9 @@ pub use parts::{
     NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, Quantization, Style,
     clamped_hold_let_go_gray_percent, itg_column_xs,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use receptor::receptor_bench_support;
 pub use receptor::{
     ItgReceptorVisuals, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse,
     ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,

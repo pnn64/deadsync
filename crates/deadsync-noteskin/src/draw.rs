@@ -354,14 +354,14 @@ fn model_draw_at_impl(
     auto_rot_z_keys: &[ModelAutoRotKey],
     time: f32,
     beat: f32,
-    static_fast_path: bool,
+    optimized: bool,
 ) -> ModelDrawState {
     #[inline(always)]
     fn lerp(a: f32, b: f32, t: f32) -> f32 {
         (b - a).mul_add(t, a)
     }
 
-    if static_fast_path
+    if optimized
         && timeline.is_empty()
         && (auto_rot_total_frames <= f32::EPSILON || auto_rot_z_keys.is_empty())
         && matches!(
@@ -437,7 +437,13 @@ fn model_draw_at_impl(
             .mul_add(clock, out.rot[2])
             .rem_euclid(360.0);
     }
-    if let Some(percent) = model_effect_mix(effect, time, beat) {
+    if (!optimized
+        || matches!(
+            effect.mode,
+            ModelEffectMode::DiffuseRamp | ModelEffectMode::DiffuseShift | ModelEffectMode::Pulse
+        ))
+        && let Some(percent) = model_effect_mix(effect, time, beat)
+    {
         match effect.mode {
             ModelEffectMode::DiffuseRamp => {
                 let mut c = [0.0; 4];
@@ -760,6 +766,41 @@ pub mod model_draw_bench_support {
     #[must_use]
     pub fn transparent_static_glow_new(evaluations: usize) -> u64 {
         transparent_static_glow(evaluations, false)
+    }
+
+    fn discarded_model_effect(evaluations: usize, optimized: bool) -> u64 {
+        let base = black_box(ModelDrawState::default());
+        let effect = black_box(ModelEffectState {
+            mode: ModelEffectMode::GlowShift,
+            ..ModelEffectState::default()
+        });
+        let auto_rot = black_box([ModelAutoRotKey {
+            frame: 0.0,
+            z_deg: 45.0,
+        }]);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
+            let draw = if optimized {
+                model_draw_at(base, &[], effect, 120.0, &auto_rot, time, time * 4.0)
+            } else {
+                model_draw_at_legacy(base, &[], effect, 120.0, &auto_rot, time, time * 4.0)
+            };
+            checksum = draw_checksum(draw, checksum)
+                .wrapping_add(u64::from(draw.rot[2].to_bits()))
+                .rotate_left(7);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn discarded_model_effect_old(evaluations: usize) -> u64 {
+        discarded_model_effect(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn discarded_model_effect_new(evaluations: usize) -> u64 {
+        discarded_model_effect(evaluations, true)
     }
 
     fn static_model_draw(evaluations: usize, legacy: bool) -> u64 {
@@ -1196,6 +1237,60 @@ mod tests {
                             time,
                             time * 4.0,
                         ),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn discarded_model_effect_curves_match_legacy_evaluator() {
+        let base = ModelDrawState {
+            pos: [3.0, -5.0, 7.0],
+            rot: [-90.0, 450.0, 720.0],
+            zoom: [-2.0, 0.5, 3.0],
+            tint: [-1.0, 0.25, 2.0, 0.75],
+            glow: [1.5, -0.5, 0.5, 2.0],
+            fade: [-1.0, 0.25, 1.5, 0.75],
+            ..ModelDrawState::default()
+        };
+        let timeline = [ModelTweenSegment {
+            start: 10_000.0,
+            duration: 1.0,
+            tween: TweenType::Linear,
+            from: base,
+            to: ModelDrawState::default(),
+        }];
+        for mode in [
+            ModelEffectMode::GlowShift,
+            ModelEffectMode::Bob,
+            ModelEffectMode::Bounce,
+            ModelEffectMode::Wag,
+        ] {
+            for timing in [
+                [0.5, 0.0, 0.5, 0.0, 0.0],
+                [0.25, 0.5, 0.0, 0.25, 0.0],
+                [f32::NAN, -1.0, f32::INFINITY, 0.0, -0.0],
+            ] {
+                let effect = ModelEffectState {
+                    mode,
+                    timing,
+                    ..ModelEffectState::default()
+                };
+                for time in [
+                    -f32::MAX,
+                    -1.0,
+                    -0.0,
+                    0.0,
+                    1.25,
+                    f32::MAX,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    assert_draw_bits_eq(
+                        model_draw_at(base, &timeline, effect, 0.0, &[], time, time * 4.0),
+                        model_draw_at_legacy(base, &timeline, effect, 0.0, &[], time, time * 4.0),
                     );
                 }
             }

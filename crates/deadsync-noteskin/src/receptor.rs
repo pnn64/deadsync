@@ -278,6 +278,16 @@ impl ReceptorPulse {
 
     #[must_use]
     pub fn color_for_beat(&self, beat: f32) -> [f32; 4] {
+        self.color_for_beat_impl(beat, true)
+    }
+
+    #[inline(always)]
+    fn color_for_beat_impl(&self, beat: f32, optimized: bool) -> [f32; 4] {
+        const OPAQUE_WHITE: [f32; 4] = [1.0; 4];
+        if optimized && self.effect_color1 == OPAQUE_WHITE && self.effect_color2 == OPAQUE_WHITE {
+            return OPAQUE_WHITE;
+        }
+
         let cycle = self.total_period();
         if cycle <= f32::EPSILON {
             return self.effect_color2;
@@ -305,12 +315,98 @@ impl ReceptorPulse {
             0.0
         };
 
+        if optimized
+            && self.effect_color1[0] == 1.0
+            && self.effect_color2[0] == 1.0
+            && self.effect_color1[1] == 1.0
+            && self.effect_color2[1] == 1.0
+            && self.effect_color1[2] == 1.0
+            && self.effect_color2[2] == 1.0
+        {
+            let alpha =
+                self.effect_color1[3].mul_add(percent, self.effect_color2[3] * (1.0 - percent));
+            return [1.0, 1.0, 1.0, alpha];
+        }
+
+        self.color_between(percent)
+    }
+
+    #[inline(always)]
+    fn color_between(&self, percent: f32) -> [f32; 4] {
         let mut color = [0.0; 4];
         for (i, channel) in color.iter_mut().enumerate() {
             *channel =
                 self.effect_color1[i].mul_add(percent, self.effect_color2[i] * (1.0 - percent));
         }
         color
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl ReceptorPulse {
+    fn color_for_beat_legacy(&self, beat: f32) -> [f32; 4] {
+        self.color_for_beat_impl(beat, false)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod receptor_bench_support {
+    use std::hint::black_box;
+
+    use super::ReceptorPulse;
+
+    #[inline(always)]
+    fn color_checksum(color: [f32; 4], checksum: u64) -> u64 {
+        color.into_iter().fold(checksum, |checksum, channel| {
+            checksum
+                .wrapping_add(u64::from(channel.to_bits()))
+                .rotate_left(7)
+        })
+    }
+
+    fn pulse_colors(evaluations: usize, pulse: ReceptorPulse, optimized: bool) -> u64 {
+        let pulse = black_box(pulse);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let beat = black_box((index & 65_535) as f32 * 0.003_906_25);
+            let color = if optimized {
+                pulse.color_for_beat(beat)
+            } else {
+                pulse.color_for_beat_legacy(beat)
+            };
+            checksum = color_checksum(black_box(color), checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn opaque_white_pulse_old(evaluations: usize) -> u64 {
+        pulse_colors(evaluations, ReceptorPulse::default(), false)
+    }
+
+    #[must_use]
+    pub fn opaque_white_pulse_new(evaluations: usize) -> u64 {
+        pulse_colors(evaluations, ReceptorPulse::default(), true)
+    }
+
+    fn alpha_only_pulse() -> ReceptorPulse {
+        ReceptorPulse {
+            effect_color1: [1.0, 1.0, 1.0, 0.75],
+            effect_color2: [1.0, 1.0, 1.0, 0.125],
+            effect_offset: 0.125,
+            ..ReceptorPulse::default()
+        }
+    }
+
+    #[must_use]
+    pub fn alpha_only_pulse_old(evaluations: usize) -> u64 {
+        pulse_colors(evaluations, alpha_only_pulse(), false)
+    }
+
+    #[must_use]
+    pub fn alpha_only_pulse_new(evaluations: usize) -> u64 {
+        pulse_colors(evaluations, alpha_only_pulse(), true)
     }
 }
 
@@ -703,6 +799,73 @@ mod tests {
         let beat_1 = pulse.color_for_beat(1.0);
         assert!((beat_0[0] - beat_1[0]).abs() <= 1e-6);
         assert!((beat_0[0] - beat_half[0]).abs() > 0.2);
+    }
+
+    #[test]
+    fn opaque_white_receptor_pulse_matches_legacy_curve() {
+        for timing in [
+            [0.5, 0.0, 0.5, 0.0, 0.0],
+            [0.25, 0.5, 0.0, 0.25, 0.0],
+            [-1.0, f32::NAN, f32::INFINITY, 0.0, -0.0],
+        ] {
+            let pulse = ReceptorPulse {
+                ramp_to_half: timing[0],
+                hold_at_half: timing[1],
+                ramp_to_full: timing[2],
+                hold_at_full: timing[3],
+                hold_at_zero: timing[4],
+                ..ReceptorPulse::default()
+            };
+            for beat in [
+                -f32::MAX,
+                -1.0,
+                -0.0,
+                0.0,
+                0.125,
+                0.5,
+                0.875,
+                f32::MAX,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                assert_eq!(
+                    pulse.color_for_beat(beat).map(f32::to_bits),
+                    pulse.color_for_beat_legacy(beat).map(f32::to_bits),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn alpha_only_receptor_pulse_matches_legacy_curve() {
+        let pulse = ReceptorPulse {
+            effect_color1: [1.0, 1.0, 1.0, 0.75],
+            effect_color2: [1.0, 1.0, 1.0, 0.125],
+            effect_offset: 0.125,
+            ..ReceptorPulse::default()
+        };
+        for tick in -16_384..=16_384 {
+            let beat = tick as f32 / 1_024.0;
+            assert_eq!(
+                pulse.color_for_beat(beat).map(f32::to_bits),
+                pulse.color_for_beat_legacy(beat).map(f32::to_bits),
+            );
+        }
+        for beat in [
+            -f32::MAX,
+            -0.0,
+            0.0,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            assert_eq!(
+                pulse.color_for_beat(beat).map(f32::to_bits),
+                pulse.color_for_beat_legacy(beat).map(f32::to_bits),
+            );
+        }
     }
 
     #[test]

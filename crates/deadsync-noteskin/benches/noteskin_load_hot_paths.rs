@@ -1,8 +1,8 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, model_draw_bench_support, sprite_math_bench_support,
-    uv_color_bench_support,
+    NotePartTextureTranslate, model_draw_bench_support, receptor_bench_support,
+    sprite_math_bench_support, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -481,6 +481,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_RECEPTOR_MODEL_ONLY").is_some() {
+        run_uv_case(
+            "noteskin discarded model effect timing",
+            model_draw_bench_support::discarded_model_effect_old,
+            model_draw_bench_support::discarded_model_effect_new,
+        );
+        run_uv_case(
+            "noteskin opaque-white receptor pulse",
+            receptor_bench_support::opaque_white_pulse_old,
+            receptor_bench_support::opaque_white_pulse_new,
+        );
+        run_uv_case(
+            "noteskin alpha-only receptor pulse",
+            receptor_bench_support::alpha_only_pulse_old,
+            receptor_bench_support::alpha_only_pulse_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_MODEL_ENDPOINT_ONLY").is_some() {
         run_uv_case(
             "noteskin single-key model auto rotation",
