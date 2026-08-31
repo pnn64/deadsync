@@ -6633,6 +6633,74 @@ mod tests {
     }
 
     #[test]
+    fn display_clock_optimized_math_matches_reference_across_changes() {
+        fn event_bits(event: DisplayClockStepEvent) -> (DisplayClockDiagEventKind, [u32; 6]) {
+            (
+                event.kind,
+                [
+                    event.target_time_sec.to_bits(),
+                    event.previous_time_sec.to_bits(),
+                    event.current_time_sec.to_bits(),
+                    event.error_seconds.to_bits(),
+                    event.step_seconds.to_bits(),
+                    event.limit_seconds.to_bits(),
+                ],
+            )
+        }
+
+        let start = song_time_ns_from_seconds(100.0);
+        let mut reference = FrameStableDisplayClock::new(start);
+        let mut optimized = FrameStableDisplayClock::new(start);
+        let deltas = [1.0 / 60.0, 1.0 / 120.0, 0.004, 0.02];
+        let rates = [1.0, 1.25, 2.0, 0.0, -1.0, f32::NAN, f32::INFINITY];
+        let mut target = start;
+
+        for frame in 0..4_096 {
+            let delta = deltas[frame % deltas.len()];
+            let rate = rates[(frame / 7) % rates.len()];
+            target += song_time_ns_from_seconds(delta * normalized_song_rate(rate));
+            if frame % 257 == 128 {
+                target += song_time_ns_from_seconds(0.2);
+            } else if frame % 127 == 63 {
+                target += song_time_ns_from_seconds(0.04);
+            }
+            let first_update = frame % 1_009 == 0;
+            let mut reference_events = Vec::new();
+            let mut optimized_events = Vec::new();
+
+            let reference_time = reference_frame_stable_display_clock_step(
+                &mut reference,
+                target,
+                delta,
+                rate,
+                first_update,
+                |event| reference_events.push(event_bits(event)),
+            );
+            let optimized_time = frame_stable_display_clock_step(
+                &mut optimized,
+                target,
+                delta,
+                rate,
+                first_update,
+                |event| optimized_events.push(event_bits(event)),
+            );
+
+            assert_eq!(optimized_time, reference_time, "frame {frame}");
+            assert_eq!(optimized_events, reference_events, "frame {frame}");
+            assert_eq!(
+                optimized.health().error_seconds.to_bits(),
+                reference.health().error_seconds.to_bits(),
+                "frame {frame}"
+            );
+            assert_eq!(
+                optimized.health().catching_up,
+                reference.health().catching_up,
+                "frame {frame}"
+            );
+        }
+    }
+
+    #[test]
     fn gameplay_display_clock_state_steps_and_records_diag_events() {
         let mut state = GameplayDisplayClockState::new(song_time_ns_from_seconds(100.0));
 

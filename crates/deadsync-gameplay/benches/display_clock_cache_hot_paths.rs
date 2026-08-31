@@ -211,19 +211,19 @@ fn change(old: f64, new: f64) -> f64 {
 
 fn main() {
     print_pair(
-        "display-clock correction coefficient",
-        &measure(|| display_clock_bench_support::correction_old(EVALUATIONS, 1.0 / 60.0)),
-        &measure(|| display_clock_bench_support::correction_new(EVALUATIONS, 1.0 / 60.0)),
+        "display-clock cached rate normalization",
+        &measure(|| display_clock_bench_support::frame_timing_old(EVALUATIONS, 1.0 / 60.0, 1.25)),
+        &measure(|| display_clock_bench_support::frame_timing_new(EVALUATIONS, 1.0 / 60.0, 1.25)),
     );
     print_pair(
-        "display-clock rate-scaled limits",
-        &measure(|| display_clock_bench_support::scaled_limits_old(EVALUATIONS, 1.25)),
-        &measure(|| display_clock_bench_support::scaled_limits_new(EVALUATIONS, 1.25)),
+        "display-clock unified rate limits",
+        &measure(|| display_clock_bench_support::rate_limits_old(EVALUATIONS, 1.25)),
+        &measure(|| display_clock_bench_support::rate_limits_new(EVALUATIONS, 1.25)),
     );
     print_pair(
-        "display-clock derived step thresholds",
-        &measure(|| display_clock_bench_support::step_thresholds_old(EVALUATIONS, 1.25)),
-        &measure(|| display_clock_bench_support::step_thresholds_new(EVALUATIONS, 1.25)),
+        "display-clock frame delta conversion",
+        &measure(|| display_clock_bench_support::frame_delta_old(EVALUATIONS, 1.0 / 60.0, 1.25)),
+        &measure(|| display_clock_bench_support::frame_delta_new(EVALUATIONS, 1.0 / 60.0, 1.25)),
     );
 }
 
