@@ -91,6 +91,11 @@ name = "song_lua_ease_math_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "display_clock_cache_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

@@ -206,11 +206,31 @@ pub struct DisplayClockHealth {
 }
 
 #[derive(Clone, Copy, Debug)]
+struct DisplayClockScaledLimits {
+    max_error_ns: i128,
+    max_step_ns: i128,
+    max_lag_ns: i128,
+    max_lead_ns: i128,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DisplayClockStepThresholds {
+    target_jump_ns: i128,
+    clamp_step_ns: i128,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct FrameStableDisplayClock {
     current_time_ns: SongTimeNs,
     target_time_ns: SongTimeNs,
     catching_up: bool,
     error_over_threshold: bool,
+    correction_delta_bits: u32,
+    correction_alpha: f32,
+    scaled_limits_slope_bits: u32,
+    scaled_limits: DisplayClockScaledLimits,
+    step_thresholds_slope_bits: u32,
+    step_thresholds: DisplayClockStepThresholds,
 }
 
 impl FrameStableDisplayClock {
@@ -222,6 +242,20 @@ impl FrameStableDisplayClock {
             target_time_ns: time_ns,
             catching_up: false,
             error_over_threshold: false,
+            correction_delta_bits: u32::MAX,
+            correction_alpha: 0.0,
+            scaled_limits_slope_bits: u32::MAX,
+            scaled_limits: DisplayClockScaledLimits {
+                max_error_ns: 0,
+                max_step_ns: 0,
+                max_lag_ns: 0,
+                max_lead_ns: 0,
+            },
+            step_thresholds_slope_bits: u32::MAX,
+            step_thresholds: DisplayClockStepThresholds {
+                target_jump_ns: 0,
+                clamp_step_ns: 0,
+            },
         }
     }
 
@@ -243,6 +277,49 @@ impl FrameStableDisplayClock {
             ),
             catching_up: self.catching_up,
         }
+    }
+
+    #[inline(always)]
+    fn correction_alpha(&mut self, delta_time: f32) -> f32 {
+        let bits = delta_time.to_bits();
+        if self.correction_delta_bits != bits {
+            self.correction_delta_bits = bits;
+            self.correction_alpha =
+                1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+        }
+        self.correction_alpha
+    }
+
+    #[inline(always)]
+    fn scaled_limits(&mut self, slope: f32) -> DisplayClockScaledLimits {
+        let bits = slope.to_bits();
+        if self.scaled_limits_slope_bits != bits {
+            self.scaled_limits_slope_bits = bits;
+            self.scaled_limits = DisplayClockScaledLimits {
+                max_error_ns: i128::from(scaled_song_time_ns(
+                    DISPLAY_CLOCK_RESET_ERROR_S,
+                    slope,
+                )),
+                max_step_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope)),
+                max_lag_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LAG_S, slope)),
+                max_lead_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LEAD_S, slope)),
+            };
+        }
+        self.scaled_limits
+    }
+
+    #[inline(always)]
+    fn step_thresholds(&mut self, slope: f32) -> DisplayClockStepThresholds {
+        let bits = slope.to_bits();
+        if self.step_thresholds_slope_bits != bits {
+            self.step_thresholds_slope_bits = bits;
+            let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
+            self.step_thresholds = DisplayClockStepThresholds {
+                target_jump_ns: (max_step_ns as f64 * 2.0).round() as i128,
+                clamp_step_ns: (max_step_ns as f64 * 1.2).round() as i128,
+            };
+        }
+        self.step_thresholds
     }
 }
 
@@ -420,8 +497,8 @@ pub fn frame_stable_display_clock_step(
     let previous_catching_up = display_clock.catching_up;
     let previous_error_over_threshold = display_clock.error_over_threshold;
     let target_delta_ns = i128::from(target_display_time_ns) - i128::from(previous_display_time_ns);
-    let max_error_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_RESET_ERROR_S, slope));
-    if target_delta_ns.abs() > max_error_ns {
+    let limits = display_clock.scaled_limits(slope);
+    if target_delta_ns.abs() > limits.max_error_ns {
         note_event(display_clock_step_event(
             DisplayClockDiagEventKind::ResetJump,
             target_display_time_ns,
@@ -429,19 +506,19 @@ pub fn frame_stable_display_clock_step(
             target_display_time_ns,
             target_delta_ns,
             target_delta_ns,
-            max_error_ns,
+            limits.max_error_ns,
         ));
         return display_clock.reset(target_display_time_ns);
     }
 
     let advanced_ns =
         i128::from(previous_display_time_ns) + i128::from(scaled_song_time_ns(delta_time, slope));
-    let correction_alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+    let correction_alpha = display_clock.correction_alpha(delta_time);
     let mut corrected_ns = advanced_ns
         + ((i128::from(target_display_time_ns) - advanced_ns) as f64 * f64::from(correction_alpha))
             .round() as i128;
-    let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
-    if target_delta_ns.abs() > (max_step_ns as f64 * 2.0).round() as i128 {
+    let thresholds = display_clock.step_thresholds(slope);
+    if target_delta_ns.abs() > thresholds.target_jump_ns {
         note_event(display_clock_step_event(
             DisplayClockDiagEventKind::TargetJump,
             target_display_time_ns,
@@ -449,26 +526,25 @@ pub fn frame_stable_display_clock_step(
             clamp_song_time_ns(corrected_ns),
             target_delta_ns,
             target_delta_ns,
-            (max_step_ns as f64 * 2.0).round() as i128,
+            thresholds.target_jump_ns,
         ));
     }
     let step_ns = corrected_ns - i128::from(previous_display_time_ns);
     let mut clamped_step = false;
-    if step_ns.abs() > (max_step_ns as f64 * 1.2).round() as i128 {
-        corrected_ns = i128::from(previous_display_time_ns) + step_ns.signum() * max_step_ns;
+    if step_ns.abs() > thresholds.clamp_step_ns {
+        corrected_ns =
+            i128::from(previous_display_time_ns) + step_ns.signum() * limits.max_step_ns;
         clamped_step = true;
     }
-    let min_allowed_ns = i128::from(target_display_time_ns)
-        - i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LAG_S, slope));
-    let max_allowed_ns = i128::from(target_display_time_ns)
-        + i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LEAD_S, slope));
+    let min_allowed_ns = i128::from(target_display_time_ns) - limits.max_lag_ns;
+    let max_allowed_ns = i128::from(target_display_time_ns) + limits.max_lead_ns;
     corrected_ns = corrected_ns
         .clamp(min_allowed_ns, max_allowed_ns)
         .max(i128::from(previous_display_time_ns));
     display_clock.current_time_ns = clamp_song_time_ns(corrected_ns);
     let error_ns = i128::from(target_display_time_ns) - corrected_ns;
-    display_clock.catching_up = error_ns.abs() > (max_step_ns / 2);
-    display_clock.error_over_threshold = error_ns.abs() > max_step_ns;
+    display_clock.catching_up = error_ns.abs() > (limits.max_step_ns / 2);
+    display_clock.error_over_threshold = error_ns.abs() > limits.max_step_ns;
     if clamped_step {
         note_event(display_clock_step_event(
             DisplayClockDiagEventKind::ClampStep,
@@ -477,7 +553,7 @@ pub fn frame_stable_display_clock_step(
             display_clock.current_time_ns,
             error_ns,
             corrected_ns - i128::from(previous_display_time_ns),
-            max_step_ns,
+            limits.max_step_ns,
         ));
     }
     if !previous_error_over_threshold && display_clock.error_over_threshold {
@@ -488,7 +564,7 @@ pub fn frame_stable_display_clock_step(
             display_clock.current_time_ns,
             error_ns,
             corrected_ns - i128::from(previous_display_time_ns),
-            max_step_ns,
+            limits.max_step_ns,
         ));
     }
     if !previous_catching_up && display_clock.catching_up {
@@ -499,9 +575,107 @@ pub fn frame_stable_display_clock_step(
             display_clock.current_time_ns,
             error_ns,
             corrected_ns - i128::from(previous_display_time_ns),
-            max_step_ns / 2,
+            limits.max_step_ns / 2,
         ));
     }
     display_clock.current_time_ns
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod display_clock_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    fn scaled_limits_checksum(limits: DisplayClockScaledLimits) -> u64 {
+        (limits.max_error_ns as u64)
+            ^ (limits.max_step_ns as u64).rotate_left(13)
+            ^ (limits.max_lag_ns as u64).rotate_left(29)
+            ^ (limits.max_lead_ns as u64).rotate_left(47)
+    }
+
+    fn thresholds_checksum(thresholds: DisplayClockStepThresholds) -> u64 {
+        (thresholds.target_jump_ns as u64)
+            ^ (thresholds.clamp_step_ns as u64).rotate_left(31)
+    }
+
+    #[must_use]
+    pub fn correction_old(evaluations: usize, delta_time: f32) -> u64 {
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let delta_time = black_box(delta_time);
+            let alpha = 1.0 - f32::exp2(-delta_time / DISPLAY_CLOCK_CORRECTION_HALF_LIFE_S);
+            checksum = checksum.wrapping_add(u64::from(alpha.to_bits()));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn correction_new(evaluations: usize, delta_time: f32) -> u64 {
+        let mut clock = FrameStableDisplayClock::new(0);
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let alpha = clock.correction_alpha(black_box(delta_time));
+            checksum = checksum.wrapping_add(u64::from(alpha.to_bits()));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn scaled_limits_old(evaluations: usize, slope: f32) -> u64 {
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let slope = black_box(slope);
+            let limits = DisplayClockScaledLimits {
+                max_error_ns: i128::from(scaled_song_time_ns(
+                    DISPLAY_CLOCK_RESET_ERROR_S,
+                    slope,
+                )),
+                max_step_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope)),
+                max_lag_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LAG_S, slope)),
+                max_lead_ns: i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_LEAD_S, slope)),
+            };
+            checksum = checksum.wrapping_add(scaled_limits_checksum(limits));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn scaled_limits_new(evaluations: usize, slope: f32) -> u64 {
+        let mut clock = FrameStableDisplayClock::new(0);
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let limits = clock.scaled_limits(black_box(slope));
+            checksum = checksum.wrapping_add(scaled_limits_checksum(limits));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn step_thresholds_old(evaluations: usize, slope: f32) -> u64 {
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let slope = black_box(slope);
+            let max_step_ns = i128::from(scaled_song_time_ns(DISPLAY_CLOCK_MAX_STEP_S, slope));
+            let thresholds = DisplayClockStepThresholds {
+                target_jump_ns: (max_step_ns as f64 * 2.0).round() as i128,
+                clamp_step_ns: (max_step_ns as f64 * 1.2).round() as i128,
+            };
+            checksum = checksum.wrapping_add(thresholds_checksum(thresholds));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn step_thresholds_new(evaluations: usize, slope: f32) -> u64 {
+        let mut clock = FrameStableDisplayClock::new(0);
+        let mut checksum = 0_u64;
+        for _ in 0..evaluations {
+            let thresholds = clock.step_thresholds(black_box(slope));
+            checksum = checksum.wrapping_add(thresholds_checksum(thresholds));
+        }
+        checksum
+    }
 }
 

@@ -6535,6 +6535,104 @@ mod tests {
     }
 
     #[test]
+    fn display_clock_delta_change_matches_a_fresh_clock() {
+        let start = song_time_ns_from_seconds(100.0);
+        let target = song_time_ns_from_seconds(100.02);
+        let mut warmed = FrameStableDisplayClock::new(start);
+        frame_stable_display_clock_step(
+            &mut warmed,
+            song_time_ns_from_seconds(100.01),
+            1.0 / 60.0,
+            1.0,
+            false,
+            |_| {},
+        );
+        warmed.reset(start);
+
+        let mut warmed_events = Vec::new();
+        let warmed_time = frame_stable_display_clock_step(
+            &mut warmed,
+            target,
+            1.0 / 120.0,
+            1.0,
+            false,
+            |event| warmed_events.push(event.kind),
+        );
+        let mut fresh = FrameStableDisplayClock::new(start);
+        let mut fresh_events = Vec::new();
+        let fresh_time = frame_stable_display_clock_step(
+            &mut fresh,
+            target,
+            1.0 / 120.0,
+            1.0,
+            false,
+            |event| fresh_events.push(event.kind),
+        );
+
+        assert_eq!(warmed_time, fresh_time);
+        assert_eq!(warmed_events, fresh_events);
+        assert!(warmed_time > start && warmed_time < target);
+    }
+
+    #[test]
+    fn display_clock_rate_change_recomputes_reset_window() {
+        let start = song_time_ns_from_seconds(100.0);
+        let target = song_time_ns_from_seconds(100.15);
+        let mut clock = FrameStableDisplayClock::new(start);
+        frame_stable_display_clock_step(
+            &mut clock,
+            song_time_ns_from_seconds(100.01),
+            1.0 / 60.0,
+            1.0,
+            false,
+            |_| {},
+        );
+        clock.reset(start);
+
+        let mut events = Vec::new();
+        let display_time = frame_stable_display_clock_step(
+            &mut clock,
+            target,
+            1.0 / 60.0,
+            2.0,
+            false,
+            |event| events.push(event.kind),
+        );
+
+        assert_ne!(display_time, target);
+        assert!(!events.contains(&DisplayClockDiagEventKind::ResetJump));
+        assert!(display_time > start && display_time < target);
+    }
+
+    #[test]
+    fn display_clock_rate_change_recomputes_step_thresholds() {
+        let start = song_time_ns_from_seconds(100.0);
+        let target = song_time_ns_from_seconds(100.05);
+        let mut clock = FrameStableDisplayClock::new(start);
+        frame_stable_display_clock_step(
+            &mut clock,
+            song_time_ns_from_seconds(100.01),
+            1.0 / 60.0,
+            1.0,
+            false,
+            |_| {},
+        );
+        clock.reset(start);
+
+        let mut events = Vec::new();
+        frame_stable_display_clock_step(
+            &mut clock,
+            target,
+            1.0 / 60.0,
+            2.0,
+            false,
+            |event| events.push(event.kind),
+        );
+
+        assert!(!events.contains(&DisplayClockDiagEventKind::TargetJump));
+    }
+
+    #[test]
     fn gameplay_display_clock_state_steps_and_records_diag_events() {
         let mut state = GameplayDisplayClockState::new(song_time_ns_from_seconds(100.0));
 
