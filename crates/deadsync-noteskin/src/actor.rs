@@ -12,6 +12,13 @@ pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
+const BEAT_UPDATE_MARKER: &[u8] = b"setupdatefunction,";
+const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
+    b"part=beat%1",
+    b"part=clamp(part,0,0.5)",
+    b"eff=scale(part,0,0.5,1,0)",
+    b".glow:diffusealpha(eff)",
+];
 
 #[derive(Debug, Default)]
 struct CommandContext {
@@ -214,6 +221,95 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
 }
 
 fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
+    let Some(update_start) = find_compact_ascii_case_insensitive(content, BEAT_UPDATE_MARKER)
+    else {
+        return false;
+    };
+    let Some(function) =
+        with_compact_ascii_identifier(&content[update_start..], |name| context.functions.get(name))
+            .flatten()
+    else {
+        return false;
+    };
+    has_beat_fade_glow_signature(&function.body)
+}
+
+fn find_compact_ascii_case_insensitive(content: &str, needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    content.char_indices().find_map(|(start, ch)| {
+        (!ch.is_whitespace() && ch.is_ascii() && (ch as u8).eq_ignore_ascii_case(&needle[0]))
+            .then(|| compact_ascii_match_end(content, start, needle))
+            .flatten()
+    })
+}
+
+fn compact_ascii_match_end(content: &str, start: usize, needle: &[u8]) -> Option<usize> {
+    let mut chars = content[start..].char_indices();
+    let mut end = start;
+    for expected in needle {
+        let (offset, ch) = chars.find(|(_, ch)| !ch.is_whitespace())?;
+        if !ch.is_ascii() || !(ch as u8).eq_ignore_ascii_case(expected) {
+            return None;
+        }
+        end = start + offset + ch.len_utf8();
+    }
+    Some(end)
+}
+
+fn with_compact_ascii_identifier<T>(content: &str, use_key: impl FnOnce(&str) -> T) -> Option<T> {
+    let mut start = None;
+    let mut end = 0usize;
+    let mut gap = false;
+    let mut internal_gap = false;
+    for (idx, ch) in content.char_indices() {
+        if ch.is_whitespace() {
+            if start.is_some() {
+                gap = true;
+            }
+            continue;
+        }
+        if !ch.is_ascii() || !is_lua_ident(ch as u8) {
+            break;
+        }
+        start.get_or_insert(idx);
+        internal_gap |= gap;
+        gap = false;
+        end = idx + ch.len_utf8();
+    }
+    let start = start?;
+    if !internal_gap {
+        return Some(with_ascii_lowercase_key(&content[start..end], use_key));
+    }
+
+    let mut normalized = [0_u8; STACK_LOWERCASE_KEY_CAPACITY];
+    let mut len = 0usize;
+    for ch in content[start..end].chars().filter(|ch| !ch.is_whitespace()) {
+        if len == normalized.len() {
+            let key = content[start..end]
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .map(|ch| ch.to_ascii_lowercase())
+                .collect::<String>();
+            return Some(use_key(&key));
+        }
+        normalized[len] = ch.to_ascii_lowercase() as u8;
+        len += 1;
+    }
+    let key =
+        std::str::from_utf8(&normalized[..len]).expect("Lua identifiers contain only ASCII bytes");
+    Some(use_key(key))
+}
+
+fn has_beat_fade_glow_signature(body: &str) -> bool {
+    BEAT_FADE_GLOW_SIGNATURES
+        .iter()
+        .all(|signature| find_compact_ascii_case_insensitive(body, signature).is_some())
+}
+
+#[cfg(test)]
+fn has_beat_fade_glow_update_reference(content: &str, context: &CommandContext) -> bool {
     let compact = content
         .chars()
         .filter(|ch| !ch.is_whitespace())
@@ -230,8 +326,12 @@ fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
     let Some(function) = get_ascii_lowercase(&context.functions, &function_name) else {
         return false;
     };
-    let body = function
-        .body
+    has_beat_fade_glow_signature_reference(&function.body)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn has_beat_fade_glow_signature_reference(body: &str) -> bool {
+    let body = body
         .chars()
         .filter(|ch| !ch.is_whitespace())
         .collect::<String>()
@@ -240,6 +340,67 @@ fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
         && body.contains("part=clamp(part,0,0.5)")
         && body.contains("eff=scale(part,0,0.5,1,0)")
         && body.contains(".glow:diffusealpha(eff)")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_beat_update_marker_for_bench(content: &str) -> bool {
+    find_compact_ascii_case_insensitive(content, BEAT_UPDATE_MARKER).is_some()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_beat_update_marker_reference_for_bench(content: &str) -> bool {
+    content
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase()
+        .contains("setupdatefunction,")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn identifier_checksum(name: &str) -> u64 {
+    name.bytes().fold(name.len() as u64, |checksum, byte| {
+        checksum
+            .wrapping_mul(1_099_511_628_211)
+            .wrapping_add(u64::from(byte))
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_update_function_name_for_bench(content: &str) -> Option<u64> {
+    with_compact_ascii_identifier(content, identifier_checksum)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_update_function_name_reference_for_bench(content: &str) -> Option<u64> {
+    let name = content
+        .bytes()
+        .take_while(|byte| is_lua_ident(*byte))
+        .map(char::from)
+        .collect::<String>();
+    (!name.is_empty()).then(|| identifier_checksum(&name))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_beat_fade_glow_signature_for_bench(body: &str) -> bool {
+    has_beat_fade_glow_signature(body)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_beat_fade_glow_signature_reference_for_bench(body: &str) -> bool {
+    has_beat_fade_glow_signature_reference(body)
 }
 
 fn strip_lua_comments(content: &str) -> String {
@@ -1586,9 +1747,106 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn allocation_free_update_marker_scan_matches_committed_behavior() {
+        let cases = [
+            ("InitCommand=cmd(SetUpdateFunction,Beat)", true),
+            ("cmd(SET\u{2003}UPDATE\nFUNCTION , Pulse)", true),
+            ("prefix setupdatefunction, suffix", true),
+            ("SetUpdateFunction", false),
+            ("SetUpdaterFunction,Beat", false),
+            ("", false),
+        ];
+
+        for (content, expected) in cases {
+            assert_eq!(
+                itg_has_beat_update_marker_for_bench(content),
+                expected,
+                "case: {content:?}"
+            );
+            assert_eq!(
+                itg_has_beat_update_marker_for_bench(content),
+                itg_has_beat_update_marker_reference_for_bench(content),
+                "case: {content:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_update_function_keys_match_committed_behavior() {
+        let cases = [
+            ("  Beat);", Some("beat")),
+            ("\u{2003}Pu lSe_2,", Some("pulse_2")),
+            ("9TICK ", Some("9tick")),
+            ("_Update\n)", Some("_update")),
+            ("\u{00c9}lan", None),
+            (" --", None),
+        ];
+
+        for (content, expected) in cases {
+            let expected = expected.map(identifier_checksum);
+            assert_eq!(
+                itg_update_function_name_for_bench(content),
+                expected,
+                "case: {content:?}"
+            );
+            let committed_input = content
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            assert_eq!(
+                itg_update_function_name_for_bench(&committed_input),
+                itg_update_function_name_reference_for_bench(&committed_input),
+                "case: {content:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_beat_fade_signature_matches_committed_behavior() {
+        let cases = [
+            (
+                "part=beat%1; part=clamp(part,0,0.5); \
+                 eff=scale(part,0,0.5,1,0); this.Glow:diffusealpha(eff)",
+                true,
+            ),
+            (
+                "PART = BEAT % 1\u{2003}PART = CLAMP(PART, 0, 0.5)\n\
+                 EFF = SCALE(PART, 0, 0.5, 1, 0)\n\
+                 THIS.GLOW : DIFFUSEALPHA(EFF)",
+                true,
+            ),
+            (
+                "part=beat%1; part=clamp(part,0,0.5); \
+                 eff=scale(part,0,0.5,1,0)",
+                false,
+            ),
+            (
+                "part=beat%1; part=clamp(part,0,1); \
+                 eff=scale(part,0,0.5,1,0); this.Glow:diffusealpha(eff)",
+                false,
+            ),
+            ("", false),
+        ];
+
+        for (body, expected) in cases {
+            assert_eq!(
+                itg_has_beat_fade_glow_signature_for_bench(body),
+                expected,
+                "case: {body:?}"
+            );
+            assert_eq!(
+                itg_has_beat_fade_glow_signature_for_bench(body),
+                itg_has_beat_fade_glow_signature_reference_for_bench(body),
+                "case: {body:?}"
+            );
+        }
+    }
+
+    #[test]
     fn actor_parser_marks_pump_beat_fade_glow_update() {
         let content = r#"
-local function Beat(self)
+local function BeAt(self)
     local this = self:GetChildren()
     local beat = GAMESTATE:GetSongPosition():GetSongBeat()
     local part = beat%1
@@ -1598,7 +1856,7 @@ local function Beat(self)
 end
 
 return Def.ActorFrame {
-    InitCommand=cmd(SetUpdateFunction,Beat);
+    InitCommand=cmd(SetUpdateFunction , BeAt);
     NOTESKIN:LoadActor(Var "Button", "Ready Receptor")..{
         Name="Base";
         Frames={{ Frame = 0 }};
@@ -1612,6 +1870,14 @@ return Def.ActorFrame {
 "#;
 
         let decl = parse_actor_decl(content, &noteskin_itg::IniData::default());
+        let stripped = strip_lua_comments(content);
+        let context = command_context(&stripped);
+
+        assert!(has_beat_fade_glow_update(&stripped, &context));
+        assert_eq!(
+            has_beat_fade_glow_update(&stripped, &context),
+            has_beat_fade_glow_update_reference(&stripped, &context)
+        );
 
         assert_eq!(decl.refs.len(), 2);
         for reference in &decl.refs {

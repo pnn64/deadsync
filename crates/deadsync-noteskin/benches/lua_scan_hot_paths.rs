@@ -1,3 +1,9 @@
+use deadsync_noteskin::actor::{
+    itg_has_beat_fade_glow_signature_for_bench,
+    itg_has_beat_fade_glow_signature_reference_for_bench, itg_has_beat_update_marker_for_bench,
+    itg_has_beat_update_marker_reference_for_bench, itg_update_function_name_for_bench,
+    itg_update_function_name_reference_for_bench,
+};
 use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
@@ -234,6 +240,10 @@ fn linear_checksum(value: LinearFrames) -> u64 {
     })
 }
 
+const fn bool_checksum(value: bool) -> u64 {
+    if value { 2 } else { 1 }
+}
+
 fn assert_improved(name: &str, old: &Row, new: &Row) {
     assert_eq!(old.checksum, new.checksum, "{name} behavior diverged");
     assert!(
@@ -456,5 +466,126 @@ fn main() {
         "borrowed quoted-path scan (6 representative sources)",
         &old_quoted,
         &new_quoted,
+    );
+
+    let update_marker_cases = [
+        "InitCommand=cmd(SetUpdateFunction,Beat);",
+        "OnCommand = cmd( SET UPDATE FUNCTION , Pulse );",
+        "prefix\u{2003}SET\nUPDATE\tFUNCTION,Glow suffix",
+        "InitCommand=cmd(SetUpdateFunction);",
+        "InitCommand=cmd(SetUpdaterFunction,Beat);",
+        "local function SetUpdateFunctionAlias(self) end",
+    ];
+    let marker_suite = |scan: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for source in update_marker_cases {
+                checksum = mix(checksum, bool_checksum(black_box(scan(black_box(source)))));
+            }
+        }
+        checksum
+    };
+    let (old_marker, new_marker) = measure_pair(
+        256,
+        update_marker_cases.len() * REPEATS,
+        || marker_suite(itg_has_beat_update_marker_reference_for_bench),
+        || marker_suite(itg_has_beat_update_marker_for_bench),
+    );
+    assert_improved(
+        "allocation-free update-marker scan",
+        &old_marker,
+        &new_marker,
+    );
+    assert_eq!(new_marker.alloc.allocs, 0);
+    assert_eq!(new_marker.alloc.reallocs, 0);
+    assert_eq!(new_marker.alloc.frees, 0);
+    assert_eq!(new_marker.alloc.churn(), 0);
+    print_pair(
+        "allocation-free update-marker scan (6 representative actor fragments)",
+        &old_marker,
+        &new_marker,
+    );
+
+    let update_function_cases = [
+        "beat);",
+        "pulse_2,",
+        "9tick",
+        "_update)",
+        "missingcallbackend",
+        "--nocallback",
+    ];
+    let function_suite = |scan: fn(&str) -> Option<u64>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for source in update_function_cases {
+                checksum = mix(
+                    checksum,
+                    black_box(scan(black_box(source))).unwrap_or(u64::MAX),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_function, new_function) = measure_pair(
+        256,
+        update_function_cases.len() * REPEATS,
+        || function_suite(itg_update_function_name_reference_for_bench),
+        || function_suite(itg_update_function_name_for_bench),
+    );
+    assert_improved(
+        "allocation-free update-function key extraction",
+        &old_function,
+        &new_function,
+    );
+    assert_eq!(new_function.alloc.allocs, 0);
+    assert_eq!(new_function.alloc.reallocs, 0);
+    assert_eq!(new_function.alloc.frees, 0);
+    assert_eq!(new_function.alloc.churn(), 0);
+    print_pair(
+        "allocation-free update-function key extraction (6 representative tails)",
+        &old_function,
+        &new_function,
+    );
+
+    let beat_fade_cases = [
+        "part=beat%1; part=clamp(part,0,0.5); eff=scale(part,0,0.5,1,0); \
+         this.Glow:diffusealpha(eff)",
+        "PART = BEAT % 1\u{2003}PART = CLAMP(PART, 0, 0.5)\n\
+         EFF = SCALE(PART, 0, 0.5, 1, 0)\nTHIS.GLOW : DIFFUSEALPHA(EFF)",
+        "local part=beat%1; part=clamp(part,0,0.5); eff=scale(part,0,0.5,1,0)",
+        "part=beat%1; part=clamp(part,0,1); eff=scale(part,0,0.5,1,0); \
+         this.Glow:diffusealpha(eff)",
+        "part=beat%2; part=clamp(part,0,0.5); eff=scale(part,0,0.5,1,0); \
+         this.Glow:diffusealpha(eff)",
+        "ordinary update body without the pump beat fade pattern",
+    ];
+    let signature_suite = |scan: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for body in beat_fade_cases {
+                checksum = mix(checksum, bool_checksum(black_box(scan(black_box(body)))));
+            }
+        }
+        checksum
+    };
+    let (old_signature, new_signature) = measure_pair(
+        256,
+        beat_fade_cases.len() * REPEATS,
+        || signature_suite(itg_has_beat_fade_glow_signature_reference_for_bench),
+        || signature_suite(itg_has_beat_fade_glow_signature_for_bench),
+    );
+    assert_improved(
+        "allocation-free beat-fade body signature scan",
+        &old_signature,
+        &new_signature,
+    );
+    assert_eq!(new_signature.alloc.allocs, 0);
+    assert_eq!(new_signature.alloc.reallocs, 0);
+    assert_eq!(new_signature.alloc.frees, 0);
+    assert_eq!(new_signature.alloc.churn(), 0);
+    print_pair(
+        "allocation-free beat-fade body signature scan (6 representative bodies)",
+        &old_signature,
+        &new_signature,
     );
 }
