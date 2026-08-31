@@ -303,8 +303,8 @@ fn compose_field_contents<S, F>(
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
         note_world_z_for_bumpy_cached(
             travel_offset,
-            lane_effect_params[local_col].bumpy,
             note_inputs.bumpy_frame_cache,
+            lane_transform_caches[local_col],
         )
     };
     let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
@@ -836,7 +836,6 @@ fn compose_field_contents<S, F>(
         note_inputs,
         frame.completed_rows,
         &visible_note_bounds[..num_cols],
-        &lane_effect_params[..num_cols],
         &lane_transform_caches[..num_cols],
         &lane_offsets[..num_cols],
         note_x_is_static,
@@ -871,7 +870,6 @@ fn compose_visible_notes<S, F>(
     notes: &PreparedNotefieldNotes<'_, S>,
     completed_rows: CompletedRowVisibility<'_>,
     visible_note_bounds: &[(usize, usize)],
-    lane_effect_params: &[VisualEffectParams],
     lane_transform_caches: &[LaneNoteTransformCache],
     lane_offsets: &[f32],
     note_x_is_static: bool,
@@ -916,7 +914,6 @@ fn compose_visible_notes<S, F>(
         let direction = prepared.field.column_dirs[local_col];
         let receptor_y = prepared.field.column_receptor_ys[local_col];
         let lane_offset = lane_offsets[local_col];
-        let effect_params = lane_effect_params[local_col];
         for_each_lane_index(
             request.chart.lane_note_rows(col),
             visible_note_bounds[local_col],
@@ -985,12 +982,12 @@ fn compose_visible_notes<S, F>(
                         )
                     };
                 let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
+                let transform_cache = lane_transform_caches[local_col];
                 let world_z = note_world_z_for_bumpy_cached(
                     adjusted_travel,
-                    effect_params.bumpy,
                     notes.bumpy_frame_cache,
+                    transform_cache,
                 );
-                let transform_cache = lane_transform_caches[local_col];
                 let effect_zoom = prepared.column_zooms[local_col]
                     * visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache);
                 let note_scale = field_zoom * effect_zoom;

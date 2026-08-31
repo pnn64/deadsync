@@ -45,8 +45,10 @@ pub(crate) struct VisualEffectParams {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LaneNoteTransformCache {
+    bumpy_amplitude: f32,
     tiny_zoom: f32,
     pulse_active: bool,
+    pulse_constant: bool,
     pulse_inner_zoom: f32,
     pulse_outer_scale: f32,
     pulse_offset: f32,
@@ -366,12 +368,29 @@ pub(crate) fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f3
     bumpy * BUMPY_Z_MAGNITUDE * bumpy_angle(y, offset, period).sin()
 }
 
-pub(crate) fn note_world_z_for_bumpy_cached(y: f32, bumpy: f32, cache: BumpyFrameCache) -> f32 {
+#[cfg(feature = "bench-support")]
+pub(crate) fn note_world_z_for_bumpy_frame_cached(
+    y: f32,
+    bumpy: f32,
+    cache: BumpyFrameCache,
+) -> f32 {
     if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
         return 0.0;
     }
     let angle = 100.0f32.mul_add(cache.offset, y) / cache.divisor;
     bumpy * BUMPY_Z_MAGNITUDE * angle.sin()
+}
+
+pub(crate) fn note_world_z_for_bumpy_cached(
+    y: f32,
+    frame_cache: BumpyFrameCache,
+    lane_cache: LaneNoteTransformCache,
+) -> f32 {
+    if lane_cache.bumpy_amplitude == 0.0 {
+        return 0.0;
+    }
+    let angle = 100.0f32.mul_add(frame_cache.offset, y) / frame_cache.divisor;
+    lane_cache.bumpy_amplitude * angle.sin()
 }
 
 pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
@@ -455,6 +474,11 @@ pub(crate) fn lane_note_transform_cache(
     song_beat: f32,
     params: VisualEffectParams,
 ) -> LaneNoteTransformCache {
+    let bumpy_amplitude = if signed_effect_active(params.bumpy) {
+        params.bumpy * BUMPY_Z_MAGNITUDE
+    } else {
+        0.0
+    };
     let pulse_active = visual_pulse_active(params);
     let pulse_outer = if params.pulse_outer.is_finite() {
         params.pulse_outer
@@ -484,8 +508,10 @@ pub(crate) fn lane_note_transform_cache(
         None
     };
     LaneNoteTransformCache {
+        bumpy_amplitude,
         tiny_zoom: visual_tiny_zoom(params),
         pulse_active,
+        pulse_constant: pulse_active && pulse_outer == 0.0,
         pulse_inner_zoom: visual_pulse_inner_zoom(params),
         pulse_outer_scale: pulse_outer * 0.5,
         pulse_offset,
@@ -499,6 +525,21 @@ pub(crate) fn lane_note_transform_cache(
 }
 
 pub(crate) fn visual_arrow_effect_zoom_cached(y: f32, cache: LaneNoteTransformCache) -> f32 {
+    if cache.pulse_active {
+        if cache.pulse_constant && y.is_finite() {
+            return cache.tiny_zoom * cache.pulse_inner_zoom;
+        }
+        let pulse = (100.0f32.mul_add(cache.pulse_offset, y) / cache.pulse_divisor)
+            .sin()
+            .mul_add(cache.pulse_outer_scale, cache.pulse_inner_zoom);
+        cache.tiny_zoom * pulse
+    } else {
+        cache.tiny_zoom
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn visual_arrow_effect_zoom_cached_reference(y: f32, cache: LaneNoteTransformCache) -> f32 {
     if cache.pulse_active {
         let pulse = (100.0f32.mul_add(cache.pulse_offset, y) / cache.pulse_divisor)
             .sin()
@@ -525,6 +566,15 @@ pub(crate) fn visual_dizzy_rotation_deg(
         * (-180.0 / std::f32::consts::PI)
 }
 
+#[inline(always)]
+fn wrap_dizzy_radians(radians: f32) -> f32 {
+    if radians > -std::f32::consts::TAU && radians < std::f32::consts::TAU {
+        radians
+    } else {
+        radians % std::f32::consts::TAU
+    }
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn visual_note_rotation_z(
     note_beat: f32,
@@ -543,6 +593,21 @@ pub(crate) fn visual_note_rotation_z(
 }
 
 pub(crate) fn visual_note_rotation_z_cached(note_beat: f32, cache: LaneNoteTransformCache) -> f32 {
+    if cache.identity_rotation {
+        return 0.0;
+    }
+    if note_beat.is_finite()
+        && let Some(rotation) = cache.static_rotation_z
+    {
+        return rotation;
+    }
+    let radians = (note_beat - cache.song_beat) * cache.dizzy;
+    let wrapped = wrap_dizzy_radians(radians);
+    cache.rotation_base_z + wrapped * (-180.0 / std::f32::consts::PI)
+}
+
+#[cfg(feature = "bench-support")]
+fn visual_note_rotation_z_cached_reference(note_beat: f32, cache: LaneNoteTransformCache) -> f32 {
     if cache.identity_rotation {
         return 0.0;
     }
@@ -871,9 +936,16 @@ mod common_note_transform_tests {
         ] {
             let cache = bumpy_frame_cache(offset, period);
             for bumpy in [0.0, 0.6, -0.4, f32::NAN] {
+                let lane_cache = lane_note_transform_cache(
+                    0.0,
+                    VisualEffectParams {
+                        bumpy,
+                        ..VisualEffectParams::default()
+                    },
+                );
                 for y in [-128.0, 0.0, 96.0, 512.0] {
                     let reference = note_world_z_for_bumpy(y, bumpy, offset, period);
-                    let cached = note_world_z_for_bumpy_cached(y, bumpy, cache);
+                    let cached = note_world_z_for_bumpy_cached(y, cache, lane_cache);
                     assert_eq!(cached.to_bits(), reference.to_bits());
                 }
             }
@@ -924,6 +996,11 @@ mod common_note_transform_tests {
             VisualEffectParams {
                 tiny: 0.25,
                 confusion_offset: 0.4,
+                ..VisualEffectParams::default()
+            },
+            VisualEffectParams {
+                tiny: 0.25,
+                pulse_inner: 0.4,
                 ..VisualEffectParams::default()
             },
             VisualEffectParams {
@@ -981,12 +1058,44 @@ mod common_note_transform_tests {
         ];
         for params in cases {
             let cache = lane_note_transform_cache(song_beat, params);
-            for note_beat in [-1.0, 0.0, 6.25, 12.5, f32::INFINITY, f32::NAN] {
+            for note_beat in [
+                -100.0,
+                -1.0,
+                0.0,
+                6.25,
+                12.5,
+                100.0,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
                 assert_eq!(
                     visual_note_rotation_z_cached(note_beat, cache).to_bits(),
                     visual_note_rotation_z(note_beat, song_beat, false, params).to_bits(),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn bounded_dizzy_wrap_matches_remainder() {
+        for radians in [
+            -std::f32::consts::TAU * 8.0,
+            -std::f32::consts::TAU,
+            -1.0,
+            -0.0,
+            0.0,
+            1.0,
+            std::f32::consts::TAU,
+            std::f32::consts::TAU * 8.0,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            assert_eq!(
+                wrap_dizzy_radians(radians).to_bits(),
+                (radians % std::f32::consts::TAU).to_bits(),
+                "radians={radians}"
+            );
         }
     }
 
@@ -1843,6 +1952,42 @@ pub mod transform_cache_bench_support {
         checksum
     }
 
+    fn inner_pulse_params() -> VisualEffectParams {
+        VisualEffectParams {
+            tiny: 0.25,
+            pulse_inner: 0.4,
+            ..VisualEffectParams::default()
+        }
+    }
+
+    #[must_use]
+    pub fn inner_pulse_old(evaluations: usize) -> u64 {
+        let cache = lane_note_transform_cache(black_box(17.25), black_box(inner_pulse_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let zoom = visual_arrow_effect_zoom_cached_reference(y, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(zoom.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn inner_pulse_new(evaluations: usize) -> u64 {
+        let cache = lane_note_transform_cache(black_box(17.25), black_box(inner_pulse_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let zoom = visual_arrow_effect_zoom_cached(y, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(zoom.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
     fn rotation_params() -> VisualEffectParams {
         VisualEffectParams {
             confusion: 0.35,
@@ -1875,6 +2020,36 @@ pub mod transform_cache_bench_support {
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let note_beat = black_box((index % 768) as f32 * 0.125 - 24.0);
+            let rotation = visual_note_rotation_z_cached(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(rotation.to_bits()))
+                .rotate_left(15);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bounded_dizzy_old(evaluations: usize) -> u64 {
+        let song_beat = black_box(17.25_f32);
+        let cache = lane_note_transform_cache(song_beat, black_box(rotation_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box(song_beat + ((index & 63) as f32 - 32.0) * 0.125);
+            let rotation = visual_note_rotation_z_cached_reference(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(rotation.to_bits()))
+                .rotate_left(15);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bounded_dizzy_new(evaluations: usize) -> u64 {
+        let song_beat = black_box(17.25_f32);
+        let cache = lane_note_transform_cache(song_beat, black_box(rotation_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box(song_beat + ((index & 63) as f32 - 32.0) * 0.125);
             let rotation = visual_note_rotation_z_cached(note_beat, cache);
             checksum = checksum
                 .wrapping_add(u64::from(rotation.to_bits()))
@@ -2003,7 +2178,42 @@ pub mod lane_invariant_cache_bench_support {
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let y = black_box((index % 960) as f32 - 160.0);
-            let z = note_world_z_for_bumpy_cached(y, 0.7, cache);
+            let z = note_world_z_for_bumpy_frame_cached(y, 0.7, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(z.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bumpy_lane_old(evaluations: usize) -> u64 {
+        let cache = bumpy_frame_cache(black_box(0.35), black_box(0.75));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let z = note_world_z_for_bumpy_frame_cached(y, black_box(0.0), cache);
+            checksum = checksum
+                .wrapping_add(u64::from(z.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bumpy_lane_new(evaluations: usize) -> u64 {
+        let frame_cache = bumpy_frame_cache(black_box(0.35), black_box(0.75));
+        let lane_cache = lane_note_transform_cache(
+            0.0,
+            black_box(VisualEffectParams {
+                bumpy: 0.0,
+                ..VisualEffectParams::default()
+            }),
+        );
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let z = note_world_z_for_bumpy_cached(y, frame_cache, lane_cache);
             checksum = checksum
                 .wrapping_add(u64::from(z.to_bits()))
                 .rotate_left(11);
