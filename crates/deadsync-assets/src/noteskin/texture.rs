@@ -411,11 +411,14 @@ impl SpriteSlot {
     #[inline(always)]
     #[must_use]
     pub fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
-        let atlas_tex_dims = match self.source.as_ref() {
-            SpriteSource::Atlas { tex_dims, .. } => Some(*tex_dims),
+        let atlas_origin = match self.source.as_ref() {
+            SpriteSource::Atlas { uv_cache, .. } => {
+                let uv = uv_cache.get(false);
+                Some([uv[0], uv[1]])
+            }
             SpriteSource::Animated { .. } => None,
         };
-        deadsync_noteskin::model_texture_uv_params(uv_rect, self.def.src, atlas_tex_dims)
+        deadsync_noteskin::model_texture_uv_params_cached(uv_rect, atlas_origin)
     }
 }
 

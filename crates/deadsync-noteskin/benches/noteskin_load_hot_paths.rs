@@ -1,7 +1,8 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, sprite_math_bench_support, uv_color_bench_support,
+    NotePartTextureTranslate, model_draw_bench_support, sprite_math_bench_support,
+    uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -480,6 +481,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_MODEL_DRAW_CACHE_ONLY").is_some() {
+        run_uv_case(
+            "noteskin static model draw evaluation",
+            model_draw_bench_support::static_model_draw_old,
+            model_draw_bench_support::static_model_draw_new,
+        );
+        run_uv_case(
+            "noteskin canonical model effect timing",
+            model_draw_bench_support::canonical_effect_mix_old,
+            model_draw_bench_support::canonical_effect_mix_new,
+        );
+        run_uv_case(
+            "noteskin cached model atlas origin",
+            model_draw_bench_support::cached_model_uv_old,
+            model_draw_bench_support::cached_model_uv_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_ANIMATED_SPRITE_CACHE_ONLY").is_some() {
         run_uv_case(
             "noteskin cached weighted animation total",
