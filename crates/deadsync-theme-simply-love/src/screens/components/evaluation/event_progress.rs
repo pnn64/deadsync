@@ -406,7 +406,122 @@ struct HeaderLayout {
 }
 
 #[inline(always)]
-fn wrap_text_with_measure<F>(
+fn wrap_text_with_measure_into<F>(
+    raw_text: &str,
+    max_width_px: f32,
+    zoom: f32,
+    measure: &mut F,
+    out: &mut String,
+) -> usize
+where
+    F: FnMut(&str) -> f32,
+{
+    out.clear();
+    let mut line_count = 1usize;
+    let mut is_first_segment = true;
+    for segment in raw_text.split('\n') {
+        let trimmed = segment.trim_end();
+        if !is_first_segment {
+            out.push('\n');
+            line_count += 1;
+        }
+        is_first_segment = false;
+
+        let mut line_start = out.len();
+        let mut has_word = false;
+        for word in trimmed.split_whitespace() {
+            if !has_word {
+                out.push_str(word);
+                has_word = true;
+                continue;
+            }
+
+            let previous_end = out.len();
+            out.push(' ');
+            out.push_str(word);
+            if measure(&out[line_start..]) * zoom > max_width_px {
+                out.truncate(previous_end);
+                out.push('\n');
+                line_count += 1;
+                line_start = out.len();
+                out.push_str(word);
+            }
+        }
+    }
+
+    line_count
+}
+
+#[inline(always)]
+fn body_layout_with_measure<F>(
+    text: &str,
+    pane_width: f32,
+    max_height: f32,
+    font_height: f32,
+    line_spacing: f32,
+    mut measure: F,
+) -> BodyLayout
+where
+    F: FnMut(&str) -> f32,
+{
+    // Wrapping never expands the source: whitespace is normalized to one byte
+    // and inserted line breaks replace separators already present in `text`.
+    let mut wrapped = String::with_capacity(text.len());
+
+    for zoom_step in (2..=20).rev() {
+        let zoom = zoom_step as f32 / 20.0;
+        let line_count =
+            wrap_text_with_measure_into(text, pane_width, zoom, &mut measure, &mut wrapped) as f32;
+        let block_height = (line_count - 1.0)
+            .max(0.0)
+            .mul_add(line_spacing, font_height);
+        if block_height * zoom <= max_height || zoom_step == 2 {
+            return BodyLayout {
+                text: wrapped,
+                zoom,
+            };
+        }
+    }
+
+    unreachable!("body zoom range is non-empty")
+}
+
+#[inline(always)]
+fn header_layout_with_measure<F>(
+    text: &str,
+    pane_width: f32,
+    row_height: f32,
+    font_height: f32,
+    line_spacing: f32,
+    mut measure: F,
+) -> HeaderLayout
+where
+    F: FnMut(&str) -> f32,
+{
+    let max_width = pane_width - 6.0;
+    let max_height = row_height * 2.0;
+    let mut wrapped = String::with_capacity(text.len());
+
+    for zoom_step in (2..=10).rev() {
+        let zoom = zoom_step as f32 / 20.0;
+        let line_count =
+            wrap_text_with_measure_into(text, max_width, zoom, &mut measure, &mut wrapped) as f32;
+        let block_height = (line_count - 1.0)
+            .max(0.0)
+            .mul_add(line_spacing, font_height);
+        if block_height * zoom <= max_height || zoom_step == 2 {
+            return HeaderLayout {
+                text: wrapped,
+                zoom,
+            };
+        }
+    }
+
+    unreachable!("header zoom range is non-empty")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn wrap_text_with_measure_reference<F>(
     raw_text: &str,
     max_width_px: f32,
     zoom: f32,
@@ -461,8 +576,8 @@ where
     out
 }
 
-#[inline(always)]
-fn body_layout_with_measure<F>(
+#[cfg(any(test, feature = "bench-support"))]
+fn body_layout_with_measure_reference<F>(
     text: &str,
     pane_width: f32,
     max_height: f32,
@@ -480,7 +595,7 @@ where
 
     for zoom_step in (2..=20).rev() {
         let zoom = zoom_step as f32 / 20.0;
-        let wrapped = wrap_text_with_measure(text, pane_width, zoom, &mut measure);
+        let wrapped = wrap_text_with_measure_reference(text, pane_width, zoom, &mut measure);
         let line_count = wrapped.split('\n').count().max(1) as f32;
         let block_height = (line_count - 1.0)
             .max(0.0)
@@ -498,43 +613,76 @@ where
     best
 }
 
-#[inline(always)]
-fn header_layout_with_measure<F>(
+#[cfg(any(test, feature = "bench-support"))]
+#[inline]
+fn benchmark_text_width(text: &str) -> f32 {
+    text.bytes()
+        .map(|byte| if byte == b' ' { 4u32 } else { 8u32 })
+        .sum::<u32>() as f32
+}
+
+/// Runs the previous event-text wrapping implementation for benchmarks.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_event_wrap_reference(text: &str, max_width: f32, zoom: f32) -> String {
+    wrap_text_with_measure_reference(text, max_width, zoom, &mut benchmark_text_width)
+}
+
+/// Runs the current event-text wrapping implementation for benchmarks.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_event_wrap_current(text: &str, max_width: f32, zoom: f32) -> String {
+    let mut wrapped = String::with_capacity(text.len());
+    let _ = wrap_text_with_measure_into(
+        text,
+        max_width,
+        zoom,
+        &mut benchmark_text_width,
+        &mut wrapped,
+    );
+    wrapped
+}
+
+/// Runs the previous event body-layout implementation for benchmarks.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_event_layout_reference(
     text: &str,
     pane_width: f32,
-    row_height: f32,
-    font_height: f32,
-    line_spacing: f32,
-    mut measure: F,
-) -> HeaderLayout
-where
-    F: FnMut(&str) -> f32,
-{
-    let max_width = pane_width - 6.0;
-    let max_height = row_height * 2.0;
-    let mut best = HeaderLayout {
-        text: text.to_string(),
-        zoom: 0.1,
-    };
+    max_height: f32,
+) -> (String, u32) {
+    let layout = body_layout_with_measure_reference(
+        text,
+        pane_width,
+        max_height,
+        16.0,
+        20.0,
+        benchmark_text_width,
+    );
+    (layout.text, layout.zoom.to_bits())
+}
 
-    for zoom_step in (2..=10).rev() {
-        let zoom = zoom_step as f32 / 20.0;
-        let wrapped = wrap_text_with_measure(text, max_width, zoom, &mut measure);
-        let line_count = wrapped.split('\n').count().max(1) as f32;
-        let block_height = (line_count - 1.0)
-            .max(0.0)
-            .mul_add(line_spacing, font_height);
-        let layout = HeaderLayout {
-            text: wrapped,
-            zoom,
-        };
-        if block_height * zoom <= max_height {
-            return layout;
-        }
-        best = layout;
-    }
-
-    best
+/// Runs the current event body-layout implementation for benchmarks.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_event_layout_current(
+    text: &str,
+    pane_width: f32,
+    max_height: f32,
+) -> (String, u32) {
+    let layout = body_layout_with_measure(
+        text,
+        pane_width,
+        max_height,
+        16.0,
+        20.0,
+        benchmark_text_width,
+    );
+    (layout.text, layout.zoom.to_bits())
 }
 
 #[inline(always)]
@@ -1555,6 +1703,73 @@ fn actor_tree_checksum(actors: &[Actor]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wrapped_text_preserves_normalized_words_blank_lines_and_line_count() {
+        let mut wrapped = String::new();
+        let line_count = wrap_text_with_measure_into(
+            "  Alpha   beta gamma  \n\nDelta epsilon  ",
+            10.0,
+            1.0,
+            &mut |candidate| candidate.chars().count() as f32,
+            &mut wrapped,
+        );
+
+        assert_eq!(wrapped, "Alpha beta\ngamma\n\nDelta\nepsilon");
+        assert_eq!(line_count, 5);
+    }
+
+    #[test]
+    fn body_layout_reuses_wrapping_until_the_first_fitting_zoom() {
+        let layout =
+            body_layout_with_measure("one two three four", 7.0, 10.0, 10.0, 10.0, |candidate| {
+                candidate.chars().count() as f32
+            });
+
+        assert_eq!(layout.text, "one two three\nfour");
+        assert!((layout.zoom - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn wrapped_text_matches_reference_for_edge_cases() {
+        for (text, width, zoom) in [
+            ("", 10.0, 1.0),
+            ("   ", 10.0, 1.0),
+            ("alpha beta\n", 8.0, 1.0),
+            ("\n\nalpha", 8.0, 1.0),
+            ("Miyuki Δelta résumé", 9.0, 0.75),
+            ("unbreakable", 2.0, 1.0),
+        ] {
+            let mut current = String::with_capacity(text.len());
+            let _ = wrap_text_with_measure_into(
+                text,
+                width,
+                zoom,
+                &mut |candidate| candidate.chars().count() as f32,
+                &mut current,
+            );
+            let reference = wrap_text_with_measure_reference(text, width, zoom, &mut |candidate| {
+                candidate.chars().count() as f32
+            });
+
+            assert_eq!(current, reference, "text={text:?}");
+        }
+    }
+
+    #[test]
+    fn body_layout_matches_reference_text_and_zoom() {
+        let text = "Completed the \"Prismatic Pathfinder\" Achievement!\n\nEarned +250 points at 1.25x rate.";
+        let current = body_layout_with_measure(text, 96.0, 48.0, 16.0, 20.0, |candidate| {
+            candidate.chars().count() as f32 * 8.0
+        });
+        let reference =
+            body_layout_with_measure_reference(text, 96.0, 48.0, 16.0, 20.0, |candidate| {
+                candidate.chars().count() as f32 * 8.0
+            });
+
+        assert_eq!(current.text, reference.text);
+        assert_eq!(current.zoom, reference.zoom);
+    }
 
     #[test]
     fn long_achievement_titles_wrap_without_shrinking_body_text() {
