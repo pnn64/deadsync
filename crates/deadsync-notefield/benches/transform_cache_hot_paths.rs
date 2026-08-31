@@ -19,12 +19,13 @@ use deadsync_notefield::note_projection_bench_support::{
 };
 use deadsync_notefield::transform_cache_bench_support::{
     appearance_new, appearance_old, blink_only_appearance_new, blink_only_appearance_old,
-    boomerang_only_new, boomerang_only_old, boost_boomerang_new, boost_boomerang_old,
-    boost_brake_new, boost_brake_old, boost_only_new, boost_only_old, bounded_dizzy_new,
-    bounded_dizzy_old, brake_boomerang_new, brake_boomerang_old, brake_only_new, brake_only_old,
-    expand_new, expand_old, expand_only_new, expand_only_old, hidden_blink_appearance_new,
-    hidden_blink_appearance_old, hidden_only_appearance_new, hidden_only_appearance_old,
-    hidden_stealth_appearance_new, hidden_stealth_appearance_old,
+    boomerang_expand_new, boomerang_expand_old, boomerang_only_new, boomerang_only_old,
+    boost_boomerang_new, boost_boomerang_old, boost_brake_new, boost_brake_old, boost_expand_new,
+    boost_expand_old, boost_only_new, boost_only_old, bounded_dizzy_new, bounded_dizzy_old,
+    brake_boomerang_new, brake_boomerang_old, brake_expand_new, brake_expand_old, brake_only_new,
+    brake_only_old, expand_new, expand_old, expand_only_new, expand_only_old,
+    hidden_blink_appearance_new, hidden_blink_appearance_old, hidden_only_appearance_new,
+    hidden_only_appearance_old, hidden_stealth_appearance_new, hidden_stealth_appearance_old,
     hidden_stealth_blink_appearance_new, hidden_stealth_blink_appearance_old,
     hidden_sudden_appearance_new, hidden_sudden_appearance_old, hidden_sudden_blink_appearance_new,
     hidden_sudden_blink_appearance_old, hidden_sudden_stealth_appearance_new,
@@ -299,6 +300,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield Boost+Expand acceleration",
+        boost_expand_old,
+        boost_expand_new,
+    );
+    run(
+        "notefield Brake+Expand acceleration",
+        brake_expand_old,
+        brake_expand_new,
+    );
+    run(
+        "notefield Boomerang+Expand acceleration",
+        boomerang_expand_old,
+        boomerang_expand_new,
+    );
     run(
         "notefield Boost+Boomerang acceleration",
         boost_boomerang_old,
