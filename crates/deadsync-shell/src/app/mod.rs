@@ -212,6 +212,15 @@ const fn options_entry_restores_main_selection(from: CurrentScreen) -> bool {
     )
 }
 
+/// Returning from a played song refreshes wheel data in place so Guest
+/// sessions retain the highlighted song without needing persisted profile data.
+const fn resumes_music_wheel(from: CurrentScreen) -> bool {
+    matches!(
+        from,
+        CurrentScreen::Gameplay | CurrentScreen::Practice | CurrentScreen::Evaluation
+    )
+}
+
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
@@ -9035,17 +9044,7 @@ impl App {
                         &mut self.state.screens.select_music_state,
                     );
                 }
-                CurrentScreen::Evaluation => {
-                    let color_index = self.state.screens.select_music_state.active_color_index;
-                    let sort = select_music::sort_snapshot(&self.state.screens.select_music_state);
-                    let init_view =
-                        self.coin_select_music_init_view(crate::select_music::prepared_init_view());
-                    let mut refreshed = select_music::init(init_view);
-                    refreshed.active_color_index = color_index;
-                    select_music::restore_sort(&mut refreshed, sort);
-                    self.state.screens.select_music_state = refreshed;
-                }
-                CurrentScreen::Gameplay | CurrentScreen::Practice => {
+                previous if resumes_music_wheel(previous) => {
                     select_music::reset_preview_after_gameplay(
                         &mut self.state.screens.select_music_state,
                         crate::select_music::history_view(),
@@ -9634,6 +9633,25 @@ mod tests {
             CurrentScreen::SmxAssignPads,
         ] {
             assert!(!options_entry_restores_main_selection(screen));
+        }
+    }
+
+    #[test]
+    fn song_play_returns_reuse_the_music_wheel() {
+        for screen in [
+            CurrentScreen::Gameplay,
+            CurrentScreen::Practice,
+            CurrentScreen::Evaluation,
+        ] {
+            assert!(resumes_music_wheel(screen));
+        }
+
+        for screen in [
+            CurrentScreen::Menu,
+            CurrentScreen::PlayerOptions,
+            CurrentScreen::EvaluationSummary,
+        ] {
+            assert!(!resumes_music_wheel(screen));
         }
     }
 

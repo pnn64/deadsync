@@ -1225,61 +1225,6 @@ enum WheelSortMode {
     Playlist,
 }
 
-/// Session-only sort state retained while the shell rebuilds Select Music.
-#[derive(Clone, Debug)]
-pub struct SelectMusicSortSnapshot {
-    mode: WheelSortMode,
-    active_playlist_id: Option<String>,
-    open_meter_section: Option<Arc<str>>,
-}
-
-pub fn sort_snapshot(state: &State) -> SelectMusicSortSnapshot {
-    SelectMusicSortSnapshot {
-        mode: state.sort_mode,
-        active_playlist_id: state.active_playlist_id.clone(),
-        open_meter_section: if state.sort_mode == WheelSortMode::Meter {
-            state.expanded_pack_name.clone()
-        } else {
-            None
-        },
-    }
-}
-
-pub fn restore_sort(state: &mut State, snapshot: SelectMusicSortSnapshot) {
-    let selected_song = selected_song_arc(state);
-    state.active_playlist_id = snapshot.active_playlist_id;
-    apply_wheel_sort(state, snapshot.mode);
-
-    let Some(section) = snapshot.open_meter_section else {
-        return;
-    };
-    if state.sort_mode != WheelSortMode::Meter
-        || !state
-            .all_entries
-            .iter()
-            .any(|entry| entry.section_key() == Some(section.as_ref()))
-    {
-        return;
-    }
-
-    if state.expanded_pack_name.as_deref() != Some(section.as_ref()) {
-        state.expanded_pack_name = Some(section);
-        rebuild_displayed_entries(state);
-    }
-    if let Some(song) = selected_song
-        && let Some(index) = song_entry_index(&state.entries, &song)
-    {
-        state.selected_index = index;
-        select_wheel_steps(state, song.as_ref());
-    }
-    state.selected_index = state
-        .selected_index
-        .min(state.entries.len().saturating_sub(1));
-    state.prev_selected_index = state.selected_index;
-    state.time_since_selection_change = 0.0;
-    state.wheel_offset_from_selection = 0.0;
-}
-
 impl From<SelectMusicSort> for WheelSortMode {
     fn from(sort: SelectMusicSort) -> Self {
         match sort {
@@ -15772,11 +15717,11 @@ mod tests {
         first_song_entry_index, handle_downloads_overlay_raw_key,
         handle_profile_switch_overlay_input, init_placeholder, keymap_has_player_input,
         maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
-        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay, restore_sort,
+        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
         select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
-        sort_snapshot, steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows,
-        sync_beat_row_y, sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music,
-        sync_low_confidence_warning, sync_overlay_graph_size,
+        steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y,
+        sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
+        sync_overlay_graph_size,
     };
     use crate::config::{
         GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicSort,
@@ -18209,62 +18154,6 @@ mod tests {
         assert_eq!(state.p2_selected_steps_index, 3);
     }
 
-    #[test]
-    fn sort_snapshot_restores_open_meter_section_after_rebuild() {
-        let mut song = (*super::test_folder_stats_song(0)).clone();
-        for (chart, meter) in song.charts.iter_mut().zip([4, 8, 12, 15, 18]) {
-            chart.meter = meter;
-        }
-        let song = Arc::new(song);
-        let meter_entries = vec![
-            header("04", 0, 1, None),
-            super::MusicWheelEntry::Song(song.clone()),
-            header("08", 1, 1, None),
-            super::MusicWheelEntry::Song(song.clone()),
-            header("12", 2, 1, None),
-            super::MusicWheelEntry::Song(song.clone()),
-        ];
-
-        let mut previous = init_placeholder();
-        previous.sort_mode = WheelSortMode::Meter;
-        previous.expanded_pack_name = Some(Arc::from("12"));
-        let snapshot = sort_snapshot(&previous);
-
-        let mut rebuilt = init_placeholder();
-        rebuilt.sort_mode = WheelSortMode::Meter;
-        rebuilt.meter_entries = meter_entries.clone().into();
-        rebuilt.all_entries = meter_entries.clone().into();
-        rebuilt.expanded_pack_name = Some(Arc::from("04"));
-        rebuilt.entries = build_displayed_entries(
-            &meter_entries,
-            None,
-            Some("04"),
-            rebuilt.policy.interaction.wheel_style,
-            rebuilt.policy.interaction.hide_inactive_series,
-        );
-        rebuilt.selected_index = rebuilt
-            .entries
-            .iter()
-            .position(|entry| matches!(entry, super::MusicWheelEntry::Song(_)))
-            .expect("lowest meter section should contain the selected song");
-        rebuilt.selected_steps_index = 0;
-        rebuilt.preferred_difficulty_index = 4;
-        rebuilt.p2_selected_steps_index = 0;
-        rebuilt.p2_preferred_difficulty_index = 3;
-
-        restore_sort(&mut rebuilt, snapshot);
-
-        assert_eq!(rebuilt.expanded_pack_name.as_deref(), Some("12"));
-        assert!(matches!(
-            rebuilt.entries.get(rebuilt.selected_index),
-            Some(super::MusicWheelEntry::Song(selected)) if Arc::ptr_eq(selected, &song)
-        ));
-        assert_eq!(rebuilt.selected_steps_index, 2);
-        assert_eq!(rebuilt.p2_selected_steps_index, 2);
-        assert_eq!(rebuilt.preferred_difficulty_index, 4);
-        assert_eq!(rebuilt.p2_preferred_difficulty_index, 3);
-    }
-
     fn song_titles(entries: &[super::MusicWheelEntry]) -> Vec<&str> {
         entries
             .iter()
@@ -18629,13 +18518,16 @@ mod tests {
     }
 
     #[test]
-    fn reset_preview_after_gameplay_rearms_leaderboard_refresh() {
+    fn reset_preview_after_gameplay_preserves_selection_and_rearms_refresh() {
         let mut state = init_placeholder();
+        state.entries = test_entries();
+        state.selected_index = 4;
         state.last_refreshed_leaderboard_hash = Some("abc123".to_string());
         state.last_refreshed_leaderboard_hash_p2 = Some("def456".to_string());
 
         reset_preview_after_gameplay(&mut state, crate::views::SelectMusicHistoryView::default());
 
+        assert_eq!(state.selected_index, 4);
         assert_eq!(state.last_refreshed_leaderboard_hash, None);
         assert_eq!(state.last_refreshed_leaderboard_hash_p2, None);
         assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
@@ -18685,23 +18577,6 @@ mod tests {
 
         assert_eq!(state.sort_mode, WheelSortMode::Recent);
         assert!(matches!(effect, ThemeEffect::None));
-    }
-
-    #[test]
-    fn sort_snapshot_restores_transient_mode_after_rebuild() {
-        let mut original = init_placeholder();
-        original.sort_mode = WheelSortMode::Artist;
-        original.active_playlist_id = Some("session-playlist".to_string());
-        let snapshot = sort_snapshot(&original);
-        let mut rebuilt = init_placeholder();
-
-        restore_sort(&mut rebuilt, snapshot);
-
-        assert_eq!(rebuilt.sort_mode, WheelSortMode::Artist);
-        assert_eq!(
-            rebuilt.active_playlist_id.as_deref(),
-            Some("session-playlist")
-        );
     }
 
     #[test]
