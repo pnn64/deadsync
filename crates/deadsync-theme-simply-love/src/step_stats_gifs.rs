@@ -696,6 +696,22 @@ fn capture_frames(sprite: &Table) -> mlua::Result<(Vec<u32>, Vec<f32>)> {
 }
 
 fn numbered_key(key: &str, prefix: &str) -> Option<usize> {
+    let key_prefix = key.as_bytes().get(..prefix.len())?;
+    if !key_prefix.eq_ignore_ascii_case(prefix.as_bytes()) {
+        return None;
+    }
+    key.get(prefix.len()..)?.parse().ok()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn step_stats_numbered_key_for_bench(key: &str, prefix: &str) -> Option<usize> {
+    numbered_key(key, prefix)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn step_stats_numbered_key_reference_for_bench(key: &str, prefix: &str) -> Option<usize> {
     let lower = key.to_ascii_lowercase();
     lower.strip_prefix(prefix)?.parse().ok()
 }
@@ -726,22 +742,142 @@ fn value_string(value: &Value) -> Option<String> {
     }
 }
 
+fn alignment_name_lower(value: &str) -> Option<f32> {
+    match value {
+        "left" | "top" => Some(0.0),
+        "center" | "middle" => Some(0.5),
+        "right" | "bottom" => Some(1.0),
+        _ => None,
+    }
+}
+
+fn alignment_name(value: &str) -> Option<f32> {
+    alignment_name_lower(value).or_else(|| {
+        if value.eq_ignore_ascii_case("left") || value.eq_ignore_ascii_case("top") {
+            Some(0.0)
+        } else if value.eq_ignore_ascii_case("center") || value.eq_ignore_ascii_case("middle") {
+            Some(0.5)
+        } else if value.eq_ignore_ascii_case("right") || value.eq_ignore_ascii_case("bottom") {
+            Some(1.0)
+        } else {
+            None
+        }
+    })
+}
+
 fn align_value(value: &Value) -> Option<f32> {
-    value_f32(value).or_else(
-        || match value_string(value)?.to_ascii_lowercase().as_str() {
-            "left" | "top" => Some(0.0),
-            "center" | "middle" => Some(0.5),
-            "right" | "bottom" => Some(1.0),
-            _ => None,
-        },
-    )
+    if let Some(value) = value_f32(value) {
+        return Some(value);
+    }
+    let Value::String(value) = value else {
+        return None;
+    };
+    let value = value.to_str().ok()?;
+    alignment_name(value.as_ref())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn step_stats_alignment_name_for_bench(value: &str) -> Option<f32> {
+    alignment_name(value)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn step_stats_alignment_name_reference_for_bench(value: &str) -> Option<f32> {
+    // The committed Lua path first copied the string out of `mlua`, then
+    // allocated a second lowercase string for classification.
+    let owned = value.to_string();
+    alignment_name_lower(&owned.to_ascii_lowercase())
+}
+
+#[derive(Clone, Copy)]
+#[repr(u8)]
+enum GifActorCommand {
+    EffectClock,
+    X,
+    Y,
+    Xy,
+    AddX,
+    AddY,
+    Zoom,
+    HAlign,
+    Align,
+    CropLeft,
+    CropRight,
+    CropTop,
+    CropBottom,
+}
+
+fn actor_command_lower(method: &str) -> Option<GifActorCommand> {
+    match method {
+        "effectclock" => Some(GifActorCommand::EffectClock),
+        "x" => Some(GifActorCommand::X),
+        "y" => Some(GifActorCommand::Y),
+        "xy" => Some(GifActorCommand::Xy),
+        "addx" => Some(GifActorCommand::AddX),
+        "addy" => Some(GifActorCommand::AddY),
+        "zoom" => Some(GifActorCommand::Zoom),
+        "halign" => Some(GifActorCommand::HAlign),
+        "align" => Some(GifActorCommand::Align),
+        "cropleft" => Some(GifActorCommand::CropLeft),
+        "cropright" => Some(GifActorCommand::CropRight),
+        "croptop" => Some(GifActorCommand::CropTop),
+        "cropbottom" => Some(GifActorCommand::CropBottom),
+        _ => None,
+    }
+}
+
+fn actor_command(method: &str) -> Option<GifActorCommand> {
+    actor_command_lower(method).or_else(|| {
+        if method.eq_ignore_ascii_case("effectclock") {
+            Some(GifActorCommand::EffectClock)
+        } else if method.eq_ignore_ascii_case("x") {
+            Some(GifActorCommand::X)
+        } else if method.eq_ignore_ascii_case("y") {
+            Some(GifActorCommand::Y)
+        } else if method.eq_ignore_ascii_case("xy") {
+            Some(GifActorCommand::Xy)
+        } else if method.eq_ignore_ascii_case("addx") {
+            Some(GifActorCommand::AddX)
+        } else if method.eq_ignore_ascii_case("addy") {
+            Some(GifActorCommand::AddY)
+        } else if method.eq_ignore_ascii_case("zoom") {
+            Some(GifActorCommand::Zoom)
+        } else if method.eq_ignore_ascii_case("halign") {
+            Some(GifActorCommand::HAlign)
+        } else if method.eq_ignore_ascii_case("align") {
+            Some(GifActorCommand::Align)
+        } else if method.eq_ignore_ascii_case("cropleft") {
+            Some(GifActorCommand::CropLeft)
+        } else if method.eq_ignore_ascii_case("cropright") {
+            Some(GifActorCommand::CropRight)
+        } else if method.eq_ignore_ascii_case("croptop") {
+            Some(GifActorCommand::CropTop)
+        } else if method.eq_ignore_ascii_case("cropbottom") {
+            Some(GifActorCommand::CropBottom)
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn step_stats_actor_command_for_bench(method: &str) -> Option<u8> {
+    actor_command(method).map(|command| command as u8)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn step_stats_actor_command_reference_for_bench(method: &str) -> Option<u8> {
+    actor_command_lower(&method.to_ascii_lowercase()).map(|command| command as u8)
 }
 
 fn apply_actor_command(style: &mut GifStyle, method: &str, args: &MultiValue) {
-    let method = method.to_ascii_lowercase();
     let first = args.front();
-    match method.as_str() {
-        "effectclock" => {
+    match actor_command(method) {
+        Some(GifActorCommand::EffectClock) => {
             if let Some(clock) = first.and_then(value_string) {
                 style.effect_clock = match clock.to_ascii_lowercase().as_str() {
                     "beat" | "beatnooffset" | "bgm" => EffectClock::Beat,
@@ -749,24 +885,36 @@ fn apply_actor_command(style: &mut GifStyle, method: &str, args: &MultiValue) {
                 };
             }
         }
-        "x" => style.x = first.and_then(value_f32).unwrap_or(style.x),
-        "y" => style.y = first.and_then(value_f32).unwrap_or(style.y),
-        "xy" => {
+        Some(GifActorCommand::X) => style.x = first.and_then(value_f32).unwrap_or(style.x),
+        Some(GifActorCommand::Y) => style.y = first.and_then(value_f32).unwrap_or(style.y),
+        Some(GifActorCommand::Xy) => {
             style.x = first.and_then(value_f32).unwrap_or(style.x);
             style.y = args.get(1).and_then(value_f32).unwrap_or(style.y);
         }
-        "addx" => style.x += first.and_then(value_f32).unwrap_or(0.0),
-        "addy" => style.y += first.and_then(value_f32).unwrap_or(0.0),
-        "zoom" => style.zoom = first.and_then(value_f32).unwrap_or(style.zoom),
-        "halign" => style.align_x = first.and_then(align_value).unwrap_or(style.align_x),
-        "align" => {
+        Some(GifActorCommand::AddX) => style.x += first.and_then(value_f32).unwrap_or(0.0),
+        Some(GifActorCommand::AddY) => style.y += first.and_then(value_f32).unwrap_or(0.0),
+        Some(GifActorCommand::Zoom) => {
+            style.zoom = first.and_then(value_f32).unwrap_or(style.zoom);
+        }
+        Some(GifActorCommand::HAlign) => {
             style.align_x = first.and_then(align_value).unwrap_or(style.align_x);
         }
-        "cropleft" => style.crop[0] = first.and_then(value_f32).unwrap_or(style.crop[0]),
-        "cropright" => style.crop[1] = first.and_then(value_f32).unwrap_or(style.crop[1]),
-        "croptop" => style.crop[2] = first.and_then(value_f32).unwrap_or(style.crop[2]),
-        "cropbottom" => style.crop[3] = first.and_then(value_f32).unwrap_or(style.crop[3]),
-        _ => {}
+        Some(GifActorCommand::Align) => {
+            style.align_x = first.and_then(align_value).unwrap_or(style.align_x);
+        }
+        Some(GifActorCommand::CropLeft) => {
+            style.crop[0] = first.and_then(value_f32).unwrap_or(style.crop[0]);
+        }
+        Some(GifActorCommand::CropRight) => {
+            style.crop[1] = first.and_then(value_f32).unwrap_or(style.crop[1]);
+        }
+        Some(GifActorCommand::CropTop) => {
+            style.crop[2] = first.and_then(value_f32).unwrap_or(style.crop[2]);
+        }
+        Some(GifActorCommand::CropBottom) => {
+            style.crop[3] = first.and_then(value_f32).unwrap_or(style.crop[3]);
+        }
+        None => {}
     }
 }
 
@@ -796,6 +944,90 @@ t[#t+1] = Def.Sprite {
 }
 return t
 "#;
+
+    #[test]
+    fn allocation_free_numbered_keys_match_committed_behavior() {
+        let cases = [
+            ("Frame0000", "frame", Some(0)),
+            ("frame42", "frame", Some(42)),
+            ("DeLaY0012", "delay", Some(12)),
+            ("delay4095", "delay", Some(4095)),
+            ("frame", "frame", None),
+            ("frame-1", "frame", None),
+            ("frame12tail", "frame", None),
+            ("fr\u{00e1}me12", "frame", None),
+            (" Frame1", "frame", None),
+        ];
+
+        for (key, prefix, expected) in cases {
+            assert_eq!(numbered_key(key, prefix), expected, "case: {key:?}");
+            assert_eq!(
+                numbered_key(key, prefix),
+                step_stats_numbered_key_reference_for_bench(key, prefix),
+                "case: {key:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_alignment_names_match_committed_behavior() {
+        let cases = [
+            ("left", Some(0.0)),
+            ("TOP", Some(0.0)),
+            ("Center", Some(0.5)),
+            ("mIdDlE", Some(0.5)),
+            ("RIGHT", Some(1.0)),
+            ("bottom", Some(1.0)),
+            (" left ", None),
+            ("baseline", None),
+            ("\u{00e9}center", None),
+        ];
+
+        for (value, expected) in cases {
+            assert_eq!(alignment_name(value), expected, "case: {value:?}");
+            assert_eq!(
+                alignment_name(value),
+                step_stats_alignment_name_reference_for_bench(value),
+                "case: {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_actor_commands_match_committed_behavior() {
+        let cases = [
+            ("effectclock", Some(GifActorCommand::EffectClock as u8)),
+            ("EffectClock", Some(GifActorCommand::EffectClock as u8)),
+            ("x", Some(GifActorCommand::X as u8)),
+            ("Y", Some(GifActorCommand::Y as u8)),
+            ("Xy", Some(GifActorCommand::Xy as u8)),
+            ("AddX", Some(GifActorCommand::AddX as u8)),
+            ("ADDY", Some(GifActorCommand::AddY as u8)),
+            ("zoom", Some(GifActorCommand::Zoom as u8)),
+            ("HAlign", Some(GifActorCommand::HAlign as u8)),
+            ("align", Some(GifActorCommand::Align as u8)),
+            ("CropLeft", Some(GifActorCommand::CropLeft as u8)),
+            ("CROPRIGHT", Some(GifActorCommand::CropRight as u8)),
+            ("cropTop", Some(GifActorCommand::CropTop as u8)),
+            ("cropbottom", Some(GifActorCommand::CropBottom as u8)),
+            ("rotatez", None),
+            (" zoom ", None),
+            ("z\u{00f6}om", None),
+        ];
+
+        for (method, expected) in cases {
+            assert_eq!(
+                actor_command(method).map(|command| command as u8),
+                expected,
+                "case: {method:?}"
+            );
+            assert_eq!(
+                actor_command(method).map(|command| command as u8),
+                step_stats_actor_command_reference_for_bench(method),
+                "case: {method:?}"
+            );
+        }
+    }
 
     #[test]
     fn issue_641_actor_compiles_to_animation_data() {
@@ -833,6 +1065,26 @@ return Def.Sprite {
         assert_eq!(gif.styles[1][1].x, 220.0);
         assert_eq!(gif.styles[0][0].align_x, 0.0);
         assert_eq!(gif.styles[0][1].align_x, 1.0);
+    }
+
+    #[test]
+    fn mixed_case_actor_methods_and_named_alignment_compile() {
+        let script = r#"
+return Def.Sprite {
+    Texture="mixed 1x1.png",
+    OnCommand=function(self)
+        self:X(12):CropLeft(0.25):HAlign("RIGHT")
+    end
+}
+"#;
+        let gif = compile_definition("mixed", script, "fixture.lua").unwrap();
+        for styles in gif.styles {
+            for style in styles {
+                assert_eq!(style.x, 12.0);
+                assert_eq!(style.crop[0], 0.25);
+                assert_eq!(style.align_x, 1.0);
+            }
+        }
     }
 
     #[test]

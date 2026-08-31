@@ -102,6 +102,11 @@ name = "song_search_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "step_stats_lua_parse_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
