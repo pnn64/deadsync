@@ -61,6 +61,13 @@ pub use files::{
     retarget_loader_env, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
     song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use files::{
+    actor_util_extension_type_for_bench, actor_util_extension_type_reference_for_bench,
+    ascii_lowercase_contains_for_bench, ascii_lowercase_contains_reference_for_bench,
+    song_lookup_matches_reference_for_bench,
+};
 pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
