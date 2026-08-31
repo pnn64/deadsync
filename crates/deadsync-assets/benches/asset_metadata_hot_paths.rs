@@ -316,7 +316,22 @@ fn legacy_strip_sprite_hints(name: &str) -> String {
         out.push(bytes[i] as char);
         i += 1;
     }
-    out.replace(" (doubleres)", "").trim().to_string()
+    const DOUBLERES_HINT: &str = " (doubleres)";
+    while let Some(start) = out.find(DOUBLERES_HINT) {
+        out.replace_range(start..start + DOUBLERES_HINT.len(), "");
+    }
+
+    let trim_start = out.len() - out.trim_start().len();
+    let trim_end = out.trim_end().len();
+    if trim_start >= trim_end {
+        out.clear();
+        return out;
+    }
+    out.truncate(trim_end);
+    if trim_start != 0 {
+        out.drain(..trim_start);
+    }
+    out
 }
 
 fn string_checksum(value: &str) -> u64 {
@@ -747,6 +762,16 @@ fn main() {
         })
     });
     assert_eq!(old_strip.checksum, new_strip.checksum);
+    assert_faster("sprite display-name normalization", &old_strip, &new_strip);
+    assert!(
+        new_strip.p95_ns < old_strip.p95_ns,
+        "sprite display-name normalization p95 regressed"
+    );
+    assert!(new_strip.alloc.allocs <= old_strip.alloc.allocs);
+    assert!(new_strip.alloc.reallocs <= old_strip.alloc.reallocs);
+    assert!(new_strip.alloc.frees <= old_strip.alloc.frees);
+    assert!(new_strip.alloc.alloc_bytes < old_strip.alloc.alloc_bytes);
+    assert!(new_strip.alloc.churn() < old_strip.alloc.churn());
     print_pair(
         "sprite display-name normalization (8 names)",
         &old_strip,

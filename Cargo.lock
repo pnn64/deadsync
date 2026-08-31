@@ -1085,6 +1085,7 @@ dependencies = [
  "deadlib-video",
  "image",
  "log",
+ "memchr",
  "rustc-hash 2.1.3",
  "twox-hash",
 ]
@@ -1354,7 +1355,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.928"
+version = "0.5.929"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1804,7 +1805,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.928"
+version = "0.5.929"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1865,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.928"
+version = "0.5.929"
 dependencies = [
  "log",
  "semver",

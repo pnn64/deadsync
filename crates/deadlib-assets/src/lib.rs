@@ -407,44 +407,67 @@ pub fn strip_sprite_hints(name: &str) -> String {
         .rsplit_once('.')
         .map_or(file_name, |(stem, _)| stem);
     let bytes = without_ext.as_bytes();
-    let mut out = String::with_capacity(without_ext.len());
-    let mut i = 0usize;
-    while i < bytes.len() {
-        if bytes[i] == b' ' {
-            let mut left = i + 1;
-            while left < bytes.len() && bytes[left].is_ascii_digit() {
-                left += 1;
-            }
-            if left > i + 1 && left < bytes.len() && matches!(bytes[left], b'x' | b'X') {
-                let mut right = left + 1;
-                while right < bytes.len() && bytes[right].is_ascii_digit() {
-                    right += 1;
-                }
-                if right > left + 1 {
-                    i = right;
-                    continue;
-                }
-            }
+    let mut scan_from = 0usize;
+    let mut copy_from = 0usize;
+    let mut out: Option<String> = None;
+
+    while let Some(offset) = memchr::memchr(b' ', &bytes[scan_from..]) {
+        let start = scan_from + offset;
+        let Some(end) = sprite_hint_end(bytes, start) else {
+            scan_from = start + 1;
+            continue;
+        };
+
+        if let Some(out) = out.as_mut() {
+            push_sprite_label_chunk(out, &without_ext[copy_from..start]);
+        } else {
+            let prefix = &without_ext[..start];
+            let trimmed_prefix = prefix.trim_start();
+            let leading_trim = prefix.len() - trimmed_prefix.len();
+            let mut built = String::with_capacity(without_ext.len() - (end - start) - leading_trim);
+            built.push_str(trimmed_prefix);
+            out = Some(built);
         }
-        out.push(bytes[i] as char);
-        i += 1;
-    }
-    const DOUBLERES_HINT: &str = " (doubleres)";
-    while let Some(start) = out.find(DOUBLERES_HINT) {
-        out.replace_range(start..start + DOUBLERES_HINT.len(), "");
+        copy_from = end;
+        scan_from = end;
     }
 
-    let trim_start = out.len() - out.trim_start().len();
-    let trim_end = out.trim_end().len();
-    if trim_start >= trim_end {
-        out.clear();
-        return out;
-    }
-    out.truncate(trim_end);
-    if trim_start != 0 {
-        out.drain(..trim_start);
-    }
+    let Some(mut out) = out else {
+        return without_ext.trim().to_owned();
+    };
+    push_sprite_label_chunk(&mut out, &without_ext[copy_from..]);
+    out.truncate(out.trim_end().len());
     out
+}
+
+#[inline]
+fn push_sprite_label_chunk(out: &mut String, chunk: &str) {
+    out.push_str(if out.is_empty() {
+        chunk.trim_start()
+    } else {
+        chunk
+    });
+}
+
+#[inline]
+fn sprite_hint_end(bytes: &[u8], start: usize) -> Option<usize> {
+    const DOUBLERES_HINT: &[u8] = b" (doubleres)";
+    if bytes[start..].starts_with(DOUBLERES_HINT) {
+        return Some(start + DOUBLERES_HINT.len());
+    }
+
+    let mut left = start + 1;
+    while left < bytes.len() && bytes[left].is_ascii_digit() {
+        left += 1;
+    }
+    if left == start + 1 || left >= bytes.len() || !matches!(bytes[left], b'x' | b'X') {
+        return None;
+    }
+    let mut right = left + 1;
+    while right < bytes.len() && bytes[right].is_ascii_digit() {
+        right += 1;
+    }
+    (right > left + 1).then_some(right)
 }
 
 #[must_use]
@@ -926,7 +949,7 @@ mod tests {
     }
 
     #[test]
-    fn optimized_sprite_hint_strip_matches_reference() {
+    fn optimized_sprite_hint_strip_matches_committed_ascii_behavior() {
         fn reference(name: &str) -> String {
             let file_name = Path::new(name)
                 .file_name()
@@ -958,7 +981,22 @@ mod tests {
                 out.push(bytes[i] as char);
                 i += 1;
             }
-            out.replace(" (doubleres)", "").trim().to_string()
+            const DOUBLERES_HINT: &str = " (doubleres)";
+            while let Some(start) = out.find(DOUBLERES_HINT) {
+                out.replace_range(start..start + DOUBLERES_HINT.len(), "");
+            }
+
+            let trim_start = out.len() - out.trim_start().len();
+            let trim_end = out.trim_end().len();
+            if trim_start >= trim_end {
+                out.clear();
+                return out;
+            }
+            out.truncate(trim_end);
+            if trim_start != 0 {
+                out.drain(..trim_start);
+            }
+            out
         }
 
         let cases = [
@@ -971,11 +1009,45 @@ mod tests {
             "no 1x0 hint.png",
             "unchanged (DOUBLEres).png",
             "mine.png",
+            "",
+            "   ",
+            "  2x3",
+            "trailing 2x3   ",
+            "many   spaces 12X34 between 5x6 words.png",
+            "not 12x nor 12X.png",
+            "folder.with.dot/name.with.dots 4x5.png",
         ];
 
         for name in cases {
             assert_eq!(strip_sprite_hints(name), reference(name), "{name}");
         }
+
+        for prefix in ["", " ", "  ", "plain", "plain ", "folder/name "] {
+            for hint in [
+                "",
+                "1x1",
+                "12X34",
+                "1x",
+                "x2",
+                "(doubleres)",
+                "(DOUBLEres)",
+                "2x3 (doubleres)",
+            ] {
+                for suffix in ["", " tail", "   ", ".png"] {
+                    let name = format!("{prefix}{hint}{suffix}");
+                    assert_eq!(strip_sprite_hints(&name), reference(&name), "{name}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sprite_hint_strip_preserves_utf8_labels() {
+        assert_eq!(strip_sprite_hints("décor/ネオン 4x2.png"), "ネオン");
+        assert_eq!(
+            strip_sprite_hints("  écran (doubleres) principal.png  "),
+            "écran principal"
+        );
     }
 
     #[test]
