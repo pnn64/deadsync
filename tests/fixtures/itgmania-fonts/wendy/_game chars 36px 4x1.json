@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "font": "wendy/_game chars 36px 4x1.ini",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "height": 36,
+  "line_spacing": 72,
+  "right_to_left": false,
+  "distance_field": false,
+  "default_stroke_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "line_width": 295,
+  "line_height": 36,
+  "pages": [
+    {
+      "texture": "wendy/_game chars 36px 4x1 (doubleres).png",
+      "texture_hints": "32bpp",
+      "source_size": {
+        "width": 288,
+        "height": 72
+      },
+      "image_size": {
+        "width": 576,
+        "height": 144
+      },
+      "frames": {
+        "width": 4,
+        "height": 1
+      },
+      "height": 36,
+      "line_spacing": 72,
+      "vertical_shift": -54.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    },
+    {
+      "texture": "Common default 2x1.png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 64,
+        "height": 34
+      },
+      "image_size": {
+        "width": 64,
+        "height": 34
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 34,
+      "line_spacing": 34,
+      "vertical_shift": -34.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    }
+  ],
+  "glyphs": [
+    {
+      "codepoint": 57357,
+      "uses_default_glyph": false,
+      "texture": "wendy/_game chars 36px 4x1 (doubleres).png",
+      "frame": 0,
+      "pen_x": 0,
+      "advance": 61,
+      "width": 63.0,
+      "height": 72.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -54.0,
+      "sample_rect": {
+        "left": 8.0,
+        "top": 0.0,
+        "right": 134.0,
+        "bottom": 144.0
+      }
+    },
+    {
+      "codepoint": 57360,
+      "uses_default_glyph": false,
+      "texture": "wendy/_game chars 36px 4x1 (doubleres).png",
+      "frame": 2,
+      "pen_x": 61,
+      "advance": 61,
+      "width": 63.0,
+      "height": 72.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -54.0,
+      "sample_rect": {
+        "left": 296.0,
+        "top": 0.0,
+        "right": 422.0,
+        "bottom": 144.0
+      }
+    },
+    {
+      "codepoint": 57363,
+      "uses_default_glyph": false,
+      "texture": "wendy/_game chars 36px 4x1 (doubleres).png",
+      "frame": 1,
+      "pen_x": 122,
+      "advance": 61,
+      "width": 63.0,
+      "height": 72.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -54.0,
+      "sample_rect": {
+        "left": 152.0,
+        "top": 0.0,
+        "right": 278.0,
+        "bottom": 144.0
+      }
+    },
+    {
+      "codepoint": 57384,
+      "uses_default_glyph": false,
+      "texture": "wendy/_game chars 36px 4x1 (doubleres).png",
+      "frame": 3,
+      "pen_x": 183,
+      "advance": 61,
+      "width": 63.0,
+      "height": 72.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -54.0,
+      "sample_rect": {
+        "left": 440.0,
+        "top": 0.0,
+        "right": 566.0,
+        "bottom": 144.0
+      }
+    },
+    {
+      "codepoint": 65533,
+      "uses_default_glyph": false,
+      "texture": "Common default 2x1.png",
+      "frame": 1,
+      "pen_x": 244,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 38.0,
+        "top": 0.0,
+        "right": 57.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 63743,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 261,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 888,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 278,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    }
+  ]
+}

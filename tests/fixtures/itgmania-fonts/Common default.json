@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "font": "Common default.ini",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "height": 34,
+  "line_spacing": 34,
+  "right_to_left": false,
+  "distance_field": false,
+  "default_stroke_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "line_width": 51,
+  "line_height": 34,
+  "pages": [
+    {
+      "texture": "Common default 2x1.png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 64,
+        "height": 34
+      },
+      "image_size": {
+        "width": 64,
+        "height": 34
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 34,
+      "line_spacing": 34,
+      "vertical_shift": -34.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    }
+  ],
+  "glyphs": [
+    {
+      "codepoint": 65533,
+      "uses_default_glyph": false,
+      "texture": "Common default 2x1.png",
+      "frame": 1,
+      "pen_x": 0,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 38.0,
+        "top": 0.0,
+        "right": 57.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 63743,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 17,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 888,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 34,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    }
+  ]
+}

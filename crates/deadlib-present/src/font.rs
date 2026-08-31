@@ -2841,27 +2841,23 @@ pub fn parse_with_texture_context(
 
             let mut width_i = base_w_scaled;
             let mut chop_i = frame_w_i - width_i;
-            if chop_i < 0 {
-                chop_i = 0;
-            }
-            if (chop_i & 1) != 0 {
+            if chop_i % 2 == 1 {
                 chop_i -= 1;
                 width_i += 1; // odd-chop quirk
             }
 
             let width_f = width_i as f32;
             let chop_f = chop_i as f32;
-            let pad_f = (chop_f * 0.5).max(0.0);
+            let pad_f = chop_f * 0.5;
 
-            let mut extra_left = (draw_left as f32).min(pad_f);
-            let mut extra_right = (draw_right as f32).min(pad_f);
-            if width_i <= 0 {
-                extra_left = 0.0;
-                extra_right = 0.0;
-            }
+            let extra_left = (draw_left as f32).min(pad_f);
+            let extra_right = (draw_right as f32).min(pad_f);
 
             let glyph_size = [width_f + extra_left + extra_right, frame_h_i as f32];
-            let glyph_offset = [-extra_left, vshift_authored];
+            let glyph_offset = [
+                if extra_left == 0.0 { 0.0 } else { -extra_left },
+                vshift_authored,
+            ];
             let advance = hadvance as f32;
 
             // texture rect in actual pixels (retain SM float precision)
@@ -2941,7 +2937,7 @@ pub fn parse_with_texture_context(
             }
 
             // default glyph from our first page only (not from imports)
-            if page_idx == 0 && i == 0 {
+            if is_top_level && page_idx == 0 && i == 0 {
                 all_glyphs
                     .entry(FONT_DEFAULT_CHAR)
                     .or_insert_with(|| glyph.clone());

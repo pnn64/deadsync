@@ -1,0 +1,6838 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "font": "miso/_miso light.ini",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "height": 15,
+  "line_spacing": 24,
+  "right_to_left": false,
+  "distance_field": false,
+  "default_stroke_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "line_width": 2876,
+  "line_height": 34,
+  "pages": [
+    {
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 360,
+        "height": 360
+      },
+      "image_size": {
+        "width": 1920,
+        "height": 1920
+      },
+      "frames": {
+        "width": 15,
+        "height": 15
+      },
+      "height": 15,
+      "line_spacing": 24,
+      "vertical_shift": -19.0,
+      "draw_extra_pixels_left": 2,
+      "draw_extra_pixels_right": 2
+    },
+    {
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 240,
+        "height": 240
+      },
+      "image_size": {
+        "width": 1280,
+        "height": 1280
+      },
+      "frames": {
+        "width": 10,
+        "height": 10
+      },
+      "height": 15,
+      "line_spacing": 24,
+      "vertical_shift": -19.0,
+      "draw_extra_pixels_left": 2,
+      "draw_extra_pixels_right": 2
+    },
+    {
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 384,
+        "height": 170
+      },
+      "image_size": {
+        "width": 2048,
+        "height": 896
+      },
+      "frames": {
+        "width": 16,
+        "height": 7
+      },
+      "height": 15,
+      "line_spacing": 24,
+      "vertical_shift": -19.0,
+      "draw_extra_pixels_left": 2,
+      "draw_extra_pixels_right": 2
+    },
+    {
+      "texture": "Common default 2x1.png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 64,
+        "height": 34
+      },
+      "image_size": {
+        "width": 64,
+        "height": 34
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 34,
+      "line_spacing": 34,
+      "vertical_shift": -34.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    }
+  ],
+  "glyphs": [
+    {
+      "codepoint": 9,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 219,
+      "pen_x": 0,
+      "advance": 20,
+      "width": 24.0,
+      "height": 24.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1152.0,
+        "top": 1792.0,
+        "right": 1280.0,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 32,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 0,
+      "pen_x": 20,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 32.0,
+        "top": 0.0,
+        "right": 90.666664,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 33,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 1,
+      "pen_x": 24,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 160.00002,
+        "top": 0.0,
+        "right": 218.66666,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 34,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 2,
+      "pen_x": 28,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 0.0,
+        "right": 357.33334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 35,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 3,
+      "pen_x": 35,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 400.0,
+        "top": 0.0,
+        "right": 490.66666,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 36,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 4,
+      "pen_x": 44,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 0.0,
+        "right": 613.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 37,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 5,
+      "pen_x": 52,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 650.6667,
+        "top": 0.0,
+        "right": 752.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 38,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 6,
+      "pen_x": 64,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 0.0,
+        "right": 874.6667,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 39,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 7,
+      "pen_x": 74,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 928.0,
+        "top": 0.0,
+        "right": 986.6667,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 40,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 8,
+      "pen_x": 78,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1050.6666,
+        "top": 0.0,
+        "right": 1120.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 41,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 9,
+      "pen_x": 83,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1178.6666,
+        "top": 0.0,
+        "right": 1248.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 42,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 10,
+      "pen_x": 88,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 0.0,
+        "right": 1381.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 43,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 11,
+      "pen_x": 96,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 0.0,
+        "right": 1509.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 44,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 12,
+      "pen_x": 104,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1568.0,
+        "top": 0.0,
+        "right": 1626.6666,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 45,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 13,
+      "pen_x": 108,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 0.0,
+        "right": 1765.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 46,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 14,
+      "pen_x": 116,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1824.0,
+        "top": 0.0,
+        "right": 1882.6666,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 47,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 15,
+      "pen_x": 120,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 128.0,
+        "right": 101.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 48,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 16,
+      "pen_x": 128,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 128.0,
+        "right": 229.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 49,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 17,
+      "pen_x": 136,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 128.0,
+        "right": 357.33334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 50,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 18,
+      "pen_x": 144,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 128.0,
+        "right": 485.33334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 51,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 19,
+      "pen_x": 152,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 128.0,
+        "right": 613.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 52,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 20,
+      "pen_x": 160,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 128.0,
+        "right": 741.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 53,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 21,
+      "pen_x": 168,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 128.0,
+        "right": 869.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 54,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 22,
+      "pen_x": 176,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 128.0,
+        "right": 997.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 55,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 23,
+      "pen_x": 184,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 128.0,
+        "right": 1125.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 56,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 24,
+      "pen_x": 192,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 128.0,
+        "right": 1253.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 57,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 25,
+      "pen_x": 200,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 128.0,
+        "right": 1381.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 58,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 26,
+      "pen_x": 208,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1440.0,
+        "top": 128.0,
+        "right": 1498.6666,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 59,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 27,
+      "pen_x": 212,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1568.0,
+        "top": 128.0,
+        "right": 1626.6666,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 60,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 28,
+      "pen_x": 216,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 128.0,
+        "right": 1765.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 61,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 29,
+      "pen_x": 224,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 128.0,
+        "right": 1893.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 62,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 30,
+      "pen_x": 232,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 256.0,
+        "right": 101.33333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 63,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 31,
+      "pen_x": 240,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 256.0,
+        "right": 229.33333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 64,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 32,
+      "pen_x": 247,
+      "advance": 15,
+      "width": 23.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 256.0,
+        "top": 256.0,
+        "right": 378.66666,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 65,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 33,
+      "pen_x": 262,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 400.0,
+        "top": 256.0,
+        "right": 490.66666,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 66,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 34,
+      "pen_x": 271,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 528.0,
+        "top": 256.0,
+        "right": 618.6667,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 67,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 35,
+      "pen_x": 280,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 256.0,
+        "right": 741.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 68,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 36,
+      "pen_x": 288,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 256.0,
+        "right": 874.6667,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 69,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 37,
+      "pen_x": 297,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 256.0,
+        "right": 997.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 70,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 38,
+      "pen_x": 304,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 256.0,
+        "right": 1125.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 71,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 39,
+      "pen_x": 311,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 256.0,
+        "right": 1253.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 72,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 40,
+      "pen_x": 319,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1296.0,
+        "top": 256.0,
+        "right": 1386.6666,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 73,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 41,
+      "pen_x": 328,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1440.0,
+        "top": 256.0,
+        "right": 1498.6666,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 74,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 42,
+      "pen_x": 332,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 256.0,
+        "right": 1637.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 75,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 43,
+      "pen_x": 339,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 256.0,
+        "right": 1765.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 76,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 44,
+      "pen_x": 347,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 256.0,
+        "right": 1893.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 77,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 45,
+      "pen_x": 354,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 16.000002,
+        "top": 384.0,
+        "right": 106.666664,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 78,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 46,
+      "pen_x": 364,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 144.00002,
+        "top": 384.0,
+        "right": 234.66666,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 79,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 47,
+      "pen_x": 374,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 384.0,
+        "right": 357.33334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 80,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 48,
+      "pen_x": 382,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 384.0,
+        "right": 485.33334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 81,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 49,
+      "pen_x": 390,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 384.0,
+        "right": 613.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 82,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 50,
+      "pen_x": 398,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 384.0,
+        "right": 741.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 83,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 51,
+      "pen_x": 406,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 384.0,
+        "right": 869.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 84,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 52,
+      "pen_x": 414,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 384.0,
+        "right": 997.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 85,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 53,
+      "pen_x": 422,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 384.0,
+        "right": 1125.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 86,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 54,
+      "pen_x": 430,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 384.0,
+        "right": 1258.6666,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 87,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 55,
+      "pen_x": 439,
+      "advance": 14,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1285.3333,
+        "top": 384.0,
+        "right": 1397.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 88,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 56,
+      "pen_x": 453,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 384.0,
+        "right": 1509.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 89,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 57,
+      "pen_x": 461,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 384.0,
+        "right": 1637.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 90,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 58,
+      "pen_x": 469,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 384.0,
+        "right": 1765.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 91,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 59,
+      "pen_x": 477,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1818.6666,
+        "top": 384.0,
+        "right": 1888.0,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 92,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 60,
+      "pen_x": 482,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 512.0,
+        "right": 101.33333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 93,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 61,
+      "pen_x": 490,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 154.66667,
+        "top": 512.0,
+        "right": 224.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 94,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 62,
+      "pen_x": 495,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 272.0,
+        "top": 512.0,
+        "right": 362.66666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 95,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 63,
+      "pen_x": 505,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 400.0,
+        "top": 512.0,
+        "right": 490.66666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 96,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 64,
+      "pen_x": 515,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 528.0,
+        "top": 512.0,
+        "right": 618.6667,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 97,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 65,
+      "pen_x": 525,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 512.0,
+        "right": 741.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 98,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 66,
+      "pen_x": 532,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 512.0,
+        "right": 869.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 99,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 67,
+      "pen_x": 540,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 512.0,
+        "right": 997.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 100,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 68,
+      "pen_x": 547,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 512.0,
+        "right": 1125.3334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 101,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 69,
+      "pen_x": 555,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 512.0,
+        "right": 1253.3334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 102,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 70,
+      "pen_x": 562,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1306.6666,
+        "top": 512.0,
+        "right": 1376.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 103,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 71,
+      "pen_x": 568,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 512.0,
+        "right": 1509.3334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 104,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 72,
+      "pen_x": 576,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 512.0,
+        "right": 1637.3334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 105,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 73,
+      "pen_x": 584,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1696.0,
+        "top": 512.0,
+        "right": 1754.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 106,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 74,
+      "pen_x": 588,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1824.0,
+        "top": 512.0,
+        "right": 1882.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 107,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 75,
+      "pen_x": 592,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 640.0,
+        "right": 101.33333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 108,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 76,
+      "pen_x": 600,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 160.00002,
+        "top": 640.0,
+        "right": 218.66666,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 109,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 77,
+      "pen_x": 604,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 266.66666,
+        "top": 640.0,
+        "right": 368.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 110,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 78,
+      "pen_x": 616,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 640.0,
+        "right": 485.33334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 111,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 79,
+      "pen_x": 624,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 640.0,
+        "right": 613.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 112,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 80,
+      "pen_x": 632,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 640.0,
+        "right": 741.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 113,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 81,
+      "pen_x": 640,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 640.0,
+        "right": 869.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 114,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 82,
+      "pen_x": 648,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 922.6667,
+        "top": 640.0,
+        "right": 992.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 115,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 83,
+      "pen_x": 654,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 640.0,
+        "right": 1125.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 116,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 84,
+      "pen_x": 661,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1178.6666,
+        "top": 640.0,
+        "right": 1248.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 117,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 85,
+      "pen_x": 667,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 640.0,
+        "right": 1381.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 118,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 86,
+      "pen_x": 675,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 640.0,
+        "right": 1509.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 119,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 87,
+      "pen_x": 682,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1546.6666,
+        "top": 640.0,
+        "right": 1648.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 120,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 88,
+      "pen_x": 693,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 640.0,
+        "right": 1765.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 121,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 89,
+      "pen_x": 700,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 640.0,
+        "right": 1893.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 122,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 90,
+      "pen_x": 707,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 768.0,
+        "right": 101.33333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 123,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 91,
+      "pen_x": 714,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 154.66667,
+        "top": 768.0,
+        "right": 224.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 124,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 92,
+      "pen_x": 719,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 288.0,
+        "top": 768.0,
+        "right": 346.66666,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 125,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 93,
+      "pen_x": 723,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 410.66666,
+        "top": 768.0,
+        "right": 480.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 126,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 94,
+      "pen_x": 728,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 768.0,
+        "right": 613.3333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 160,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 0,
+      "pen_x": 736,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 32.0,
+        "top": 0.0,
+        "right": 90.666664,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 161,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 123,
+      "pen_x": 740,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 416.0,
+        "top": 1024.0,
+        "right": 474.66666,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 162,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 124,
+      "pen_x": 744,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 1024.0,
+        "right": 613.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 163,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 125,
+      "pen_x": 752,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 1024.0,
+        "right": 741.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 164,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 4,
+      "pen_x": 760,
+      "advance": 14,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 517.3334,
+        "top": 0.0,
+        "right": 629.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 165,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 127,
+      "pen_x": 774,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 1024.0,
+        "right": 997.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 166,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 128,
+      "pen_x": 782,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1056.0,
+        "top": 1024.0,
+        "right": 1114.6666,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 167,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 7,
+      "pen_x": 786,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 0.0,
+        "right": 997.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 168,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 8,
+      "pen_x": 794,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 0.0,
+        "right": 1125.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 169,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 131,
+      "pen_x": 802,
+      "advance": 14,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1413.3333,
+        "top": 1024.0,
+        "right": 1525.3334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 170,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 132,
+      "pen_x": 816,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1562.6666,
+        "top": 1024.0,
+        "right": 1632.0,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 171,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 133,
+      "pen_x": 822,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 1024.0,
+        "right": 1765.3334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 172,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 134,
+      "pen_x": 830,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 1024.0,
+        "right": 1893.3334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 173,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 13,
+      "pen_x": 838,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 128.0,
+        "right": 485.33334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 174,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 136,
+      "pen_x": 846,
+      "advance": 14,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 133.33334,
+        "top": 1152.0,
+        "right": 245.33333,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 175,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 137,
+      "pen_x": 860,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 272.0,
+        "top": 1152.0,
+        "right": 362.66666,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 176,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 16,
+      "pen_x": 870,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 794.6667,
+        "top": 128.0,
+        "right": 864.0,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 177,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 139,
+      "pen_x": 876,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 1152.0,
+        "right": 613.3333,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 178,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 140,
+      "pen_x": 884,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 666.6667,
+        "top": 1152.0,
+        "right": 736.0,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 179,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 141,
+      "pen_x": 890,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 794.6667,
+        "top": 1152.0,
+        "right": 864.0,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 180,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 20,
+      "pen_x": 896,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 26.666666,
+        "top": 256.0,
+        "right": 96.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 181,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 143,
+      "pen_x": 901,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 1152.0,
+        "right": 1125.3334,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 182,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 144,
+      "pen_x": 909,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 1152.0,
+        "right": 1258.6666,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 183,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 145,
+      "pen_x": 919,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1312.0,
+        "top": 1152.0,
+        "right": 1370.6666,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 184,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 24,
+      "pen_x": 923,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 544.0,
+        "top": 256.0,
+        "right": 602.6667,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 185,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 147,
+      "pen_x": 927,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1562.6666,
+        "top": 1152.0,
+        "right": 1632.0,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 186,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 148,
+      "pen_x": 932,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1690.6666,
+        "top": 1152.0,
+        "right": 1760.0,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 187,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 149,
+      "pen_x": 938,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 1152.0,
+        "right": 1893.3334,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 188,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 150,
+      "pen_x": 946,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 10.666666,
+        "top": 1280.0,
+        "right": 112.0,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 189,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 151,
+      "pen_x": 958,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 138.66667,
+        "top": 1280.0,
+        "right": 240.0,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 190,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 152,
+      "pen_x": 970,
+      "advance": 13,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 261.3333,
+        "top": 1280.0,
+        "right": 373.33334,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 191,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 153,
+      "pen_x": 983,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 1280.0,
+        "right": 485.33334,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 192,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 154,
+      "pen_x": 990,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 528.0,
+        "top": 1280.0,
+        "right": 618.6667,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 193,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 33,
+      "pen_x": 999,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 400.0,
+        "top": 384.0,
+        "right": 490.66666,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 194,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 34,
+      "pen_x": 1008,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 528.0,
+        "top": 384.0,
+        "right": 618.6667,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 195,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 157,
+      "pen_x": 1017,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 912.0,
+        "top": 1280.0,
+        "right": 1002.6667,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 196,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 36,
+      "pen_x": 1026,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 384.0,
+        "right": 874.6667,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 197,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 159,
+      "pen_x": 1035,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 1280.0,
+        "right": 1258.6666,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 198,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 160,
+      "pen_x": 1044,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1290.6666,
+        "top": 1280.0,
+        "right": 1392.0,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 199,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 39,
+      "pen_x": 1056,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 384.0,
+        "right": 1253.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 200,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 162,
+      "pen_x": 1064,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 1280.0,
+        "right": 1637.3334,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 201,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 41,
+      "pen_x": 1071,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 512.0,
+        "right": 229.33333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 202,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 164,
+      "pen_x": 1078,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 1280.0,
+        "right": 1893.3334,
+        "bottom": 1408.0
+      }
+    },
+    {
+      "codepoint": 203,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 43,
+      "pen_x": 1085,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 512.0,
+        "right": 485.33334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 204,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 166,
+      "pen_x": 1092,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 160.00002,
+        "top": 1408.0,
+        "right": 218.66666,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 205,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 45,
+      "pen_x": 1096,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 672.0,
+        "top": 512.0,
+        "right": 730.6667,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 206,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 46,
+      "pen_x": 1100,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 800.0,
+        "top": 512.0,
+        "right": 858.6667,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 207,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 169,
+      "pen_x": 1104,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 544.0,
+        "top": 1408.0,
+        "right": 602.6667,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 208,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 170,
+      "pen_x": 1108,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 656.0,
+        "top": 1408.0,
+        "right": 746.6667,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 209,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 171,
+      "pen_x": 1117,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 1408.0,
+        "right": 874.6667,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 210,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 172,
+      "pen_x": 1127,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 1408.0,
+        "right": 997.3333,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 211,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 51,
+      "pen_x": 1135,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 640.0,
+        "right": 229.33333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 212,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 52,
+      "pen_x": 1143,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 640.0,
+        "right": 357.33334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 213,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 175,
+      "pen_x": 1151,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 1408.0,
+        "right": 1381.3334,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 214,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 54,
+      "pen_x": 1159,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 640.0,
+        "right": 613.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 215,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 55,
+      "pen_x": 1167,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 640.0,
+        "right": 741.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 216,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 178,
+      "pen_x": 1175,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1680.0,
+        "top": 1408.0,
+        "right": 1770.6666,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 217,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 179,
+      "pen_x": 1184,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 1408.0,
+        "right": 1893.3334,
+        "bottom": 1536.0
+      }
+    },
+    {
+      "codepoint": 218,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 58,
+      "pen_x": 1192,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 640.0,
+        "right": 1125.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 219,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 181,
+      "pen_x": 1200,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1536.0,
+        "right": 229.33333,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 220,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 60,
+      "pen_x": 1208,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 768.0,
+        "right": 101.33333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 221,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 61,
+      "pen_x": 1216,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 768.0,
+        "right": 229.33333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 222,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 184,
+      "pen_x": 1224,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 1536.0,
+        "right": 613.3333,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 223,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 63,
+      "pen_x": 1232,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 400.0,
+        "top": 768.0,
+        "right": 490.66666,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 224,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 186,
+      "pen_x": 1241,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 1536.0,
+        "right": 869.3333,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 225,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 65,
+      "pen_x": 1248,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 768.0,
+        "right": 741.3333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 226,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 66,
+      "pen_x": 1255,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 768.0,
+        "right": 869.3333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 227,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 189,
+      "pen_x": 1262,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 1536.0,
+        "right": 1253.3334,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 228,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 68,
+      "pen_x": 1269,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 768.0,
+        "right": 1125.3334,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 229,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 191,
+      "pen_x": 1276,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 1536.0,
+        "right": 1509.3334,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 230,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 192,
+      "pen_x": 1283,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1546.6666,
+        "top": 1536.0,
+        "right": 1648.0,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 231,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 71,
+      "pen_x": 1294,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 896.0,
+        "right": 229.33333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 232,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 194,
+      "pen_x": 1301,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 1536.0,
+        "right": 1893.3334,
+        "bottom": 1664.0
+      }
+    },
+    {
+      "codepoint": 233,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 73,
+      "pen_x": 1308,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 896.0,
+        "right": 485.33334,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 234,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 196,
+      "pen_x": 1315,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1664.0,
+        "right": 229.33333,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 235,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 75,
+      "pen_x": 1322,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 896.0,
+        "right": 741.3333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 236,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 198,
+      "pen_x": 1329,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 416.0,
+        "top": 1664.0,
+        "right": 474.66666,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 237,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 77,
+      "pen_x": 1333,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 928.0,
+        "top": 896.0,
+        "right": 986.6667,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 238,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 78,
+      "pen_x": 1337,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1056.0,
+        "top": 896.0,
+        "right": 1114.6666,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 239,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 201,
+      "pen_x": 1341,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 800.0,
+        "top": 1664.0,
+        "right": 858.6667,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 240,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 202,
+      "pen_x": 1345,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 1664.0,
+        "right": 997.3333,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 241,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 203,
+      "pen_x": 1353,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 1664.0,
+        "right": 1125.3334,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 242,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 204,
+      "pen_x": 1361,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 1664.0,
+        "right": 1253.3334,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 243,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 83,
+      "pen_x": 1369,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 1024.0,
+        "right": 485.33334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 244,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 84,
+      "pen_x": 1377,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 1024.0,
+        "right": 613.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 245,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 207,
+      "pen_x": 1385,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 1664.0,
+        "right": 1637.3334,
+        "bottom": 1792.0
+      }
+    },
+    {
+      "codepoint": 246,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 86,
+      "pen_x": 1393,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 1024.0,
+        "right": 869.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 247,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 87,
+      "pen_x": 1401,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 1024.0,
+        "right": 997.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 248,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 210,
+      "pen_x": 1409,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 1792.0,
+        "right": 101.33333,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 249,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 211,
+      "pen_x": 1417,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1792.0,
+        "right": 229.33333,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 250,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 90,
+      "pen_x": 1425,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 1152.0,
+        "right": 101.33333,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 251,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 213,
+      "pen_x": 1433,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 1792.0,
+        "right": 485.33334,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 252,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 92,
+      "pen_x": 1441,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 1152.0,
+        "right": 357.33334,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 253,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 93,
+      "pen_x": 1449,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 1152.0,
+        "right": 485.33334,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 254,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 216,
+      "pen_x": 1456,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 1792.0,
+        "right": 869.3333,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 255,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 217,
+      "pen_x": 1464,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 1792.0,
+        "right": 997.3333,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 258,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 35,
+      "pen_x": 1471,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 656.0,
+        "top": 384.0,
+        "right": 746.6667,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 259,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 67,
+      "pen_x": 1480,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 768.0,
+        "right": 997.3333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 260,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 1,
+      "pen_x": 1487,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 0.0,
+        "right": 229.33333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 261,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 17,
+      "pen_x": 1495,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 128.0,
+        "right": 997.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 262,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 38,
+      "pen_x": 1503,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 384.0,
+        "right": 1125.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 263,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 70,
+      "pen_x": 1511,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 896.0,
+        "right": 101.33333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 268,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 40,
+      "pen_x": 1518,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 512.0,
+        "right": 101.33333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 269,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 72,
+      "pen_x": 1526,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 896.0,
+        "right": 357.33334,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 270,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 47,
+      "pen_x": 1533,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 912.0,
+        "top": 512.0,
+        "right": 1002.6667,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 271,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 79,
+      "pen_x": 1542,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 896.0,
+        "right": 1258.6666,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 272,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 48,
+      "pen_x": 1552,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1040.0,
+        "top": 512.0,
+        "right": 1130.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 273,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 80,
+      "pen_x": 1561,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 1024.0,
+        "right": 101.33333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 280,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 42,
+      "pen_x": 1569,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 512.0,
+        "right": 357.33334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 281,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 74,
+      "pen_x": 1576,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 896.0,
+        "right": 613.3333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 282,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 44,
+      "pen_x": 1583,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 512.0,
+        "right": 613.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 283,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 76,
+      "pen_x": 1590,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 896.0,
+        "right": 869.3333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 313,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 37,
+      "pen_x": 1597,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 384.0,
+        "right": 997.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 314,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 69,
+      "pen_x": 1604,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1184.0,
+        "top": 768.0,
+        "right": 1242.6666,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 317,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 5,
+      "pen_x": 1608,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 0.0,
+        "right": 741.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 318,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 21,
+      "pen_x": 1616,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 154.66667,
+        "top": 256.0,
+        "right": 224.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 321,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 3,
+      "pen_x": 1622,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 0.0,
+        "right": 485.33334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 322,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 19,
+      "pen_x": 1630,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1178.6666,
+        "top": 128.0,
+        "right": 1248.0,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 323,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 49,
+      "pen_x": 1636,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 512.0,
+        "right": 1258.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 324,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 81,
+      "pen_x": 1646,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1024.0,
+        "right": 229.33333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 327,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 50,
+      "pen_x": 1654,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 16.000002,
+        "top": 640.0,
+        "right": 106.666664,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 328,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 82,
+      "pen_x": 1664,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 1024.0,
+        "right": 357.33334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 336,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 53,
+      "pen_x": 1672,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 640.0,
+        "right": 485.33334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 337,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 85,
+      "pen_x": 1680,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 1024.0,
+        "right": 741.3333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 338,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 106,
+      "pen_x": 1688,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 138.66667,
+        "top": 896.0,
+        "right": 240.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 339,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 119,
+      "pen_x": 1700,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1802.6666,
+        "top": 896.0,
+        "right": 1904.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 340,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 32,
+      "pen_x": 1711,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 384.0,
+        "right": 357.33334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 341,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 64,
+      "pen_x": 1719,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 538.6667,
+        "top": 768.0,
+        "right": 608.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 344,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 56,
+      "pen_x": 1725,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 640.0,
+        "right": 869.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 345,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 88,
+      "pen_x": 1733,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1050.6666,
+        "top": 1024.0,
+        "right": 1120.0,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 346,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 6,
+      "pen_x": 1739,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 0.0,
+        "right": 869.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 347,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 22,
+      "pen_x": 1747,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 256.0,
+        "right": 357.33334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 350,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 10,
+      "pen_x": 1754,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 128.0,
+        "right": 101.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 351,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 26,
+      "pen_x": 1762,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 256.0,
+        "right": 869.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 352,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 9,
+      "pen_x": 1769,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 0.0,
+        "right": 1253.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 353,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 25,
+      "pen_x": 1777,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 256.0,
+        "right": 741.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 354,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 62,
+      "pen_x": 1784,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 768.0,
+        "right": 357.33334,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 355,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 94,
+      "pen_x": 1792,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 1152.0,
+        "right": 613.3333,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 356,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 11,
+      "pen_x": 1799,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 128.0,
+        "right": 229.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 357,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 27,
+      "pen_x": 1807,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 256.0,
+        "right": 997.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 366,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 57,
+      "pen_x": 1815,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 640.0,
+        "right": 997.3333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 367,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 89,
+      "pen_x": 1823,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 1024.0,
+        "right": 1253.3334,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 368,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 59,
+      "pen_x": 1831,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 640.0,
+        "right": 1253.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 369,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 91,
+      "pen_x": 1839,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1152.0,
+        "right": 229.33333,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 376,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 121,
+      "pen_x": 1847,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 1024.0,
+        "right": 229.33333,
+        "bottom": 1152.0
+      }
+    },
+    {
+      "codepoint": 377,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 12,
+      "pen_x": 1855,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 128.0,
+        "right": 357.33334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 378,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 28,
+      "pen_x": 1863,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 256.0,
+        "right": 1125.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 379,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 15,
+      "pen_x": 1870,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 128.0,
+        "right": 741.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 380,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 31,
+      "pen_x": 1878,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 384.0,
+        "right": 229.33333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 381,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 14,
+      "pen_x": 1885,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 128.0,
+        "right": 613.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 382,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 30,
+      "pen_x": 1893,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 384.0,
+        "right": 101.33333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 402,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 97,
+      "pen_x": 1900,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 912.0,
+        "top": 768.0,
+        "right": 1002.6667,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 710,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 102,
+      "pen_x": 1910,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1552.0,
+        "top": 768.0,
+        "right": 1642.6666,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 711,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 23,
+      "pen_x": 1920,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 256.0,
+        "right": 485.33334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 728,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 2,
+      "pen_x": 1928,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 0.0,
+        "right": 357.33334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 729,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 95,
+      "pen_x": 1936,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 672.0,
+        "top": 1152.0,
+        "right": 730.6667,
+        "bottom": 1280.0
+      }
+    },
+    {
+      "codepoint": 731,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 18,
+      "pen_x": 1940,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 128.0,
+        "right": 1125.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 732,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 115,
+      "pen_x": 1948,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1296.0,
+        "top": 896.0,
+        "right": 1386.6666,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 733,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [alt] 10x10 (res 240x240).png",
+      "frame": 29,
+      "pen_x": 1958,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 256.0,
+        "right": 1253.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1024,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 0,
+      "pen_x": 1966,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 0.0,
+        "right": 101.33333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1025,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 1,
+      "pen_x": 1973,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 0.0,
+        "right": 229.33333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1026,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 2,
+      "pen_x": 1980,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 0.0,
+        "right": 357.33334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1027,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 3,
+      "pen_x": 1988,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 410.66666,
+        "top": 0.0,
+        "right": 480.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1028,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 4,
+      "pen_x": 1994,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 0.0,
+        "right": 613.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1029,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 5,
+      "pen_x": 2002,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 0.0,
+        "right": 741.3333,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1030,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 6,
+      "pen_x": 2009,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 800.0,
+        "top": 0.0,
+        "right": 858.6667,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1031,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 7,
+      "pen_x": 2013,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 928.0,
+        "top": 0.0,
+        "right": 986.6667,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1032,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 8,
+      "pen_x": 2017,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1050.6666,
+        "top": 0.0,
+        "right": 1120.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1033,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 9,
+      "pen_x": 2023,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1162.6666,
+        "top": 0.0,
+        "right": 1264.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1034,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 10,
+      "pen_x": 2034,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1290.6666,
+        "top": 0.0,
+        "right": 1392.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1035,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 11,
+      "pen_x": 2045,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1424.0,
+        "top": 0.0,
+        "right": 1514.6666,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1036,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 12,
+      "pen_x": 2054,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 0.0,
+        "right": 1637.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1037,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 13,
+      "pen_x": 2062,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 0.0,
+        "right": 1765.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1038,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 14,
+      "pen_x": 2069,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1818.6666,
+        "top": 0.0,
+        "right": 1888.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1039,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 15,
+      "pen_x": 2075,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1941.3333,
+        "top": 0.0,
+        "right": 2021.3334,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 1040,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 16,
+      "pen_x": 2083,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 128.0,
+        "right": 101.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1041,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 17,
+      "pen_x": 2090,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 128.0,
+        "right": 229.33333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1042,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 18,
+      "pen_x": 2097,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 128.0,
+        "right": 357.33334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1043,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 19,
+      "pen_x": 2104,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 410.66666,
+        "top": 128.0,
+        "right": 480.0,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1044,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 20,
+      "pen_x": 2110,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 128.0,
+        "right": 613.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1045,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 21,
+      "pen_x": 2118,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 128.0,
+        "right": 741.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1046,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 22,
+      "pen_x": 2125,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 128.0,
+        "right": 874.6667,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1047,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 23,
+      "pen_x": 2135,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 128.0,
+        "right": 997.3333,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1048,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 24,
+      "pen_x": 2142,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 128.0,
+        "right": 1125.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1049,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 25,
+      "pen_x": 2150,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 128.0,
+        "right": 1253.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1050,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 26,
+      "pen_x": 2158,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 128.0,
+        "right": 1381.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1051,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 27,
+      "pen_x": 2166,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 128.0,
+        "right": 1509.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1052,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 28,
+      "pen_x": 2174,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1552.0,
+        "top": 128.0,
+        "right": 1642.6666,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1053,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 29,
+      "pen_x": 2184,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 128.0,
+        "right": 1765.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1054,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 30,
+      "pen_x": 2192,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 128.0,
+        "right": 1893.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1055,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 31,
+      "pen_x": 2200,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1941.3333,
+        "top": 128.0,
+        "right": 2021.3334,
+        "bottom": 256.0
+      }
+    },
+    {
+      "codepoint": 1056,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 32,
+      "pen_x": 2208,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 256.0,
+        "right": 101.33333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1057,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 33,
+      "pen_x": 2216,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 256.0,
+        "right": 229.33333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1058,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 34,
+      "pen_x": 2223,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 282.66666,
+        "top": 256.0,
+        "right": 352.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1059,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 35,
+      "pen_x": 2229,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 256.0,
+        "right": 485.33334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1060,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 36,
+      "pen_x": 2236,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 528.0,
+        "top": 256.0,
+        "right": 618.6667,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1061,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 37,
+      "pen_x": 2245,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 256.0,
+        "right": 741.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1062,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 38,
+      "pen_x": 2252,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 256.0,
+        "right": 874.6667,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1063,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 39,
+      "pen_x": 2261,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 917.3334,
+        "top": 256.0,
+        "right": 997.3333,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1064,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 40,
+      "pen_x": 2268,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1034.6666,
+        "top": 256.0,
+        "right": 1136.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1065,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 41,
+      "pen_x": 2279,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1162.6666,
+        "top": 256.0,
+        "right": 1264.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1066,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 42,
+      "pen_x": 2290,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 256.0,
+        "right": 1381.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1067,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 43,
+      "pen_x": 2297,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1418.6666,
+        "top": 256.0,
+        "right": 1520.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1068,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 44,
+      "pen_x": 2308,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 256.0,
+        "right": 1637.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1069,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 45,
+      "pen_x": 2315,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 256.0,
+        "right": 1765.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1070,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 46,
+      "pen_x": 2322,
+      "advance": 11,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1802.6666,
+        "top": 256.0,
+        "right": 1904.0,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1071,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 47,
+      "pen_x": 2333,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1941.3333,
+        "top": 256.0,
+        "right": 2021.3334,
+        "bottom": 384.0
+      }
+    },
+    {
+      "codepoint": 1072,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 48,
+      "pen_x": 2341,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 384.0,
+        "right": 101.33333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1073,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 49,
+      "pen_x": 2348,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 384.0,
+        "right": 229.33333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1074,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 50,
+      "pen_x": 2355,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 282.66666,
+        "top": 384.0,
+        "right": 352.0,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1075,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 51,
+      "pen_x": 2361,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 410.66666,
+        "top": 384.0,
+        "right": 480.0,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1076,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 52,
+      "pen_x": 2366,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 384.0,
+        "right": 613.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1077,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 53,
+      "pen_x": 2373,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 384.0,
+        "right": 741.3333,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1078,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 54,
+      "pen_x": 2380,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 784.0,
+        "top": 384.0,
+        "right": 874.6667,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1079,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 55,
+      "pen_x": 2389,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 922.6667,
+        "top": 384.0,
+        "right": 992.0,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1080,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 56,
+      "pen_x": 2395,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 384.0,
+        "right": 1125.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1081,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 57,
+      "pen_x": 2402,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1173.3333,
+        "top": 384.0,
+        "right": 1253.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1082,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 58,
+      "pen_x": 2409,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 384.0,
+        "right": 1381.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1083,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 59,
+      "pen_x": 2416,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 384.0,
+        "right": 1509.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1084,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 60,
+      "pen_x": 2423,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 384.0,
+        "right": 1637.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1085,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 61,
+      "pen_x": 2431,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 384.0,
+        "right": 1765.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1086,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 62,
+      "pen_x": 2438,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 384.0,
+        "right": 1893.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1087,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 63,
+      "pen_x": 2445,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1941.3333,
+        "top": 384.0,
+        "right": 2021.3334,
+        "bottom": 512.0
+      }
+    },
+    {
+      "codepoint": 1088,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 64,
+      "pen_x": 2452,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 512.0,
+        "right": 101.33333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1089,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 65,
+      "pen_x": 2459,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 154.66667,
+        "top": 512.0,
+        "right": 224.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1090,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 66,
+      "pen_x": 2465,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 282.66666,
+        "top": 512.0,
+        "right": 352.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1091,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 67,
+      "pen_x": 2470,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 405.3333,
+        "top": 512.0,
+        "right": 485.33334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1092,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 68,
+      "pen_x": 2477,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 533.3334,
+        "top": 512.0,
+        "right": 613.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1093,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 69,
+      "pen_x": 2485,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 666.6667,
+        "top": 512.0,
+        "right": 736.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1094,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 70,
+      "pen_x": 2491,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 512.0,
+        "right": 869.3333,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1095,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 71,
+      "pen_x": 2498,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 922.6667,
+        "top": 512.0,
+        "right": 992.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1096,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 72,
+      "pen_x": 2504,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1040.0,
+        "top": 512.0,
+        "right": 1130.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1097,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 73,
+      "pen_x": 2514,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 512.0,
+        "right": 1258.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1098,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 74,
+      "pen_x": 2524,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1306.6666,
+        "top": 512.0,
+        "right": 1376.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1099,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 75,
+      "pen_x": 2530,
+      "advance": 9,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1424.0,
+        "top": 512.0,
+        "right": 1514.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1100,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 76,
+      "pen_x": 2539,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1562.6666,
+        "top": 512.0,
+        "right": 1632.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1101,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 77,
+      "pen_x": 2545,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1690.6666,
+        "top": 512.0,
+        "right": 1760.0,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1102,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 78,
+      "pen_x": 2551,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1808.0,
+        "top": 512.0,
+        "right": 1898.6666,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1103,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 79,
+      "pen_x": 2561,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1941.3333,
+        "top": 512.0,
+        "right": 2021.3334,
+        "bottom": 640.0
+      }
+    },
+    {
+      "codepoint": 1104,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 80,
+      "pen_x": 2568,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 21.333334,
+        "top": 640.0,
+        "right": 101.33333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1105,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 81,
+      "pen_x": 2575,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 149.33334,
+        "top": 640.0,
+        "right": 229.33333,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1106,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 82,
+      "pen_x": 2582,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 277.3333,
+        "top": 640.0,
+        "right": 357.33334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1107,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 83,
+      "pen_x": 2589,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 410.66666,
+        "top": 640.0,
+        "right": 480.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1108,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 84,
+      "pen_x": 2594,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 538.6667,
+        "top": 640.0,
+        "right": 608.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1109,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 85,
+      "pen_x": 2600,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 666.6667,
+        "top": 640.0,
+        "right": 736.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1110,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 86,
+      "pen_x": 2606,
+      "advance": 3,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 800.0,
+        "top": 640.0,
+        "right": 858.6667,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1111,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 87,
+      "pen_x": 2609,
+      "advance": 3,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 928.0,
+        "top": 640.0,
+        "right": 986.6667,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1112,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 88,
+      "pen_x": 2612,
+      "advance": 3,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1056.0,
+        "top": 640.0,
+        "right": 1114.6666,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1113,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 89,
+      "pen_x": 2615,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1168.0,
+        "top": 640.0,
+        "right": 1258.6666,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1114,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 90,
+      "pen_x": 2625,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1296.0,
+        "top": 640.0,
+        "right": 1386.6666,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1115,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 91,
+      "pen_x": 2635,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 640.0,
+        "right": 1509.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1116,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 92,
+      "pen_x": 2642,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1557.3333,
+        "top": 640.0,
+        "right": 1637.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1117,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 93,
+      "pen_x": 2649,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1685.3333,
+        "top": 640.0,
+        "right": 1765.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1118,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 94,
+      "pen_x": 2656,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1813.3333,
+        "top": 640.0,
+        "right": 1893.3334,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1119,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 95,
+      "pen_x": 2663,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1946.6666,
+        "top": 640.0,
+        "right": 2016.0,
+        "bottom": 768.0
+      }
+    },
+    {
+      "codepoint": 1168,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 96,
+      "pen_x": 2669,
+      "advance": 6,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 26.666666,
+        "top": 768.0,
+        "right": 96.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 1169,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light [cyrillic-a] 16x7 (res 384x170).png",
+      "frame": 97,
+      "pen_x": 2675,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 154.66667,
+        "top": 768.0,
+        "right": 224.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8203,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 218,
+      "pen_x": 2680,
+      "advance": 0,
+      "width": 7.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1066.6666,
+        "top": 1792.0,
+        "right": 1104.0,
+        "bottom": 1920.0
+      }
+    },
+    {
+      "codepoint": 8211,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 113,
+      "pen_x": 2680,
+      "advance": 10,
+      "width": 17.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1040.0,
+        "top": 896.0,
+        "right": 1130.6666,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8212,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 114,
+      "pen_x": 2690,
+      "advance": 20,
+      "width": 24.0,
+      "height": 24.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1152.0,
+        "top": 896.0,
+        "right": 1280.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8216,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 108,
+      "pen_x": 2710,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 416.0,
+        "top": 896.0,
+        "right": 474.66666,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8217,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 109,
+      "pen_x": 2714,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 544.0,
+        "top": 896.0,
+        "right": 602.6667,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8218,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 96,
+      "pen_x": 2718,
+      "advance": 4,
+      "width": 11.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 800.0,
+        "top": 768.0,
+        "right": 858.6667,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8220,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 110,
+      "pen_x": 2722,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 896.0,
+        "right": 741.3333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8221,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 111,
+      "pen_x": 2729,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 789.3334,
+        "top": 896.0,
+        "right": 869.3333,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8222,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 98,
+      "pen_x": 2736,
+      "advance": 7,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1045.3333,
+        "top": 768.0,
+        "right": 1125.3334,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8224,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 100,
+      "pen_x": 2743,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1301.3333,
+        "top": 768.0,
+        "right": 1381.3334,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8225,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 101,
+      "pen_x": 2751,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1429.3333,
+        "top": 768.0,
+        "right": 1509.3334,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8226,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 112,
+      "pen_x": 2759,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 922.6667,
+        "top": 896.0,
+        "right": 992.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8230,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 99,
+      "pen_x": 2764,
+      "advance": 12,
+      "width": 19.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1162.6666,
+        "top": 768.0,
+        "right": 1264.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8240,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 103,
+      "pen_x": 2776,
+      "advance": 18,
+      "width": 24.0,
+      "height": 24.0,
+      "horizontal_shift": -3.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1664.0,
+        "top": 768.0,
+        "right": 1792.0,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8249,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 105,
+      "pen_x": 2794,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 26.666666,
+        "top": 896.0,
+        "right": 96.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8250,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 118,
+      "pen_x": 2799,
+      "advance": 5,
+      "width": 13.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1690.6666,
+        "top": 896.0,
+        "right": 1760.0,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 8364,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 95,
+      "pen_x": 2804,
+      "advance": 8,
+      "width": 15.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 661.3334,
+        "top": 768.0,
+        "right": 741.3333,
+        "bottom": 896.0
+      }
+    },
+    {
+      "codepoint": 8482,
+      "uses_default_glyph": false,
+      "texture": "miso/_miso light 15x15 (res 360x360).png",
+      "frame": 116,
+      "pen_x": 2812,
+      "advance": 13,
+      "width": 21.0,
+      "height": 24.0,
+      "horizontal_shift": -4.0,
+      "vertical_shift": -19.0,
+      "sample_rect": {
+        "left": 1413.3333,
+        "top": 896.0,
+        "right": 1525.3334,
+        "bottom": 1024.0
+      }
+    },
+    {
+      "codepoint": 65533,
+      "uses_default_glyph": false,
+      "texture": "Common default 2x1.png",
+      "frame": 1,
+      "pen_x": 2825,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 38.0,
+        "top": 0.0,
+        "right": 57.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 63743,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 2842,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 888,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 2859,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    }
+  ]
+}

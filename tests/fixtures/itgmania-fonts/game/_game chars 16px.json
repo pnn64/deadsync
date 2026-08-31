@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "font": "game/_game chars 16px.ini",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "height": 16,
+  "line_spacing": 32,
+  "right_to_left": false,
+  "distance_field": false,
+  "default_stroke_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "line_width": 375,
+  "line_height": 34,
+  "pages": [
+    {
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "texture_hints": "32bpp",
+      "source_size": {
+        "width": 128,
+        "height": 96
+      },
+      "image_size": {
+        "width": 256,
+        "height": 192
+      },
+      "frames": {
+        "width": 4,
+        "height": 3
+      },
+      "height": 16,
+      "line_spacing": 32,
+      "vertical_shift": -24.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    },
+    {
+      "texture": "Common default 2x1.png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 64,
+        "height": 34
+      },
+      "image_size": {
+        "width": 64,
+        "height": 34
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 34,
+      "line_spacing": 34,
+      "vertical_shift": -34.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    }
+  ],
+  "glyphs": [
+    {
+      "codepoint": 57344,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 0,
+      "pen_x": 0,
+      "advance": 33,
+      "width": 32.0,
+      "height": 32.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 64.0,
+        "bottom": 64.0
+      }
+    },
+    {
+      "codepoint": 57345,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 1,
+      "pen_x": 33,
+      "advance": 33,
+      "width": 32.0,
+      "height": 32.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 64.0,
+        "top": 0.0,
+        "right": 128.0,
+        "bottom": 64.0
+      }
+    },
+    {
+      "codepoint": 57346,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 2,
+      "pen_x": 66,
+      "advance": 33,
+      "width": 32.0,
+      "height": 32.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 128.0,
+        "top": 0.0,
+        "right": 192.0,
+        "bottom": 64.0
+      }
+    },
+    {
+      "codepoint": 57347,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 3,
+      "pen_x": 99,
+      "advance": 33,
+      "width": 32.0,
+      "height": 32.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 192.0,
+        "top": 0.0,
+        "right": 256.0,
+        "bottom": 64.0
+      }
+    },
+    {
+      "codepoint": 57353,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 4,
+      "pen_x": 132,
+      "advance": 21,
+      "width": 23.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 8.0,
+        "top": 64.0,
+        "right": 54.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 57354,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 5,
+      "pen_x": 153,
+      "advance": 21,
+      "width": 23.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 72.0,
+        "top": 64.0,
+        "right": 118.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 57355,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 6,
+      "pen_x": 174,
+      "advance": 21,
+      "width": 23.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 136.0,
+        "top": 64.0,
+        "right": 182.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 57356,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 7,
+      "pen_x": 195,
+      "advance": 21,
+      "width": 23.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 200.0,
+        "top": 64.0,
+        "right": 246.0,
+        "bottom": 128.0
+      }
+    },
+    {
+      "codepoint": 57357,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 8,
+      "pen_x": 216,
+      "advance": 27,
+      "width": 29.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 2.0,
+        "top": 128.0,
+        "right": 60.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "codepoint": 57360,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 10,
+      "pen_x": 243,
+      "advance": 27,
+      "width": 29.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 130.0,
+        "top": 128.0,
+        "right": 188.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "codepoint": 57363,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 9,
+      "pen_x": 270,
+      "advance": 27,
+      "width": 29.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 66.0,
+        "top": 128.0,
+        "right": 124.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "codepoint": 57384,
+      "uses_default_glyph": false,
+      "texture": "game/_game chars 16px 4x3 (doubleres).png",
+      "frame": 11,
+      "pen_x": 297,
+      "advance": 27,
+      "width": 29.0,
+      "height": 32.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -24.0,
+      "sample_rect": {
+        "left": 194.0,
+        "top": 128.0,
+        "right": 252.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "codepoint": 65533,
+      "uses_default_glyph": false,
+      "texture": "Common default 2x1.png",
+      "frame": 1,
+      "pen_x": 324,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 38.0,
+        "top": 0.0,
+        "right": 57.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 63743,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 341,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 888,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 358,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    }
+  ]
+}

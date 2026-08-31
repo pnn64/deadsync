@@ -1,0 +1,122 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "itgmania": {
+    "git_revision": "49fddb40adbdb43e9c03e6856b6c2afeeccf451a",
+    "git_dirty": "false"
+  },
+  "fonts": [
+    {
+      "font": "Common default.ini",
+      "fixture": "Common default.json",
+      "glyphs": 3
+    },
+    {
+      "font": "Mega/_ScreenEvaluation numbers.ini",
+      "fixture": "Mega/_ScreenEvaluation numbers.json",
+      "glyphs": 18
+    },
+    {
+      "font": "Mega/_game chars 36px 4x1.ini",
+      "fixture": "Mega/_game chars 36px 4x1.json",
+      "glyphs": 7
+    },
+    {
+      "font": "Mega/_mega font.ini",
+      "fixture": "Mega/_mega font.json",
+      "glyphs": 99
+    },
+    {
+      "font": "Mega/_mega monospace numbers.ini",
+      "fixture": "Mega/_mega monospace numbers.json",
+      "glyphs": 18
+    },
+    {
+      "font": "_combo/Arial Rounded/Arial Rounded.ini",
+      "fixture": "_combo/Arial Rounded/Arial Rounded.json",
+      "glyphs": 19
+    },
+    {
+      "font": "_combo/Asap/Asap.ini",
+      "fixture": "_combo/Asap/Asap.json",
+      "glyphs": 19
+    },
+    {
+      "font": "_combo/Bebas Neue/Bebas Neue.ini",
+      "fixture": "_combo/Bebas Neue/Bebas Neue.json",
+      "glyphs": 19
+    },
+    {
+      "font": "_combo/Mega/Mega.ini",
+      "fixture": "_combo/Mega/Mega.json",
+      "glyphs": 18
+    },
+    {
+      "font": "_combo/Source Code/Source Code.ini",
+      "fixture": "_combo/Source Code/Source Code.json",
+      "glyphs": 25
+    },
+    {
+      "font": "_combo/Wendy (Cursed)/Wendy (Cursed).ini",
+      "fixture": "_combo/Wendy (Cursed)/Wendy (Cursed).json",
+      "glyphs": 13
+    },
+    {
+      "font": "_combo/Work/Work.ini",
+      "fixture": "_combo/Work/Work.json",
+      "glyphs": 19
+    },
+    {
+      "font": "_combo/wendy/Wendy.ini",
+      "fixture": "_combo/wendy/Wendy.json",
+      "glyphs": 13
+    },
+    {
+      "font": "cjk/_jfonts 16px.ini",
+      "fixture": "cjk/_jfonts 16px.json",
+      "glyphs": 7550
+    },
+    {
+      "font": "emoji/_emoji 16px.ini",
+      "fixture": "emoji/_emoji 16px.json",
+      "glyphs": 1084
+    },
+    {
+      "font": "game/_game chars 16px.ini",
+      "fixture": "game/_game chars 16px.json",
+      "glyphs": 15
+    },
+    {
+      "font": "miso/_miso light.ini",
+      "fixture": "miso/_miso light.json",
+      "glyphs": 374
+    },
+    {
+      "font": "wendy/_ScreenEvaluation numbers.ini",
+      "fixture": "wendy/_ScreenEvaluation numbers.json",
+      "glyphs": 18
+    },
+    {
+      "font": "wendy/_game chars 36px 4x1.ini",
+      "fixture": "wendy/_game chars 36px 4x1.json",
+      "glyphs": 7
+    },
+    {
+      "font": "wendy/_wendy monospace numbers.ini",
+      "fixture": "wendy/_wendy monospace numbers.json",
+      "glyphs": 18
+    },
+    {
+      "font": "wendy/_wendy small.ini",
+      "fixture": "wendy/_wendy small.json",
+      "glyphs": 256
+    },
+    {
+      "font": "wendy/_wendy white.ini",
+      "fixture": "wendy/_wendy white.json",
+      "glyphs": 84
+    }
+  ]
+}

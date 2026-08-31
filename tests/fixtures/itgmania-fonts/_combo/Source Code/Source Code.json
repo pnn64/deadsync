@@ -1,0 +1,514 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "font": "_combo/Source Code/Source Code.ini",
+  "corpus": "all-complete-bmp-plus-default-and-missing",
+  "height": 50,
+  "line_spacing": 50,
+  "right_to_left": false,
+  "distance_field": false,
+  "default_stroke_color": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "line_width": 655,
+  "line_height": 50,
+  "pages": [
+    {
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 400,
+        "height": 150
+      },
+      "image_size": {
+        "width": 800,
+        "height": 300
+      },
+      "frames": {
+        "width": 8,
+        "height": 3
+      },
+      "height": 50,
+      "line_spacing": 50,
+      "vertical_shift": -50.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    },
+    {
+      "texture": "Common default 2x1.png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 64,
+        "height": 34
+      },
+      "image_size": {
+        "width": 64,
+        "height": 34
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 34,
+      "line_spacing": 34,
+      "vertical_shift": -34.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    }
+  ],
+  "glyphs": [
+    {
+      "codepoint": 37,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 15,
+      "pen_x": 0,
+      "advance": 37,
+      "width": 39.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 710.0,
+        "top": 100.0,
+        "right": 788.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 40,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 10,
+      "pen_x": 37,
+      "advance": 16,
+      "width": 19.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 230.0,
+        "top": 100.0,
+        "right": 268.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 41,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 11,
+      "pen_x": 53,
+      "advance": 16,
+      "width": 19.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 330.0,
+        "top": 100.0,
+        "right": 368.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 45,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 14,
+      "pen_x": 69,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 618.0,
+        "top": 100.0,
+        "right": 680.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 46,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 13,
+      "pen_x": 98,
+      "advance": 13,
+      "width": 15.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 534.0,
+        "top": 100.0,
+        "right": 564.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 47,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 12,
+      "pen_x": 111,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 418.0,
+        "top": 100.0,
+        "right": 480.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 48,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 9,
+      "pen_x": 140,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 118.0,
+        "top": 100.0,
+        "right": 180.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 49,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 0,
+      "pen_x": 169,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 18.0,
+        "top": 0.0,
+        "right": 80.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 50,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 1,
+      "pen_x": 198,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 118.0,
+        "top": 0.0,
+        "right": 180.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 51,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 2,
+      "pen_x": 227,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 218.0,
+        "top": 0.0,
+        "right": 280.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 52,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 3,
+      "pen_x": 256,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 318.0,
+        "top": 0.0,
+        "right": 380.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 53,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 4,
+      "pen_x": 285,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 418.0,
+        "top": 0.0,
+        "right": 480.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 54,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 5,
+      "pen_x": 314,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 518.0,
+        "top": 0.0,
+        "right": 580.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 55,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 6,
+      "pen_x": 343,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 618.0,
+        "top": 0.0,
+        "right": 680.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 56,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 7,
+      "pen_x": 372,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 718.0,
+        "top": 0.0,
+        "right": 780.0,
+        "bottom": 100.0
+      }
+    },
+    {
+      "codepoint": 57,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 8,
+      "pen_x": 401,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 18.0,
+        "top": 100.0,
+        "right": 80.0,
+        "bottom": 200.0
+      }
+    },
+    {
+      "codepoint": 97,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 16,
+      "pen_x": 430,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 18.0,
+        "top": 200.0,
+        "right": 80.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 98,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 17,
+      "pen_x": 459,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 118.0,
+        "top": 200.0,
+        "right": 180.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 99,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 18,
+      "pen_x": 488,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 218.0,
+        "top": 200.0,
+        "right": 280.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 100,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 19,
+      "pen_x": 517,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 318.0,
+        "top": 200.0,
+        "right": 380.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 101,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 20,
+      "pen_x": 546,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 418.0,
+        "top": 200.0,
+        "right": 480.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 102,
+      "uses_default_glyph": false,
+      "texture": "_combo/Source Code/Source Code 8x3 (doubleres).png",
+      "frame": 21,
+      "pen_x": 575,
+      "advance": 29,
+      "width": 31.0,
+      "height": 50.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -50.0,
+      "sample_rect": {
+        "left": 518.0,
+        "top": 200.0,
+        "right": 580.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "codepoint": 65533,
+      "uses_default_glyph": false,
+      "texture": "Common default 2x1.png",
+      "frame": 1,
+      "pen_x": 604,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 38.0,
+        "top": 0.0,
+        "right": 57.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 63743,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 621,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    },
+    {
+      "codepoint": 888,
+      "uses_default_glyph": true,
+      "texture": "Common default 2x1.png",
+      "frame": 0,
+      "pen_x": 638,
+      "advance": 17,
+      "width": 19.0,
+      "height": 34.0,
+      "horizontal_shift": -2.0,
+      "vertical_shift": -34.0,
+      "sample_rect": {
+        "left": 6.0,
+        "top": 0.0,
+        "right": 25.0,
+        "bottom": 34.0
+      }
+    }
+  ]
+}
