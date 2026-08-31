@@ -43,6 +43,11 @@ name = "playlist_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "tag_value_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

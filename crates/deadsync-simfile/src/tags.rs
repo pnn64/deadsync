@@ -48,26 +48,76 @@ pub fn latest_simfile_tag_values<const N: usize>(
 
 #[must_use]
 pub fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
+    named_tag_values(data, tags).collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn extract_named_tag_values_baseline<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
     let mut out = Vec::new();
-    let mut i = 0usize;
-    while i < data.len() {
-        let Some(pos) = find_byte(&data[i..], b'#') else {
+    let mut offset = 0usize;
+    while offset < data.len() {
+        let Some(pos) = find_byte(&data[offset..], b'#') else {
             break;
         };
-        i += pos;
-        let slice = &data[i..];
+        offset += pos;
+        let slice = &data[offset..];
         let Some(tag) = tags.iter().copied().find(|tag| starts_with_ci(slice, tag)) else {
-            i += 1;
+            offset += 1;
             continue;
         };
-        if let Some((value, adv)) = parse_tag_val(slice, tag.len(), true) {
+        if let Some((value, advance)) = parse_tag_val(slice, tag.len(), true) {
             out.push(value);
-            i += adv;
+            offset += advance;
         } else {
-            i += 1;
+            offset += 1;
         }
     }
     out
+}
+
+/// Lazily yields values for any of the requested tags without allocating a
+/// temporary collection.
+#[must_use]
+pub const fn named_tag_values<'data, 'tags>(
+    data: &'data [u8],
+    tags: &'tags [&'tags [u8]],
+) -> NamedTagValues<'data, 'tags> {
+    NamedTagValues {
+        remaining: data,
+        tags,
+    }
+}
+
+pub struct NamedTagValues<'data, 'tags> {
+    remaining: &'data [u8],
+    tags: &'tags [&'tags [u8]],
+}
+
+impl<'data> Iterator for NamedTagValues<'data, '_> {
+    type Item = &'data [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.remaining.is_empty() {
+            let pos = find_byte(self.remaining, b'#')?;
+            self.remaining = &self.remaining[pos..];
+            let Some(tag) = self
+                .tags
+                .iter()
+                .copied()
+                .find(|tag| starts_with_ci(self.remaining, tag))
+            else {
+                self.remaining = &self.remaining[1..];
+                continue;
+            };
+            if let Some((value, advance)) = parse_tag_val(self.remaining, tag.len(), true) {
+                self.remaining = &self.remaining[advance..];
+                return Some(value);
+            }
+            self.remaining = &self.remaining[1..];
+        }
+        None
+    }
 }
 
 #[inline(always)]
@@ -223,5 +273,34 @@ mod tests {
 
         assert_eq!(cdimage, "new;image.png");
         assert_eq!(discimage, "disc.png");
+    }
+
+    #[test]
+    fn lazy_named_values_match_eager_extraction_for_edge_cases() {
+        let fixtures: &[&[u8]] = &[
+            b"ignored#TITLE:One;#artist:DJ;#title:Two;",
+            b"#TITLE:One\\;Two;#TITLE:Three;",
+            b"#TITLE:first line\r\n second line;\r\n#TITLE:last;",
+            b"#TITLE:unterminated\n#TITLE:recovered;",
+            b"#OTHER:x;#title:;trailer",
+        ];
+        let tags = [b"#TITLE:".as_slice()];
+
+        for data in fixtures {
+            let eager = extract_named_tag_values_baseline(data, &tags);
+            let lazy = named_tag_values(data, &tags).collect::<Vec<_>>();
+            assert_eq!(lazy, eager, "lazy extraction diverged for {data:?}");
+        }
+    }
+
+    #[test]
+    fn lazy_named_values_can_stop_without_scanning_later_tags() {
+        let data = b"#FGCHANGES:first;#FGCHANGES:second;#FGCHANGES:third;";
+        let tags = [b"#FGCHANGES:".as_slice()];
+
+        assert_eq!(
+            named_tag_values(data, &tags).next(),
+            Some(b"first".as_slice())
+        );
     }
 }

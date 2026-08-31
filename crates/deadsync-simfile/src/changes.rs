@@ -12,9 +12,9 @@ use crate::media::{
     list_song_dir_rel_entries, path_uses_lua_like_itg, resolve_foreground_media_dir,
     resolve_song_path_like_itg, song_lua_entry_path_like_itg,
 };
-use crate::tags::extract_named_tag_values;
+use crate::tags::named_tag_values;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget};
-use rssp::parse::{decode_bytes, extract_bgchanges_values, unescape_tag};
+use rssp::parse::{bgchanges_values, decode_bytes, unescape_tag};
 use std::path::{Path, PathBuf};
 
 #[must_use]
@@ -25,10 +25,10 @@ pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &s
         return true;
     }
     let entries = list_song_dir_rel_entries(song_dir);
-    bgchange_values_use_lua(song_dir, &extract_bgchanges_values(simfile_data), &entries)
+    bgchange_values_use_lua(song_dir, bgchanges_values(simfile_data), &entries)
         || bgchange_values_use_lua(
             song_dir,
-            &extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]),
+            named_tag_values(simfile_data, &[b"#FGCHANGES:"]),
             &entries,
         )
 }
@@ -66,9 +66,10 @@ fn extract_foreground_change_sets_with(
     let mut media = Vec::new();
     let mut lua = Vec::new();
     let mut uses_lua = false;
-    for raw in extract_named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
-        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
-        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+    for raw in named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
+        let decoded = decode_bytes(raw);
+        let text = unescape_tag(decoded.as_ref());
+        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -161,9 +162,10 @@ pub fn extract_background_lua_change_set(
         push_change(0.0, path);
     }
 
-    for raw in extract_bgchanges_values(simfile_data) {
-        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
-        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+    for raw in bgchanges_values(simfile_data) {
+        let decoded = decode_bytes(raw);
+        let text = unescape_tag(decoded.as_ref());
+        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -196,7 +198,7 @@ pub fn resolve_background_changes_from_roots(
 ) -> Vec<SongBackgroundChange> {
     resolve_background_changes_from_values(
         song_dir,
-        extract_bgchanges_values(simfile_data),
+        bgchanges_values(simfile_data),
         song_movie_roots,
         random_movie_roots,
         &[],
@@ -215,7 +217,7 @@ pub fn resolve_background_layer2_changes_from_roots(
 ) -> Vec<SongBackgroundChange> {
     resolve_background_changes_from_values(
         song_dir,
-        extract_named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
+        named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
         song_movie_roots,
         random_movie_roots,
         bg_animation_roots,
@@ -224,9 +226,9 @@ pub fn resolve_background_layer2_changes_from_roots(
     )
 }
 
-fn resolve_background_changes_from_values(
+fn resolve_background_changes_from_values<'a>(
     song_dir: &Path,
-    values: Vec<&[u8]>,
+    values: impl IntoIterator<Item = &'a [u8]>,
     song_movie_roots: &[PathBuf],
     random_movie_roots: &[PathBuf],
     bg_animation_roots: &[PathBuf],
@@ -237,8 +239,9 @@ fn resolve_background_changes_from_values(
     let mut out: Vec<SongBackgroundChange> = Vec::new();
     let mut saw_no_song_bg = false;
     for raw in values {
-        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
-        for fields in split_bgchange_sets_like_itg(&text, &entries) {
+        let decoded = decode_bytes(raw);
+        let text = unescape_tag(decoded.as_ref());
+        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
             let Some(change) = parse_background_change_set(
                 song_dir,
                 &fields,
@@ -509,10 +512,15 @@ fn bgchange_target_uses_lua(song_dir: &Path, target: &str) -> bool {
     resolve_song_path_like_itg(song_dir, target).is_some_and(|path| path_uses_lua_like_itg(&path))
 }
 
-fn bgchange_values_use_lua(song_dir: &Path, values: &[&[u8]], entries: &[String]) -> bool {
-    values.iter().copied().any(|raw| {
-        let text = unescape_tag(decode_bytes(raw).as_ref()).into_owned();
-        split_bgchange_sets_like_itg(&text, entries)
+fn bgchange_values_use_lua<'a>(
+    song_dir: &Path,
+    values: impl IntoIterator<Item = &'a [u8]>,
+    entries: &[String],
+) -> bool {
+    values.into_iter().any(|raw| {
+        let decoded = decode_bytes(raw);
+        let text = unescape_tag(decoded.as_ref());
+        split_bgchange_sets_like_itg(text.as_ref(), entries)
             .into_iter()
             .any(|fields| {
                 fields
