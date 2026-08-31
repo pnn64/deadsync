@@ -397,10 +397,10 @@ enum BuildOp {
     XY(Target, Target),
     Size(Target, Target),
     ZoomBoth(Target),
+    ZoomXY(Target, Target),
     ZoomX(Target),
     ZoomY(Target),
-    ZoomToW(f32),
-    ZoomToH(f32),
+    ZoomTo(f32, f32),
     Tint(Target, Target, Target, Target),
     Glow(Target, Target, Target, Target),
     Visible(bool),
@@ -433,6 +433,7 @@ enum PreparedKind {
     ScaleX { from: f32, to: f32 },
     ScaleY { from: f32, to: f32 },
     ScaleBoth { from: [f32; 2], to: f32 },
+    ScaleXY { from: [f32; 2], to: [f32; 2] },
     Tint { from: [f32; 4], to: [f32; 4] },
     Glow { from: [f32; 4], to: [f32; 4] },
     Visible(bool),
@@ -473,6 +474,10 @@ impl OpPrepared {
             PreparedKind::ScaleBoth { from, to } => {
                 s.scale[0] = (to - from[0]).mul_add(a, from[0]);
                 s.scale[1] = (to - from[1]).mul_add(a, from[1]);
+            }
+            PreparedKind::ScaleXY { from, to } => {
+                s.scale[0] = (to[0] - from[0]).mul_add(a, from[0]);
+                s.scale[1] = (to[1] - from[1]).mul_add(a, from[1]);
             }
             PreparedKind::Tint { from, to } => {
                 for i in 0..4 {
@@ -620,6 +625,22 @@ impl RuntimeSegment {
                         kind: PreparedKind::ScaleBoth { from: s.scale, to },
                     });
                 }
+                BuildOp::ZoomXY(tx, ty) => {
+                    let to_x = match tx {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.scale[0] + dv,
+                    };
+                    let to_y = match ty {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.scale[1] + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::ScaleXY {
+                            from: s.scale,
+                            to: [to_x, to_y],
+                        },
+                    });
+                }
                 BuildOp::ZoomX(t) => {
                     let to = match t {
                         Target::Abs(v) => v,
@@ -644,21 +665,13 @@ impl RuntimeSegment {
                         },
                     });
                 }
-                BuildOp::ZoomToW(w) => {
-                    let to = if s.w == 0.0 { 0.0 } else { w / s.w };
+                BuildOp::ZoomTo(w, h) => {
+                    let to_x = if s.w == 0.0 { 0.0 } else { w / s.w };
+                    let to_y = if s.h == 0.0 { 0.0 } else { h / s.h };
                     self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleX {
-                            from: s.scale[0],
-                            to,
-                        },
-                    });
-                }
-                BuildOp::ZoomToH(h) => {
-                    let to = if s.h == 0.0 { 0.0 } else { h / s.h };
-                    self.prepared.push(OpPrepared {
-                        kind: PreparedKind::ScaleY {
-                            from: s.scale[1],
-                            to,
+                        kind: PreparedKind::ScaleXY {
+                            from: s.scale,
+                            to: [to_x, to_y],
                         },
                     });
                 }
@@ -833,11 +846,7 @@ impl RuntimeSegment {
     fn update(&mut self, s: &mut TweenState, dt: f32) -> bool {
         // returns true if finished
         if self.dur == 0.0 {
-            // apply final immediately
             self.prepare_if_needed(s);
-            for p in &self.prepared {
-                p.apply_final(s);
-            }
             return true;
         }
 
@@ -845,13 +854,19 @@ impl RuntimeSegment {
 
         self.elapsed = (self.elapsed + dt).min(self.dur);
 
+        // The caller finalizes completed segments after taking them out of
+        // `current`, so avoid applying the same endpoint twice here.
+        if self.elapsed >= self.dur {
+            return true;
+        }
+
         let a = ease_apply(self.ease, self.elapsed / self.dur);
 
         for p in &self.prepared {
             p.apply_lerp(s, a);
         }
 
-        self.elapsed >= self.dur
+        false
     }
 }
 
@@ -912,8 +927,8 @@ impl SegmentBuilder {
         if (f - g).abs() < f32::EPSILON {
             self.ops.push(BuildOp::ZoomBoth(Target::Abs(f)));
         } else {
-            self.ops.push(BuildOp::ZoomX(Target::Abs(f)));
-            self.ops.push(BuildOp::ZoomY(Target::Abs(g)));
+            self.ops
+                .push(BuildOp::ZoomXY(Target::Abs(f), Target::Abs(g)));
         }
         self
     }
@@ -941,8 +956,7 @@ impl SegmentBuilder {
     // --- zoomto (StepMania: zoomto/zoomtowidth/zoomtoheight) ---
     #[must_use]
     pub fn zoomto(mut self, w: f32, h: f32) -> Self {
-        self.ops.push(BuildOp::ZoomToW(w));
-        self.ops.push(BuildOp::ZoomToH(h));
+        self.ops.push(BuildOp::ZoomTo(w, h));
         self
     }
 
@@ -1251,7 +1265,7 @@ impl TweenSeq {
 
 #[cfg(any(test, feature = "bench-support"))]
 pub mod bench_support {
-    use super::{OpPrepared, PreparedKind, TweenState};
+    use super::{Ease, OpPrepared, PreparedKind, TweenState, ease_apply};
     use std::hint::black_box;
 
     #[derive(Clone, Copy)]
@@ -1418,6 +1432,162 @@ pub mod bench_support {
         }
         checksum
     }
+
+    #[must_use]
+    pub fn scale_xy_pair_legacy(evaluations: usize) -> u64 {
+        let ops = black_box([
+            LegacyPreparedKind::ScaleX {
+                from: 0.375,
+                to: 2.125,
+            },
+            LegacyPreparedKind::ScaleY {
+                from: 1.875,
+                to: 0.625,
+            },
+        ]);
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            let amount = black_box(amount(index));
+            for op in ops {
+                op.apply(&mut state, amount);
+            }
+            checksum = pair_checksum(checksum, state.scale);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn scale_xy_pair_current(evaluations: usize) -> u64 {
+        let op = black_box(OpPrepared {
+            kind: PreparedKind::ScaleXY {
+                from: [0.375, 1.875],
+                to: [2.125, 0.625],
+            },
+        });
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply_lerp(&mut state, black_box(amount(index)));
+            checksum = pair_checksum(checksum, state.scale);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn zoom_to_pair_legacy(evaluations: usize) -> u64 {
+        let width = black_box(320.0_f32);
+        let height = black_box(240.0_f32);
+        let ops = black_box([
+            LegacyPreparedKind::ScaleX {
+                from: 0.75,
+                to: 1280.0 / width,
+            },
+            LegacyPreparedKind::ScaleY {
+                from: 1.25,
+                to: 1080.0 / height,
+            },
+        ]);
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            let amount = black_box(amount(index));
+            for op in ops {
+                op.apply(&mut state, amount);
+            }
+            checksum = pair_checksum(checksum, state.scale);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn zoom_to_pair_current(evaluations: usize) -> u64 {
+        let width = black_box(320.0_f32);
+        let height = black_box(240.0_f32);
+        let op = black_box(OpPrepared {
+            kind: PreparedKind::ScaleXY {
+                from: [0.75, 1.25],
+                to: [1280.0 / width, 1080.0 / height],
+            },
+        });
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply_lerp(&mut state, black_box(amount(index)));
+            checksum = pair_checksum(checksum, state.scale);
+        }
+        checksum
+    }
+
+    fn completion_ops() -> [OpPrepared; 4] {
+        [
+            OpPrepared {
+                kind: PreparedKind::X {
+                    from: -320.25,
+                    to: 854.75,
+                },
+            },
+            OpPrepared {
+                kind: PreparedKind::Y {
+                    from: 720.5,
+                    to: -48.125,
+                },
+            },
+            OpPrepared {
+                kind: PreparedKind::Tint {
+                    from: [0.125, 0.25, 0.5, 0.75],
+                    to: [0.875, 0.625, 0.375, 0.9375],
+                },
+            },
+            OpPrepared {
+                kind: PreparedKind::Glow {
+                    from: [0.75, 0.5, 0.25, 0.125],
+                    to: [0.0625, 0.3125, 0.6875, 1.0],
+                },
+            },
+        ]
+    }
+
+    #[inline(always)]
+    fn completion_checksum(mut checksum: u64, state: &TweenState) -> u64 {
+        checksum = pair_checksum(checksum, [state.x, state.y]);
+        for value in state.tint.into_iter().chain(state.glow) {
+            checksum = scalar_checksum(checksum, value);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn segment_completion_legacy(evaluations: usize) -> u64 {
+        let ops = black_box(completion_ops());
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for _ in 0..evaluations {
+            let amount = black_box(ease_apply(Ease::Decelerate, 1.0));
+            for op in &ops {
+                op.apply_lerp(&mut state, amount);
+            }
+            for op in &ops {
+                op.apply_final(&mut state);
+            }
+            checksum = completion_checksum(checksum, &state);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn segment_completion_current(evaluations: usize) -> u64 {
+        let ops = black_box(completion_ops());
+        let mut state = TweenState::default();
+        let mut checksum = 0;
+        for _ in 0..evaluations {
+            for op in &ops {
+                op.apply_final(&mut state);
+            }
+            checksum = completion_checksum(checksum, &state);
+        }
+        checksum
+    }
 }
 
 #[cfg(test)]
@@ -1450,6 +1620,96 @@ mod tests {
                 bench_support::scale_pair_legacy(evaluations),
                 "equal-axis zoom behavior diverged after {evaluations} evaluations"
             );
+            assert_eq!(
+                bench_support::scale_xy_pair_current(evaluations),
+                bench_support::scale_xy_pair_legacy(evaluations),
+                "non-uniform zoom behavior diverged after {evaluations} evaluations"
+            );
+            assert_eq!(
+                bench_support::zoom_to_pair_current(evaluations),
+                bench_support::zoom_to_pair_legacy(evaluations),
+                "zoomto behavior diverged after {evaluations} evaluations"
+            );
+            assert_eq!(
+                bench_support::segment_completion_current(evaluations),
+                bench_support::segment_completion_legacy(evaluations),
+                "segment endpoint behavior diverged after {evaluations} evaluations"
+            );
+        }
+    }
+
+    #[test]
+    fn fused_scale_pairs_match_independent_interpolation() {
+        let initial = TweenState {
+            w: 320.0,
+            h: 240.0,
+            scale: [0.375, 1.875],
+            ..TweenState::default()
+        };
+
+        let mut zoom = TweenSeq::new(initial);
+        zoom.push(linear(1.0).zoom(2.125, 0.625));
+        zoom.update(0.375);
+        assert_bits(
+            zoom.state().scale[0],
+            (2.125_f32 - initial.scale[0]).mul_add(0.375, initial.scale[0]),
+            "non-uniform scale x",
+        );
+        assert_bits(
+            zoom.state().scale[1],
+            (0.625_f32 - initial.scale[1]).mul_add(0.375, initial.scale[1]),
+            "non-uniform scale y",
+        );
+
+        let mut zoom_to = TweenSeq::new(initial);
+        zoom_to.push(linear(1.0).zoomto(1280.0, 1080.0));
+        zoom_to.update(0.375);
+        assert_bits(
+            zoom_to.state().scale[0],
+            (4.0_f32 - initial.scale[0]).mul_add(0.375, initial.scale[0]),
+            "zoomto scale x",
+        );
+        assert_bits(
+            zoom_to.state().scale[1],
+            (4.5_f32 - initial.scale[1]).mul_add(0.375, initial.scale[1]),
+            "zoomto scale y",
+        );
+
+        let mut zero_width = TweenSeq::new(TweenState {
+            w: 0.0,
+            h: 240.0,
+            scale: [0.75, 1.25],
+            ..TweenState::default()
+        });
+        zero_width.push(linear(1.0).zoomto(1280.0, 1080.0));
+        zero_width.update(1.0);
+        assert_bits(zero_width.state().scale[0], 0.0, "zero-width zoomto x");
+        assert_bits(zero_width.state().scale[1], 4.5, "zero-width zoomto y");
+    }
+
+    #[test]
+    fn completed_segments_snap_once_and_consume_following_steps() {
+        let mut tween = TweenSeq::new(TweenState::default());
+        tween.push(linear(0.25).xy(100.0, 200.0).diffuse(0.25, 0.5, 0.75, 1.0));
+        tween.push(linear(0.0).size(640.0, 480.0).zoom(2.0, 3.0));
+        tween.push(linear(0.5).xy(-20.0, 40.0));
+
+        tween.update(1.0);
+        let state = tween.state();
+        assert!(tween.is_empty());
+        assert_bits(state.x, -20.0, "completed x");
+        assert_bits(state.y, 40.0, "completed y");
+        assert_bits(state.w, 640.0, "instant width");
+        assert_bits(state.h, 480.0, "instant height");
+        assert_bits(state.scale[0], 2.0, "instant scale x");
+        assert_bits(state.scale[1], 3.0, "instant scale y");
+        for (index, (actual, expected)) in state
+            .tint
+            .into_iter()
+            .zip([0.25, 0.5, 0.75, 1.0])
+            .enumerate()
+        {
+            assert_bits(actual, expected, &format!("completed tint {index}"));
         }
     }
 

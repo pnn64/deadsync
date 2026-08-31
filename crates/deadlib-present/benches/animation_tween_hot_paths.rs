@@ -227,6 +227,21 @@ fn main() {
         bench_support::scale_pair_legacy,
         bench_support::scale_pair_current,
     );
+    print_pair(
+        "fused non-uniform zoom operation",
+        bench_support::scale_xy_pair_legacy,
+        bench_support::scale_xy_pair_current,
+    );
+    print_pair(
+        "fused zoomto operation",
+        bench_support::zoom_to_pair_legacy,
+        bench_support::zoom_to_pair_current,
+    );
+    print_pair(
+        "single-pass segment completion",
+        bench_support::segment_completion_legacy,
+        bench_support::segment_completion_current,
+    );
 }
 
 #[cfg(target_arch = "x86")]
