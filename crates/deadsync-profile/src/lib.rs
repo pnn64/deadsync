@@ -6387,8 +6387,114 @@ pub fn tap_explosion_skin_hidden(noteskin: Option<&NoteSkin>) -> bool {
     noteskin.is_some_and(NoteSkin::is_none_choice)
 }
 
+const EVALUATION_MODS_INLINE_BYTES: usize = 192;
+
+struct EvaluationModsInlineText {
+    bytes: [u8; EVALUATION_MODS_INLINE_BYTES],
+    len: usize,
+}
+
+impl EvaluationModsInlineText {
+    #[inline(always)]
+    const fn new() -> Self {
+        Self {
+            bytes: [0; EVALUATION_MODS_INLINE_BYTES],
+            len: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len])
+            .expect("evaluation modifier text only contains valid UTF-8")
+    }
+}
+
+impl core::fmt::Write for EvaluationModsInlineText {
+    #[inline]
+    fn write_str(&mut self, value: &str) -> core::fmt::Result {
+        let Some(end) = self.len.checked_add(value.len()) else {
+            return Err(core::fmt::Error);
+        };
+        let Some(destination) = self.bytes.get_mut(self.len..end) else {
+            return Err(core::fmt::Error);
+        };
+        destination.copy_from_slice(value.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+
+fn write_evaluation_mods_text(
+    output: &mut impl core::fmt::Write,
+    profile: &Profile,
+    speed_mod: ScrollSpeedSetting,
+) -> core::fmt::Result {
+    write!(output, "{speed_mod}")?;
+    if profile.mini_percent != 0 {
+        write!(output, ", {}% Mini", profile.mini_percent)?;
+    }
+    if profile.spacing_percent != 0 {
+        write!(output, ", {}% Spacing", profile.spacing_percent)?;
+    }
+
+    let scroll = profile.scroll_option;
+    for (option, label) in [
+        (ScrollOption::Reverse, ", Reverse"),
+        (ScrollOption::Split, ", Split"),
+        (ScrollOption::Alternate, ", Alternate"),
+        (ScrollOption::Cross, ", Cross"),
+        (ScrollOption::Centered, ", Centered"),
+    ] {
+        if scroll.contains(option) {
+            output.write_str(label)?;
+        }
+    }
+
+    write!(output, ", {}", profile.perspective)?;
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    if disabled_windows.iter().any(|disabled| *disabled) {
+        output.write_str(", No ")?;
+        let mut first = true;
+        for (index, disabled) in disabled_windows.into_iter().enumerate() {
+            if !disabled {
+                continue;
+            }
+            if !first {
+                output.write_char('/')?;
+            }
+            first = false;
+            write!(output, "W{}", index + 1)?;
+        }
+    }
+    output.write_str(", ")?;
+    output.write_str(profile.noteskin.as_str())
+}
+
 #[must_use]
 pub fn evaluation_mods_text(profile: &Profile, speed_mod: ScrollSpeedSetting) -> Arc<str> {
+    let mut inline = EvaluationModsInlineText::new();
+    if write_evaluation_mods_text(&mut inline, profile, speed_mod).is_ok() {
+        return Arc::from(inline.as_str());
+    }
+
+    // Only an unusually long user-defined noteskin name can exceed the inline
+    // buffer. Its length dominates the result, so this avoids heap growth too.
+    let mut output = String::with_capacity(
+        EVALUATION_MODS_INLINE_BYTES.saturating_add(profile.noteskin.as_str().len()),
+    );
+    write_evaluation_mods_text(&mut output, profile, speed_mod)
+        .expect("writing evaluation modifier text into a String cannot fail");
+    Arc::from(output)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn evaluation_mods_text_reference_for_bench(
+    profile: &Profile,
+    speed_mod: ScrollSpeedSetting,
+) -> Arc<str> {
     let mut parts = vec![speed_mod.to_string()];
     if profile.mini_percent != 0 {
         parts.push(format!("{}% Mini", profile.mini_percent));
@@ -11332,6 +11438,87 @@ mod tests {
             evaluation_mods_text(&profile, ScrollSpeedSetting::XMod(2.5)).as_ref(),
             "X2.50, 35% Mini, -20% Spacing, Reverse, Split, Cross, Incoming, No W4/W5, cyber"
         );
+    }
+
+    #[test]
+    fn evaluation_mods_text_covers_minimal_timing_and_inline_fallback_outputs() {
+        assert_eq!(
+            evaluation_mods_text(&Profile::default(), ScrollSpeedSetting::CMod(600.0)).as_ref(),
+            "C600, Overhead, cel"
+        );
+
+        let timing_profile = Profile {
+            scroll_option: ScrollOption::Alternate.union(ScrollOption::Centered),
+            perspective: Perspective::Space,
+            timing_windows: TimingWindowsOption::FantasticsAndExcellents,
+            noteskin: NoteSkin::new("Metal"),
+            ..Profile::default()
+        };
+        assert_eq!(
+            evaluation_mods_text(&timing_profile, ScrollSpeedSetting::MMod(425.5)).as_ref(),
+            "M425.5, Alternate, Centered, Space, No W1/W2, metal"
+        );
+
+        let long_name = "n".repeat(EVALUATION_MODS_INLINE_BYTES + 32);
+        let long_profile = Profile {
+            noteskin: NoteSkin::new(&long_name),
+            ..Profile::default()
+        };
+        let expected = format!("C600, Overhead, {long_name}");
+        assert_eq!(
+            evaluation_mods_text(&long_profile, ScrollSpeedSetting::CMod(600.0)).as_ref(),
+            expected
+        );
+    }
+
+    #[test]
+    fn evaluation_mods_text_matches_reference_across_option_matrix() {
+        let scroll_options = [
+            ScrollOption::Normal,
+            ScrollOption::Reverse,
+            ScrollOption::Split.union(ScrollOption::Cross),
+            ScrollOption::Reverse
+                .union(ScrollOption::Split)
+                .union(ScrollOption::Alternate)
+                .union(ScrollOption::Cross)
+                .union(ScrollOption::Centered),
+        ];
+        let timing_options = [
+            TimingWindowsOption::None,
+            TimingWindowsOption::WayOffs,
+            TimingWindowsOption::DecentsAndWayOffs,
+            TimingWindowsOption::FantasticsAndExcellents,
+        ];
+        let speed_options = [
+            ScrollSpeedSetting::CMod(600.0),
+            ScrollSpeedSetting::XMod(2.75),
+            ScrollSpeedSetting::MMod(425.5),
+        ];
+
+        for (scroll_index, scroll_option) in scroll_options.into_iter().enumerate() {
+            for (timing_index, timing_windows) in timing_options.into_iter().enumerate() {
+                for speed_mod in speed_options {
+                    let profile = Profile {
+                        mini_percent: if scroll_index % 2 == 0 { 0 } else { -35 },
+                        spacing_percent: if timing_index % 2 == 0 { 125 } else { 0 },
+                        scroll_option,
+                        perspective: if timing_index % 2 == 0 {
+                            Perspective::Distant
+                        } else {
+                            Perspective::Hallway
+                        },
+                        timing_windows,
+                        noteskin: NoteSkin::new("Cyber-Δ"),
+                        ..Profile::default()
+                    };
+                    assert_eq!(
+                        evaluation_mods_text(&profile, speed_mod),
+                        evaluation_mods_text_reference_for_bench(&profile, speed_mod),
+                        "scroll={scroll_index} timing={timing_index} speed={speed_mod}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
