@@ -15,6 +15,7 @@ use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 #[cfg(test)]
 use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render_core::BlendMode;
+use deadsync_core::input::MAX_COLS;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_gameplay::ChartNoteIndex;
@@ -859,6 +860,7 @@ pub struct ScrollTravel<'a> {
     post_accel_scale: f32,
     accel_is_identity: bool,
     accel_cache: AccelYCache,
+    random_speed_lane_seeds: [u32; MAX_COLS],
 }
 
 pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_> {
@@ -913,13 +915,23 @@ pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_
             }
         }
     };
+    let random_speed_lane_seeds = if request.random_speed <= 0.0 {
+        [0; MAX_COLS]
+    } else {
+        std::array::from_fn(|local_col| random_speed_lane_seed(request.stage_seed, local_col))
+    };
     ScrollTravel {
         request,
         raw,
         displayed_speed_percent,
         post_accel_scale,
         accel_is_identity: accel_y_is_identity(request.accel),
-        accel_cache: accel_y_cache(request.elapsed_screen_s, request.accel),
+        accel_cache: accel_y_cache(
+            request.elapsed_screen_s,
+            request.effect_height,
+            request.accel,
+        ),
+        random_speed_lane_seeds,
     }
 }
 
@@ -1076,11 +1088,11 @@ impl ScrollTravel<'_> {
         if raw_travel < 0.0 || self.request.random_speed <= 0.0 {
             return adjusted;
         }
+        debug_assert!(local_col < MAX_COLS);
         adjusted
-            * random_speed_mult(
-                self.request.stage_seed,
+            * random_speed_mult_from_lane_seed(
+                self.random_speed_lane_seeds[local_col],
                 note_row,
-                local_col,
                 self.request.random_speed,
             )
     }
@@ -1222,14 +1234,66 @@ impl ScrollTravel<'_> {
     }
 }
 
+const RANDOM_SPEED_LCG_MULTIPLIER: u32 = 1_664_525;
+const RANDOM_SPEED_LCG_INCREMENT: u32 = 1_013_904_223;
+const RANDOM_SPEED_LCG_MULTIPLIER_3: u32 = RANDOM_SPEED_LCG_MULTIPLIER
+    .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER)
+    .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER);
+const RANDOM_SPEED_LCG_INCREMENT_3: u32 = RANDOM_SPEED_LCG_INCREMENT.wrapping_mul(
+    RANDOM_SPEED_LCG_MULTIPLIER
+        .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER)
+        .wrapping_add(RANDOM_SPEED_LCG_MULTIPLIER)
+        .wrapping_add(1),
+);
+
+// Three LCG rounds are one affine transform modulo 2^32. Keeping the composed
+// coefficients removes two dependent multiply-add pairs from every random-speed note.
+#[inline(always)]
+const fn random_speed_seed(seed: u32) -> u32 {
+    seed.wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER_3)
+        .wrapping_add(RANDOM_SPEED_LCG_INCREMENT_3)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn random_speed_seed_legacy(mut seed: u32) -> u32 {
+    for _ in 0..3 {
+        seed = seed
+            .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER)
+            .wrapping_add(RANDOM_SPEED_LCG_INCREMENT);
+    }
+    seed
+}
+
+#[inline(always)]
+fn random_speed_lane_seed(stage_seed: u32, local_col: usize) -> u32 {
+    random_speed_seed(stage_seed.wrapping_add((local_col as u32).wrapping_mul(100)))
+}
+
+// The affine transform distributes over the row contribution, so each lane's
+// stage/column component can be prepared once when the frame travel is built.
+#[inline(always)]
+fn random_speed_seed_from_lane_seed(lane_seed: u32, note_row: i32) -> u32 {
+    lane_seed.wrapping_add(
+        (note_row as u32)
+            .wrapping_shl(8)
+            .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER_3),
+    )
+}
+
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn random_speed_mult(stage_seed: u32, note_row: i32, local_col: usize, amount: f32) -> f32 {
-    let mut seed = stage_seed
+    let seed = stage_seed
         .wrapping_add((note_row as u32).wrapping_shl(8))
         .wrapping_add((local_col as u32).wrapping_mul(100));
-    for _ in 0..3 {
-        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-    }
+    let seed = random_speed_seed(seed);
+    (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0)
+}
+
+#[inline(always)]
+fn random_speed_mult_from_lane_seed(lane_seed: u32, note_row: i32, amount: f32) -> f32 {
+    let seed = random_speed_seed_from_lane_seed(lane_seed, note_row);
     (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0)
 }
 
@@ -1618,7 +1682,74 @@ pub mod note_projection_bench_support {
     use std::hint::black_box;
 
     use super::*;
-    use deadsync_core::input::MAX_COLS;
+
+    fn random_speed_checksum(seed: u32, amount: f32, checksum: u64) -> u64 {
+        let value = (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0);
+        checksum
+            .wrapping_add(u64::from(value.to_bits()))
+            .rotate_left(11)
+    }
+
+    #[must_use]
+    pub fn random_speed_lcg_old(evaluations: usize) -> u64 {
+        let amount = black_box(0.65);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let seed = black_box(0x1234_5678_u32)
+                .wrapping_add(((index as i32 - 512) as u32).wrapping_shl(8))
+                .wrapping_add(((index % MAX_COLS) as u32).wrapping_mul(100));
+            checksum = random_speed_checksum(random_speed_seed_legacy(seed), amount, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn random_speed_lcg_new(evaluations: usize) -> u64 {
+        let amount = black_box(0.65);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let seed = black_box(0x1234_5678_u32)
+                .wrapping_add(((index as i32 - 512) as u32).wrapping_shl(8))
+                .wrapping_add(((index % MAX_COLS) as u32).wrapping_mul(100));
+            checksum = random_speed_checksum(random_speed_seed(seed), amount, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn random_speed_lane_cache_old(evaluations: usize) -> u64 {
+        let stage_seed = black_box(0x1234_5678_u32);
+        let amount = black_box(0.65);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_row = black_box(index as i32 - 512);
+            let local_col = index % MAX_COLS;
+            let seed = stage_seed
+                .wrapping_add((note_row as u32).wrapping_shl(8))
+                .wrapping_add((local_col as u32).wrapping_mul(100));
+            checksum = random_speed_checksum(random_speed_seed(seed), amount, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn random_speed_lane_cache_new(evaluations: usize) -> u64 {
+        let stage_seed = black_box(0x1234_5678_u32);
+        let lane_seeds: [u32; MAX_COLS] =
+            std::array::from_fn(|local_col| random_speed_lane_seed(stage_seed, local_col));
+        let amount = black_box(0.65);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_row = black_box(index as i32 - 512);
+            let local_col = index % MAX_COLS;
+            checksum = random_speed_checksum(
+                random_speed_seed_from_lane_seed(lane_seeds[local_col], note_row),
+                amount,
+                checksum,
+            );
+        }
+        checksum
+    }
 
     #[must_use]
     pub fn random_speed_row_old(evaluations: usize) -> u64 {
@@ -1925,7 +2056,9 @@ mod tests {
         compose_flat_mine_layers, compose_flat_note_layer, compose_note_glow, compose_note_layer,
         find_first_displayed_beat, find_first_displayed_row, find_last_displayed_beat,
         find_last_displayed_row, for_each_visible_hold_index, for_each_visible_note_index,
-        hold_overlaps_visible_window, scroll_travel, song_time_ns_delta_seconds,
+        hold_overlaps_visible_window, random_speed_lane_seed, random_speed_seed,
+        random_speed_seed_from_lane_seed, random_speed_seed_legacy, scroll_travel,
+        song_time_ns_delta_seconds,
     };
     use crate::{
         AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
@@ -1933,6 +2066,7 @@ mod tests {
     };
     use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource};
     use deadlib_render_core::BlendMode;
+    use deadsync_core::input::MAX_COLS;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_noteskin::{
@@ -2719,6 +2853,28 @@ mod tests {
         assert_near(displayed.raw_beat(5.0), 16.0);
         assert_near(edit.raw_beat(5.0), 64.0);
         assert_near(edit.adjusted(edit.raw_beat(5.0)), 128.0);
+    }
+
+    #[test]
+    fn collapsed_and_lane_cached_random_speed_match_three_lcg_rounds() {
+        for stage_seed in [0, 1, 0x1234_5678, u32::MAX] {
+            for note_row in [i32::MIN, -192, -1, 0, 1, 192, i32::MAX] {
+                for local_col in 0..MAX_COLS {
+                    let input = stage_seed
+                        .wrapping_add((note_row as u32).wrapping_shl(8))
+                        .wrapping_add((local_col as u32).wrapping_mul(100));
+                    let reference = random_speed_seed_legacy(input);
+                    assert_eq!(random_speed_seed(input), reference);
+                    assert_eq!(
+                        random_speed_seed_from_lane_seed(
+                            random_speed_lane_seed(stage_seed, local_col),
+                            note_row,
+                        ),
+                        reference,
+                    );
+                }
+            }
+        }
     }
 
     #[test]

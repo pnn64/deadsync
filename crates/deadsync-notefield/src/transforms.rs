@@ -121,6 +121,7 @@ pub(crate) struct AccelYParams {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AccelYCache {
+    boost_height_offset: f32,
     expand_scale: f32,
     path: AccelYPath,
 }
@@ -254,7 +255,7 @@ pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
         || accel.boomerang > f32::EPSILON)
 }
 
-pub(crate) fn accel_y_cache(elapsed: f32, accel: AccelYParams) -> AccelYCache {
+pub(crate) fn accel_y_cache(elapsed: f32, effect_height: f32, accel: AccelYParams) -> AccelYCache {
     let expand_scale = if accel.expand > f32::EPSILON {
         let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
         let multiplier = sm_scale(
@@ -298,7 +299,11 @@ pub(crate) fn accel_y_cache(elapsed: f32, accel: AccelYParams) -> AccelYCache {
         (false, true, false, true, true) => AccelYPath::BrakeBoomerangExpandOnly,
         _ => AccelYPath::General,
     };
-    AccelYCache { expand_scale, path }
+    AccelYCache {
+        boost_height_offset: effect_height / 1.2,
+        expand_scale,
+        path,
+    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -396,7 +401,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
     }
     match cache.path {
         AccelYPath::BoostOnly => {
-            let new_y = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let new_y = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let adjust =
                 (accel.boost * (new_y - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             return (raw_y + adjust, true);
@@ -420,7 +425,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (y, before_peak);
         }
         AccelYPath::BoostBrakeOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
                 (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             let boosted_y = raw_y + boost_adjust;
@@ -431,7 +436,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (boosted_y + brake_adjust, true);
         }
         AccelYPath::BoostBoomerangOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
                 (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             let y = raw_y + boost_adjust;
@@ -457,7 +462,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (y, before_peak);
         }
         AccelYPath::BoostExpandOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
                 (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             let y = (raw_y + boost_adjust) * cache.expand_scale;
@@ -477,7 +482,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (y, before_peak);
         }
         AccelYPath::BoostBrakeExpandOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
                 (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             let boosted_y = raw_y + boost_adjust;
@@ -489,7 +494,7 @@ pub(crate) fn apply_accel_y_with_peak_cached(
             return (y, true);
         }
         AccelYPath::BoostBoomerangExpandOnly => {
-            let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+            let boosted = raw_y * 1.5 / ((raw_y + cache.boost_height_offset) / effect_height);
             let boost_adjust =
                 (accel.boost * (boosted - raw_y)).clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
             let y = raw_y + boost_adjust;
@@ -521,7 +526,7 @@ fn apply_accel_y_general(
     cache: AccelYCache,
 ) -> (f32, bool) {
     if accel.boost > f32::EPSILON {
-        let new_y = y * 1.5 / ((y + effect_height / 1.2) / effect_height);
+        let new_y = y * 1.5 / ((y + cache.boost_height_offset) / effect_height);
         let mut adjust = accel.boost * (new_y - y);
         adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
         y += adjust;
@@ -1331,7 +1336,7 @@ mod common_note_transform_tests {
             boomerang: 0.3,
         };
         for elapsed in [0.0, 0.125, 3.25, 81.75] {
-            let cache = accel_y_cache(elapsed, accel);
+            let cache = accel_y_cache(elapsed, 480.0, accel);
             for raw_y in [-64.0, 0.0, 32.0, 160.0, 384.0, 640.0] {
                 let reference = apply_accel_y_with_peak(raw_y, elapsed, 480.0, 720.0, accel);
                 let cached = apply_accel_y_with_peak_cached(raw_y, 480.0, 720.0, accel, cache);
@@ -1359,7 +1364,7 @@ mod common_note_transform_tests {
         ];
         for accel in cases {
             for elapsed in [0.0, 0.125, 3.25, 81.75] {
-                let cache = accel_y_cache(elapsed, accel);
+                let cache = accel_y_cache(elapsed, 480.0, accel);
                 for raw_y in [
                     -64.0,
                     -0.0,
@@ -1399,7 +1404,7 @@ mod common_note_transform_tests {
         ];
         for accel in cases {
             for elapsed in [0.0, 0.125, 3.25, 81.75] {
-                let cache = accel_y_cache(elapsed, accel);
+                let cache = accel_y_cache(elapsed, 480.0, accel);
                 for raw_y in [
                     -64.0,
                     -0.0,
@@ -1441,9 +1446,9 @@ mod common_note_transform_tests {
         ];
         for accel in cases {
             for elapsed in [0.0, 0.125, 3.25, 81.75] {
-                let cache = accel_y_cache(elapsed, accel);
                 for effect_height in [0.0, 480.0, f32::INFINITY] {
                     for screen_height in [0.0, 720.0, f32::INFINITY] {
+                        let cache = accel_y_cache(elapsed, effect_height, accel);
                         for raw_y in [
                             -64.0,
                             -0.0,
@@ -1499,9 +1504,9 @@ mod common_note_transform_tests {
         ];
         for accel in cases {
             for elapsed in [0.0, 0.125, 3.25, 81.75] {
-                let cache = accel_y_cache(elapsed, accel);
                 for effect_height in [0.0, 480.0, f32::INFINITY] {
                     for screen_height in [0.0, 720.0, f32::INFINITY] {
+                        let cache = accel_y_cache(elapsed, effect_height, accel);
                         for raw_y in [
                             -64.0,
                             -0.0,
@@ -1560,9 +1565,9 @@ mod common_note_transform_tests {
         ];
         for accel in cases {
             for elapsed in [0.0, 0.125, 3.25, 81.75] {
-                let cache = accel_y_cache(elapsed, accel);
                 for effect_height in [0.0, 480.0, f32::INFINITY] {
                     for screen_height in [0.0, 720.0, f32::INFINITY] {
+                        let cache = accel_y_cache(elapsed, effect_height, accel);
                         for raw_y in [
                             -64.0,
                             -0.0,
@@ -3333,7 +3338,7 @@ pub mod transform_cache_bench_support {
 
     fn accel_path_old(evaluations: usize, accel: AccelYParams) -> u64 {
         let accel = black_box(accel);
-        let cache = black_box(accel_y_cache(black_box(37.25), accel));
+        let cache = black_box(accel_y_cache(black_box(37.25), 480.0, accel));
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let raw_y = black_box((index % 1024) as f32 - 96.0);
@@ -3353,7 +3358,7 @@ pub mod transform_cache_bench_support {
 
     fn accel_path_new(evaluations: usize, accel: AccelYParams) -> u64 {
         let accel = black_box(accel);
-        let cache = black_box(accel_y_cache(black_box(37.25), accel));
+        let cache = black_box(accel_y_cache(black_box(37.25), 480.0, accel));
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let raw_y = black_box((index % 1024) as f32 - 96.0);
@@ -3367,6 +3372,54 @@ pub mod transform_cache_bench_support {
             checksum = checksum
                 .wrapping_add(u64::from(y.to_bits()))
                 .rotate_left(u32::from(before_peak));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn boost_frame_invariant_old(evaluations: usize) -> u64 {
+        let accel = black_box(AccelYParams {
+            boost: 0.35,
+            ..AccelYParams::default()
+        });
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let raw_y = black_box((index % 1024) as f32 - 96.0);
+            let effect_height = black_box(480.0);
+            let y = if raw_y < 0.0 {
+                raw_y
+            } else {
+                let boosted = raw_y * 1.5 / ((raw_y + effect_height / 1.2) / effect_height);
+                let adjust = (accel.boost * (boosted - raw_y))
+                    .clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+                raw_y + adjust
+            };
+            checksum = checksum.wrapping_add(u64::from(y.to_bits())).rotate_left(1);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn boost_frame_invariant_new(evaluations: usize) -> u64 {
+        let accel = black_box(AccelYParams {
+            boost: 0.35,
+            ..AccelYParams::default()
+        });
+        let cache = black_box(accel_y_cache(37.25, 480.0, accel));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let raw_y = black_box((index % 1024) as f32 - 96.0);
+            let effect_height = black_box(480.0);
+            let y = if raw_y < 0.0 {
+                raw_y
+            } else {
+                let boosted =
+                    raw_y * 1.5 / ((raw_y + black_box(cache).boost_height_offset) / effect_height);
+                let adjust = (accel.boost * (boosted - raw_y))
+                    .clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+                raw_y + adjust
+            };
+            checksum = checksum.wrapping_add(u64::from(y.to_bits())).rotate_left(1);
         }
         checksum
     }
@@ -3757,7 +3810,7 @@ pub mod transform_cache_bench_support {
             expand: 0.75,
             boomerang: 0.3,
         };
-        let cache = accel_y_cache(black_box(37.25), accel);
+        let cache = accel_y_cache(black_box(37.25), 480.0, accel);
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let raw_y = black_box((index % 1024) as f32 - 96.0);
