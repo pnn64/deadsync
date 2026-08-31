@@ -1,7 +1,10 @@
 use deadsync_notefield::edit_bar_geometry_bench_support::{
     edit_bar_geometry_new, edit_bar_geometry_old,
 };
-use deadsync_notefield::hold_geometry_bench_support::{mesh_slice_new, mesh_slice_old};
+use deadsync_notefield::hold_geometry_bench_support::{
+    endpoint_sample_new, endpoint_sample_old, mesh_cap_pose_new, mesh_cap_pose_old, mesh_slice_new,
+    mesh_slice_old, strip_normal_new, strip_normal_old,
+};
 use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
 };
@@ -277,6 +280,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield hold endpoint sample reuse",
+        endpoint_sample_old,
+        endpoint_sample_new,
+    );
+    run(
+        "notefield hold strip single-division normal",
+        strip_normal_old,
+        strip_normal_new,
+    );
+    run(
+        "notefield mesh cap pose elision",
+        mesh_cap_pose_old,
+        mesh_cap_pose_new,
+    );
     run(
         "notefield cached note animation phase",
         part_phase_old,

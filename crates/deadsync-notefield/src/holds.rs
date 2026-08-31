@@ -1126,6 +1126,7 @@ where
     let slice_step = if request.depth_test { 4.0 } else { 16.0 };
     let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
     let mut prev_row: Option<[[f32; 3]; 2]> = None;
+    let mut previous_endpoint: Option<(f32, HoldPathSample)> = None;
     let mut rendered = RenderedHoldBody::default();
     let mut emitted = 0;
 
@@ -1175,8 +1176,9 @@ where
                 continue;
             }
 
-            let top = sample_path(slice_top);
+            let top = hold_path_endpoint_sample(slice_top, previous_endpoint, sample_path);
             let bottom = sample_path(slice_bottom);
+            previous_endpoint = Some((slice_bottom, bottom));
             rendered.top = Some(rendered.top.map_or(slice_top, |v| v.min(slice_top)));
             rendered.bottom = Some(
                 rendered
@@ -1233,6 +1235,21 @@ where
     }
 
     rendered
+}
+
+#[inline(always)]
+fn hold_path_endpoint_sample<P>(
+    y: f32,
+    previous: Option<(f32, HoldPathSample)>,
+    sample_path: &P,
+) -> HoldPathSample
+where
+    P: Fn(f32) -> HoldPathSample,
+{
+    match previous {
+        Some((previous_y, sample)) if previous_y.to_bits() == y.to_bits() => sample,
+        _ => sample_path(y),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1394,12 +1411,6 @@ fn compose_top_cap<S, F, P>(
     }
     let top = sample_path(cap_top);
     let bottom = sample_path(cap_bottom);
-    let (center_xy, draw_height, path_rotation) =
-        hold_segment_pose([top.center_x, cap_top], [bottom.center_x, cap_bottom]);
-    if draw_height <= f32::EPSILON {
-        return;
-    }
-
     let use_mesh = !request.use_legacy_sprites
         && slot.model().is_none()
         && request.rotation_y_deg.abs() <= f32::EPSILON;
@@ -1469,6 +1480,11 @@ fn compose_top_cap<S, F, P>(
             request,
         );
     } else {
+        let (center_xy, draw_height, path_rotation) =
+            hold_segment_pose([top.center_x, cap_top], [bottom.center_x, cap_bottom]);
+        if draw_height <= f32::EPSILON {
+            return;
+        }
         compose_hold_sprite(
             draws,
             HoldSpritePass {
@@ -1660,12 +1676,6 @@ fn compose_bottom_cap<S, F, P>(
     }
     let top = sample_path(draw_top);
     let bottom = sample_path(draw_bottom);
-    let (center_xy, cap_draw_height, rotation_z) =
-        hold_segment_pose([top.center_x, draw_top], [bottom.center_x, draw_bottom]);
-    if cap_draw_height <= f32::EPSILON {
-        return;
-    }
-
     let use_mesh = !request.use_legacy_sprites
         && slot.model().is_none()
         && !request.lane_reverse
@@ -1732,6 +1742,11 @@ fn compose_bottom_cap<S, F, P>(
             request,
         );
     } else {
+        let (center_xy, cap_draw_height, rotation_z) =
+            hold_segment_pose([top.center_x, draw_top], [bottom.center_x, draw_bottom]);
+        if cap_draw_height <= f32::EPSILON {
+            return;
+        }
         compose_hold_sprite(
             draws,
             HoldSpritePass {
@@ -1925,8 +1940,9 @@ pub(crate) fn hold_strip_row_3d(
     let len = (forward[0] * forward[0] + forward[1] * forward[1])
         .sqrt()
         .max(0.0001);
-    let nx = -forward[1] / len * half_width;
-    let ny = forward[0] / len * half_width;
+    let width_scale = half_width / len;
+    let nx = -forward[1] * width_scale;
+    let ny = forward[0] * width_scale;
     hold_strip_row_from_positions(
         [center[0] + nx, center[1] + ny, center[2]],
         [center[0] - nx, center[1] - ny, center[2]],
@@ -2180,6 +2196,54 @@ pub mod hold_geometry_bench_support {
             .wrapping_add(u64::from(row[1].pos[1].to_bits()))
     }
 
+    #[inline(always)]
+    fn sample_checksum(sample: HoldPathSample) -> u64 {
+        u64::from(sample.adjusted_travel.to_bits())
+            .rotate_left(7)
+            .wrapping_add(u64::from(sample.center_x.to_bits()))
+            .rotate_left(11)
+            .wrapping_add(u64::from(sample.world_z.to_bits()))
+            .rotate_left(13)
+            .wrapping_add(u64::from(sample.arrow_px.to_bits()))
+    }
+
+    #[inline(always)]
+    fn benchmark_path_sample(y: f32) -> HoldPathSample {
+        let adjusted_travel = black_box(y).mul_add(1.125, -9.5);
+        let angle = adjusted_travel.mul_add(0.013, 0.25);
+        HoldPathSample {
+            adjusted_travel,
+            center_x: angle.sin().mul_add(38.0, angle.cos() * 12.0),
+            world_z: (angle * 0.75).sin() * 24.0,
+            arrow_px: (angle * 0.125).cos().mul_add(4.0, 64.0),
+        }
+    }
+
+    #[inline(always)]
+    fn hold_strip_row_3d_old(
+        center: [f32; 3],
+        forward: [f32; 2],
+        half_width: f32,
+        u0: f32,
+        u1: f32,
+        v: f32,
+        color: [f32; 4],
+    ) -> [TexturedMeshVertex; 2] {
+        let len = (forward[0] * forward[0] + forward[1] * forward[1])
+            .sqrt()
+            .max(0.0001);
+        let nx = -forward[1] / len * half_width;
+        let ny = forward[0] / len * half_width;
+        hold_strip_row_from_positions(
+            [center[0] + nx, center[1] + ny, center[2]],
+            [center[0] - nx, center[1] - ny, center[2]],
+            u0,
+            u1,
+            v,
+            color,
+        )
+    }
+
     #[must_use]
     pub fn mesh_slice_old(evaluations: usize) -> u64 {
         let mut checksum = 0_u64;
@@ -2232,6 +2296,162 @@ pub mod hold_geometry_bench_support {
                 [1.0; 4],
             );
             checksum = checksum.wrapping_add(row_checksum(row)).rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn endpoint_sample_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top_y = black_box((index as f32) * 4.0);
+            let bottom_y = top_y + 4.0;
+            let top = benchmark_path_sample(top_y);
+            let bottom = benchmark_path_sample(bottom_y);
+            checksum = checksum
+                .wrapping_add(sample_checksum(top))
+                .rotate_left(9)
+                .wrapping_add(sample_checksum(bottom));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn endpoint_sample_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        let mut previous = None;
+        for index in 0..evaluations {
+            let top_y = black_box((index as f32) * 4.0);
+            let bottom_y = top_y + 4.0;
+            let top = hold_path_endpoint_sample(top_y, previous, &benchmark_path_sample);
+            let bottom = benchmark_path_sample(bottom_y);
+            previous = Some((bottom_y, bottom));
+            checksum = checksum
+                .wrapping_add(sample_checksum(top))
+                .rotate_left(9)
+                .wrapping_add(sample_checksum(bottom));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn strip_normal_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let dy = black_box(4.0 * (1_u32 << (index & 3)) as f32);
+            let forward = [black_box(0.0), dy];
+            let row = hold_strip_row_3d_old(
+                [index as f32 * 0.25, index as f32 * 0.5, 0.0],
+                forward,
+                black_box(16.0 * (1 + (index & 1)) as f32),
+                0.0,
+                1.0,
+                0.5,
+                [1.0; 4],
+            );
+            checksum = checksum.wrapping_add(row_checksum(row)).rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn strip_normal_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let dy = black_box(4.0 * (1_u32 << (index & 3)) as f32);
+            let forward = [black_box(0.0), dy];
+            let row = hold_strip_row_3d(
+                [index as f32 * 0.25, index as f32 * 0.5, 0.0],
+                forward,
+                black_box(16.0 * (1 + (index & 1)) as f32),
+                0.0,
+                1.0,
+                0.5,
+                [1.0; 4],
+            );
+            checksum = checksum.wrapping_add(row_checksum(row)).rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn mesh_cap_pose_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top = [
+                black_box(((index * 17) % 192) as f32 - 96.0),
+                black_box((index % 720) as f32 - 160.0),
+            ];
+            let bottom = [
+                black_box(top[0] + ((index % 7) as f32 - 3.0)),
+                top[1] + black_box((index % 13) as f32 + 8.0),
+            ];
+            let (_, height, _) = hold_segment_pose(top, bottom);
+            if height <= f32::EPSILON {
+                continue;
+            }
+            let forward = [bottom[0] - top[0], bottom[1] - top[1]];
+            let top_row = hold_strip_row_3d(
+                [top[0], top[1], 0.0],
+                forward,
+                32.0,
+                0.0,
+                1.0,
+                0.0,
+                [1.0; 4],
+            );
+            let bottom_row = hold_strip_row_3d(
+                [bottom[0], bottom[1], 0.0],
+                forward,
+                32.0,
+                0.0,
+                1.0,
+                1.0,
+                [1.0; 4],
+            );
+            checksum = checksum
+                .wrapping_add(row_checksum(top_row))
+                .rotate_left(9)
+                .wrapping_add(row_checksum(bottom_row));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn mesh_cap_pose_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top = [
+                black_box(((index * 17) % 192) as f32 - 96.0),
+                black_box((index % 720) as f32 - 160.0),
+            ];
+            let bottom = [
+                black_box(top[0] + ((index % 7) as f32 - 3.0)),
+                top[1] + black_box((index % 13) as f32 + 8.0),
+            ];
+            let forward = [bottom[0] - top[0], bottom[1] - top[1]];
+            let top_row = hold_strip_row_3d(
+                [top[0], top[1], 0.0],
+                forward,
+                32.0,
+                0.0,
+                1.0,
+                0.0,
+                [1.0; 4],
+            );
+            let bottom_row = hold_strip_row_3d(
+                [bottom[0], bottom[1], 0.0],
+                forward,
+                32.0,
+                0.0,
+                1.0,
+                1.0,
+                [1.0; 4],
+            );
+            checksum = checksum
+                .wrapping_add(row_checksum(top_row))
+                .rotate_left(9)
+                .wrapping_add(row_checksum(bottom_row));
         }
         checksum
     }
@@ -2392,6 +2612,117 @@ mod tests {
             world_z: y * 0.1,
             arrow_px: 64.0,
         }
+    }
+
+    #[test]
+    fn cached_hold_endpoint_sample_matches_direct_sampling() {
+        let sample = |y: f32| HoldPathSample {
+            adjusted_travel: y.mul_add(1.25, -3.0),
+            center_x: y.mul_add(-0.5, 17.0),
+            world_z: y * 0.125,
+            arrow_px: y.mul_add(0.0625, 64.0),
+        };
+        let previous_y = 48.0;
+        let previous = sample(previous_y);
+        let calls = Cell::new(0);
+        let counted = |y| {
+            calls.set(calls.get() + 1);
+            sample(y)
+        };
+
+        let reused = hold_path_endpoint_sample(previous_y, Some((previous_y, previous)), &counted);
+        assert_eq!(reused, sample(previous_y));
+        assert_eq!(calls.get(), 0);
+
+        let sampled = hold_path_endpoint_sample(52.0, Some((previous_y, previous)), &counted);
+        assert_eq!(sampled, sample(52.0));
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn single_division_strip_normal_matches_reference_geometry() {
+        let reference = |center: [f32; 3], forward: [f32; 2], half_width: f32| {
+            let len = (forward[0] * forward[0] + forward[1] * forward[1])
+                .sqrt()
+                .max(0.0001);
+            let nx = -forward[1] / len * half_width;
+            let ny = forward[0] / len * half_width;
+            hold_strip_row_from_positions(
+                [center[0] + nx, center[1] + ny, center[2]],
+                [center[0] - nx, center[1] - ny, center[2]],
+                0.1,
+                0.9,
+                0.4,
+                [0.2, 0.3, 0.4, 0.5],
+            )
+        };
+        for (center, forward, half_width) in [
+            ([0.0, 0.0, 0.0], [0.0, 16.0], 32.0),
+            ([13.5, -7.25, 2.0], [3.0, 4.0], 24.0),
+            ([-80.0, 120.0, -9.0], [-11.0, 7.0], 40.0),
+            ([4.0, 8.0, 12.0], [0.00001, 0.00002], 8.0),
+        ] {
+            let expected = reference(center, forward, half_width);
+            let actual = hold_strip_row_3d(
+                center,
+                forward,
+                half_width,
+                0.1,
+                0.9,
+                0.4,
+                [0.2, 0.3, 0.4, 0.5],
+            );
+            for (actual, expected) in actual.into_iter().zip(expected) {
+                for (actual, expected) in actual.pos.into_iter().zip(expected.pos) {
+                    assert!((actual - expected).abs() <= 1.0e-5);
+                }
+                assert_eq!(actual.uv, expected.uv);
+                assert_eq!(actual.color, expected.color);
+            }
+        }
+    }
+
+    #[test]
+    fn mesh_caps_preserve_curved_geometry_without_sprite_fallback() {
+        let top = TestSlot::sprite("top-mesh");
+        let bottom = TestSlot::sprite("bottom-mesh");
+        let mut request = body_cap_request(None, Some(&top), Some(&bottom));
+        request.use_legacy_sprites = false;
+        request.depth_test = true;
+        let source_calls = Cell::new(0);
+        let mut draws = Vec::new();
+        let mut mesh_scratch = HoldMeshScratch::with_columns(1);
+        mesh_scratch.begin_frame();
+        let curved_path = |y: f32| HoldPathSample {
+            adjusted_travel: y,
+            center_x: y.mul_add(0.125, 12.0),
+            world_z: y * 0.25,
+            arrow_px: y.mul_add(0.01, 62.0),
+        };
+
+        compose_hold_body_caps(
+            &mut draws,
+            &mut mesh_scratch,
+            request,
+            &curved_path,
+            &|slot| {
+                source_calls.set(source_calls.get() + 1);
+                test_source(slot)
+            },
+        );
+
+        assert!(!draws.is_empty());
+        assert_eq!(source_calls.get(), 0);
+        assert!(draws.iter().all(|draw| {
+            matches!(
+                draw,
+                FlatDraw::TexturedMesh(FlatTexturedMesh {
+                    depth_test: true,
+                    vertices: FlatMeshVertices::Reusable(vertices),
+                    ..
+                }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))
+            )
+        }));
     }
 
     fn test_source(slot: &TestSlot) -> SpriteSource {
