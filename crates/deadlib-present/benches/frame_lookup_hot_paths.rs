@@ -1,4 +1,8 @@
-use deadlib_present::compose::{FrameInlineByteIndexBench, TextureLookupBenchState};
+use deadlib_present::compose::{
+    FrameInlineByteIndexBench, SaturatedLayoutCurrentBench, SaturatedLayoutLegacyBench,
+    TextureLookupBenchState, prewarmed_u16_storage_current, prewarmed_u16_storage_legacy,
+    render_target_scratch_storage_current, render_target_scratch_storage_legacy,
+};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHasher};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -299,6 +303,9 @@ fn main() {
     const ACTOR_BUILD_OPS: usize = 1_024;
     const ACTOR_LOOKUP_OPS: usize = 8_192;
     const INLINE_OPS: usize = 16_384;
+    const RENDER_TARGET_STORAGE_OPS: usize = 4_096;
+    const PREWARMED_STORAGE_OPS: usize = 128;
+    const SATURATED_LAYOUT_OPS: usize = 8_192;
     const TEXTURE_COLD_OPS: usize = 512;
     const TEXTURE_FRAME_OPS: usize = 2_048;
 
@@ -398,6 +405,68 @@ fn main() {
         "changing inline-text glyph resolution (8 values)",
         &old_glyph_lookup,
         &new_glyph_lookup,
+    );
+
+    const RENDER_TARGET_COUNT: usize = 8;
+    let old_render_target_storage = measure(RENDER_TARGET_STORAGE_OPS, RENDER_TARGET_COUNT, || {
+        render_target_scratch_storage_legacy(black_box(RENDER_TARGET_COUNT))
+    });
+    let new_render_target_storage = measure(RENDER_TARGET_STORAGE_OPS, RENDER_TARGET_COUNT, || {
+        render_target_scratch_storage_current(black_box(RENDER_TARGET_COUNT))
+    });
+    assert_eq!(
+        old_render_target_storage.checksum,
+        new_render_target_storage.checksum
+    );
+    print_pair(
+        "render-target scratch pool growth (8 targets)",
+        &old_render_target_storage,
+        &new_render_target_storage,
+    );
+
+    const PREWARMED_LAYOUT_COUNT: usize = 501;
+    let old_prewarmed_storage = measure(PREWARMED_STORAGE_OPS, PREWARMED_LAYOUT_COUNT, || {
+        prewarmed_u16_storage_legacy(black_box(PREWARMED_LAYOUT_COUNT))
+    });
+    let new_prewarmed_storage = measure(PREWARMED_STORAGE_OPS, PREWARMED_LAYOUT_COUNT, || {
+        prewarmed_u16_storage_current(black_box(PREWARMED_LAYOUT_COUNT))
+    });
+    assert_eq!(
+        old_prewarmed_storage.checksum,
+        new_prewarmed_storage.checksum
+    );
+    print_pair(
+        "prewarmed-u16 dense layout storage (501 layouts)",
+        &old_prewarmed_storage,
+        &new_prewarmed_storage,
+    );
+
+    const SATURATED_TEXTS: [&str; 2] = [
+        "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+        "BABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABA",
+    ];
+    let mut old_saturated_layout = SaturatedLayoutLegacyBench::new();
+    let mut old_text_index = 0usize;
+    let old_saturated_rebuild = measure(SATURATED_LAYOUT_OPS, SATURATED_TEXTS[0].len(), || {
+        let text = SATURATED_TEXTS[old_text_index & 1];
+        old_text_index = old_text_index.wrapping_add(1);
+        old_saturated_layout.rebuild(black_box(text))
+    });
+    let mut new_saturated_layout = SaturatedLayoutCurrentBench::new();
+    let mut new_text_index = 0usize;
+    let new_saturated_rebuild = measure(SATURATED_LAYOUT_OPS, SATURATED_TEXTS[0].len(), || {
+        let text = SATURATED_TEXTS[new_text_index & 1];
+        new_text_index = new_text_index.wrapping_add(1);
+        new_saturated_layout.rebuild(black_box(text))
+    });
+    assert_eq!(
+        old_saturated_rebuild.checksum,
+        new_saturated_rebuild.checksum
+    );
+    print_pair(
+        "saturated text-layout rebuild (64 glyphs)",
+        &old_saturated_rebuild,
+        &new_saturated_rebuild,
     );
 
     let keys = texture_keys(128);

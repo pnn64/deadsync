@@ -31,6 +31,15 @@ fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
     values.reserve(target.saturating_sub(values.len()));
 }
 
+fn ensure_render_target_scratch_count(scratches: &mut Vec<ComposeScratch>, target_count: usize) {
+    if scratches.capacity() < target_count {
+        scratches.reserve_exact(target_count.saturating_sub(scratches.len()));
+    }
+    while scratches.len() < target_count {
+        scratches.push(ComposeScratch::default());
+    }
+}
+
 /// Detached draw used only while clipping or copying a retained fragment.
 /// Live frame composition stays in `FrameBuilder`'s typed arrays.
 #[repr(C)]
@@ -1105,11 +1114,7 @@ where
     let mut target_frames = std::mem::take(&mut scratch.render_target_frames);
     target_frames.clear();
     target_frames.reserve(target_specs.len().saturating_sub(target_frames.capacity()));
-    while scratch.render_target_scratches.len() < target_specs.len() {
-        scratch
-            .render_target_scratches
-            .push(Box::<ComposeScratch>::default());
-    }
+    ensure_render_target_scratch_count(&mut scratch.render_target_scratches, target_specs.len());
     for (index, target) in target_specs.into_iter().enumerate() {
         let width = target.size[0].max(1);
         let height = target.size[1].max(1);
@@ -1119,7 +1124,7 @@ where
             bottom: -0.5 * target.logical_size[1],
             top: 0.5 * target.logical_size[1],
         };
-        let target_scratch = scratch.render_target_scratches[index].as_mut();
+        let target_scratch = &mut scratch.render_target_scratches[index];
         let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
             std::iter::once(ActorSegment::new(target.children)),
             [0.0, 0.0, 0.0, 0.0],
@@ -1470,7 +1475,7 @@ pub struct ComposeScratch {
     tmesh_geometries: Vec<renderer::TexturedMeshGeometry>,
     ops: Vec<renderer::DrawOp>,
     render_target_frames: Vec<renderer::RenderTargetFrame>,
-    render_target_scratches: Vec<Box<Self>>,
+    render_target_scratches: Vec<Self>,
     tmesh_geom_map: HashMap<TMeshGeomKey, u32, rustc_hash::FxBuildHasher>,
     cameras: Vec<Matrix4>,
     masks: Vec<WorldRect>,
@@ -3369,7 +3374,7 @@ impl PreparedU32LayoutSlot {
 
 struct PrewarmedU16Domain {
     key: Option<TextLayoutKey>,
-    layouts: Vec<Box<CachedTextLayout>>,
+    layouts: Vec<CachedTextLayout>,
 }
 
 impl PrewarmedU16Domain {
@@ -3706,20 +3711,20 @@ impl TextLayoutCache {
         layouts.clear();
         let layout_count = usize::from(max_value) + 1;
         if layouts.capacity() < layout_count {
-            layouts.reserve(layout_count.saturating_sub(layouts.len()));
+            layouts.reserve_exact(layout_count.saturating_sub(layouts.len()));
         }
         let mut built_lines = 0usize;
         let mut built_glyphs = 0usize;
         for value in 0..=max_value {
             let text = actors::InlineU16Text::new(value);
-            let layout = Box::new(build_cached_text_layout(
+            let layout = build_cached_text_layout(
                 font,
                 fonts,
                 text.as_str(),
                 key.line_spacing,
                 key.wrap_width_pixels,
                 text_layout_mesh_seed(key, text.as_str()),
-            ));
+            );
             let _ = layout.fill_batches(align);
             built_lines = built_lines.saturating_add(layout.lines.len());
             built_glyphs = built_glyphs.saturating_add(layout.glyph_count);
@@ -3904,7 +3909,7 @@ impl TextLayoutCache {
             if let Some(stats) = self.frame_stats.as_mut() {
                 stats.owned_hits = stats.owned_hits.saturating_add(1);
             }
-            return self.prewarmed_u16_domains[domain_index].layouts[value_index].as_ref();
+            return &self.prewarmed_u16_domains[domain_index].layouts[value_index];
         }
         self.get_or_build_owned(key, font, fonts, text.as_str())
     }
@@ -3926,6 +3931,9 @@ impl TextLayoutCache {
                 frame_stats.owned_hits = frame_stats.owned_hits.saturating_add(1);
             }
             return self.layouts[layout_index].as_ref();
+        }
+        if self.entry_count >= self.max_entries {
+            return self.rebuild_uncached_layout(key, font, fonts, text);
         }
         let layout = Box::new(build_cached_text_layout(
             font,
@@ -3982,6 +3990,10 @@ impl TextLayoutCache {
             return self.layouts[layout_index].as_ref();
         }
 
+        if self.alias_count >= self.max_aliases {
+            return self.rebuild_uncached_layout(key, font, fonts, text_ref);
+        }
+
         let layout = Box::new(build_cached_text_layout(
             font,
             fonts,
@@ -3998,6 +4010,257 @@ impl TextLayoutCache {
         } else {
             self.uncached_layout_ref()
         }
+    }
+
+    fn rebuild_uncached_layout(
+        &mut self,
+        key: TextLayoutKey,
+        font: &font::Font,
+        fonts: &font::FontMap,
+        text: &str,
+    ) -> &CachedTextLayout {
+        let (built_lines, built_glyphs) = {
+            let layout = self
+                .uncached_layout
+                .get_or_insert_with(|| Box::new(CachedTextLayout::empty()));
+            rebuild_cached_text_layout(
+                layout.as_mut(),
+                font,
+                fonts,
+                text,
+                key.line_spacing,
+                key.wrap_width_pixels,
+                text_layout_mesh_seed(key, text),
+            );
+            (layout.lines.len(), layout.glyph_count)
+        };
+        if let Some(frame_stats) = self.frame_stats.as_mut() {
+            frame_stats.misses = frame_stats.misses.saturating_add(1);
+            frame_stats.built_lines = frame_stats
+                .built_lines
+                .saturating_add(saturating_u32(built_lines));
+            frame_stats.built_glyphs = frame_stats
+                .built_glyphs
+                .saturating_add(saturating_u32(built_glyphs));
+        }
+        self.uncached_layout_ref()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn storage_bench_layout(seed: u64) -> CachedTextLayout {
+    let mut layout = CachedTextLayout::empty();
+    layout.layout_seed = seed;
+    layout
+}
+
+#[cfg(feature = "bench-support")]
+fn storage_bench_layout_checksum<'a>(
+    layouts: impl IntoIterator<Item = &'a CachedTextLayout>,
+) -> u64 {
+    layouts.into_iter().fold(0u64, |checksum, layout| {
+        checksum
+            .wrapping_mul(131)
+            .wrapping_add(layout.layout_seed)
+            .wrapping_add(layout.glyph_count as u64)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn render_target_scratch_storage_legacy(target_count: usize) -> u64 {
+    let mut scratches = Vec::<Box<ComposeScratch>>::new();
+    while scratches.len() < target_count {
+        scratches.push(Box::<ComposeScratch>::default());
+    }
+    scratches
+        .iter()
+        .fold(scratches.len() as u64, |checksum, scratch| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(scratch.frame_builder.len() as u64)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn render_target_scratch_storage_current(target_count: usize) -> u64 {
+    let mut scratches = Vec::<ComposeScratch>::new();
+    ensure_render_target_scratch_count(&mut scratches, target_count);
+    scratches
+        .iter()
+        .fold(scratches.len() as u64, |checksum, scratch| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(scratch.frame_builder.len() as u64)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn prewarmed_u16_storage_legacy(layout_count: usize) -> u64 {
+    let mut layouts = Vec::<Box<CachedTextLayout>>::with_capacity(layout_count);
+    for index in 0..layout_count {
+        layouts.push(Box::new(storage_bench_layout(index as u64)));
+    }
+    storage_bench_layout_checksum(layouts.iter().map(Box::as_ref))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn prewarmed_u16_storage_current(layout_count: usize) -> u64 {
+    let mut layouts = Vec::<CachedTextLayout>::new();
+    layouts.reserve_exact(layout_count);
+    for index in 0..layout_count {
+        layouts.push(storage_bench_layout(index as u64));
+    }
+    storage_bench_layout_checksum(&layouts)
+}
+
+#[cfg(feature = "bench-support")]
+fn saturated_layout_bench_font() -> font::Font {
+    let texture_key = Arc::<str>::from("bench_page");
+    let glyph = font::Glyph {
+        texture_key,
+        stroke_texture_key: None,
+        tex_rect: [0.0, 0.0, 8.0, 10.0],
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        size: [8.0, 10.0],
+        offset: [0.0, -10.0],
+        advance: 8.0,
+        advance_i32: 8,
+    };
+    let mut glyph_map = font::GlyphMap::default();
+    glyph_map.insert('A', glyph.clone());
+    glyph_map.insert('B', glyph.clone());
+    let ascii_glyphs = Box::new(std::array::from_fn(|index| match index as u8 as char {
+        'A' | 'B' => Some(glyph.clone()),
+        _ => None,
+    }));
+    font::Font {
+        glyph_map,
+        ascii_glyphs,
+        default_glyph: Some(glyph),
+        line_spacing: 10,
+        height: 10,
+        fallback_font_name: None,
+        cache_tag: 1,
+        chain_key: 1,
+        default_stroke_color: [0.0; 4],
+        stroke_texture_map: HashMap::new(),
+        texture_hints_map: HashMap::new(),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+struct SaturatedLayoutBenchCore {
+    cache: TextLayoutCache,
+    fonts: font::FontMap,
+    key: TextLayoutKey,
+}
+
+#[cfg(feature = "bench-support")]
+impl SaturatedLayoutBenchCore {
+    fn new() -> Self {
+        let fonts = font::FontMap::from_iter([("bench", saturated_layout_bench_font())]);
+        let font = fonts.get("bench").expect("benchmark font");
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let mut cache = TextLayoutCache::new(1);
+        let _ = cache.get_or_build_owned(key, font, &fonts, "A");
+        cache.lock_growth();
+        Self { cache, fonts, key }
+    }
+
+    fn checksum(layout: &CachedTextLayout) -> u64 {
+        layout
+            .layout_seed
+            .wrapping_mul(131)
+            .wrapping_add(layout.glyph_count as u64)
+            .wrapping_add(layout.max_logical_width_i as u64)
+            .wrapping_add(layout.lines.len() as u64)
+    }
+
+    fn rebuild_legacy(&mut self, text: &str) -> u64 {
+        let font = self.fonts.get("bench").expect("benchmark font");
+        let layout = Box::new(build_cached_text_layout(
+            font,
+            &self.fonts,
+            text,
+            self.key.line_spacing,
+            self.key.wrap_width_pixels,
+            text_layout_mesh_seed(self.key, text),
+        ));
+        self.cache.record_layout_build(layout.as_ref());
+        let layout =
+            if let Some(layout_index) = self.cache.insert_owned_layout(self.key, text, layout) {
+                self.cache.layouts[layout_index].as_ref()
+            } else {
+                self.cache.uncached_layout_ref()
+            };
+        Self::checksum(layout)
+    }
+
+    fn rebuild_current(&mut self, text: &str) -> u64 {
+        let font = self.fonts.get("bench").expect("benchmark font");
+        let layout = self
+            .cache
+            .get_or_build_owned(self.key, font, &self.fonts, text);
+        Self::checksum(layout)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SaturatedLayoutLegacyBench(SaturatedLayoutBenchCore);
+
+#[cfg(feature = "bench-support")]
+impl SaturatedLayoutLegacyBench {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(SaturatedLayoutBenchCore::new())
+    }
+
+    pub fn rebuild(&mut self, text: &str) -> u64 {
+        self.0.rebuild_legacy(text)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for SaturatedLayoutLegacyBench {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub struct SaturatedLayoutCurrentBench(SaturatedLayoutBenchCore);
+
+#[cfg(feature = "bench-support")]
+impl SaturatedLayoutCurrentBench {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(SaturatedLayoutBenchCore::new())
+    }
+
+    pub fn rebuild(&mut self, text: &str) -> u64 {
+        self.0.rebuild_current(text)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl Default for SaturatedLayoutCurrentBench {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -9972,15 +10235,22 @@ mod tests {
             bottom: -16.0,
         };
 
-        let frame = build_screen(
+        let fonts = font::FontMap::default();
+        let mut text_cache = TextLayoutCache::default();
+        let mut scratch = ComposeScratch::default();
+        let frame = build_screen_cached_with_scratch(
             &actors,
             [0.0, 0.0, 0.0, 1.0],
             &metrics,
-            &font::FontMap::default(),
+            &fonts,
             0.0,
+            &mut text_cache,
+            &mut scratch,
         );
 
         assert_eq!(frame.render_targets.len(), 2);
+        assert_eq!(scratch.render_target_scratches.len(), 2);
+        assert!(scratch.render_target_scratches.capacity() >= 2);
         assert_eq!(frame.render_targets[0].texture_handle, screen);
         assert_eq!(frame.render_targets[1].texture_handle, strips);
         assert_eq!(
@@ -11133,6 +11403,92 @@ mod tests {
         assert!(!layout.fill_batches.is_built(TextAlign::Right));
         assert!(!layout.stroke_batches.is_built(TextAlign::Left));
         assert_eq!(cache.entry_count, 0);
+    }
+
+    #[test]
+    fn saturated_layout_rebuilds_match_fresh_owned_and_shared_layouts() {
+        fn signature(layout: &CachedTextLayout) -> (u64, i32, usize, Vec<(i32, usize)>) {
+            (
+                layout.layout_seed,
+                layout.max_logical_width_i,
+                layout.glyph_count,
+                layout
+                    .lines
+                    .iter()
+                    .map(|line| (line.width_i32, line.glyph_len))
+                    .collect(),
+            )
+        }
+
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = fonts.get("test").expect("test font");
+        let key = TextLayoutKey {
+            font_key: font_chain_key(font, &fonts),
+            line_spacing: font.line_spacing,
+            wrap_width_pixels: -1,
+        };
+        let expected_ab = build_cached_text_layout(
+            font,
+            &fonts,
+            "AB",
+            key.line_spacing,
+            key.wrap_width_pixels,
+            super::text_layout_mesh_seed(key, "AB"),
+        );
+        let expected_b = build_cached_text_layout(
+            font,
+            &fonts,
+            "B",
+            key.line_spacing,
+            key.wrap_width_pixels,
+            super::text_layout_mesh_seed(key, "B"),
+        );
+
+        let mut owned = TextLayoutCache::new(1);
+        owned.prewarm_text(&fonts, "test", "A", None);
+        owned.lock_growth();
+        owned.begin_frame_stats(true);
+        let (first_signature, fallback_ptr, glyph_capacity) = {
+            let layout = owned.get_or_build_owned(key, font, &fonts, "AB");
+            (
+                signature(layout),
+                std::ptr::from_ref(layout),
+                layout.glyphs.capacity(),
+            )
+        };
+        let (second_signature, rebuilt_ptr, rebuilt_glyph_capacity) = {
+            let layout = owned.get_or_build_owned(key, font, &fonts, "B");
+            (
+                signature(layout),
+                std::ptr::from_ref(layout),
+                layout.glyphs.capacity(),
+            )
+        };
+        assert_eq!(first_signature, signature(&expected_ab));
+        assert_eq!(second_signature, signature(&expected_b));
+        assert_eq!(fallback_ptr, rebuilt_ptr);
+        assert!(rebuilt_glyph_capacity >= glyph_capacity);
+        assert_eq!(owned.entry_count, 1);
+        assert!(owned.owned_layout(key, "AB").is_none());
+        let stats = owned.frame_stats();
+        assert_eq!(stats.misses, 2);
+        assert_eq!(stats.built_lines, 2);
+        assert_eq!(stats.built_glyphs, 3);
+
+        let mut shared = TextLayoutCache::new(1);
+        shared.prewarm_text(&fonts, "test", "A", None);
+        shared.lock_growth();
+        let shared_ab = Arc::<str>::from("AB");
+        let shared_b = Arc::<str>::from("B");
+        assert_eq!(
+            signature(shared.get_or_build_shared(key, font, &fonts, &shared_ab)),
+            signature(&expected_ab)
+        );
+        assert_eq!(
+            signature(shared.get_or_build_shared(key, font, &fonts, &shared_b)),
+            signature(&expected_b)
+        );
+        assert_eq!(shared.alias_count, 0);
     }
 
     #[test]
