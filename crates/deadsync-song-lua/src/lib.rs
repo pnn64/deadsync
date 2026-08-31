@@ -207,6 +207,12 @@ pub use option_rows::{
     create_theme_prefs_rows_table, create_theme_prefs_table, custom_option_default_text,
     custom_option_row_spec, operator_menu_option_row_spec, option_value_text, theme_pref_row_spec,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use option_rows::{
+    conf_option_row_spec_reference_for_bench, custom_option_row_spec_reference_for_bench,
+    theme_pref_row_spec_reference_for_bench,
+};
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
     SongLuaPerframeSample, SongLuaUpdateModState, active_perframe_entries,
