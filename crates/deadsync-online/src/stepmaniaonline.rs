@@ -59,7 +59,7 @@ pub struct PackInfo {
     pub pack_type: Option<String>,
     pub substyle: Option<String>,
     pub min_version: Option<String>,
-    normalized_name: String,
+    normalized_name_len: usize,
     search_text: String,
 }
 
@@ -76,7 +76,7 @@ impl PackInfo {
         substyle: Option<String>,
         min_version: Option<String>,
     ) -> Self {
-        let (normalized_name, search_text) = pack_search_index(
+        let (normalized_name_len, search_text) = pack_search_index(
             id,
             name.as_str(),
             [
@@ -95,15 +95,19 @@ impl PackInfo {
             pack_type,
             substyle,
             min_version,
-            normalized_name,
+            normalized_name_len,
             search_text,
         }
     }
+
+    #[inline(always)]
+    fn normalized_name(&self) -> &str {
+        &self.search_text[..self.normalized_name_len]
+    }
 }
 
-fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (String, String) {
-    let normalized_name = name.to_lowercase();
-    let capacity = normalized_name.len()
+fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (usize, String) {
+    let capacity = name.len()
         + metadata
             .iter()
             .flatten()
@@ -111,14 +115,15 @@ fn pack_search_index(id: u64, name: &str, metadata: [Option<&str>; 4]) -> (Strin
             .sum::<usize>()
         + 21;
     let mut search_text = String::with_capacity(capacity);
-    search_text.push_str(normalized_name.as_str());
+    search_text.extend(name.chars().flat_map(char::to_lowercase));
+    let normalized_name_len = search_text.len();
     for value in metadata.into_iter().flatten() {
         search_text.push(' ');
         search_text.extend(value.chars().flat_map(char::to_lowercase));
     }
     search_text.push(' ');
     write!(&mut search_text, "{id}").expect("writing to a String cannot fail");
-    (normalized_name, search_text)
+    (normalized_name_len, search_text)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -220,17 +225,14 @@ pub fn search_catalog(catalog: &[PackInfo], query: &str) -> Vec<usize> {
     let multiple_tokens = tokens.len() > 1;
     let mut buckets: [Vec<usize>; 5] = std::array::from_fn(|_| Vec::new());
     for (idx, pack) in catalog.iter().enumerate() {
-        let rank = if pack.normalized_name == query {
+        let normalized_name = pack.normalized_name();
+        let rank = if normalized_name == query {
             Some(0)
-        } else if pack.normalized_name.starts_with(query) {
+        } else if normalized_name.starts_with(query) {
             Some(1)
-        } else if pack.normalized_name.contains(query) {
+        } else if normalized_name.contains(query) {
             Some(2)
-        } else if multiple_tokens
-            && tokens
-                .iter()
-                .all(|token| pack.normalized_name.contains(token))
-        {
+        } else if multiple_tokens && tokens.iter().all(|token| normalized_name.contains(token)) {
             Some(3)
         } else if if multiple_tokens {
             tokens.iter().all(|token| pack.search_text.contains(token))
@@ -282,8 +284,10 @@ pub fn parse_catalog(text: &str) -> Result<Vec<PackInfo>, StepManiaOnlineError> 
         ));
     }
 
-    let mut packs = Vec::with_capacity(4096);
-    let mut ids = HashSet::with_capacity(4096);
+    let row_capacity = lines.clone().take(MAX_CATALOG_ROWS + 1).count();
+    let row_capacity = row_capacity.min(MAX_CATALOG_ROWS);
+    let mut packs = Vec::with_capacity(row_capacity);
+    let mut ids = HashSet::with_capacity(row_capacity);
     for (idx, raw_line) in lines.enumerate() {
         let line_number = idx + 2;
         let line = raw_line.trim_end_matches('\r');
@@ -316,9 +320,12 @@ fn parse_catalog_line(line: &str, line_number: usize) -> Result<PackInfo, StepMa
     // The upstream endpoint wraps names in quotes but does not CSV-escape
     // embedded quotes. Its six trailing columns have fixed, comma-free value
     // domains, so parsing from the right preserves names containing commas.
-    let fields: Vec<&str> = line.rsplitn(7, ", ").collect();
-    if fields.len() != 7 {
-        return Err(catalog_line_error(line_number, "expected eight columns"));
+    let mut fields = [""; 7];
+    let mut split = line.rsplitn(fields.len(), ", ");
+    for field in &mut fields {
+        *field = split
+            .next()
+            .ok_or_else(|| catalog_line_error(line_number, "expected eight columns"))?;
     }
     let (id_text, quoted_name) = fields[6]
         .split_once(", ")
@@ -1199,6 +1206,88 @@ mod tests {
             zip.finish().expect("finish fixture archive");
         }
         fs::write(path, bytes).expect("write fixture archive");
+    }
+
+    fn parse_catalog_committed(text: &str) -> Result<Vec<PackInfo>, StepManiaOnlineError> {
+        let mut lines = text.lines();
+        let header = lines
+            .next()
+            .map(|line| line.trim_start_matches('\u{feff}').trim_end_matches('\r'))
+            .ok_or_else(|| StepManiaOnlineError::Catalog("response is empty".to_string()))?;
+        if header != HEADER.trim_end() {
+            return Err(StepManiaOnlineError::Catalog(
+                "unexpected header".to_string(),
+            ));
+        }
+
+        let mut packs = Vec::with_capacity(4096);
+        let mut ids = HashSet::with_capacity(4096);
+        for (idx, raw_line) in lines.enumerate() {
+            let line_number = idx + 2;
+            let line = raw_line.trim_end_matches('\r');
+            if line.trim().is_empty() {
+                continue;
+            }
+            let fields = line.rsplitn(7, ", ").collect::<Vec<_>>();
+            if fields.len() != 7 {
+                return Err(catalog_line_error(line_number, "expected eight columns"));
+            }
+            let (id_text, quoted_name) = fields[6]
+                .split_once(", ")
+                .ok_or_else(|| catalog_line_error(line_number, "missing pack name"))?;
+            let name = quoted_name
+                .strip_prefix('"')
+                .and_then(|value| value.strip_suffix('"'))
+                .ok_or_else(|| catalog_line_error(line_number, "pack name is not quoted"))?;
+            let pack = PackInfo::new(
+                parse_catalog_number(id_text, line_number, "ID")?,
+                name.to_string(),
+                parse_catalog_number(fields[5], line_number, "song count")?,
+                parse_catalog_number(fields[4], line_number, "size")?,
+                optional_catalog_value(fields[3]),
+                optional_catalog_value(fields[2]),
+                optional_catalog_value(fields[1]),
+                optional_catalog_value(fields[0]),
+            );
+            if !ids.insert(pack.id) {
+                return Err(catalog_line_error(line_number, "duplicate pack ID"));
+            }
+            packs.push(pack);
+        }
+        Ok(packs)
+    }
+
+    #[test]
+    fn optimized_catalog_parser_matches_committed_public_behavior() {
+        let mut text = HEADER.to_string();
+        for index in 0..257 {
+            let pack_type = if index % 3 == 0 { "None" } else { "pad" };
+            let substyle = if index % 5 == 0 { "null" } else { "technical" };
+            writeln!(
+                text,
+                "{}, \"Pack {}, Volume {}\", {}, {}, 9ms, {pack_type}, {substyle}, Stepmania 5",
+                10_000 + index,
+                index,
+                index % 7,
+                10 + index % 30,
+                1_000_000 + index * 97,
+            )
+            .unwrap();
+            if index % 31 == 0 {
+                text.push('\n');
+            }
+        }
+
+        let expected = parse_catalog_committed(&text).unwrap();
+        let actual = parse_catalog(&text).unwrap();
+        assert_eq!(actual, expected);
+        for query in ["pack 12", "volume 4", "technical", "STEPMania 5", "10042"] {
+            assert_eq!(
+                search_catalog(&actual, query),
+                search_catalog(&expected, query),
+                "query {query:?} changed"
+            );
+        }
     }
 
     #[test]
