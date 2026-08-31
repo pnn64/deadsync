@@ -88,6 +88,9 @@ enum AppearancePath {
     HiddenOnly,
     SuddenOnly,
     StealthOnly,
+    BlinkOnly,
+    HiddenSuddenOnly,
+    StealthBlinkOnly,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -963,6 +966,56 @@ mod common_note_transform_tests {
     }
 
     #[test]
+    fn blink_hidden_sudden_and_stealth_blink_paths_match_reference_alpha_and_glow_behavior() {
+        let cases = [
+            NoteAlphaParams {
+                blink: 0.1,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                stealth: 0.15,
+                blink: 0.1,
+                ..NoteAlphaParams::default()
+            },
+        ];
+        for params in cases {
+            for elapsed in [0.0, 0.125, 3.25, 81.75] {
+                for mini in [-0.5, 0.0, 0.2, 1.5] {
+                    let cache = note_appearance_cache(elapsed, mini, params);
+                    for y in [
+                        -64.0,
+                        -0.0,
+                        0.0,
+                        64.0,
+                        160.0,
+                        320.0,
+                        640.0,
+                        f32::INFINITY,
+                        f32::NAN,
+                    ] {
+                        let cached = appearance_note_alpha_glow_cached(y, &cache);
+                        assert_eq!(
+                            cached.0.to_bits(),
+                            appearance_note_actor_alpha(y, elapsed, mini, params).to_bits(),
+                        );
+                        assert_eq!(
+                            cached.1.to_bits(),
+                            appearance_note_glow(y, elapsed, mini, params).to_bits(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn cached_expand_scale_matches_per_note_reference_math() {
         let accel = AccelYParams {
             boost: 0.35,
@@ -1804,6 +1857,9 @@ pub(crate) fn note_appearance_cache(
         (true, false, false, false, false) => AppearancePath::HiddenOnly,
         (false, true, false, false, false) => AppearancePath::SuddenOnly,
         (false, false, true, false, false) => AppearancePath::StealthOnly,
+        (false, false, false, true, false) => AppearancePath::BlinkOnly,
+        (true, true, false, false, false) => AppearancePath::HiddenSuddenOnly,
+        (false, false, true, true, false) => AppearancePath::StealthBlinkOnly,
         _ => AppearancePath::General,
     };
     NoteAppearanceCache {
@@ -1864,6 +1920,37 @@ fn appearance_note_alpha_from_cache(y: f32, cache: &NoteAppearanceCache) -> f32 
         AppearancePath::StealthOnly => {
             let mut visible_adjust = 0.0;
             visible_adjust -= cache.stealth;
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::BlinkOnly => {
+            let mut visible_adjust = 0.0;
+            visible_adjust += cache.blink_adjust;
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::HiddenSuddenOnly => {
+            let mut visible_adjust = 0.0;
+            let hidden_scaled = if cache.hidden_degenerate {
+                -1.0
+            } else {
+                ((y - cache.hidden_start) / cache.hidden_denom).mul_add(-1.0, 0.0)
+            };
+            visible_adjust = cache
+                .hidden
+                .mul_add(hidden_scaled.clamp(-1.0, 0.0), visible_adjust);
+            let sudden_scaled = if cache.sudden_degenerate {
+                0.0
+            } else {
+                ((y - cache.sudden_start) / cache.sudden_denom).mul_add(1.0, -1.0)
+            };
+            visible_adjust = cache
+                .sudden
+                .mul_add(sudden_scaled.clamp(-1.0, 0.0), visible_adjust);
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::StealthBlinkOnly => {
+            let mut visible_adjust = 0.0;
+            visible_adjust -= cache.stealth;
+            visible_adjust += cache.blink_adjust;
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::General => {}
@@ -2203,6 +2290,80 @@ pub mod transform_cache_bench_support {
             evaluations,
             NoteAlphaParams {
                 stealth: 0.15,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn blink_only_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                blink: 0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn blink_only_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                blink: 0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn hidden_sudden_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn hidden_sudden_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn stealth_blink_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                stealth: 0.15,
+                blink: 0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn stealth_blink_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                stealth: 0.15,
+                blink: 0.1,
                 ..NoteAlphaParams::default()
             },
         )
