@@ -86,6 +86,11 @@ name = "active_hold_lane_index_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "song_lua_ease_math_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }

@@ -8101,6 +8101,73 @@ mod tests {
     }
 
     #[test]
+    fn optimized_song_lua_ease_math_matches_preoptimization_formulas() {
+        let polynomials = [
+            SongLuaEase::InQuad,
+            SongLuaEase::OutQuad,
+            SongLuaEase::InOutQuad,
+            SongLuaEase::OutInQuad,
+            SongLuaEase::InCubic,
+            SongLuaEase::OutCubic,
+            SongLuaEase::InOutCubic,
+            SongLuaEase::OutInCubic,
+            SongLuaEase::InQuart,
+            SongLuaEase::OutQuart,
+            SongLuaEase::InOutQuart,
+            SongLuaEase::OutInQuart,
+            SongLuaEase::InQuint,
+            SongLuaEase::OutQuint,
+            SongLuaEase::InOutQuint,
+            SongLuaEase::OutInQuint,
+        ];
+        let elastic = [
+            SongLuaEase::InElastic,
+            SongLuaEase::OutElastic,
+            SongLuaEase::InOutElastic,
+            SongLuaEase::OutInElastic,
+        ];
+        let back = [
+            SongLuaEase::InBack,
+            SongLuaEase::OutBack,
+            SongLuaEase::OutInBack,
+        ];
+
+        for step in 0..=4_096 {
+            let t = step as f32 / 4_096.0;
+            for easing in polynomials {
+                let expected = song_lua_ease_factor_reference(easing, t, None, None);
+                let actual = easing.factor(t, None, None);
+                assert!(
+                    (actual - expected).abs() <= 8.0 * f32::EPSILON,
+                    "easing={easing:?}, t={t}, expected={expected}, actual={actual}"
+                );
+            }
+            for easing in elastic {
+                for opt1 in [None, Some(0.55), Some(0.0), Some(f32::NAN)] {
+                    let expected = song_lua_ease_factor_reference(easing, t, opt1, None);
+                    let actual = easing.factor(t, opt1, None);
+                    assert_eq!(
+                        actual.to_bits(),
+                        expected.to_bits(),
+                        "easing={easing:?}, t={t}, opt1={opt1:?}"
+                    );
+                }
+            }
+            for easing in back {
+                for opt1 in [None, Some(1.25), Some(f32::NAN)] {
+                    let expected = song_lua_ease_factor_reference(easing, t, opt1, None);
+                    let actual = easing.factor(t, opt1, None);
+                    assert_eq!(
+                        actual.to_bits(),
+                        expected.to_bits(),
+                        "easing={easing:?}, t={t}, opt1={opt1:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
         let windows = [SongLuaColumnOffsetWindowRuntime {
             column: 2,

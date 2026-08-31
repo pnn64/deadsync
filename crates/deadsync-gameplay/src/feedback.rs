@@ -19,31 +19,92 @@ impl GameplayTween {
 }
 
 #[inline(always)]
-fn song_lua_pow_in(t: f32, power: f32) -> f32 {
-    t.powf(power)
-}
-
-#[inline(always)]
-fn song_lua_pow_out(t: f32, power: f32) -> f32 {
-    1.0 - (1.0 - t).powf(power)
-}
-
-#[inline(always)]
-fn song_lua_pow_in_out(t: f32, power: f32) -> f32 {
-    if t < 0.5 {
-        0.5 * (2.0 * t).powf(power)
-    } else {
-        0.5f32.mul_add(-(2.0 * (1.0 - t)).powf(power), 1.0)
+fn song_lua_pow<const POWER: u8>(t: f32) -> f32 {
+    let square = t * t;
+    match POWER {
+        2 => square,
+        3 => square * t,
+        4 => square * square,
+        5 => square * square * t,
+        _ => unreachable!("Song-Lua polynomial degree must be in 2..=5"),
     }
 }
 
 #[inline(always)]
-fn song_lua_pow_out_in(t: f32, power: f32) -> f32 {
+fn song_lua_pow_out<const POWER: u8>(t: f32) -> f32 {
+    1.0 - song_lua_pow::<POWER>(1.0 - t)
+}
+
+#[inline(always)]
+fn song_lua_pow_in_out<const POWER: u8>(t: f32) -> f32 {
     if t < 0.5 {
-        0.5 * song_lua_pow_out(t * 2.0, power)
+        0.5 * song_lua_pow::<POWER>(2.0 * t)
     } else {
-        0.5f32.mul_add(song_lua_pow_in(t.mul_add(2.0, -1.0), power), 0.5)
+        0.5f32.mul_add(-song_lua_pow::<POWER>(2.0 * (1.0 - t)), 1.0)
     }
+}
+
+#[inline(always)]
+fn song_lua_pow_out_in<const POWER: u8>(t: f32) -> f32 {
+    if t < 0.5 {
+        0.5 * song_lua_pow_out::<POWER>(t * 2.0)
+    } else {
+        0.5f32.mul_add(song_lua_pow::<POWER>(t.mul_add(2.0, -1.0)), 0.5)
+    }
+}
+
+// StepMania's easing library uses 0.3 seconds when no elastic period is given.
+const DEFAULT_ELASTIC_PERIOD: f32 = 0.3;
+const DEFAULT_ELASTIC_TAU: f32 = std::f32::consts::TAU / DEFAULT_ELASTIC_PERIOD;
+
+#[inline(always)]
+fn song_lua_elastic_params(opt1: Option<f32>) -> (f32, f32) {
+    match opt1 {
+        Some(period) if period.is_finite() && period > 0.0 => {
+            (period, std::f32::consts::TAU / period)
+        }
+        _ => (DEFAULT_ELASTIC_PERIOD, DEFAULT_ELASTIC_TAU),
+    }
+}
+
+#[inline(always)]
+fn song_lua_in_elastic(t: f32, opt1: Option<f32>) -> f32 {
+    if t <= 0.0 {
+        0.0
+    } else if t >= 1.0 {
+        1.0
+    } else {
+        let (period, tau) = song_lua_elastic_params(opt1);
+        let u = t - 1.0;
+        -(10.0 * u).exp2() * ((u - period * 0.25) * tau).sin()
+    }
+}
+
+#[inline(always)]
+fn song_lua_out_elastic(t: f32, opt1: Option<f32>) -> f32 {
+    if t <= 0.0 {
+        0.0
+    } else if t >= 1.0 {
+        1.0
+    } else {
+        let (period, tau) = song_lua_elastic_params(opt1);
+        (-10.0 * t)
+            .exp2()
+            .mul_add(((t - period * 0.25) * tau).sin(), 1.0)
+    }
+}
+
+#[inline(always)]
+fn song_lua_in_back(t: f32, opt1: Option<f32>) -> f32 {
+    let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+    t * t * (overshoot + 1.0).mul_add(t, -overshoot)
+}
+
+#[inline(always)]
+fn song_lua_out_back(t: f32, opt1: Option<f32>) -> f32 {
+    let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
+    let u = t - 1.0;
+    (u * u).mul_add((overshoot + 1.0).mul_add(u, overshoot), 1.0)
 }
 
 fn song_lua_out_bounce(t: f32) -> f32 {
@@ -230,22 +291,22 @@ impl SongLuaEase {
         match self {
             Self::Instant => 1.0,
             Self::Linear => t,
-            Self::InQuad => song_lua_pow_in(t, 2.0),
-            Self::OutQuad => song_lua_pow_out(t, 2.0),
-            Self::InOutQuad => song_lua_pow_in_out(t, 2.0),
-            Self::OutInQuad => song_lua_pow_out_in(t, 2.0),
-            Self::InCubic => song_lua_pow_in(t, 3.0),
-            Self::OutCubic => song_lua_pow_out(t, 3.0),
-            Self::InOutCubic => song_lua_pow_in_out(t, 3.0),
-            Self::OutInCubic => song_lua_pow_out_in(t, 3.0),
-            Self::InQuart => song_lua_pow_in(t, 4.0),
-            Self::OutQuart => song_lua_pow_out(t, 4.0),
-            Self::InOutQuart => song_lua_pow_in_out(t, 4.0),
-            Self::OutInQuart => song_lua_pow_out_in(t, 4.0),
-            Self::InQuint => song_lua_pow_in(t, 5.0),
-            Self::OutQuint => song_lua_pow_out(t, 5.0),
-            Self::InOutQuint => song_lua_pow_in_out(t, 5.0),
-            Self::OutInQuint => song_lua_pow_out_in(t, 5.0),
+            Self::InQuad => song_lua_pow::<2>(t),
+            Self::OutQuad => song_lua_pow_out::<2>(t),
+            Self::InOutQuad => song_lua_pow_in_out::<2>(t),
+            Self::OutInQuad => song_lua_pow_out_in::<2>(t),
+            Self::InCubic => song_lua_pow::<3>(t),
+            Self::OutCubic => song_lua_pow_out::<3>(t),
+            Self::InOutCubic => song_lua_pow_in_out::<3>(t),
+            Self::OutInCubic => song_lua_pow_out_in::<3>(t),
+            Self::InQuart => song_lua_pow::<4>(t),
+            Self::OutQuart => song_lua_pow_out::<4>(t),
+            Self::InOutQuart => song_lua_pow_in_out::<4>(t),
+            Self::OutInQuart => song_lua_pow_out_in::<4>(t),
+            Self::InQuint => song_lua_pow::<5>(t),
+            Self::OutQuint => song_lua_pow_out::<5>(t),
+            Self::InOutQuint => song_lua_pow_in_out::<5>(t),
+            Self::OutInQuint => song_lua_pow_out_in::<5>(t),
             Self::InSine => 1.0 - (t * std::f32::consts::FRAC_PI_2).cos(),
             Self::OutSine => (t * std::f32::consts::FRAC_PI_2).sin(),
             Self::InOutSine => -((std::f32::consts::PI * t).cos() - 1.0) * 0.5,
@@ -306,37 +367,15 @@ impl SongLuaEase {
                     0.5f32.mul_add(1.0 - 2.0f32.mul_add(t, -1.0).mul_add(-2.0f32.mul_add(t, -1.0), 1.0).sqrt(), 0.5)
                 }
             }
-            Self::InElastic => {
-                if t <= 0.0 {
-                    0.0
-                } else if t >= 1.0 {
-                    1.0
-                } else {
-                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
-                    let tau = std::f32::consts::TAU / period;
-                    let u = t - 1.0;
-                    -(10.0 * u).exp2() * ((u - period * 0.25) * tau).sin()
-                }
-            }
-            Self::OutElastic => {
-                if t <= 0.0 {
-                    0.0
-                } else if t >= 1.0 {
-                    1.0
-                } else {
-                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
-                    let tau = std::f32::consts::TAU / period;
-                    (-10.0 * t).exp2().mul_add(((t - period * 0.25) * tau).sin(), 1.0)
-                }
-            }
+            Self::InElastic => song_lua_in_elastic(t, opt1),
+            Self::OutElastic => song_lua_out_elastic(t, opt1),
             Self::InOutElastic => {
                 if t <= 0.0 {
                     0.0
                 } else if t >= 1.0 {
                     1.0
                 } else {
-                    let period = opt1.filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.3);
-                    let tau = std::f32::consts::TAU / period;
+                    let (period, tau) = song_lua_elastic_params(opt1);
                     if t < 0.5 {
                         let u = 2.0f32.mul_add(t, -1.0);
                         -0.5 * (10.0 * u).exp2() * ((u - period * 0.375) * tau).sin()
@@ -348,20 +387,13 @@ impl SongLuaEase {
             }
             Self::OutInElastic => {
                 if t < 0.5 {
-                    0.5 * Self::OutElastic.factor(t * 2.0, opt1, _opt2)
+                    0.5 * song_lua_out_elastic(t * 2.0, opt1)
                 } else {
-                    0.5f32.mul_add(Self::InElastic.factor((t * 2.0) - 1.0, opt1, _opt2), 0.5)
+                    0.5f32.mul_add(song_lua_in_elastic((t * 2.0) - 1.0, opt1), 0.5)
                 }
             }
-            Self::InBack => {
-                let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
-                t * t * (overshoot + 1.0).mul_add(t, -overshoot)
-            }
-            Self::OutBack => {
-                let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
-                let u = t - 1.0;
-                (u * u).mul_add((overshoot + 1.0).mul_add(u, overshoot), 1.0)
-            }
+            Self::InBack => song_lua_in_back(t, opt1),
+            Self::OutBack => song_lua_out_back(t, opt1),
             Self::InOutBack => {
                 let overshoot = opt1.filter(|v| v.is_finite()).unwrap_or(1.70158);
                 let s = overshoot * 1.525;
@@ -375,9 +407,9 @@ impl SongLuaEase {
             }
             Self::OutInBack => {
                 if t < 0.5 {
-                    0.5 * Self::OutBack.factor(t * 2.0, opt1, _opt2)
+                    0.5 * song_lua_out_back(t * 2.0, opt1)
                 } else {
-                    0.5f32.mul_add(Self::InBack.factor((t * 2.0) - 1.0, opt1, _opt2), 0.5)
+                    0.5f32.mul_add(song_lua_in_back((t * 2.0) - 1.0, opt1), 0.5)
                 }
             }
             Self::InBounce => song_lua_in_bounce(t),
@@ -391,6 +423,160 @@ impl SongLuaEase {
                 }
             }
         }
+    }
+}
+
+/// Pre-optimization formulas retained for parity tests and release benchmarks.
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn song_lua_ease_factor_reference(
+    easing: SongLuaEase,
+    t: f32,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+) -> f32 {
+    fn pow_in(t: f32, power: f32) -> f32 {
+        t.powf(power)
+    }
+
+    fn pow_out(t: f32, power: f32) -> f32 {
+        1.0 - (1.0 - t).powf(power)
+    }
+
+    fn pow_in_out(t: f32, power: f32) -> f32 {
+        if t < 0.5 {
+            0.5 * (2.0 * t).powf(power)
+        } else {
+            0.5f32.mul_add(-(2.0 * (1.0 - t)).powf(power), 1.0)
+        }
+    }
+
+    fn pow_out_in(t: f32, power: f32) -> f32 {
+        if t < 0.5 {
+            0.5 * pow_out(t * 2.0, power)
+        } else {
+            0.5f32.mul_add(pow_in(t.mul_add(2.0, -1.0), power), 0.5)
+        }
+    }
+
+    let t = t.clamp(0.0, 1.0);
+    match easing {
+        SongLuaEase::InQuad => pow_in(t, 2.0),
+        SongLuaEase::OutQuad => pow_out(t, 2.0),
+        SongLuaEase::InOutQuad => pow_in_out(t, 2.0),
+        SongLuaEase::OutInQuad => pow_out_in(t, 2.0),
+        SongLuaEase::InCubic => pow_in(t, 3.0),
+        SongLuaEase::OutCubic => pow_out(t, 3.0),
+        SongLuaEase::InOutCubic => pow_in_out(t, 3.0),
+        SongLuaEase::OutInCubic => pow_out_in(t, 3.0),
+        SongLuaEase::InQuart => pow_in(t, 4.0),
+        SongLuaEase::OutQuart => pow_out(t, 4.0),
+        SongLuaEase::InOutQuart => pow_in_out(t, 4.0),
+        SongLuaEase::OutInQuart => pow_out_in(t, 4.0),
+        SongLuaEase::InQuint => pow_in(t, 5.0),
+        SongLuaEase::OutQuint => pow_out(t, 5.0),
+        SongLuaEase::InOutQuint => pow_in_out(t, 5.0),
+        SongLuaEase::OutInQuint => pow_out_in(t, 5.0),
+        SongLuaEase::InElastic => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                let period = opt1
+                    .filter(|value| value.is_finite() && *value > 0.0)
+                    .unwrap_or(0.3);
+                let tau = std::f32::consts::TAU / period;
+                let u = t - 1.0;
+                -(10.0 * u).exp2() * ((u - period * 0.25) * tau).sin()
+            }
+        }
+        SongLuaEase::OutElastic => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                let period = opt1
+                    .filter(|value| value.is_finite() && *value > 0.0)
+                    .unwrap_or(0.3);
+                let tau = std::f32::consts::TAU / period;
+                (-10.0 * t)
+                    .exp2()
+                    .mul_add(((t - period * 0.25) * tau).sin(), 1.0)
+            }
+        }
+        SongLuaEase::InOutElastic => {
+            if t <= 0.0 {
+                0.0
+            } else if t >= 1.0 {
+                1.0
+            } else {
+                let period = opt1
+                    .filter(|value| value.is_finite() && *value > 0.0)
+                    .unwrap_or(0.3);
+                let tau = std::f32::consts::TAU / period;
+                if t < 0.5 {
+                    let u = 2.0f32.mul_add(t, -1.0);
+                    -0.5 * (10.0 * u).exp2() * ((u - period * 0.375) * tau).sin()
+                } else {
+                    let u = 2.0f32.mul_add(t, -1.0);
+                    (0.5 * (-10.0 * u).exp2())
+                        .mul_add(((u - period * 0.375) * tau).sin(), 1.0)
+                }
+            }
+        }
+        SongLuaEase::OutInElastic => {
+            if t < 0.5 {
+                0.5 * song_lua_ease_factor_reference(
+                    SongLuaEase::OutElastic,
+                    t * 2.0,
+                    opt1,
+                    opt2,
+                )
+            } else {
+                0.5f32.mul_add(
+                    song_lua_ease_factor_reference(
+                        SongLuaEase::InElastic,
+                        (t * 2.0) - 1.0,
+                        opt1,
+                        opt2,
+                    ),
+                    0.5,
+                )
+            }
+        }
+        SongLuaEase::InBack => {
+            let overshoot = opt1.filter(|value| value.is_finite()).unwrap_or(1.70158);
+            t * t * (overshoot + 1.0).mul_add(t, -overshoot)
+        }
+        SongLuaEase::OutBack => {
+            let overshoot = opt1.filter(|value| value.is_finite()).unwrap_or(1.70158);
+            let u = t - 1.0;
+            (u * u).mul_add((overshoot + 1.0).mul_add(u, overshoot), 1.0)
+        }
+        SongLuaEase::OutInBack => {
+            if t < 0.5 {
+                0.5 * song_lua_ease_factor_reference(
+                    SongLuaEase::OutBack,
+                    t * 2.0,
+                    opt1,
+                    opt2,
+                )
+            } else {
+                0.5f32.mul_add(
+                    song_lua_ease_factor_reference(
+                        SongLuaEase::InBack,
+                        (t * 2.0) - 1.0,
+                        opt1,
+                        opt2,
+                    ),
+                    0.5,
+                )
+            }
+        }
+        _ => easing.factor(t, opt1, opt2),
     }
 }
 
