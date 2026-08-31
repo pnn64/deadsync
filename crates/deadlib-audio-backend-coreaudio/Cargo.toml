@@ -9,7 +9,7 @@ coreaudio = { package = "coreaudio-rs", version = "0.14.2" }
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.34"
-mach2 = "0.6.0"
+mach2 = "0.7.0"
 objc2-core-audio = "0.3.2"
 objc2-core-foundation = "0.3.2"
 

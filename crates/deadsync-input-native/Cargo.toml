@@ -48,7 +48,7 @@ libc = "0.2.189"
 hidparser = "1.0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-mach2 = "0.6.0"
+mach2 = "0.7.0"
 
 [target.'cfg(all(windows, target_vendor = "win7"))'.dependencies]
 windows = { version = "0.62.2", features = [
