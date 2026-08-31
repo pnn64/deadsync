@@ -91,6 +91,7 @@ pub(crate) struct MineLayerRequest<'a, S> {
 pub(crate) struct NotePartPhaseCache {
     base_phase: f32,
     vivid_interval: f32,
+    single_bucket_vivid: bool,
     vivid: bool,
 }
 
@@ -103,10 +104,33 @@ pub(crate) fn note_part_phase_cache(
 ) -> NotePartPhaseCache {
     let length = animation.length.max(1e-6);
     let clock = if beat_based { song_beat } else { song_seconds };
+    let vivid_interval = if animation.vivid { 1.0 / length } else { 0.0 };
     NotePartPhaseCache {
         base_phase: clock.rem_euclid(length) / length,
-        vivid_interval: if animation.vivid { 1.0 / length } else { 0.0 },
+        vivid_interval,
+        single_bucket_vivid: animation.vivid && length <= 1.0,
         vivid: animation.vivid,
+    }
+}
+
+#[inline(always)]
+fn note_beat_fraction(note_beat: f32) -> f32 {
+    note_beat - note_beat.floor()
+}
+
+#[inline(always)]
+fn vivid_bucket_offset(note_fraction: f32, interval: f32) -> f32 {
+    (note_fraction / interval).floor() * interval
+}
+
+#[inline(always)]
+fn wrap_vivid_phase(phase: f32) -> f32 {
+    if phase < 1.0 {
+        phase
+    } else if phase < 2.0 {
+        phase - 1.0
+    } else {
+        phase.rem_euclid(1.0)
     }
 }
 
@@ -115,9 +139,12 @@ pub(crate) fn note_part_phase_cached(note_beat: f32, cache: NotePartPhaseCache) 
     if !cache.vivid {
         return cache.base_phase;
     }
-    let note_fraction = note_beat.rem_euclid(1.0);
-    let vivid_offset = (note_fraction / cache.vivid_interval).floor() * cache.vivid_interval;
-    (cache.base_phase + vivid_offset).rem_euclid(1.0)
+    if cache.single_bucket_vivid && note_beat.is_finite() {
+        return cache.base_phase;
+    }
+    let note_fraction = note_beat_fraction(note_beat);
+    let vivid_offset = vivid_bucket_offset(note_fraction, cache.vivid_interval);
+    wrap_vivid_phase(cache.base_phase + vivid_offset)
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -231,6 +258,93 @@ mod note_metadata_cache_tests {
                             .to_bits(),
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn floor_fraction_matches_euclidean_note_fraction() {
+        for note_beat in [
+            -4096.9375,
+            -1024.5,
+            -4.0,
+            -0.75,
+            -0.0,
+            0.0,
+            0.125,
+            12.75,
+            1_024.937_5,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            let expected = note_beat.rem_euclid(1.0);
+            let actual = note_beat_fraction(note_beat);
+            if expected.is_nan() {
+                assert!(actual.is_nan(), "note_beat={note_beat}");
+            } else {
+                assert_eq!(actual, expected, "note_beat={note_beat}");
+            }
+        }
+    }
+
+    #[test]
+    fn single_bucket_vivid_cache_matches_reference_phase() {
+        for length in [1.0e-6_f32, 0.125, 0.5, 0.75, 1.0] {
+            let animation = NotePartAnimation {
+                length,
+                vivid: true,
+            };
+            let cache = note_part_phase_cache(12.25, 37.5, animation, true);
+            for note_beat in [
+                -4_096.937_5,
+                -12.75,
+                -0.0,
+                0.0,
+                0.125,
+                12.75,
+                4_096.937_5,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                let expected = note_part_phase_reference(12.25, 37.5, note_beat, animation, true);
+                let actual = note_part_phase_cached(note_beat, cache);
+                if expected.is_nan() {
+                    assert!(actual.is_nan(), "length={length} note_beat={note_beat}");
+                } else {
+                    assert_eq!(
+                        actual.to_bits(),
+                        expected.to_bits(),
+                        "length={length} note_beat={note_beat}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn bounded_vivid_phase_wrap_matches_euclidean_wrap() {
+        for phase in [
+            -0.0_f32,
+            0.0,
+            0.125,
+            0.999_999,
+            1.0,
+            1.125,
+            1.999_999,
+            2.0,
+            2.75,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            let expected = phase.rem_euclid(1.0);
+            let actual = wrap_vivid_phase(phase);
+            if expected.is_nan() {
+                assert!(actual.is_nan(), "phase={phase}");
+            } else {
+                assert_eq!(actual.to_bits(), expected.to_bits(), "phase={phase}");
             }
         }
     }
@@ -1648,6 +1762,106 @@ pub mod note_metadata_bench_support {
         for index in 0..evaluations {
             let note_beat = black_box((index as f32 * 0.125) - 96.0);
             let phase = note_part_phase_cached(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn beat_fraction_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box(((index & 4095) as i32 - 2048) as f32 * 0.125 + 0.0625);
+            let fraction = note_beat.rem_euclid(1.0);
+            checksum = checksum
+                .wrapping_add(u64::from(fraction.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn beat_fraction_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box(((index & 4095) as i32 - 2048) as f32 * 0.125 + 0.0625);
+            let fraction = note_beat_fraction(note_beat);
+            checksum = checksum
+                .wrapping_add(u64::from(fraction.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn single_bucket_vivid_old(evaluations: usize) -> u64 {
+        let cache = note_part_phase_cache(
+            12.25,
+            37.5,
+            black_box(NotePartAnimation {
+                length: 0.75,
+                vivid: true,
+            }),
+            true,
+        );
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index as f32 * 0.125) - 96.0);
+            let fraction = note_beat_fraction(note_beat);
+            let offset = vivid_bucket_offset(fraction, cache.vivid_interval);
+            let phase = wrap_vivid_phase(cache.base_phase + offset);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn single_bucket_vivid_new(evaluations: usize) -> u64 {
+        let cache = note_part_phase_cache(
+            12.25,
+            37.5,
+            black_box(NotePartAnimation {
+                length: 0.75,
+                vivid: true,
+            }),
+            true,
+        );
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index as f32 * 0.125) - 96.0);
+            let phase = note_part_phase_cached(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn vivid_wrap_old(evaluations: usize) -> u64 {
+        let base_phase = black_box(0.625_f32);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let offset = black_box((index & 3) as f32 * 0.25);
+            let phase = (base_phase + offset).rem_euclid(1.0);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn vivid_wrap_new(evaluations: usize) -> u64 {
+        let base_phase = black_box(0.625_f32);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let offset = black_box((index & 3) as f32 * 0.25);
+            let phase = wrap_vivid_phase(base_phase + offset);
             checksum = checksum
                 .wrapping_add(u64::from(phase.to_bits()))
                 .rotate_left(9);

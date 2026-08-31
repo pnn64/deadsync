@@ -10,7 +10,9 @@ use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
 };
 use deadsync_notefield::note_metadata_bench_support::{
-    part_phase_new, part_phase_old, uv_translation_new, uv_translation_old,
+    beat_fraction_new, beat_fraction_old, part_phase_new, part_phase_old, single_bucket_vivid_new,
+    single_bucket_vivid_old, uv_translation_new, uv_translation_old, vivid_wrap_new,
+    vivid_wrap_old,
 };
 use deadsync_notefield::note_projection_bench_support::{
     lane_offset_new, lane_offset_old, random_speed_row_new, random_speed_row_old,
@@ -281,6 +283,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield vivid note floor fraction",
+        beat_fraction_old,
+        beat_fraction_new,
+    );
+    run(
+        "notefield single-bucket vivid phase",
+        single_bucket_vivid_old,
+        single_bucket_vivid_new,
+    );
+    run(
+        "notefield bounded vivid phase wrap",
+        vivid_wrap_old,
+        vivid_wrap_new,
+    );
     run(
         "notefield hold endpoint appearance reuse",
         endpoint_appearance_old,
