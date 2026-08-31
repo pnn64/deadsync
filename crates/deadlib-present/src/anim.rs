@@ -402,7 +402,10 @@ enum BuildOp {
     ZoomY(Target),
     ZoomTo(f32, f32),
     Tint(Target, Target, Target, Target),
+    TintRgb(f32, f32, f32),
+    TintAlpha(f32),
     Glow(Target, Target, Target, Target),
+    GlowRgb(f32, f32, f32),
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
@@ -435,7 +438,10 @@ enum PreparedKind {
     ScaleBoth { from: [f32; 2], to: f32 },
     ScaleXY { from: [f32; 2], to: [f32; 2] },
     Tint { from: [f32; 4], to: [f32; 4] },
+    TintRgb { from: [f32; 4], to: [f32; 3] },
+    TintAlpha { from: [f32; 4], to: f32 },
     Glow { from: [f32; 4], to: [f32; 4] },
+    GlowRgb { from: [f32; 4], to: [f32; 3] },
     Visible(bool),
     FlipX(bool),
     FlipY(bool),
@@ -450,6 +456,11 @@ enum PreparedKind {
     FadeR { from: f32, to: f32 },
     FadeT { from: f32, to: f32 },
     FadeB { from: f32, to: f32 },
+}
+
+#[inline]
+fn identity_interpolation_is_exact(value: f32) -> bool {
+    value.is_finite() && value.to_bits() != (-0.0_f32).to_bits()
 }
 
 type BuildOps = SmallVec<[BuildOp; 12]>;
@@ -484,10 +495,42 @@ impl OpPrepared {
                     s.tint[i] = (to[i] - from[i]).mul_add(a, from[i]);
                 }
             }
+            PreparedKind::TintRgb { from, to } => {
+                for i in 0..3 {
+                    s.tint[i] = (to[i] - from[i]).mul_add(a, from[i]);
+                }
+                s.tint[3] = if a.is_finite() {
+                    from[3]
+                } else {
+                    0.0_f32.mul_add(a, from[3])
+                };
+            }
+            PreparedKind::TintAlpha { from, to } => {
+                if a.is_finite() {
+                    s.tint[0] = from[0];
+                    s.tint[1] = from[1];
+                    s.tint[2] = from[2];
+                } else {
+                    for (output, input) in s.tint[..3].iter_mut().zip(from) {
+                        *output = 0.0_f32.mul_add(a, input);
+                    }
+                }
+                s.tint[3] = (to - from[3]).mul_add(a, from[3]);
+            }
             PreparedKind::Glow { from, to } => {
                 for i in 0..4 {
                     s.glow[i] = (to[i] - from[i]).mul_add(a, from[i]);
                 }
+            }
+            PreparedKind::GlowRgb { from, to } => {
+                for i in 0..3 {
+                    s.glow[i] = (to[i] - from[i]).mul_add(a, from[i]);
+                }
+                s.glow[3] = if a.is_finite() {
+                    from[3]
+                } else {
+                    0.0_f32.mul_add(a, from[3])
+                };
             }
             PreparedKind::Visible(v) => s.visible = v,
             PreparedKind::FlipX(v) => s.flip_x = v,
@@ -699,6 +742,38 @@ impl RuntimeSegment {
                         },
                     });
                 }
+                BuildOp::TintRgb(r, g, b) => {
+                    let kind = if identity_interpolation_is_exact(s.tint[3]) {
+                        PreparedKind::TintRgb {
+                            from: s.tint,
+                            to: [r, g, b],
+                        }
+                    } else {
+                        PreparedKind::Tint {
+                            from: s.tint,
+                            to: [r, g, b, s.tint[3] + 0.0],
+                        }
+                    };
+                    self.prepared.push(OpPrepared { kind });
+                }
+                BuildOp::TintAlpha(a) => {
+                    let kind = if s.tint[..3]
+                        .iter()
+                        .copied()
+                        .all(identity_interpolation_is_exact)
+                    {
+                        PreparedKind::TintAlpha {
+                            from: s.tint,
+                            to: a,
+                        }
+                    } else {
+                        PreparedKind::Tint {
+                            from: s.tint,
+                            to: [s.tint[0] + 0.0, s.tint[1] + 0.0, s.tint[2] + 0.0, a],
+                        }
+                    };
+                    self.prepared.push(OpPrepared { kind });
+                }
                 BuildOp::Glow(gr, gg, gb, ga) => {
                     let to0 = match gr {
                         Target::Abs(v) => v,
@@ -722,6 +797,20 @@ impl RuntimeSegment {
                             to: [to0, to1, to2, to3],
                         },
                     });
+                }
+                BuildOp::GlowRgb(r, g, b) => {
+                    let kind = if identity_interpolation_is_exact(s.glow[3]) {
+                        PreparedKind::GlowRgb {
+                            from: s.glow,
+                            to: [r, g, b],
+                        }
+                    } else {
+                        PreparedKind::Glow {
+                            from: s.glow,
+                            to: [r, g, b, s.glow[3] + 0.0],
+                        }
+                    };
+                    self.prepared.push(OpPrepared { kind });
                 }
                 BuildOp::Visible(v) => {
                     self.prepared.push(OpPrepared {
@@ -973,22 +1062,12 @@ impl SegmentBuilder {
     }
     #[must_use]
     pub fn diffuse_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
-        self.ops.push(BuildOp::Tint(
-            Target::Abs(r),
-            Target::Abs(g),
-            Target::Abs(b),
-            Target::Rel(0.0),
-        ));
+        self.ops.push(BuildOp::TintRgb(r, g, b));
         self
     }
     #[must_use]
     pub fn alpha(mut self, a: f32) -> Self {
-        self.ops.push(BuildOp::Tint(
-            Target::Rel(0.0),
-            Target::Rel(0.0),
-            Target::Rel(0.0),
-            Target::Abs(a),
-        ));
+        self.ops.push(BuildOp::TintAlpha(a));
         self
     }
 
@@ -1005,12 +1084,7 @@ impl SegmentBuilder {
     }
     #[must_use]
     pub fn glow_rgb(mut self, r: f32, g: f32, b: f32) -> Self {
-        self.ops.push(BuildOp::Glow(
-            Target::Abs(r),
-            Target::Abs(g),
-            Target::Abs(b),
-            Target::Rel(0.0),
-        ));
+        self.ops.push(BuildOp::GlowRgb(r, g, b));
         self
     }
     #[must_use]
@@ -1276,6 +1350,8 @@ pub mod bench_support {
         Height { from: f32, to: f32 },
         ScaleX { from: f32, to: f32 },
         ScaleY { from: f32, to: f32 },
+        Tint { from: [f32; 4], to: [f32; 4] },
+        Glow { from: [f32; 4], to: [f32; 4] },
     }
 
     impl LegacyPreparedKind {
@@ -1291,6 +1367,16 @@ pub mod bench_support {
                 }
                 Self::ScaleY { from, to } => {
                     state.scale[1] = (to - from).mul_add(amount, from);
+                }
+                Self::Tint { from, to } => {
+                    for i in 0..4 {
+                        state.tint[i] = (to[i] - from[i]).mul_add(amount, from[i]);
+                    }
+                }
+                Self::Glow { from, to } => {
+                    for i in 0..4 {
+                        state.glow[i] = (to[i] - from[i]).mul_add(amount, from[i]);
+                    }
                 }
             }
         }
@@ -1310,6 +1396,14 @@ pub mod bench_support {
     #[inline(always)]
     fn pair_checksum(checksum: u64, values: [f32; 2]) -> u64 {
         scalar_checksum(scalar_checksum(checksum, values[0]), values[1])
+    }
+
+    #[inline(always)]
+    fn color_checksum(mut checksum: u64, values: [f32; 4]) -> u64 {
+        for value in values {
+            checksum = scalar_checksum(checksum, value);
+        }
+        checksum
     }
 
     #[inline(always)]
@@ -1519,6 +1613,123 @@ pub mod bench_support {
         checksum
     }
 
+    #[must_use]
+    pub fn tint_alpha_legacy(evaluations: usize) -> u64 {
+        let from = [0.125, 0.25, 0.5, 0.75];
+        let op = black_box(LegacyPreparedKind::Tint {
+            from,
+            to: [from[0], from[1], from[2], 0.9375],
+        });
+        let mut state = TweenState {
+            tint: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.tint);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn tint_alpha_current(evaluations: usize) -> u64 {
+        let from = [0.125, 0.25, 0.5, 0.75];
+        let op = black_box(OpPrepared {
+            kind: PreparedKind::TintAlpha { from, to: 0.9375 },
+        });
+        let mut state = TweenState {
+            tint: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply_lerp(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.tint);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn tint_rgb_legacy(evaluations: usize) -> u64 {
+        let from = [0.125, 0.25, 0.5, 0.75];
+        let op = black_box(LegacyPreparedKind::Tint {
+            from,
+            to: [0.875, 0.625, 0.375, from[3]],
+        });
+        let mut state = TweenState {
+            tint: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.tint);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn tint_rgb_current(evaluations: usize) -> u64 {
+        let from = [0.125, 0.25, 0.5, 0.75];
+        let op = black_box(OpPrepared {
+            kind: PreparedKind::TintRgb {
+                from,
+                to: [0.875, 0.625, 0.375],
+            },
+        });
+        let mut state = TweenState {
+            tint: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply_lerp(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.tint);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn glow_rgb_legacy(evaluations: usize) -> u64 {
+        let from = [0.75, 0.5, 0.25, 0.125];
+        let op = black_box(LegacyPreparedKind::Glow {
+            from,
+            to: [0.0625, 0.3125, 0.6875, from[3]],
+        });
+        let mut state = TweenState {
+            glow: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.glow);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn glow_rgb_current(evaluations: usize) -> u64 {
+        let from = [0.75, 0.5, 0.25, 0.125];
+        let op = black_box(OpPrepared {
+            kind: PreparedKind::GlowRgb {
+                from,
+                to: [0.0625, 0.3125, 0.6875],
+            },
+        });
+        let mut state = TweenState {
+            glow: from,
+            ..TweenState::default()
+        };
+        let mut checksum = 0;
+        for index in 0..evaluations {
+            op.apply_lerp(&mut state, black_box(amount(index)));
+            checksum = color_checksum(checksum, state.glow);
+        }
+        checksum
+    }
+
     fn completion_ops() -> [OpPrepared; 4] {
         [
             OpPrepared {
@@ -1592,7 +1803,7 @@ pub mod bench_support {
 
 #[cfg(test)]
 mod tests {
-    use super::{TweenSeq, TweenState, bench_support, linear};
+    use super::{TweenSeq, TweenState, bench_support, ease, linear};
 
     fn assert_bits(actual: f32, expected: f32, field: &str) {
         assert_eq!(
@@ -1603,7 +1814,7 @@ mod tests {
     }
 
     #[test]
-    fn fused_pair_operations_match_legacy_checksums() {
+    fn specialized_operations_match_legacy_checksums() {
         for evaluations in [0, 1, 2, 17, 257, 65_536, 131_071] {
             assert_eq!(
                 bench_support::xy_pair_current(evaluations),
@@ -1635,7 +1846,137 @@ mod tests {
                 bench_support::segment_completion_legacy(evaluations),
                 "segment endpoint behavior diverged after {evaluations} evaluations"
             );
+            assert_eq!(
+                bench_support::tint_alpha_current(evaluations),
+                bench_support::tint_alpha_legacy(evaluations),
+                "alpha-only tint behavior diverged after {evaluations} evaluations"
+            );
+            assert_eq!(
+                bench_support::tint_rgb_current(evaluations),
+                bench_support::tint_rgb_legacy(evaluations),
+                "RGB-only tint behavior diverged after {evaluations} evaluations"
+            );
+            assert_eq!(
+                bench_support::glow_rgb_current(evaluations),
+                bench_support::glow_rgb_legacy(evaluations),
+                "RGB-only glow behavior diverged after {evaluations} evaluations"
+            );
         }
+    }
+
+    #[test]
+    fn specialized_color_tweens_preserve_channels_and_interpolation() {
+        let initial = TweenState {
+            tint: [0.125, 0.25, 0.5, 0.75],
+            glow: [0.75, 0.5, 0.25, 0.125],
+            ..TweenState::default()
+        };
+
+        let mut tint_rgb = TweenSeq::new(initial);
+        tint_rgb.push(linear(1.0).diffuse_rgb(0.875, 0.625, 0.375));
+        tint_rgb.update(0.375);
+        let state = tint_rgb.state();
+
+        for (index, target) in [0.875_f32, 0.625, 0.375].into_iter().enumerate() {
+            assert_bits(
+                state.tint[index],
+                (target - initial.tint[index]).mul_add(0.375, initial.tint[index]),
+                &format!("specialized tint RGB {index}"),
+            );
+        }
+        assert_bits(state.tint[3], initial.tint[3], "specialized tint alpha");
+
+        let mut alpha = TweenSeq::new(initial);
+        alpha.push(linear(1.0).alpha(0.9375));
+        alpha.update(0.375);
+        let state = alpha.state();
+        for index in 0..3 {
+            assert_bits(
+                state.tint[index],
+                initial.tint[index],
+                &format!("specialized alpha tint RGB {index}"),
+            );
+        }
+        assert_bits(
+            state.tint[3],
+            (0.9375_f32 - initial.tint[3]).mul_add(0.375, initial.tint[3]),
+            "specialized tint alpha",
+        );
+
+        let mut glow_rgb = TweenSeq::new(initial);
+        glow_rgb.push(linear(1.0).glow_rgb(0.0625, 0.3125, 0.6875));
+        glow_rgb.update(0.375);
+        let state = glow_rgb.state();
+        for (index, target) in [0.0625_f32, 0.3125, 0.6875].into_iter().enumerate() {
+            assert_bits(
+                state.glow[index],
+                (target - initial.glow[index]).mul_add(0.375, initial.glow[index]),
+                &format!("specialized glow RGB {index}"),
+            );
+        }
+        assert_bits(state.glow[3], initial.glow[3], "specialized glow alpha");
+    }
+
+    #[test]
+    fn specialized_color_tweens_preserve_legacy_overwrite_behavior() {
+        let initial = TweenState {
+            tint: [0.125, 0.25, 0.5, 0.75],
+            glow: [0.75, 0.5, 0.25, -0.0],
+            ..TweenState::default()
+        };
+        let mut ordered = TweenSeq::new(initial);
+        ordered.push(linear(1.0).diffuse_rgb(0.875, 0.625, 0.375).alpha(0.9375));
+        ordered.update(0.375);
+        for index in 0..3 {
+            assert_bits(
+                ordered.state().tint[index],
+                initial.tint[index],
+                &format!("ordered tint RGB {index}"),
+            );
+        }
+
+        ordered.state_mut().tint[0] = 1.0;
+        ordered.update(0.125);
+        assert_bits(
+            ordered.state().tint[0],
+            initial.tint[0],
+            "active alpha tween reasserts untouched RGB",
+        );
+
+        let mut negative_zero = TweenSeq::new(initial);
+        negative_zero.push(linear(1.0).glow_rgb(0.0625, 0.3125, 0.6875));
+        negative_zero.update(0.375);
+        let legacy_alpha =
+            ((initial.glow[3] + 0.0) - initial.glow[3]).mul_add(0.375, initial.glow[3]);
+        assert_bits(
+            negative_zero.state().glow[3],
+            legacy_alpha,
+            "negative-zero glow alpha",
+        );
+
+        let mut non_finite_amount = TweenSeq::new(initial);
+        non_finite_amount.push(ease(1.0, f32::NAN).alpha(0.9375));
+        non_finite_amount.update(0.375);
+        assert!(
+            non_finite_amount.state().tint.into_iter().all(f32::is_nan),
+            "a non-finite interpolation amount must affect untouched tint channels as before"
+        );
+
+        let mut non_finite_amount = TweenSeq::new(initial);
+        non_finite_amount.push(ease(1.0, f32::NAN).diffuse_rgb(0.875, 0.625, 0.375));
+        non_finite_amount.update(0.375);
+        assert!(
+            non_finite_amount.state().tint.into_iter().all(f32::is_nan),
+            "a non-finite interpolation amount must affect untouched tint alpha as before"
+        );
+
+        let mut non_finite_amount = TweenSeq::new(initial);
+        non_finite_amount.push(ease(1.0, f32::NAN).glow_rgb(0.0625, 0.3125, 0.6875));
+        non_finite_amount.update(0.375);
+        assert!(
+            non_finite_amount.state().glow.into_iter().all(f32::is_nan),
+            "a non-finite interpolation amount must affect untouched glow alpha as before"
+        );
     }
 
     #[test]

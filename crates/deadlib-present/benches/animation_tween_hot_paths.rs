@@ -242,6 +242,21 @@ fn main() {
         bench_support::segment_completion_legacy,
         bench_support::segment_completion_current,
     );
+    print_pair(
+        "specialized alpha-only tint",
+        bench_support::tint_alpha_legacy,
+        bench_support::tint_alpha_current,
+    );
+    print_pair(
+        "specialized RGB-only tint",
+        bench_support::tint_rgb_legacy,
+        bench_support::tint_rgb_current,
+    );
+    print_pair(
+        "specialized RGB-only glow",
+        bench_support::glow_rgb_legacy,
+        bench_support::glow_rgb_current,
+    );
 }
 
 #[cfg(target_arch = "x86")]
