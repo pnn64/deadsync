@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::error::Error;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Display, Formatter, Write as _};
 use std::io::ErrorKind;
 use std::net::TcpStream;
 use std::ops::{Deref, DerefMut};
@@ -890,6 +890,52 @@ pub fn machine_state_signature(joined_code: &str, machine_state: &Value) -> Stri
     format!("{joined_code}|{machine_state}")
 }
 
+#[derive(Debug, Default)]
+struct MachineStateSignatureCache {
+    last: String,
+    scratch: String,
+    has_last: bool,
+}
+
+impl MachineStateSignatureCache {
+    fn prepare(&mut self, joined_code: &str, machine_state: &Value) -> bool {
+        self.scratch.clear();
+        self.scratch.push_str(joined_code);
+        self.scratch.push('|');
+        write!(&mut self.scratch, "{machine_state}").expect("writing JSON to a String cannot fail");
+        self.has_last && self.last == self.scratch
+    }
+
+    fn commit_prepared(&mut self) {
+        std::mem::swap(&mut self.last, &mut self.scratch);
+        self.scratch.clear();
+        self.has_last = true;
+    }
+
+    fn invalidate(&mut self) {
+        self.has_last = false;
+        self.last.clear();
+        self.scratch.clear();
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[derive(Debug, Default)]
+pub struct MachineStateSignatureCacheForBench(MachineStateSignatureCache);
+
+#[cfg(feature = "bench-support")]
+impl MachineStateSignatureCacheForBench {
+    #[must_use]
+    pub fn update(&mut self, joined_code: &str, machine_state: &Value) -> bool {
+        if self.0.prepare(joined_code, machine_state) {
+            return false;
+        }
+        self.0.commit_prepared();
+        true
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn machine_state_update_command(
@@ -1132,10 +1178,8 @@ static RUNTIME_SNAPSHOT: LazyLock<Mutex<Arc<Snapshot>>> =
     LazyLock::new(|| Mutex::new(Arc::new(Snapshot::default())));
 static RUNTIME_COMMAND_TX: LazyLock<Mutex<Option<Sender<LobbyCommand>>>> =
     LazyLock::new(|| Mutex::new(None));
-static RUNTIME_LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> =
-    LazyLock::new(|| Mutex::new(None));
-static RUNTIME_LAST_MACHINE_STATE_INPUT: LazyLock<Mutex<Option<RuntimeMachineStateInput>>> =
-    LazyLock::new(|| Mutex::new(None));
+static RUNTIME_MACHINE_STATE_CACHE: LazyLock<Mutex<RuntimeMachineStateCache>> =
+    LazyLock::new(|| Mutex::new(RuntimeMachineStateCache::default()));
 static RUNTIME_RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
     LazyLock::new(|| Mutex::new(ReconnectState::default()));
 static RUNTIME_TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -1207,9 +1251,15 @@ struct RuntimeMachineStateInput {
     display_names: [String; 2],
 }
 
+#[derive(Debug, Default)]
+struct RuntimeMachineStateCache {
+    signatures: MachineStateSignatureCache,
+    default_input: Option<RuntimeMachineStateInput>,
+}
+
 impl RuntimeMachineStateInput {
     #[allow(clippy::too_many_arguments)]
-    fn matches(
+    fn matches_machine_state(
         &self,
         joined_code: &str,
         screen_name: &str,
@@ -1221,16 +1271,69 @@ impl RuntimeMachineStateInput {
         joined: [bool; 2],
         display_names: [&str; 2],
     ) -> bool {
-        self.joined_code == joined_code
-            && self.screen_name == screen_name
-            && self.p1_ready == p1_ready
-            && self.p2_ready == p2_ready
-            && self.p1_stats.as_ref() == p1_stats
-            && self.p2_stats.as_ref() == p2_stats
-            && self.active_side == active_side
-            && self.joined == joined
-            && self.display_names[0] == display_names[0]
-            && self.display_names[1] == display_names[1]
+        if self.joined_code != joined_code {
+            return false;
+        }
+
+        let previous_included = included_machine_sides(self.active_side, self.joined);
+        let included = included_machine_sides(active_side, joined);
+        if previous_included != included {
+            return false;
+        }
+
+        (!included[0]
+            || (self.screen_name == screen_name
+                && self.p1_ready == p1_ready
+                && machine_player_stats_equal(self.p1_stats.as_ref(), p1_stats)
+                && lobby_profile_names_equal(&self.display_names[0], display_names[0])))
+            && (!included[1]
+                || (self.screen_name == screen_name
+                    && self.p2_ready == p2_ready
+                    && machine_player_stats_equal(self.p2_stats.as_ref(), p2_stats)
+                    && lobby_profile_names_equal(&self.display_names[1], display_names[1])))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn store(
+        cache: &mut Option<Self>,
+        joined_code: &str,
+        screen_name: &str,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<&MachinePlayerStats>,
+        p2_stats: Option<&MachinePlayerStats>,
+        active_side: PlayerSide,
+        joined: [bool; 2],
+        display_names: [&str; 2],
+    ) {
+        let input = cache.get_or_insert_with(|| Self {
+            joined_code: String::with_capacity(joined_code.len()),
+            screen_name: String::with_capacity(screen_name.len()),
+            p1_ready,
+            p2_ready,
+            p1_stats: None,
+            p2_stats: None,
+            active_side,
+            joined,
+            display_names: [
+                String::with_capacity(display_names[0].len()),
+                String::with_capacity(display_names[1].len()),
+            ],
+        });
+        input.joined_code.clear();
+        input.joined_code.push_str(joined_code);
+        input.screen_name.clear();
+        input.screen_name.push_str(screen_name);
+        input.p1_ready = p1_ready;
+        input.p2_ready = p2_ready;
+        input.p1_stats.clone_from(&p1_stats.cloned());
+        input.p2_stats.clone_from(&p2_stats.cloned());
+        input.active_side = active_side;
+        input.joined = joined;
+        input.display_names[0].clear();
+        input.display_names[0].push_str(display_names[0]);
+        input.display_names[1].clear();
+        input.display_names[1].push_str(display_names[1]);
     }
 
     fn machine_state_value(&self) -> Value {
@@ -1256,9 +1359,142 @@ impl RuntimeMachineStateInput {
     }
 }
 
+fn machine_player_stats_equal(
+    previous: Option<&MachinePlayerStats>,
+    current: Option<&MachinePlayerStats>,
+) -> bool {
+    previous.and_then(|stats| stats.judgments.as_ref())
+        == current.and_then(|stats| stats.judgments.as_ref())
+        && optional_json_f32_equal(
+            previous.and_then(|stats| stats.score),
+            current.and_then(|stats| stats.score),
+        )
+        && optional_json_f32_equal(
+            previous.and_then(|stats| stats.ex_score),
+            current.and_then(|stats| stats.ex_score),
+        )
+}
+
+fn optional_json_f32_equal(previous: Option<f32>, current: Option<f32>) -> bool {
+    match (
+        previous.filter(|value| value.is_finite()),
+        current.filter(|value| value.is_finite()),
+    ) {
+        (None, None) => true,
+        (Some(previous), Some(current)) => previous.to_bits() == current.to_bits(),
+        _ => false,
+    }
+}
+
+struct LobbyProfileNameParts<'a> {
+    prefix: &'static str,
+    body: &'a str,
+}
+
+fn lobby_profile_name_parts(name: &str) -> LobbyProfileNameParts<'_> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return LobbyProfileNameParts {
+            prefix: LOBBY_PROFILE_PREFIX,
+            body: "Player",
+        };
+    }
+    if trimmed
+        .get(..4)
+        .is_some_and(|tag| tag.eq_ignore_ascii_case("[DS]"))
+    {
+        LobbyProfileNameParts {
+            prefix: "",
+            body: trimmed,
+        }
+    } else {
+        LobbyProfileNameParts {
+            prefix: LOBBY_PROFILE_PREFIX,
+            body: trimmed,
+        }
+    }
+}
+
+fn lobby_profile_names_equal(previous: &str, current: &str) -> bool {
+    let previous = lobby_profile_name_parts(previous);
+    let current = lobby_profile_name_parts(current);
+    previous
+        .prefix
+        .bytes()
+        .chain(previous.body.bytes())
+        .eq(current.prefix.bytes().chain(current.body.bytes()))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[derive(Debug, Default)]
+pub struct DefaultMachineStateCacheForBench {
+    input: Option<RuntimeMachineStateInput>,
+}
+
+#[cfg(feature = "bench-support")]
+impl DefaultMachineStateCacheForBench {
+    #[allow(clippy::too_many_arguments)]
+    #[must_use]
+    pub fn update(
+        &mut self,
+        joined_code: &str,
+        screen_name: &str,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<&MachinePlayerStats>,
+        p2_stats: Option<&MachinePlayerStats>,
+        active_side: PlayerSide,
+        joined: [bool; 2],
+        display_names: [&str; 2],
+    ) -> bool {
+        if self.input.as_ref().is_some_and(|last| {
+            last.matches_machine_state(
+                joined_code,
+                screen_name,
+                p1_ready,
+                p2_ready,
+                p1_stats,
+                p2_stats,
+                active_side,
+                joined,
+                display_names,
+            )
+        }) {
+            return false;
+        }
+        RuntimeMachineStateInput::store(
+            &mut self.input,
+            joined_code,
+            screen_name,
+            p1_ready,
+            p2_ready,
+            p1_stats,
+            p2_stats,
+            active_side,
+            joined,
+            display_names,
+        );
+        true
+    }
+}
+
+#[inline(always)]
+const fn included_machine_sides(active_side: PlayerSide, joined: [bool; 2]) -> [bool; 2] {
+    if joined[0] || joined[1] {
+        joined
+    } else {
+        [
+            matches!(active_side, PlayerSide::P1),
+            matches!(active_side, PlayerSide::P2),
+        ]
+    }
+}
+
 fn runtime_clear_machine_state_cache() {
-    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
-    *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = None;
+    let mut cache = RUNTIME_MACHINE_STATE_CACHE.lock().unwrap();
+    cache.signatures.invalidate();
+    cache.default_input = None;
 }
 
 #[derive(Debug)]
@@ -1436,6 +1672,14 @@ pub fn runtime_update_machine_state_sides_with_stats(
     p1_stats: Option<MachinePlayerStats>,
     p2_stats: Option<MachinePlayerStats>,
 ) {
+    let snapshot = Arc::clone(&runtime_lock_snapshot());
+    if !matches!(snapshot.connection, ConnectionState::Connected) {
+        return;
+    }
+    let Some(joined_lobby) = snapshot.joined_lobby.as_ref() else {
+        return;
+    };
+
     let machine_state = (hooks.local_machine_state)(
         screen_name,
         p1_ready,
@@ -1443,24 +1687,36 @@ pub fn runtime_update_machine_state_sides_with_stats(
         p1_stats.as_ref(),
         p2_stats.as_ref(),
     );
-    let update = {
-        let snapshot = runtime_lock_snapshot();
-        let last_sig = RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap();
-        machine_state_update_command(
-            &snapshot,
-            last_sig.as_deref(),
-            &machine_state,
-            screen_name,
-            p1_ready,
-            p2_ready,
-            p1_stats,
-            p2_stats,
-        )
-    };
-    if let Some(update) = update
-        && runtime_send_command(hooks, update.command)
+    let mut cache = RUNTIME_MACHINE_STATE_CACHE.lock().unwrap();
+    if !cache.signatures.has_last
+        && let Some(input) = cache.default_input.as_ref()
     {
-        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some(update.signature);
+        let joined_code = input.joined_code.clone();
+        let previous_machine_state = input.machine_state_value();
+        debug_assert!(
+            !cache
+                .signatures
+                .prepare(joined_code.as_str(), &previous_machine_state)
+        );
+        cache.signatures.commit_prepared();
+    }
+    if cache
+        .signatures
+        .prepare(joined_lobby.code.as_str(), &machine_state)
+    {
+        return;
+    }
+
+    let command = LobbyCommand::UpdateMachine {
+        screen_name: screen_name.to_string(),
+        p1_ready,
+        p2_ready,
+        p1_stats,
+        p2_stats,
+    };
+    if runtime_send_command(hooks, command) {
+        cache.signatures.commit_prepared();
+        cache.default_input = None;
     }
 }
 
@@ -1479,66 +1735,92 @@ fn runtime_update_default_machine_state_sides_with_stats(
         return;
     };
 
-    let input =
-        deadsync_profile::runtime_with_session_players(|active_side, joined, display_names| {
-            if RUNTIME_LAST_MACHINE_STATE_INPUT
-                .lock()
-                .unwrap()
-                .as_ref()
-                .is_some_and(|last| {
-                    last.matches(
-                        joined_lobby.code.as_str(),
-                        screen_name,
-                        p1_ready,
-                        p2_ready,
-                        p1_stats.as_ref(),
-                        p2_stats.as_ref(),
-                        active_side,
-                        joined,
-                        display_names,
-                    )
-                })
-            {
-                return None;
-            }
-            Some(RuntimeMachineStateInput {
-                joined_code: joined_lobby.code.clone(),
-                screen_name: screen_name.to_string(),
+    deadsync_profile::runtime_with_session_players(|active_side, joined, display_names| {
+        let mut cache = RUNTIME_MACHINE_STATE_CACHE.lock().unwrap();
+        if cache.default_input.as_ref().is_some_and(|last| {
+            last.matches_machine_state(
+                joined_lobby.code.as_str(),
+                screen_name,
                 p1_ready,
                 p2_ready,
-                p1_stats: p1_stats.clone(),
-                p2_stats: p2_stats.clone(),
+                p1_stats.as_ref(),
+                p2_stats.as_ref(),
                 active_side,
                 joined,
-                display_names: display_names.map(str::to_string),
-            })
-        });
-    let Some(input) = input else {
-        return;
-    };
+                display_names,
+            )
+        }) {
+            return;
+        }
 
-    let machine_state = input.machine_state_value();
-    let update = {
-        let last_sig = RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap();
-        machine_state_update_command(
-            &snapshot,
-            last_sig.as_deref(),
-            &machine_state,
-            screen_name,
+        let compared_signature = cache.default_input.is_none() && cache.signatures.has_last;
+        if compared_signature {
+            let machine_state = local_lobby_machine_state_value(
+                LocalLobbyPlayer {
+                    side: PlayerSide::P1,
+                    display_name: display_names[0],
+                    joined: joined[0],
+                    screen_name,
+                    ready: p1_ready,
+                    stats: p1_stats.as_ref(),
+                },
+                LocalLobbyPlayer {
+                    side: PlayerSide::P2,
+                    display_name: display_names[1],
+                    joined: joined[1],
+                    screen_name,
+                    ready: p2_ready,
+                    stats: p2_stats.as_ref(),
+                },
+                active_side,
+            );
+            if cache
+                .signatures
+                .prepare(joined_lobby.code.as_str(), &machine_state)
+            {
+                RuntimeMachineStateInput::store(
+                    &mut cache.default_input,
+                    joined_lobby.code.as_str(),
+                    screen_name,
+                    p1_ready,
+                    p2_ready,
+                    p1_stats.as_ref(),
+                    p2_stats.as_ref(),
+                    active_side,
+                    joined,
+                    display_names,
+                );
+                return;
+            }
+        }
+
+        let command = LobbyCommand::UpdateMachine {
+            screen_name: screen_name.to_string(),
             p1_ready,
             p2_ready,
-            p1_stats,
-            p2_stats,
-        )
-    };
-    let Some(update) = update else {
-        *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = Some(input);
-        return;
-    };
-    if runtime_send_command(DEFAULT_RUNTIME_HOOKS, update.command) {
-        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some(update.signature);
-        *RUNTIME_LAST_MACHINE_STATE_INPUT.lock().unwrap() = Some(input);
-    }
+            p1_stats: p1_stats.clone(),
+            p2_stats: p2_stats.clone(),
+        };
+        if runtime_send_command(DEFAULT_RUNTIME_HOOKS, command) {
+            if compared_signature {
+                cache.signatures.commit_prepared();
+            } else {
+                cache.signatures.invalidate();
+            }
+            RuntimeMachineStateInput::store(
+                &mut cache.default_input,
+                joined_lobby.code.as_str(),
+                screen_name,
+                p1_ready,
+                p2_ready,
+                p1_stats.as_ref(),
+                p2_stats.as_ref(),
+                active_side,
+                joined,
+                display_names,
+            );
+        }
+    });
 }
 
 pub fn runtime_select_song(hooks: LobbyRuntimeHooks, song_info: LobbySongInfo) {
@@ -1671,6 +1953,8 @@ fn runtime_handle_text_message(
 mod tests {
     use super::*;
 
+    static TEST_MACHINE_STATE_CALLS: AtomicU64 = AtomicU64::new(0);
+
     fn test_machine_state(
         _screen_name: &str,
         _p1_ready: bool,
@@ -1679,6 +1963,17 @@ mod tests {
         _p2_stats: Option<&MachinePlayerStats>,
     ) -> Value {
         serde_json::json!({})
+    }
+
+    fn counting_machine_state(
+        screen_name: &str,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<&MachinePlayerStats>,
+        p2_stats: Option<&MachinePlayerStats>,
+    ) -> Value {
+        TEST_MACHINE_STATE_CALLS.fetch_add(1, Ordering::Relaxed);
+        test_machine_state(screen_name, p1_ready, p2_ready, p1_stats, p2_stats)
     }
 
     fn ignore_malformed_payload(_event: Option<&str>, _error: &str, _raw_text: &str) {}
@@ -1721,7 +2016,7 @@ mod tests {
             display_names: ["Alice".to_string(), "Bob".to_string()],
         };
 
-        assert!(input.matches(
+        assert!(input.matches_machine_state(
             "ROOM",
             "ScreenGameplay",
             true,
@@ -1732,7 +2027,7 @@ mod tests {
             [true, false],
             ["Alice", "Bob"],
         ));
-        assert!(!input.matches(
+        assert!(!input.matches_machine_state(
             "ROOM",
             "ScreenGameplay",
             true,
@@ -1743,6 +2038,225 @@ mod tests {
             [true, false],
             ["Changed", "Bob"],
         ));
+    }
+
+    #[test]
+    fn runtime_machine_state_semantic_cache_matches_serialized_ground_truth() {
+        #[allow(clippy::too_many_arguments)]
+        fn assert_parity(
+            previous: &RuntimeMachineStateInput,
+            joined_code: &str,
+            screen_name: &str,
+            p1_ready: bool,
+            p2_ready: bool,
+            p1_stats: Option<&MachinePlayerStats>,
+            p2_stats: Option<&MachinePlayerStats>,
+            active_side: PlayerSide,
+            joined: [bool; 2],
+            display_names: [&str; 2],
+        ) {
+            let previous_signature =
+                machine_state_signature(&previous.joined_code, &previous.machine_state_value());
+            let current = local_lobby_machine_state_value(
+                LocalLobbyPlayer {
+                    side: PlayerSide::P1,
+                    display_name: display_names[0],
+                    joined: joined[0],
+                    screen_name,
+                    ready: p1_ready,
+                    stats: p1_stats,
+                },
+                LocalLobbyPlayer {
+                    side: PlayerSide::P2,
+                    display_name: display_names[1],
+                    joined: joined[1],
+                    screen_name,
+                    ready: p2_ready,
+                    stats: p2_stats,
+                },
+                active_side,
+            );
+            let current_signature = machine_state_signature(joined_code, &current);
+            assert_eq!(
+                previous.matches_machine_state(
+                    joined_code,
+                    screen_name,
+                    p1_ready,
+                    p2_ready,
+                    p1_stats,
+                    p2_stats,
+                    active_side,
+                    joined,
+                    display_names,
+                ),
+                previous_signature == current_signature,
+            );
+        }
+
+        let stats = MachinePlayerStats {
+            score: Some(98.5),
+            ex_score: Some(1943.0),
+            ..MachinePlayerStats::default()
+        };
+        let previous = RuntimeMachineStateInput {
+            joined_code: "ROOM".to_string(),
+            screen_name: "ScreenGameplay".to_string(),
+            p1_ready: true,
+            p2_ready: false,
+            p1_stats: Some(stats.clone()),
+            p2_stats: None,
+            active_side: PlayerSide::P1,
+            joined: [true, false],
+            display_names: ["Alice".to_string(), "Bob".to_string()],
+        };
+
+        assert_parity(
+            &previous,
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            true,
+            Some(&stats),
+            Some(&MachinePlayerStats {
+                score: Some(1.0),
+                ..MachinePlayerStats::default()
+            }),
+            PlayerSide::P2,
+            [true, false],
+            [" [DS] Alice ", "Changed but absent"],
+        );
+        assert_parity(
+            &previous,
+            "OTHER",
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&stats),
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Alice", "Bob"],
+        );
+
+        let null_stats = RuntimeMachineStateInput {
+            p1_stats: Some(MachinePlayerStats {
+                score: Some(f32::NAN),
+                ex_score: Some(f32::INFINITY),
+                ..MachinePlayerStats::default()
+            }),
+            display_names: [" ".to_string(), "Bob".to_string()],
+            ..previous
+        };
+        assert_parity(
+            &null_stats,
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            false,
+            None,
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Player", "Bob"],
+        );
+        assert_parity(
+            &null_stats,
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&MachinePlayerStats {
+                score: Some(-0.0),
+                ..MachinePlayerStats::default()
+            }),
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Player", "Bob"],
+        );
+
+        let negative_zero = RuntimeMachineStateInput {
+            p1_stats: Some(MachinePlayerStats {
+                score: Some(-0.0),
+                ..MachinePlayerStats::default()
+            }),
+            ..null_stats
+        };
+        assert_parity(
+            &negative_zero,
+            "ROOM",
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&MachinePlayerStats {
+                score: Some(0.0),
+                ..MachinePlayerStats::default()
+            }),
+            None,
+            PlayerSide::P1,
+            [true, false],
+            ["Player", "Bob"],
+        );
+    }
+
+    #[test]
+    fn reusable_machine_state_signature_matches_allocating_reference() {
+        let states = [
+            ("ROOM", serde_json::json!({"player1": null})),
+            (
+                "ROOM",
+                serde_json::json!({"player1": {"ready": true, "score": 98.5}}),
+            ),
+            (
+                "NEXT",
+                serde_json::json!({"player1": {"ready": true, "score": 98.5}}),
+            ),
+        ];
+        let mut reference = None;
+        let mut cache = MachineStateSignatureCache::default();
+        for (code, state) in states.iter().chain(states.iter().rev()) {
+            let signature = machine_state_signature(code, state);
+            let reference_changed = reference.as_deref() != Some(signature.as_str());
+            if reference_changed {
+                reference = Some(signature);
+            }
+            let duplicate = cache.prepare(code, state);
+            assert_eq!(!duplicate, reference_changed);
+            if !duplicate {
+                cache.commit_prepared();
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_machine_state_preflight_skips_state_builder_until_joined() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+        reset_runtime_test_state();
+        TEST_MACHINE_STATE_CALLS.store(0, Ordering::Relaxed);
+        let hooks = LobbyRuntimeHooks::new(counting_machine_state, ignore_malformed_payload);
+
+        runtime_update_machine_state(hooks, "ScreenGameplay", true);
+        assert_eq!(TEST_MACHINE_STATE_CALLS.load(Ordering::Relaxed), 0);
+
+        Arc::make_mut(&mut *runtime_lock_snapshot()).connection = ConnectionState::Connected;
+        runtime_update_machine_state(hooks, "ScreenGameplay", true);
+        assert_eq!(TEST_MACHINE_STATE_CALLS.load(Ordering::Relaxed), 0);
+
+        Arc::make_mut(&mut *runtime_lock_snapshot()).joined_lobby = Some(JoinedLobby {
+            code: "ROOM".to_string(),
+            players: Vec::new(),
+            song_info: None,
+        });
+        let (tx, rx) = std::sync::mpsc::channel();
+        *RUNTIME_COMMAND_TX.lock().unwrap() = Some(tx);
+        runtime_update_machine_state(hooks, "ScreenGameplay", true);
+        assert_eq!(TEST_MACHINE_STATE_CALLS.load(Ordering::Relaxed), 1);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(LobbyCommand::UpdateMachine { .. })
+        ));
+
+        reset_runtime_test_state();
     }
 
     #[test]
@@ -2159,7 +2673,12 @@ mod tests {
 
         let (tx, rx) = std::sync::mpsc::channel();
         *RUNTIME_COMMAND_TX.lock().unwrap() = Some(tx);
-        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some("ABCD|{}".to_string());
+        {
+            let mut cache = RUNTIME_MACHINE_STATE_CACHE.lock().unwrap();
+            let machine = serde_json::json!({});
+            assert!(!cache.signatures.prepare("ABCD", &machine));
+            cache.signatures.commit_prepared();
+        }
         *runtime_lock_reconnect() = ReconnectState {
             target: Some(ReconnectTarget {
                 code: "ABCD".to_string(),
@@ -2191,7 +2710,10 @@ mod tests {
 
         let snapshot = runtime_lock_snapshot().clone();
         assert!(snapshot.joined_lobby.is_none());
-        assert!(RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap().is_none());
+        let cache = RUNTIME_MACHINE_STATE_CACHE.lock().unwrap();
+        assert!(!cache.signatures.has_last);
+        assert!(cache.default_input.is_none());
+        drop(cache);
         let reconnect = runtime_lock_reconnect();
         assert!(reconnect.target.is_none());
         assert!(reconnect.pending_create_password.is_none());
