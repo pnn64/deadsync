@@ -299,6 +299,47 @@ fn build_song_lua_constant_window_from_mod<Window: SongLuaModWindowLike>(
     build_song_lua_constant_attack_mask_window(start_second, end_second, window.mods())
 }
 
+#[inline(always)]
+fn song_lua_iterator_capacity_hint(iter: &impl Iterator) -> usize {
+    let (lower, upper) = iter.size_hint();
+    upper.unwrap_or(lower)
+}
+
+#[doc(hidden)]
+pub fn build_song_lua_constant_windows_for_player_iter<Window, TimeWindows, BeatWindows>(
+    time_mods: TimeWindows,
+    beat_mods: BeatWindows,
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+) -> Vec<AttackMaskWindow>
+where
+    Window: SongLuaModWindowLike,
+    TimeWindows: IntoIterator<Item = Window>,
+    BeatWindows: IntoIterator<Item = Window>,
+{
+    let time_mods = time_mods.into_iter();
+    let beat_mods = beat_mods.into_iter();
+    let capacity = song_lua_iterator_capacity_hint(&time_mods)
+        .saturating_add(song_lua_iterator_capacity_hint(&beat_mods));
+    let mut out = Vec::new();
+    for window in time_mods.chain(beat_mods) {
+        if song_lua_target_matches_player(window.player(), player)
+            && let Some(window) = build_song_lua_constant_window_from_mod(
+                &window,
+                timing_player,
+                global_offset_seconds,
+            )
+        {
+            if out.is_empty() {
+                out.reserve(capacity);
+            }
+            out.push(window);
+        }
+    }
+    out
+}
+
 pub fn build_song_lua_constant_windows_for_player<Window: SongLuaModWindowLike>(
     time_mods: &[Window],
     beat_mods: &[Window],
@@ -471,6 +512,64 @@ impl SongLuaColumnOffsetWindowLike for SongLuaRuntimeColumnOffsetWindow {
     fn opt2(&self) -> Option<f32> {
         self.opt2
     }
+}
+
+#[doc(hidden)]
+pub fn build_song_lua_column_offset_windows_for_player_iter<Window, Windows>(
+    windows: Windows,
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+) -> Vec<SongLuaColumnOffsetWindowRuntime>
+where
+    Window: SongLuaColumnOffsetWindowLike,
+    Windows: IntoIterator<Item = Window>,
+{
+    let windows = windows.into_iter();
+    let capacity = song_lua_iterator_capacity_hint(&windows);
+    let mut out = Vec::new();
+    for window in windows {
+        if window.player() != player {
+            continue;
+        }
+        let Some((start_second, end_second)) = song_lua_window_seconds(
+            window.unit(),
+            window.start(),
+            window.limit(),
+            window.span_mode(),
+            timing_player,
+            global_offset_seconds,
+        ) else {
+            continue;
+        };
+        let sustain_end_second = song_lua_sustain_end_second(
+            window.unit(),
+            window.start(),
+            window.limit(),
+            window.span_mode(),
+            window.sustain(),
+            timing_player,
+            global_offset_seconds,
+            end_second,
+        );
+        if out.is_empty() {
+            out.reserve(capacity);
+        }
+        out.push(build_song_lua_column_offset_window_runtime(
+            window.column(),
+            window.target(),
+            start_second,
+            end_second,
+            sustain_end_second,
+            window.from_y(),
+            window.to_y(),
+            window.easing(),
+            window.opt1(),
+            window.opt2(),
+        ));
+    }
+    song_lua_extend_column_offset_tails(&mut out);
+    out
 }
 
 pub fn build_song_lua_column_offset_windows_for_player<Window: SongLuaColumnOffsetWindowLike>(

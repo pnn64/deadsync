@@ -61,6 +61,231 @@ fn test_timing(last_row: usize) -> TimingData {
     TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(last_row))
 }
 
+fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
+    TestCompiledSongLua {
+        time_mods: vec![
+            SongLuaModWindow {
+                unit: SongLuaTimeUnit::Second,
+                start: 1.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                mods: "*100 50 drunk".to_string(),
+                player: None,
+            },
+            SongLuaModWindow {
+                unit: SongLuaTimeUnit::Second,
+                start: 2.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                mods: "*100 25 tipsy".to_string(),
+                player: Some(1),
+            },
+            SongLuaModWindow {
+                unit: SongLuaTimeUnit::Second,
+                start: 3.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                mods: "*100 -25 flip".to_string(),
+                player: Some(2),
+            },
+        ],
+        beat_mods: vec![SongLuaModWindow {
+            unit: SongLuaTimeUnit::Beat,
+            start: 8.0,
+            limit: 1.0,
+            span_mode: SongLuaSpanMode::Len,
+            mods: "*100 75 dark".to_string(),
+            player: None,
+        }],
+        eases: vec![
+            SongLuaEaseWindow {
+                player: None,
+                unit: SongLuaTimeUnit::Second,
+                start: 1.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                target: SongLuaEaseTarget::Mod("dark".to_string()),
+                from: 0.0,
+                to: 100.0,
+                easing: Some("inOutQuad".to_string()),
+                sustain: Some(0.25),
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaEaseWindow {
+                player: Some(1),
+                unit: SongLuaTimeUnit::Beat,
+                start: 4.0,
+                limit: 1.0,
+                span_mode: SongLuaSpanMode::Len,
+                target: SongLuaEaseTarget::PlayerX,
+                from: 320.0,
+                to: 360.0,
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaEaseWindow {
+                player: Some(2),
+                unit: SongLuaTimeUnit::Second,
+                start: 3.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                target: SongLuaEaseTarget::Mod("tipsy".to_string()),
+                from: 20.0,
+                to: 80.0,
+                easing: Some("outSine".to_string()),
+                sustain: None,
+                opt1: Some(0.5),
+                opt2: None,
+            },
+            SongLuaEaseWindow {
+                player: Some(1),
+                unit: SongLuaTimeUnit::Second,
+                start: 5.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                target: SongLuaEaseTarget::Mod("unsupported-window-target".to_string()),
+                from: 0.0,
+                to: 1.0,
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaEaseWindow {
+                player: None,
+                unit: SongLuaTimeUnit::Second,
+                start: 6.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                target: SongLuaEaseTarget::Function,
+                from: 0.0,
+                to: 1.0,
+                easing: None,
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+        ],
+        column_offsets: vec![
+            SongLuaColumnOffsetWindow {
+                player: 0,
+                column: 0,
+                target: SongLuaColumnTransformTarget::OffsetX,
+                unit: SongLuaTimeUnit::Second,
+                start: 1.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                from_y: -16.0,
+                to_y: 16.0,
+                easing: Some("inOutSine".to_string()),
+                sustain: Some(0.25),
+                opt1: None,
+                opt2: None,
+            },
+            SongLuaColumnOffsetWindow {
+                player: 0,
+                column: 3,
+                target: SongLuaColumnTransformTarget::RotationZ,
+                unit: SongLuaTimeUnit::Beat,
+                start: 4.0,
+                limit: 1.0,
+                span_mode: SongLuaSpanMode::Len,
+                from_y: 0.0,
+                to_y: 45.0,
+                easing: Some("outQuad".to_string()),
+                sustain: None,
+                opt1: Some(0.25),
+                opt2: Some(0.75),
+            },
+            SongLuaColumnOffsetWindow {
+                player: 1,
+                column: 7,
+                target: SongLuaColumnTransformTarget::Zoom,
+                unit: SongLuaTimeUnit::Second,
+                start: 3.0,
+                limit: 0.5,
+                span_mode: SongLuaSpanMode::Len,
+                from_y: 1.0,
+                to_y: 0.5,
+                easing: Some("linear".to_string()),
+                sustain: None,
+                opt1: None,
+                opt2: None,
+            },
+        ],
+        ..Default::default()
+    }
+}
+
+#[test]
+fn borrowed_constant_window_bridge_matches_owned_ground_truth() {
+    let timing = test_timing(16 * 48);
+    let compiled = runtime_window_bridge_fixture();
+    for player in 0..2 {
+        let expected = super::build_song_lua_constant_windows_for_player_reference(
+            &compiled, &timing, player, 0.25,
+        );
+        let actual =
+            super::build_song_lua_constant_windows_for_player(&compiled, &timing, player, 0.25);
+        assert_eq!(actual, expected);
+        assert_eq!(actual.len(), 3);
+    }
+    let windows = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.25);
+    assert_eq!(windows[0].start_second, 0.75);
+    assert_eq!(windows[0].end_second, 1.25);
+    assert_eq!(windows[2].start_second, 8.0);
+}
+
+#[test]
+fn borrowed_ease_window_bridge_matches_owned_ground_truth() {
+    let timing = test_timing(16 * 48);
+    let compiled = runtime_window_bridge_fixture();
+    for player in 0..2 {
+        let expected = super::build_song_lua_ease_windows_for_player_reference(
+            &compiled,
+            &timing,
+            player,
+            0.25,
+            &[],
+        );
+        let actual =
+            super::build_song_lua_ease_windows_for_player(&compiled, &timing, player, 0.25, &[]);
+        assert_eq!(actual, expected);
+    }
+    let (windows, unsupported) =
+        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.25, &[]);
+    assert_eq!(windows.len(), 2);
+    assert_eq!(unsupported, 1);
+    assert!(matches!(
+        windows[0].target,
+        SongLuaEaseMaskTarget::VisibilityDark
+    ));
+    assert!(matches!(windows[1].target, SongLuaEaseMaskTarget::PlayerX));
+}
+
+#[test]
+fn borrowed_column_offset_bridge_matches_owned_ground_truth() {
+    let timing = test_timing(16 * 48);
+    let compiled = runtime_window_bridge_fixture();
+    for (player, expected_len) in [(0, 2), (1, 1)] {
+        let expected = super::build_song_lua_column_offset_windows_for_player_reference(
+            &compiled, &timing, player, 0.25,
+        );
+        let actual = super::build_song_lua_column_offset_windows_for_player(
+            &compiled, &timing, player, 0.25,
+        );
+        assert_eq!(actual, expected);
+        assert_eq!(actual.len(), expected_len);
+    }
+    let windows =
+        super::build_song_lua_column_offset_windows_for_player(&compiled, &timing, 1, 0.25);
+    assert_eq!(windows[0].column, 7);
+    assert_eq!(windows[0].start_second, 2.75);
+}
+
 #[test]
 fn song_lua_overlay_updates_keep_absolute_song_time() {
     let timing = test_timing(8 * 48);

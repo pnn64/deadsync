@@ -2189,6 +2189,43 @@ where
     (out, unsupported_targets)
 }
 
+#[doc(hidden)]
+pub fn build_song_lua_ease_windows_for_player_iter<Window, Windows>(
+    windows: Windows,
+    timing_player: &TimingData,
+    player: usize,
+    global_offset_seconds: f32,
+    constant_windows: &[AttackMaskWindow],
+    mut unsupported_window: impl FnMut(&Window),
+) -> (Vec<SongLuaEaseMaskWindow>, usize)
+where
+    Window: SongLuaEaseWindowLike,
+    Windows: IntoIterator<Item = Window>,
+{
+    let windows = windows.into_iter();
+    let (lower, upper) = windows.size_hint();
+    let capacity = upper.unwrap_or(lower).saturating_mul(2);
+    let mut out = Vec::with_capacity(capacity);
+    let mut unsupported_targets = 0usize;
+    for window in windows {
+        if !song_lua_target_matches_player(window.player(), player) {
+            continue;
+        }
+        if append_song_lua_ease_window_for(
+            &mut out,
+            &window,
+            timing_player,
+            global_offset_seconds,
+        ) == SongLuaRuntimeEaseAppend::Unsupported
+        {
+            unsupported_targets += 1;
+            unsupported_window(&window);
+        }
+    }
+    song_lua_extend_ease_tails(&mut out, constant_windows);
+    (out, unsupported_targets)
+}
+
 #[cfg(any(test, feature = "bench-support"))]
 #[doc(hidden)]
 pub fn build_song_lua_ease_windows_for_player_reference<Window>(
