@@ -39,6 +39,11 @@ name = "lighting_frame_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "cabinet_chart_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

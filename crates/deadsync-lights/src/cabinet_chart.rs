@@ -193,11 +193,36 @@ fn build_cabinet_light_events(
     charts: &[GameplayChartData],
     pack_sync_offset_seconds: f32,
 ) -> Vec<CabinetLightEvent> {
-    let mut events = Vec::new();
+    // The result is song-lifetime storage. Reserve its conservative maximum
+    // once so construction cannot grow repeatedly; generated bass emits at
+    // most two events per source note. The final unstable sort is sufficient
+    // because equal-time light blinks commute in the runtime bitmask.
+    let event_capacity = match plan {
+        CabinetLightPlan::Explicit { .. } => {
+            charts.first().map_or(0, |chart| chart.parsed_notes.len())
+        }
+        CabinetLightPlan::Generated {
+            marquee_ix,
+            bass_ix,
+            ..
+        } => charts.first().map_or(0, |marquee| {
+            let bass = if marquee_ix == bass_ix {
+                marquee
+            } else {
+                charts.get(1).unwrap_or(marquee)
+            };
+            marquee
+                .parsed_notes
+                .len()
+                .saturating_add(bass.parsed_notes.len().saturating_mul(2))
+        }),
+    };
+    let mut events = Vec::with_capacity(event_capacity);
+    let pack_sync_offset_ns = timing_offset_ns(pack_sync_offset_seconds);
     match plan {
         CabinetLightPlan::Explicit { .. } => {
             if let Some(chart) = charts.first() {
-                push_explicit_cabinet_events(&mut events, chart, pack_sync_offset_seconds);
+                push_explicit_cabinet_events(&mut events, chart, pack_sync_offset_ns);
             }
         }
         CabinetLightPlan::Generated {
@@ -213,25 +238,25 @@ fn build_cabinet_light_events(
             } else {
                 charts.get(1).unwrap_or(marquee)
             };
-            push_generated_marquee_events(&mut events, marquee, pack_sync_offset_seconds);
+            push_generated_marquee_events(&mut events, marquee, pack_sync_offset_ns);
             push_generated_bass_events(
                 &mut events,
                 bass,
-                pack_sync_offset_seconds,
+                pack_sync_offset_ns,
                 marquee_ix == bass_ix,
             );
         }
     }
-    events.sort_by_key(|event| event.time_ns);
+    events.sort_unstable_by_key(|event| event.time_ns);
     events
 }
 
 fn push_explicit_cabinet_events(
     events: &mut Vec<CabinetLightEvent>,
     chart: &GameplayChartData,
-    pack_sync_offset_seconds: f32,
+    pack_sync_offset_ns: SongTimeNs,
 ) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
+    let timing = &chart.timing;
     for note in &chart.parsed_notes {
         if !explicit_light_note(note.note_type) {
             continue;
@@ -239,7 +264,9 @@ fn push_explicit_cabinet_events(
         let Some(light) = explicit_cabinet_light_for_col(note.column) else {
             continue;
         };
-        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, false) {
+        if let Some(time_ns) =
+            light_note_time_ns(timing, note.row_index, false, pack_sync_offset_ns)
+        {
             events.push(CabinetLightEvent {
                 time_ns,
                 row_index: note.row_index,
@@ -253,9 +280,9 @@ fn push_explicit_cabinet_events(
 fn push_generated_marquee_events(
     events: &mut Vec<CabinetLightEvent>,
     chart: &GameplayChartData,
-    pack_sync_offset_seconds: f32,
+    pack_sync_offset_ns: SongTimeNs,
 ) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
+    let timing = &chart.timing;
     for note in &chart.parsed_notes {
         if !generated_light_note(note.note_type) {
             continue;
@@ -263,7 +290,8 @@ fn push_generated_marquee_events(
         let Some(light) = cabinet_light_for_col(note.column % 4) else {
             continue;
         };
-        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) {
+        if let Some(time_ns) = light_note_time_ns(timing, note.row_index, true, pack_sync_offset_ns)
+        {
             events.push(CabinetLightEvent {
                 time_ns,
                 row_index: note.row_index,
@@ -277,16 +305,17 @@ fn push_generated_marquee_events(
 fn push_generated_bass_events(
     events: &mut Vec<CabinetLightEvent>,
     chart: &GameplayChartData,
-    pack_sync_offset_seconds: f32,
+    pack_sync_offset_ns: SongTimeNs,
     simplify_candidate: bool,
 ) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
+    let timing = &chart.timing;
     let mut last_row = usize::MAX;
     for note in &chart.parsed_notes {
         if note.row_index == last_row || !generated_light_note(note.note_type) {
             continue;
         }
-        let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) else {
+        let Some(time_ns) = light_note_time_ns(timing, note.row_index, true, pack_sync_offset_ns)
+        else {
             continue;
         };
         for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
@@ -301,22 +330,153 @@ fn push_generated_bass_events(
     }
 }
 
-fn light_timing(chart: &GameplayChartData, pack_sync_offset_seconds: f32) -> TimingData {
-    let mut timing = chart.timing.clone();
-    timing.shift_song_offset_seconds(pack_sync_offset_seconds);
-    timing
+#[inline(always)]
+fn timing_offset_ns(seconds: f32) -> SongTimeNs {
+    let nanos = f64::from(seconds) * 1_000_000_000.0;
+    nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as SongTimeNs
 }
 
 fn light_note_time_ns(
     timing: &TimingData,
     row_index: usize,
     skip_fake_rows: bool,
+    pack_sync_offset_ns: SongTimeNs,
 ) -> Option<SongTimeNs> {
     let beat = timing.get_beat_for_row(row_index)?;
-    if skip_fake_rows && (!timing.is_judgable_at_beat(beat) || timing.is_fake_at_beat(beat)) {
+    // `is_judgable_at_beat` already rejects fake rows. The old extra fake
+    // query repeated the same partition-point search for every valid event.
+    if skip_fake_rows && !timing.is_judgable_at_beat(beat) {
         return None;
     }
-    Some(timing.get_time_for_beat_ns(beat))
+    Some(
+        timing
+            .get_time_for_beat_ns(beat)
+            .saturating_sub(pack_sync_offset_ns),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn build_cabinet_light_events_reference(
+    plan: &CabinetLightPlan,
+    charts: &[GameplayChartData],
+    pack_sync_offset_seconds: f32,
+) -> Vec<CabinetLightEvent> {
+    fn timing(chart: &GameplayChartData, offset: f32) -> TimingData {
+        let mut timing = chart.timing.clone();
+        timing.shift_song_offset_seconds(offset);
+        timing
+    }
+
+    fn note_time(
+        timing: &TimingData,
+        row_index: usize,
+        skip_fake_rows: bool,
+    ) -> Option<SongTimeNs> {
+        let beat = timing.get_beat_for_row(row_index)?;
+        if skip_fake_rows && (!timing.is_judgable_at_beat(beat) || timing.is_fake_at_beat(beat)) {
+            return None;
+        }
+        Some(timing.get_time_for_beat_ns(beat))
+    }
+
+    let mut events = Vec::new();
+    match plan {
+        CabinetLightPlan::Explicit { .. } => {
+            if let Some(chart) = charts.first() {
+                let timing = timing(chart, pack_sync_offset_seconds);
+                for note in &chart.parsed_notes {
+                    if !explicit_light_note(note.note_type) {
+                        continue;
+                    }
+                    let Some(light) = explicit_cabinet_light_for_col(note.column) else {
+                        continue;
+                    };
+                    if let Some(time_ns) = note_time(&timing, note.row_index, false) {
+                        events.push(CabinetLightEvent {
+                            time_ns,
+                            row_index: note.row_index,
+                            light,
+                            simplify_bass_candidate: false,
+                        });
+                    }
+                }
+            }
+        }
+        CabinetLightPlan::Generated {
+            marquee_ix,
+            bass_ix,
+            ..
+        } => {
+            let Some(marquee) = charts.first() else {
+                return events;
+            };
+            let bass = if marquee_ix == bass_ix {
+                marquee
+            } else {
+                charts.get(1).unwrap_or(marquee)
+            };
+            let marquee_timing = timing(marquee, pack_sync_offset_seconds);
+            for note in &marquee.parsed_notes {
+                if !generated_light_note(note.note_type) {
+                    continue;
+                }
+                let Some(light) = cabinet_light_for_col(note.column % 4) else {
+                    continue;
+                };
+                if let Some(time_ns) = note_time(&marquee_timing, note.row_index, true) {
+                    events.push(CabinetLightEvent {
+                        time_ns,
+                        row_index: note.row_index,
+                        light,
+                        simplify_bass_candidate: false,
+                    });
+                }
+            }
+            let bass_timing = timing(bass, pack_sync_offset_seconds);
+            let mut last_row = usize::MAX;
+            for note in &bass.parsed_notes {
+                if note.row_index == last_row || !generated_light_note(note.note_type) {
+                    continue;
+                }
+                let Some(time_ns) = note_time(&bass_timing, note.row_index, true) else {
+                    continue;
+                };
+                for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
+                    events.push(CabinetLightEvent {
+                        time_ns,
+                        row_index: note.row_index,
+                        light,
+                        simplify_bass_candidate: marquee_ix == bass_ix,
+                    });
+                }
+                last_row = note.row_index;
+            }
+        }
+    }
+    events.sort_by_key(|event| event.time_ns);
+    events
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn build_cabinet_light_events_for_bench(
+    plan: &CabinetLightPlan,
+    charts: &[GameplayChartData],
+    pack_sync_offset_seconds: f32,
+) -> Vec<CabinetLightEvent> {
+    build_cabinet_light_events(plan, charts, pack_sync_offset_seconds)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn build_cabinet_light_events_reference_for_bench(
+    plan: &CabinetLightPlan,
+    charts: &[GameplayChartData],
+    pack_sync_offset_seconds: f32,
+) -> Vec<CabinetLightEvent> {
+    build_cabinet_light_events_reference(plan, charts, pack_sync_offset_seconds)
 }
 
 const fn generated_light_note(note_type: NoteType) -> bool {
@@ -368,11 +528,17 @@ mod tests {
     }
 
     fn test_gameplay_chart(parsed_notes: Vec<ParsedNote>) -> GameplayChartData {
+        test_gameplay_chart_with_segments(parsed_notes, TimingSegments::default())
+    }
+
+    fn test_gameplay_chart_with_segments(
+        parsed_notes: Vec<ParsedNote>,
+        timing_segments: TimingSegments,
+    ) -> GameplayChartData {
         let max_row = parsed_notes.iter().map(|n| n.row_index).max().unwrap_or(0);
         let row_to_beat = (0..=max_row.max(deadsync_core::timing::ROWS_PER_BEAT as usize * 2))
             .map(|row| row as f32 / deadsync_core::timing::ROWS_PER_BEAT as f32)
             .collect::<Vec<_>>();
-        let timing_segments = TimingSegments::default();
         let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
         GameplayChartData {
             notes: Vec::new(),
@@ -538,6 +704,116 @@ mod tests {
             event.row_index == deadsync_core::timing::ROWS_PER_BEAT as usize
                 && event.light == CabinetLight::BassLeft
         }));
+    }
+
+    #[test]
+    fn optimized_cabinet_event_builder_matches_reference_across_timing_boundaries() {
+        use deadsync_rules::timing::{DelaySegment, FakeSegment, StopSegment, WarpSegment};
+
+        fn canonical(events: &[CabinetLightEvent]) -> Vec<(SongTimeNs, usize, u8, bool)> {
+            let mut rows = events
+                .iter()
+                .map(|event| {
+                    let light = match event.light {
+                        CabinetLight::MarqueeUpperLeft => 0,
+                        CabinetLight::MarqueeUpperRight => 1,
+                        CabinetLight::MarqueeLowerLeft => 2,
+                        CabinetLight::MarqueeLowerRight => 3,
+                        CabinetLight::BassLeft => 4,
+                        CabinetLight::BassRight => 5,
+                    };
+                    (
+                        event.time_ns,
+                        event.row_index,
+                        light,
+                        event.simplify_bass_candidate,
+                    )
+                })
+                .collect::<Vec<_>>();
+            rows.sort_unstable();
+            rows
+        }
+
+        let timing_segments = TimingSegments {
+            bpms: vec![(0.0, 120.0), (8.0, 180.0), (20.0, 90.0)],
+            stops: vec![StopSegment {
+                beat: 6.0,
+                duration: 0.125,
+            }],
+            delays: vec![DelaySegment {
+                beat: 14.0,
+                duration: 0.075,
+            }],
+            warps: vec![WarpSegment {
+                beat: 10.0,
+                length: 1.0,
+            }],
+            fakes: vec![FakeSegment {
+                beat: 16.0,
+                length: 1.0,
+            }],
+            ..TimingSegments::default()
+        };
+        let rows_per_beat = deadsync_core::timing::ROWS_PER_BEAT as usize;
+        let notes = (0..1_024)
+            .flat_map(|index| {
+                let row = index * (rows_per_beat / 4);
+                let note_type = match index % 11 {
+                    0 => NoteType::Mine,
+                    1 => NoteType::Lift,
+                    2 => NoteType::Fake,
+                    3 => NoteType::Hold,
+                    4 => NoteType::Roll,
+                    _ => NoteType::Tap,
+                };
+                [
+                    parsed_note(row, index % 4, note_type),
+                    parsed_note(row, (index + 1) % 4, NoteType::Tap),
+                ]
+            })
+            .collect::<Vec<_>>();
+        let chart = test_gameplay_chart_with_segments(notes, timing_segments);
+
+        for offset in [-0.137_125, 0.0, 0.243_875] {
+            for plan in [
+                CabinetLightPlan::Explicit {
+                    chart_ix: 0,
+                    chart_hash: "lights".to_owned(),
+                },
+                CabinetLightPlan::Generated {
+                    marquee_ix: 0,
+                    marquee_hash: "hard".to_owned(),
+                    bass_ix: 0,
+                    bass_hash: "hard".to_owned(),
+                },
+            ] {
+                let actual =
+                    build_cabinet_light_events(&plan, std::slice::from_ref(&chart), offset);
+                let expected = build_cabinet_light_events_reference(
+                    &plan,
+                    std::slice::from_ref(&chart),
+                    offset,
+                );
+                let actual_canonical = canonical(&actual);
+                let expected_canonical = canonical(&expected);
+                assert_eq!(actual_canonical.len(), expected_canonical.len());
+                if let Some((index, (actual, expected))) = actual_canonical
+                    .iter()
+                    .zip(&expected_canonical)
+                    .enumerate()
+                    .find(|(_, (actual, expected))| actual != expected)
+                {
+                    panic!(
+                        "cabinet event mismatch at {index} for offset {offset}: {actual:?} != {expected:?}"
+                    );
+                }
+                assert!(
+                    actual
+                        .windows(2)
+                        .all(|pair| pair[0].time_ns <= pair[1].time_ns)
+                );
+            }
+        }
     }
 
     fn test_song(path: &str, offset: f32, hashes: [&str; 2]) -> SongData {
