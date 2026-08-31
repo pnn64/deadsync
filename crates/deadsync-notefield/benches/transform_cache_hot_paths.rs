@@ -18,9 +18,10 @@ use deadsync_notefield::note_projection_bench_support::{
     lane_offset_new, lane_offset_old, random_speed_row_new, random_speed_row_old,
 };
 use deadsync_notefield::transform_cache_bench_support::{
-    appearance_new, appearance_old, bounded_dizzy_new, bounded_dizzy_old, expand_new, expand_old,
-    inner_pulse_new, inner_pulse_old, pulse_new, pulse_old, rotation_new, rotation_old,
-    tornado_new, tornado_old,
+    appearance_new, appearance_old, boost_only_new, boost_only_old, bounded_dizzy_new,
+    bounded_dizzy_old, brake_only_new, brake_only_old, expand_new, expand_old, expand_only_new,
+    expand_only_old, inner_pulse_new, inner_pulse_old, pulse_new, pulse_old, rotation_new,
+    rotation_old, tornado_new, tornado_old,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -284,6 +285,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield Boost-only acceleration",
+        boost_only_old,
+        boost_only_new,
+    );
+    run(
+        "notefield Brake-only acceleration",
+        brake_only_old,
+        brake_only_new,
+    );
+    run(
+        "notefield Expand-only acceleration",
+        expand_only_old,
+        expand_only_new,
+    );
     run(
         "notefield cached Bumpy lane classification",
         bumpy_lane_old,
