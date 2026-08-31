@@ -89,6 +89,39 @@ fn compact_buffer<T: Copy>(buffer: &mut Vec<T>, data_start: usize, live: usize) 
     buffer.truncate(live);
 }
 
+#[inline(always)]
+fn cursor_avail_cached(
+    window_frames: usize,
+    pos: usize,
+    data_avail_frames: usize,
+    max_correlated_pos: usize,
+    max_last_correlated_pos: usize,
+) -> usize {
+    let furthest = max_correlated_pos.max(max_last_correlated_pos);
+    window_frames.saturating_sub(pos).min(
+        data_avail_frames
+            .saturating_sub(furthest)
+            .saturating_sub(pos),
+    )
+}
+
+#[inline(always)]
+fn max_needed_cached(
+    prospective_uncorrelated: usize,
+    tolerance_frames: usize,
+    window_frames: usize,
+    max_correlated_pos: usize,
+    pos: usize,
+) -> usize {
+    (prospective_uncorrelated + tolerance_frames + window_frames)
+        .max(max_correlated_pos + pos + window_frames)
+}
+
+#[inline(always)]
+fn earliest_cached(uncorrelated_pos: usize, min_correlated_pos: usize) -> usize {
+    uncorrelated_pos.min(min_correlated_pos)
+}
+
 struct ChannelState {
     data: Vec<f32>,
     correlated_pos: usize,
@@ -110,6 +143,13 @@ pub struct SolaStretcher {
     fade_weights: Box<[f32]>,
 
     state: Vec<ChannelState>,
+    /// Cached extrema for the per-channel cursors. The correlation search is
+    /// the only operation that can make channel cursors diverge; maintaining
+    /// the extrema there turns three decoder-hot `state` scans into scalar
+    /// comparisons between searches.
+    min_correlated_pos: usize,
+    max_correlated_pos: usize,
+    max_last_correlated_pos: usize,
     data_avail_frames: usize,
     /// Physical index in each channel's `data` Vec where logical frame 0 lives.
     /// `erase_front` advances this cursor instead of memmoving the buffer; the
@@ -162,6 +202,9 @@ impl SolaStretcher {
             tolerance_frames,
             fade_weights,
             state,
+            min_correlated_pos: 0,
+            max_correlated_pos: 0,
+            max_last_correlated_pos: 0,
             data_avail_frames: 0,
             data_start: 0,
             compact_threshold_frames,
@@ -225,6 +268,9 @@ impl SolaStretcher {
             ch.correlated_pos = 0;
             ch.last_correlated_pos = 0;
         }
+        self.min_correlated_pos = 0;
+        self.max_correlated_pos = 0;
+        self.max_last_correlated_pos = 0;
         self.uncorrelated_pos = 0;
         self.pos = 0;
         self.error_frames = 0.0;
@@ -302,26 +348,17 @@ impl SolaStretcher {
     }
 
     fn cursor_avail(&self) -> usize {
-        let mut avail = self.window_frames.saturating_sub(self.pos);
-        for ch in &self.state {
-            // Bound by both the current and the previous correlated position:
-            // `emit` reads a window from each, and in the EOF-flush path (where
-            // no fresh search runs) `last_correlated_pos` can sit ahead of
-            // `correlated_pos`. Guarding both keeps every slice read in bounds
-            // without relying on over-allocated capacity. In normal operation
-            // both positions satisfy `pos + window <= data_avail`, so this term
-            // never binds tighter than `window - pos`.
-            let by_corr = self
-                .data_avail_frames
-                .saturating_sub(ch.correlated_pos)
-                .saturating_sub(self.pos);
-            let by_last = self
-                .data_avail_frames
-                .saturating_sub(ch.last_correlated_pos)
-                .saturating_sub(self.pos);
-            avail = avail.min(by_corr).min(by_last);
-        }
-        avail
+        // Bound by both the current and the previous correlated position:
+        // `emit` reads a window from each, and in the EOF-flush path (where no
+        // fresh search runs) the previous position can sit ahead of the current
+        // one. The cached maxima are updated whenever either cursor changes.
+        cursor_avail_cached(
+            self.window_frames,
+            self.pos,
+            self.data_avail_frames,
+            self.max_correlated_pos,
+            self.max_last_correlated_pos,
+        )
     }
 
     fn emit(&mut self, output: &mut [Vec<f32>], frames: usize) {
@@ -405,10 +442,13 @@ impl SolaStretcher {
         // (both sides shift down by the same `earliest`), so we can evaluate it
         // here against the prospective, pre-erase positions and cache the
         // boolean for reuse after the commit.
-        let mut max_needed = prospective_uncorrelated + self.tolerance_frames + self.window_frames;
-        for ch in &self.state {
-            max_needed = max_needed.max(ch.correlated_pos + self.pos + self.window_frames);
-        }
+        let max_needed = max_needed_cached(
+            prospective_uncorrelated,
+            self.tolerance_frames,
+            self.window_frames,
+            self.max_correlated_pos,
+            self.pos,
+        );
         let insufficient = max_needed > self.data_avail_frames;
         if insufficient && !self.finishing {
             // Retryable: nothing mutated. Caller must push more source.
@@ -420,6 +460,8 @@ impl SolaStretcher {
             for ch in &mut self.state {
                 ch.correlated_pos = ch.correlated_pos.saturating_add(self.pos);
             }
+            self.min_correlated_pos = self.min_correlated_pos.saturating_add(self.pos);
+            self.max_correlated_pos = self.max_correlated_pos.saturating_add(self.pos);
             self.error_frames = advance - rounded;
             self.uncorrelated_pos = prospective_uncorrelated;
             self.pos = 0;
@@ -429,10 +471,7 @@ impl SolaStretcher {
         self.trailing_speed_ratio = self.speed_ratio;
 
         // Erase data older than min(uncorrelated_pos, all correlated_pos).
-        let mut earliest = self.uncorrelated_pos;
-        for ch in &self.state {
-            earliest = earliest.min(ch.correlated_pos);
-        }
+        let earliest = earliest_cached(self.uncorrelated_pos, self.min_correlated_pos);
         if earliest > 0 {
             self.erase_front(earliest);
         }
@@ -470,12 +509,18 @@ impl SolaStretcher {
             right.last_correlated_pos = right.correlated_pos;
             left.correlated_pos = left_best + uncorrelated_pos;
             right.correlated_pos = right_best + uncorrelated_pos;
+            self.max_last_correlated_pos = self.max_correlated_pos;
+            self.min_correlated_pos = left.correlated_pos.min(right.correlated_pos);
+            self.max_correlated_pos = left.correlated_pos.max(right.correlated_pos);
             debug_assert!(left.correlated_pos + self.window_frames <= self.data_avail_frames);
             debug_assert!(right.correlated_pos + self.window_frames <= self.data_avail_frames);
             return true;
         }
         // Channels share the buffer layout so we mutate state[i] in place but
         // need to read its data slice for the closest-match computation.
+        self.max_last_correlated_pos = self.max_correlated_pos;
+        let mut min_correlated_pos = usize::MAX;
+        let mut max_correlated_pos = 0usize;
         for ch in &mut self.state {
             let unc = base + uncorrelated_pos;
             let cor = base + ch.correlated_pos;
@@ -485,8 +530,12 @@ impl SolaStretcher {
             );
             ch.last_correlated_pos = ch.correlated_pos;
             ch.correlated_pos = best + self.uncorrelated_pos;
+            min_correlated_pos = min_correlated_pos.min(ch.correlated_pos);
+            max_correlated_pos = max_correlated_pos.max(ch.correlated_pos);
             debug_assert!(ch.correlated_pos + self.window_frames <= self.data_avail_frames);
         }
+        self.min_correlated_pos = min_correlated_pos;
+        self.max_correlated_pos = max_correlated_pos;
         true
     }
 
@@ -500,6 +549,8 @@ impl SolaStretcher {
             debug_assert!(frames <= ch.correlated_pos);
             ch.correlated_pos -= frames;
         }
+        self.min_correlated_pos -= frames;
+        self.max_correlated_pos -= frames;
         // `last_correlated_pos` is intentionally left frozen here (as upstream
         // does): the next search overwrites it before any normal emit, and the
         // EOF-flush path relies on the `data_start`-relative read still landing
@@ -716,6 +767,89 @@ fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
     use super::*;
+
+    #[must_use]
+    pub fn cursor_avail_old(
+        window_frames: usize,
+        pos: usize,
+        data_avail_frames: usize,
+        positions: &[(usize, usize)],
+    ) -> usize {
+        let mut avail = window_frames.saturating_sub(pos);
+        for &(correlated_pos, last_correlated_pos) in positions {
+            let by_corr = data_avail_frames
+                .saturating_sub(correlated_pos)
+                .saturating_sub(pos);
+            let by_last = data_avail_frames
+                .saturating_sub(last_correlated_pos)
+                .saturating_sub(pos);
+            avail = avail.min(by_corr).min(by_last);
+        }
+        avail
+    }
+
+    #[must_use]
+    pub fn cursor_avail_new(
+        window_frames: usize,
+        pos: usize,
+        data_avail_frames: usize,
+        max_correlated_pos: usize,
+        max_last_correlated_pos: usize,
+    ) -> usize {
+        cursor_avail_cached(
+            window_frames,
+            pos,
+            data_avail_frames,
+            max_correlated_pos,
+            max_last_correlated_pos,
+        )
+    }
+
+    #[must_use]
+    pub fn max_needed_old(
+        prospective_uncorrelated: usize,
+        tolerance_frames: usize,
+        window_frames: usize,
+        pos: usize,
+        positions: &[(usize, usize)],
+    ) -> usize {
+        let mut max_needed = prospective_uncorrelated + tolerance_frames + window_frames;
+        for &(correlated_pos, _) in positions {
+            max_needed = max_needed.max(correlated_pos + pos + window_frames);
+        }
+        max_needed
+    }
+
+    #[must_use]
+    pub fn max_needed_new(
+        prospective_uncorrelated: usize,
+        tolerance_frames: usize,
+        window_frames: usize,
+        max_correlated_pos: usize,
+        pos: usize,
+    ) -> usize {
+        max_needed_cached(
+            prospective_uncorrelated,
+            tolerance_frames,
+            window_frames,
+            max_correlated_pos,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn earliest_old(uncorrelated_pos: usize, positions: &[(usize, usize)]) -> usize {
+        positions
+            .iter()
+            .fold(uncorrelated_pos, |earliest, &(correlated_pos, _)| {
+                earliest.min(correlated_pos)
+            })
+    }
+
+    #[must_use]
+    pub fn earliest_new(uncorrelated_pos: usize, min_correlated_pos: usize) -> usize {
+        earliest_cached(uncorrelated_pos, min_correlated_pos)
+    }
 
     pub fn deinterleave_old(interleaved: &[i16], output: &mut [Vec<f32>]) {
         let channels = output.len();
@@ -1104,6 +1238,95 @@ mod tests {
             assert_eq!(channel.data.capacity(), capacity);
             assert!(channel.data.capacity() - channel.data.len() >= 4);
         }
+    }
+
+    fn assert_cached_cursor_extrema(stretcher: &SolaStretcher) {
+        let min_correlated = stretcher
+            .state
+            .iter()
+            .map(|channel| channel.correlated_pos)
+            .min()
+            .unwrap();
+        let max_correlated = stretcher
+            .state
+            .iter()
+            .map(|channel| channel.correlated_pos)
+            .max()
+            .unwrap();
+        let max_last = stretcher
+            .state
+            .iter()
+            .map(|channel| channel.last_correlated_pos)
+            .max()
+            .unwrap();
+        assert_eq!(stretcher.min_correlated_pos, min_correlated);
+        assert_eq!(stretcher.max_correlated_pos, max_correlated);
+        assert_eq!(stretcher.max_last_correlated_pos, max_last);
+    }
+
+    #[test]
+    fn cached_cursor_extrema_follow_incremental_streaming() {
+        for channels in [1usize, 2, 6] {
+            let input = (0..12_000 * channels)
+                .map(|sample| sample.wrapping_mul(25_173) as i16)
+                .collect::<Vec<_>>();
+            let mut stretcher = SolaStretcher::new(channels, 48_000);
+            stretcher.set_speed_ratio(1.25);
+            let mut output = (0..channels).map(|_| Vec::new()).collect::<Vec<_>>();
+
+            for packet in input.chunks(257 * channels) {
+                stretcher.push_interleaved_i16(packet);
+                assert_cached_cursor_extrema(&stretcher);
+                stretcher.pull(&mut output, 333);
+                assert_cached_cursor_extrema(&stretcher);
+            }
+            stretcher.finish();
+            while stretcher.pull(&mut output, 333) != 0 {
+                assert_cached_cursor_extrema(&stretcher);
+            }
+            assert_cached_cursor_extrema(&stretcher);
+            stretcher.reset();
+            assert_cached_cursor_extrema(&stretcher);
+        }
+    }
+
+    #[test]
+    fn cached_cursor_queries_match_legacy_channel_scans() {
+        let positions = [(120usize, 115usize), (137, 142), (91, 99), (131, 127)];
+        let max_correlated = positions
+            .iter()
+            .map(|&(correlated, _)| correlated)
+            .max()
+            .unwrap();
+        let min_correlated = positions
+            .iter()
+            .map(|&(correlated, _)| correlated)
+            .min()
+            .unwrap();
+        let max_last = positions.iter().map(|&(_, last)| last).max().unwrap();
+
+        for pos in [0usize, 71, 1_439, 1_500] {
+            for data_avail in [0usize, 256, 2_048] {
+                assert_eq!(
+                    bench_support::cursor_avail_new(
+                        1_440,
+                        pos,
+                        data_avail,
+                        max_correlated,
+                        max_last,
+                    ),
+                    bench_support::cursor_avail_old(1_440, pos, data_avail, &positions)
+                );
+            }
+            assert_eq!(
+                bench_support::max_needed_new(180, 360, 1_440, max_correlated, pos),
+                bench_support::max_needed_old(180, 360, 1_440, pos, &positions)
+            );
+        }
+        assert_eq!(
+            bench_support::earliest_new(180, min_correlated),
+            bench_support::earliest_old(180, &positions)
+        );
     }
 
     #[test]

@@ -17,6 +17,7 @@ const DEINTERLEAVE_RUNS: usize = 5_000;
 const CROSSFADE_RUNS: usize = 10_000;
 const CORRELATION_RUNS: usize = 20_000;
 const CAPACITY_RUNS: usize = 5_000;
+const CURSOR_QUERY_RUNS: usize = 2_000_000;
 const DEAD_PREFIX: usize = 4_096;
 const LIVE_FRAMES: usize = 3_072;
 const APPEND_FRAMES: usize = 1_024;
@@ -247,6 +248,84 @@ fn output_checksum(output: &[Vec<f32>]) -> u64 {
 }
 
 fn main() {
+    let positions = [(120usize, 115usize), (137, 142)];
+    let max_correlated = positions
+        .iter()
+        .map(|&(correlated, _)| correlated)
+        .max()
+        .unwrap();
+    let min_correlated = positions
+        .iter()
+        .map(|&(correlated, _)| correlated)
+        .min()
+        .unwrap();
+    let max_last = positions.iter().map(|&(_, last)| last).max().unwrap();
+
+    let cursor_avail_old = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::cursor_avail_old(
+            black_box(WINDOW_FRAMES),
+            black_box(71),
+            black_box(2_048),
+            black_box(&positions),
+        ) as u64
+    });
+    let cursor_avail_new = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::cursor_avail_new(
+            black_box(WINDOW_FRAMES),
+            black_box(71),
+            black_box(2_048),
+            black_box(max_correlated),
+            black_box(max_last),
+        ) as u64
+    });
+    print_pair(
+        "cached SOLA readable-window bound",
+        "query",
+        CURSOR_QUERY_RUNS,
+        &cursor_avail_old,
+        &cursor_avail_new,
+    );
+
+    let max_needed_old = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::max_needed_old(
+            black_box(180),
+            black_box(360),
+            black_box(WINDOW_FRAMES),
+            black_box(71),
+            black_box(&positions),
+        ) as u64
+    });
+    let max_needed_new = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::max_needed_new(
+            black_box(180),
+            black_box(360),
+            black_box(WINDOW_FRAMES),
+            black_box(max_correlated),
+            black_box(71),
+        ) as u64
+    });
+    print_pair(
+        "cached SOLA source-sufficiency bound",
+        "query",
+        CURSOR_QUERY_RUNS,
+        &max_needed_old,
+        &max_needed_new,
+    );
+
+    let earliest_old = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::earliest_old(black_box(180), black_box(&positions)) as u64
+    });
+    let earliest_new = measure(CURSOR_QUERY_RUNS, 1, || {
+        sola_bench_support::earliest_new(black_box(180), black_box(min_correlated)) as u64
+    });
+    print_pair(
+        "cached SOLA erase-front boundary",
+        "query",
+        CURSOR_QUERY_RUNS,
+        &earliest_old,
+        &earliest_new,
+    );
+
     let interleaved = (0..FRAMES * CHANNELS)
         .map(|index| index.wrapping_mul(25_173) as i16)
         .collect::<Vec<_>>();
