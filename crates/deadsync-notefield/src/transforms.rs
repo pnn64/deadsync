@@ -605,18 +605,28 @@ pub(crate) fn gameplay_visual_effect_params(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn fill_gameplay_lane_effects(
     visual: &VisualEffects,
     arrow_effect_time_s: f32,
     num_cols: usize,
     effect_params: &mut [VisualEffectParams],
     lane_offsets: &mut [f32],
+    tipsy_offsets: &mut [f32],
+    move_y_offsets: &mut [f32],
 ) {
-    let columns = num_cols.min(effect_params.len()).min(lane_offsets.len());
+    let columns = num_cols
+        .min(effect_params.len())
+        .min(lane_offsets.len())
+        .min(tipsy_offsets.len())
+        .min(move_y_offsets.len());
     for local_col in 0..columns {
         effect_params[local_col] = gameplay_visual_effect_params(visual, local_col);
-        lane_offsets[local_col] = tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy)
-            + move_col_extra(&visual.move_y_cols, local_col);
+        let tipsy = tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy);
+        let move_y = move_col_extra(&visual.move_y_cols, local_col);
+        lane_offsets[local_col] = tipsy + move_y;
+        tipsy_offsets[local_col] = tipsy;
+        move_y_offsets[local_col] = move_y;
     }
 }
 

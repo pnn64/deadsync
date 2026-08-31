@@ -55,6 +55,9 @@ pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use measure_lines::edit_bar_geometry_bench_support;
 pub use mini_indicator::{
     BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
     MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,
@@ -65,6 +68,9 @@ pub use mini_indicator::{
     zmod_static_combo_color, zmod_stream_prog_completion_for_beat, zmod_target_score_missed,
 };
 pub use notes::ScrollTravel;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use notes::note_projection_bench_support;
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
@@ -1563,7 +1569,17 @@ mod tests {
 
         let mut params = [VisualEffectParams::default(); 4];
         let mut lane_offsets = [0.0; 4];
-        fill_gameplay_lane_effects(&visual, 1.25, 4, &mut params, &mut lane_offsets);
+        let mut tipsy_offsets = [0.0; 4];
+        let mut move_y_offsets = [0.0; 4];
+        fill_gameplay_lane_effects(
+            &visual,
+            1.25,
+            4,
+            &mut params,
+            &mut lane_offsets,
+            &mut tipsy_offsets,
+            &mut move_y_offsets,
+        );
         for local_col in 0..4 {
             let expected_params = gameplay_visual_effect_params(&visual, local_col);
             assert_eq!(
@@ -1581,6 +1597,14 @@ mod tests {
             let expected_offset = tipsy_y_extra(local_col, 1.25, visual.tipsy)
                 + move_col_extra(&visual.move_y_cols, local_col);
             assert_eq!(lane_offsets[local_col].to_bits(), expected_offset.to_bits());
+            assert_eq!(
+                tipsy_offsets[local_col].to_bits(),
+                tipsy_y_extra(local_col, 1.25, visual.tipsy).to_bits(),
+            );
+            assert_eq!(
+                move_y_offsets[local_col].to_bits(),
+                move_col_extra(&visual.move_y_cols, local_col).to_bits(),
+            );
         }
     }
 

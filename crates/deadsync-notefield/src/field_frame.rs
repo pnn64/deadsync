@@ -237,12 +237,16 @@ fn compose_field_contents<S, F>(
     let travel = &note_inputs.travel;
     let mut lane_effect_params = [VisualEffectParams::default(); deadsync_core::input::MAX_COLS];
     let mut lane_offsets = [0.0; deadsync_core::input::MAX_COLS];
+    let mut lane_tipsy_offsets = [0.0; deadsync_core::input::MAX_COLS];
+    let mut lane_move_y_offsets = [0.0; deadsync_core::input::MAX_COLS];
     fill_gameplay_lane_effects(
         &visual,
         travel.arrow_effect_time_s(),
         num_cols,
         &mut lane_effect_params,
         &mut lane_offsets,
+        &mut lane_tipsy_offsets,
+        &mut lane_move_y_offsets,
     );
     let mut lane_transform_caches =
         [lane_note_transform_cache(current_beat, VisualEffectParams::default());
@@ -426,11 +430,11 @@ fn compose_field_contents<S, F>(
         let lane_offset = lane_offsets[local_col];
         let lane_frame = *hold_lane_frames[local_col].get_or_insert_with(|| {
             hold_lane_frame(
-                local_col,
                 lane_receptor_y,
                 lane_center_x_from_adjusted_travel(local_col, 0.0),
                 target_arrow_px * column_zoom,
-                travel.arrow_effect_time_s(),
+                lane_move_y_offsets[local_col],
+                lane_tipsy_offsets[local_col],
                 visual,
                 lane_effect_params[local_col],
                 lane_transform_caches[local_col],
@@ -454,7 +458,18 @@ fn compose_field_contents<S, F>(
             request.chart.cached_note_time_ns(note_index, true),
             request.chart.cached_displayed_beat(note_index, true),
         );
-        let head_adjusted_travel = travel.adjusted_note(head_travel_offset, head_beat, local_col);
+        let head_note_row = if is_head_dynamic {
+            deadsync_core::timing::beat_to_note_row(head_beat)
+        } else {
+            request
+                .chart
+                .note_itg_rows
+                .get(note_index)
+                .copied()
+                .unwrap_or_else(|| deadsync_core::timing::beat_to_note_row(head_beat))
+        };
+        let head_adjusted_travel =
+            travel.adjusted_note_for_row(head_travel_offset, head_note_row, local_col);
         let tail_adjusted_travel =
             travel.adjusted_note(tail_travel_offset, hold.end_beat, local_col);
         let head_y = dir.mul_add(head_adjusted_travel, lane_receptor_y) + lane_offset;
@@ -900,14 +915,20 @@ fn compose_visible_notes<S, F>(
                         return;
                     }
                 }
-                let adjusted_travel = travel.adjusted_note(
+                let note_row = request
+                    .chart
+                    .note_itg_rows
+                    .get(note_index)
+                    .copied()
+                    .unwrap_or_else(|| deadsync_core::timing::beat_to_note_row(note.beat));
+                let adjusted_travel = travel.adjusted_note_for_row(
                     travel.raw_note_cached(
                         note,
                         false,
                         request.chart.cached_note_time_ns(note_index, false),
                         request.chart.cached_displayed_beat(note_index, false),
                     ),
-                    note.beat,
+                    note_row,
                     local_col,
                 );
                 if adjusted_travel < -request.geometry.draw_distance_after_targets
@@ -1484,19 +1505,17 @@ fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
 #[allow(clippy::too_many_arguments)]
 #[inline(always)]
 fn hold_lane_frame(
-    local_col: usize,
     receptor_y: f32,
     receptor_center_x: f32,
     target_arrow_px: f32,
-    arrow_effect_time_s: f32,
+    move_y_offset: f32,
+    tipsy_y_offset: f32,
     visual: VisualEffects,
     effect_params: VisualEffectParams,
     transform_cache: LaneNoteTransformCache,
 ) -> HoldLaneFrame {
     HoldLaneFrame {
-        receptor_draw_y: receptor_y
-            + crate::move_col_extra(&visual.move_y_cols, local_col)
-            + crate::tipsy_y_extra(local_col, arrow_effect_time_s, visual.tipsy),
+        receptor_draw_y: receptor_y + move_y_offset + tipsy_y_offset,
         receptor_center_x,
         target_arrow_px: target_arrow_px * visual_arrow_effect_zoom_cached(0.0, transform_cache),
         use_legacy_sprites: visual_use_legacy_hold_sprites(
@@ -1506,6 +1525,40 @@ fn hold_lane_frame(
             visual.beat,
             visual.pulse_outer,
         ),
+    }
+}
+
+#[cfg(test)]
+mod hold_lane_frame_cache_tests {
+    use super::*;
+
+    #[test]
+    fn prepared_lane_offset_preserves_hold_receptor_position() {
+        let local_col = 3;
+        let elapsed = 2.25;
+        let mut visual = VisualEffects {
+            tipsy: 0.75,
+            ..VisualEffects::default()
+        };
+        visual.move_y_cols[local_col] = -0.2;
+        let move_y_offset = crate::move_col_extra(&visual.move_y_cols, local_col);
+        let tipsy_y_offset = crate::tipsy_y_extra(local_col, elapsed, visual.tipsy);
+        let effect_params = VisualEffectParams::default();
+        let frame = hold_lane_frame(
+            240.0,
+            320.0,
+            64.0,
+            move_y_offset,
+            tipsy_y_offset,
+            visual,
+            effect_params,
+            lane_note_transform_cache(0.0, effect_params),
+        );
+
+        assert_eq!(
+            frame.receptor_draw_y.to_bits(),
+            (240.0 + move_y_offset + tipsy_y_offset).to_bits(),
+        );
     }
 }
 

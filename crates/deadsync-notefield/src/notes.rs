@@ -753,6 +753,16 @@ impl ScrollTravel<'_> {
 
     #[inline(always)]
     pub(crate) fn adjusted_note(&self, raw_travel: f32, beat: f32, local_col: usize) -> f32 {
+        self.adjusted_note_for_row(raw_travel, beat_to_note_row(beat), local_col)
+    }
+
+    #[inline(always)]
+    pub(crate) fn adjusted_note_for_row(
+        &self,
+        raw_travel: f32,
+        note_row: i32,
+        local_col: usize,
+    ) -> f32 {
         let adjusted = self.adjusted(raw_travel);
         if raw_travel < 0.0 || self.request.random_speed <= 0.0 {
             return adjusted;
@@ -760,7 +770,7 @@ impl ScrollTravel<'_> {
         adjusted
             * random_speed_mult(
                 self.request.stage_seed,
-                beat_to_note_row(beat),
+                note_row,
                 local_col,
                 self.request.random_speed,
             )
@@ -1292,6 +1302,91 @@ pub(crate) const fn mine_hides_after_resolution(mine_result: Option<MineResult>)
 }
 
 use crate::style::MAX_NOTES_AFTER;
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod note_projection_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+    use deadsync_core::input::MAX_COLS;
+
+    #[must_use]
+    pub fn random_speed_row_old(evaluations: usize) -> u64 {
+        let amount = black_box(0.65);
+        let beats: [f32; 64] = std::array::from_fn(|index| (index as i32 * 3 - 96) as f32 / 48.0);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let beat = black_box(beats[index & 63]);
+            let value = random_speed_mult(
+                0x1234_5678,
+                beat_to_note_row(beat),
+                index % MAX_COLS,
+                amount,
+            );
+            checksum = checksum
+                .wrapping_add(u64::from(value.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn random_speed_row_new(evaluations: usize) -> u64 {
+        let amount = black_box(0.65);
+        let rows: [i32; 64] = std::array::from_fn(|index| index as i32 * 3 - 96);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let value = random_speed_mult(0x1234_5678, rows[index & 63], index % MAX_COLS, amount);
+            checksum = checksum
+                .wrapping_add(u64::from(value.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn lane_offset_old(evaluations: usize) -> u64 {
+        let move_y = black_box([
+            0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, 0.8, -0.9, 1.0, -1.1, 1.2, -1.3, 1.4, -1.5,
+        ]);
+        let elapsed = black_box(2.25);
+        let tipsy = black_box(0.75);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let local_col = index % MAX_COLS;
+            let offset = 240.0
+                + move_col_extra(&move_y, local_col)
+                + tipsy_y_extra(local_col, elapsed, tipsy);
+            checksum = checksum
+                .wrapping_add(u64::from(offset.to_bits()))
+                .rotate_left(13);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn lane_offset_new(evaluations: usize) -> u64 {
+        let move_y = black_box([
+            0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, 0.8, -0.9, 1.0, -1.1, 1.2, -1.3, 1.4, -1.5,
+        ]);
+        let elapsed = black_box(2.25);
+        let tipsy = black_box(0.75);
+        let tipsy_offsets: [f32; MAX_COLS] =
+            std::array::from_fn(|local_col| tipsy_y_extra(local_col, elapsed, tipsy));
+        let move_y_offsets: [f32; MAX_COLS] =
+            std::array::from_fn(|local_col| move_col_extra(&move_y, local_col));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let local_col = index % MAX_COLS;
+            let offset = 240.0 + move_y_offsets[local_col] + tipsy_offsets[local_col];
+            checksum = checksum
+                .wrapping_add(u64::from(offset.to_bits()))
+                .rotate_left(13);
+        }
+        checksum
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -2107,6 +2202,13 @@ mod tests {
         let base = travel.adjusted(raw);
         let first = travel.adjusted_note(raw, 5.0, 0);
         let second = travel.adjusted_note(raw, 5.0, 1);
+
+        assert_eq!(
+            travel
+                .adjusted_note_for_row(raw, beat_to_note_row(5.0), 0)
+                .to_bits(),
+            first.to_bits(),
+        );
 
         assert!((base..=base * 1.5).contains(&first));
         assert!((base..=base * 1.5).contains(&second));

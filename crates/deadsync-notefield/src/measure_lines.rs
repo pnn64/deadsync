@@ -136,10 +136,37 @@ fn measure_index_before(segments: &[TimeSignatureSegment], index: usize) -> i64 
 
 /// Stack-only cursor for a monotonic or seeking sequence of edit-bar rows.
 #[derive(Clone, Copy)]
+struct EditBeatBarSegmentCache {
+    start_row: i32,
+    step_rows: i32,
+    measure_frequency: i32,
+}
+
+fn edit_beat_bar_segment_cache(
+    segments: &[TimeSignatureSegment],
+    index: usize,
+) -> EditBeatBarSegmentCache {
+    let sig = sig_at(segments, index);
+    EditBeatBarSegmentCache {
+        start_row: beat_to_note_row(sig.beat),
+        step_rows: bar_step_rows(sig),
+        measure_frequency: measure_frequency(sig),
+    }
+}
+
+fn next_edit_beat_bar_start_row(segments: &[TimeSignatureSegment], index: usize) -> i32 {
+    segments
+        .get(index + 1)
+        .map_or(i32::MAX, |sig| beat_to_note_row(sig.beat))
+}
+
+#[derive(Clone, Copy)]
 pub struct EditBeatBarCursor<'a> {
     segments: &'a [TimeSignatureSegment],
     index: usize,
     measure_index_before: i64,
+    segment: EditBeatBarSegmentCache,
+    next_start_row: i32,
 }
 
 impl<'a> EditBeatBarCursor<'a> {
@@ -150,32 +177,31 @@ impl<'a> EditBeatBarCursor<'a> {
             segments,
             index,
             measure_index_before: measure_index_before(segments, index),
+            segment: edit_beat_bar_segment_cache(segments, index),
+            next_start_row: next_edit_beat_bar_start_row(segments, index),
         }
     }
 
     fn advance_to(&mut self, row: i32) {
-        while self.index + 1 < self.segments.len()
-            && row >= beat_to_note_row(self.segments[self.index + 1].beat)
-        {
-            let sig = sig_at(self.segments, self.index);
-            let next_sig = sig_at(self.segments, self.index + 1);
+        while self.index + 1 < self.segments.len() && row >= self.next_start_row {
             self.measure_index_before += bars_in_segment(
-                beat_to_note_row(sig.beat),
-                beat_to_note_row(next_sig.beat),
-                sig,
+                self.segment.start_row,
+                self.next_start_row,
+                sig_at(self.segments, self.index),
             );
             self.index += 1;
+            self.segment = edit_beat_bar_segment_cache(self.segments, self.index);
+            self.next_start_row = next_edit_beat_bar_start_row(self.segments, self.index);
         }
-        while self.index > 0 && row < beat_to_note_row(self.segments[self.index].beat) {
+        while self.index > 0 && row < self.segment.start_row {
             let previous = self.index - 1;
             let sig = sig_at(self.segments, previous);
-            let next_sig = sig_at(self.segments, self.index);
-            self.measure_index_before -= bars_in_segment(
-                beat_to_note_row(sig.beat),
-                beat_to_note_row(next_sig.beat),
-                sig,
-            );
+            let previous_segment = edit_beat_bar_segment_cache(self.segments, previous);
+            self.measure_index_before -=
+                bars_in_segment(previous_segment.start_row, self.segment.start_row, sig);
             self.index = previous;
+            self.segment = previous_segment;
+            self.next_start_row = next_edit_beat_bar_start_row(self.segments, self.index);
         }
     }
 
@@ -184,7 +210,7 @@ impl<'a> EditBeatBarCursor<'a> {
             return None;
         }
         self.advance_to(row);
-        edit_beat_bar_info(row, self.segments, self.index, self.measure_index_before)
+        edit_beat_bar_info_cached(row, self.segment, self.measure_index_before)
     }
 }
 
@@ -221,26 +247,37 @@ pub fn edit_beat_bar_info_for_row(
     edit_beat_bar_info(row, segments, idx, measure_index_before(segments, idx))
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn edit_beat_bar_info(
     row: i32,
     segments: &[TimeSignatureSegment],
     idx: usize,
     measure_index_before: i64,
 ) -> Option<EditBeatBarInfo> {
-    let sig = sig_at(segments, idx);
-    let start_row = beat_to_note_row(sig.beat);
-    if row < start_row {
+    edit_beat_bar_info_cached(
+        row,
+        edit_beat_bar_segment_cache(segments, idx),
+        measure_index_before,
+    )
+}
+
+fn edit_beat_bar_info_cached(
+    row: i32,
+    segment: EditBeatBarSegmentCache,
+    measure_index_before: i64,
+) -> Option<EditBeatBarInfo> {
+    if row < segment.start_row {
         return None;
     }
 
-    let rel = row - start_row;
-    let step = bar_step_rows(sig);
+    let rel = row - segment.start_row;
+    let step = segment.step_rows;
     if step <= 0 || rel % step != 0 {
         return None;
     }
 
     let bars_drawn = rel / step;
-    let measure_frequency = measure_frequency(sig);
+    let measure_frequency = segment.measure_frequency;
     let is_measure = bars_drawn % measure_frequency == 0;
     let frame = if is_measure {
         0
@@ -739,6 +776,102 @@ pub(crate) fn compose_measure_lines(
         for group in groups.into_iter().flatten() {
             append_group_cues(draws, &request, group, &ranges);
         }
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod edit_bar_geometry_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    struct PreviousEditBeatBarCursor<'a> {
+        segments: &'a [TimeSignatureSegment],
+        index: usize,
+        measure_index_before: i64,
+    }
+
+    impl<'a> PreviousEditBeatBarCursor<'a> {
+        fn new(row: i32, segments: &'a [TimeSignatureSegment]) -> Self {
+            let index = sig_index_at_row(segments, row);
+            Self {
+                segments,
+                index,
+                measure_index_before: measure_index_before(segments, index),
+            }
+        }
+
+        fn info_for_row(&mut self, row: i32) -> Option<EditBeatBarInfo> {
+            if row < 0 {
+                return None;
+            }
+            while self.index + 1 < self.segments.len()
+                && row >= beat_to_note_row(self.segments[self.index + 1].beat)
+            {
+                let sig = sig_at(self.segments, self.index);
+                let next_sig = sig_at(self.segments, self.index + 1);
+                self.measure_index_before += bars_in_segment(
+                    beat_to_note_row(sig.beat),
+                    beat_to_note_row(next_sig.beat),
+                    sig,
+                );
+                self.index += 1;
+            }
+            while self.index > 0 && row < beat_to_note_row(self.segments[self.index].beat) {
+                let previous = self.index - 1;
+                let sig = sig_at(self.segments, previous);
+                let next_sig = sig_at(self.segments, self.index);
+                self.measure_index_before -= bars_in_segment(
+                    beat_to_note_row(sig.beat),
+                    beat_to_note_row(next_sig.beat),
+                    sig,
+                );
+                self.index = previous;
+            }
+            edit_beat_bar_info(row, self.segments, self.index, self.measure_index_before)
+        }
+    }
+
+    fn signatures() -> [TimeSignatureSegment; 8] {
+        std::array::from_fn(|index| TimeSignatureSegment {
+            beat: index as f32 * 32.0,
+            numerator: [4, 3, 7, 5][index & 3],
+            denominator: [4, 8, 16, 4][index & 3],
+        })
+    }
+
+    fn checksum(info: Option<EditBeatBarInfo>) -> u64 {
+        info.map_or(u64::MAX, |info| {
+            u64::from(info.frame) ^ (info.measure_index.unwrap_or(i64::MIN) as u64).rotate_left(17)
+        })
+    }
+
+    #[must_use]
+    pub fn edit_bar_geometry_old(evaluations: usize) -> u64 {
+        let signatures = black_box(signatures());
+        let mut cursor = PreviousEditBeatBarCursor::new(0, &signatures);
+        let mut out = 0_u64;
+        for index in 0..evaluations {
+            out = out
+                .wrapping_add(checksum(cursor.info_for_row(black_box(index as i32 * 3))))
+                .rotate_left(7);
+        }
+        out
+    }
+
+    #[must_use]
+    pub fn edit_bar_geometry_new(evaluations: usize) -> u64 {
+        let signatures = black_box(signatures());
+        let mut cursor = EditBeatBarCursor::new(0, &signatures);
+        let mut out = 0_u64;
+        for index in 0..evaluations {
+            out = out
+                .wrapping_add(checksum(cursor.info_for_row(black_box(index as i32 * 3))))
+                .rotate_left(7);
+        }
+        out
     }
 }
 

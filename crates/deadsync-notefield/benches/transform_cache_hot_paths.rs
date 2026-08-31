@@ -1,5 +1,11 @@
+use deadsync_notefield::edit_bar_geometry_bench_support::{
+    edit_bar_geometry_new, edit_bar_geometry_old,
+};
 use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
+};
+use deadsync_notefield::note_projection_bench_support::{
+    lane_offset_new, lane_offset_old, random_speed_row_new, random_speed_row_old,
 };
 use deadsync_notefield::transform_cache_bench_support::{
     appearance_new, appearance_old, expand_new, expand_old, pulse_new, pulse_old, rotation_new,
@@ -182,16 +188,6 @@ fn run(title: &str, old_operation: fn(usize) -> u64, new_operation: fn(usize) ->
     assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
     assert_zero_alloc(&old);
     assert_zero_alloc(&new);
-    assert!(
-        new.median_ns < old.median_ns,
-        "{title} median latency did not improve"
-    );
-    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
-        assert!(
-            new_cycles < old_cycles,
-            "{title} median CPU cycles did not improve"
-        );
-    }
 
     println!("\n{title}");
     print_result("old", &old);
@@ -211,6 +207,17 @@ fn run(title: &str, old_operation: fn(usize) -> u64, new_operation: fn(usize) ->
             new.allocated.churn_bytes() as f64,
         ),
     );
+
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title} median latency did not improve"
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{title} median CPU cycles did not improve"
+        );
+    }
 }
 
 fn print_result(label: &str, result: &BenchResult) {
@@ -266,6 +273,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield edit-bar segment geometry",
+        edit_bar_geometry_old,
+        edit_bar_geometry_new,
+    );
+    run(
+        "notefield RandomSpeed preindexed rows",
+        random_speed_row_old,
+        random_speed_row_new,
+    );
+    run(
+        "notefield hold lane offset reuse",
+        lane_offset_old,
+        lane_offset_new,
+    );
     run("notefield Expand frame scale", expand_old, expand_new);
     run(
         "notefield appearance fade evaluation",
