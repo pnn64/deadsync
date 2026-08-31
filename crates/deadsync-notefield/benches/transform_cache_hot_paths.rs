@@ -2,7 +2,8 @@ use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
 };
 use deadsync_notefield::transform_cache_bench_support::{
-    appearance_new, appearance_old, expand_new, expand_old, tornado_new, tornado_old,
+    appearance_new, appearance_old, expand_new, expand_old, pulse_new, pulse_old, rotation_new,
+    rotation_old, tornado_new, tornado_old,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -267,7 +268,7 @@ fn cycle_counter() -> Option<u64> {
 fn main() {
     run("notefield Expand frame scale", expand_old, expand_new);
     run(
-        "notefield appearance frame geometry",
+        "notefield appearance fade evaluation",
         appearance_old,
         appearance_new,
     );
@@ -275,4 +276,10 @@ fn main() {
     run("notefield Tiny frame scale", tiny_old, tiny_new);
     run("notefield Bumpy frame geometry", bumpy_old, bumpy_new);
     run("notefield Move column offsets", move_old, move_new);
+    run("notefield Pulse frame geometry", pulse_old, pulse_new);
+    run(
+        "notefield dynamic rotation base",
+        rotation_old,
+        rotation_new,
+    );
 }

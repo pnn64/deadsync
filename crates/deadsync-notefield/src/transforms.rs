@@ -47,19 +47,36 @@ pub(crate) struct VisualEffectParams {
 pub(crate) struct LaneNoteTransformCache {
     tiny_zoom: f32,
     pulse_active: bool,
+    pulse_inner_zoom: f32,
+    pulse_outer_scale: f32,
+    pulse_offset: f32,
+    pulse_divisor: f32,
     identity_rotation: bool,
     static_rotation_z: Option<f32>,
+    rotation_base_z: f32,
+    song_beat: f32,
+    dizzy: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct NoteAppearanceCache {
     identity: bool,
     center_line: f32,
-    hidden_end: f32,
+    hidden_active: bool,
+    hidden: f32,
     hidden_start: f32,
-    sudden_end: f32,
+    hidden_denom: f32,
+    hidden_degenerate: bool,
+    sudden_active: bool,
+    sudden: f32,
     sudden_start: f32,
+    sudden_denom: f32,
+    sudden_degenerate: bool,
+    stealth_active: bool,
+    stealth: f32,
     blink_adjust: f32,
+    random_vanish_active: bool,
+    random_vanish: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -438,10 +455,28 @@ pub(crate) fn lane_note_transform_cache(
     song_beat: f32,
     params: VisualEffectParams,
 ) -> LaneNoteTransformCache {
+    let pulse_active = visual_pulse_active(params);
+    let pulse_outer = if params.pulse_outer.is_finite() {
+        params.pulse_outer
+    } else {
+        0.0
+    };
+    let pulse_offset = if params.pulse_offset.is_finite() {
+        params.pulse_offset
+    } else {
+        0.0
+    };
+    let pulse_period = if params.pulse_period.is_finite() {
+        params.pulse_period
+    } else {
+        0.0
+    };
     let identity_rotation = params.rotate_z == 0.0
         && params.confusion == 0.0
         && params.confusion_offset == 0.0
         && params.dizzy == 0.0;
+    let rotation_base_z =
+        itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params);
     let static_rotation_z = if !identity_rotation && params.dizzy == 0.0 && song_beat.is_finite() {
         let rotation = visual_note_rotation_z_full(song_beat, song_beat, params);
         (rotation.is_finite() && rotation != 0.0).then_some(rotation)
@@ -450,19 +485,25 @@ pub(crate) fn lane_note_transform_cache(
     };
     LaneNoteTransformCache {
         tiny_zoom: visual_tiny_zoom(params),
-        pulse_active: visual_pulse_active(params),
+        pulse_active,
+        pulse_inner_zoom: visual_pulse_inner_zoom(params),
+        pulse_outer_scale: pulse_outer * 0.5,
+        pulse_offset,
+        pulse_divisor: mod_divisor(0.4 * ARROW_EFFECT_PIXEL_SIZE * (1.0 + pulse_period)),
         identity_rotation,
         static_rotation_z,
+        rotation_base_z,
+        song_beat,
+        dizzy: params.dizzy,
     }
 }
 
-pub(crate) fn visual_arrow_effect_zoom_cached(
-    y: f32,
-    params: VisualEffectParams,
-    cache: LaneNoteTransformCache,
-) -> f32 {
+pub(crate) fn visual_arrow_effect_zoom_cached(y: f32, cache: LaneNoteTransformCache) -> f32 {
     if cache.pulse_active {
-        cache.tiny_zoom * visual_pulse_zoom_for_y(y, params)
+        let pulse = (100.0f32.mul_add(cache.pulse_offset, y) / cache.pulse_divisor)
+            .sin()
+            .mul_add(cache.pulse_outer_scale, cache.pulse_inner_zoom);
+        cache.tiny_zoom * pulse
     } else {
         cache.tiny_zoom
     }
@@ -484,6 +525,7 @@ pub(crate) fn visual_dizzy_rotation_deg(
         * (-180.0 / std::f32::consts::PI)
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn visual_note_rotation_z(
     note_beat: f32,
     song_beat: f32,
@@ -500,13 +542,7 @@ pub(crate) fn visual_note_rotation_z(
     visual_note_rotation_z_full(note_beat, song_beat, params)
 }
 
-pub(crate) fn visual_note_rotation_z_cached(
-    note_beat: f32,
-    song_beat: f32,
-    is_hold_head: bool,
-    params: VisualEffectParams,
-    cache: LaneNoteTransformCache,
-) -> f32 {
+pub(crate) fn visual_note_rotation_z_cached(note_beat: f32, cache: LaneNoteTransformCache) -> f32 {
     if cache.identity_rotation {
         return 0.0;
     }
@@ -515,7 +551,9 @@ pub(crate) fn visual_note_rotation_z_cached(
     {
         return rotation;
     }
-    visual_note_rotation_z(note_beat, song_beat, is_hold_head, params)
+    cache.rotation_base_z
+        + ((note_beat - cache.song_beat) * cache.dizzy) % std::f32::consts::TAU
+            * (-180.0 / std::f32::consts::PI)
 }
 
 #[inline(always)]
@@ -669,7 +707,7 @@ mod common_note_transform_tests {
     }
 
     #[test]
-    fn cached_appearance_pair_matches_separate_alpha_and_glow_evaluation() {
+    fn cached_appearance_fades_match_reference_alpha_and_glow_behavior() {
         let cases = [
             NoteAlphaParams::default(),
             NoteAlphaParams {
@@ -690,7 +728,7 @@ mod common_note_transform_tests {
         for params in cases {
             let cache = note_appearance_cache(3.25, 0.2, params);
             for y in [-1.0, 0.0, 64.0, 160.0, 320.0, f32::NAN] {
-                let cached = appearance_note_alpha_glow_cached(y, params, cache);
+                let cached = appearance_note_alpha_glow_cached(y, &cache);
                 assert_eq!(
                     cached.0.to_bits(),
                     appearance_note_actor_alpha(y, 3.25, 0.2, params).to_bits(),
@@ -869,7 +907,7 @@ mod common_note_transform_tests {
     }
 
     #[test]
-    fn lane_transform_cache_matches_zoom_and_rotation_formulas() {
+    fn cached_pulse_geometry_matches_per_note_reference_math() {
         let song_beat = 6.25;
         let cases = [
             VisualEffectParams::default(),
@@ -889,19 +927,53 @@ mod common_note_transform_tests {
                 rotate_z: 15.0,
                 ..VisualEffectParams::default()
             },
+            VisualEffectParams {
+                pulse_inner: f32::NAN,
+                pulse_outer: 0.35,
+                pulse_offset: f32::INFINITY,
+                pulse_period: f32::NAN,
+                ..VisualEffectParams::default()
+            },
         ];
         for params in cases {
             let cache = lane_note_transform_cache(song_beat, params);
-            for y in [-128.0, 0.0, 256.0, 640.0] {
+            for y in [-128.0, 0.0, 256.0, 640.0, f32::NAN] {
                 assert_eq!(
-                    visual_arrow_effect_zoom_cached(y, params, cache).to_bits(),
+                    visual_arrow_effect_zoom_cached(y, cache).to_bits(),
                     visual_arrow_effect_zoom(y, params).to_bits(),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn cached_dynamic_rotation_matches_per_note_reference_math() {
+        let song_beat = 6.25;
+        let cases = [
+            VisualEffectParams::default(),
+            VisualEffectParams {
+                confusion: 0.2,
+                confusion_offset: 0.4,
+                rotate_z: 15.0,
+                ..VisualEffectParams::default()
+            },
+            VisualEffectParams {
+                confusion: 0.2,
+                confusion_offset: -0.1,
+                dizzy: 0.5,
+                rotate_z: 15.0,
+                ..VisualEffectParams::default()
+            },
+            VisualEffectParams {
+                confusion: f32::NAN,
+                ..VisualEffectParams::default()
+            },
+        ];
+        for params in cases {
+            let cache = lane_note_transform_cache(song_beat, params);
             for note_beat in [-1.0, 0.0, 6.25, 12.5, f32::INFINITY, f32::NAN] {
                 assert_eq!(
-                    visual_note_rotation_z_cached(note_beat, song_beat, false, params, cache)
-                        .to_bits(),
+                    visual_note_rotation_z_cached(note_beat, cache).to_bits(),
                     visual_note_rotation_z(note_beat, song_beat, false, params).to_bits(),
                 );
             }
@@ -1333,11 +1405,21 @@ pub(crate) fn note_appearance_cache(
         return NoteAppearanceCache {
             identity: true,
             center_line: 0.0,
-            hidden_end: 0.0,
+            hidden_active: false,
+            hidden: 0.0,
             hidden_start: 0.0,
-            sudden_end: 0.0,
+            hidden_denom: 0.0,
+            hidden_degenerate: false,
+            sudden_active: false,
+            sudden: 0.0,
             sudden_start: 0.0,
+            sudden_denom: 0.0,
+            sudden_degenerate: false,
+            stealth_active: false,
+            stealth: 0.0,
             blink_adjust: 0.0,
+            random_vanish_active: false,
+            random_vanish: 0.0,
         };
     }
     let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
@@ -1360,27 +1442,35 @@ pub(crate) fn note_appearance_cache(
     } else {
         0.0
     };
+    let hidden_denom = hidden_end - hidden_start;
+    let sudden_denom = sudden_end - sudden_start;
     NoteAppearanceCache {
         identity: false,
         center_line,
-        hidden_end,
+        hidden_active: params.hidden > f32::EPSILON,
+        hidden: params.hidden,
         hidden_start,
-        sudden_end,
+        hidden_denom,
+        hidden_degenerate: hidden_denom.abs() < 1e-6,
+        sudden_active: params.sudden > f32::EPSILON,
+        sudden: params.sudden,
         sudden_start,
+        sudden_denom,
+        sudden_degenerate: sudden_denom.abs() < 1e-6,
+        stealth_active: params.stealth > f32::EPSILON,
+        stealth: params.stealth,
         blink_adjust,
+        random_vanish_active: params.random_vanish > f32::EPSILON,
+        random_vanish: params.random_vanish,
     }
 }
 
 #[inline(always)]
-pub(crate) fn appearance_note_alpha_glow_cached(
-    y: f32,
-    params: NoteAlphaParams,
-    cache: NoteAppearanceCache,
-) -> (f32, f32) {
+pub(crate) fn appearance_note_alpha_glow_cached(y: f32, cache: &NoteAppearanceCache) -> (f32, f32) {
     if cache.identity || y < 0.0 {
         return (1.0, 0.0);
     }
-    let percent_visible = appearance_note_alpha_from_cache(y, params, cache);
+    let percent_visible = appearance_note_alpha_from_cache(y, cache);
     (
         appearance_note_actor_alpha_from_alpha(percent_visible),
         appearance_note_glow_from_alpha(percent_visible),
@@ -1388,37 +1478,41 @@ pub(crate) fn appearance_note_alpha_glow_cached(
 }
 
 #[inline(always)]
-fn appearance_note_alpha_from_cache(
-    y: f32,
-    params: NoteAlphaParams,
-    cache: NoteAppearanceCache,
-) -> f32 {
+fn appearance_note_alpha_from_cache(y: f32, cache: &NoteAppearanceCache) -> f32 {
     let mut visible_adjust = 0.0;
-    if params.hidden > f32::EPSILON {
-        visible_adjust = params.hidden.mul_add(
-            sm_scale(y, cache.hidden_start, cache.hidden_end, 0.0, -1.0).clamp(-1.0, 0.0),
-            visible_adjust,
-        );
+    if cache.hidden_active {
+        let scaled = if cache.hidden_degenerate {
+            -1.0
+        } else {
+            ((y - cache.hidden_start) / cache.hidden_denom).mul_add(-1.0, 0.0)
+        };
+        visible_adjust = cache
+            .hidden
+            .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
     }
-    if params.sudden > f32::EPSILON {
-        visible_adjust = params.sudden.mul_add(
-            sm_scale(y, cache.sudden_start, cache.sudden_end, -1.0, 0.0).clamp(-1.0, 0.0),
-            visible_adjust,
-        );
+    if cache.sudden_active {
+        let scaled = if cache.sudden_degenerate {
+            0.0
+        } else {
+            ((y - cache.sudden_start) / cache.sudden_denom).mul_add(1.0, -1.0)
+        };
+        visible_adjust = cache
+            .sudden
+            .mul_add(scaled.clamp(-1.0, 0.0), visible_adjust);
     }
-    if params.stealth > f32::EPSILON {
-        visible_adjust -= params.stealth;
+    if cache.stealth_active {
+        visible_adjust -= cache.stealth;
     }
     visible_adjust += cache.blink_adjust;
-    if params.random_vanish > f32::EPSILON {
+    if cache.random_vanish_active {
         let dist = (y - cache.center_line).abs();
-        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * params.random_vanish;
+        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * cache.random_vanish;
     }
     (1.0 + visible_adjust).clamp(0.0, 1.0)
 }
 
 #[inline(always)]
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn appearance_note_alpha_full(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
     let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
@@ -1529,6 +1623,82 @@ pub mod transform_cache_bench_support {
 
     use super::*;
 
+    #[derive(Clone, Copy)]
+    struct PreviousAppearanceCache {
+        center_line: f32,
+        hidden_end: f32,
+        hidden_start: f32,
+        sudden_end: f32,
+        sudden_start: f32,
+        blink_adjust: f32,
+    }
+
+    fn previous_appearance_cache(
+        elapsed: f32,
+        mini: f32,
+        params: NoteAlphaParams,
+    ) -> PreviousAppearanceCache {
+        let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
+        let center_line = CENTER_LINE_Y / zoom;
+        let hidden_sudden = params.hidden * params.sudden;
+        let hidden_end = FADE_DIST_Y
+            .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25), center_line)
+            + center_line * params.hidden_offset;
+        let hidden_start = FADE_DIST_Y
+            .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25), center_line)
+            + center_line * params.hidden_offset;
+        let sudden_end = FADE_DIST_Y
+            .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25), center_line)
+            + center_line * params.sudden_offset;
+        let sudden_start = FADE_DIST_Y
+            .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25), center_line)
+            + center_line * params.sudden_offset;
+        let blink_adjust = if params.blink > f32::EPSILON {
+            let blink = quantize_step((elapsed * 10.0).sin(), BLINK_MOD_FREQUENCY);
+            sm_scale(blink, 0.0, 1.0, -1.0, 0.0)
+        } else {
+            0.0
+        };
+        PreviousAppearanceCache {
+            center_line,
+            hidden_end,
+            hidden_start,
+            sudden_end,
+            sudden_start,
+            blink_adjust,
+        }
+    }
+
+    #[inline(always)]
+    fn previous_appearance_alpha(
+        y: f32,
+        params: NoteAlphaParams,
+        cache: PreviousAppearanceCache,
+    ) -> f32 {
+        let mut visible_adjust = 0.0;
+        if params.hidden > f32::EPSILON {
+            visible_adjust = params.hidden.mul_add(
+                sm_scale(y, cache.hidden_start, cache.hidden_end, 0.0, -1.0).clamp(-1.0, 0.0),
+                visible_adjust,
+            );
+        }
+        if params.sudden > f32::EPSILON {
+            visible_adjust = params.sudden.mul_add(
+                sm_scale(y, cache.sudden_start, cache.sudden_end, -1.0, 0.0).clamp(-1.0, 0.0),
+                visible_adjust,
+            );
+        }
+        if params.stealth > f32::EPSILON {
+            visible_adjust -= params.stealth;
+        }
+        visible_adjust += cache.blink_adjust;
+        if params.random_vanish > f32::EPSILON {
+            let dist = (y - cache.center_line).abs();
+            visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * params.random_vanish;
+        }
+        (1.0 + visible_adjust).clamp(0.0, 1.0)
+    }
+
     #[must_use]
     pub fn expand_old(evaluations: usize) -> u64 {
         let accel = AccelYParams {
@@ -1583,10 +1753,11 @@ pub mod transform_cache_bench_support {
             blink: 0.1,
             random_vanish: 0.3,
         };
+        let cache = previous_appearance_cache(black_box(3.25), black_box(0.2), params);
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let y = black_box((index % 640) as f32 - 32.0);
-            let alpha = appearance_note_alpha_full(y, black_box(3.25), black_box(0.2), params);
+            let alpha = previous_appearance_alpha(y, black_box(params), black_box(cache));
             let actor = appearance_note_actor_alpha_from_alpha(alpha);
             let glow = appearance_note_glow_from_alpha(alpha);
             checksum = checksum
@@ -1612,13 +1783,92 @@ pub mod transform_cache_bench_support {
         let mut checksum = 0_u64;
         for index in 0..evaluations {
             let y = black_box((index % 640) as f32 - 32.0);
-            let alpha = appearance_note_alpha_from_cache(y, params, cache);
+            let alpha = appearance_note_alpha_from_cache(y, &cache);
             let actor = appearance_note_actor_alpha_from_alpha(alpha);
             let glow = appearance_note_glow_from_alpha(alpha);
             checksum = checksum
                 .wrapping_add(u64::from(actor.to_bits()))
                 .rotate_left(11)
                 ^ u64::from(glow.to_bits());
+        }
+        checksum
+    }
+
+    fn pulse_params() -> VisualEffectParams {
+        VisualEffectParams {
+            tiny: 0.25,
+            pulse_inner: 0.2,
+            pulse_outer: 0.65,
+            pulse_offset: -0.15,
+            pulse_period: 0.4,
+            ..VisualEffectParams::default()
+        }
+    }
+
+    #[must_use]
+    pub fn pulse_old(evaluations: usize) -> u64 {
+        let params = pulse_params();
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let zoom = visual_arrow_effect_zoom(y, black_box(params));
+            checksum = checksum
+                .wrapping_add(u64::from(zoom.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn pulse_new(evaluations: usize) -> u64 {
+        let cache = lane_note_transform_cache(black_box(17.25), black_box(pulse_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let zoom = visual_arrow_effect_zoom_cached(y, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(zoom.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    fn rotation_params() -> VisualEffectParams {
+        VisualEffectParams {
+            confusion: 0.35,
+            confusion_offset: -0.2,
+            dizzy: 0.7,
+            rotate_z: 15.0,
+            ..VisualEffectParams::default()
+        }
+    }
+
+    #[must_use]
+    pub fn rotation_old(evaluations: usize) -> u64 {
+        let params = rotation_params();
+        let song_beat = 17.25;
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index % 768) as f32 * 0.125 - 24.0);
+            let rotation =
+                visual_note_rotation_z(note_beat, black_box(song_beat), false, black_box(params));
+            checksum = checksum
+                .wrapping_add(u64::from(rotation.to_bits()))
+                .rotate_left(15);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn rotation_new(evaluations: usize) -> u64 {
+        let cache = lane_note_transform_cache(black_box(17.25), black_box(rotation_params()));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index % 768) as f32 * 0.125 - 24.0);
+            let rotation = visual_note_rotation_z_cached(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(rotation.to_bits()))
+                .rotate_left(15);
         }
         checksum
     }

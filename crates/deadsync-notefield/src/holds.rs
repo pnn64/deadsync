@@ -648,8 +648,7 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
 fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> (f32, f32) {
     let (alpha, glow) = appearance_note_alpha_glow_cached(
         sample.adjusted_travel + request.lane_offset,
-        request.appearance,
-        request.appearance_cache,
+        &request.appearance_cache,
     );
     (alpha, itg_actor_glow_alpha(glow))
 }
@@ -2697,10 +2696,12 @@ mod tests {
         let top = TestSlot::sprite("top");
         let bottom = TestSlot::sprite("bottom");
         let mut request = body_cap_request(Some(&body), Some(&top), Some(&bottom));
-        request.appearance = NoteAlphaParams {
+        let appearance = NoteAlphaParams {
             hidden: 1.0,
             ..NoteAlphaParams::default()
         };
+        request.appearance = appearance;
+        request.appearance_cache = crate::transforms::note_appearance_cache(9.0, 0.0, appearance);
         let mut actors = Vec::new();
         let mut mesh_scratch = HoldMeshScratch::with_columns(1);
         mesh_scratch.begin_frame();
