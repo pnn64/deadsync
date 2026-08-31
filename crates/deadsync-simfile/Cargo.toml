@@ -48,6 +48,11 @@ name = "tag_value_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "artwork_resolution_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 

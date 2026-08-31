@@ -11,6 +11,16 @@ pub struct ResolvedSongArtwork {
     pub cdtitle_path: Option<PathBuf>,
 }
 
+#[derive(Default)]
+struct ArtworkCandidates {
+    banner: Option<PathBuf>,
+    background: Option<PathBuf>,
+    cdtitle: Option<PathBuf>,
+    jacket: Option<PathBuf>,
+    cdimage: Option<PathBuf>,
+    disc: Option<PathBuf>,
+}
+
 #[must_use]
 pub fn resolve_song_artwork_like_itg(
     song_dir: &Path,
@@ -20,16 +30,10 @@ pub fn resolve_song_artwork_like_itg(
     cdtitle_tag: &str,
     jacket_tag: &str,
 ) -> ResolvedSongArtwork {
-    let mut banner = resolve_song_asset_path_like_itg(song_dir, banner_tag);
-    let mut background = resolve_song_asset_path_like_itg(song_dir, background_tag);
-    let mut cdtitle = resolve_song_asset_path_like_itg(song_dir, cdtitle_tag);
-    let mut jacket = resolve_song_asset_path_like_itg(song_dir, jacket_tag);
-    let [cdimage_tag, discimage_tag] = latest_simfile_tag_values(
-        simfile_data,
-        [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()],
-    );
-    let mut cdimage = resolve_song_asset_path_like_itg(song_dir, &cdimage_tag);
-    let mut disc = resolve_song_asset_path_like_itg(song_dir, &discimage_tag);
+    let banner = resolve_song_asset_path_like_itg(song_dir, banner_tag);
+    let background = resolve_song_asset_path_like_itg(song_dir, background_tag);
+    let cdtitle = resolve_song_asset_path_like_itg(song_dir, cdtitle_tag);
+    let jacket = resolve_song_asset_path_like_itg(song_dir, jacket_tag);
 
     if banner.is_some() && background.is_some() && cdtitle.is_some() {
         return ResolvedSongArtwork {
@@ -39,79 +43,79 @@ pub fn resolve_song_artwork_like_itg(
         };
     }
 
+    let [cdimage_tag, discimage_tag] = latest_simfile_tag_values(
+        simfile_data,
+        [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()],
+    );
+    let mut candidates = ArtworkCandidates {
+        banner,
+        background,
+        cdtitle,
+        jacket,
+        cdimage: resolve_song_asset_path_like_itg(song_dir, &cdimage_tag),
+        disc: resolve_song_asset_path_like_itg(song_dir, &discimage_tag),
+    };
     let images = list_song_art_images(song_dir);
-    if banner.is_none() {
-        banner = find_song_art_hint(&images, &[], &["banner"], &[" bn"]);
-    }
-    if background.is_none() {
-        background = find_song_art_hint(&images, &[], &["background"], &["bg"]);
-    }
-    if jacket.is_none() {
-        jacket = find_song_art_hint(&images, &["jk_"], &["jacket", "albumart"], &[]);
-    }
-    if cdimage.is_none() {
-        cdimage = find_song_art_hint(&images, &[], &[], &["-cd"]);
-    }
-    if disc.is_none() {
-        disc = find_song_art_hint(&images, &[], &[], &[" disc", " title"]);
-    }
-    if cdtitle.is_none() {
-        cdtitle = find_song_art_hint(&images, &[], &["cdtitle"], &[]);
-    }
+    fill_song_art_hints(&images, &mut candidates);
 
     for image in &images {
-        if banner.is_some() && background.is_some() && cdtitle.is_some() {
+        if candidates.banner.is_some()
+            && candidates.background.is_some()
+            && candidates.cdtitle.is_some()
+        {
             break;
         }
-        if song_art_is_classified(
-            image,
-            &banner,
-            &background,
-            &cdtitle,
-            &jacket,
-            &cdimage,
-            &disc,
-        ) {
+        if song_art_is_classified(image, &candidates) {
             continue;
         }
 
         let Ok((width, height)) = image_dimensions(image) else {
             continue;
         };
-        if background.is_none() && width >= 320 && height >= 240 {
-            background = Some(image.clone());
+        if candidates.background.is_none() && width >= 320 && height >= 240 {
+            candidates.background = Some(image.clone());
             continue;
         }
-        if banner.is_none() && (100..=320).contains(&width) && (50..=240).contains(&height) {
-            banner = Some(image.clone());
-            continue;
-        }
-        if banner.is_none() && width > 200 && height > 0 && width as f32 / height as f32 > 2.0 {
-            banner = Some(image.clone());
-            continue;
-        }
-        if cdtitle.is_none() && width <= 100 && height <= 48 {
-            cdtitle = Some(image.clone());
-            continue;
-        }
-        if jacket.is_none() && width == height {
-            jacket = Some(image.clone());
-            continue;
-        }
-        if disc.is_none() && width > height && banner.is_some() && !song_art_matches(image, &banner)
+        if candidates.banner.is_none()
+            && (100..=320).contains(&width)
+            && (50..=240).contains(&height)
         {
-            disc = Some(image.clone());
+            candidates.banner = Some(image.clone());
             continue;
         }
-        if cdimage.is_none() && width == height {
-            cdimage = Some(image.clone());
+        if candidates.banner.is_none()
+            && width > 200
+            && height > 0
+            && width as f32 / height as f32 > 2.0
+        {
+            candidates.banner = Some(image.clone());
+            continue;
+        }
+        if candidates.cdtitle.is_none() && width <= 100 && height <= 48 {
+            candidates.cdtitle = Some(image.clone());
+            continue;
+        }
+        if candidates.jacket.is_none() && width == height {
+            candidates.jacket = Some(image.clone());
+            continue;
+        }
+        if candidates.disc.is_none()
+            && width > height
+            && candidates.banner.is_some()
+            && !song_art_matches(image, &candidates.banner)
+        {
+            candidates.disc = Some(image.clone());
+            continue;
+        }
+        if candidates.cdimage.is_none() && width == height {
+            candidates.cdimage = Some(image.clone());
         }
     }
 
     ResolvedSongArtwork {
-        banner_path: banner,
-        background_path: background,
-        cdtitle_path: cdtitle,
+        banner_path: candidates.banner,
+        background_path: candidates.background,
+        cdtitle_path: candidates.cdtitle,
     }
 }
 
@@ -124,14 +128,75 @@ fn list_song_art_images(song_dir: &Path) -> Vec<PathBuf> {
         .map(|entry| entry.path())
         .filter(|path| !is_mac_resource_fork(path) && path.is_file() && is_song_art_image(path))
         .collect::<Vec<_>>();
+    sort_song_art_paths(&mut paths);
+    paths
+}
+
+#[derive(Clone, Copy)]
+struct ArtworkSortKey {
+    start: usize,
+    end: usize,
+    path_index: usize,
+}
+
+fn sort_song_art_paths(paths: &mut [PathBuf]) {
+    if paths.len() < 2 {
+        return;
+    }
+    let folded_capacity = paths
+        .iter()
+        .filter_map(|path| path.file_name())
+        .map(|name| name.as_encoded_bytes().len())
+        .sum();
+    let mut folded = Vec::with_capacity(folded_capacity);
+    let mut keys = Vec::with_capacity(paths.len());
+    for (path_index, path) in paths.iter().enumerate() {
+        let start = folded.len();
+        if let Some(name) = path.file_name() {
+            folded.extend(
+                name.to_string_lossy()
+                    .bytes()
+                    .map(|byte| byte.to_ascii_lowercase()),
+            );
+        }
+        keys.push(ArtworkSortKey {
+            start,
+            end: folded.len(),
+            path_index,
+        });
+    }
+    keys.sort_by(|left, right| folded[left.start..left.end].cmp(&folded[right.start..right.end]));
+
+    for target_index in 0..keys.len() {
+        let original_index = keys[target_index].path_index;
+        keys[original_index].start = target_index;
+    }
+    for index in 0..keys.len() {
+        while keys[index].start != index {
+            let target_index = keys[index].start;
+            paths.swap(index, target_index);
+            keys.swap(index, target_index);
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn sort_song_art_paths_reference_for_bench(paths: &mut [PathBuf]) {
     paths.sort_by_cached_key(|path| {
         path.file_name()
             .map(|name| name.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default()
     });
-    paths
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn sort_song_art_paths_for_bench(paths: &mut [PathBuf]) {
+    sort_song_art_paths(paths);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn find_song_art_hint(
     images: &[PathBuf],
     starts_with: &[&str],
@@ -144,6 +209,119 @@ fn find_song_art_hint(
         }
     }
     None
+}
+
+fn fill_song_art_hints(images: &[PathBuf], candidates: &mut ArtworkCandidates) {
+    for image in images {
+        let Some(stem) = image.file_stem() else {
+            continue;
+        };
+        let stem = stem.to_string_lossy();
+        if candidates.banner.is_none()
+            && song_art_stem_matches_text(&stem, &[], &["banner"], &[" bn"])
+        {
+            candidates.banner = Some(image.clone());
+        }
+        if candidates.background.is_none()
+            && song_art_stem_matches_text(&stem, &[], &["background"], &["bg"])
+        {
+            candidates.background = Some(image.clone());
+        }
+        if candidates.jacket.is_none()
+            && song_art_stem_matches_text(&stem, &["jk_"], &["jacket", "albumart"], &[])
+        {
+            candidates.jacket = Some(image.clone());
+        }
+        if candidates.cdimage.is_none() && song_art_stem_matches_text(&stem, &[], &[], &["-cd"]) {
+            candidates.cdimage = Some(image.clone());
+        }
+        if candidates.disc.is_none()
+            && song_art_stem_matches_text(&stem, &[], &[], &[" disc", " title"])
+        {
+            candidates.disc = Some(image.clone());
+        }
+        if candidates.cdtitle.is_none() && song_art_stem_matches_text(&stem, &[], &["cdtitle"], &[])
+        {
+            candidates.cdtitle = Some(image.clone());
+        }
+        if candidates.banner.is_some()
+            && candidates.background.is_some()
+            && candidates.cdtitle.is_some()
+            && candidates.jacket.is_some()
+            && candidates.cdimage.is_some()
+            && candidates.disc.is_some()
+        {
+            break;
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn fill_song_art_hints_reference(images: &[PathBuf], candidates: &mut ArtworkCandidates) {
+    if candidates.banner.is_none() {
+        candidates.banner = find_song_art_hint(images, &[], &["banner"], &[" bn"]);
+    }
+    if candidates.background.is_none() {
+        candidates.background = find_song_art_hint(images, &[], &["background"], &["bg"]);
+    }
+    if candidates.jacket.is_none() {
+        candidates.jacket = find_song_art_hint(images, &["jk_"], &["jacket", "albumart"], &[]);
+    }
+    if candidates.cdimage.is_none() {
+        candidates.cdimage = find_song_art_hint(images, &[], &[], &["-cd"]);
+    }
+    if candidates.disc.is_none() {
+        candidates.disc = find_song_art_hint(images, &[], &[], &[" disc", " title"]);
+    }
+    if candidates.cdtitle.is_none() {
+        candidates.cdtitle = find_song_art_hint(images, &[], &["cdtitle"], &[]);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn artwork_candidate_paths(candidates: ArtworkCandidates) -> [Option<PathBuf>; 6] {
+    [
+        candidates.banner,
+        candidates.background,
+        candidates.cdtitle,
+        candidates.jacket,
+        candidates.cdimage,
+        candidates.disc,
+    ]
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_art_hints_reference_for_bench(images: &[PathBuf]) -> [Option<PathBuf>; 6] {
+    let mut candidates = ArtworkCandidates::default();
+    fill_song_art_hints_reference(images, &mut candidates);
+    artwork_candidate_paths(candidates)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_art_hints_for_bench(images: &[PathBuf]) -> [Option<PathBuf>; 6] {
+    let mut candidates = ArtworkCandidates::default();
+    fill_song_art_hints(images, &mut candidates);
+    artwork_candidate_paths(candidates)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn resolved_required_artwork_reference_for_bench(simfile_data: &[u8]) -> usize {
+    let optional = latest_simfile_tag_values(
+        simfile_data,
+        [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()],
+    );
+    std::hint::black_box(optional);
+    3
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn resolved_required_artwork_for_bench(simfile_data: &[u8]) -> usize {
+    std::hint::black_box(simfile_data);
+    3
 }
 
 fn song_art_matches(candidate: &Path, selected: &Option<PathBuf>) -> bool {
@@ -190,6 +368,7 @@ fn ascii_lowercase_contains(value: &str, expected: &str) -> bool {
         })
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn song_art_stem_matches(
     path: &Path,
     starts_with: &[&str],
@@ -200,15 +379,24 @@ fn song_art_stem_matches(
         return false;
     };
     let stem = stem.to_string_lossy();
+    song_art_stem_matches_text(&stem, starts_with, contains, ends_with)
+}
+
+fn song_art_stem_matches_text(
+    stem: &str,
+    starts_with: &[&str],
+    contains: &[&str],
+    ends_with: &[&str],
+) -> bool {
     starts_with
         .iter()
-        .any(|needle| ascii_lowercase_starts_with(&stem, needle))
+        .any(|needle| ascii_lowercase_starts_with(stem, needle))
         || ends_with
             .iter()
-            .any(|needle| ascii_lowercase_ends_with(&stem, needle))
+            .any(|needle| ascii_lowercase_ends_with(stem, needle))
         || contains
             .iter()
-            .any(|needle| ascii_lowercase_contains(&stem, needle))
+            .any(|needle| ascii_lowercase_contains(stem, needle))
 }
 
 fn song_art_paths_match(left: &Path, right: &Path) -> bool {
@@ -231,21 +419,13 @@ fn song_art_paths_match(left: &Path, right: &Path) -> bool {
         }))
 }
 
-fn song_art_is_classified(
-    image: &Path,
-    banner: &Option<PathBuf>,
-    background: &Option<PathBuf>,
-    cdtitle: &Option<PathBuf>,
-    jacket: &Option<PathBuf>,
-    cdimage: &Option<PathBuf>,
-    disc: &Option<PathBuf>,
-) -> bool {
-    song_art_matches(image, banner)
-        || song_art_matches(image, background)
-        || song_art_matches(image, cdtitle)
-        || song_art_matches(image, jacket)
-        || song_art_matches(image, cdimage)
-        || song_art_matches(image, disc)
+fn song_art_is_classified(image: &Path, candidates: &ArtworkCandidates) -> bool {
+    song_art_matches(image, &candidates.banner)
+        || song_art_matches(image, &candidates.background)
+        || song_art_matches(image, &candidates.cdtitle)
+        || song_art_matches(image, &candidates.jacket)
+        || song_art_matches(image, &candidates.cdimage)
+        || song_art_matches(image, &candidates.disc)
 }
 
 #[cfg(test)]
@@ -277,6 +457,72 @@ mod tests {
             banner,
             Path::new("Visuals/background.png")
         ));
+    }
+
+    #[test]
+    fn pooled_artwork_sort_matches_cached_lowercase_keys() {
+        let paths = vec![
+            PathBuf::new(),
+            PathBuf::from("Visuals/zeta.PNG"),
+            PathBuf::from("Visuals/Alpha.png"),
+            PathBuf::from("Visuals/ALPHA.JPG"),
+            PathBuf::from("Visuals/alpha.png"),
+            PathBuf::from("Visuals/Éclair.png"),
+            PathBuf::from("Visuals/banner.BMP"),
+        ];
+        let mut expected = paths.clone();
+        let mut actual = paths;
+
+        sort_song_art_paths_reference_for_bench(&mut expected);
+        sort_song_art_paths_for_bench(&mut actual);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn single_pass_artwork_hints_match_independent_scans() {
+        let images = [
+            "00 unrelated.png",
+            "01 song banner.png",
+            "02 song background.jpg",
+            "03 jk_song.png",
+            "04 song-cd.png",
+            "05 song disc.png",
+            "06 cdtitle.png",
+            "07 albumart.png",
+        ]
+        .map(PathBuf::from);
+
+        assert_eq!(
+            song_art_hints_for_bench(&images),
+            song_art_hints_reference_for_bench(&images)
+        );
+    }
+
+    #[test]
+    fn required_tagged_artwork_ignores_optional_simfile_art() {
+        let root = test_dir("required-art-fast-path");
+        let song_dir = root.join("Song");
+        fs::create_dir_all(&song_dir).unwrap();
+        let banner = song_dir.join("banner.png");
+        let background = song_dir.join("background.png");
+        let cdtitle = song_dir.join("cdtitle.png");
+        fs::write(&banner, b"banner").unwrap();
+        fs::write(&background, b"background").unwrap();
+        fs::write(&cdtitle, b"cdtitle").unwrap();
+
+        let artwork = resolve_song_artwork_like_itg(
+            &song_dir,
+            b"#CDIMAGE:missing.png;#DISCIMAGE:also-missing.png;",
+            "banner.png",
+            "background.png",
+            "cdtitle.png",
+            "",
+        );
+
+        assert_eq!(artwork.banner_path, Some(banner));
+        assert_eq!(artwork.background_path, Some(background));
+        assert_eq!(artwork.cdtitle_path, Some(cdtitle));
     }
 
     #[test]
