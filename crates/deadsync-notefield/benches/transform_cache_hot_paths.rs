@@ -10,9 +10,10 @@ use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_lane_new, bumpy_lane_old, bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
 };
 use deadsync_notefield::note_metadata_bench_support::{
-    beat_fraction_new, beat_fraction_old, part_phase_new, part_phase_old, single_bucket_vivid_new,
-    single_bucket_vivid_old, uv_translation_new, uv_translation_old, vivid_wrap_new,
-    vivid_wrap_old,
+    beat_fraction_new, beat_fraction_old, denominator_clamp_new, denominator_clamp_old,
+    part_phase_new, part_phase_old, progress_alternate_color_new, progress_alternate_color_old,
+    progress_color_new, progress_color_old, single_bucket_vivid_new, single_bucket_vivid_old,
+    uv_translation_new, uv_translation_old, vivid_wrap_new, vivid_wrap_old,
 };
 use deadsync_notefield::note_projection_bench_support::{
     lane_offset_new, lane_offset_old, random_speed_lane_cache_new, random_speed_lane_cache_old,
@@ -209,6 +210,9 @@ fn measure(mut operation: impl FnMut(usize) -> u64) -> BenchResult {
 }
 
 fn run(title: &str, old_operation: fn(usize) -> u64, new_operation: fn(usize) -> u64) {
+    if std::env::var("DEADSYNC_BENCH_FILTER").is_ok_and(|filter| !title.contains(&filter)) {
+        return;
+    }
     assert_eq!(
         old_operation(EVALUATIONS),
         new_operation(EVALUATIONS),
@@ -541,6 +545,21 @@ fn main() {
         "notefield preclassified UV quantization",
         uv_translation_old,
         uv_translation_new,
+    );
+    run(
+        "notefield denominator integer color clamp",
+        denominator_clamp_old,
+        denominator_clamp_new,
+    );
+    run(
+        "notefield progress integer color remainder",
+        progress_color_old,
+        progress_color_new,
+    );
+    run(
+        "notefield alternate-progress integer color math",
+        progress_alternate_color_old,
+        progress_alternate_color_new,
     );
     run(
         "notefield hold mesh slice pose",

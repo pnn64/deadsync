@@ -179,6 +179,64 @@ pub(crate) fn note_part_uv_translation_for_quantization(
     let count = metrics.note_color_count.max(1);
     let countf = count as f32;
     let color = match metrics.note_color_type {
+        NoteColorType::Denominator => i32::from(quantization_idx).min(count - 1) as f32,
+        NoteColorType::Progress => integral_color_remainder((note_beat * countf).ceil(), count),
+        NoteColorType::ProgressAlternate => {
+            let mut scaled = note_beat * countf;
+            let in_fast_integer_range =
+                scaled.is_finite() && scaled.abs() < 9_223_372_036_854_775_808.0;
+            let is_integer = if in_fast_integer_range {
+                scaled == scaled.trunc()
+            } else {
+                scaled - (scaled as i64 as f32) == 0.0
+            };
+            if is_integer {
+                scaled += countf - 1.0;
+            }
+            integral_color_remainder(scaled.ceil(), count)
+        }
+    };
+    let add = if is_addition {
+        metrics.addition_offset
+    } else {
+        [0.0, 0.0]
+    };
+    [
+        metrics.note_color_spacing[0].mul_add(color, add[0]),
+        metrics.note_color_spacing[1].mul_add(color, add[1]),
+    ]
+}
+
+#[inline(always)]
+fn integral_color_remainder(value: f32, count: i32) -> f32 {
+    if value == 0.0 {
+        return value;
+    }
+    // Every integer through 2^24 is exact in f32; above that, `% count as f32`
+    // can intentionally use a rounded divisor and must remain on the float path.
+    if count <= 16_777_216 && value >= i32::MIN as f32 && value < 2_147_483_648.0 {
+        let remainder = (value as i32) % count;
+        if remainder == 0 && value.is_sign_negative() {
+            -0.0
+        } else {
+            remainder as f32
+        }
+    } else {
+        value % count as f32
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn note_part_uv_translation_legacy_for_quantization(
+    note_beat: f32,
+    quantization_idx: u8,
+    metrics: NotePartTextureTranslate,
+    is_addition: bool,
+) -> [f32; 2] {
+    let count = metrics.note_color_count.max(1);
+    let countf = count as f32;
+    let color = match metrics.note_color_type {
         NoteColorType::Denominator => f32::from(quantization_idx).clamp(0.0, (count - 1) as f32),
         NoteColorType::Progress => (note_beat * countf).ceil() % countf,
         NoteColorType::ProgressAlternate => {
@@ -227,7 +285,12 @@ fn note_part_uv_translation_reference(
     } else {
         8
     };
-    note_part_uv_translation_for_quantization(note_beat, quantization_idx, metrics, is_addition)
+    note_part_uv_translation_legacy_for_quantization(
+        note_beat,
+        quantization_idx,
+        metrics,
+        is_addition,
+    )
 }
 
 #[cfg(test)]
@@ -389,6 +452,101 @@ mod note_metadata_cache_tests {
                         note_part_uv_translation_reference(beat, metrics, is_addition)
                             .map(f32::to_bits),
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_preclassified_color_math_matches_legacy_reference() {
+        for note_color_type in [NoteColorType::Progress, NoteColorType::ProgressAlternate] {
+            for note_color_count in [1, 2, 3, 8, 12] {
+                let metrics = NotePartTextureTranslate {
+                    addition_offset: [0.125, -0.25],
+                    note_color_spacing: [0.0625, 0.125],
+                    note_color_count,
+                    note_color_type,
+                };
+                for tick in -4_096..=4_096 {
+                    let beat = tick as f32 / 64.0;
+                    let quantization_idx = (tick as u8) % 9;
+                    for is_addition in [false, true] {
+                        let old = note_part_uv_translation_legacy_for_quantization(
+                            beat,
+                            quantization_idx,
+                            metrics,
+                            is_addition,
+                        );
+                        let new = note_part_uv_translation_for_quantization(
+                            beat,
+                            quantization_idx,
+                            metrics,
+                            is_addition,
+                        );
+                        assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
+                    }
+                }
+            }
+        }
+
+        let beats = [
+            -f32::MAX,
+            -1_000_000.25,
+            -128.0,
+            -1.0,
+            -0.125,
+            -0.0,
+            0.0,
+            0.125,
+            1.0,
+            128.0,
+            1_000_000.25,
+            f32::MAX,
+            f32::NEG_INFINITY,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        for note_color_type in [
+            NoteColorType::Denominator,
+            NoteColorType::Progress,
+            NoteColorType::ProgressAlternate,
+        ] {
+            for note_color_count in [
+                i32::MIN,
+                -1,
+                0,
+                1,
+                2,
+                8,
+                12,
+                16_777_216,
+                16_777_217,
+                i32::MAX,
+            ] {
+                let metrics = NotePartTextureTranslate {
+                    addition_offset: [0.125, -0.25],
+                    note_color_spacing: [0.0625, 0.125],
+                    note_color_count,
+                    note_color_type,
+                };
+                for beat in beats {
+                    for quantization_idx in [0, 1, 8, 9, u8::MAX] {
+                        for is_addition in [false, true] {
+                            let old = note_part_uv_translation_legacy_for_quantization(
+                                beat,
+                                quantization_idx,
+                                metrics,
+                                is_addition,
+                            );
+                            let new = note_part_uv_translation_for_quantization(
+                                beat,
+                                quantization_idx,
+                                metrics,
+                                is_addition,
+                            );
+                            assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
+                        }
+                    }
                 }
             }
         }
@@ -2044,6 +2202,109 @@ pub mod note_metadata_bench_support {
                 .wrapping_add(u64::from(translation[0].to_bits()))
                 .rotate_left(7)
                 .wrapping_add(u64::from(translation[1].to_bits()));
+        }
+        checksum
+    }
+
+    #[inline(always)]
+    fn color_checksum(translation: [f32; 2], checksum: u64) -> u64 {
+        checksum
+            .wrapping_add(u64::from(translation[0].to_bits()))
+            .rotate_left(7)
+            .wrapping_add(u64::from(translation[1].to_bits()))
+    }
+
+    fn color_metrics(note_color_type: NoteColorType) -> NotePartTextureTranslate {
+        black_box(NotePartTextureTranslate {
+            addition_offset: [0.125, -0.25],
+            note_color_spacing: [0.0625, 0.125],
+            note_color_count: 8,
+            note_color_type,
+        })
+    }
+
+    #[must_use]
+    pub fn denominator_clamp_old(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::Denominator);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let quantization_idx = black_box((index % 12) as u8);
+            let translation = note_part_uv_translation_legacy_for_quantization(
+                0.0,
+                quantization_idx,
+                metrics,
+                false,
+            );
+            checksum = color_checksum(translation, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn denominator_clamp_new(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::Denominator);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let quantization_idx = black_box((index % 12) as u8);
+            let translation =
+                note_part_uv_translation_for_quantization(0.0, quantization_idx, metrics, false);
+            checksum = color_checksum(translation, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn progress_color_old(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::Progress);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let tick = (index as i32 & 8_191) - 4_096;
+            let note_beat = black_box(tick as f32 / 64.0);
+            let translation =
+                note_part_uv_translation_legacy_for_quantization(note_beat, 0, metrics, false);
+            checksum = color_checksum(translation, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn progress_color_new(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::Progress);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let tick = (index as i32 & 8_191) - 4_096;
+            let note_beat = black_box(tick as f32 / 64.0);
+            let translation =
+                note_part_uv_translation_for_quantization(note_beat, 0, metrics, false);
+            checksum = color_checksum(translation, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn progress_alternate_color_old(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::ProgressAlternate);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let tick = (index as i32 & 8_191) - 4_096;
+            let note_beat = black_box(tick as f32 / 64.0);
+            let translation =
+                note_part_uv_translation_legacy_for_quantization(note_beat, 0, metrics, false);
+            checksum = color_checksum(translation, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn progress_alternate_color_new(evaluations: usize) -> u64 {
+        let metrics = color_metrics(NoteColorType::ProgressAlternate);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let tick = (index as i32 & 8_191) - 4_096;
+            let note_beat = black_box(tick as f32 / 64.0);
+            let translation =
+                note_part_uv_translation_for_quantization(note_beat, 0, metrics, false);
+            checksum = color_checksum(translation, checksum);
         }
         checksum
     }
