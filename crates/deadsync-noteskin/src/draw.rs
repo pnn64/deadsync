@@ -271,16 +271,38 @@ pub fn glowshift_mix(through: f32) -> f32 {
 #[inline(always)]
 #[must_use]
 pub fn model_auto_rot_z_at(total_frames: f32, keys: &[ModelAutoRotKey], time: f32) -> Option<f32> {
+    model_auto_rot_z_at_impl(total_frames, keys, time, true)
+}
+
+#[inline(always)]
+fn model_auto_rot_z_at_impl(
+    total_frames: f32,
+    keys: &[ModelAutoRotKey],
+    time: f32,
+    small_key_fast_paths: bool,
+) -> Option<f32> {
     if total_frames <= f32::EPSILON {
         return None;
     }
     let first = *keys.first()?;
+    if small_key_fast_paths && keys.len() == 1 {
+        return Some(first.z_deg);
+    }
     let frame = (time * 30.0).rem_euclid(total_frames);
     if !frame.is_finite() {
         return Some(first.z_deg);
     }
     if frame <= first.frame {
         return Some(first.z_deg);
+    }
+    if small_key_fast_paths && keys.len() == 2 && first.frame <= keys[1].frame {
+        let next = keys[1];
+        if frame > next.frame {
+            return Some(next.z_deg);
+        }
+        let span = (next.frame - first.frame).max(1e-6);
+        let t = ((frame - first.frame) / span).clamp(0.0, 1.0);
+        return Some((next.z_deg - first.z_deg).mul_add(t, first.z_deg));
     }
     let next_idx = keys.partition_point(|key| key.frame < frame);
     if next_idx >= keys.len() {
@@ -291,6 +313,15 @@ pub fn model_auto_rot_z_at(total_frames: f32, keys: &[ModelAutoRotKey], time: f3
     let span = (next.frame - prev.frame).max(1e-6);
     let t = ((frame - prev.frame) / span).clamp(0.0, 1.0);
     Some((next.z_deg - prev.z_deg).mul_add(t, prev.z_deg))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn model_auto_rot_z_at_legacy(
+    total_frames: f32,
+    keys: &[ModelAutoRotKey],
+    time: f32,
+) -> Option<f32> {
+    model_auto_rot_z_at_impl(total_frames, keys, time, false)
 }
 
 #[must_use]
@@ -524,8 +555,27 @@ pub fn model_glow_with_draw(
     beat: f32,
     diffuse_alpha: f32,
 ) -> Option<[f32; 4]> {
+    model_glow_with_draw_impl(draw, effect, time, beat, diffuse_alpha, true)
+}
+
+#[inline(always)]
+fn model_glow_with_draw_impl(
+    draw: ModelDrawState,
+    effect: ModelEffectState,
+    time: f32,
+    beat: f32,
+    diffuse_alpha: f32,
+    transparent_fast_path: bool,
+) -> Option<[f32; 4]> {
     let mut glow = draw.glow;
-    if matches!(effect.mode, ModelEffectMode::GlowShift) {
+    let glow_shifts = matches!(effect.mode, ModelEffectMode::GlowShift);
+    if transparent_fast_path
+        && !glow_shifts
+        && glow[3].partial_cmp(&f32::EPSILON) != Some(std::cmp::Ordering::Greater)
+    {
+        return None;
+    }
+    if glow_shifts {
         let through = model_effect_mix(effect, time, beat)?;
         let mix = glowshift_mix(through);
         for (i, out) in glow.iter_mut().enumerate() {
@@ -538,6 +588,17 @@ pub fn model_glow_with_draw(
     glow[2] = glow[2].clamp(0.0, 1.0);
     glow[3] = glow[3].clamp(0.0, 1.0);
     (glow[3] > f32::EPSILON).then_some(glow)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn model_glow_with_draw_legacy(
+    draw: ModelDrawState,
+    effect: ModelEffectState,
+    time: f32,
+    beat: f32,
+    diffuse_alpha: f32,
+) -> Option<[f32; 4]> {
+    model_glow_with_draw_impl(draw, effect, time, beat, diffuse_alpha, false)
 }
 
 #[inline(always)]
@@ -611,6 +672,94 @@ pub mod model_draw_bench_support {
                 .wrapping_add((value * 65_536.0).round() as i64 as u64)
                 .rotate_left(7)
         })
+    }
+
+    #[inline(always)]
+    fn optional_float_checksum(value: Option<f32>, checksum: u64) -> u64 {
+        checksum
+            .wrapping_add(value.map_or(u64::MAX, |value| u64::from(value.to_bits())))
+            .rotate_left(7)
+    }
+
+    fn small_auto_rot(evaluations: usize, key_count: usize, legacy: bool) -> u64 {
+        let keys = black_box([
+            ModelAutoRotKey {
+                frame: 10.0,
+                z_deg: -35.0,
+            },
+            ModelAutoRotKey {
+                frame: 80.0,
+                z_deg: 145.0,
+            },
+        ]);
+        let keys = &keys[..key_count];
+        let total_frames = black_box(120.0);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 4_095) as f32 * (1.0 / 1_024.0));
+            let rotation = if legacy {
+                model_auto_rot_z_at_legacy(total_frames, keys, time)
+            } else {
+                model_auto_rot_z_at(total_frames, keys, time)
+            };
+            checksum = optional_float_checksum(black_box(rotation), checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn single_key_auto_rot_old(evaluations: usize) -> u64 {
+        small_auto_rot(evaluations, 1, true)
+    }
+
+    #[must_use]
+    pub fn single_key_auto_rot_new(evaluations: usize) -> u64 {
+        small_auto_rot(evaluations, 1, false)
+    }
+
+    #[must_use]
+    pub fn two_key_auto_rot_old(evaluations: usize) -> u64 {
+        small_auto_rot(evaluations, 2, true)
+    }
+
+    #[must_use]
+    pub fn two_key_auto_rot_new(evaluations: usize) -> u64 {
+        small_auto_rot(evaluations, 2, false)
+    }
+
+    fn transparent_static_glow(evaluations: usize, legacy: bool) -> u64 {
+        let base = black_box(ModelDrawState {
+            glow: [1.5, -0.5, 0.5, 0.0],
+            ..ModelDrawState::default()
+        });
+        let effect = black_box(ModelEffectState::default());
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let mut draw = base;
+            draw.glow[3] = black_box(-((index & 1) as f32));
+            let glow = if legacy {
+                model_glow_with_draw_legacy(draw, effect, 0.0, 0.0, 1.0)
+            } else {
+                model_glow_with_draw(draw, effect, 0.0, 0.0, 1.0)
+            };
+            checksum = black_box(glow).map_or_else(
+                || checksum.wrapping_add(index as u64).rotate_left(7),
+                |glow| {
+                    normalized_uv_checksum([glow[0], glow[1], glow[2], glow[3], 0.0, 0.0], checksum)
+                },
+            );
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn transparent_static_glow_old(evaluations: usize) -> u64 {
+        transparent_static_glow(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn transparent_static_glow_new(evaluations: usize) -> u64 {
+        transparent_static_glow(evaluations, false)
     }
 
     fn static_model_draw(evaluations: usize, legacy: bool) -> u64 {
@@ -728,9 +877,9 @@ mod tests {
     use super::{
         ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
         ModelTweenCursor, ModelTweenSegment, TweenType, glowshift_mix, model_auto_rot_z_at,
-        model_draw_at, model_draw_at_cursor, model_draw_at_legacy, model_effect_clock_units,
-        model_effect_mix, model_effect_mix_legacy, model_glow_with_draw, model_texture_uv_params,
-        model_texture_uv_params_cached,
+        model_auto_rot_z_at_legacy, model_draw_at, model_draw_at_cursor, model_draw_at_legacy,
+        model_effect_clock_units, model_effect_mix, model_effect_mix_legacy, model_glow_with_draw,
+        model_glow_with_draw_legacy, model_texture_uv_params, model_texture_uv_params_cached,
     };
 
     fn assert_draw_bits_eq(actual: ModelDrawState, expected: ModelDrawState) {
@@ -774,6 +923,17 @@ mod tests {
                 "optimized {actual:?} and legacy {expected:?} UV parameters differ"
             );
         }
+    }
+
+    fn assert_optional_float_bits_eq(actual: Option<f32>, expected: Option<f32>) {
+        assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
+    }
+
+    fn assert_optional_color_bits_eq(actual: Option<[f32; 4]>, expected: Option<[f32; 4]>) {
+        assert_eq!(
+            actual.map(|color| color.map(f32::to_bits)),
+            expected.map(|color| color.map(f32::to_bits))
+        );
     }
 
     #[test]
@@ -875,6 +1035,72 @@ mod tests {
         assert!((model_auto_rot_z_at(80.0, &keys, 25.0 / 30.0).unwrap() - 50.0).abs() <= 1e-6);
         assert_eq!(model_auto_rot_z_at(80.0, &keys, 40.0 / 30.0), Some(80.0));
         assert_eq!(model_auto_rot_z_at(80.0, &keys, 80.0 / 30.0), Some(20.0));
+    }
+
+    #[test]
+    fn small_auto_rot_key_sets_match_legacy_search() {
+        let key_sets = [
+            &[
+                ModelAutoRotKey {
+                    frame: 10.0,
+                    z_deg: -35.0,
+                },
+                ModelAutoRotKey {
+                    frame: 80.0,
+                    z_deg: 145.0,
+                },
+            ][..1],
+            &[
+                ModelAutoRotKey {
+                    frame: 10.0,
+                    z_deg: -35.0,
+                },
+                ModelAutoRotKey {
+                    frame: 80.0,
+                    z_deg: 145.0,
+                },
+            ][..],
+            &[
+                ModelAutoRotKey {
+                    frame: 80.0,
+                    z_deg: 145.0,
+                },
+                ModelAutoRotKey {
+                    frame: 10.0,
+                    z_deg: -35.0,
+                },
+            ][..],
+        ];
+        for keys in key_sets {
+            for total_frames in [
+                -f32::INFINITY,
+                -1.0,
+                0.0,
+                f32::EPSILON,
+                120.0,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                for time in [
+                    -f32::MAX,
+                    -1.0,
+                    -0.0,
+                    0.0,
+                    10.0 / 30.0,
+                    45.0 / 30.0,
+                    80.0 / 30.0,
+                    f32::MAX,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    assert_optional_float_bits_eq(
+                        model_auto_rot_z_at(total_frames, keys, time),
+                        model_auto_rot_z_at_legacy(total_frames, keys, time),
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -1105,5 +1331,44 @@ mod tests {
         let glow = model_glow_with_draw(draw, effect, 0.0, 0.0, 0.25).unwrap();
 
         assert_eq!(glow, [1.0, 0.0, 0.0, 0.25]);
+    }
+
+    #[test]
+    fn transparent_static_glow_matches_legacy_clamping() {
+        for mode in [
+            ModelEffectMode::None,
+            ModelEffectMode::DiffuseRamp,
+            ModelEffectMode::DiffuseShift,
+            ModelEffectMode::Pulse,
+            ModelEffectMode::Bob,
+            ModelEffectMode::Bounce,
+            ModelEffectMode::Wag,
+            ModelEffectMode::Spin,
+        ] {
+            let effect = ModelEffectState {
+                mode,
+                ..ModelEffectState::default()
+            };
+            for alpha in [
+                f32::NEG_INFINITY,
+                -1.0,
+                -0.0,
+                0.0,
+                f32::EPSILON,
+                f32::EPSILON * 2.0,
+                1.0,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                let draw = ModelDrawState {
+                    glow: [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, alpha],
+                    ..ModelDrawState::default()
+                };
+                assert_optional_color_bits_eq(
+                    model_glow_with_draw(draw, effect, 1.25, 5.0, 0.75),
+                    model_glow_with_draw_legacy(draw, effect, 1.25, 5.0, 0.75),
+                );
+            }
+        }
     }
 }

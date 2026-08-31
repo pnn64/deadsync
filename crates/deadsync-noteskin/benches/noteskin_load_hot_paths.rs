@@ -481,6 +481,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_MODEL_ENDPOINT_ONLY").is_some() {
+        run_uv_case(
+            "noteskin single-key model auto rotation",
+            model_draw_bench_support::single_key_auto_rot_old,
+            model_draw_bench_support::single_key_auto_rot_new,
+        );
+        run_uv_case(
+            "noteskin two-key model auto rotation",
+            model_draw_bench_support::two_key_auto_rot_old,
+            model_draw_bench_support::two_key_auto_rot_new,
+        );
+        run_uv_case(
+            "noteskin transparent static model glow",
+            model_draw_bench_support::transparent_static_glow_old,
+            model_draw_bench_support::transparent_static_glow_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_MODEL_DRAW_CACHE_ONLY").is_some() {
         run_uv_case(
             "noteskin static model draw evaluation",
