@@ -188,10 +188,112 @@ impl From<network::NetworkError> for StepManiaOnlineError {
     }
 }
 
+/// Reusable allocations for repeated catalog searches.
+#[derive(Clone, Debug, Default)]
+pub struct CatalogSearchScratch {
+    normalized_query: String,
+    buckets: [Vec<usize>; 5],
+}
+
 /// Returns matching catalog indices in relevance order. A blank query keeps
-/// the server's natural catalog order. Search work is bounded by the catalog
-/// cap and uses strings normalized once when the catalog is parsed.
+/// the server's natural catalog order. Prefer [`search_catalog_into`] for
+/// repeated searches so its output and scratch allocations can be retained.
 pub fn search_catalog(catalog: &[PackInfo], query: &str) -> Vec<usize> {
+    let mut results = Vec::new();
+    search_catalog_into(
+        catalog,
+        query,
+        &mut results,
+        &mut CatalogSearchScratch::default(),
+    );
+    results
+}
+
+/// Replaces `results` with matching catalog indices in relevance order while
+/// retaining all caller-owned capacities for the next query.
+pub fn search_catalog_into(
+    catalog: &[PackInfo],
+    query: &str,
+    results: &mut Vec<usize>,
+    scratch: &mut CatalogSearchScratch,
+) {
+    results.clear();
+    let query = query.trim();
+    if query.is_empty() {
+        results.extend(0..catalog.len());
+        return;
+    }
+    let CatalogSearchScratch {
+        normalized_query,
+        buckets,
+    } = scratch;
+    normalized_query.clear();
+    let query = if is_lowercase(query) {
+        query
+    } else {
+        normalized_query.extend(query.chars().flat_map(char::to_lowercase));
+        normalized_query.as_str()
+    };
+    let mut inline_tokens = [""; INLINE_QUERY_TOKENS];
+    let mut token_count = 0;
+    let mut overflow_tokens = Vec::new();
+    for token in query.split_whitespace() {
+        if token_count < inline_tokens.len() {
+            inline_tokens[token_count] = token;
+        } else {
+            if overflow_tokens.is_empty() {
+                overflow_tokens.extend_from_slice(&inline_tokens);
+            }
+            overflow_tokens.push(token);
+        }
+        token_count += 1;
+    }
+    let tokens = if overflow_tokens.is_empty() {
+        &inline_tokens[..token_count]
+    } else {
+        overflow_tokens.as_slice()
+    };
+    let multiple_tokens = tokens.len() > 1;
+    for bucket in &mut *buckets {
+        bucket.clear();
+    }
+    for (idx, pack) in catalog.iter().enumerate() {
+        let normalized_name = pack.normalized_name();
+        let rank = if normalized_name == query {
+            Some(0)
+        } else if normalized_name.starts_with(query) {
+            Some(1)
+        } else if normalized_name.contains(query) {
+            Some(2)
+        } else if multiple_tokens && tokens.iter().all(|token| normalized_name.contains(token)) {
+            Some(3)
+        } else if if multiple_tokens {
+            tokens.iter().all(|token| pack.search_text.contains(token))
+        } else {
+            pack.search_text.contains(query)
+        } {
+            Some(4)
+        } else {
+            None
+        };
+        if let Some(rank) = rank {
+            buckets[rank].push(idx);
+        }
+    }
+    let result_len = buckets.iter().map(Vec::len).sum::<usize>();
+    let Some(first_rank) = buckets.iter().position(|bucket| !bucket.is_empty()) else {
+        return;
+    };
+    std::mem::swap(results, &mut buckets[first_rank]);
+    results.reserve(result_len - results.len());
+    for bucket in &mut buckets[first_rank + 1..] {
+        results.append(bucket);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn search_catalog_reference(catalog: &[PackInfo], query: &str) -> Vec<usize> {
     let query = query.trim();
     if query.is_empty() {
         return (0..catalog.len()).collect();
@@ -1330,6 +1432,39 @@ mod tests {
         assert_eq!(search_catalog(&catalog, "spectrum"), vec![1, 0, 2]);
         assert_eq!(search_catalog(&catalog, "other technical"), vec![2]);
         assert_eq!(search_catalog(&catalog, "   "), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn reusable_catalog_search_matches_committed_behavior_across_query_shapes() {
+        let catalog = [
+            pack(1, "Technical Spectrum", Some("pad"), Some("technical")),
+            pack(2, "Spectrum", Some("dance"), Some("speed")),
+            pack(3, "Other Pack", Some("spectrum"), Some("technical")),
+            pack(4, "Älpha Mix", Some("keyboard"), Some("stream")),
+        ];
+        let queries = [
+            "spectrum",
+            "SPECTRUM",
+            "technical spec",
+            "other technical",
+            "keyboard stream",
+            "ÄLPHA",
+            "1",
+            "missing",
+            "one two three four five six seven eight nine",
+            "   ",
+        ];
+        let mut results = vec![usize::MAX; 32];
+        let mut scratch = CatalogSearchScratch::default();
+
+        for _ in 0..2 {
+            for query in queries {
+                let expected = search_catalog_reference(&catalog, query);
+                search_catalog_into(&catalog, query, &mut results, &mut scratch);
+                assert_eq!(results, expected, "query {query:?} changed");
+                assert_eq!(search_catalog(&catalog, query), expected);
+            }
+        }
     }
 
     #[test]

@@ -1,7 +1,8 @@
 use super::*;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadsync_online::stepmaniaonline::{
-    CatalogPhase, InstallPhase, InstallSnapshot, PackInfo, Snapshot, search_catalog,
+    CatalogPhase, CatalogSearchScratch, InstallPhase, InstallSnapshot, PackInfo, Snapshot,
+    search_catalog_into,
 };
 
 const Z: i16 = 1490;
@@ -58,6 +59,8 @@ pub(super) struct DownloadPacksOverlayData {
     /// the header exposes its result count, and ordinary-frame lookup/render is
     /// bounded to `VIEW_ROWS` entries.
     results: Vec<usize>,
+    /// Query-normalization and relevance-bucket storage retained across edits.
+    search_scratch: CatalogSearchScratch,
     selected: usize,
     /// Catalog-revision-owned facets. They are rebuilt only when the immutable
     /// catalog changes, capped by its distinct substyle count, and dropped with
@@ -135,6 +138,7 @@ pub(super) fn show_overlay(
     let mut data = DownloadPacksOverlayData {
         query: String::new(),
         results: Vec::new(),
+        search_scratch: CatalogSearchScratch::default(),
         selected: 0,
         substyles: Vec::new(),
         selected_substyle: 0,
@@ -865,15 +869,18 @@ fn rebuild_results(
     preserve_pack_id: Option<u64>,
 ) {
     let active = active_substyle(data).cloned().unwrap_or(SubstyleKey::All);
-    data.results = search_catalog(&snapshot.catalog, &data.query)
-        .into_iter()
-        .filter(|&index| {
-            snapshot
-                .catalog
-                .get(index)
-                .is_some_and(|pack| pack_matches_substyle(pack, &active))
-        })
-        .collect();
+    search_catalog_into(
+        &snapshot.catalog,
+        &data.query,
+        &mut data.results,
+        &mut data.search_scratch,
+    );
+    data.results.retain(|&index| {
+        snapshot
+            .catalog
+            .get(index)
+            .is_some_and(|pack| pack_matches_substyle(pack, &active))
+    });
     data.catalog_revision = snapshot.revision;
     data.selected = preserve_pack_id
         .and_then(|id| {
@@ -1643,6 +1650,7 @@ mod tests {
         DownloadPacksOverlayData {
             query: String::new(),
             results: Vec::new(),
+            search_scratch: CatalogSearchScratch::default(),
             selected: 0,
             substyles: vec![SubstyleButton {
                 key: SubstyleKey::All,
