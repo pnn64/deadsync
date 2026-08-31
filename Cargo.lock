@@ -111,7 +111,7 @@ dependencies = [
  "android-properties",
  "bitflags 2.13.1",
  "cc",
- "jni 0.22.4",
+ "jni",
  "libc",
  "log",
  "ndk",
@@ -483,9 +483,9 @@ dependencies = [
 
 [[package]]
 name = "btleplug"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52c3264dbe2c8e29381e4e95aa2d2783ad0b9192b511240f3755b7e5e3cee87e"
+checksum = "9af9a6252c1fad599d8c45507e668a9af18cb5535ef6345000697fd035d6d8e8"
 dependencies = [
  "async-trait",
  "bitflags 2.13.1",
@@ -493,11 +493,11 @@ dependencies = [
  "dashmap",
  "dbus",
  "futures",
- "jni 0.19.0",
+ "jni",
  "log",
- "objc2 0.5.2",
+ "objc2 0.6.4",
  "objc2-core-bluetooth",
- "objc2-foundation 0.2.2",
+ "objc2-foundation 0.3.2",
  "once_cell",
  "static_assertions",
  "thiserror 2.0.20",
@@ -601,12 +601,6 @@ dependencies = [
  "libc",
  "shlex",
 ]
-
-[[package]]
-name = "cesu8"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
 name = "cfg-if"
@@ -1355,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.961"
+version = "0.5.962"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1806,7 +1800,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.961"
+version = "0.5.962"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1867,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.961"
+version = "0.5.962"
 dependencies = [
  "log",
  "semver",
@@ -2842,20 +2836,6 @@ dependencies = [
 
 [[package]]
 name = "jni"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6df18c2e3db7e453d3c6ac5b3e9d5182664d28788126d39b91f2d1e22b017ec"
-dependencies = [
- "cesu8",
- "combine",
- "jni-sys 0.3.1",
- "log",
- "thiserror 1.0.69",
- "walkdir",
-]
-
-[[package]]
-name = "jni"
 version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5efd9a482cf3a427f00d6b35f14332adc7902ce91efb778580e180ff90fa3498"
@@ -3639,13 +3619,13 @@ dependencies = [
 
 [[package]]
 name = "objc2-core-bluetooth"
-version = "0.2.2"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a644b62ffb826a5277f536cf0f701493de420b13d40e700c452c36567771111"
+checksum = "79b30b9eacc37434a61377866f68b27acef9fa5496f25cc9ca8b2549032e0394"
 dependencies = [
  "bitflags 2.13.1",
- "objc2 0.5.2",
- "objc2-foundation 0.2.2",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
