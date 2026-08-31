@@ -2,6 +2,7 @@ use deadsync_config::prelude::SrpgShopFolder;
 use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File};
@@ -706,12 +707,16 @@ fn parse_catalog(
         _ => None,
     }
     .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
-    let mut rows = rows.iter().collect::<Vec<_>>();
-    rows.sort_by_key(|row| catalog_row_key(row));
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| catalog_item(row, shop_id, lifetime_balance))
-        .collect())
+    let mut keyed_rows = Vec::with_capacity(rows.len());
+    keyed_rows.extend(rows.iter().map(|row| (catalog_row_key(row), row)));
+    keyed_rows.sort_by_key(|(key, _)| *key);
+    let mut items = Vec::with_capacity(keyed_rows.len());
+    items.extend(
+        keyed_rows
+            .into_iter()
+            .filter_map(|(_, row)| catalog_item(row, shop_id, lifetime_balance)),
+    );
+    Ok(items)
 }
 
 fn catalog_row_key(row: &Value) -> (u64, u64, u64, u64, u64) {
@@ -727,13 +732,149 @@ fn catalog_row_key(row: &Value) -> (u64, u64, u64, u64, u64) {
 fn catalog_cell_number(row: &Value, index: usize) -> u64 {
     row.as_array()
         .and_then(|cells| cells.get(index))
+        .and_then(catalog_number_with_commas)
+        .unwrap_or(u64::MAX)
+}
+
+fn catalog_number_with_commas(value: &Value) -> Option<u64> {
+    match value {
+        Value::Number(number) => number.as_u64(),
+        Value::String(text) if !text.contains(',') => text.parse().ok(),
+        Value::String(text) => parse_u64_ignoring_commas(text),
+        _ => None,
+    }
+}
+
+fn parse_u64_ignoring_commas(text: &str) -> Option<u64> {
+    let mut bytes = text.bytes().filter(|&byte| byte != b',');
+    let first = bytes.next()?;
+    let mut value = 0u64;
+    let mut has_digit = false;
+    if first != b'+' {
+        value = u64::from(first.checked_sub(b'0')?);
+        if value > 9 {
+            return None;
+        }
+        has_digit = true;
+    }
+    for byte in bytes {
+        let digit = byte.checked_sub(b'0')?;
+        if digit > 9 {
+            return None;
+        }
+        value = value.checked_mul(10)?.checked_add(u64::from(digit))?;
+        has_digit = true;
+    }
+    has_digit.then_some(value)
+}
+
+fn catalog_plain_number(value: Option<&Value>) -> Option<u64> {
+    match value? {
+        Value::Number(number) => number.as_u64(),
+        Value::String(text) => text.parse().ok(),
+        _ => None,
+    }
+}
+
+fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
+    let cells = row.as_array()?;
+    let cell = |index: usize| value_text_ref(cells.get(index));
+    let type_id = catalog_plain_number(cells.get(11))
+        .and_then(|number| u8::try_from(number).ok())
+        .unwrap_or(0);
+    let kind = if type_id == 1 {
+        SrpgShopItemKind::Song
+    } else {
+        SrpgShopItemKind::Relic
+    };
+    let cost = cells.get(7).and_then(catalog_number_with_commas);
+    let censor = shop_id == 2 && cost.is_some_and(|cost| cost > lifetime_balance);
+    Some(SrpgShopItem {
+        item_id: cell(0).into_owned(),
+        kind,
+        name: if censor {
+            "???".to_string()
+        } else {
+            clean_cell(cell(2).as_ref())
+        },
+        description: if censor {
+            "Reach the required lifetime Jej total to reveal this song.".to_string()
+        } else {
+            clean_cell(cell(3).as_ref())
+        },
+        effect: if censor {
+            "Difficulty: ???  •  Speed Tier: ???".to_string()
+        } else {
+            clean_cell(cell(4).as_ref()).replace('|', "  •  ")
+        },
+        cost,
+        difficulty: (kind == SrpgShopItemKind::Song && !censor)
+            .then(|| {
+                catalog_plain_number(cells.get(12)).and_then(|number| u32::try_from(number).ok())
+            })
+            .flatten(),
+        bpm: (kind == SrpgShopItemKind::Song && !censor)
+            .then(|| {
+                catalog_plain_number(cells.get(13)).and_then(|number| u32::try_from(number).ok())
+            })
+            .flatten(),
+        type_id,
+        owned: false,
+        site_downloaded: false,
+        downloaded: false,
+        download_url: None,
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_catalog_reference(
+    body: &str,
+    shop_id: u32,
+    lifetime_balance: u64,
+) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
+    let value: Value = serde_json::from_str(body)
+        .map_err(|error| SrpgShopError::InvalidResponse(error.to_string()))?;
+    let rows = match &value {
+        Value::Object(map) => object_array(map, &["data", "aaData", "rows", "items"]),
+        Value::Array(rows) => Some(rows),
+        _ => None,
+    }
+    .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
+    let mut rows = rows.iter().collect::<Vec<_>>();
+    rows.sort_by_key(|row| catalog_row_key_reference(row));
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| catalog_item_reference(row, shop_id, lifetime_balance))
+        .collect())
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn catalog_row_key_reference(row: &Value) -> (u64, u64, u64, u64, u64) {
+    (
+        catalog_cell_number_reference(row, 11),
+        catalog_cell_number_reference(row, 8),
+        catalog_cell_number_reference(row, 12),
+        catalog_cell_number_reference(row, 13),
+        catalog_cell_number_reference(row, 7),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn catalog_cell_number_reference(row: &Value, index: usize) -> u64 {
+    row.as_array()
+        .and_then(|cells| cells.get(index))
         .map(value_text)
         .map(|value| value.replace(',', ""))
         .and_then(|value| value.parse().ok())
         .unwrap_or(u64::MAX)
 }
 
-fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
+#[cfg(any(test, feature = "bench-support"))]
+fn catalog_item_reference(
+    row: &Value,
+    shop_id: u32,
+    lifetime_balance: u64,
+) -> Option<SrpgShopItem> {
     let cells = row.as_array()?;
     let cell = |index: usize| cells.get(index).map(value_text).unwrap_or_default();
     let type_id = cell(11).parse().unwrap_or(0);
@@ -775,6 +916,26 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
         downloaded: false,
         download_url: None,
     })
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_catalog_for_bench(
+    body: &str,
+    shop_id: u32,
+    lifetime_balance: u64,
+) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
+    parse_catalog(body, shop_id, lifetime_balance)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn parse_catalog_reference_for_bench(
+    body: &str,
+    shop_id: u32,
+    lifetime_balance: u64,
+) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
+    parse_catalog_reference(body, shop_id, lifetime_balance)
 }
 
 fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
@@ -922,11 +1083,16 @@ fn object_text(map: &Map<String, Value>, keys: &[&str]) -> Option<String> {
 }
 
 fn value_text(value: &Value) -> String {
+    value_text_ref(Some(value)).into_owned()
+}
+
+fn value_text_ref(value: Option<&Value>) -> Cow<'_, str> {
     match value {
-        Value::String(value) => value.clone(),
-        Value::Number(value) => value.to_string(),
-        Value::Bool(value) => value.to_string(),
-        _ => String::new(),
+        Some(Value::String(value)) => Cow::Borrowed(value),
+        Some(Value::Number(value)) => Cow::Owned(value.to_string()),
+        Some(Value::Bool(true)) => Cow::Borrowed("true"),
+        Some(Value::Bool(false)) => Cow::Borrowed("false"),
+        _ => Cow::Borrowed(""),
     }
 }
 
@@ -991,6 +1157,50 @@ fn absolutize_url(url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optimized_catalog_parser_matches_committed_behavior() {
+        let body = r#"{"AaData":[
+            ["7","chart.png","<b>Fast &amp; Loud</b>","  Purchase   now  ","Difficulty: 14|Speed Tier: 180 BPM","2","0","1,234","2","0","0","1","14","180","0"],
+            [8,"chart.png","Equal Key First","First","Difficulty: 14|Speed Tier: 180 BPM","2","0",1234,2,"0","0",1,14,180,"0"],
+            [9,"chart.png","Equal Key Second","Second","Difficulty: 14|Speed Tier: 180 BPM","2","0",1234,2,"0","0",1,14,180,"0"],
+            ["2","axe.png",true,null,42,"0","0","294","0","0","0","0","---","---","---"],
+            {"ignored":"non-array row"}
+        ]}"#;
+
+        for (shop_id, balance) in [(0, 0), (2, 1_000), (2, 1_234)] {
+            assert_eq!(
+                parse_catalog(body, shop_id, balance).unwrap(),
+                parse_catalog_reference(body, shop_id, balance).unwrap(),
+                "shop {shop_id}, balance {balance} changed"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_catalog_number_parser_keeps_committed_semantics() {
+        for text in [
+            "0",
+            "1,234",
+            "+1,234",
+            ",+12",
+            "1,,2",
+            ",",
+            "+",
+            " 12",
+            "-1",
+            "12.0",
+            "18446744073709551615",
+            "18446744073709551616",
+        ] {
+            let value = Value::String(text.to_string());
+            assert_eq!(
+                catalog_number_with_commas(&value),
+                text.replace(',', "").parse().ok(),
+                "number {text:?} changed"
+            );
+        }
+    }
 
     #[test]
     fn parses_catalog_song_and_relic_rows() {
