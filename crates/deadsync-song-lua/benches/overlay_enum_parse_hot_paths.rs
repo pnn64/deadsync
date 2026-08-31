@@ -1,13 +1,16 @@
 use deadlib_present::actors::TextAlign;
-use deadlib_present::anim::EffectMode;
+use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_song_lua::{
-    SongLuaDifficulty, SongLuaStyleInfo, SongLuaTextGlowMode, parse_overlay_effect_mode,
+    SongLuaDifficulty, SongLuaStyleInfo, SongLuaTextGlowMode, parse_overlay_effect_clock,
+    parse_overlay_effect_clock_reference_for_bench, parse_overlay_effect_mode,
     parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
     parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
     parse_overlay_text_glow_mode_reference_for_bench, song_lua_difficulty_from_value,
     song_lua_difficulty_from_value_reference_for_bench, song_lua_steps_type_is_dance_single,
     song_lua_steps_type_is_dance_single_reference_for_bench, song_lua_style_info,
-    song_lua_style_info_reference_for_bench,
+    song_lua_style_info_reference_for_bench, theme_pref_default,
+    theme_pref_default_reference_for_bench, theme_screen_fallback_for_bench,
+    theme_screen_fallback_reference_for_bench,
 };
 use mlua::{Lua, Value};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -252,6 +255,35 @@ fn difficulty_value(value: Option<SongLuaDifficulty>) -> u64 {
     }
 }
 
+fn effect_clock_value(value: Option<EffectClock>) -> u64 {
+    match value {
+        None => 0,
+        Some(EffectClock::Time) => 1,
+        Some(EffectClock::Beat) => 2,
+    }
+}
+
+fn optional_text_checksum(value: Option<&str>) -> u64 {
+    value.map_or(0, |value| text_checksum(1, value))
+}
+
+fn lua_value_checksum(value: Value) -> u64 {
+    match value {
+        Value::Nil => 0,
+        Value::Boolean(value) => mix(1, u64::from(value)),
+        Value::Integer(value) => mix(2, value as u64),
+        Value::Number(value) => mix(3, value.to_bits()),
+        Value::String(value) => text_checksum(
+            4,
+            value
+                .to_str()
+                .expect("theme default strings are valid UTF-8")
+                .as_ref(),
+        ),
+        _ => panic!("unexpected theme default value kind"),
+    }
+}
+
 fn effect_mode_value(value: Option<EffectMode>) -> u64 {
     match value {
         None => 0,
@@ -285,7 +317,7 @@ fn text_glow_value(value: Option<SongLuaTextGlowMode>) -> u64 {
     }
 }
 
-fn assert_improved(name: &str, old: &Row, new: &Row) {
+fn assert_relative_improved(name: &str, old: &Row, new: &Row) {
     assert_eq!(old.checksum, new.checksum, "{name} behavior diverged");
     assert!(
         new.median_ns < old.median_ns,
@@ -310,6 +342,10 @@ fn assert_improved(name: &str, old: &Row, new: &Row) {
     assert!(new.alloc.frees < old.alloc.frees);
     assert!(new.alloc.allocated_bytes < old.alloc.allocated_bytes);
     assert!(new.alloc.churn() < old.alloc.churn());
+}
+
+fn assert_improved(name: &str, old: &Row, new: &Row) {
+    assert_relative_improved(name, old, new);
     assert_eq!(new.alloc.allocs, 0, "{name} still allocates");
     assert_eq!(new.alloc.reallocs, 0, "{name} still reallocates");
     assert_eq!(new.alloc.frees, 0, "{name} still frees");
@@ -616,5 +652,122 @@ fn main() {
         "song steps-type classification (6 representative tokens)",
         &old_steps_type,
         &new_steps_type,
+    );
+
+    let clock_names = [
+        " BEAT ",
+        "BeatNoOffset",
+        "BGM",
+        "'timer'",
+        "TimerGlobal",
+        "\"MUSIC\"",
+        "MusicNoOffset",
+        "seconds",
+        "EffectClock_Beat",
+        "unknown",
+        "''",
+    ];
+    let clock_suite = |lookup: fn(&str) -> Option<EffectClock>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for name in clock_names {
+                checksum = mix(
+                    checksum,
+                    effect_clock_value(black_box(lookup(black_box(name)))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_clock, new_clock) = measure_pair(
+        clock_names.len() * REPEATS,
+        || clock_suite(parse_overlay_effect_clock_reference_for_bench),
+        || clock_suite(parse_overlay_effect_clock),
+    );
+    assert_improved("overlay effect-clock parsing", &old_clock, &new_clock);
+    print_pair(
+        "overlay effect-clock parsing (11 representative tokens)",
+        &old_clock,
+        &new_clock,
+    );
+
+    let fallback_groups = [
+        "ScreenOptionsService",
+        "SCREENVISUALOPTIONS",
+        "ScreenSystemOptions",
+        "ScreenInputOptions",
+        "ScreenGraphicsSoundOptions",
+        "ScreenTournamentModeOptions",
+        "UnknownScreen",
+    ];
+    let fallback_suite = |lookup: fn(&str) -> Option<&'static str>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for group in fallback_groups {
+                checksum = mix(
+                    checksum,
+                    optional_text_checksum(black_box(lookup(black_box(group)))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_fallback, new_fallback) = measure_pair(
+        fallback_groups.len() * REPEATS,
+        || fallback_suite(theme_screen_fallback_reference_for_bench),
+        || fallback_suite(theme_screen_fallback_for_bench),
+    );
+    assert_improved("theme screen-fallback lookup", &old_fallback, &new_fallback);
+    print_pair(
+        "theme screen-fallback lookup (7 representative names)",
+        &old_fallback,
+        &new_fallback,
+    );
+
+    let pref_names = [
+        "CasualMaxMeter",
+        "NUMBEROFCONTINUESALLOWED",
+        "ScreenEvaluationNonstopMenuTimer",
+        "SimplyLoveColor",
+        "VisualStyle",
+        "ThemeFont",
+        "DefaultGameMode",
+        "SongSelectBG",
+        "EditModeLastSeenDifficulty",
+        "UseImageCache",
+        "UnknownPreference",
+    ];
+    let pref_suite = |lookup: fn(&Lua, &str) -> mlua::Result<Value>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for name in pref_names {
+                checksum = mix(
+                    checksum,
+                    lua_value_checksum(black_box(
+                        lookup(black_box(&lua), black_box(name))
+                            .expect("static preference lookup succeeds"),
+                    )),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_pref, new_pref) = measure_pair(
+        pref_names.len() * REPEATS,
+        || pref_suite(theme_pref_default_reference_for_bench),
+        || pref_suite(theme_pref_default),
+    );
+    assert_relative_improved("theme-preference default lookup", &old_pref, &new_pref);
+    let output_string_allocs = 5 * REPEATS * OPS;
+    assert_eq!(
+        new_pref.alloc.allocs, output_string_allocs as u64,
+        "theme-preference lookup allocated beyond returned Lua strings"
+    );
+    assert_eq!(new_pref.alloc.reallocs, 0);
+    assert_eq!(new_pref.alloc.frees, output_string_allocs as u64);
+    print_pair(
+        "theme-preference default lookup (11 representative names)",
+        &old_pref,
+        &new_pref,
     );
 }

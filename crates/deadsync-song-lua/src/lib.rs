@@ -975,8 +975,11 @@ const fn theme_line_names(group: &str) -> Option<&'static str> {
 }
 
 fn theme_screen_fallback(group: &str) -> Option<&'static str> {
-    let lower = group.to_ascii_lowercase();
-    match lower.as_str() {
+    with_ascii_lowercase_overlay_key(group, theme_screen_fallback_normalized)
+}
+
+fn theme_screen_fallback_normalized(key: &str) -> Option<&'static str> {
+    match key {
         "screenoptionsservice" => Some("ScreenOptionsSimple"),
         "screenvisualoptions" => Some("ScreenOptionsServiceSub"),
         "screensystemoptions"
@@ -992,6 +995,20 @@ fn theme_screen_fallback(group: &str) -> Option<&'static str> {
         | "screengroovestatsoptions" => Some("ScreenOptionsServiceChild"),
         _ => None,
     }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn theme_screen_fallback_for_bench(group: &str) -> Option<&'static str> {
+    theme_screen_fallback(group)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn theme_screen_fallback_reference_for_bench(group: &str) -> Option<&'static str> {
+    theme_screen_fallback_normalized(&group.to_ascii_lowercase())
 }
 
 pub fn theme_metric_bool(value: mlua::Value) -> bool {
@@ -1182,9 +1199,12 @@ pub fn custom_multi_modifier_key(option_name: &str, choice: &str) -> String {
 }
 
 pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Value> {
-    let lower = name.to_ascii_lowercase();
+    with_ascii_lowercase_overlay_key(name, |key| theme_pref_default_normalized(lua, key))
+}
+
+fn theme_pref_default_normalized(lua: &mlua::Lua, key: &str) -> mlua::Result<mlua::Value> {
     if matches!(
-        lower.as_str(),
+        key,
         "casualmaxmeter"
             | "numberofcontinuesallowed"
             | "screenselectmusicmenutimer"
@@ -1198,14 +1218,14 @@ pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Val
             | "simplylovecolor"
             | "nice"
     ) {
-        return Ok(mlua::Value::Integer(match lower.as_str() {
+        return Ok(mlua::Value::Integer(match key {
             "casualmaxmeter" => 12,
             "simplylovecolor" => 1,
             _ => 0,
         }));
     }
     if matches!(
-        lower.as_str(),
+        key,
         "visualstyle"
             | "lastactiveevent"
             | "musicwheelstyle"
@@ -1221,7 +1241,7 @@ pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Val
             | "editmodelastseenstepstype"
             | "editmodelastseenstyletype"
     ) {
-        let value = match lower.as_str() {
+        let value = match key {
             "themefont" => "Common",
             "defaultgamemode" => "Dance",
             "songselectbg" | "resultsbg" => "Off",
@@ -1231,10 +1251,16 @@ pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Val
         };
         return Ok(mlua::Value::String(lua.create_string(value)?));
     }
-    Ok(mlua::Value::Boolean(matches!(
-        lower.as_str(),
-        "useimagecache"
-    )))
+    Ok(mlua::Value::Boolean(matches!(key, "useimagecache")))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn theme_pref_default_reference_for_bench(
+    lua: &mlua::Lua,
+    name: &str,
+) -> mlua::Result<mlua::Value> {
+    theme_pref_default_normalized(lua, &name.to_ascii_lowercase())
 }
 
 pub type SongLuaNoteskinPathResolver = fn(&str, &str, &str) -> Option<PathBuf>;
@@ -1943,20 +1969,28 @@ pub fn parse_overlay_effect_mode_reference_for_bench(raw: &str) -> Option<Effect
 
 #[must_use]
 pub fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
-    let lower = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    match lower.as_str() {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    with_ascii_lowercase_overlay_key(raw, parse_overlay_effect_clock_normalized)
+}
+
+fn parse_overlay_effect_clock_normalized(key: &str) -> Option<EffectClock> {
+    match key {
         "beat" | "beatnooffset" | "bgm" => Some(EffectClock::Beat),
         "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
             Some(EffectClock::Time)
         }
-        _ if lower.contains("beat") => Some(EffectClock::Beat),
-        _ if !lower.is_empty() => Some(EffectClock::Time),
+        _ if key.contains("beat") => Some(EffectClock::Beat),
+        _ if !key.is_empty() => Some(EffectClock::Time),
         _ => None,
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn parse_overlay_effect_clock_reference_for_bench(raw: &str) -> Option<EffectClock> {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    parse_overlay_effect_clock_normalized(&raw.to_ascii_lowercase())
 }
 
 #[must_use]
@@ -4553,7 +4587,8 @@ mod tests {
         note_field_column_actors as create_note_field_column_actors, note_hide_window_from_indices,
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
         overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
-        parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
+        parse_overlay_blend_mode, parse_overlay_effect_clock,
+        parse_overlay_effect_clock_reference_for_bench, parse_overlay_effect_mode,
         parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
         parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
         parse_overlay_text_glow_mode_reference_for_bench, push_multitap_arrow_sample,
@@ -4572,7 +4607,8 @@ mod tests {
         sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
         sprite_texture_rect, sprite_texture_rect_with_offset, texture_pixel_offset_rect,
         theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_pref_default,
-        theme_string, theme_string_names,
+        theme_pref_default_reference_for_bench, theme_screen_fallback,
+        theme_screen_fallback_reference_for_bench, theme_string, theme_string_names,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -19437,6 +19473,61 @@ end
     }
 
     #[test]
+    fn stack_normalized_overlay_effect_clocks_match_committed_behavior() {
+        let long_value = "É".repeat(20);
+        let cases = [
+            (" BEAT ", Some(EffectClock::Beat)),
+            ("BeatNoOffset", Some(EffectClock::Beat)),
+            ("BGM", Some(EffectClock::Beat)),
+            ("'timer'", Some(EffectClock::Time)),
+            ("TimerGlobal", Some(EffectClock::Time)),
+            ("\"MUSIC\"", Some(EffectClock::Time)),
+            ("MusicNoOffset", Some(EffectClock::Time)),
+            ("seconds", Some(EffectClock::Time)),
+            ("EffectClock_Beat", Some(EffectClock::Beat)),
+            ("unknown", Some(EffectClock::Time)),
+            ("''", None),
+            (long_value.as_str(), Some(EffectClock::Time)),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(parse_overlay_effect_clock(raw), expected, "raw={raw:?}");
+            assert_eq!(
+                parse_overlay_effect_clock(raw),
+                parse_overlay_effect_clock_reference_for_bench(raw),
+                "raw={raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_normalized_theme_screen_fallbacks_match_committed_behavior() {
+        let long_unknown = "É".repeat(20);
+        let cases = [
+            ("ScreenOptionsService", Some("ScreenOptionsSimple")),
+            ("SCREENVISUALOPTIONS", Some("ScreenOptionsServiceSub")),
+            ("ScreenSystemOptions", Some("ScreenOptionsServiceChild")),
+            (
+                "ScreenGraphicsSoundOptions",
+                Some("ScreenOptionsServiceChild"),
+            ),
+            (
+                "ScreenTournamentModeOptions",
+                Some("ScreenOptionsServiceChild"),
+            ),
+            ("UnknownScreen", None),
+            (long_unknown.as_str(), None),
+        ];
+        for (group, expected) in cases {
+            assert_eq!(theme_screen_fallback(group), expected, "group={group:?}");
+            assert_eq!(
+                theme_screen_fallback(group),
+                theme_screen_fallback_reference_for_bench(group),
+                "group={group:?}"
+            );
+        }
+    }
+
+    #[test]
     fn theme_metric_number_exposes_numeric_compat_values() {
         assert_eq!(
             theme_metric_number("Player", "ReceptorArrowsYStandard"),
@@ -19565,5 +19656,31 @@ end
             theme_pref_default(&lua, "UnknownPreference").unwrap(),
             Value::Boolean(false)
         );
+    }
+
+    #[test]
+    fn stack_normalized_theme_pref_defaults_match_committed_behavior() {
+        let lua = Lua::new();
+        let long_unknown = "É".repeat(20);
+        for name in [
+            "CasualMaxMeter",
+            "NUMBEROFCONTINUESALLOWED",
+            "ScreenEvaluationNonstopMenuTimer",
+            "SimplyLoveColor",
+            "VisualStyle",
+            "ThemeFont",
+            "DefaultGameMode",
+            "SongSelectBG",
+            "EditModeLastSeenDifficulty",
+            "UseImageCache",
+            "UnknownPreference",
+            long_unknown.as_str(),
+        ] {
+            assert_eq!(
+                theme_pref_default(&lua, name).unwrap(),
+                theme_pref_default_reference_for_bench(&lua, name).unwrap(),
+                "name={name:?}"
+            );
+        }
     }
 }
