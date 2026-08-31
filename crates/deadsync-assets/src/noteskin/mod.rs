@@ -2239,6 +2239,11 @@ return skin
         slot.source = Arc::new(SpriteSource::Atlas {
             texture_key: Arc::<str>::from(key.as_str()),
             tex_dims: (2048, 2048),
+            texel_scale: [1.0 / 2048.0, 1.0 / 2048.0],
+            uv_cache: deadsync_noteskin::SpriteAtlasUvCache::new(
+                [1.0 / 2048.0, 1.0 / 2048.0],
+                &slot.def,
+            ),
             cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),
@@ -2320,6 +2325,11 @@ return skin
         slot.source = Arc::new(SpriteSource::Atlas {
             texture_key: Arc::<str>::from(key.as_str()),
             tex_dims: (2048, 2048),
+            texel_scale: [1.0 / 2048.0, 1.0 / 2048.0],
+            uv_cache: deadsync_noteskin::SpriteAtlasUvCache::new(
+                [1.0 / 2048.0, 1.0 / 2048.0],
+                &slot.def,
+            ),
             cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),

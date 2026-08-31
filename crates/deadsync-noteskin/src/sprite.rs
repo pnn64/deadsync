@@ -734,6 +734,43 @@ pub fn sprite_frame_index(
         }
         _ => return 0,
     };
+    if frame >= 0 {
+        frame as usize % frames
+    } else {
+        frame.rem_euclid(frames as isize) as usize
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sprite_frame_index_legacy(
+    frame_count: usize,
+    rate: AnimationRate,
+    frame_durations: Option<&[f32]>,
+    time: f32,
+    beat: f32,
+) -> usize {
+    let frames = frame_count.max(1);
+    if frames <= 1 {
+        return 0;
+    }
+    if let Some(durations) = frame_durations {
+        let clock = match rate {
+            AnimationRate::FramesPerSecond(_) => time,
+            AnimationRate::FramesPerBeat(_) => beat,
+        };
+        if let Some(total) = frame_duration_total(durations, frames)
+            && let Some(idx) = duration_frame_index(durations, frames, clock.rem_euclid(total))
+        {
+            return idx;
+        }
+    }
+    let frame = match rate {
+        AnimationRate::FramesPerSecond(fps) if fps > 0.0 => (time * fps).floor() as isize,
+        AnimationRate::FramesPerBeat(frames_per_beat) if frames_per_beat > 0.0 => {
+            (beat * frames_per_beat).floor() as isize
+        }
+        _ => return 0,
+    };
     ((frame % frames as isize) + frames as isize) as usize % frames
 }
 
@@ -804,6 +841,90 @@ pub fn sprite_atlas_uv(tex_dims: [u32; 2], def: &SpriteDefinition, inset_texels:
     [u0 / tw, v0 / th, u1 / tw, v1 / th]
 }
 
+/// Computes atlas coordinates with a texture scale cached by the owning
+/// sprite source, avoiding repeated division in the render hot path.
+#[must_use]
+pub fn sprite_atlas_uv_scaled(
+    texel_scale: [f32; 2],
+    def: &SpriteDefinition,
+    inset_texels: bool,
+) -> [f32; 4] {
+    let mut u0 = def.src[0] as f32;
+    let mut v0 = def.src[1] as f32;
+    let mut u1 = (def.src[0] + def.size[0]) as f32;
+    let mut v1 = (def.src[1] + def.size[1]) as f32;
+
+    if inset_texels {
+        if def.size[0] > 0 {
+            u0 += 0.5;
+            u1 -= 0.5;
+        }
+        if def.size[1] > 0 {
+            v0 += 0.5;
+            v1 -= 0.5;
+        }
+    }
+
+    [
+        u0 * texel_scale[0],
+        v0 * texel_scale[1],
+        u1 * texel_scale[0],
+        v1 * texel_scale[1],
+    ]
+}
+
+/// Allocation-free cache for the two static atlas UV variants used by sprite
+/// and model draws. Rebuild it when the texture scale, source, or size changes.
+#[derive(Debug, Clone, Copy)]
+pub struct SpriteAtlasUvCache {
+    uv: [[f32; 4]; 2],
+}
+
+impl SpriteAtlasUvCache {
+    #[must_use]
+    pub fn new(texel_scale: [f32; 2], def: &SpriteDefinition) -> Self {
+        Self {
+            uv: [
+                sprite_atlas_uv_scaled(texel_scale, def, false),
+                sprite_atlas_uv_scaled(texel_scale, def, true),
+            ],
+        }
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn get(&self, inset_texels: bool) -> [f32; 4] {
+        self.uv[inset_texels as usize]
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sprite_atlas_uv_legacy(
+    tex_dims: [u32; 2],
+    def: &SpriteDefinition,
+    inset_texels: bool,
+) -> [f32; 4] {
+    let tw = tex_dims[0].max(1) as f32;
+    let th = tex_dims[1].max(1) as f32;
+    let mut u0 = def.src[0] as f32;
+    let mut v0 = def.src[1] as f32;
+    let mut u1 = (def.src[0] + def.size[0]) as f32;
+    let mut v1 = (def.src[1] + def.size[1]) as f32;
+
+    if inset_texels {
+        if def.size[0] > 0 {
+            u0 += 0.5;
+            u1 -= 0.5;
+        }
+        if def.size[1] > 0 {
+            v0 += 0.5;
+            v1 -= 0.5;
+        }
+    }
+
+    [u0 / tw, v0 / th, u1 / tw, v1 / th]
+}
+
 #[must_use]
 pub fn sprite_animated_uv(
     tex_dims: [u32; 2],
@@ -840,6 +961,82 @@ pub fn sprite_animated_uv(
         mirror_v: false,
     };
     sprite_atlas_uv(tex_dims, &frame_def, inset_texels)
+}
+
+#[must_use]
+pub fn sprite_animated_uv_scaled(
+    texel_scale: [f32; 2],
+    def: &SpriteDefinition,
+    frame_size: [i32; 2],
+    grid: [usize; 2],
+    frame_count: usize,
+    frame_indices: Option<&[usize]>,
+    frame_index: usize,
+    inset_texels: bool,
+) -> [f32; 4] {
+    let frames = frame_count.max(1);
+    let idx = frame_index % frames;
+    let cols = grid[0].max(1);
+    let available = cols.saturating_mul(grid[1].max(1)).max(1);
+    let source_idx = frame_indices
+        .and_then(|indices| indices.get(idx).copied())
+        .map_or(idx, |idx| idx % available);
+    let row = source_idx / cols;
+    let col = source_idx % cols;
+    let (src_x, src_y) = if frame_indices.is_some() {
+        (col as i32 * frame_size[0], row as i32 * frame_size[1])
+    } else {
+        (
+            def.src[0] + (col as i32 * frame_size[0]),
+            def.src[1] + (row as i32 * frame_size[1]),
+        )
+    };
+    let frame_def = SpriteDefinition {
+        src: [src_x, src_y],
+        size: frame_size,
+        rotation_deg: 0,
+        mirror_h: false,
+        mirror_v: false,
+    };
+    sprite_atlas_uv_scaled(texel_scale, &frame_def, inset_texels)
+}
+
+#[cfg(test)]
+fn sprite_animated_uv_legacy(
+    tex_dims: [u32; 2],
+    def: &SpriteDefinition,
+    frame_size: [i32; 2],
+    grid: [usize; 2],
+    frame_count: usize,
+    frame_indices: Option<&[usize]>,
+    frame_index: usize,
+    inset_texels: bool,
+) -> [f32; 4] {
+    let frames = frame_count.max(1);
+    let idx = frame_index % frames;
+    let cols = grid[0].max(1);
+    let available = cols.saturating_mul(grid[1].max(1)).max(1);
+    let source_idx = frame_indices
+        .and_then(|indices| indices.get(idx).copied())
+        .map_or(idx, |idx| idx % available);
+    let row = source_idx / cols;
+    let col = source_idx % cols;
+    let (src_x, src_y) = if frame_indices.is_some() {
+        (col as i32 * frame_size[0], row as i32 * frame_size[1])
+    } else {
+        (
+            def.src[0] + (col as i32 * frame_size[0]),
+            def.src[1] + (row as i32 * frame_size[1]),
+        )
+    };
+    let frame_def = SpriteDefinition {
+        src: [src_x, src_y],
+        size: frame_size,
+        rotation_deg: 0,
+        mirror_h: false,
+        mirror_v: false,
+    };
+    sprite_atlas_uv_legacy(tex_dims, &frame_def, inset_texels)
 }
 
 #[must_use]
@@ -974,6 +1171,110 @@ pub mod sprite_math_bench_support {
                 .wrapping_add(u64::from(value.to_bits()))
                 .rotate_left(7)
         })
+    }
+
+    #[inline(always)]
+    fn normalized_uv_checksum(uv: [f32; 4], checksum: u64) -> u64 {
+        uv.into_iter().fold(checksum, |checksum, value| {
+            checksum
+                .wrapping_add((value * 65_536.0).round() as i64 as u64)
+                .rotate_left(7)
+        })
+    }
+
+    fn uniform_frame_index(evaluations: usize, legacy: bool) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
+            let frame = if legacy {
+                sprite_frame_index_legacy(17, AnimationRate::FramesPerSecond(30.0), None, time, 0.0)
+            } else {
+                sprite_frame_index(17, AnimationRate::FramesPerSecond(30.0), None, time, 0.0)
+            };
+            checksum = frame_checksum(frame, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn uniform_frame_index_old(evaluations: usize) -> u64 {
+        uniform_frame_index(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn uniform_frame_index_new(evaluations: usize) -> u64 {
+        uniform_frame_index(evaluations, false)
+    }
+
+    fn atlas_uv(evaluations: usize, legacy: bool) -> u64 {
+        let def = black_box(SpriteDefinition {
+            src: [64, 96],
+            size: [48, 64],
+            rotation_deg: 0,
+            mirror_h: false,
+            mirror_v: false,
+        });
+        let texel_scales = black_box([[1.0 / 257.0, 1.0 / 509.0], [1.0 / 258.0, 1.0 / 510.0]]);
+        let mut total = [0.0_f32; 4];
+        for index in 0..evaluations {
+            let tex_dims = black_box([257 + (index & 1) as u32, 509 + (index & 1) as u32]);
+            let uv = if legacy {
+                sprite_atlas_uv_legacy(tex_dims, &def, true)
+            } else {
+                sprite_atlas_uv_scaled(texel_scales[index & 1], &def, true)
+            };
+            for (total, value) in total.iter_mut().zip(uv) {
+                *total += value;
+            }
+        }
+        let average = total.map(|value| value / evaluations as f32);
+        normalized_uv_checksum(average, 0)
+    }
+
+    #[must_use]
+    pub fn atlas_uv_old(evaluations: usize) -> u64 {
+        atlas_uv(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn atlas_uv_new(evaluations: usize) -> u64 {
+        atlas_uv(evaluations, false)
+    }
+
+    fn cached_atlas_uv(evaluations: usize, legacy: bool) -> u64 {
+        let def = black_box(SpriteDefinition {
+            src: [64, 96],
+            size: [48, 64],
+            rotation_deg: 0,
+            mirror_h: false,
+            mirror_v: false,
+        });
+        let texel_scale = black_box([1.0 / 512.0, 1.0 / 256.0]);
+        let cache = black_box(SpriteAtlasUvCache::new(texel_scale, &def));
+        let mut total = [0.0_f32; 4];
+        for index in 0..evaluations {
+            let inset = black_box(index & 1 != 0);
+            let uv = if legacy {
+                sprite_atlas_uv_scaled(texel_scale, &def, inset)
+            } else {
+                cache.get(inset)
+            };
+            for (total, value) in total.iter_mut().zip(uv) {
+                *total += value;
+            }
+        }
+        let average = total.map(|value| value / evaluations as f32);
+        normalized_uv_checksum(average, 0)
+    }
+
+    #[must_use]
+    pub fn cached_atlas_uv_old(evaluations: usize) -> u64 {
+        cached_atlas_uv(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn cached_atlas_uv_new(evaluations: usize) -> u64 {
+        cached_atlas_uv(evaluations, false)
     }
 
     #[must_use]
@@ -1139,17 +1440,29 @@ mod tests {
     use crate::script::{SpriteAnimationCommandPlan, SpriteStatePropertiesPlan};
 
     use super::{
-        AnimationRate, SpriteAnimationPlan, SpriteDefinition, SpriteSourcePlan,
+        AnimationRate, SpriteAnimationPlan, SpriteAtlasUvCache, SpriteDefinition, SpriteSourcePlan,
         SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan, atlas_sprite_slot_plan,
         duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
         generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
         itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
         itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
         neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv,
-        sprite_animation_plan, sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase,
-        sprite_frame_index_from_phase_legacy, sprite_scrolled_uv, sprite_scrolled_uv_legacy,
+        sprite_animated_uv_legacy, sprite_animated_uv_scaled, sprite_animation_plan,
+        sprite_atlas_uv, sprite_atlas_uv_legacy, sprite_atlas_uv_scaled, sprite_frame_index,
+        sprite_frame_index_from_phase, sprite_frame_index_from_phase_legacy,
+        sprite_frame_index_legacy, sprite_scrolled_uv, sprite_scrolled_uv_legacy,
         sprite_sheet_frame, sprite_state_properties_animation,
     };
+
+    fn assert_uv_close(old: [f32; 4], new: [f32; 4]) {
+        for (old, new) in old.into_iter().zip(new) {
+            let tolerance = old.abs().max(1.0) * f32::EPSILON * 2.0;
+            assert!(
+                (old - new).abs() <= tolerance,
+                "legacy {old:?} and optimized {new:?} UV coordinates differ"
+            );
+        }
+    }
 
     #[test]
     fn neg_rotation_uses_exact_cardinal_values() {
@@ -1516,6 +1829,147 @@ mod tests {
             1
         );
         assert_eq!(sprite_frame_index_from_phase(2, Some(&durations), -0.05), 1);
+    }
+
+    #[test]
+    fn single_remainder_frame_wrapping_matches_legacy_selection() {
+        let durations = [0.125, 0.375, 0.25, 0.25];
+        for frame_count in [0, 1, 2, 4, 8, 17] {
+            for rate in [
+                AnimationRate::FramesPerSecond(30.0),
+                AnimationRate::FramesPerBeat(4.0),
+                AnimationRate::FramesPerSecond(0.0),
+            ] {
+                for frame_durations in [None, Some(durations.as_slice())] {
+                    for tick in -8_192..=8_192 {
+                        let time = tick as f32 / 256.0;
+                        let beat = tick as f32 / 1_024.0;
+                        assert_eq!(
+                            sprite_frame_index(frame_count, rate, frame_durations, time, beat),
+                            sprite_frame_index_legacy(
+                                frame_count,
+                                rate,
+                                frame_durations,
+                                time,
+                                beat,
+                            )
+                        );
+                    }
+                    for clock in [
+                        -f32::MAX,
+                        -0.0,
+                        0.0,
+                        f32::MAX,
+                        f32::NEG_INFINITY,
+                        f32::INFINITY,
+                        f32::NAN,
+                    ] {
+                        assert_eq!(
+                            sprite_frame_index(frame_count, rate, frame_durations, clock, clock),
+                            sprite_frame_index_legacy(
+                                frame_count,
+                                rate,
+                                frame_durations,
+                                clock,
+                                clock,
+                            )
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn reciprocal_atlas_uv_normalization_matches_legacy_coordinates() {
+        let definitions = [
+            SpriteDefinition::default(),
+            SpriteDefinition {
+                src: [17, 31],
+                size: [47, 63],
+                ..SpriteDefinition::default()
+            },
+            SpriteDefinition {
+                src: [-19, -7],
+                size: [-3, 0],
+                ..SpriteDefinition::default()
+            },
+        ];
+        for tex_dims in [[0, 0], [1, 1], [257, 509], [4_096, 2_047]] {
+            for def in &definitions {
+                for inset in [false, true] {
+                    assert_uv_close(
+                        sprite_atlas_uv_legacy(tex_dims, def, inset),
+                        sprite_atlas_uv_scaled(
+                            [
+                                1.0 / tex_dims[0].max(1) as f32,
+                                1.0 / tex_dims[1].max(1) as f32,
+                            ],
+                            def,
+                            inset,
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn scaled_animated_uv_matches_legacy_addressing() {
+        let def = SpriteDefinition {
+            src: [64, 32],
+            size: [32, 32],
+            ..SpriteDefinition::default()
+        };
+        let indices = [7, 0, 5, 2, 19, 1, 6, 3];
+        for grid in [[8, 1], [1, 8], [4, 2]] {
+            for frame_indices in [None, Some(indices.as_slice())] {
+                for frame_index in 0..32 {
+                    for inset in [false, true] {
+                        let old = sprite_animated_uv_legacy(
+                            [512, 256],
+                            &def,
+                            [32, 32],
+                            grid,
+                            8,
+                            frame_indices,
+                            frame_index,
+                            inset,
+                        );
+                        let texel_scale = [1.0 / 512.0, 1.0 / 256.0];
+                        let new = sprite_animated_uv_scaled(
+                            texel_scale,
+                            &def,
+                            [32, 32],
+                            grid,
+                            8,
+                            frame_indices,
+                            frame_index,
+                            inset,
+                        );
+                        assert_uv_close(old, new);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn static_atlas_uv_cache_preserves_both_inset_variants() {
+        let scale = [1.0 / 257.0, 1.0 / 509.0];
+        let def = SpriteDefinition {
+            src: [17, 31],
+            size: [47, 63],
+            ..SpriteDefinition::default()
+        };
+        let cache = SpriteAtlasUvCache::new(scale, &def);
+
+        for inset in [false, true] {
+            assert_eq!(
+                cache.get(inset).map(f32::to_bits),
+                sprite_atlas_uv_scaled(scale, &def, inset).map(f32::to_bits)
+            );
+        }
     }
 
     #[test]

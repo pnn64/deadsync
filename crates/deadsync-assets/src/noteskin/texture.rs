@@ -18,14 +18,14 @@ use deadsync_noteskin::script::{
 };
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenCursor,
-    ModelTweenSegment, NotePartAnimation, NotePartTextureTranslate, NoteskinSlot, SpriteDefinition,
-    SpriteSlotPlan, SpriteSourcePlan, generated_animation_sprite_slot_plan,
-    itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
-    itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
-    itg_sprite_slot_plan_from_path, model_draw_at, model_draw_at_cursor, model_glow_at,
-    model_glow_with_draw, model_vertex_for_sprite, neg_rot_sin_cos, sprite_animated_uv,
-    sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
-    sprite_sheet_frame,
+    ModelTweenSegment, NotePartAnimation, NotePartTextureTranslate, NoteskinSlot,
+    SpriteAtlasUvCache, SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan,
+    generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
+    itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
+    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_draw_at,
+    model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
+    neg_rot_sin_cos, sprite_animated_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
+    sprite_scrolled_uv, sprite_sheet_frame,
 };
 use image::image_dimensions;
 use log::warn;
@@ -40,6 +40,8 @@ pub enum SpriteSource {
     Atlas {
         texture_key: Arc<str>,
         tex_dims: (u32, u32),
+        texel_scale: [f32; 2],
+        uv_cache: SpriteAtlasUvCache,
         cached_handle: AtomicU64,
         cached_generation: AtomicU64,
         cached_actor_texture: AtomicU64,
@@ -47,6 +49,7 @@ pub enum SpriteSource {
     Animated {
         texture_key: Arc<str>,
         tex_dims: (u32, u32),
+        texel_scale: [f32; 2],
         frame_size: [i32; 2],
         grid: (usize, usize),
         frame_count: usize,
@@ -170,6 +173,12 @@ impl SpriteSource {
                 ..
             }
         )
+    }
+
+    pub const fn texel_scale(&self) -> [f32; 2] {
+        match self {
+            Self::Atlas { texel_scale, .. } | Self::Animated { texel_scale, .. } => *texel_scale,
+        }
     }
 }
 
@@ -358,18 +367,16 @@ impl SpriteSlot {
     #[must_use]
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
         let uv = match self.source.as_ref() {
-            SpriteSource::Atlas { tex_dims, .. } => {
-                sprite_atlas_uv([tex_dims.0, tex_dims.1], &self.def, self.model.is_none())
-            }
+            SpriteSource::Atlas { uv_cache, .. } => uv_cache.get(self.model.is_none()),
             SpriteSource::Animated {
-                tex_dims,
+                texel_scale,
                 frame_size,
                 grid,
                 frame_count,
                 frame_indices,
                 ..
-            } => sprite_animated_uv(
-                [tex_dims.0, tex_dims.1],
+            } => sprite_animated_uv_scaled(
+                *texel_scale,
                 &self.def,
                 *frame_size,
                 [grid.0, grid.1],
@@ -530,6 +537,11 @@ pub fn test_model_slot() -> SpriteSlot {
         source: Arc::new(SpriteSource::Atlas {
             texture_key: Arc::from("test"),
             tex_dims: (64, 64),
+            texel_scale: [1.0 / 64.0, 1.0 / 64.0],
+            uv_cache: SpriteAtlasUvCache::new(
+                [1.0 / 64.0, 1.0 / 64.0],
+                &SpriteDefinition::default(),
+            ),
             cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
             cached_generation: AtomicU64::new(u64::MAX),
             cached_actor_texture: AtomicU64::new(0),
@@ -641,18 +653,30 @@ pub fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, 
     .map(Arc::from)
 }
 
-fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
+fn texture_texel_scale(tex_dims: (u32, u32)) -> [f32; 2] {
+    [
+        1.0 / tex_dims.0.max(1) as f32,
+        1.0 / tex_dims.1.max(1) as f32,
+    ]
+}
+
+fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<SpriteSource> {
     match plan {
         SpriteSourcePlan::Atlas {
             texture_key,
             tex_dims,
-        } => Arc::new(SpriteSource::Atlas {
-            texture_key: texture_key.into(),
-            tex_dims,
-            cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
-            cached_generation: AtomicU64::new(u64::MAX),
-            cached_actor_texture: AtomicU64::new(0),
-        }),
+        } => {
+            let texel_scale = texture_texel_scale(tex_dims);
+            Arc::new(SpriteSource::Atlas {
+                texture_key: texture_key.into(),
+                tex_dims,
+                texel_scale,
+                uv_cache: SpriteAtlasUvCache::new(texel_scale, def),
+                cached_handle: AtomicU64::new(deadlib_render_core::INVALID_TEXTURE_HANDLE),
+                cached_generation: AtomicU64::new(u64::MAX),
+                cached_actor_texture: AtomicU64::new(0),
+            })
+        }
         SpriteSourcePlan::Animated {
             texture_key,
             tex_dims,
@@ -665,6 +689,7 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
         } => Arc::new(SpriteSource::Animated {
             texture_key: texture_key.into(),
             tex_dims,
+            texel_scale: texture_texel_scale(tex_dims),
             frame_size,
             grid,
             frame_count,
@@ -679,12 +704,14 @@ fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
 }
 
 fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
+    let def = plan.def;
+    let source = source_from_plan(plan.source, &def);
     SpriteSlot {
         stable_id: next_slot_id(),
-        def: plan.def,
+        def,
         base_rot_sin_cos: [0.0, 1.0],
         source_size: plan.source_size,
-        source: source_from_plan(plan.source),
+        source,
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
@@ -743,7 +770,7 @@ fn plan_from_slot(slot: &SpriteSlot) -> SpriteSlotPlan {
 fn apply_slot_plan(slot: &mut SpriteSlot, plan: SpriteSlotPlan) {
     slot.def = plan.def;
     slot.source_size = plan.source_size;
-    slot.source = source_from_plan(plan.source);
+    slot.source = source_from_plan(plan.source, &slot.def);
     slot.note_color_translate = plan.note_color_translate;
 }
 
@@ -770,6 +797,15 @@ pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
     );
     slot.def.src = plan.def.src;
     slot.def.size = plan.def.size;
+    if matches!(slot.source.as_ref(), SpriteSource::Atlas { .. }) {
+        slot.source = source_from_plan(
+            SpriteSourcePlan::Atlas {
+                texture_key: key,
+                tex_dims: (tex_w, tex_h),
+            },
+            &slot.def,
+        );
+    }
 }
 
 pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot> {
@@ -824,20 +860,23 @@ pub(super) fn itg_apply_note_animation(
         SpriteSource::Animated { .. } => return,
     };
     let frames_per_cycle = frame_indices.len() as f32 / animation.length.max(1e-6);
-    slot.source = source_from_plan(SpriteSourcePlan::Animated {
-        texture_key: key,
-        tex_dims,
-        frame_size: [frame_w, frame_h],
-        grid: (grid_x, grid_y),
-        frame_count: frame_indices.len(),
-        frame_indices: Some(frame_indices),
-        rate: if beat_based {
-            AnimationRate::FramesPerBeat(frames_per_cycle)
-        } else {
-            AnimationRate::FramesPerSecond(frames_per_cycle)
+    slot.source = source_from_plan(
+        SpriteSourcePlan::Animated {
+            texture_key: key,
+            tex_dims,
+            frame_size: [frame_w, frame_h],
+            grid: (grid_x, grid_y),
+            frame_count: frame_indices.len(),
+            frame_indices: Some(frame_indices),
+            rate: if beat_based {
+                AnimationRate::FramesPerBeat(frames_per_cycle)
+            } else {
+                AnimationRate::FramesPerSecond(frames_per_cycle)
+            },
+            frame_durations: None,
         },
-        frame_durations: None,
-    });
+        &slot.def,
+    );
 }
 
 pub fn itg_slot_from_path_animated(
@@ -972,10 +1011,13 @@ fn freeze_sprite_animation(slot: &mut SpriteSlot) {
     else {
         return;
     };
-    slot.source = source_from_plan(SpriteSourcePlan::Atlas {
-        texture_key: texture_key.to_string(),
-        tex_dims: *tex_dims,
-    });
+    slot.source = source_from_plan(
+        SpriteSourcePlan::Atlas {
+            texture_key: texture_key.to_string(),
+            tex_dims: *tex_dims,
+        },
+        &slot.def,
+    );
 }
 
 #[cfg(test)]
@@ -1127,6 +1169,11 @@ mod contract_tests {
         assert!(matches!(slot.source.as_ref(), SpriteSource::Atlas { .. }));
         assert_eq!(slot.def.src, [128, 0]);
         assert_eq!(slot.frame_index(10.0, 40.0), 0);
+        assert_eq!(
+            slot.uv_for_frame_at(0, 0.0).map(f32::to_bits),
+            deadsync_noteskin::sprite_atlas_uv_scaled([1.0 / 192.0, 1.0 / 64.0], &slot.def, true,)
+                .map(f32::to_bits),
+        );
     }
 
     #[test]
