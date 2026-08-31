@@ -2,8 +2,9 @@ use deadsync_notefield::edit_bar_geometry_bench_support::{
     edit_bar_geometry_new, edit_bar_geometry_old,
 };
 use deadsync_notefield::hold_geometry_bench_support::{
-    endpoint_sample_new, endpoint_sample_old, mesh_cap_pose_new, mesh_cap_pose_old, mesh_slice_new,
-    mesh_slice_old, strip_normal_new, strip_normal_old,
+    endpoint_appearance_new, endpoint_appearance_old, endpoint_sample_new, endpoint_sample_old,
+    mesh_cap_pose_new, mesh_cap_pose_old, mesh_slice_new, mesh_slice_old, segment_uv_new,
+    segment_uv_old, slice_uv_reuse_new, slice_uv_reuse_old, strip_normal_new, strip_normal_old,
 };
 use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
@@ -280,6 +281,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield hold endpoint appearance reuse",
+        endpoint_appearance_old,
+        endpoint_appearance_new,
+    );
+    run(
+        "notefield hold segment reciprocal UV",
+        segment_uv_old,
+        segment_uv_new,
+    );
+    run(
+        "notefield hold slice UV endpoint reuse",
+        slice_uv_reuse_old,
+        slice_uv_reuse_new,
+    );
     run(
         "notefield hold endpoint sample reuse",
         endpoint_sample_old,

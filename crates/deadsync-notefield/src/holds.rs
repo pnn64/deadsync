@@ -83,6 +83,13 @@ pub(crate) struct HoldPathSample {
     pub arrow_px: f32,
 }
 
+#[derive(Clone, Copy)]
+struct HoldPathEndpoint {
+    y: f32,
+    sample: HoldPathSample,
+    appearance: Option<(f32, f32)>,
+}
+
 /// Canonical body and cap inputs after concrete noteskin/state resolution.
 #[derive(Debug)]
 pub(crate) struct HoldBodyCapRequest<'a, S> {
@@ -653,6 +660,21 @@ fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSampl
     (alpha, itg_actor_glow_alpha(glow))
 }
 
+#[inline(always)]
+fn hold_endpoint_alpha_glow(
+    sample: HoldPathSample,
+    cached_appearance: Option<(f32, f32)>,
+    lane_offset: f32,
+    appearance_cache: &NoteAppearanceCache,
+) -> (f32, f32) {
+    if let Some(appearance) = cached_appearance {
+        return appearance;
+    }
+    let (alpha, glow) =
+        appearance_note_alpha_glow_cached(sample.adjusted_travel + lane_offset, appearance_cache);
+    (alpha, itg_actor_glow_alpha(glow))
+}
+
 struct HoldSpritePass<'a, S> {
     slot: &'a S,
     center: [f32; 2],
@@ -1126,7 +1148,7 @@ where
     let slice_step = if request.depth_test { 4.0 } else { 16.0 };
     let use_mesh = slot.model().is_none() && request.rotation_y_deg.abs() <= f32::EPSILON;
     let mut prev_row: Option<[[f32; 3]; 2]> = None;
-    let mut previous_endpoint: Option<(f32, HoldPathSample)> = None;
+    let mut previous_endpoint: Option<HoldPathEndpoint> = None;
     let mut rendered = RenderedHoldBody::default();
     let mut emitted = 0;
 
@@ -1156,29 +1178,32 @@ where
             request.y_tail,
             phase_end,
         );
+        let inverse_segment_size = segment_size.recip();
         let mut slice_top = segment_top;
+        let mut slice_v0 =
+            hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
         while slice_top + f32::EPSILON < segment_bottom {
             let slice_bottom = (slice_top + slice_step).min(segment_bottom);
             let slice_size = slice_bottom - slice_top;
             if slice_size <= f32::EPSILON {
                 break;
             }
-            let t0 = ((slice_top - segment_top) / segment_size).clamp(0.0, 1.0);
-            let t1 = ((slice_bottom - segment_top) / segment_size).clamp(0.0, 1.0);
-            let slice_v0 = (v1 - v0).mul_add(t0, v0);
-            let slice_v1 = (v1 - v0).mul_add(t1, v0);
+            let slice_v1 =
+                hold_segment_slice_v(slice_bottom, segment_top, inverse_segment_size, v0, v1);
             let center_y = f32::midpoint(slice_top, slice_bottom);
             let center = sample_path(center_y);
             let (alpha, glow) = hold_alpha_glow(request, center);
             if alpha <= f32::EPSILON && glow <= f32::EPSILON {
                 prev_row = None;
                 slice_top = slice_bottom;
+                slice_v0 = slice_v1;
                 continue;
             }
 
-            let top = hold_path_endpoint_sample(slice_top, previous_endpoint, sample_path);
+            let cached_top =
+                previous_endpoint.filter(|endpoint| endpoint.y.to_bits() == slice_top.to_bits());
+            let top = hold_path_endpoint_sample(slice_top, cached_top, sample_path);
             let bottom = sample_path(slice_bottom);
-            previous_endpoint = Some((slice_bottom, bottom));
             rendered.top = Some(rendered.top.map_or(slice_top, |v| v.min(slice_top)));
             rendered.bottom = Some(
                 rendered
@@ -1187,6 +1212,18 @@ where
             );
 
             if use_mesh {
+                let top_appearance = hold_endpoint_alpha_glow(
+                    top,
+                    cached_top.and_then(|endpoint| endpoint.appearance),
+                    request.lane_offset,
+                    &request.appearance_cache,
+                );
+                let bottom_appearance = hold_alpha_glow(request, bottom);
+                previous_endpoint = Some(HoldPathEndpoint {
+                    y: slice_bottom,
+                    sample: bottom,
+                    appearance: Some(bottom_appearance),
+                });
                 append_hold_body_mesh_slice(
                     request,
                     u0,
@@ -1195,6 +1232,8 @@ where
                     slice_v1,
                     top,
                     bottom,
+                    top_appearance,
+                    bottom_appearance,
                     slice_top,
                     slice_bottom,
                     &mut prev_row,
@@ -1203,10 +1242,16 @@ where
                     glow_vertices,
                 );
             } else {
+                previous_endpoint = Some(HoldPathEndpoint {
+                    y: slice_bottom,
+                    sample: bottom,
+                    appearance: None,
+                });
                 let (center_xy, slice_height, rotation_z) =
                     hold_segment_pose([top.center_x, slice_top], [bottom.center_x, slice_bottom]);
                 if slice_height <= f32::EPSILON {
                     slice_top = slice_bottom;
+                    slice_v0 = slice_v1;
                     continue;
                 }
                 compose_hold_sprite(
@@ -1229,6 +1274,7 @@ where
                 );
             }
             slice_top = slice_bottom;
+            slice_v0 = slice_v1;
         }
         phase = next_phase;
         emitted += 1;
@@ -1240,16 +1286,28 @@ where
 #[inline(always)]
 fn hold_path_endpoint_sample<P>(
     y: f32,
-    previous: Option<(f32, HoldPathSample)>,
+    previous: Option<HoldPathEndpoint>,
     sample_path: &P,
 ) -> HoldPathSample
 where
     P: Fn(f32) -> HoldPathSample,
 {
     match previous {
-        Some((previous_y, sample)) if previous_y.to_bits() == y.to_bits() => sample,
+        Some(endpoint) if endpoint.y.to_bits() == y.to_bits() => endpoint.sample,
         _ => sample_path(y),
     }
+}
+
+#[inline(always)]
+fn hold_segment_slice_v(
+    y: f32,
+    segment_top: f32,
+    inverse_segment_size: f32,
+    v0: f32,
+    v1: f32,
+) -> f32 {
+    let t = ((y - segment_top) * inverse_segment_size).clamp(0.0, 1.0);
+    (v1 - v0).mul_add(t, v0)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1261,6 +1319,8 @@ fn append_hold_body_mesh_slice<S>(
     v1: f32,
     top: HoldPathSample,
     bottom: HoldPathSample,
+    top_appearance: (f32, f32),
+    bottom_appearance: (f32, f32),
     top_y: f32,
     bottom_y: f32,
     prev_row: &mut Option<[[f32; 3]; 2]>,
@@ -1268,8 +1328,8 @@ fn append_hold_body_mesh_slice<S>(
     diffuse_vertices: &mut Vec<TexturedMeshVertex>,
     glow_vertices: &mut Vec<TexturedMeshVertex>,
 ) {
-    let (top_alpha, top_glow) = hold_alpha_glow(request, top);
-    let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
+    let (top_alpha, top_glow) = top_appearance;
+    let (bottom_alpha, bottom_glow) = bottom_appearance;
     let forward = [bottom.center_x - top.center_x, bottom_y - top_y];
     let top_row_positions = prev_row.unwrap_or_else(|| {
         let row = hold_strip_row_3d(
@@ -2208,6 +2268,36 @@ pub mod hold_geometry_bench_support {
     }
 
     #[inline(always)]
+    fn appearance_checksum(appearance: (f32, f32)) -> u64 {
+        u64::from(appearance.0.to_bits())
+            .rotate_left(11)
+            .wrapping_add(u64::from(appearance.1.to_bits()))
+    }
+
+    #[inline(always)]
+    fn uv_checksum(v0: f32, v1: f32) -> u64 {
+        u64::from(v0.to_bits())
+            .rotate_left(13)
+            .wrapping_add(u64::from(v1.to_bits()))
+    }
+
+    fn benchmark_appearance_cache() -> NoteAppearanceCache {
+        crate::transforms::note_appearance_cache(
+            7.25,
+            0.0,
+            NoteAlphaParams {
+                hidden: 0.8,
+                hidden_offset: -0.1,
+                sudden: 0.7,
+                sudden_offset: 0.2,
+                stealth: 0.15,
+                blink: 0.25,
+                random_vanish: 0.2,
+            },
+        )
+    }
+
+    #[inline(always)]
     fn benchmark_path_sample(y: f32) -> HoldPathSample {
         let adjusted_travel = black_box(y).mul_add(1.125, -9.5);
         let angle = adjusted_travel.mul_add(0.013, 0.25);
@@ -2325,11 +2415,174 @@ pub mod hold_geometry_bench_support {
             let bottom_y = top_y + 4.0;
             let top = hold_path_endpoint_sample(top_y, previous, &benchmark_path_sample);
             let bottom = benchmark_path_sample(bottom_y);
-            previous = Some((bottom_y, bottom));
+            previous = Some(HoldPathEndpoint {
+                y: bottom_y,
+                sample: bottom,
+                appearance: None,
+            });
             checksum = checksum
                 .wrapping_add(sample_checksum(top))
                 .rotate_left(9)
                 .wrapping_add(sample_checksum(bottom));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn endpoint_appearance_old(evaluations: usize) -> u64 {
+        let appearance_cache = benchmark_appearance_cache();
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top_y = black_box(((index & 15) as f32).mul_add(4.0, -32.0));
+            let bottom_y = top_y + 4.0;
+            let top = HoldPathSample {
+                adjusted_travel: top_y,
+                ..HoldPathSample::default()
+            };
+            let bottom = HoldPathSample {
+                adjusted_travel: bottom_y,
+                ..HoldPathSample::default()
+            };
+            let top_appearance = hold_endpoint_alpha_glow(top, None, 3.5, &appearance_cache);
+            let bottom_appearance = hold_endpoint_alpha_glow(bottom, None, 3.5, &appearance_cache);
+            checksum = checksum
+                .wrapping_add(appearance_checksum(top_appearance))
+                .rotate_left(9)
+                .wrapping_add(appearance_checksum(bottom_appearance));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn endpoint_appearance_new(evaluations: usize) -> u64 {
+        let appearance_cache = benchmark_appearance_cache();
+        let mut checksum = 0_u64;
+        let mut previous = None;
+        for index in 0..evaluations {
+            let top_y = black_box(((index & 15) as f32).mul_add(4.0, -32.0));
+            let bottom_y = top_y + 4.0;
+            let top = HoldPathSample {
+                adjusted_travel: top_y,
+                ..HoldPathSample::default()
+            };
+            let bottom = HoldPathSample {
+                adjusted_travel: bottom_y,
+                ..HoldPathSample::default()
+            };
+            let cached_top = previous
+                .filter(|endpoint: &HoldPathEndpoint| endpoint.y.to_bits() == top_y.to_bits());
+            let top_appearance = hold_endpoint_alpha_glow(
+                top,
+                cached_top.and_then(|endpoint| endpoint.appearance),
+                3.5,
+                &appearance_cache,
+            );
+            let bottom_appearance = hold_endpoint_alpha_glow(bottom, None, 3.5, &appearance_cache);
+            previous = Some(HoldPathEndpoint {
+                y: bottom_y,
+                sample: bottom,
+                appearance: Some(bottom_appearance),
+            });
+            checksum = checksum
+                .wrapping_add(appearance_checksum(top_appearance))
+                .rotate_left(9)
+                .wrapping_add(appearance_checksum(bottom_appearance));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn segment_uv_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let segment_top = black_box(((index & 63) as f32).mul_add(64.0, -2048.0));
+            let segment_size = black_box(64.0_f32);
+            let v0 = black_box(0.125_f32);
+            let v1 = black_box(0.875_f32);
+            for slice in 0..8 {
+                let slice_top = black_box(segment_top + slice as f32 * 8.0);
+                let slice_bottom = black_box(slice_top + 8.0);
+                let t0 = ((slice_top - segment_top) / segment_size).clamp(0.0, 1.0);
+                let t1 = ((slice_bottom - segment_top) / segment_size).clamp(0.0, 1.0);
+                let slice_v0 = (v1 - v0).mul_add(t0, v0);
+                let slice_v1 = (v1 - v0).mul_add(t1, v0);
+                checksum = checksum
+                    .wrapping_add(uv_checksum(slice_v0, slice_v1))
+                    .rotate_left(9);
+            }
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn segment_uv_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let segment_top = black_box(((index & 63) as f32).mul_add(64.0, -2048.0));
+            let segment_size = black_box(64.0_f32);
+            let inverse_segment_size = segment_size.recip();
+            let v0 = black_box(0.125_f32);
+            let v1 = black_box(0.875_f32);
+            for slice in 0..8 {
+                let slice_top = black_box(segment_top + slice as f32 * 8.0);
+                let slice_bottom = black_box(slice_top + 8.0);
+                let slice_v0 =
+                    hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
+                let slice_v1 =
+                    hold_segment_slice_v(slice_bottom, segment_top, inverse_segment_size, v0, v1);
+                checksum = checksum
+                    .wrapping_add(uv_checksum(slice_v0, slice_v1))
+                    .rotate_left(9);
+            }
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn slice_uv_reuse_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let segment_top = black_box(((index & 63) as f32).mul_add(64.0, -2048.0));
+            let inverse_segment_size = black_box(64.0_f32).recip();
+            let v0 = black_box(0.125_f32);
+            let v1 = black_box(0.875_f32);
+            let mut slice_top = segment_top;
+            for _ in 0..8 {
+                let slice_bottom = black_box(slice_top + 8.0);
+                let slice_v0 =
+                    hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
+                let slice_v1 =
+                    hold_segment_slice_v(slice_bottom, segment_top, inverse_segment_size, v0, v1);
+                checksum = checksum
+                    .wrapping_add(uv_checksum(slice_v0, slice_v1))
+                    .rotate_left(9);
+                slice_top = slice_bottom;
+            }
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn slice_uv_reuse_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let segment_top = black_box(((index & 63) as f32).mul_add(64.0, -2048.0));
+            let inverse_segment_size = black_box(64.0_f32).recip();
+            let v0 = black_box(0.125_f32);
+            let v1 = black_box(0.875_f32);
+            let mut slice_top = segment_top;
+            let mut slice_v0 =
+                hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
+            for _ in 0..8 {
+                let slice_bottom = black_box(slice_top + 8.0);
+                let slice_v1 =
+                    hold_segment_slice_v(slice_bottom, segment_top, inverse_segment_size, v0, v1);
+                checksum = checksum
+                    .wrapping_add(uv_checksum(slice_v0, slice_v1))
+                    .rotate_left(9);
+                slice_top = slice_bottom;
+                slice_v0 = slice_v1;
+            }
         }
         checksum
     }
@@ -2630,13 +2883,100 @@ mod tests {
             sample(y)
         };
 
-        let reused = hold_path_endpoint_sample(previous_y, Some((previous_y, previous)), &counted);
+        let previous = HoldPathEndpoint {
+            y: previous_y,
+            sample: previous,
+            appearance: None,
+        };
+        let reused = hold_path_endpoint_sample(previous_y, Some(previous), &counted);
         assert_eq!(reused, sample(previous_y));
         assert_eq!(calls.get(), 0);
 
-        let sampled = hold_path_endpoint_sample(52.0, Some((previous_y, previous)), &counted);
+        let sampled = hold_path_endpoint_sample(52.0, Some(previous), &counted);
         assert_eq!(sampled, sample(52.0));
         assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn cached_hold_endpoint_appearance_matches_direct_evaluation() {
+        let request: HoldBodyCapRequest<'_, TestSlot> = body_cap_request(None, None, None);
+        let sample = HoldPathSample {
+            adjusted_travel: 37.5,
+            center_x: -12.0,
+            world_z: 4.0,
+            arrow_px: 63.0,
+        };
+        let direct = hold_alpha_glow(&request, sample);
+        assert_eq!(
+            hold_endpoint_alpha_glow(sample, None, request.lane_offset, &request.appearance_cache),
+            direct
+        );
+
+        let cached = (0.375, 0.625);
+        let endpoint = HoldPathEndpoint {
+            y: 52.0,
+            sample,
+            appearance: Some(cached),
+        };
+        assert_eq!(
+            hold_endpoint_alpha_glow(
+                sample,
+                endpoint.appearance,
+                request.lane_offset,
+                &request.appearance_cache,
+            ),
+            cached
+        );
+    }
+
+    #[test]
+    fn reciprocal_segment_uv_matches_division_reference() {
+        let cases: [(f32, f32, f32, f32); 4] = [
+            (-128.0, 64.0, 0.0, 1.0),
+            (17.25, 37.5, 0.125, 0.875),
+            (240.0, 11.75, 0.8, 0.2),
+            (-3.5, 0.25, 0.4, 0.6),
+        ];
+        for (segment_top, segment_size, v0, v1) in cases {
+            let inverse_segment_size = segment_size.recip();
+            for fraction in [-0.25, 0.0, 0.125, 0.5, 0.875, 1.0, 1.25] {
+                let y = segment_size.mul_add(fraction, segment_top);
+                let reference_t = ((y - segment_top) / segment_size).clamp(0.0, 1.0);
+                let expected = (v1 - v0).mul_add(reference_t, v0);
+                let actual = hold_segment_slice_v(y, segment_top, inverse_segment_size, v0, v1);
+                assert!(
+                    (actual - expected).abs() <= 2.0e-6,
+                    "segment_top={segment_top} segment_size={segment_size} fraction={fraction}: \
+                     expected {expected}, got {actual}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn reused_slice_uv_matches_independent_endpoint_interpolation() {
+        let cases: [(f32, f32, f32, f32, f32); 3] = [
+            (-128.0, 64.0, 0.0, 1.0, 4.0),
+            (17.25, 37.5, 0.125, 0.875, 5.0),
+            (240.0, 11.75, 0.8, 0.2, 2.0),
+        ];
+        for (segment_top, segment_size, v0, v1, slice_size) in cases {
+            let inverse_segment_size = segment_size.recip();
+            let segment_bottom = segment_top + segment_size;
+            let mut slice_top = segment_top;
+            let mut reused_v0 =
+                hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
+            while slice_top + f32::EPSILON < segment_bottom {
+                let slice_bottom = (slice_top + slice_size).min(segment_bottom);
+                let independent_v0 =
+                    hold_segment_slice_v(slice_top, segment_top, inverse_segment_size, v0, v1);
+                let independent_v1 =
+                    hold_segment_slice_v(slice_bottom, segment_top, inverse_segment_size, v0, v1);
+                assert_eq!(reused_v0.to_bits(), independent_v0.to_bits());
+                reused_v0 = independent_v1;
+                slice_top = slice_bottom;
+            }
+        }
     }
 
     #[test]
