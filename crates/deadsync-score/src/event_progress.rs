@@ -1,4 +1,6 @@
 use crate::LeaderboardEntry;
+use smallvec::SmallVec;
+use std::fmt::Write as _;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum EventProgressKind {
@@ -49,6 +51,9 @@ pub struct EventProgress {
 
 pub type ItlEventProgress = EventProgress;
 pub type ItlOverlayPage = EventOverlayPage;
+
+type RewardDescriptions<'a> = SmallVec<[&'a str; 4]>;
+type RewardGroups<'a> = SmallVec<[(&'a str, RewardDescriptions<'a>); 4]>;
 
 #[derive(Clone, Debug, Default)]
 pub struct SubmitStatImprovement {
@@ -151,26 +156,25 @@ pub fn delta_i32(current: u32, previous: u32) -> i32 {
         as i32
 }
 
-fn trim_blank_lines(text: String) -> String {
-    text.trim_end_matches(['\n', '\r']).to_string()
+fn trim_blank_lines(mut text: String) -> String {
+    text.truncate(text.trim_end_matches(['\n', '\r']).len());
+    text
 }
 
-fn capitalize_ascii_first(text: &str) -> String {
+fn push_capitalized_first(out: &mut String, text: &str) {
     let mut chars = text.chars();
     let Some(first) = chars.next() else {
-        return String::new();
+        return;
     };
-    let mut out = String::new();
     out.extend(first.to_uppercase());
     out.extend(chars);
-    out
 }
 
-fn stat_improvement_lines(progress: Option<&SubmitProgress>) -> Vec<String> {
+fn push_stat_improvement_lines(out: &mut String, progress: Option<&SubmitProgress>) -> bool {
     let Some(progress) = progress else {
-        return Vec::new();
+        return false;
     };
-    let mut lines = Vec::new();
+    let mut wrote_line = false;
     for improvement in &progress.stat_improvements {
         if improvement.gained == 0 {
             continue;
@@ -178,11 +182,16 @@ fn stat_improvement_lines(progress: Option<&SubmitProgress>) -> Vec<String> {
         if improvement.name.eq_ignore_ascii_case("clearType") {
             let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
             let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
-            lines.push(format!(
+            if wrote_line {
+                out.push('\n');
+            }
+            let _ = write!(
+                out,
                 "Clear Type: {} >>> {}",
                 clear_type_name(before),
                 clear_type_name(after)
-            ));
+            );
+            wrote_line = true;
             continue;
         }
         if improvement.name.eq_ignore_ascii_case("grade") {
@@ -195,33 +204,58 @@ fn stat_improvement_lines(progress: Option<&SubmitProgress>) -> Vec<String> {
                     _ => None,
                 };
                 if let Some(grade) = grade {
-                    lines.push(format!("New {grade}!"));
+                    if wrote_line {
+                        out.push('\n');
+                    }
+                    let _ = write!(out, "New {grade}!");
+                    wrote_line = true;
                 }
             }
             continue;
         }
-        let stat_name = capitalize_ascii_first(improvement.name.trim_end_matches("Level"));
-        lines.push(format!(
-            "{stat_name} Lvl: {} (+{})",
+        if wrote_line {
+            out.push('\n');
+        }
+        push_capitalized_first(out, improvement.name.trim_end_matches("Level"));
+        let _ = write!(
+            out,
+            " Lvl: {} (+{})",
             improvement.current, improvement.gained
-        ));
+        );
+        wrote_line = true;
     }
-    lines
+    wrote_line
 }
 
-fn srpg_stat_improvement_lines(progress: &ItlEventProgress) -> Vec<String> {
-    progress
-        .stat_improvements
-        .iter()
-        .filter(|improvement| improvement.gained > 0)
-        .map(|improvement| {
-            format!(
-                "+{} {}",
-                improvement.gained,
-                improvement.name.to_uppercase()
-            )
-        })
-        .collect()
+fn push_uppercase(out: &mut String, text: &str) {
+    for ch in text.chars() {
+        out.extend(ch.to_uppercase());
+    }
+}
+
+fn push_srpg_stat_improvement_lines(out: &mut String, progress: &ItlEventProgress) -> bool {
+    let mut wrote_line = false;
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 {
+            continue;
+        }
+        if wrote_line {
+            out.push('\n');
+        }
+        let _ = write!(out, "+{} ", improvement.gained);
+        push_uppercase(out, improvement.name.as_str());
+        wrote_line = true;
+    }
+    wrote_line
+}
+
+fn push_joined_lines(out: &mut String, lines: &[String]) {
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(line);
+    }
 }
 
 fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
@@ -236,14 +270,14 @@ fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
         f64::from(rate) / 100.0,
         f64::from(rate_delta) / 100.0,
     );
-    let lines = srpg_stat_improvement_lines(progress);
-    if !lines.is_empty() {
-        text.push_str("\n\n");
-        text.push_str(lines.join("\n").as_str());
+    let stat_start = text.len();
+    text.push_str("\n\n");
+    if !push_srpg_stat_improvement_lines(&mut text, progress) {
+        text.truncate(stat_start);
     }
     if !progress.skill_improvements.is_empty() {
         text.push_str("\n\n");
-        text.push_str(progress.skill_improvements.join("\n").as_str());
+        push_joined_lines(&mut text, progress.skill_improvements.as_slice());
     }
     trim_blank_lines(text)
 }
@@ -274,10 +308,10 @@ fn itl_summary_page_text(
         progress.total_delta,
         progress.total_passes,
     );
-    let lines = stat_improvement_lines(submit_progress);
-    if !lines.is_empty() {
-        text.push_str("\n\n");
-        text.push_str(lines.join("\n").as_str());
+    let stat_start = text.len();
+    text.push_str("\n\n");
+    if !push_stat_improvement_lines(&mut text, submit_progress) {
+        text.truncate(stat_start);
     }
     trim_blank_lines(text)
 }
@@ -292,7 +326,7 @@ fn summary_page_text(
     }
 }
 
-fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[String]) {
+fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[&str]) {
     if descriptions.is_empty() {
         return;
     }
@@ -300,15 +334,20 @@ fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions:
         out.push_str("\n\n");
     }
     if !reward_type.eq_ignore_ascii_case("ad-hoc") {
-        out.push_str(reward_type.trim().to_ascii_uppercase().as_str());
+        push_uppercase(out, reward_type.trim());
         out.push_str(":\n");
     }
-    out.push_str(descriptions.join("\n").as_str());
+    for (index, description) in descriptions.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(description);
+    }
 }
 
 fn quest_page_text(quest: &SubmitQuest) -> String {
     let mut body = format!("Completed \"{}\"!", quest.title.trim());
-    let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
+    let mut grouped = RewardGroups::new();
     for reward in &quest.rewards {
         let reward_type = reward.reward_type.trim();
         let description = reward.description.trim();
@@ -319,40 +358,41 @@ fn quest_page_text(quest: &SubmitQuest) -> String {
             .iter_mut()
             .find(|(kind, _)| kind.eq_ignore_ascii_case(reward_type))
         {
-            descriptions.push(description.to_string());
+            descriptions.push(description);
         } else {
-            grouped.push((reward_type.to_string(), vec![description.to_string()]));
+            grouped.push((reward_type, SmallVec::from_slice(&[description])));
         }
     }
     for (reward_type, descriptions) in &grouped {
-        append_grouped_reward_text(&mut body, reward_type.as_str(), descriptions.as_slice());
+        append_grouped_reward_text(&mut body, reward_type, descriptions.as_slice());
     }
     trim_blank_lines(body)
 }
 
 fn achievement_page_text(achievement: &SubmitAchievement) -> String {
-    let mut lines = vec![format!(
+    let mut text = format!(
         "Completed the \"{}\" Achievement!",
         achievement.title.trim()
-    )];
+    );
     for reward in &achievement.rewards {
         let tier = reward.tier.trim();
         if !tier.is_empty() && tier != "0" {
-            lines.push(format!("Tier {tier}"));
+            let _ = write!(text, "\nTier {tier}");
         }
         for requirement in &reward.requirements {
             let requirement = requirement.trim();
             if !requirement.is_empty() {
-                lines.push(requirement.to_string());
+                text.push('\n');
+                text.push_str(requirement);
             }
         }
         let title = reward.title_unlocked.trim();
         if !title.is_empty() {
-            lines.push(format!("Unlocked the \"{title}\" Title!"));
+            let _ = write!(text, "\nUnlocked the \"{title}\" Title!");
         }
-        lines.push(String::new());
+        text.push('\n');
     }
-    trim_blank_lines(lines.join("\n"))
+    trim_blank_lines(text)
 }
 
 #[must_use]
