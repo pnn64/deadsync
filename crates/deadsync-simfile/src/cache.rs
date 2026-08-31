@@ -1086,6 +1086,89 @@ pub struct CachedSong {
     pub chart_payloads: Vec<CachedChartPayloadIndex>,
 }
 
+#[derive(Encode)]
+struct BorrowedCachedChartMeta<'a> {
+    chart_type: &'a str,
+    difficulty: &'a str,
+    description: &'a str,
+    chart_name: &'a str,
+    meter: u32,
+    step_artist: &'a str,
+    music_path: Option<&'a str>,
+    short_hash: &'a str,
+    stats: &'a CachedArrowStats,
+    tech_counts: CachedTechCounts,
+    mines_nonfake: u32,
+    stamina_counts: CachedStaminaCounts,
+    total_streams: u32,
+    matrix_rating: f64,
+    matrix_profile: &'a [CachedMatrixInput],
+    max_nps: f64,
+    sn_detailed_breakdown: &'a str,
+    sn_partial_breakdown: &'a str,
+    sn_simple_breakdown: &'a str,
+    detailed_breakdown: &'a str,
+    partial_breakdown: &'a str,
+    simple_breakdown: &'a str,
+    total_measures: usize,
+    measure_nps_vec: &'a [f64],
+    measure_seconds_vec: Vec<f32>,
+    first_second: f32,
+    has_note_data: bool,
+    has_chart_attacks: bool,
+    possible_grade_points: i32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+    display_bpm: Option<&'a CachedChartDisplayBpm>,
+    min_bpm: f64,
+    max_bpm: f64,
+}
+
+#[derive(Encode)]
+struct BorrowedCachedSongMeta<'a> {
+    simfile_path: &'a str,
+    title: &'a str,
+    subtitle: &'a str,
+    translit_title: &'a str,
+    translit_subtitle: &'a str,
+    artist: &'a str,
+    translit_artist: &'a str,
+    genre: &'a str,
+    banner_path: Option<&'a str>,
+    background_path: Option<&'a str>,
+    background_changes: &'a [SerializableSongBackgroundChange],
+    background_layer2_changes: &'a [SerializableSongBackgroundChange],
+    foreground_changes: &'a [SerializableSongForegroundChange],
+    background_lua_changes: &'a [SerializableSongBackgroundLuaChange],
+    foreground_lua_changes: &'a [SerializableSongForegroundLuaChange],
+    has_lua: bool,
+    cdtitle_path: Option<&'a str>,
+    music_path: Option<&'a str>,
+    display_bpm: &'a str,
+    offset: f32,
+    sample_start: Option<f32>,
+    sample_length: Option<f32>,
+    min_bpm: f64,
+    max_bpm: f64,
+    normalized_bpms: &'a str,
+    music_length_seconds: f32,
+    first_second: f32,
+    total_length_seconds: i32,
+    precise_last_second_seconds: f32,
+    charts: Vec<BorrowedCachedChartMeta<'a>>,
+}
+
+#[derive(Encode)]
+struct BorrowedCachedSong<'a> {
+    cache_version: u8,
+    rssp_version: &'static str,
+    mono_threshold: usize,
+    directory_hash: u64,
+    data: BorrowedCachedSongMeta<'a>,
+    chart_payloads: &'a [CachedChartPayloadIndex],
+}
+
 impl From<CachedChartDisplayBpm> for ChartDisplayBpm {
     fn from(c: CachedChartDisplayBpm) -> Self {
         match c {
@@ -1286,17 +1369,7 @@ pub fn build_cached_chart_meta(
     chart: &SerializableChartData,
     global_offset_seconds: f32,
 ) -> CachedChartMeta {
-    let timing_segments: TimingSegments = chart.timing_segments.clone().into();
-    let timing = TimingData::from_segments(
-        -chart.offset,
-        global_offset_seconds,
-        &timing_segments,
-        &chart.row_to_beat,
-    );
-    let (possible_grade_points, holds_total, rolls_total, mines_total) =
-        build_chart_totals(&chart.parsed_notes, &timing);
-    let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
-    let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
+    let computed = compute_cached_chart_meta(chart, global_offset_seconds);
     CachedChartMeta {
         chart_type: chart.chart_type.clone(),
         difficulty: chart.difficulty.clone(),
@@ -1322,6 +1395,47 @@ pub fn build_cached_chart_meta(
         simple_breakdown: chart.simple_breakdown.clone(),
         total_measures: chart.total_measures,
         measure_nps_vec: chart.measure_nps_vec.clone(),
+        measure_seconds_vec: computed.measure_seconds_vec,
+        first_second: computed.first_second,
+        has_note_data: computed.has_note_data,
+        has_chart_attacks: computed.has_chart_attacks,
+        possible_grade_points: computed.possible_grade_points,
+        holds_total: computed.holds_total,
+        rolls_total: computed.rolls_total,
+        mines_total: computed.mines_total,
+        display_bpm: chart.display_bpm.clone(),
+        min_bpm: chart.min_bpm,
+        max_bpm: chart.max_bpm,
+    }
+}
+
+struct ComputedCachedChartMeta {
+    measure_seconds_vec: Vec<f32>,
+    first_second: f32,
+    has_note_data: bool,
+    has_chart_attacks: bool,
+    possible_grade_points: i32,
+    holds_total: u32,
+    rolls_total: u32,
+    mines_total: u32,
+}
+
+fn compute_cached_chart_meta(
+    chart: &SerializableChartData,
+    global_offset_seconds: f32,
+) -> ComputedCachedChartMeta {
+    let timing_segments: TimingSegments = chart.timing_segments.clone().into();
+    let timing = TimingData::from_segments(
+        -chart.offset,
+        global_offset_seconds,
+        &timing_segments,
+        &chart.row_to_beat,
+    );
+    let (possible_grade_points, holds_total, rolls_total, mines_total) =
+        build_chart_totals(&chart.parsed_notes, &timing);
+    let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
+    let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
+    ComputedCachedChartMeta {
         measure_seconds_vec,
         first_second,
         has_note_data: !chart.notes.is_empty(),
@@ -1330,9 +1444,49 @@ pub fn build_cached_chart_meta(
         holds_total,
         rolls_total,
         mines_total,
-        display_bpm: chart.display_bpm.clone(),
-        min_bpm: chart.min_bpm,
-        max_bpm: chart.max_bpm,
+    }
+}
+
+impl<'a> BorrowedCachedChartMeta<'a> {
+    fn new(chart: &'a SerializableChartData, global_offset_seconds: f32) -> Self {
+        let computed = compute_cached_chart_meta(chart, global_offset_seconds);
+        Self {
+            chart_type: &chart.chart_type,
+            difficulty: &chart.difficulty,
+            description: &chart.description,
+            chart_name: &chart.chart_name,
+            meter: chart.meter,
+            step_artist: &chart.step_artist,
+            music_path: chart.music_path.as_deref(),
+            short_hash: &chart.short_hash,
+            stats: &chart.stats,
+            tech_counts: chart.tech_counts,
+            mines_nonfake: chart.mines_nonfake,
+            stamina_counts: chart.stamina_counts,
+            total_streams: chart.total_streams,
+            matrix_rating: chart.matrix_rating,
+            matrix_profile: &chart.matrix_profile,
+            max_nps: chart.max_nps,
+            sn_detailed_breakdown: &chart.sn_detailed_breakdown,
+            sn_partial_breakdown: &chart.sn_partial_breakdown,
+            sn_simple_breakdown: &chart.sn_simple_breakdown,
+            detailed_breakdown: &chart.detailed_breakdown,
+            partial_breakdown: &chart.partial_breakdown,
+            simple_breakdown: &chart.simple_breakdown,
+            total_measures: chart.total_measures,
+            measure_nps_vec: &chart.measure_nps_vec,
+            measure_seconds_vec: computed.measure_seconds_vec,
+            first_second: computed.first_second,
+            has_note_data: computed.has_note_data,
+            has_chart_attacks: computed.has_chart_attacks,
+            possible_grade_points: computed.possible_grade_points,
+            holds_total: computed.holds_total,
+            rolls_total: computed.rolls_total,
+            mines_total: computed.mines_total,
+            display_bpm: chart.display_bpm.as_ref(),
+            min_bpm: chart.min_bpm,
+            max_bpm: chart.max_bpm,
+        }
     }
 }
 
@@ -1547,6 +1701,47 @@ pub fn build_cached_song_meta(
             .iter()
             .map(|chart| build_cached_chart_meta(chart, global_offset_seconds))
             .collect(),
+    }
+}
+
+impl<'a> BorrowedCachedSongMeta<'a> {
+    fn new(song: &'a SerializableSongData, global_offset_seconds: f32) -> Self {
+        Self {
+            simfile_path: &song.simfile_path,
+            title: &song.title,
+            subtitle: &song.subtitle,
+            translit_title: &song.translit_title,
+            translit_subtitle: &song.translit_subtitle,
+            artist: &song.artist,
+            translit_artist: &song.translit_artist,
+            genre: &song.genre,
+            banner_path: song.banner_path.as_deref(),
+            background_path: song.background_path.as_deref(),
+            background_changes: &song.background_changes,
+            background_layer2_changes: &song.background_layer2_changes,
+            foreground_changes: &song.foreground_changes,
+            background_lua_changes: &song.background_lua_changes,
+            foreground_lua_changes: &song.foreground_lua_changes,
+            has_lua: song.has_lua,
+            cdtitle_path: song.cdtitle_path.as_deref(),
+            music_path: song.music_path.as_deref(),
+            display_bpm: &song.display_bpm,
+            offset: song.offset,
+            sample_start: song.sample_start,
+            sample_length: song.sample_length,
+            min_bpm: song.min_bpm,
+            max_bpm: song.max_bpm,
+            normalized_bpms: &song.normalized_bpms,
+            music_length_seconds: song.music_length_seconds,
+            first_second: song.first_second,
+            total_length_seconds: song.total_length_seconds,
+            precise_last_second_seconds: song.precise_last_second_seconds,
+            charts: song
+                .charts
+                .iter()
+                .map(|chart| BorrowedCachedChartMeta::new(chart, global_offset_seconds))
+                .collect(),
+        }
     }
 }
 
@@ -1785,17 +1980,181 @@ fn fold_payload_checksum(mut checksum: u64, bytes: &[u8]) -> u64 {
     checksum
 }
 
+#[cfg(feature = "bench-support")]
+#[must_use]
+/// # Panics
+///
+/// Panics if cache metadata cannot be encoded.
+pub fn benchmark_cache_metadata_encoding_baseline(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let metadata = build_cached_song_meta(std::hint::black_box(data), global_offset_seconds);
+        let bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())
+            .expect("benchmark cache metadata should encode");
+        checksum = fold_payload_checksum(checksum, &bytes);
+        std::hint::black_box(metadata);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+/// # Panics
+///
+/// Panics if cache metadata cannot be encoded.
+pub fn benchmark_cache_metadata_encoding_current(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let metadata =
+            BorrowedCachedSongMeta::new(std::hint::black_box(data), global_offset_seconds);
+        let bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())
+            .expect("benchmark cache metadata should encode");
+        checksum = fold_payload_checksum(checksum, &bytes);
+        std::hint::black_box(metadata);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_cache_payload_indices_baseline(
+    payload_lengths: &[usize],
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    for _ in 0..iterations {
+        let mut indices = Vec::with_capacity(payload_lengths.len());
+        append_chart_payload_indices(payload_lengths.iter().map(|&len| len as u64), &mut indices);
+        checksum = fold_chart_payload_index_checksum(checksum, &indices);
+        std::hint::black_box(indices);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_cache_payload_indices_current(
+    payload_lengths: &[usize],
+    iterations: usize,
+) -> u64 {
+    let mut checksum = 0u64;
+    let mut indices = Vec::new();
+    for _ in 0..iterations {
+        indices.clear();
+        indices.reserve_exact(payload_lengths.len());
+        append_chart_payload_indices(payload_lengths.iter().map(|&len| len as u64), &mut indices);
+        checksum = fold_chart_payload_index_checksum(checksum, &indices);
+        std::hint::black_box(&indices);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+fn fold_chart_payload_index_checksum(
+    mut checksum: u64,
+    indices: &[CachedChartPayloadIndex],
+) -> u64 {
+    for index in indices {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(index.offset)
+            .wrapping_mul(131)
+            .wrapping_add(index.len);
+    }
+    checksum
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+/// # Panics
+///
+/// Panics if the cache header cannot be encoded.
+pub fn benchmark_cache_header_buffer_baseline(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    iterations: usize,
+) -> u64 {
+    benchmark_cache_header_buffer(data, global_offset_seconds, iterations, false)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+/// # Panics
+///
+/// Panics if the cache header cannot be encoded.
+pub fn benchmark_cache_header_buffer_current(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    iterations: usize,
+) -> u64 {
+    benchmark_cache_header_buffer(data, global_offset_seconds, iterations, true)
+}
+
+#[cfg(feature = "bench-support")]
+fn benchmark_cache_header_buffer(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    iterations: usize,
+    reuse_buffer: bool,
+) -> u64 {
+    let metadata = BorrowedCachedSongMeta::new(data, global_offset_seconds);
+    let chart_payloads = data
+        .charts
+        .iter()
+        .enumerate()
+        .map(|(chart_ix, _)| CachedChartPayloadIndex {
+            offset: chart_ix as u64 * 1_024,
+            len: 1_024,
+        })
+        .collect::<Vec<_>>();
+    let cached_song = BorrowedCachedSong {
+        cache_version: SONG_CACHE_VERSION,
+        rssp_version: rssp::RSSP_VERSION,
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        directory_hash: 0xDEAD_5A1C,
+        data: metadata,
+        chart_payloads: &chart_payloads,
+    };
+    let mut checksum = 0u64;
+    let mut scratch = Vec::new();
+    for _ in 0..iterations {
+        if reuse_buffer {
+            bincode::encode_into_vec(&cached_song, &mut scratch, bincode::config::standard())
+                .expect("benchmark cache header should encode");
+            checksum = fold_payload_checksum(checksum, &scratch);
+        } else {
+            let bytes = bincode::encode_to_vec(&cached_song, bincode::config::standard())
+                .expect("benchmark cache header should encode");
+            checksum = fold_payload_checksum(checksum, &bytes);
+            std::hint::black_box(bytes);
+        }
+    }
+    checksum
+}
+
 pub fn write_song_cache_file(
     cache_path: &Path,
     data: &SerializableSongData,
     global_offset_seconds: f32,
 ) -> Result<(), SongCacheWriteError> {
+    let mut encoded_header = Vec::new();
     let mut payload_scratch = Vec::new();
+    let mut chart_payloads = Vec::new();
     write_song_cache_file_in(
         cache_path,
         data,
         global_offset_seconds,
+        &mut encoded_header,
         &mut payload_scratch,
+        &mut chart_payloads,
     )
 }
 
@@ -1803,33 +2162,23 @@ fn write_song_cache_file_in(
     cache_path: &Path,
     data: &SerializableSongData,
     global_offset_seconds: f32,
+    encoded_header: &mut Vec<u8>,
     payload_scratch: &mut Vec<Vec<u8>>,
+    chart_payloads: &mut Vec<CachedChartPayloadIndex>,
 ) -> Result<(), SongCacheWriteError> {
     let directory_hash = get_song_directory_hash(Path::new(&data.simfile_path))
         .map_err(SongCacheWriteError::DirectoryHash)?;
     let encoded_payloads = encode_chart_payloads_reused(data, payload_scratch)
         .map_err(|_| SongCacheWriteError::EncodePayload)?;
-    let mut chart_payloads = Vec::with_capacity(encoded_payloads.len());
-    let mut payload_offset = 0u64;
-    for encoded in encoded_payloads {
-        let len = encoded.len() as u64;
-        chart_payloads.push(CachedChartPayloadIndex {
-            offset: payload_offset,
-            len,
-        });
-        payload_offset = payload_offset.saturating_add(len);
-    }
-    let meta = build_cached_song_meta(data, global_offset_seconds);
-    let cached_song = CachedSong {
-        cache_version: SONG_CACHE_VERSION,
-        rssp_version: rssp::RSSP_VERSION.to_string(),
-        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+    rebuild_chart_payload_indices(encoded_payloads, chart_payloads);
+    encode_song_cache_header(
+        data,
+        global_offset_seconds,
         directory_hash,
-        data: meta,
         chart_payloads,
-    };
-    let encoded_header = bincode::encode_to_vec(&cached_song, bincode::config::standard())
-        .map_err(|_| SongCacheWriteError::EncodeHeader)?;
+        encoded_header,
+    )
+    .map_err(|_| SongCacheWriteError::EncodeHeader)?;
     if let Some(parent) = cache_path.parent() {
         fs::create_dir_all(parent).map_err(|source| SongCacheWriteError::CreateDir {
             path: parent.to_path_buf(),
@@ -1841,13 +2190,57 @@ fn write_song_cache_file_in(
         .map_err(SongCacheWriteError::Write)?;
     file.write_all(&(encoded_header.len() as u64).to_le_bytes())
         .map_err(SongCacheWriteError::Write)?;
-    file.write_all(&encoded_header)
+    file.write_all(encoded_header)
         .map_err(SongCacheWriteError::Write)?;
     for payload in encoded_payloads {
         file.write_all(payload)
             .map_err(SongCacheWriteError::Write)?;
     }
     Ok(())
+}
+
+fn encode_song_cache_header(
+    data: &SerializableSongData,
+    global_offset_seconds: f32,
+    directory_hash: u64,
+    chart_payloads: &[CachedChartPayloadIndex],
+    encoded_header: &mut Vec<u8>,
+) -> Result<(), bincode::error::EncodeError> {
+    let cached_song = BorrowedCachedSong {
+        cache_version: SONG_CACHE_VERSION,
+        rssp_version: rssp::RSSP_VERSION,
+        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+        directory_hash,
+        data: BorrowedCachedSongMeta::new(data, global_offset_seconds),
+        chart_payloads,
+    };
+    bincode::encode_into_vec(&cached_song, encoded_header, bincode::config::standard())
+}
+
+fn rebuild_chart_payload_indices(
+    encoded_payloads: &[Vec<u8>],
+    chart_payloads: &mut Vec<CachedChartPayloadIndex>,
+) {
+    chart_payloads.clear();
+    chart_payloads.reserve_exact(encoded_payloads.len());
+    append_chart_payload_indices(
+        encoded_payloads.iter().map(|encoded| encoded.len() as u64),
+        chart_payloads,
+    );
+}
+
+fn append_chart_payload_indices(
+    payload_lengths: impl IntoIterator<Item = u64>,
+    chart_payloads: &mut Vec<CachedChartPayloadIndex>,
+) {
+    let mut payload_offset = 0u64;
+    for len in payload_lengths {
+        chart_payloads.push(CachedChartPayloadIndex {
+            offset: payload_offset,
+            len,
+        });
+        payload_offset = payload_offset.saturating_add(len);
+    }
 }
 
 #[must_use]
@@ -2113,11 +2506,14 @@ where
     )?;
     if options.cachesongs
         && let Some(cache_path) = cache_path.as_deref()
+        && let (cache_header, cache_payloads, cache_payload_indices) = scratch.cache_write_buffers()
         && let Err(error) = write_song_cache_file_in(
             cache_path,
             &song_data,
             options.global_offset_seconds,
-            scratch.cache_payloads(),
+            cache_header,
+            cache_payloads,
+            cache_payload_indices,
         )
     {
         log_entries.push(RuntimeSongLoadLogEntry::warn(format!(
@@ -3123,6 +3519,75 @@ mod tests {
             }]
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn borrowed_cache_header_matches_owned_wire_format_and_reuses_storage() {
+        let mut data = cached_song(Path::new("songs/pack/song/song.ssc"));
+        data.subtitle = "Cache subtitle".to_string();
+        data.artist = "Cache artist".to_string();
+        data.banner_path = Some("banner.png".to_string());
+        data.music_path = Some("music.ogg".to_string());
+        data.display_bpm = "120:180".to_string();
+        data.normalized_bpms = "0=120,64=180".to_string();
+        let mut chart = test_serializable_chart("dance-single", "Challenge", 4, Some(12));
+        chart.description = "Wire-compatible chart".to_string();
+        chart.chart_name = "Borrowed header".to_string();
+        chart.step_artist = "DeadSync".to_string();
+        chart.music_path = Some("chart.ogg".to_string());
+        chart.short_hash = "0123456789abcdef".to_string();
+        chart.matrix_profile = Box::new([CachedMatrixInput {
+            effective_bpm: 180.0,
+            measures: 32,
+        }]);
+        chart.measure_nps_vec = vec![1.25, 2.5, 3.75];
+        chart.display_bpm = Some(CachedChartDisplayBpm::Specified {
+            min: 120.0,
+            max: 180.0,
+        });
+        data.charts = vec![chart];
+        let chart_payloads = vec![CachedChartPayloadIndex { offset: 7, len: 41 }];
+        let directory_hash = 0x1234_5678_90ab_cdef;
+
+        let owned = CachedSong {
+            cache_version: SONG_CACHE_VERSION,
+            rssp_version: rssp::RSSP_VERSION.to_string(),
+            mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
+            directory_hash,
+            data: build_cached_song_meta(&data, 0.125),
+            chart_payloads: chart_payloads.clone(),
+        };
+        let expected = bincode::encode_to_vec(&owned, bincode::config::standard()).unwrap();
+        let mut encoded = Vec::new();
+        encode_song_cache_header(&data, 0.125, directory_hash, &chart_payloads, &mut encoded)
+            .unwrap();
+
+        assert_eq!(encoded, expected);
+        let retained_ptr = encoded.as_ptr();
+        let retained_capacity = encoded.capacity();
+        encode_song_cache_header(&data, 0.125, directory_hash, &chart_payloads, &mut encoded)
+            .unwrap();
+        assert_eq!(encoded, expected);
+        assert_eq!(encoded.as_ptr(), retained_ptr);
+        assert_eq!(encoded.capacity(), retained_capacity);
+    }
+
+    #[test]
+    fn chart_payload_indices_preserve_offsets_and_retain_capacity() {
+        let mut indices = Vec::new();
+        rebuild_chart_payload_indices(&[vec![0; 3], vec![0; 5], vec![0; 2]], &mut indices);
+        assert_eq!(indices.len(), 3);
+        assert_eq!((indices[0].offset, indices[0].len), (0, 3));
+        assert_eq!((indices[1].offset, indices[1].len), (3, 5));
+        assert_eq!((indices[2].offset, indices[2].len), (8, 2));
+        let retained_ptr = indices.as_ptr();
+        let retained_capacity = indices.capacity();
+
+        rebuild_chart_payload_indices(&[vec![0; 7]], &mut indices);
+        assert_eq!(indices.len(), 1);
+        assert_eq!((indices[0].offset, indices[0].len), (0, 7));
+        assert_eq!(indices.as_ptr(), retained_ptr);
+        assert_eq!(indices.capacity(), retained_capacity);
     }
 
     #[test]

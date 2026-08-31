@@ -2,7 +2,10 @@ use deadsync_simfile::app_runtime::{
     benchmark_parse_options_hoisted, benchmark_parse_options_per_song,
 };
 use deadsync_simfile::cache::{
+    benchmark_cache_header_buffer_baseline, benchmark_cache_header_buffer_current,
     benchmark_cache_header_loads_baseline, benchmark_cache_header_loads_current,
+    benchmark_cache_metadata_encoding_baseline, benchmark_cache_metadata_encoding_current,
+    benchmark_cache_payload_indices_baseline, benchmark_cache_payload_indices_current,
     benchmark_cache_probes_current, benchmark_cache_probes_legacy,
     benchmark_chart_payload_encoding_baseline, benchmark_chart_payload_encoding_current,
     benchmark_chart_requests_current, benchmark_chart_requests_legacy,
@@ -56,6 +59,9 @@ const CACHE_PATH_OPS: usize = 2_048;
 const CACHE_PROBE_OPS: usize = 2_048;
 const CACHE_PAYLOAD_ROUNDS: usize = 256;
 const CACHE_HEADER_ROUNDS: usize = 512;
+const CACHE_METADATA_ROUNDS: usize = 256;
+const CACHE_INDEX_ROUNDS: usize = 65_536;
+const CACHE_HEADER_BUFFER_ROUNDS: usize = 512;
 const SONG_PARSE_ROUNDS: usize = 64;
 const NOTE_HANDOFF_ROUNDS: usize = 128;
 const NOTE_PARSE_ROUNDS: usize = 2_048;
@@ -613,6 +619,71 @@ fn bench_rssp_boundary() {
     print_result("separate", CACHE_PAYLOAD_ROUNDS, &separate_payloads);
     print_result("worker-reuse", CACHE_PAYLOAD_ROUNDS, &reused_payloads);
     print_change(&separate_payloads, &reused_payloads);
+
+    assert_eq!(
+        benchmark_cache_metadata_encoding_baseline(&song_data, 0.0, 1),
+        benchmark_cache_metadata_encoding_current(&song_data, 0.0, 1),
+        "borrowed cache metadata bytes diverged"
+    );
+    let (owned_metadata, borrowed_metadata) = measure_pair(
+        CACHE_METADATA_ROUNDS,
+        || benchmark_cache_metadata_encoding_baseline(&song_data, 0.0, CACHE_METADATA_ROUNDS),
+        || benchmark_cache_metadata_encoding_current(&song_data, 0.0, CACHE_METADATA_ROUNDS),
+    );
+    black_box(owned_metadata.checksum ^ borrowed_metadata.checksum);
+    println!("cache metadata encoding ({CACHE_METADATA_ROUNDS} songs)");
+    print_result("owned", CACHE_METADATA_ROUNDS, &owned_metadata);
+    print_result("borrowed", CACHE_METADATA_ROUNDS, &borrowed_metadata);
+    print_change(&owned_metadata, &borrowed_metadata);
+
+    let payload_lengths = song_data
+        .charts
+        .iter()
+        .map(|chart| chart.notes.len())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        benchmark_cache_payload_indices_baseline(&payload_lengths, 1),
+        benchmark_cache_payload_indices_current(&payload_lengths, 1),
+        "retained cache payload indexes diverged"
+    );
+    let index_items = CACHE_INDEX_ROUNDS * payload_lengths.len();
+    let (fresh_indices, retained_indices) = measure_pair(
+        index_items,
+        || benchmark_cache_payload_indices_baseline(&payload_lengths, CACHE_INDEX_ROUNDS),
+        || benchmark_cache_payload_indices_current(&payload_lengths, CACHE_INDEX_ROUNDS),
+    );
+    black_box(fresh_indices.checksum ^ retained_indices.checksum);
+    println!(
+        "cache payload index construction ({CACHE_INDEX_ROUNDS} songs, {} charts)",
+        payload_lengths.len()
+    );
+    print_result("allocate", index_items, &fresh_indices);
+    print_result("retain", index_items, &retained_indices);
+    print_change(&fresh_indices, &retained_indices);
+
+    assert_eq!(
+        benchmark_cache_header_buffer_baseline(&song_data, 0.0, 1),
+        benchmark_cache_header_buffer_current(&song_data, 0.0, 1),
+        "retained cache header bytes diverged"
+    );
+    let (fresh_header_buffers, retained_header_buffers) = measure_pair(
+        CACHE_HEADER_BUFFER_ROUNDS,
+        || benchmark_cache_header_buffer_baseline(&song_data, 0.0, CACHE_HEADER_BUFFER_ROUNDS),
+        || benchmark_cache_header_buffer_current(&song_data, 0.0, CACHE_HEADER_BUFFER_ROUNDS),
+    );
+    black_box(fresh_header_buffers.checksum ^ retained_header_buffers.checksum);
+    println!("cache header buffer encoding ({CACHE_HEADER_BUFFER_ROUNDS} songs)");
+    print_result(
+        "allocate",
+        CACHE_HEADER_BUFFER_ROUNDS,
+        &fresh_header_buffers,
+    );
+    print_result(
+        "retain",
+        CACHE_HEADER_BUFFER_ROUNDS,
+        &retained_header_buffers,
+    );
+    print_change(&fresh_header_buffers, &retained_header_buffers);
 
     let cache_path = root.join("song-cache.bin");
     write_song_cache_file(&cache_path, &song_data, 0.0).unwrap();

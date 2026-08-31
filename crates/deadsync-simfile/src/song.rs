@@ -1,6 +1,6 @@
 use crate::artwork::resolve_song_artwork_like_itg;
 use crate::cache::{
-    CachedParsedNote, CachedTimingSegments, SerializableChartData,
+    CachedChartPayloadIndex, CachedParsedNote, CachedTimingSegments, SerializableChartData,
     SerializableSongBackgroundChange, SerializableSongData, build_song_meta,
     parse_chart_display_bpm, update_precise_song_bounds,
 };
@@ -90,6 +90,7 @@ pub struct SongParseScratch {
     parsed_notes: Vec<Vec<CachedParsedNote>>,
     cache_header: Vec<u8>,
     cache_payloads: Vec<Vec<u8>>,
+    cache_payload_indices: Vec<CachedChartPayloadIndex>,
 }
 
 impl SongParseScratch {
@@ -97,8 +98,18 @@ impl SongParseScratch {
         &mut self.cache_header
     }
 
-    pub(crate) const fn cache_payloads(&mut self) -> &mut Vec<Vec<u8>> {
-        &mut self.cache_payloads
+    pub(crate) const fn cache_write_buffers(
+        &mut self,
+    ) -> (
+        &mut Vec<u8>,
+        &mut Vec<Vec<u8>>,
+        &mut Vec<CachedChartPayloadIndex>,
+    ) {
+        (
+            &mut self.cache_header,
+            &mut self.cache_payloads,
+            &mut self.cache_payload_indices,
+        )
     }
 }
 
