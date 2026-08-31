@@ -80,6 +80,9 @@ pub use song_lua::{
 };
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub use transforms::lane_invariant_cache_bench_support;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub use transforms::transform_cache_bench_support;
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
@@ -213,22 +216,22 @@ pub(crate) use receptors::{
     receptor_row_center,
 };
 pub(crate) use transforms::{
-    AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache, NoteXParams,
-    TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor,
-    compute_active_note_geometry, compute_tornado_lane_caches, fill_gameplay_lane_effects,
-    fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
-    move_col_extra, note_appearance_cache, note_world_z_for_bumpy, note_x_offset,
-    note_x_offset_cached, smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom,
+    AccelYParams, BumpyFrameCache, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache,
+    NoteXParams, TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached,
+    beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
+    fill_gameplay_lane_effects, fill_move_col_extras, fill_static_note_x_offsets,
+    gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
+    note_appearance_cache, note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached,
+    smoothstep01, tiny_spacing_scale, tipsy_y_extra, visual_arrow_effect_zoom,
     visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
     appearance_needs_rows, apply_accel_y, apply_accel_y_with_peak, beat_x_extra, bumpy_angle,
-    drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_x_extra, quantize_step,
-    signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
-    visual_effect_params_for_col, visual_note_rotation_z, visual_pulse_inner_zoom,
-    visual_pulse_zoom_for_y, visual_tiny_zoom,
+    drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_world_z_for_bumpy, note_x_extra,
+    quantize_step, signed_effect_active, sm_scale, tornado_x_extra, visual_effect_params_for_col,
+    visual_note_rotation_z, visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 pub(crate) use transforms::{

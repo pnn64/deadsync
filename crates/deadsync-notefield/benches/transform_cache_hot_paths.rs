@@ -1,3 +1,6 @@
+use deadsync_notefield::lane_invariant_cache_bench_support::{
+    bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
+};
 use deadsync_notefield::transform_cache_bench_support::{
     appearance_new, appearance_old, expand_new, expand_old, tornado_new, tornado_old,
 };
@@ -269,4 +272,7 @@ fn main() {
         appearance_new,
     );
     run("notefield Tornado lane angles", tornado_old, tornado_new);
+    run("notefield Tiny frame scale", tiny_old, tiny_new);
+    run("notefield Bumpy frame geometry", bumpy_old, bumpy_new);
+    run("notefield Move column offsets", move_old, move_new);
 }

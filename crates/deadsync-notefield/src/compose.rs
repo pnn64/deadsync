@@ -1,11 +1,12 @@
 use crate::{
-    ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
-    HudLayoutParams, LayoutMiniIndicatorPosition, NotefieldFrameFeatures, NotefieldFramePlan,
-    NotefieldFramePlanRequest, ProxyCaptureRequests, ScrollTravel, ScrollTravelRequest,
-    TornadoBounds, TornadoLaneCache, ViewOverride, ZmodLayoutParams, beat_factor,
-    compute_active_note_geometry, compute_tornado_lane_caches, effective_mini_value,
-    field_effect_height, field_layout, fill_lane_col_offsets, notefield_frame_plan, scroll_travel,
-    song_time_ns_to_seconds,
+    BumpyFrameCache, ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement,
+    HudLayoutOffsets, HudLayoutParams, LayoutMiniIndicatorPosition, NotefieldFrameFeatures,
+    NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests, ScrollTravel,
+    ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride, ZmodLayoutParams,
+    beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
+    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
+    fill_move_col_extras, notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
+    tiny_spacing_scale,
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
@@ -240,6 +241,9 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
+    pub(crate) move_x_offsets: [f32; MAX_COLS],
+    pub(crate) bumpy_frame_cache: BumpyFrameCache,
+    pub(crate) tiny_spacing_scale: f32,
     pub measure_column_xs: [f32; MAX_COLS],
     pub note_display_time_scale: f32,
     pub travel: ScrollTravel<'a>,
@@ -404,6 +408,16 @@ fn prepare_notes<'a, S>(
         request.visual.visual.tornado,
         &mut tornado_lane_caches[..num_cols],
     );
+    let mut move_x_offsets = [0.0; MAX_COLS];
+    fill_move_col_extras(
+        &request.visual.visual.move_x_cols,
+        &mut move_x_offsets[..num_cols],
+    );
+    let bumpy_frame_cache = bumpy_frame_cache(
+        request.visual.visual.bumpy_offset,
+        request.visual.visual.bumpy_period,
+    );
+    let tiny_spacing_scale = tiny_spacing_scale(request.visual.visual.tiny);
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -446,6 +460,9 @@ fn prepare_notes<'a, S>(
         invert_distances,
         tornado_bounds,
         tornado_lane_caches,
+        move_x_offsets,
+        bumpy_frame_cache,
+        tiny_spacing_scale,
         measure_column_xs,
         note_display_time_scale: request.geometry.num_players as f32 + 1.0,
         travel,

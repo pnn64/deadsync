@@ -12,6 +12,12 @@ pub(crate) struct TornadoLaneCache {
     base_angle: f32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BumpyFrameCache {
+    offset: f32,
+    divisor: f32,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct NoteAlphaParams {
     pub hidden: f32,
@@ -202,11 +208,21 @@ pub(crate) fn accel_y_cache(elapsed: f32, accel: AccelYParams) -> AccelYCache {
     AccelYCache { expand_scale }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
     let offset = if offset.is_finite() { offset } else { 0.0 };
     let period = if period.is_finite() { period } else { 0.0 };
     let divisor = mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR));
     100.0f32.mul_add(offset, y) / divisor
+}
+
+pub(crate) fn bumpy_frame_cache(offset: f32, period: f32) -> BumpyFrameCache {
+    let offset = if offset.is_finite() { offset } else { 0.0 };
+    let period = if period.is_finite() { period } else { 0.0 };
+    BumpyFrameCache {
+        offset,
+        divisor: mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR)),
+    }
 }
 
 #[cfg(any(test, feature = "bench-support"))]
@@ -325,11 +341,20 @@ pub(crate) fn apply_accel_y_cached(
     apply_accel_y_with_peak_cached(raw_y, effect_height, screen_height, accel, cache).0
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
     if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
         return 0.0;
     }
     bumpy * BUMPY_Z_MAGNITUDE * bumpy_angle(y, offset, period).sin()
+}
+
+pub(crate) fn note_world_z_for_bumpy_cached(y: f32, bumpy: f32, cache: BumpyFrameCache) -> f32 {
+    if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
+        return 0.0;
+    }
+    let angle = 100.0f32.mul_add(cache.offset, y) / cache.divisor;
+    bumpy * BUMPY_Z_MAGNITUDE * angle.sin()
 }
 
 pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
@@ -707,6 +732,8 @@ mod common_note_transform_tests {
         compute_tornado_lane_caches(&col_offsets, &bounds, 0.8, &mut caches);
         let invert = [17.0, 11.0, 5.0, 2.0, -2.0, -5.0, -11.0, -17.0];
         let move_x = [0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7];
+        let mut move_x_cache = [0.0; 8];
+        fill_move_col_extras(&move_x, &mut move_x_cache);
         let params = NoteXParams {
             screen_height: 720.0,
             flip: 0.25,
@@ -738,12 +765,83 @@ mod common_note_transform_tests {
                     &invert,
                     &bounds,
                     &caches,
-                    &move_x,
+                    &move_x_cache,
                     params,
-                    0.2,
+                    tiny_spacing_scale(0.2),
                 );
                 assert_eq!(cached.to_bits(), reference.to_bits());
             }
+        }
+    }
+
+    #[test]
+    fn cached_tiny_scale_matches_per_note_reference_spacing() {
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let zero = [0.0; 4];
+        let bounds = [TornadoBounds::default(); 4];
+        let tornado_caches = [TornadoLaneCache::default(); 4];
+        for tiny in [-0.5, 0.0, 0.2, 0.75, f32::NAN] {
+            let tiny_scale = tiny_spacing_scale(tiny);
+            for local_col in 0..col_offsets.len() {
+                let reference = note_x_offset(
+                    local_col,
+                    96.0,
+                    0.0,
+                    2.5,
+                    &col_offsets,
+                    &zero,
+                    &bounds,
+                    &zero,
+                    NoteXParams::default(),
+                    tiny,
+                );
+                let cached = note_x_offset_cached(
+                    local_col,
+                    96.0,
+                    0.0,
+                    2.5,
+                    &col_offsets,
+                    &zero,
+                    &bounds,
+                    &tornado_caches,
+                    &zero,
+                    NoteXParams::default(),
+                    tiny_scale,
+                );
+                assert_eq!(cached.to_bits(), reference.to_bits());
+            }
+        }
+    }
+
+    #[test]
+    fn cached_bumpy_geometry_matches_per_note_reference_math() {
+        for (offset, period) in [
+            (0.0, 0.0),
+            (0.35, 0.75),
+            (-1.25, -0.5),
+            (f32::NAN, f32::NAN),
+        ] {
+            let cache = bumpy_frame_cache(offset, period);
+            for bumpy in [0.0, 0.6, -0.4, f32::NAN] {
+                for y in [-128.0, 0.0, 96.0, 512.0] {
+                    let reference = note_world_z_for_bumpy(y, bumpy, offset, period);
+                    let cached = note_world_z_for_bumpy_cached(y, bumpy, cache);
+                    assert_eq!(cached.to_bits(), reference.to_bits());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cached_move_offsets_match_per_note_reference_math() {
+        let values = [0.0, 0.1, -0.2, f32::NAN, 0.4, -0.5];
+        let mut cache = [0.0; 8];
+        fill_move_col_extras(&values, &mut cache);
+        for local_col in 0..cache.len() {
+            assert_eq!(
+                cache[local_col].to_bits(),
+                move_col_extra(&values, local_col).to_bits()
+            );
         }
     }
 
@@ -1115,9 +1213,9 @@ pub(crate) fn note_x_offset_cached(
     invert: &[f32],
     tornado: &[TornadoBounds],
     tornado_cache: &[TornadoLaneCache],
-    move_x: &[f32],
+    move_x_cache: &[f32],
     params: NoteXParams,
-    tiny_zoom: f32,
+    tiny_scale: f32,
 ) -> f32 {
     let base_x = col_offsets.get(local_col).copied().unwrap_or(0.0);
     let mut extra = 0.0;
@@ -1163,7 +1261,7 @@ pub(crate) fn note_x_offset_cached(
         extra += beat_x_extra(y, beat_factor_value, params.beat);
     }
     let base = base_x + extra;
-    base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
+    base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
 }
 
 pub(crate) fn fill_static_note_x_offsets(
@@ -1418,6 +1516,12 @@ pub(crate) fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
         * ARROW_EFFECT_PIXEL_SIZE
 }
 
+pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
+    for (local_col, extra) in out.iter_mut().enumerate() {
+        *extra = move_col_extra(values, local_col);
+    }
+}
+
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub mod transform_cache_bench_support {
@@ -1582,9 +1686,95 @@ pub mod transform_cache_bench_support {
                 &caches,
                 &zero,
                 params,
-                0.0,
+                tiny_spacing_scale(0.0),
             );
             checksum = checksum.wrapping_add(u64::from(x.to_bits())).rotate_left(7);
+        }
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod lane_invariant_cache_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    #[must_use]
+    pub fn tiny_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let base_x = black_box((index % 768) as f32 - 384.0);
+            let x = base_x * tiny_spacing_scale(black_box(0.65));
+            checksum = checksum.wrapping_add(u64::from(x.to_bits())).rotate_left(5);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn tiny_new(evaluations: usize) -> u64 {
+        let scale = tiny_spacing_scale(black_box(0.65));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let base_x = black_box((index % 768) as f32 - 384.0);
+            let x = base_x * scale;
+            checksum = checksum.wrapping_add(u64::from(x.to_bits())).rotate_left(5);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bumpy_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let z = note_world_z_for_bumpy(y, 0.7, black_box(0.35), black_box(0.75));
+            checksum = checksum
+                .wrapping_add(u64::from(z.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn bumpy_new(evaluations: usize) -> u64 {
+        let cache = bumpy_frame_cache(black_box(0.35), black_box(0.75));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 960) as f32 - 160.0);
+            let z = note_world_z_for_bumpy_cached(y, 0.7, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(z.to_bits()))
+                .rotate_left(11);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn move_old(evaluations: usize) -> u64 {
+        let values = black_box([0.0, 0.1, -0.2, 0.3, f32::NAN, 0.5, -0.6, 0.7]);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let x = move_col_extra(&values, index & 7);
+            checksum = checksum
+                .wrapping_add(u64::from(x.to_bits()))
+                .rotate_left(13);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn move_new(evaluations: usize) -> u64 {
+        let values = black_box([0.0, 0.1, -0.2, 0.3, f32::NAN, 0.5, -0.6, 0.7]);
+        let mut cache = [0.0; 8];
+        fill_move_col_extras(&values, &mut cache);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let x = cache[index & 7];
+            checksum = checksum
+                .wrapping_add(u64::from(x.to_bits()))
+                .rotate_left(13);
         }
         checksum
     }

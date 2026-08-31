@@ -10,7 +10,7 @@ use crate::{
     hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
-    note_appearance_cache, note_world_z_for_bumpy,
+    note_appearance_cache, note_world_z_for_bumpy_cached,
     note_x_offset_cached as canonical_note_x_offset_cached, offset_center, scale_sprite_to_arrow,
     share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
     translated_uv_rect, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
@@ -287,6 +287,8 @@ fn compose_field_contents<S, F>(
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
                     &note_inputs.tornado_lane_caches[..num_cols],
+                    &note_inputs.move_x_offsets[..num_cols],
+                    note_inputs.tiny_spacing_scale,
                 )
             }
     };
@@ -298,11 +300,10 @@ fn compose_field_contents<S, F>(
         )
     };
     let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
-        note_world_z_for_bumpy(
+        note_world_z_for_bumpy_cached(
             travel_offset,
             lane_effect_params[local_col].bumpy,
-            visual.bumpy_offset,
-            visual.bumpy_period,
+            note_inputs.bumpy_frame_cache,
         )
     };
     let visible_row_range = crate::note_placement::expand_range(travel.visible_row_range());
@@ -958,14 +959,15 @@ fn compose_visible_notes<S, F>(
                             &notes.invert_distances[..num_cols],
                             &notes.tornado_bounds[..num_cols],
                             &notes.tornado_lane_caches[..num_cols],
+                            &notes.move_x_offsets[..num_cols],
+                            notes.tiny_spacing_scale,
                         )
                     };
                 let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
-                let world_z = note_world_z_for_bumpy(
+                let world_z = note_world_z_for_bumpy_cached(
                     adjusted_travel,
                     effect_params.bumpy,
-                    visual.bumpy_offset,
-                    visual.bumpy_period,
+                    notes.bumpy_frame_cache,
                 );
                 let transform_cache = lane_transform_caches[local_col];
                 let effect_zoom = prepared.column_zooms[local_col]
@@ -1477,6 +1479,8 @@ fn note_x_offset(
     invert_distances: &[f32],
     tornado_bounds: &[TornadoBounds],
     tornado_lane_caches: &[crate::TornadoLaneCache],
+    move_x_offsets: &[f32],
+    tiny_spacing_scale: f32,
 ) -> f32 {
     canonical_note_x_offset_cached(
         local_col,
@@ -1487,7 +1491,7 @@ fn note_x_offset(
         invert_distances,
         tornado_bounds,
         tornado_lane_caches,
-        &visual.move_x_cols,
+        move_x_offsets,
         NoteXParams {
             screen_height,
             tornado: visual.tornado,
@@ -1496,7 +1500,7 @@ fn note_x_offset(
             invert: visual.invert,
             beat: visual.beat,
         },
-        visual.tiny,
+        tiny_spacing_scale,
     )
 }
 
