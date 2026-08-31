@@ -107,11 +107,16 @@ impl AllocSnapshot {
     const fn churn_bytes(self) -> u64 {
         self.alloc_bytes + self.realloc_bytes + self.free_bytes
     }
+
+    const fn operations(self) -> u64 {
+        self.allocs + self.reallocs + self.frees
+    }
 }
 
 struct BenchResult {
     ns_per_callback: f64,
-    worst_sample_ns: f64,
+    median_sample_ns: f64,
+    p95_sample_ns: f64,
     cycles_per_callback: Option<f64>,
     samples_per_second: f64,
     allocated: AllocSnapshot,
@@ -126,17 +131,21 @@ fn measure(mut callback: impl FnMut() -> u64) -> BenchResult {
     let cycle_start = cycle_counter();
     let started = Instant::now();
     let mut checksum = 0u64;
-    let mut worst_sample_ns = 0.0f64;
+    let mut sample_ns = Vec::with_capacity(CALLBACKS / SAMPLE_OPS);
     for _ in 0..CALLBACKS / SAMPLE_OPS {
         let sample_started = Instant::now();
         for _ in 0..SAMPLE_OPS {
             checksum = checksum.wrapping_add(black_box(callback()));
         }
-        worst_sample_ns = worst_sample_ns
-            .max(sample_started.elapsed().as_secs_f64() * 1_000_000_000.0 / SAMPLE_OPS as f64);
+        sample_ns
+            .push(sample_started.elapsed().as_secs_f64() * 1_000_000_000.0 / SAMPLE_OPS as f64);
     }
     let elapsed = started.elapsed();
     let cycle_end = cycle_counter();
+    sample_ns.sort_unstable_by(f64::total_cmp);
+    let median_sample_ns = sample_ns[sample_ns.len() / 2];
+    let p95_index = (sample_ns.len() * 95).div_ceil(100).saturating_sub(1);
+    let p95_sample_ns = sample_ns[p95_index];
 
     let before = ALLOC.snapshot();
     ALLOC.enabled.store(true, Ordering::Relaxed);
@@ -151,7 +160,8 @@ fn measure(mut callback: impl FnMut() -> u64) -> BenchResult {
     let seconds = elapsed.as_secs_f64();
     BenchResult {
         ns_per_callback: seconds * 1_000_000_000.0 / CALLBACKS as f64,
-        worst_sample_ns,
+        median_sample_ns,
+        p95_sample_ns,
         cycles_per_callback: cycle_start
             .zip(cycle_end)
             .map(|(start, end)| end.wrapping_sub(start) as f64 / CALLBACKS as f64),
@@ -163,29 +173,36 @@ fn measure(mut callback: impl FnMut() -> u64) -> BenchResult {
 
 fn print_pair(title: &str, old: &BenchResult, new: &BenchResult) {
     assert_eq!(old.checksum, new.checksum, "{title} behavior diverged");
+    assert_eq!(old.allocated.operations(), 0, "{title} old path allocated");
+    assert_eq!(new.allocated.operations(), 0, "{title} new path allocated");
+    assert_eq!(new.allocated.churn_bytes(), 0, "{title} new path churned");
     println!("\n{title}");
     print_result("old", old);
     print_result("new", new);
     println!(
-        "  change: {:>7.2}% latency  {:>7.2}% cycles  {:>7.2}% throughput  {:>7.2}% sample tail",
+        "  change: {:>7.2}% latency  {:>7.2}% cycles  {:>7.2}% throughput  \
+         {:>7.2}% median  {:>7.2}% p95",
         percent_change(old.ns_per_callback, new.ns_per_callback),
         percent_change(
             old.cycles_per_callback.unwrap_or(f64::NAN),
             new.cycles_per_callback.unwrap_or(f64::NAN),
         ),
         percent_change(old.samples_per_second, new.samples_per_second),
-        percent_change(old.worst_sample_ns, new.worst_sample_ns),
+        percent_change(old.median_sample_ns, new.median_sample_ns),
+        percent_change(old.p95_sample_ns, new.p95_sample_ns),
     );
 }
 
 fn print_result(label: &str, result: &BenchResult) {
     let count = CALLBACKS as f64;
     println!(
-        "  {label:<3} {:>9.2} ns/cb  {:>9.2} cycles/cb  {:>9.2} worst ns  \
+        "  {label:<3} {:>9.2} ns/cb  {:>9.2} cycles/cb  {:>9.2} median ns  \
+         {:>9.2} p95 ns  \
          {:>8.1} Msamp/s  {:>5.2} alloc/cb  {:>5.2} realloc/cb  {:>5.2} free/cb  {:>8.1} churn B/cb",
         result.ns_per_callback,
         result.cycles_per_callback.unwrap_or(f64::NAN),
-        result.worst_sample_ns,
+        result.median_sample_ns,
+        result.p95_sample_ns,
         result.samples_per_second / 1_000_000.0,
         result.allocated.allocs as f64 / count,
         result.allocated.reallocs as f64 / count,
@@ -240,6 +257,118 @@ fn main() {
     let source: Vec<i16> = (0..SAMPLES)
         .map(|index| ((index as i32 * 7_919 + 13_337) as i16).wrapping_sub(8_000))
         .collect();
+
+    let mut old_muted = vec![f32::NAN; SAMPLES];
+    let mut old_muted_gain = 1.0f32;
+    let muted_old = measure(|| {
+        old_muted_gain = 1.0;
+        render::music_convert_old(
+            black_box(&source),
+            &mut old_muted,
+            black_box(2),
+            black_box(0.0),
+            black_box(1.0),
+            &mut old_muted_gain,
+        );
+        f32_checksum(&old_muted)
+    });
+    let mut new_muted = vec![f32::NAN; SAMPLES];
+    let mut new_muted_gain = 1.0f32;
+    let muted_new = measure(|| {
+        new_muted_gain = 1.0;
+        render::music_convert_new(
+            black_box(&source),
+            &mut new_muted,
+            black_box(2),
+            black_box(0.0),
+            black_box(1.0),
+            &mut new_muted_gain,
+        );
+        f32_checksum(&new_muted)
+    });
+    assert!(
+        old_muted
+            .iter()
+            .zip(&new_muted)
+            .all(|(&old, &new)| old.to_bits() == new.to_bits()),
+        "muted music conversion changed samples"
+    );
+    print_pair("muted stable-gain music conversion", &muted_old, &muted_new);
+
+    let mut old_unity = vec![f32::NAN; SAMPLES];
+    let mut old_unity_gain = 1.0f32;
+    let unity_old = measure(|| {
+        old_unity_gain = 1.0;
+        render::music_convert_old(
+            black_box(&source),
+            &mut old_unity,
+            black_box(2),
+            black_box(1.0),
+            black_box(1.0),
+            &mut old_unity_gain,
+        );
+        f32_checksum(&old_unity)
+    });
+    let mut new_unity = vec![f32::NAN; SAMPLES];
+    let mut new_unity_gain = 1.0f32;
+    let unity_new = measure(|| {
+        new_unity_gain = 1.0;
+        render::music_convert_new(
+            black_box(&source),
+            &mut new_unity,
+            black_box(2),
+            black_box(1.0),
+            black_box(1.0),
+            &mut new_unity_gain,
+        );
+        f32_checksum(&new_unity)
+    });
+    assert!(
+        old_unity
+            .iter()
+            .zip(&new_unity)
+            .all(|(&old, &new)| old.to_bits() == new.to_bits()),
+        "unity music conversion changed samples"
+    );
+    print_pair("unity stable-gain music conversion", &unity_old, &unity_new);
+
+    let mut old_ramp = vec![f32::NAN; SAMPLES];
+    let mut old_ramp_gain = 1.0f32;
+    let ramp_old = measure(|| {
+        old_ramp_gain = 1.0;
+        render::music_convert_old(
+            black_box(&source),
+            &mut old_ramp,
+            black_box(2),
+            black_box(0.9),
+            black_box(0.5),
+            &mut old_ramp_gain,
+        );
+        f32_checksum(&old_ramp) ^ u64::from(old_ramp_gain.to_bits())
+    });
+    let mut new_ramp = vec![f32::NAN; SAMPLES];
+    let mut new_ramp_gain = 1.0f32;
+    let ramp_new = measure(|| {
+        new_ramp_gain = 1.0;
+        render::music_convert_new(
+            black_box(&source),
+            &mut new_ramp,
+            black_box(2),
+            black_box(0.9),
+            black_box(0.5),
+            &mut new_ramp_gain,
+        );
+        f32_checksum(&new_ramp) ^ u64::from(new_ramp_gain.to_bits())
+    });
+    assert!(
+        old_ramp
+            .iter()
+            .zip(&new_ramp)
+            .all(|(&old, &new)| old.to_bits() == new.to_bits()),
+        "stereo gain-ramp conversion changed samples"
+    );
+    assert_eq!(old_ramp_gain.to_bits(), new_ramp_gain.to_bits());
+    print_pair("stereo music gain-ramp conversion", &ramp_old, &ramp_new);
 
     let mut old_scratch = vec![0.0f32; SAMPLES];
     let mut old_f32 = vec![0.0f32; SAMPLES];
