@@ -9596,11 +9596,11 @@ fn sync_overlay_apply_result(
 
 fn apply_song_sync_events(
     overlay: &mut NullOrDieOverlayData,
-    events: Vec<crate::SimplyLoveSyncEvent>,
+    events: &mut Vec<crate::SimplyLoveSyncEvent>,
 ) {
     let has_events = !events.is_empty();
     let mut refresh = NullOrDieOverlayRefresh::default();
-    for event in events {
+    for event in events.drain(..) {
         match event {
             crate::SimplyLoveSyncEvent::SongStream(event) => {
                 sync_overlay_apply_event(overlay, event, &mut refresh);
@@ -9632,20 +9632,22 @@ fn apply_song_sync_events(
 pub fn apply_sync_analysis_events(
     state: &mut State,
     owner: crate::SimplyLoveSyncOwner,
-    events: Vec<crate::SimplyLoveSyncEvent>,
+    events: &mut Vec<crate::SimplyLoveSyncEvent>,
 ) {
     match owner {
         crate::SimplyLoveSyncOwner::SelectMusicSong => {
             if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
                 apply_song_sync_events(overlay, events);
+            } else {
+                events.clear();
             }
         }
         crate::SimplyLoveSyncOwner::SelectMusicPack => {
-            for event in events {
+            for event in events.drain(..) {
                 crate::screens::pack_sync::apply_event(&mut state.pack_sync_overlay, event);
             }
         }
-        crate::SimplyLoveSyncOwner::OptionsPack => {}
+        crate::SimplyLoveSyncOwner::OptionsPack => events.clear(),
     }
 }
 
@@ -19934,32 +19936,31 @@ mod tests {
     #[test]
     fn sync_overlay_accepts_cached_single_chart_result() {
         let mut overlay = test_running_sync_overlay();
-        super::apply_song_sync_events(
-            &mut overlay,
-            vec![crate::SimplyLoveSyncEvent::SongFinished(Ok(
-                crate::SimplyLoveSyncSongResult {
-                    estimate: crate::SimplyLoveSyncResult {
-                        bias_ms: -4.0,
-                        confidence: 0.93,
-                    },
-                    plot: crate::SimplyLoveSyncPlotView {
-                        freq_rows: 1,
-                        digest_rows: 1,
-                        cols: 3,
-                        post_rows: 1,
-                        freq_domain: vec![0.2, 0.4, 0.6],
-                        beat_digest: vec![0.3, 0.5, 0.7],
-                        post_kernel: vec![0.4, 0.6, 0.8],
-                        convolution: vec![0.1, 0.9, 0.2],
-                        times_ms: vec![-1.0, 0.0, 1.0],
-                        edge_discard: 0,
-                    },
-                    cached: true,
+        let mut events = vec![crate::SimplyLoveSyncEvent::SongFinished(Ok(
+            crate::SimplyLoveSyncSongResult {
+                estimate: crate::SimplyLoveSyncResult {
+                    bias_ms: -4.0,
+                    confidence: 0.93,
                 },
-            ))],
-        );
+                plot: crate::SimplyLoveSyncPlotView {
+                    freq_rows: 1,
+                    digest_rows: 1,
+                    cols: 3,
+                    post_rows: 1,
+                    freq_domain: vec![0.2, 0.4, 0.6],
+                    beat_digest: vec![0.3, 0.5, 0.7],
+                    post_kernel: vec![0.4, 0.6, 0.8],
+                    convolution: vec![0.1, 0.9, 0.2],
+                    times_ms: vec![-1.0, 0.0, 1.0],
+                    edge_discard: 0,
+                },
+                cached: true,
+            },
+        ))];
+        super::apply_song_sync_events(&mut overlay, &mut events);
 
         assert_eq!(overlay.phase, super::NullOrDieOverlayPhase::Ready);
+        assert!(events.is_empty());
         assert!(overlay.result_cached);
         assert_eq!(overlay.final_bias_ms, Some(-4.0));
         assert_eq!(overlay.freq_domain, [0.2, 0.4, 0.6]);

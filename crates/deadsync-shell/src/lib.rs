@@ -90,3 +90,8 @@ pub(crate) use runtime::ShellState;
 pub use score_import::BenchmarkScoreImportService;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
+#[cfg(feature = "bench-support")]
+pub use sync_analysis::{
+    BenchmarkSyncEventRouter, benchmark_sync_finished_owner_filter,
+    benchmark_sync_finished_owner_filter_reference, benchmark_sync_route_reference,
+};

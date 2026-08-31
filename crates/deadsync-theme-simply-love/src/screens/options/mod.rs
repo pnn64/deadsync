@@ -271,8 +271,8 @@ fn append_pending_effects(state: &mut State, effect: ThemeEffect, effects: &mut 
     );
 }
 
-pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLoveSyncEvent>) {
-    for event in events {
+pub fn apply_sync_analysis_events(state: &mut State, events: &mut Vec<crate::SimplyLoveSyncEvent>) {
+    for event in events.drain(..) {
         shared_pack_sync::apply_event(&mut state.pack_sync_overlay, event);
     }
 }

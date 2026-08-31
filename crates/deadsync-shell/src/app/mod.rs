@@ -1897,16 +1897,9 @@ impl App {
         let Some(events) = self.sync_analysis.poll() else {
             return;
         };
-        let mut song_events = Vec::new();
-        let mut select_pack_events = Vec::new();
-        let mut options_pack_events = Vec::new();
-        for (owner, event) in events {
-            match owner {
-                SimplyLoveSyncOwner::SelectMusicSong => song_events.push(event),
-                SimplyLoveSyncOwner::SelectMusicPack => select_pack_events.push(event),
-                SimplyLoveSyncOwner::OptionsPack => options_pack_events.push(event),
-            }
-        }
+        let song_events = events.song;
+        let select_pack_events = events.select_pack;
+        let options_pack_events = events.options_pack;
         if !song_events.is_empty() {
             select_music::apply_sync_analysis_events(
                 &mut self.state.screens.select_music_state,

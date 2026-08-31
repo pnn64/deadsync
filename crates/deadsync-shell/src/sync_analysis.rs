@@ -43,6 +43,174 @@ struct Job {
 pub(crate) struct Service {
     jobs: Vec<Job>,
     cache: Arc<AnalysisCache>,
+    events: RoutedEvents,
+}
+
+#[derive(Default)]
+struct RoutedEvents {
+    song: Vec<SimplyLoveSyncEvent>,
+    select_pack: Vec<SimplyLoveSyncEvent>,
+    options_pack: Vec<SimplyLoveSyncEvent>,
+}
+
+impl RoutedEvents {
+    fn clear(&mut self) {
+        self.song.clear();
+        self.select_pack.clear();
+        self.options_pack.clear();
+    }
+
+    fn push(&mut self, owner: SimplyLoveSyncOwner, event: SimplyLoveSyncEvent) {
+        match owner {
+            SimplyLoveSyncOwner::SelectMusicSong => self.song.push(event),
+            SimplyLoveSyncOwner::SelectMusicPack => self.select_pack.push(event),
+            SimplyLoveSyncOwner::OptionsPack => self.options_pack.push(event),
+        }
+    }
+
+    const fn len(&self) -> usize {
+        self.song.len() + self.select_pack.len() + self.options_pack.len()
+    }
+
+    fn batches(&mut self) -> EventBatches<'_> {
+        EventBatches {
+            song: &mut self.song,
+            select_pack: &mut self.select_pack,
+            options_pack: &mut self.options_pack,
+        }
+    }
+}
+
+pub(crate) struct EventBatches<'a> {
+    pub(crate) song: &'a mut Vec<SimplyLoveSyncEvent>,
+    pub(crate) select_pack: &'a mut Vec<SimplyLoveSyncEvent>,
+    pub(crate) options_pack: &'a mut Vec<SimplyLoveSyncEvent>,
+}
+
+impl EventBatches<'_> {
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.song.is_empty() && self.select_pack.is_empty() && self.options_pack.is_empty()
+    }
+}
+
+#[inline(always)]
+const fn sync_owner_index(owner: SimplyLoveSyncOwner) -> usize {
+    match owner {
+        SimplyLoveSyncOwner::SelectMusicSong => 0,
+        SimplyLoveSyncOwner::SelectMusicPack => 1,
+        SimplyLoveSyncOwner::OptionsPack => 2,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[derive(Default)]
+pub struct BenchmarkSyncEventRouter {
+    events: RoutedEvents,
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+impl BenchmarkSyncEventRouter {
+    /// Models one streamed frame through the retained production owner batches.
+    /// The first call warms each needed capacity; later calls perform no heap work.
+    pub fn route(&mut self, owners: &[SimplyLoveSyncOwner]) -> u64 {
+        self.events.clear();
+        for (index, &owner) in owners.iter().enumerate() {
+            self.events.push(
+                owner,
+                SimplyLoveSyncEvent::RowBeat {
+                    index,
+                    beats_processed: index + 1,
+                    total_beats: owners.len(),
+                },
+            );
+        }
+        benchmark_routed_checksum(&self.events)
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_sync_route_reference(owners: &[SimplyLoveSyncOwner]) -> u64 {
+    let mut combined = Vec::new();
+    for (index, &owner) in owners.iter().enumerate() {
+        combined.push((
+            owner,
+            SimplyLoveSyncEvent::RowBeat {
+                index,
+                beats_processed: index + 1,
+                total_beats: owners.len(),
+            },
+        ));
+    }
+    let mut routed = RoutedEvents::default();
+    for (owner, event) in combined {
+        routed.push(owner, event);
+    }
+    benchmark_routed_checksum(&routed)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_sync_finished_owner_filter(
+    owners: &[SimplyLoveSyncOwner],
+    finished_owners: &[SimplyLoveSyncOwner],
+) -> u64 {
+    let mut finished = [false; 3];
+    for &owner in finished_owners {
+        finished[sync_owner_index(owner)] = true;
+    }
+    benchmark_retained_owner_checksum(
+        owners
+            .iter()
+            .copied()
+            .filter(|&owner| !finished[sync_owner_index(owner)]),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn benchmark_sync_finished_owner_filter_reference(
+    owners: &[SimplyLoveSyncOwner],
+    finished_owners: &[SimplyLoveSyncOwner],
+) -> u64 {
+    let finished = finished_owners.to_vec();
+    benchmark_retained_owner_checksum(
+        owners
+            .iter()
+            .copied()
+            .filter(|owner| !finished.contains(owner)),
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_routed_checksum(events: &RoutedEvents) -> u64 {
+    let batches = [
+        (&events.song, 0x9e37_79b9_u64),
+        (&events.select_pack, 0x85eb_ca6b_u64),
+        (&events.options_pack, 0xc2b2_ae35_u64),
+    ];
+    batches.into_iter().fold(0_u64, |checksum, (events, salt)| {
+        events.iter().fold(checksum ^ salt, |checksum, event| {
+            let value = match event {
+                SimplyLoveSyncEvent::RowBeat {
+                    index,
+                    beats_processed,
+                    total_beats,
+                } => (*index as u64)
+                    .wrapping_mul(31)
+                    .wrapping_add(*beats_processed as u64)
+                    .wrapping_add((*total_beats as u64).wrapping_mul(7)),
+                _ => unreachable!("the routing benchmark creates only beat events"),
+            };
+            checksum.rotate_left(7) ^ value.wrapping_add(salt)
+        })
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_retained_owner_checksum(owners: impl Iterator<Item = SimplyLoveSyncOwner>) -> u64 {
+    owners.enumerate().fold(0_u64, |checksum, (index, owner)| {
+        checksum.rotate_left(5)
+            ^ (sync_owner_index(owner) as u64 + 1).wrapping_mul(index as u64 + 17)
+    })
 }
 
 impl Default for Service {
@@ -52,6 +220,7 @@ impl Default for Service {
             cache: Arc::new(AnalysisCache::load(
                 deadlib_platform::dirs::app_dirs().null_or_die_cache_file(),
             )),
+            events: RoutedEvents::default(),
         }
     }
 }
@@ -104,20 +273,21 @@ impl Service {
     /// Returns `None` without reading a clock or constructing scratch vectors
     /// when no analysis jobs exist. Terminal events are last on each job's
     /// FIFO channel, so removing a finished job cannot strand later work.
-    pub(crate) fn poll(&mut self) -> Option<Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)>> {
+    pub(crate) fn poll(&mut self) -> Option<EventBatches<'_>> {
         if self.jobs.is_empty() {
             return None;
         }
-        Some(self.drain_events())
+        self.drain_events();
+        Some(self.events.batches())
     }
 
-    fn drain_events(&mut self) -> Vec<(SimplyLoveSyncOwner, SimplyLoveSyncEvent)> {
+    fn drain_events(&mut self) {
         let started = Instant::now();
-        let mut events = Vec::new();
-        let mut finished = Vec::new();
+        self.events.clear();
+        let mut finished = [false; 3];
 
         'jobs: for job in &self.jobs {
-            while events.len() < MAX_EVENTS_PER_FRAME && started.elapsed() < POLL_BUDGET {
+            while self.events.len() < MAX_EVENTS_PER_FRAME && started.elapsed() < POLL_BUDGET {
                 match job.rx.try_recv() {
                     Ok(event) => {
                         let is_finished = matches!(
@@ -126,24 +296,25 @@ impl Service {
                                 | SimplyLoveSyncEvent::Finished
                                 | SimplyLoveSyncEvent::Disconnected
                         );
-                        events.push((job.owner, event));
+                        self.events.push(job.owner, event);
                         if is_finished {
-                            finished.push(job.owner);
+                            finished[sync_owner_index(job.owner)] = true;
                             continue 'jobs;
                         }
                     }
                     Err(mpsc::TryRecvError::Empty) => continue 'jobs,
                     Err(mpsc::TryRecvError::Disconnected) => {
-                        events.push((job.owner, SimplyLoveSyncEvent::Disconnected));
-                        finished.push(job.owner);
+                        self.events
+                            .push(job.owner, SimplyLoveSyncEvent::Disconnected);
+                        finished[sync_owner_index(job.owner)] = true;
                         continue 'jobs;
                     }
                 }
             }
             break;
         }
-        self.jobs.retain(|job| !finished.contains(&job.owner));
-        events
+        self.jobs
+            .retain(|job| !finished[sync_owner_index(job.owner)]);
     }
 }
 
@@ -465,6 +636,18 @@ fn pack_worker_count(target_count: usize) -> usize {
 mod tests {
     use super::*;
 
+    fn test_job(owner: SimplyLoveSyncOwner) -> (Job, mpsc::Sender<SimplyLoveSyncEvent>) {
+        let (tx, rx) = mpsc::channel();
+        (
+            Job {
+                owner,
+                cancel: Arc::new(AtomicBool::new(false)),
+                rx,
+            },
+            tx,
+        )
+    }
+
     #[test]
     fn sync_poll_only_runs_while_a_job_is_active() {
         let mut service = Service::default();
@@ -482,13 +665,145 @@ mod tests {
         let events = service.poll().expect("the job is active");
 
         assert!(matches!(
-            events.as_slice(),
-            [(
-                SimplyLoveSyncOwner::SelectMusicSong,
-                SimplyLoveSyncEvent::Finished
-            )]
+            events.song.as_slice(),
+            [SimplyLoveSyncEvent::Finished]
         ));
+        assert!(events.select_pack.is_empty());
+        assert!(events.options_pack.is_empty());
         assert!(service.poll().is_none());
+    }
+
+    #[test]
+    fn sync_poll_routes_each_owner_directly_and_preserves_fifo_order() {
+        let mut service = Service::default();
+        let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
+        let (select_job, select_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
+        let (options_job, options_tx) = test_job(SimplyLoveSyncOwner::OptionsPack);
+        service.jobs.extend([song_job, select_job, options_job]);
+
+        for (tx, base) in [(&song_tx, 10), (&select_tx, 20), (&options_tx, 30)] {
+            for index in base..base + 2 {
+                tx.send(SimplyLoveSyncEvent::RowBeat {
+                    index,
+                    beats_processed: index + 1,
+                    total_beats: 99,
+                })
+                .expect("the service owns the matching receiver");
+            }
+        }
+
+        let events = service.poll().expect("three jobs are active");
+        assert!(matches!(
+            events.song.as_slice(),
+            [
+                SimplyLoveSyncEvent::RowBeat { index: 10, .. },
+                SimplyLoveSyncEvent::RowBeat { index: 11, .. }
+            ]
+        ));
+        assert!(matches!(
+            events.select_pack.as_slice(),
+            [
+                SimplyLoveSyncEvent::RowBeat { index: 20, .. },
+                SimplyLoveSyncEvent::RowBeat { index: 21, .. }
+            ]
+        ));
+        assert!(matches!(
+            events.options_pack.as_slice(),
+            [
+                SimplyLoveSyncEvent::RowBeat { index: 30, .. },
+                SimplyLoveSyncEvent::RowBeat { index: 31, .. }
+            ]
+        ));
+    }
+
+    #[test]
+    fn sync_poll_reuses_owner_batch_capacity_after_consumption() {
+        let mut service = Service::default();
+        let (job, tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
+        service.jobs.push(job);
+        for index in 0..8 {
+            tx.send(SimplyLoveSyncEvent::RowStarted { index })
+                .expect("the service owns the matching receiver");
+        }
+
+        let first_capacity = {
+            let events = service.poll().expect("the job is active");
+            let capacity = events.song.capacity();
+            events.song.clear();
+            capacity
+        };
+        tx.send(SimplyLoveSyncEvent::RowStarted { index: 8 })
+            .expect("the service owns the matching receiver");
+        let events = service.poll().expect("the job remains active");
+
+        assert_eq!(events.song.len(), 1);
+        assert_eq!(events.song.capacity(), first_capacity);
+        assert!(first_capacity >= 8);
+    }
+
+    #[test]
+    fn terminal_owner_mask_removes_only_the_finished_job() {
+        let mut service = Service::default();
+        let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
+        let (pack_job, pack_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
+        service.jobs.extend([song_job, pack_job]);
+        song_tx
+            .send(SimplyLoveSyncEvent::Finished)
+            .expect("the service owns the matching receiver");
+        pack_tx
+            .send(SimplyLoveSyncEvent::RowStarted { index: 4 })
+            .expect("the service owns the matching receiver");
+
+        let events = service.poll().expect("both jobs begin active");
+        assert!(matches!(
+            events.song.as_slice(),
+            [SimplyLoveSyncEvent::Finished]
+        ));
+        assert!(matches!(
+            events.select_pack.as_slice(),
+            [SimplyLoveSyncEvent::RowStarted { index: 4 }]
+        ));
+        assert_eq!(service.jobs.len(), 1);
+        assert_eq!(service.jobs[0].owner, SimplyLoveSyncOwner::SelectMusicPack);
+
+        pack_tx
+            .send(SimplyLoveSyncEvent::RowCached { index: 5 })
+            .expect("the service owns the matching receiver");
+        let events = service.poll().expect("the pack job remains active");
+        assert!(matches!(
+            events.select_pack.as_slice(),
+            [SimplyLoveSyncEvent::RowCached { index: 5 }]
+        ));
+    }
+
+    #[test]
+    fn optimized_routing_and_completion_mask_match_frozen_references() {
+        let owners = [
+            SimplyLoveSyncOwner::SelectMusicSong,
+            SimplyLoveSyncOwner::OptionsPack,
+            SimplyLoveSyncOwner::SelectMusicPack,
+            SimplyLoveSyncOwner::SelectMusicSong,
+            SimplyLoveSyncOwner::SelectMusicPack,
+        ];
+        let mut router = BenchmarkSyncEventRouter::default();
+        assert_eq!(
+            router.route(&owners),
+            benchmark_sync_route_reference(&owners)
+        );
+
+        for finished in [
+            &[][..],
+            &[SimplyLoveSyncOwner::SelectMusicSong][..],
+            &[
+                SimplyLoveSyncOwner::OptionsPack,
+                SimplyLoveSyncOwner::SelectMusicPack,
+            ][..],
+        ] {
+            assert_eq!(
+                benchmark_sync_finished_owner_filter(&owners, finished),
+                benchmark_sync_finished_owner_filter_reference(&owners, finished)
+            );
+        }
     }
 
     #[test]
