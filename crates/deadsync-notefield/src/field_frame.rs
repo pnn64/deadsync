@@ -10,10 +10,11 @@ use crate::{
     hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
-    note_appearance_cache, note_world_z_for_bumpy_cached,
-    note_x_offset_cached as canonical_note_x_offset_cached, offset_center, scale_sprite_to_arrow,
-    share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
-    translated_uv_rect, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    note_appearance_cache, note_part_phase_cached, note_part_uv_translation_for_quantization,
+    note_world_z_for_bumpy_cached, note_x_offset_cached as canonical_note_x_offset_cached,
+    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
+    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
+    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
@@ -482,17 +483,21 @@ fn compose_field_contents<S, F>(
         let (engaged, use_active) = hold_head_render_flags(active_state, current_beat, note.beat);
         let visuals = ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
         let hold_parts = hold_parts_for_note_type(note.note_type);
-        let hold_part_phase =
-            ns.part_uv_phase(hold_parts.head, elapsed_screen, current_beat, note.beat);
-        let hold_body_phase =
-            ns.part_uv_phase(hold_parts.body, elapsed_screen, current_beat, note.beat);
-        let hold_topcap_phase =
-            ns.part_uv_phase(hold_parts.topcap, elapsed_screen, current_beat, note.beat);
-        let hold_bottomcap_phase = ns.part_uv_phase(
-            hold_parts.bottomcap,
-            elapsed_screen,
-            current_beat,
+        let hold_part_phase = note_part_phase_cached(
             note.beat,
+            note_inputs.part_phase_caches[hold_parts.head as usize],
+        );
+        let hold_body_phase = note_part_phase_cached(
+            note.beat,
+            note_inputs.part_phase_caches[hold_parts.body as usize],
+        );
+        let hold_topcap_phase = note_part_phase_cached(
+            note.beat,
+            note_inputs.part_phase_caches[hold_parts.topcap as usize],
+        );
+        let hold_bottomcap_phase = note_part_phase_cached(
+            note.beat,
+            note_inputs.part_phase_caches[hold_parts.bottomcap as usize],
         );
         let hold_plan = hold_entry_plan(HoldEntryPlanRequest {
             note_type: note.note_type,
@@ -577,11 +582,22 @@ fn compose_field_contents<S, F>(
                 body_phase: hold_plan.body_phase,
                 top_cap_phase: hold_plan.top_cap_phase,
                 bottom_cap_phase: hold_plan.bottom_cap_phase,
-                body_uv_translation: ns.part_uv_translation(hold_parts.body, note.beat, false),
-                top_cap_uv_translation: ns.part_uv_translation(hold_parts.topcap, note.beat, false),
-                bottom_cap_uv_translation: ns.part_uv_translation(
-                    hold_parts.bottomcap,
+                body_uv_translation: note_part_uv_translation_for_quantization(
                     note.beat,
+                    note.quantization_idx,
+                    ns.note_display_metrics.part_texture_translate[hold_parts.body as usize],
+                    false,
+                ),
+                top_cap_uv_translation: note_part_uv_translation_for_quantization(
+                    note.beat,
+                    note.quantization_idx,
+                    ns.note_display_metrics.part_texture_translate[hold_parts.topcap as usize],
+                    false,
+                ),
+                bottom_cap_uv_translation: note_part_uv_translation_for_quantization(
+                    note.beat,
+                    note.quantization_idx,
+                    ns.note_display_metrics.part_texture_translate[hold_parts.bottomcap as usize],
                     false,
                 ),
                 target_arrow_px: hold_target_arrow_px,
@@ -625,7 +641,12 @@ fn compose_field_contents<S, F>(
         let head_center = [head_center_x, head_draw_y];
         let head_world_z = world_z_for_adjusted_travel(local_col, head_anchor_adjusted_travel);
         let elapsed = elapsed_screen;
-        let hold_head_translation = ns.part_uv_translation(hold_parts.head, note.beat, false);
+        let hold_head_translation = note_part_uv_translation_for_quantization(
+            note.beat,
+            note.quantization_idx,
+            ns.note_display_metrics.part_texture_translate[hold_parts.head as usize],
+            false,
+        );
         let head_slot = head_slot.and_then(|slot| {
             let draw = song_lua_note_model_draw(
                 model_cache.draw_at(slot, elapsed, current_beat),
@@ -985,9 +1006,17 @@ fn compose_visible_notes<S, F>(
                     if fill_slot.is_none() && frame_slot.is_none() {
                         return;
                     }
-                    let mine_uv_phase = mine_ns.tap_mine_uv_phase(elapsed, current_beat, note.beat);
-                    let mine_translation =
-                        mine_ns.part_uv_translation(mine_part(), note.beat, false);
+                    let mine_part = mine_part();
+                    let mine_uv_phase = note_part_phase_cached(
+                        note.beat,
+                        notes.mine_part_phase_caches[mine_part as usize],
+                    );
+                    let mine_translation = note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        mine_ns.note_display_metrics.part_texture_translate[mine_part as usize],
+                        false,
+                    );
                     let circle_reference = frame_slot
                         .map(&scale_mine_for_note)
                         .or_else(|| fill_slot.map(&scale_mine_for_note))
@@ -1039,8 +1068,14 @@ fn compose_visible_notes<S, F>(
                 ) {
                     let visuals = ns.hold_visuals_for_col(local_col, replacement.is_roll);
                     let part = replacement.part;
-                    let phase = ns.part_uv_phase(part, elapsed, current_beat, note.beat);
-                    let translation = ns.part_uv_translation(part, note.beat, false);
+                    let phase =
+                        note_part_phase_cached(note.beat, notes.part_phase_caches[part as usize]);
+                    let translation = note_part_uv_translation_for_quantization(
+                        note.beat,
+                        note.quantization_idx,
+                        ns.note_display_metrics.part_texture_translate[part as usize],
+                        false,
+                    );
                     let center = [column_center_x, y_pos];
                     if let Some(head_slots) = visuals
                         .head_inactive_layers
@@ -1101,13 +1136,21 @@ fn compose_visible_notes<S, F>(
                 }
 
                 let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
-                let translation = ns.part_uv_translation(tap_part, note.beat, false);
+                let translation = note_part_uv_translation_for_quantization(
+                    note.beat,
+                    note.quantization_idx,
+                    ns.note_display_metrics.part_texture_translate[tap_part as usize],
+                    false,
+                );
                 let lift_layers = (note.note_type == NoteType::Lift)
                     .then(|| ns.lift_note_layers.get(note_idx))
                     .flatten();
                 if let Some(note_slots) = lift_layers.or_else(|| ns.note_layers.get(note_idx)) {
                     let center = [column_center_x, y_pos];
-                    let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
+                    let phase = note_part_phase_cached(
+                        note.beat,
+                        notes.part_phase_caches[tap_part as usize],
+                    );
                     for note_slot in note_slots.iter() {
                         compose_flat_noteskin_layer(
                             flat_draws,
@@ -1131,7 +1174,10 @@ fn compose_visible_notes<S, F>(
                         );
                     }
                 } else if let Some(note_slot) = ns.notes.get(note_idx) {
-                    let phase = ns.part_uv_phase(tap_part, elapsed, current_beat, note.beat);
+                    let phase = note_part_phase_cached(
+                        note.beat,
+                        notes.part_phase_caches[tap_part as usize],
+                    );
                     let frame_index = note_slot.frame_index_from_phase(phase);
                     let uv_elapsed = if note_slot.model().is_some() {
                         phase

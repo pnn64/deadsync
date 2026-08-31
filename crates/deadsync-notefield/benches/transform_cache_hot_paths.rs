@@ -1,8 +1,12 @@
 use deadsync_notefield::edit_bar_geometry_bench_support::{
     edit_bar_geometry_new, edit_bar_geometry_old,
 };
+use deadsync_notefield::hold_geometry_bench_support::{mesh_slice_new, mesh_slice_old};
 use deadsync_notefield::lane_invariant_cache_bench_support::{
     bumpy_new, bumpy_old, move_new, move_old, tiny_new, tiny_old,
+};
+use deadsync_notefield::note_metadata_bench_support::{
+    part_phase_new, part_phase_old, uv_translation_new, uv_translation_old,
 };
 use deadsync_notefield::note_projection_bench_support::{
     lane_offset_new, lane_offset_old, random_speed_row_new, random_speed_row_old,
@@ -273,6 +277,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield cached note animation phase",
+        part_phase_old,
+        part_phase_new,
+    );
+    run(
+        "notefield preclassified UV quantization",
+        uv_translation_old,
+        uv_translation_new,
+    );
+    run(
+        "notefield hold mesh slice pose",
+        mesh_slice_old,
+        mesh_slice_new,
+    );
     run(
         "notefield edit-bar segment geometry",
         edit_bar_geometry_old,

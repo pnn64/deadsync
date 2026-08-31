@@ -1177,12 +1177,6 @@ where
 
             let top = sample_path(slice_top);
             let bottom = sample_path(slice_bottom);
-            let (center_xy, slice_height, rotation_z) =
-                hold_segment_pose([top.center_x, slice_top], [bottom.center_x, slice_bottom]);
-            if slice_height <= f32::EPSILON {
-                slice_top = slice_bottom;
-                continue;
-            }
             rendered.top = Some(rendered.top.map_or(slice_top, |v| v.min(slice_top)));
             rendered.bottom = Some(
                 rendered
@@ -1207,6 +1201,12 @@ where
                     glow_vertices,
                 );
             } else {
+                let (center_xy, slice_height, rotation_z) =
+                    hold_segment_pose([top.center_x, slice_top], [bottom.center_x, slice_bottom]);
+                if slice_height <= f32::EPSILON {
+                    slice_top = slice_bottom;
+                    continue;
+                }
                 compose_hold_sprite(
                     draws,
                     HoldSpritePass {
@@ -2160,6 +2160,81 @@ pub(crate) fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f
     let len = (dx * dx + dy * dy).sqrt();
     let rot = dx.atan2(dy).to_degrees();
     (center, len, rot)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod hold_geometry_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    #[inline(always)]
+    fn row_checksum(row: [TexturedMeshVertex; 2]) -> u64 {
+        u64::from(row[0].pos[0].to_bits())
+            .rotate_left(7)
+            .wrapping_add(u64::from(row[0].pos[1].to_bits()))
+            .rotate_left(11)
+            .wrapping_add(u64::from(row[1].pos[0].to_bits()))
+            .rotate_left(13)
+            .wrapping_add(u64::from(row[1].pos[1].to_bits()))
+    }
+
+    #[must_use]
+    pub fn mesh_slice_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top_y = black_box((index % 720) as f32 - 160.0);
+            let slice_size = black_box((index % 13) as f32 + 4.0);
+            if slice_size <= f32::EPSILON {
+                continue;
+            }
+            let top_x = black_box(((index * 17) % 192) as f32 - 96.0);
+            let bottom_x = black_box(top_x + ((index % 7) as f32 - 3.0));
+            let bottom_y = top_y + slice_size;
+            let (_, slice_height, _) = hold_segment_pose([top_x, top_y], [bottom_x, bottom_y]);
+            if slice_height <= f32::EPSILON {
+                continue;
+            }
+            let row = hold_strip_row_3d(
+                [bottom_x, bottom_y, 0.0],
+                [bottom_x - top_x, bottom_y - top_y],
+                32.0,
+                0.0,
+                1.0,
+                1.0,
+                [1.0; 4],
+            );
+            checksum = checksum.wrapping_add(row_checksum(row)).rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn mesh_slice_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let top_y = black_box((index % 720) as f32 - 160.0);
+            let slice_size = black_box((index % 13) as f32 + 4.0);
+            if slice_size <= f32::EPSILON {
+                continue;
+            }
+            let top_x = black_box(((index * 17) % 192) as f32 - 96.0);
+            let bottom_x = black_box(top_x + ((index % 7) as f32 - 3.0));
+            let bottom_y = top_y + slice_size;
+            let row = hold_strip_row_3d(
+                [bottom_x, bottom_y, 0.0],
+                [bottom_x - top_x, bottom_y - top_y],
+                32.0,
+                0.0,
+                1.0,
+                1.0,
+                [1.0; 4],
+            );
+            checksum = checksum.wrapping_add(row_checksum(row)).rotate_left(9);
+        }
+        checksum
+    }
 }
 
 pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {

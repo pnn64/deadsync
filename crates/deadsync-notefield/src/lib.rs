@@ -51,6 +51,9 @@ pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use holds::hold_geometry_bench_support;
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
@@ -68,6 +71,9 @@ pub use mini_indicator::{
     zmod_static_combo_color, zmod_stream_prog_completion_for_beat, zmod_target_score_missed,
 };
 pub use notes::ScrollTravel;
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use notes::note_metadata_bench_support;
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub use notes::note_projection_bench_support;
@@ -165,10 +171,11 @@ pub(crate) use notes::for_each_visible_hold_index;
 #[cfg(test)]
 pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
-    MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_flat_mine_layers,
-    compose_flat_note_layer, for_each_lane_index, hold_overlaps_visible_window,
-    lane_hold_window_bounds_by_note_row_from_cursor, lane_window_bounds_by_note_row_from_cursor,
-    mine_hides_after_resolution, scroll_travel,
+    MineLayerRequest, NoteLayerRequest, NotePartPhaseCache, ScrollTravelRequest,
+    compose_flat_mine_layers, compose_flat_note_layer, for_each_lane_index,
+    hold_overlaps_visible_window, lane_hold_window_bounds_by_note_row_from_cursor,
+    lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, note_part_phase_cache,
+    note_part_phase_cached, note_part_uv_translation_for_quantization, scroll_travel,
 };
 pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
 

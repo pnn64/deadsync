@@ -18,7 +18,9 @@ use deadlib_render_core::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_gameplay::ChartNoteIndex;
-use deadsync_noteskin::{ModelDrawState, NoteskinSlot};
+use deadsync_noteskin::{
+    ModelDrawState, NoteColorType, NotePartAnimation, NotePartTextureTranslate, NoteskinSlot,
+};
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
@@ -83,6 +85,199 @@ pub(crate) struct MineLayerRequest<'a, S> {
     pub note_z: i16,
     pub world_z: f32,
     pub prefer_sprite: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct NotePartPhaseCache {
+    base_phase: f32,
+    vivid_interval: f32,
+    vivid: bool,
+}
+
+#[inline(always)]
+pub(crate) fn note_part_phase_cache(
+    song_seconds: f32,
+    song_beat: f32,
+    animation: NotePartAnimation,
+    beat_based: bool,
+) -> NotePartPhaseCache {
+    let length = animation.length.max(1e-6);
+    let clock = if beat_based { song_beat } else { song_seconds };
+    NotePartPhaseCache {
+        base_phase: clock.rem_euclid(length) / length,
+        vivid_interval: if animation.vivid { 1.0 / length } else { 0.0 },
+        vivid: animation.vivid,
+    }
+}
+
+#[inline(always)]
+pub(crate) fn note_part_phase_cached(note_beat: f32, cache: NotePartPhaseCache) -> f32 {
+    if !cache.vivid {
+        return cache.base_phase;
+    }
+    let note_fraction = note_beat.rem_euclid(1.0);
+    let vivid_offset = (note_fraction / cache.vivid_interval).floor() * cache.vivid_interval;
+    (cache.base_phase + vivid_offset).rem_euclid(1.0)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn note_part_phase_reference(
+    song_seconds: f32,
+    song_beat: f32,
+    note_beat: f32,
+    animation: NotePartAnimation,
+    beat_based: bool,
+) -> f32 {
+    let length = animation.length.max(1e-6);
+    let clock = if beat_based { song_beat } else { song_seconds };
+    let mut phase = clock.rem_euclid(length) / length;
+    if animation.vivid {
+        let note_fraction = note_beat.rem_euclid(1.0);
+        let vivid_interval = 1.0 / length;
+        let vivid_offset = (note_fraction / vivid_interval).floor() * vivid_interval;
+        phase = (phase + vivid_offset).rem_euclid(1.0);
+    }
+    phase
+}
+
+#[inline(always)]
+pub(crate) fn note_part_uv_translation_for_quantization(
+    note_beat: f32,
+    quantization_idx: u8,
+    metrics: NotePartTextureTranslate,
+    is_addition: bool,
+) -> [f32; 2] {
+    let count = metrics.note_color_count.max(1);
+    let countf = count as f32;
+    let color = match metrics.note_color_type {
+        NoteColorType::Denominator => f32::from(quantization_idx).clamp(0.0, (count - 1) as f32),
+        NoteColorType::Progress => (note_beat * countf).ceil() % countf,
+        NoteColorType::ProgressAlternate => {
+            let mut scaled = note_beat * countf;
+            if scaled - (scaled as i64 as f32) == 0.0 {
+                scaled += countf - 1.0;
+            }
+            scaled.ceil() % countf
+        }
+    };
+    let add = if is_addition {
+        metrics.addition_offset
+    } else {
+        [0.0, 0.0]
+    };
+    [
+        metrics.note_color_spacing[0].mul_add(color, add[0]),
+        metrics.note_color_spacing[1].mul_add(color, add[1]),
+    ]
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn note_part_uv_translation_reference(
+    note_beat: f32,
+    metrics: NotePartTextureTranslate,
+    is_addition: bool,
+) -> [f32; 2] {
+    let row = (note_beat * 48.0).round() as i32;
+    let quantization_idx = if row.rem_euclid(48) == 0 {
+        0
+    } else if row.rem_euclid(24) == 0 {
+        1
+    } else if row.rem_euclid(16) == 0 {
+        2
+    } else if row.rem_euclid(12) == 0 {
+        3
+    } else if row.rem_euclid(8) == 0 {
+        4
+    } else if row.rem_euclid(6) == 0 {
+        5
+    } else if row.rem_euclid(4) == 0 {
+        6
+    } else if row.rem_euclid(3) == 0 {
+        7
+    } else {
+        8
+    };
+    note_part_uv_translation_for_quantization(note_beat, quantization_idx, metrics, is_addition)
+}
+
+#[cfg(test)]
+mod note_metadata_cache_tests {
+    use super::*;
+
+    #[test]
+    fn cached_part_phase_matches_per_note_reference_math() {
+        for beat_based in [false, true] {
+            for animation in [
+                NotePartAnimation {
+                    length: 1.0,
+                    vivid: false,
+                },
+                NotePartAnimation {
+                    length: 0.75,
+                    vivid: true,
+                },
+                NotePartAnimation {
+                    length: 0.0,
+                    vivid: true,
+                },
+            ] {
+                let cache = note_part_phase_cache(12.25, 37.5, animation, beat_based);
+                for note_beat in [-4.0, -0.0, 0.0, 0.25, 12.75, 1_024.125, f32::NAN] {
+                    assert_eq!(
+                        note_part_phase_cached(note_beat, cache).to_bits(),
+                        note_part_phase_reference(12.25, 37.5, note_beat, animation, beat_based,)
+                            .to_bits(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn preclassified_uv_translation_matches_beat_classification() {
+        let beats = [
+            -2.0,
+            0.0,
+            0.25,
+            1.0 / 3.0,
+            0.5,
+            0.75,
+            1.0 / 12.0,
+            1.0 / 16.0,
+            1.0 / 48.0,
+            127.875,
+        ];
+        for note_color_type in [
+            NoteColorType::Denominator,
+            NoteColorType::Progress,
+            NoteColorType::ProgressAlternate,
+        ] {
+            let metrics = NotePartTextureTranslate {
+                addition_offset: [0.125, -0.25],
+                note_color_spacing: [0.0625, 0.125],
+                note_color_count: 9,
+                note_color_type,
+            };
+            for beat in beats {
+                let quantization_idx = deadsync_gameplay::quantization_index_from_beat(beat);
+                for is_addition in [false, true] {
+                    assert_eq!(
+                        note_part_uv_translation_for_quantization(
+                            beat,
+                            quantization_idx,
+                            metrics,
+                            is_addition,
+                        )
+                        .map(f32::to_bits),
+                        note_part_uv_translation_reference(beat, metrics, is_addition)
+                            .map(f32::to_bits),
+                    );
+                }
+            }
+        }
+    }
 }
 
 struct MineSlotPass<'a, S> {
@@ -1383,6 +1578,127 @@ pub mod note_projection_bench_support {
             checksum = checksum
                 .wrapping_add(u64::from(offset.to_bits()))
                 .rotate_left(13);
+        }
+        checksum
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod note_metadata_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    const fn build_quantization_table() -> [u8; 48] {
+        let mut table = [8; 48];
+        let mut row = 0;
+        while row < table.len() {
+            table[row] = if row % 48 == 0 {
+                0
+            } else if row % 24 == 0 {
+                1
+            } else if row % 16 == 0 {
+                2
+            } else if row % 12 == 0 {
+                3
+            } else if row % 8 == 0 {
+                4
+            } else if row % 6 == 0 {
+                5
+            } else if row % 4 == 0 {
+                6
+            } else if row % 3 == 0 {
+                7
+            } else {
+                8
+            };
+            row += 1;
+        }
+        table
+    }
+
+    const QUANTIZATION_BY_ROW: [u8; 48] = build_quantization_table();
+
+    #[must_use]
+    pub fn part_phase_old(evaluations: usize) -> u64 {
+        let animation = black_box(NotePartAnimation {
+            length: 0.75,
+            vivid: true,
+        });
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index as f32 * 0.125) - 96.0);
+            let phase = note_part_phase_reference(12.25, 37.5, note_beat, animation, true);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn part_phase_new(evaluations: usize) -> u64 {
+        let animation = black_box(NotePartAnimation {
+            length: 0.75,
+            vivid: true,
+        });
+        let cache = note_part_phase_cache(12.25, 37.5, animation, true);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let note_beat = black_box((index as f32 * 0.125) - 96.0);
+            let phase = note_part_phase_cached(note_beat, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(phase.to_bits()))
+                .rotate_left(9);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn uv_translation_old(evaluations: usize) -> u64 {
+        let metrics = black_box(NotePartTextureTranslate {
+            addition_offset: [0.125, -0.25],
+            note_color_spacing: [0.0625, 0.125],
+            note_color_count: 9,
+            note_color_type: NoteColorType::Denominator,
+        });
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let row = (index as i32 % 384) - 192;
+            let note_beat = black_box(row as f32 / 48.0);
+            let translation = note_part_uv_translation_reference(note_beat, metrics, false);
+            checksum = checksum
+                .wrapping_add(u64::from(translation[0].to_bits()))
+                .rotate_left(7)
+                .wrapping_add(u64::from(translation[1].to_bits()));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn uv_translation_new(evaluations: usize) -> u64 {
+        let metrics = black_box(NotePartTextureTranslate {
+            addition_offset: [0.125, -0.25],
+            note_color_spacing: [0.0625, 0.125],
+            note_color_count: 9,
+            note_color_type: NoteColorType::Denominator,
+        });
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let row = (index as i32 % 384) - 192;
+            let note_beat = black_box(row as f32 / 48.0);
+            let quantization_idx = QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize];
+            let translation = note_part_uv_translation_for_quantization(
+                note_beat,
+                quantization_idx,
+                metrics,
+                false,
+            );
+            checksum = checksum
+                .wrapping_add(u64::from(translation[0].to_bits()))
+                .rotate_left(7)
+                .wrapping_add(u64::from(translation[1].to_bits()));
         }
         checksum
     }

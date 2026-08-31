@@ -1,12 +1,12 @@
 use crate::{
     BumpyFrameCache, ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement,
-    HudLayoutOffsets, HudLayoutParams, LayoutMiniIndicatorPosition, NotefieldFrameFeatures,
-    NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests, ScrollTravel,
-    ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride, ZmodLayoutParams,
-    beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
-    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
-    fill_move_col_extras, notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
-    tiny_spacing_scale,
+    HudLayoutOffsets, HudLayoutParams, LayoutMiniIndicatorPosition, NotePartPhaseCache,
+    NotefieldFrameFeatures, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
+    ScrollTravel, ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride,
+    ZmodLayoutParams, beat_factor, bumpy_frame_cache, compute_active_note_geometry,
+    compute_tornado_lane_caches, effective_mini_value, field_effect_height, field_layout,
+    fill_lane_col_offsets, fill_move_col_extras, note_part_phase_cache, notefield_frame_plan,
+    scroll_travel, song_time_ns_to_seconds, tiny_spacing_scale,
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
@@ -14,7 +14,7 @@ use deadsync_gameplay::{
     SongLuaColumnOffsetWindowRuntime, SongLuaColumnTransformTarget, SongLuaNoteHideWindows,
     VisibilityEffects, VisualEffects, song_lua_column_offset_window_value,
 };
-use deadsync_noteskin::NoteskinRuntime;
+use deadsync_noteskin::{NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteskinRuntime};
 use deadsync_rules::note::{Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
@@ -244,6 +244,8 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub(crate) move_x_offsets: [f32; MAX_COLS],
     pub(crate) bumpy_frame_cache: BumpyFrameCache,
     pub(crate) tiny_spacing_scale: f32,
+    pub(crate) part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
+    pub(crate) mine_part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
     pub measure_column_xs: [f32; MAX_COLS],
     pub note_display_time_scale: f32,
     pub travel: ScrollTravel<'a>,
@@ -418,6 +420,23 @@ fn prepare_notes<'a, S>(
         request.visual.visual.bumpy_period,
     );
     let tiny_spacing_scale = tiny_spacing_scale(request.visual.visual.tiny);
+    let mine = request.noteskin.mine.unwrap_or(base);
+    let part_phase_caches = NoteAnimPart::ALL.map(|part| {
+        note_part_phase_cache(
+            request.visual.elapsed_screen_s,
+            request.chart.visible_beat,
+            base.note_display_metrics.part_animation[part as usize],
+            base.animation_is_beat_based,
+        )
+    });
+    let mine_part_phase_caches = NoteAnimPart::ALL.map(|part| {
+        note_part_phase_cache(
+            request.visual.elapsed_screen_s,
+            request.chart.visible_beat,
+            mine.note_display_metrics.part_animation[part as usize],
+            mine.animation_is_beat_based,
+        )
+    });
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -451,7 +470,7 @@ fn prepare_notes<'a, S>(
         std::array::from_fn(|i| base.column_xs.get(i).copied().unwrap_or_default() as f32);
     Some(Some(PreparedNotefieldNotes {
         base,
-        mine: request.noteskin.mine.unwrap_or(base),
+        mine,
         receptor: request.noteskin.receptor.unwrap_or(base),
         tap_explosion: request.noteskin.tap_explosion,
         target_arrow_px: request.geometry.target_arrow_pixel_size * field_zoom,
@@ -463,6 +482,8 @@ fn prepare_notes<'a, S>(
         move_x_offsets,
         bumpy_frame_cache,
         tiny_spacing_scale,
+        part_phase_caches,
+        mine_part_phase_caches,
         measure_column_xs,
         note_display_time_scale: request.geometry.num_players as f32 + 1.0,
         travel,
