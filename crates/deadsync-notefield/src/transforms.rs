@@ -63,6 +63,7 @@ pub(crate) struct LaneNoteTransformCache {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct NoteAppearanceCache {
     identity: bool,
+    path: AppearancePath,
     center_line: f32,
     hidden_active: bool,
     hidden: f32,
@@ -79,6 +80,14 @@ pub(crate) struct NoteAppearanceCache {
     blink_adjust: f32,
     random_vanish_active: bool,
     random_vanish: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum AppearancePath {
+    General,
+    HiddenOnly,
+    SuddenOnly,
+    StealthOnly,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -906,6 +915,54 @@ mod common_note_transform_tests {
     }
 
     #[test]
+    fn single_appearance_paths_match_reference_alpha_and_glow_behavior() {
+        let cases = [
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+            NoteAlphaParams {
+                stealth: 0.15,
+                ..NoteAlphaParams::default()
+            },
+        ];
+        for params in cases {
+            for elapsed in [0.0, 0.125, 3.25, 81.75] {
+                for mini in [-0.5, 0.0, 0.2, 1.5] {
+                    let cache = note_appearance_cache(elapsed, mini, params);
+                    for y in [
+                        -64.0,
+                        -0.0,
+                        0.0,
+                        64.0,
+                        160.0,
+                        320.0,
+                        640.0,
+                        f32::INFINITY,
+                        f32::NAN,
+                    ] {
+                        let cached = appearance_note_alpha_glow_cached(y, &cache);
+                        assert_eq!(
+                            cached.0.to_bits(),
+                            appearance_note_actor_alpha(y, elapsed, mini, params).to_bits(),
+                        );
+                        assert_eq!(
+                            cached.1.to_bits(),
+                            appearance_note_glow(y, elapsed, mini, params).to_bits(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn cached_expand_scale_matches_per_note_reference_math() {
         let accel = AccelYParams {
             boost: 0.35,
@@ -1691,6 +1748,7 @@ pub(crate) fn note_appearance_cache(
     if appearance_note_alpha_is_identity(params) {
         return NoteAppearanceCache {
             identity: true,
+            path: AppearancePath::General,
             center_line: 0.0,
             hidden_active: false,
             hidden: 0.0,
@@ -1731,23 +1789,41 @@ pub(crate) fn note_appearance_cache(
     };
     let hidden_denom = hidden_end - hidden_start;
     let sudden_denom = sudden_end - sudden_start;
+    let hidden_active = params.hidden > f32::EPSILON;
+    let sudden_active = params.sudden > f32::EPSILON;
+    let stealth_active = params.stealth > f32::EPSILON;
+    let blink_active = params.blink > f32::EPSILON;
+    let random_vanish_active = params.random_vanish > f32::EPSILON;
+    let path = match (
+        hidden_active,
+        sudden_active,
+        stealth_active,
+        blink_active,
+        random_vanish_active,
+    ) {
+        (true, false, false, false, false) => AppearancePath::HiddenOnly,
+        (false, true, false, false, false) => AppearancePath::SuddenOnly,
+        (false, false, true, false, false) => AppearancePath::StealthOnly,
+        _ => AppearancePath::General,
+    };
     NoteAppearanceCache {
         identity: false,
+        path,
         center_line,
-        hidden_active: params.hidden > f32::EPSILON,
+        hidden_active,
         hidden: params.hidden,
         hidden_start,
         hidden_denom,
         hidden_degenerate: hidden_denom.abs() < 1e-6,
-        sudden_active: params.sudden > f32::EPSILON,
+        sudden_active,
         sudden: params.sudden,
         sudden_start,
         sudden_denom,
         sudden_degenerate: sudden_denom.abs() < 1e-6,
-        stealth_active: params.stealth > f32::EPSILON,
+        stealth_active,
         stealth: params.stealth,
         blink_adjust,
-        random_vanish_active: params.random_vanish > f32::EPSILON,
+        random_vanish_active,
         random_vanish: params.random_vanish,
     }
 }
@@ -1766,6 +1842,37 @@ pub(crate) fn appearance_note_alpha_glow_cached(y: f32, cache: &NoteAppearanceCa
 
 #[inline(always)]
 fn appearance_note_alpha_from_cache(y: f32, cache: &NoteAppearanceCache) -> f32 {
+    match cache.path {
+        AppearancePath::HiddenOnly => {
+            let scaled = if cache.hidden_degenerate {
+                -1.0
+            } else {
+                ((y - cache.hidden_start) / cache.hidden_denom).mul_add(-1.0, 0.0)
+            };
+            let visible_adjust = cache.hidden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::SuddenOnly => {
+            let scaled = if cache.sudden_degenerate {
+                0.0
+            } else {
+                ((y - cache.sudden_start) / cache.sudden_denom).mul_add(1.0, -1.0)
+            };
+            let visible_adjust = cache.sudden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::StealthOnly => {
+            let mut visible_adjust = 0.0;
+            visible_adjust -= cache.stealth;
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::General => {}
+    }
+    appearance_note_alpha_general(y, cache)
+}
+
+#[inline(always)]
+fn appearance_note_alpha_general(y: f32, cache: &NoteAppearanceCache) -> f32 {
     let mut visible_adjust = 0.0;
     if cache.hidden_active {
         let scaled = if cache.hidden_degenerate {
@@ -1796,6 +1903,11 @@ fn appearance_note_alpha_from_cache(y: f32, cache: &NoteAppearanceCache) -> f32 
         visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * cache.random_vanish;
     }
     (1.0 + visible_adjust).clamp(0.0, 1.0)
+}
+
+#[cfg(feature = "bench-support")]
+fn appearance_note_alpha_from_cache_reference(y: f32, cache: &NoteAppearanceCache) -> f32 {
+    appearance_note_alpha_general(y, cache)
 }
 
 #[inline(always)]
@@ -1984,6 +2096,116 @@ pub mod transform_cache_bench_support {
             visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * params.random_vanish;
         }
         (1.0 + visible_adjust).clamp(0.0, 1.0)
+    }
+
+    fn appearance_path_old(evaluations: usize, params: NoteAlphaParams) -> u64 {
+        let cache = black_box(note_appearance_cache(
+            black_box(3.25),
+            black_box(0.2),
+            params,
+        ));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 640) as f32);
+            let alpha = appearance_note_alpha_from_cache_reference(y, black_box(&cache));
+            let actor = appearance_note_actor_alpha_from_alpha(alpha);
+            let glow = appearance_note_glow_from_alpha(alpha);
+            checksum = checksum
+                .wrapping_add(u64::from(actor.to_bits()))
+                .rotate_left(11)
+                ^ u64::from(glow.to_bits());
+        }
+        checksum
+    }
+
+    fn appearance_path_new(evaluations: usize, params: NoteAlphaParams) -> u64 {
+        let cache = black_box(note_appearance_cache(
+            black_box(3.25),
+            black_box(0.2),
+            params,
+        ));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 640) as f32);
+            let alpha = appearance_note_alpha_from_cache(y, black_box(&cache));
+            let actor = appearance_note_actor_alpha_from_alpha(alpha);
+            let glow = appearance_note_glow_from_alpha(alpha);
+            checksum = checksum
+                .wrapping_add(u64::from(actor.to_bits()))
+                .rotate_left(11)
+                ^ u64::from(glow.to_bits());
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn hidden_only_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn hidden_only_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                hidden: 0.7,
+                hidden_offset: 0.2,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn sudden_only_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn sudden_only_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                sudden: 0.4,
+                sudden_offset: -0.1,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn stealth_only_appearance_old(evaluations: usize) -> u64 {
+        appearance_path_old(
+            evaluations,
+            NoteAlphaParams {
+                stealth: 0.15,
+                ..NoteAlphaParams::default()
+            },
+        )
+    }
+
+    #[must_use]
+    pub fn stealth_only_appearance_new(evaluations: usize) -> u64 {
+        appearance_path_new(
+            evaluations,
+            NoteAlphaParams {
+                stealth: 0.15,
+                ..NoteAlphaParams::default()
+            },
+        )
     }
 
     fn accel_path_old(evaluations: usize, accel: AccelYParams) -> u64 {
