@@ -1,5 +1,5 @@
 use crate::itg as noteskin_itg;
-use crate::lua::itg_extract_quoted_strings;
+use crate::lua::itg_quoted_strings;
 use crate::{
     ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex,
 };
@@ -59,7 +59,7 @@ pub fn itg_resolve_model_texture_path(
         }
     }
     let content = fs::read_to_string(model_path).ok()?;
-    for candidate in itg_extract_quoted_strings(&content) {
+    for candidate in itg_quoted_strings(&content) {
         let trimmed = candidate.trim();
         if trimmed.is_empty() {
             continue;

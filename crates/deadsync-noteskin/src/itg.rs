@@ -11,7 +11,7 @@ use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
     Style,
     actor::ITG_ARG0_TOKEN,
-    lua::{itg_extract_quoted_strings, itg_parse_lua_quoted},
+    lua::{itg_parse_lua_quoted, itg_quoted_strings},
     script::{parse_script_bool, parse_script_number},
 };
 
@@ -528,16 +528,16 @@ pub fn resolve_texture_expr(
         return arg0_path.map(Path::to_path_buf);
     }
     if value.starts_with("NOTESKIN:GetPath(") {
-        let args = itg_extract_quoted_strings(value);
-        if args.len() >= 2 {
+        let mut args = itg_quoted_strings(value);
+        if let Some(first) = args.next() {
+            if let Some(second) = args.next() {
+                return data
+                    .resolve_path(first, second)
+                    .or_else(|| data.resolve_path("", second));
+            }
             return data
-                .resolve_path(&args[0], &args[1])
-                .or_else(|| data.resolve_path("", &args[1]));
-        }
-        if args.len() == 1 {
-            return data
-                .resolve_path(&args[0], "")
-                .or_else(|| data.resolve_path("", &args[0]));
+                .resolve_path(first, "")
+                .or_else(|| data.resolve_path("", first));
         }
     }
     let name = itg_parse_lua_quoted(value).unwrap_or_else(|| value.to_string());

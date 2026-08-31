@@ -1,6 +1,6 @@
 use crate::lua::{
-    itg_find_function_end, itg_find_matching, itg_parse_lua_float_expr,
-    itg_parse_self_chain_commands, itg_skip_ws, itg_split_call_args,
+    itg_call_args, itg_find_function_end, itg_find_matching, itg_parse_lua_float_expr,
+    itg_parse_self_chain_commands, itg_skip_ws,
 };
 use crate::{
     ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState, ModelTweenSegment,
@@ -157,7 +157,32 @@ pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
         return None;
     }
     let close = itg_find_matching(value, open, '(', ')')?;
-    let args = itg_split_call_args(&value[open + 1..close]);
+    let mut args = itg_call_args(&value[open + 1..close]);
+    let frame_expr = args.next()?;
+    let seconds_expr = args.next()?;
+    let frame_count = frame_expr
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .or_else(|| itg_parse_lua_float_expr(frame_expr).map(|v| v as usize))?
+        .max(1);
+    let seconds = itg_parse_lua_float_expr(seconds_expr)?;
+    let delay = (seconds / frame_count as f32).max(0.0);
+    Some((frame_count, vec![delay; frame_count]))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn parse_linear_frames_expr_reference_for_bench(raw: &str) -> Option<(usize, Vec<f32>)> {
+    let value = raw.trim().trim_end_matches(';').trim();
+    let open = value.find('(')?;
+    let head = value[..open].trim();
+    if !head.eq_ignore_ascii_case("Sprite.LinearFrames") {
+        return None;
+    }
+    let close = itg_find_matching(value, open, '(', ')')?;
+    let args = crate::lua::itg_split_call_args_reference_for_bench(&value[open + 1..close]);
     if args.len() < 2 {
         return None;
     }
@@ -165,7 +190,7 @@ pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
         .trim()
         .parse::<usize>()
         .ok()
-        .or_else(|| itg_parse_lua_float_expr(&args[0]).map(|v| v as usize))?
+        .or_else(|| itg_parse_lua_float_expr(&args[0]).map(|value| value as usize))?
         .max(1);
     let seconds = itg_parse_lua_float_expr(&args[1])?;
     let delay = (seconds / frame_count as f32).max(0.0);
@@ -1403,5 +1428,24 @@ mod tests {
         assert_eq!(frames, 64);
         assert_eq!(delays.len(), 64);
         assert!((delays[0] - (1.0 / 60.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn borrowed_linear_frame_arguments_match_committed_behavior() {
+        for expression in [
+            "Sprite.LinearFrames(64,(64/60))",
+            " Sprite.LinearFrames( 4, fn(2, 3), ignored ) ; ",
+            "sprite.linearframes((8),(2/4))",
+            "Sprite.LinearFrames(0, -1)",
+            "Sprite.LinearFrames(1)",
+            "Other.LinearFrames(4, 1)",
+            "",
+        ] {
+            assert_eq!(
+                parse_linear_frames_expr(expression),
+                parse_linear_frames_expr_reference_for_bench(expression),
+                "expression={expression:?}"
+            );
+        }
     }
 }
