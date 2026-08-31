@@ -5,7 +5,8 @@ use deadsync_simfile::song_search::{
 use deadsync_theme_simply_love::MusicWheelEntry;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
     SongSearchMatch, build_pack_matches, build_pack_matches_reference, build_song_matches,
-    build_song_matches_reference, build_song_search_index,
+    build_song_matches_reference, build_song_search_index, build_song_search_index_reference,
+    song_search_index_checksum,
 };
 use deadsync_theme_simply_love::screens::components::shared::fuzzy::{
     best_match_score, best_match_score_reference, prepare_query, prepare_query_reference,
@@ -286,6 +287,29 @@ fn assert_strict_improvement(title: &str, old: &BenchResult, new: &BenchResult) 
     );
 }
 
+fn assert_allocation_improvement(title: &str, old: &BenchResult, new: &BenchResult) {
+    assert!(
+        new.allocated.allocs < old.allocated.allocs,
+        "{title}: allocation count did not improve"
+    );
+    assert!(
+        new.allocated.reallocs < old.allocated.reallocs,
+        "{title}: reallocation count did not improve"
+    );
+    assert!(
+        new.allocated.deallocs < old.allocated.deallocs,
+        "{title}: free count did not improve"
+    );
+    assert!(
+        new.allocated.allocated_bytes < old.allocated.allocated_bytes,
+        "{title}: allocated bytes did not improve"
+    );
+    assert!(
+        new.allocated.churn_bytes() < old.allocated.churn_bytes(),
+        "{title}: memory churn did not improve"
+    );
+}
+
 fn chart(meter: u32) -> ChartData {
     ChartData {
         chart_type: "dance-single".to_string(),
@@ -382,6 +406,17 @@ fn catalog(pack_count: usize, songs_per_pack: usize) -> (Vec<MusicWheelEntry>, V
     (wheel, songs)
 }
 
+fn translit_catalog(pack_count: usize, songs_per_pack: usize) -> Vec<MusicWheelEntry> {
+    let (mut wheel, _) = catalog(pack_count, songs_per_pack);
+    for entry in &mut wheel {
+        if let MusicWheelEntry::Song(song) = entry {
+            let song = Arc::make_mut(song);
+            song.translit_title = format!("[12] Catalogue Caf\u{e9} {:04}", song.title.len());
+        }
+    }
+    wheel
+}
+
 fn text_hash(text: &str) -> u64 {
     text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
         hash.wrapping_mul(0x100_0000_01b3) ^ u64::from(byte)
@@ -454,8 +489,42 @@ fn fuzzy_score_checksum(songs: &[Arc<SongData>], query_text: &str, reference: bo
 
 fn main() {
     let (song_wheel, songs) = catalog(128, 24);
-    let song_index = build_song_search_index(&song_wheel);
     let (pack_wheel, _) = catalog(512, 1);
+    let translit_wheel = translit_catalog(128, 24);
+
+    let old = measure(8, || {
+        song_search_index_checksum(&build_song_search_index_reference(black_box(&song_wheel)))
+    });
+    let new = measure(8, || {
+        song_search_index_checksum(&build_song_search_index(black_box(&song_wheel)))
+    });
+    let title = "ASCII song index construction (3,072 songs)";
+    print_pair(title, &old, &new);
+    assert_allocation_improvement(title, &old, &new);
+
+    let old = measure(40, || {
+        song_search_index_checksum(&build_song_search_index_reference(black_box(&pack_wheel)))
+    });
+    let new = measure(40, || {
+        song_search_index_checksum(&build_song_search_index(black_box(&pack_wheel)))
+    });
+    let title = "pack key index construction (512 packs)";
+    print_pair(title, &old, &new);
+    assert_allocation_improvement(title, &old, &new);
+
+    let old = measure(5, || {
+        song_search_index_checksum(&build_song_search_index_reference(black_box(
+            &translit_wheel,
+        )))
+    });
+    let new = measure(5, || {
+        song_search_index_checksum(&build_song_search_index(black_box(&translit_wheel)))
+    });
+    let title = "cleaned translit index construction (3,072 songs)";
+    print_pair(title, &old, &new);
+    assert_allocation_improvement(title, &old, &new);
+
+    let song_index = build_song_search_index(&song_wheel);
     let pack_index = build_song_search_index(&pack_wheel);
 
     let old = measure(5, || {

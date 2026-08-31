@@ -24,6 +24,7 @@ use deadsync_simfile::song_search::{
     SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
     song_search_difficulties_text,
 };
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -104,6 +105,10 @@ fn is_strippable_bracket(inner: &str) -> bool {
 /// conservative: anything that is not a leading annotation is part of the real
 /// title. Falls back to the original if cleaning would empty it.
 pub fn clean_search_title(title: &str) -> String {
+    clean_search_title_cow(title).into_owned()
+}
+
+fn clean_search_title_cow(title: &str) -> Cow<'_, str> {
     let mut rest = title.trim_matches(is_title_pad);
 
     loop {
@@ -125,16 +130,16 @@ pub fn clean_search_title(title: &str) -> String {
 
     let without_diff = strip_difficulty_parens(rest.trim());
     if without_diff.is_empty() {
-        title.trim_matches(is_title_pad).to_string()
+        Cow::Borrowed(title.trim_matches(is_title_pad))
     } else {
         without_diff
     }
 }
 
 /// Remove `(...)` groups that are exactly a difficulty word.
-fn strip_difficulty_parens(input: &str) -> String {
+fn strip_difficulty_parens(input: &str) -> Cow<'_, str> {
     if !input.contains('(') {
-        return input.to_string();
+        return Cow::Borrowed(input);
     }
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
@@ -155,7 +160,7 @@ fn strip_difficulty_parens(input: &str) -> String {
         rest = &rest[close + 1..];
     }
     out.push_str(rest);
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
+    Cow::Owned(out.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
 /// A single ranked result.
@@ -509,6 +514,79 @@ impl SongSearchIndex {
 /// load (and on reload), not per keystroke.
 #[must_use]
 pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
+    let (pack_count, song_count) = entries.iter().fold((0, 0), |(packs, songs), entry| {
+        if matches!(entry, MusicWheelEntry::Song(_)) {
+            (packs, songs + 1)
+        } else if matches!(entry, MusicWheelEntry::PackHeader { .. }) && !entry.is_series_header() {
+            (packs + 1, songs)
+        } else {
+            (packs, songs)
+        }
+    });
+    let mut index = SongSearchIndex {
+        packs: Vec::with_capacity(pack_count),
+        songs: Vec::with_capacity(song_count),
+    };
+    let mut current_pack = usize::MAX;
+
+    for entry in entries {
+        match entry {
+            MusicWheelEntry::PackHeader {
+                name, song_count, ..
+            } => {
+                if entry.is_series_header() {
+                    continue;
+                }
+                current_pack = index.packs.len();
+                index.packs.push(PackIndexEntry {
+                    search_name: folded_shared_key(name),
+                    name: Arc::clone(name),
+                    song_count: *song_count,
+                });
+            }
+            MusicWheelEntry::Song(song) => {
+                let native_raw = song.display_title(false);
+                let title: Arc<str> = Arc::from(clean_search_title_cow(native_raw));
+                let translit_raw = song.display_title(true);
+                let search_translit =
+                    (translit_raw != native_raw).then(|| folded_clean_key(translit_raw));
+                index.songs.push(SongIndexEntry {
+                    pack: current_pack,
+                    search_title: folded_shared_key(&title),
+                    search_translit,
+                    title,
+                    song: Arc::clone(song),
+                });
+            }
+        }
+    }
+
+    index
+}
+
+/// The diacritic-folded form used for scoring, sharing the input allocation when
+/// folding changes nothing (the common all-ASCII case).
+fn folded_shared_key(text: &Arc<str>) -> Arc<str> {
+    match fuzzy::fold_diacritics(text) {
+        Cow::Borrowed(_) => Arc::clone(text),
+        Cow::Owned(folded) => Arc::from(folded),
+    }
+}
+
+/// Clean and fold a secondary title without first materializing the common
+/// unchanged-cleaning case as a temporary `String`.
+fn folded_clean_key(text: &str) -> Arc<str> {
+    let cleaned = clean_search_title_cow(text);
+    match fuzzy::fold_diacritics(&cleaned) {
+        Cow::Borrowed(_) => Arc::from(cleaned),
+        Cow::Owned(folded) => Arc::from(folded),
+    }
+}
+
+/// Pre-optimization builder retained for exact old/new benchmark comparisons.
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn build_song_search_index_reference(entries: &[MusicWheelEntry]) -> SongSearchIndex {
     let mut index = SongSearchIndex::default();
     let mut current_pack = usize::MAX;
 
@@ -522,7 +600,7 @@ pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
                 }
                 current_pack = index.packs.len();
                 index.packs.push(PackIndexEntry {
-                    search_name: folded_key(name),
+                    search_name: folded_key_reference(name),
                     name: Arc::clone(name),
                     song_count: *song_count,
                 });
@@ -532,10 +610,10 @@ pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
                 let title: Arc<str> = Arc::from(clean_search_title(native_raw));
                 let translit_raw = song.display_title(true);
                 let search_translit = (translit_raw != native_raw)
-                    .then(|| folded_key(&clean_search_title(translit_raw)));
+                    .then(|| folded_key_reference(&clean_search_title(translit_raw)));
                 index.songs.push(SongIndexEntry {
                     pack: current_pack,
-                    search_title: folded_key(&title),
+                    search_title: folded_key_reference(&title),
                     search_translit,
                     title,
                     song: Arc::clone(song),
@@ -547,13 +625,38 @@ pub fn build_song_search_index(entries: &[MusicWheelEntry]) -> SongSearchIndex {
     index
 }
 
-/// The diacritic-folded form used for scoring, reusing the original allocation
-/// when folding changes nothing (the common all-ASCII case).
-fn folded_key(text: &str) -> Arc<str> {
+#[cfg(any(test, feature = "bench-support"))]
+fn folded_key_reference(text: &str) -> Arc<str> {
     match fuzzy::fold_diacritics(text) {
-        std::borrow::Cow::Borrowed(_) => Arc::from(text),
-        std::borrow::Cow::Owned(folded) => Arc::from(folded),
+        Cow::Borrowed(_) => Arc::from(text),
+        Cow::Owned(folded) => Arc::from(folded),
     }
+}
+
+/// Stable semantic checksum for comparing index builders in release benches.
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn song_search_index_checksum(index: &SongSearchIndex) -> u64 {
+    fn add_text(mut checksum: u64, text: &str) -> u64 {
+        for byte in text.bytes() {
+            checksum = checksum.rotate_left(5) ^ u64::from(byte);
+        }
+        checksum ^ text.len() as u64
+    }
+
+    let mut checksum = (index.packs.len() as u64).rotate_left(17) ^ index.songs.len() as u64;
+    for pack in &index.packs {
+        checksum = add_text(checksum, &pack.name);
+        checksum = add_text(checksum, &pack.search_name) ^ pack.song_count as u64;
+    }
+    for song in &index.songs {
+        checksum = add_text(checksum, &song.title);
+        checksum = add_text(checksum, &song.search_title) ^ song.pack as u64;
+        if let Some(translit) = &song.search_translit {
+            checksum = add_text(checksum, translit);
+        }
+    }
+    checksum
 }
 
 /// Filter by `[###]`, then fuzzy-rank the cleaned titles.
@@ -1405,6 +1508,76 @@ mod tests {
         let index = index_from(&songs);
         let matches = build_song_matches(&index, "", "dance-single");
         assert_eq!(matches.len(), 2);
+    }
+
+    #[test]
+    fn optimized_index_builder_preserves_reference_search_behavior() {
+        let mut native = (*test_song("[6998] [12] Caf\u{e9} Challenge", 150.0)).clone();
+        native.translit_title = "[12] Cafe Challenge".to_string();
+        let native = Arc::new(native);
+        let plain = test_song("Plain ASCII", 120.0);
+        let wheel = vec![
+            MusicWheelEntry::PackHeader {
+                name: Arc::from("T\u{e9}st Pack"),
+                original_index: 0,
+                banner_path: None,
+                song_count: 2,
+                pack_key: None,
+                parent_series: None,
+            },
+            MusicWheelEntry::Song(native),
+            MusicWheelEntry::Song(plain),
+        ];
+        let reference = build_song_search_index_reference(&wheel);
+        let optimized = build_song_search_index(&wheel);
+
+        assert_eq!(reference.pack_count(), optimized.pack_count());
+        assert_eq!(reference.song_count(), optimized.song_count());
+        for query in ["cafe", "plain", "challenge", "[10]", ""] {
+            assert_eq!(
+                match_signature(&build_song_matches(&reference, query, "dance-single")),
+                match_signature(&build_song_matches(&optimized, query, "dance-single")),
+                "query={query:?}",
+            );
+        }
+        for query in ["test", "pack", "missing", ""] {
+            assert_eq!(
+                match_signature(&build_pack_matches(&reference, query)),
+                match_signature(&build_pack_matches(&optimized, query)),
+                "pack query={query:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn index_shares_unchanged_ascii_search_keys() {
+        let songs = vec![("Pack ASCII", test_song("Plain ASCII", 120.0))];
+        let index = index_from(&songs);
+
+        assert!(Arc::ptr_eq(
+            &index.packs[0].name,
+            &index.packs[0].search_name
+        ));
+        assert!(Arc::ptr_eq(
+            &index.songs[0].title,
+            &index.songs[0].search_title
+        ));
+    }
+
+    #[test]
+    fn title_cleaning_borrows_slices_until_rewriting_is_required() {
+        assert!(matches!(
+            clean_search_title_cow("Plain ASCII"),
+            Cow::Borrowed("Plain ASCII")
+        ));
+        assert!(matches!(
+            clean_search_title_cow("[6998] [12] Anthem"),
+            Cow::Borrowed("Anthem")
+        ));
+        assert!(matches!(
+            clean_search_title_cow("Anthem (Challenge)"),
+            Cow::Owned(ref value) if value == "Anthem"
+        ));
     }
 
     #[test]
