@@ -58,9 +58,35 @@ fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Ve
     debug_assert_eq!(prev.len(), current.len());
     debug_assert_eq!(prev.len(), weights.len());
     out.reserve(prev.len());
+    if std::ptr::eq(prev.as_ptr(), current.as_ptr()) {
+        out.extend_from_slice(current);
+        return;
+    }
+    append_crossfade_calculated(prev, current, weights, out);
+}
+
+#[inline]
+fn append_crossfade_calculated(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
     for ((&a, &b), &t) in prev.iter().zip(current).zip(weights) {
         out.push((b - a).mul_add(t, a));
     }
+}
+
+#[inline(always)]
+fn prefix_can_satisfy_reserve<T>(
+    buffer: &Vec<T>,
+    data_start: usize,
+    live: usize,
+    additional: usize,
+) -> bool {
+    data_start > 0
+        && buffer.len().saturating_add(additional) > buffer.capacity()
+        && live.saturating_add(additional) <= buffer.capacity()
+}
+
+fn compact_buffer<T: Copy>(buffer: &mut Vec<T>, data_start: usize, live: usize) {
+    buffer.copy_within(data_start.., 0);
+    buffer.truncate(live);
 }
 
 struct ChannelState {
@@ -227,9 +253,7 @@ impl SolaStretcher {
         }
         debug_assert_eq!(interleaved.len() % self.channels, 0);
         let frames = interleaved.len() / self.channels;
-        for ch in &mut self.state {
-            ch.data.reserve(frames);
-        }
+        self.reserve_source_frames(frames);
         match self.channels {
             1 => append_mono_i16(&mut self.state[0].data, interleaved),
             2 => {
@@ -311,6 +335,27 @@ impl SolaStretcher {
             append_crossfade(prev_slice, cur_slice, weights, out);
         }
         self.pos += frames;
+    }
+
+    /// Reclaim a dead logical prefix before growing channel storage when the
+    /// retained allocation already has enough room for the live frames and the
+    /// incoming packet. This keeps decoder packet-size jitter from turning
+    /// erased history into avoidable reallocations between periodic compactions.
+    fn reserve_source_frames(&mut self, frames: usize) {
+        let reuse_prefix = self.state.iter().any(|channel| {
+            prefix_can_satisfy_reserve(
+                &channel.data,
+                self.data_start,
+                self.data_avail_frames,
+                frames,
+            )
+        });
+        if reuse_prefix {
+            self.compact_storage();
+        }
+        for channel in &mut self.state {
+            channel.data.reserve(frames);
+        }
     }
 
     /// Returns false if the search buffer doesn't yet have enough data to
@@ -404,11 +449,31 @@ impl SolaStretcher {
             return self.cursor_avail() > 0;
         }
 
-        // Per-channel correlation search.
+        // Per-channel correlation search. Stereo is overwhelmingly the common
+        // stream layout, so share its candidate and sample loops while keeping
+        // independent scores and selected offsets for the two channels.
         let correlate_to_match = self.window_frames / 4;
         let uncorrelated_to_match = self.tolerance_frames + correlate_to_match;
         let base = self.data_start;
         let uncorrelated_pos = self.uncorrelated_pos;
+        if let [left, right] = self.state.as_mut_slice() {
+            let unc = base + uncorrelated_pos;
+            let left_cor = base + left.correlated_pos;
+            let right_cor = base + right.correlated_pos;
+            let (left_best, right_best) = find_closest_match_stereo(
+                &left.data[unc..unc + uncorrelated_to_match],
+                &left.data[left_cor..left_cor + correlate_to_match],
+                &right.data[unc..unc + uncorrelated_to_match],
+                &right.data[right_cor..right_cor + correlate_to_match],
+            );
+            left.last_correlated_pos = left.correlated_pos;
+            right.last_correlated_pos = right.correlated_pos;
+            left.correlated_pos = left_best + uncorrelated_pos;
+            right.correlated_pos = right_best + uncorrelated_pos;
+            debug_assert!(left.correlated_pos + self.window_frames <= self.data_avail_frames);
+            debug_assert!(right.correlated_pos + self.window_frames <= self.data_avail_frames);
+            return true;
+        }
         // Channels share the buffer layout so we mutate state[i] in place but
         // need to read its data slice for the closest-match computation.
         for ch in &mut self.state {
@@ -458,10 +523,13 @@ impl SolaStretcher {
         if self.data_start < self.compact_threshold_frames && self.data_avail_frames != 0 {
             return;
         }
+        self.compact_storage();
+    }
+
+    fn compact_storage(&mut self) {
         let live = self.data_avail_frames;
         for ch in &mut self.state {
-            ch.data.copy_within(self.data_start.., 0);
-            ch.data.truncate(live);
+            compact_buffer(&mut ch.data, self.data_start, live);
         }
         self.data_start = 0;
     }
@@ -502,6 +570,122 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
         }
     }
     best_offset
+}
+
+/// Two independent L1 searches sharing candidate traversal and sample-loop
+/// bookkeeping. Scores retain the scalar operation order of
+/// [`find_closest_match`], so each selected offset is bit-for-bit identical to
+/// running that function separately for the two channels.
+fn find_closest_match_stereo(
+    left_buffer: &[f32],
+    left_correlate: &[f32],
+    right_buffer: &[f32],
+    right_correlate: &[f32],
+) -> (usize, usize) {
+    debug_assert_eq!(left_buffer.len(), right_buffer.len());
+    debug_assert_eq!(left_correlate.len(), right_correlate.len());
+    if left_buffer.len() <= left_correlate.len() {
+        return (0, 0);
+    }
+    let distance = left_buffer.len() - left_correlate.len();
+    let (left_first, right_first) = correlation_score_stereo(
+        &left_buffer[..left_correlate.len()],
+        left_correlate,
+        &right_buffer[..right_correlate.len()],
+        right_correlate,
+        f32::INFINITY,
+        f32::INFINITY,
+    );
+    let mut left_best_offset = 0usize;
+    let mut right_best_offset = 0usize;
+    let mut left_best_score = if left_first.is_nan() {
+        f32::INFINITY
+    } else {
+        left_first
+    };
+    let mut right_best_score = if right_first.is_nan() {
+        f32::INFINITY
+    } else {
+        right_first
+    };
+    let left_exact = left_first == 0.0;
+    let right_exact = right_first == 0.0;
+    if left_exact && right_exact {
+        return (0, 0);
+    }
+    for offset in 1..=distance {
+        let (left_score, right_score) = correlation_score_stereo(
+            &left_buffer[offset..offset + left_correlate.len()],
+            left_correlate,
+            &right_buffer[offset..offset + right_correlate.len()],
+            right_correlate,
+            if left_exact { 0.0 } else { left_best_score },
+            if right_exact { 0.0 } else { right_best_score },
+        );
+        if !left_exact && left_score < left_best_score {
+            left_best_score = left_score;
+            left_best_offset = offset;
+        }
+        if !right_exact && right_score < right_best_score {
+            right_best_score = right_score;
+            right_best_offset = offset;
+        }
+    }
+    (left_best_offset, right_best_offset)
+}
+
+#[inline(always)]
+fn correlation_score_stereo(
+    left_frames: &[f32],
+    left_correlate: &[f32],
+    right_frames: &[f32],
+    right_correlate: &[f32],
+    left_best: f32,
+    right_best: f32,
+) -> (f32, f32) {
+    let mut left_score = 0.0f32;
+    let mut right_score = 0.0f32;
+    let mut left_active = left_best > 0.0;
+    let mut right_active = right_best > 0.0;
+    let mut index = 0usize;
+    while index + 8 <= left_correlate.len() {
+        if left_active {
+            left_score += (left_frames[index] - left_correlate[index]).abs();
+            left_score += (left_frames[index + 1] - left_correlate[index + 1]).abs();
+            left_score += (left_frames[index + 2] - left_correlate[index + 2]).abs();
+            left_score += (left_frames[index + 3] - left_correlate[index + 3]).abs();
+            left_score += (left_frames[index + 4] - left_correlate[index + 4]).abs();
+            left_score += (left_frames[index + 5] - left_correlate[index + 5]).abs();
+            left_score += (left_frames[index + 6] - left_correlate[index + 6]).abs();
+            left_score += (left_frames[index + 7] - left_correlate[index + 7]).abs();
+            left_active = left_score < left_best;
+        }
+        if right_active {
+            right_score += (right_frames[index] - right_correlate[index]).abs();
+            right_score += (right_frames[index + 1] - right_correlate[index + 1]).abs();
+            right_score += (right_frames[index + 2] - right_correlate[index + 2]).abs();
+            right_score += (right_frames[index + 3] - right_correlate[index + 3]).abs();
+            right_score += (right_frames[index + 4] - right_correlate[index + 4]).abs();
+            right_score += (right_frames[index + 5] - right_correlate[index + 5]).abs();
+            right_score += (right_frames[index + 6] - right_correlate[index + 6]).abs();
+            right_score += (right_frames[index + 7] - right_correlate[index + 7]).abs();
+            right_active = right_score < right_best;
+        }
+        index += 8;
+        if !left_active && !right_active {
+            return (left_score, right_score);
+        }
+    }
+    while index < left_correlate.len() {
+        if left_active {
+            left_score += (left_frames[index] - left_correlate[index]).abs();
+        }
+        if right_active {
+            right_score += (right_frames[index] - right_correlate[index]).abs();
+        }
+        index += 1;
+    }
+    (left_score, right_score)
 }
 
 #[inline(always)]
@@ -586,6 +770,69 @@ pub mod bench_support {
     pub fn crossfade_new(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
         out.clear();
         append_crossfade(prev, current, weights, out);
+    }
+
+    pub fn identity_crossfade_old(samples: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+        out.clear();
+        out.reserve(samples.len());
+        append_crossfade_calculated(samples, samples, weights, out);
+    }
+
+    pub fn identity_crossfade_new(samples: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+        out.clear();
+        append_crossfade(samples, samples, weights, out);
+    }
+
+    #[must_use]
+    pub fn stereo_closest_match_old(
+        left_buffer: &[f32],
+        left_correlate: &[f32],
+        right_buffer: &[f32],
+        right_correlate: &[f32],
+    ) -> (usize, usize) {
+        (
+            find_closest_match(left_buffer, left_correlate),
+            find_closest_match(right_buffer, right_correlate),
+        )
+    }
+
+    #[must_use]
+    pub fn stereo_closest_match_new(
+        left_buffer: &[f32],
+        left_correlate: &[f32],
+        right_buffer: &[f32],
+        right_correlate: &[f32],
+    ) -> (usize, usize) {
+        find_closest_match_stereo(left_buffer, left_correlate, right_buffer, right_correlate)
+    }
+
+    fn logical_checksum(buffer: &[f32], start: usize) -> u64 {
+        buffer[start..].iter().fold(0u64, |checksum, sample| {
+            checksum.rotate_left(5) ^ u64::from(sample.to_bits())
+        })
+    }
+
+    #[must_use]
+    pub fn capacity_reuse_old(prefix: usize, live: usize, append: usize) -> u64 {
+        let mut buffer = Vec::with_capacity(prefix + live);
+        buffer.resize(prefix, -1.0f32);
+        buffer.extend((0..live).map(|index| index as f32));
+        buffer.reserve(append);
+        buffer.extend((0..append).map(|index| (live + index) as f32));
+        logical_checksum(&buffer, prefix)
+    }
+
+    #[must_use]
+    pub fn capacity_reuse_new(prefix: usize, live: usize, append: usize) -> u64 {
+        let mut buffer = Vec::with_capacity(prefix + live);
+        buffer.resize(prefix, -1.0f32);
+        buffer.extend((0..live).map(|index| index as f32));
+        if prefix_can_satisfy_reserve(&buffer, prefix, live, append) {
+            compact_buffer(&mut buffer, prefix, live);
+        }
+        buffer.reserve(append);
+        buffer.extend((0..append).map(|index| (live + index) as f32));
+        logical_checksum(&buffer, 0)
     }
 
     #[must_use]
@@ -761,6 +1008,102 @@ mod tests {
         );
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn identity_crossfade_copies_source_samples_bit_for_bit() {
+        let frames = 517usize;
+        let samples = (0..frames)
+            .map(|index| (index as f32 * 0.037).sin() * 0.75)
+            .collect::<Vec<_>>();
+        let weights = (0..frames)
+            .map(|index| (137 + index) as f32 / 1_440.0)
+            .collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        append_crossfade(&samples, &samples, &weights, &mut actual);
+
+        assert_eq!(
+            actual
+                .iter()
+                .map(|sample| sample.to_bits())
+                .collect::<Vec<_>>(),
+            samples
+                .iter()
+                .map(|sample| sample.to_bits())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn fused_stereo_correlation_matches_independent_searches() {
+        for correlate_len in [1usize, 7, 8, 9, 31, 64, 127, 360] {
+            let make_samples = |len: usize, multiplier: u32, increment: u32| {
+                (0..len)
+                    .map(|index| {
+                        let bits = (index as u32)
+                            .wrapping_mul(multiplier)
+                            .wrapping_add(increment);
+                        (bits as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let left_pattern = make_samples(correlate_len, 747_796_405, 2_891_336_453);
+            let right_pattern = make_samples(correlate_len, 2_246_822_519, 3_266_489_917);
+            let mut left_search = make_samples(correlate_len + 97, 1_664_525, 1_013_904_223);
+            let mut right_search = make_samples(correlate_len + 97, 1_103_515_245, 12_345);
+            let left_insert = 23.min(left_search.len() - correlate_len);
+            let right_insert = 71.min(right_search.len() - correlate_len);
+            left_search[left_insert..left_insert + correlate_len].copy_from_slice(&left_pattern);
+            right_search[right_insert..right_insert + correlate_len]
+                .copy_from_slice(&right_pattern);
+
+            assert_eq!(
+                find_closest_match_stereo(
+                    &left_search,
+                    &left_pattern,
+                    &right_search,
+                    &right_pattern,
+                ),
+                (
+                    find_closest_match(&left_search, &left_pattern),
+                    find_closest_match(&right_search, &right_pattern),
+                ),
+                "correlate_len={correlate_len}"
+            );
+        }
+    }
+
+    #[test]
+    fn source_reserve_reuses_dead_prefix_without_growing() {
+        let mut stretcher = SolaStretcher::new(2, 48_000);
+        stretcher.data_start = 8;
+        stretcher.data_avail_frames = 6;
+        for (channel_index, channel) in stretcher.state.iter_mut().enumerate() {
+            channel.data = Vec::with_capacity(16);
+            channel
+                .data
+                .extend((0..14).map(|index| index as f32 + channel_index as f32 * 100.0));
+        }
+        let expected = stretcher
+            .state
+            .iter()
+            .map(|channel| channel.data[8..14].to_vec())
+            .collect::<Vec<_>>();
+        let capacities = stretcher
+            .state
+            .iter()
+            .map(|channel| channel.data.capacity())
+            .collect::<Vec<_>>();
+
+        stretcher.reserve_source_frames(4);
+
+        assert_eq!(stretcher.data_start, 0);
+        for ((channel, expected), capacity) in stretcher.state.iter().zip(&expected).zip(capacities)
+        {
+            assert_eq!(&channel.data, expected);
+            assert_eq!(channel.data.capacity(), capacity);
+            assert!(channel.data.capacity() - channel.data.len() >= 4);
+        }
     }
 
     #[test]

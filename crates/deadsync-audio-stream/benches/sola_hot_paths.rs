@@ -16,6 +16,10 @@ const CORRELATE_FRAMES: usize = 360;
 const DEINTERLEAVE_RUNS: usize = 5_000;
 const CROSSFADE_RUNS: usize = 10_000;
 const CORRELATION_RUNS: usize = 20_000;
+const CAPACITY_RUNS: usize = 5_000;
+const DEAD_PREFIX: usize = 4_096;
+const LIVE_FRAMES: usize = 3_072;
+const APPEND_FRAMES: usize = 1_024;
 const SAMPLES: usize = 32;
 
 struct CountingAlloc {
@@ -124,7 +128,8 @@ struct BenchResult {
     ns_per_unit: f64,
     cycles_per_unit: Option<f64>,
     units_per_second: f64,
-    worst_ns_per_unit: f64,
+    median_ns_per_unit: f64,
+    p95_ns_per_unit: f64,
     allocated: AllocSnapshot,
     checksum: u64,
 }
@@ -152,17 +157,21 @@ fn measure(runs: usize, units_per_run: usize, mut operation: impl FnMut() -> u64
     ALLOC.enabled.store(false, Ordering::Relaxed);
     let allocated = ALLOC.snapshot().delta(before);
 
-    let mut worst_ns_per_unit = 0.0f64;
+    let mut samples = Vec::with_capacity(SAMPLES);
     for _ in 0..SAMPLES {
         let started = Instant::now();
         for _ in 0..sample_runs {
             black_box(operation());
         }
-        worst_ns_per_unit = worst_ns_per_unit.max(
+        samples.push(
             started.elapsed().as_secs_f64() * 1_000_000_000.0
                 / (sample_runs * units_per_run) as f64,
         );
     }
+    samples.sort_unstable_by(f64::total_cmp);
+    let median_ns_per_unit = samples[samples.len() / 2];
+    let p95_index = (samples.len() * 95).div_ceil(100).saturating_sub(1);
+    let p95_ns_per_unit = samples[p95_index];
 
     let units = (runs * units_per_run) as f64;
     let seconds = elapsed.as_secs_f64();
@@ -172,7 +181,8 @@ fn measure(runs: usize, units_per_run: usize, mut operation: impl FnMut() -> u64
             .zip(cycle_end)
             .map(|(start, end)| end.wrapping_sub(start) as f64 / units),
         units_per_second: units / seconds,
-        worst_ns_per_unit,
+        median_ns_per_unit,
+        p95_ns_per_unit,
         allocated,
         checksum,
     }
@@ -188,19 +198,40 @@ fn print_pair(name: &str, unit: &str, runs: usize, old: &BenchResult, new: &Benc
     assert_eq!(new.allocated.churn_bytes(), 0, "{name} new path churned");
 }
 
+fn print_capacity_pair(name: &str, unit: &str, runs: usize, old: &BenchResult, new: &BenchResult) {
+    println!("\n{name}");
+    print_result("old", unit, runs, old);
+    print_result("new", unit, runs, new);
+    assert_eq!(new.checksum, old.checksum, "{name} output diverged");
+    assert!(
+        old.allocated.reallocs > new.allocated.reallocs,
+        "{name} did not eliminate legacy reallocations"
+    );
+    assert_eq!(
+        new.allocated.reallocs, 0,
+        "{name} retained path reallocated"
+    );
+    assert!(
+        new.allocated.churn_bytes() < old.allocated.churn_bytes(),
+        "{name} did not reduce allocation churn"
+    );
+}
+
 fn print_result(label: &str, unit: &str, runs: usize, result: &BenchResult) {
     let count = runs as f64;
     println!(
         "{label:<4} {:>8.3} ns/{unit}  {:>8.3} cycles/{unit}  {:>8.3} M{unit}/s  \
-         worst {:>8.3} ns  {:>5.2} alloc/run  {:>5.2} realloc/run  \
-         {:>5.2} free/run  {:>8.1} churn B/run  {:016x}",
+         median {:>8.3} ns  p95 {:>8.3} ns  {:>5.2} alloc/run  {:>5.2} realloc/run  \
+         {:>5.2} free/run  {:>8.1} alloc B/run  {:>8.1} churn B/run  {:016x}",
         result.ns_per_unit,
         result.cycles_per_unit.unwrap_or(f64::NAN),
         result.units_per_second / 1_000_000.0,
-        result.worst_ns_per_unit,
+        result.median_ns_per_unit,
+        result.p95_ns_per_unit,
         result.allocated.allocs as f64 / count,
         result.allocated.reallocs as f64 / count,
         result.allocated.deallocs as f64 / count,
+        result.allocated.alloc_bytes as f64 / count,
         result.allocated.churn_bytes() as f64 / count,
         result.checksum,
     );
@@ -275,6 +306,32 @@ fn main() {
         &crossfade_new,
     );
 
+    let mut identity_fade_old = Vec::with_capacity(FADE_FRAMES);
+    let mut identity_fade_new = Vec::with_capacity(FADE_FRAMES);
+    let identity_crossfade_old = measure(CROSSFADE_RUNS, FADE_FRAMES, || {
+        sola_bench_support::identity_crossfade_old(
+            black_box(&prev),
+            black_box(&weights[FADE_START..FADE_START + FADE_FRAMES]),
+            &mut identity_fade_old,
+        );
+        output_checksum(std::slice::from_ref(&identity_fade_old))
+    });
+    let identity_crossfade_new = measure(CROSSFADE_RUNS, FADE_FRAMES, || {
+        sola_bench_support::identity_crossfade_new(
+            black_box(&prev),
+            black_box(&weights[FADE_START..FADE_START + FADE_FRAMES]),
+            &mut identity_fade_new,
+        );
+        output_checksum(std::slice::from_ref(&identity_fade_new))
+    });
+    print_pair(
+        "identity-window SOLA crossfade",
+        "frame",
+        CROSSFADE_RUNS,
+        &identity_crossfade_old,
+        &identity_crossfade_new,
+    );
+
     let silent_search = vec![0.0f32; CORRELATE_FRAMES * 2];
     let silent_pattern = vec![0.0f32; CORRELATE_FRAMES];
     let correlation_old = measure(CORRELATION_RUNS, 1, || {
@@ -313,6 +370,52 @@ fn main() {
         CORRELATION_RUNS,
         &music_old,
         &music_new,
+    );
+
+    let right_pattern = (0..CORRELATE_FRAMES)
+        .map(|index| ((index % 11) as f32).mul_add(0.001, (index as f32 * 0.047).cos() * 0.6))
+        .collect::<Vec<_>>();
+    let right_search = (0..CORRELATE_FRAMES * 2)
+        .map(|index| ((index % 19) as f32).mul_add(0.001, (index as f32 * 0.043).cos() * 0.6))
+        .collect::<Vec<_>>();
+    let stereo_correlation_old = measure(CORRELATION_RUNS, 1, || {
+        let (left, right) = sola_bench_support::stereo_closest_match_old(
+            black_box(&music_search),
+            black_box(&music_pattern),
+            black_box(&right_search),
+            black_box(&right_pattern),
+        );
+        left as u64 ^ (right as u64).rotate_left(32)
+    });
+    let stereo_correlation_new = measure(CORRELATION_RUNS, 1, || {
+        let (left, right) = sola_bench_support::stereo_closest_match_new(
+            black_box(&music_search),
+            black_box(&music_pattern),
+            black_box(&right_search),
+            black_box(&right_pattern),
+        );
+        left as u64 ^ (right as u64).rotate_left(32)
+    });
+    print_pair(
+        "fused stereo music-like SOLA correlation",
+        "stereo-search",
+        CORRELATION_RUNS,
+        &stereo_correlation_old,
+        &stereo_correlation_new,
+    );
+
+    let capacity_old = measure(CAPACITY_RUNS, APPEND_FRAMES, || {
+        sola_bench_support::capacity_reuse_old(DEAD_PREFIX, LIVE_FRAMES, APPEND_FRAMES)
+    });
+    let capacity_new = measure(CAPACITY_RUNS, APPEND_FRAMES, || {
+        sola_bench_support::capacity_reuse_new(DEAD_PREFIX, LIVE_FRAMES, APPEND_FRAMES)
+    });
+    print_capacity_pair(
+        "SOLA source-buffer dead-prefix reuse",
+        "appended-frame",
+        CAPACITY_RUNS,
+        &capacity_old,
+        &capacity_new,
     );
 
     println!(
