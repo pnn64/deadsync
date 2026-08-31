@@ -972,7 +972,7 @@ pub fn cached_itl_tournament_overall_ranks_for_profile(
     profile_id: Option<&str>,
     song_cache_generation: u64,
     song_cache: &[deadsync_chart::SongPack],
-) -> Arc<HashMap<String, u32>> {
+) -> Arc<deadsync_score::OnlineItlOverallRanks> {
     deadsync_score::runtime_online_itl_overall_ranks_for_side(
         side_idx,
         joined,

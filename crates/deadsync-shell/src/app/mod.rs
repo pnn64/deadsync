@@ -2307,7 +2307,7 @@ impl App {
                 }
             }
         }
-        let overall_ranks: [Option<Arc<std::collections::HashMap<String, u32>>>; 2] =
+        let overall_ranks: [Option<Arc<deadsync_score::OnlineItlOverallRanks>>; 2] =
             std::array::from_fn(|side_idx| {
                 (joined[side_idx] && request.rank_source == MusicWheelRankSource::Overall).then(
                     || {

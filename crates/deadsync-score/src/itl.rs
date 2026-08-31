@@ -2,6 +2,7 @@ use crate::CachedItlScore;
 use bincode::{Decode, Encode};
 use hashbrown::HashMap as FastHashMap;
 use log::warn;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -60,8 +61,10 @@ static ONLINE_SRPG_SELF_SCORE_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
     LazyLock::new(|| Mutex::new(OnlineItlSelfCacheState::default()));
 static ONLINE_ITL_OVERALL_RANK_CACHE: LazyLock<Mutex<OnlineItlOverallRankCacheState>> =
     LazyLock::new(|| Mutex::new(OnlineItlOverallRankCacheState::default()));
-static EMPTY_ONLINE_ITL_OVERALL_RANKS: LazyLock<Arc<HashMap<String, u32>>> =
-    LazyLock::new(|| Arc::new(HashMap::new()));
+pub type OnlineItlOverallRanks = FxHashMap<String, u32>;
+
+static EMPTY_ONLINE_ITL_OVERALL_RANKS: LazyLock<Arc<OnlineItlOverallRanks>> =
+    LazyLock::new(|| Arc::new(OnlineItlOverallRanks::default()));
 static ITL_SCORE_CACHE: LazyLock<Mutex<ItlScoreCacheState>> =
     LazyLock::new(|| Mutex::new(ItlScoreCacheState::default()));
 
@@ -483,7 +486,7 @@ pub struct OnlineItlOverallRankCacheKey {
 #[derive(Clone)]
 struct OnlineItlOverallRankCacheEntry {
     key: OnlineItlOverallRankCacheKey,
-    ranks: Arc<HashMap<String, u32>>,
+    ranks: Arc<OnlineItlOverallRanks>,
 }
 
 #[derive(Default)]
@@ -514,7 +517,7 @@ const fn online_itl_overall_rank_entry_for_side_mut(
     }
 }
 
-pub fn empty_online_itl_overall_ranks() -> Arc<HashMap<String, u32>> {
+pub fn empty_online_itl_overall_ranks() -> Arc<OnlineItlOverallRanks> {
     EMPTY_ONLINE_ITL_OVERALL_RANKS.clone()
 }
 
@@ -524,7 +527,7 @@ pub fn empty_online_itl_overall_ranks() -> Arc<HashMap<String, u32>> {
 pub fn cached_online_itl_overall_ranks_for_side(
     side_idx: usize,
     key: &OnlineItlOverallRankCacheKey,
-) -> Option<Arc<HashMap<String, u32>>> {
+) -> Option<Arc<OnlineItlOverallRanks>> {
     let cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
     online_itl_overall_rank_entry_for_side(&cache, side_idx)
         .filter(|entry| entry.key == *key)
@@ -537,8 +540,8 @@ pub fn cached_online_itl_overall_ranks_for_side(
 pub fn store_online_itl_overall_ranks_for_side(
     side_idx: usize,
     key: OnlineItlOverallRankCacheKey,
-    ranks: Arc<HashMap<String, u32>>,
-) -> Arc<HashMap<String, u32>> {
+    ranks: Arc<OnlineItlOverallRanks>,
+) -> Arc<OnlineItlOverallRanks> {
     let mut cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
     *online_itl_overall_rank_entry_for_side_mut(&mut cache, side_idx) =
         Some(OnlineItlOverallRankCacheEntry {
@@ -556,7 +559,7 @@ pub fn runtime_online_itl_overall_ranks_for_side<L>(
     song_cache_generation: u64,
     song_cache: &[deadsync_chart::SongPack],
     mut load_profile: L,
-) -> Arc<HashMap<String, u32>>
+) -> Arc<OnlineItlOverallRanks>
 where
     L: FnMut(&str) -> OnlineItlSelfIndexMap,
 {
@@ -1840,11 +1843,29 @@ pub fn ex_hundredths(ex_percent: f64) -> u32 {
 
 #[must_use]
 pub fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
-    let mut nums = chart_name
-        .split(|ch: char| !ch.is_ascii_digit())
-        .filter(|part| !part.is_empty())
-        .filter_map(|part| part.parse::<u32>().ok());
-    Some((nums.next()?, nums.next()?))
+    let bytes = chart_name.as_bytes();
+    let mut offset = 0;
+    let mut values = [0_u32; 2];
+    let mut found = 0;
+
+    while offset < bytes.len() && found < values.len() {
+        while offset < bytes.len() && !bytes[offset].is_ascii_digit() {
+            offset += 1;
+        }
+        let mut value = (offset < bytes.len()).then_some(0_u32);
+        while offset < bytes.len() && bytes[offset].is_ascii_digit() {
+            value = value
+                .and_then(|value| value.checked_mul(10))
+                .and_then(|value| value.checked_add(u32::from(bytes[offset] - b'0')));
+            offset += 1;
+        }
+        if let Some(value) = value {
+            values[found] = value;
+            found += 1;
+        }
+    }
+
+    (found == values.len()).then_some((values[0], values[1]))
 }
 
 #[must_use]
@@ -1859,15 +1880,17 @@ pub fn itl_points_for_chart(chart: &deadsync_chart::ChartData, ex_hundredths: u3
 
 #[must_use]
 pub fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
-    let scalar = 40.0_f64;
-    let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
-        * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
-    let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
+    // log2(40) / 40 turns the fixed-base power into the substantially cheaper
+    // exp2(x) form. The denominator is 40^2.5 - 1 and never changes.
+    const EXP2_PER_EX_POINT: f64 = (2.0 + std::f64::consts::LOG2_10) / 40.0;
+    const CURVE_DENOMINATOR: f64 = 10_118.288_512_538_815;
+    let curve_ratio = ((ex_score.max(0.0) * EXP2_PER_EX_POINT).exp2() - 1.0) / CURVE_DENOMINATOR;
+    let percent = (curve_ratio * 1_000_000.0).round() / 1_000_000.0;
     passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
 }
 
 fn apply_itl_overall_ranks(
-    out: &mut HashMap<String, u32>,
+    out: &mut OnlineItlOverallRanks,
     mut by_chart_points: Vec<(String, u32)>,
 ) {
     by_chart_points.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -1889,9 +1912,9 @@ fn apply_itl_overall_ranks(
 pub fn itl_overall_ranks_from_song_cache(
     song_cache: &[deadsync_chart::SongPack],
     by_chart_score: &HashMap<String, u32>,
-) -> HashMap<String, u32> {
+) -> OnlineItlOverallRanks {
     if by_chart_score.is_empty() {
-        return HashMap::new();
+        return OnlineItlOverallRanks::default();
     }
 
     let mut single_points = Vec::new();
@@ -1923,10 +1946,106 @@ pub fn itl_overall_ranks_from_song_cache(
         }
     }
 
-    let mut ranks = HashMap::with_capacity(single_points.len() + double_points.len());
+    let mut ranks = OnlineItlOverallRanks::with_capacity_and_hasher(
+        single_points.len() + double_points.len(),
+        FxBuildHasher,
+    );
     apply_itl_overall_ranks(&mut ranks, single_points);
     apply_itl_overall_ranks(&mut ranks, double_points);
     ranks
+}
+
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{FxBuildHasher, OnlineItlOverallRanks, itl_points_for_song, parse_itl_points};
+    use std::collections::HashMap;
+
+    #[must_use]
+    pub fn parse_points_old(names: &[String]) -> u64 {
+        checksum_parsed(names.iter().map(|name| {
+            let mut nums = name
+                .split(|ch: char| !ch.is_ascii_digit())
+                .filter(|part| !part.is_empty())
+                .filter_map(|part| part.parse::<u32>().ok());
+            Some((nums.next()?, nums.next()?))
+        }))
+    }
+
+    #[must_use]
+    pub fn parse_points_new(names: &[String]) -> u64 {
+        checksum_parsed(names.iter().map(|name| parse_itl_points(name)))
+    }
+
+    fn checksum_parsed(values: impl IntoIterator<Item = Option<(u32, u32)>>) -> u64 {
+        values.into_iter().fold(0_u64, |checksum, value| {
+            let packed = value.map_or(u64::MAX, |(passing, scoring)| {
+                u64::from(passing) << 32 | u64::from(scoring)
+            });
+            checksum.rotate_left(7) ^ packed
+        })
+    }
+
+    #[must_use]
+    pub fn curve_points_old(inputs: &[(u32, u32, f64)]) -> u64 {
+        checksum_points(inputs.iter().map(|&(passing, scoring, ex_score)| {
+            let scalar = 40.0_f64;
+            let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
+                * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
+            let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
+            passing.saturating_add((f64::from(scoring) * percent).floor() as u32)
+        }))
+    }
+
+    #[must_use]
+    pub fn curve_points_new(inputs: &[(u32, u32, f64)]) -> u64 {
+        checksum_points(
+            inputs.iter().map(|&(passing, scoring, ex_score)| {
+                itl_points_for_song(passing, scoring, ex_score)
+            }),
+        )
+    }
+
+    fn checksum_points(points: impl IntoIterator<Item = u32>) -> u64 {
+        points.into_iter().fold(0_u64, |checksum, points| {
+            checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(u64::from(points))
+        })
+    }
+
+    #[must_use]
+    pub fn rank_map_old(entries: &[(String, u32)], probe_indices: &[usize]) -> u64 {
+        let mut ranks = HashMap::with_capacity(entries.len());
+        ranks.extend(entries.iter().cloned());
+        checksum_rank_probes(entries, probe_indices, &ranks)
+    }
+
+    #[must_use]
+    pub fn rank_map_new(entries: &[(String, u32)], probe_indices: &[usize]) -> u64 {
+        let mut ranks =
+            OnlineItlOverallRanks::with_capacity_and_hasher(entries.len(), FxBuildHasher);
+        ranks.extend(entries.iter().cloned());
+        checksum_rank_probes(entries, probe_indices, &ranks)
+    }
+
+    fn checksum_rank_probes<S>(
+        entries: &[(String, u32)],
+        probe_indices: &[usize],
+        ranks: &HashMap<String, u32, S>,
+    ) -> u64
+    where
+        S: std::hash::BuildHasher,
+    {
+        probe_indices
+            .iter()
+            .fold(ranks.len() as u64, |checksum, &index| {
+                checksum
+                    .wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(
+                        ranks.get(entries[index].0.as_str()).copied().unwrap_or(0),
+                    ))
+            })
+    }
 }
 
 #[must_use]
@@ -2193,6 +2312,41 @@ mod tests {
     }
 
     #[test]
+    fn parse_itl_points_matches_split_parse_reference() {
+        fn reference(chart_name: &str) -> Option<(u32, u32)> {
+            let mut nums = chart_name
+                .split(|ch: char| !ch.is_ascii_digit())
+                .filter(|part| !part.is_empty())
+                .filter_map(|part| part.parse::<u32>().ok());
+            Some((nums.next()?, nums.next()?))
+        }
+
+        let fixed = [
+            "",
+            "1",
+            "1 2",
+            "0001 + 00002",
+            "4294967295 / 0",
+            "4294967296 overflow then 7 and 8",
+            "99 and 999999999999999999999 and 100",
+            "ITL ñ 7500（P）+12000（S）",
+            "-12.5 gives 12 then 5",
+        ];
+        for chart_name in fixed {
+            assert_eq!(
+                parse_itl_points(chart_name),
+                reference(chart_name),
+                "chart name {chart_name:?}"
+            );
+        }
+        for passing in (0..=u32::MAX).step_by(65_537) {
+            let scoring = passing.rotate_left(13);
+            let chart_name = format!("prefix-{passing:010} (P) + {scoring} (S)-suffix");
+            assert_eq!(parse_itl_points(&chart_name), reference(&chart_name));
+        }
+    }
+
+    #[test]
     fn itl_points_for_chart_uses_chart_name_curve() {
         let mut chart = sample_chart("dance-single");
         chart.chart_name = "7500 (P) + 12000 (S)".to_string();
@@ -2203,6 +2357,42 @@ mod tests {
     #[test]
     fn itl_points_curve_keeps_full_ex_exact() {
         assert_eq!(itl_points_for_song(7500, 12000, 100.0), 19_500);
+    }
+
+    #[test]
+    fn itl_points_curve_matches_powf_reference() {
+        fn reference(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
+            let scalar = 40.0_f64;
+            let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
+                * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
+            let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
+            passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
+        }
+
+        let point_pairs = [
+            (0, 0),
+            (1, 1),
+            (7_500, 12_000),
+            (25_000, 100_000),
+            (u32::MAX - 10, 100_000),
+        ];
+        for ex_hundredths in -1_000..=12_000 {
+            let ex_score = f64::from(ex_hundredths) / 100.0;
+            for (passing, scoring) in point_pairs {
+                assert_eq!(
+                    itl_points_for_song(passing, scoring, ex_score),
+                    reference(passing, scoring, ex_score),
+                    "passing={passing}, scoring={scoring}, ex={ex_score}"
+                );
+            }
+        }
+        for ex_score in [f64::NEG_INFINITY, -0.0, f64::INFINITY, f64::NAN] {
+            assert_eq!(
+                itl_points_for_song(7_500, 12_000, ex_score),
+                reference(7_500, 12_000, ex_score),
+                "ex={ex_score}"
+            );
+        }
     }
 
     #[test]

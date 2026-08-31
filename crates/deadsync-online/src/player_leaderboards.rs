@@ -7,7 +7,6 @@ use deadsync_score::{
     runtime_run_player_leaderboard_fetch,
 };
 use log::warn;
-use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
@@ -421,7 +420,7 @@ pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
     side_idx: usize,
     joined: bool,
     profile: &GameplayScoreboxProfileSnapshot,
-) -> Arc<HashMap<String, u32>> {
+) -> Arc<deadsync_score::OnlineItlOverallRanks> {
     let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
     deadsync_profile::app_runtime::cached_itl_tournament_overall_ranks_for_profile(
         side_idx,
