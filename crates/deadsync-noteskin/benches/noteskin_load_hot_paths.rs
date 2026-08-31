@@ -480,6 +480,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_ANIMATED_SPRITE_CACHE_ONLY").is_some() {
+        run_uv_case(
+            "noteskin cached weighted animation total",
+            sprite_math_bench_support::cached_weighted_frame_index_old,
+            sprite_math_bench_support::cached_weighted_frame_index_new,
+        );
+        run_uv_case(
+            "noteskin uniform weighted frame arithmetic",
+            sprite_math_bench_support::uniform_weighted_frame_index_old,
+            sprite_math_bench_support::uniform_weighted_frame_index_new,
+        );
+        run_uv_case(
+            "noteskin cached animated atlas UV",
+            sprite_math_bench_support::cached_animated_uv_old,
+            sprite_math_bench_support::cached_animated_uv_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_SPRITE_ADDRESS_ONLY").is_some() {
         run_uv_case(
             "noteskin uniform frame wrapping",

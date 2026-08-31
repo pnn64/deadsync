@@ -18,6 +18,40 @@ pub enum AnimationRate {
     FramesPerBeat(f32),
 }
 
+/// Precomputed timing invariants for a weighted sprite animation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpriteFrameTiming {
+    total: Option<f32>,
+    uniform_duration: Option<f32>,
+    duration_count: usize,
+}
+
+impl SpriteFrameTiming {
+    #[must_use]
+    pub fn new(frame_count: usize, durations: &[f32]) -> Self {
+        const F32_MANTISSA_MASK: u32 = 0x007f_ffff;
+
+        let duration_count = durations.len().min(frame_count.max(1));
+        let durations = &durations[..duration_count];
+        let total = frame_duration_total(durations, duration_count);
+        let uniform_duration = durations.first().copied().filter(|first| {
+            *first > f32::EPSILON
+                && first.is_finite()
+                // Division by a binary power of two preserves the legacy
+                // repeated-subtraction boundary decisions exactly.
+                && (first.to_bits() & F32_MANTISSA_MASK) == 0
+                && durations
+                    .iter()
+                    .all(|duration| duration.to_bits() == first.to_bits())
+        });
+        Self {
+            total,
+            uniform_duration,
+            duration_count,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpriteStatePropertiesAnimation {
     pub frame_size: [i32; 2],
@@ -712,17 +746,34 @@ pub fn sprite_frame_index(
     time: f32,
     beat: f32,
 ) -> usize {
+    sprite_frame_index_with_timing(frame_count, rate, frame_durations, None, time, beat)
+}
+
+#[must_use]
+pub fn sprite_frame_index_with_timing(
+    frame_count: usize,
+    rate: AnimationRate,
+    frame_durations: Option<&[f32]>,
+    timing: Option<SpriteFrameTiming>,
+    time: f32,
+    beat: f32,
+) -> usize {
     let frames = frame_count.max(1);
     if frames <= 1 {
         return 0;
     }
     if let Some(durations) = frame_durations {
+        let expected_count = durations.len().min(frames);
+        let timing = timing
+            .filter(|timing| timing.duration_count == expected_count)
+            .unwrap_or_else(|| SpriteFrameTiming::new(frames, durations));
         let clock = match rate {
             AnimationRate::FramesPerSecond(_) => time,
             AnimationRate::FramesPerBeat(_) => beat,
         };
-        if let Some(total) = frame_duration_total(durations, frames)
-            && let Some(idx) = duration_frame_index(durations, frames, clock.rem_euclid(total))
+        if let Some(total) = timing.total
+            && let Some(idx) =
+                duration_frame_index_with_timing(durations, frames, timing, clock.rem_euclid(total))
         {
             return idx;
         }
@@ -780,6 +831,16 @@ pub fn sprite_frame_index_from_phase(
     frame_durations: Option<&[f32]>,
     phase: f32,
 ) -> usize {
+    sprite_frame_index_from_phase_with_timing(frame_count, frame_durations, None, phase)
+}
+
+#[must_use]
+pub fn sprite_frame_index_from_phase_with_timing(
+    frame_count: usize,
+    frame_durations: Option<&[f32]>,
+    timing: Option<SpriteFrameTiming>,
+    phase: f32,
+) -> usize {
     let frames = frame_count.max(1);
     if frames <= 1 {
         return 0;
@@ -789,11 +850,17 @@ pub fn sprite_frame_index_from_phase(
     } else {
         phase.rem_euclid(1.0)
     };
-    if let Some(durations) = frame_durations
-        && let Some(total) = frame_duration_total(durations, frames)
-        && let Some(idx) = duration_frame_index(durations, frames, p * total)
-    {
-        return idx;
+    if let Some(durations) = frame_durations {
+        let expected_count = durations.len().min(frames);
+        let timing = timing
+            .filter(|timing| timing.duration_count == expected_count)
+            .unwrap_or_else(|| SpriteFrameTiming::new(frames, durations));
+        if let Some(total) = timing.total
+            && let Some(idx) =
+                duration_frame_index_with_timing(durations, frames, timing, p * total)
+        {
+            return idx;
+        }
     }
     ((p * frames as f32).floor() as usize).min(frames - 1)
 }
@@ -878,6 +945,128 @@ pub fn sprite_atlas_uv_scaled(
 #[derive(Debug, Clone, Copy)]
 pub struct SpriteAtlasUvCache {
     uv: [[f32; 4]; 2],
+}
+
+/// Cached normalized geometry for an animated sprite atlas.
+#[derive(Debug, Clone, Copy)]
+pub struct SpriteAnimatedUvCache {
+    frame_count: usize,
+    cols: usize,
+    available: usize,
+    frame_mask: usize,
+    available_mask: usize,
+    col_mask: usize,
+    col_shift: u32,
+    power_of_two_flags: u8,
+    start: [[f32; 2]; 2],
+    step: [f32; 2],
+    extent: [[f32; 2]; 2],
+}
+
+impl SpriteAnimatedUvCache {
+    #[must_use]
+    pub fn new(
+        texel_scale: [f32; 2],
+        def: &SpriteDefinition,
+        frame_size: [i32; 2],
+        grid: [usize; 2],
+        frame_count: usize,
+        indexed: bool,
+    ) -> Self {
+        let origin = if indexed { [0, 0] } else { def.src };
+        let inset = [
+            if frame_size[0] > 0 { 0.5 } else { 0.0 },
+            if frame_size[1] > 0 { 0.5 } else { 0.0 },
+        ];
+        let start = [
+            [
+                origin[0] as f32 * texel_scale[0],
+                origin[1] as f32 * texel_scale[1],
+            ],
+            [
+                (origin[0] as f32 + inset[0]) * texel_scale[0],
+                (origin[1] as f32 + inset[1]) * texel_scale[1],
+            ],
+        ];
+        let step = [
+            frame_size[0] as f32 * texel_scale[0],
+            frame_size[1] as f32 * texel_scale[1],
+        ];
+        let extent = [
+            step,
+            [
+                (frame_size[0] as f32 - inset[0] * 2.0) * texel_scale[0],
+                (frame_size[1] as f32 - inset[1] * 2.0) * texel_scale[1],
+            ],
+        ];
+        const FRAME_COUNT_POWER_OF_TWO: u8 = 1 << 0;
+        const AVAILABLE_POWER_OF_TWO: u8 = 1 << 1;
+        const COLUMN_COUNT_POWER_OF_TWO: u8 = 1 << 2;
+
+        let frame_count = frame_count.max(1);
+        let cols = grid[0].max(1);
+        let available = cols.saturating_mul(grid[1].max(1)).max(1);
+        let power_of_two_flags = (u8::from(frame_count.is_power_of_two())
+            * FRAME_COUNT_POWER_OF_TWO)
+            | (u8::from(available.is_power_of_two()) * AVAILABLE_POWER_OF_TWO)
+            | (u8::from(cols.is_power_of_two()) * COLUMN_COUNT_POWER_OF_TWO);
+        Self {
+            frame_count,
+            cols,
+            available,
+            frame_mask: frame_count.saturating_sub(1),
+            available_mask: available.saturating_sub(1),
+            col_mask: cols.saturating_sub(1),
+            col_shift: cols.trailing_zeros(),
+            power_of_two_flags,
+            start,
+            step,
+            extent,
+        }
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub fn get(
+        &self,
+        frame_indices: Option<&[usize]>,
+        frame_index: usize,
+        inset_texels: bool,
+    ) -> [f32; 4] {
+        const FRAME_COUNT_POWER_OF_TWO: u8 = 1 << 0;
+        const AVAILABLE_POWER_OF_TWO: u8 = 1 << 1;
+        const COLUMN_COUNT_POWER_OF_TWO: u8 = 1 << 2;
+
+        let idx = if self.power_of_two_flags & FRAME_COUNT_POWER_OF_TWO != 0 {
+            frame_index & self.frame_mask
+        } else {
+            frame_index % self.frame_count
+        };
+        let source_idx =
+            if let Some(source_idx) = frame_indices.and_then(|indices| indices.get(idx).copied()) {
+                if self.power_of_two_flags & AVAILABLE_POWER_OF_TWO != 0 {
+                    source_idx & self.available_mask
+                } else {
+                    source_idx % self.available
+                }
+            } else {
+                idx
+            };
+        let (row, col) = if self.power_of_two_flags & COLUMN_COUNT_POWER_OF_TWO != 0 {
+            (source_idx >> self.col_shift, source_idx & self.col_mask)
+        } else {
+            (source_idx / self.cols, source_idx % self.cols)
+        };
+        let variant = usize::from(inset_texels);
+        let u0 = col as f32 * self.step[0] + self.start[variant][0];
+        let v0 = row as f32 * self.step[1] + self.start[variant][1];
+        [
+            u0,
+            v0,
+            u0 + self.extent[variant][0],
+            v0 + self.extent[variant][1],
+        ]
+    }
 }
 
 impl SpriteAtlasUvCache {
@@ -1277,6 +1466,138 @@ pub mod sprite_math_bench_support {
         cached_atlas_uv(evaluations, false)
     }
 
+    fn cached_weighted_frame_index(evaluations: usize, legacy: bool) -> u64 {
+        let durations = black_box([
+            0.031_25, 0.062_5, 0.093_75, 0.125, 0.156_25, 0.187_5, 0.218_75, 0.25, 0.281_25,
+            0.312_5, 0.343_75, 0.375, 0.406_25, 0.437_5, 0.468_75, 0.5,
+        ]);
+        let timing = black_box(SpriteFrameTiming::new(durations.len(), &durations));
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
+            let frame = if legacy {
+                sprite_frame_index_legacy(
+                    durations.len(),
+                    AnimationRate::FramesPerSecond(30.0),
+                    Some(&durations),
+                    time,
+                    0.0,
+                )
+            } else {
+                sprite_frame_index_with_timing(
+                    durations.len(),
+                    AnimationRate::FramesPerSecond(30.0),
+                    Some(&durations),
+                    Some(timing),
+                    time,
+                    0.0,
+                )
+            };
+            checksum = frame_checksum(frame, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn cached_weighted_frame_index_old(evaluations: usize) -> u64 {
+        cached_weighted_frame_index(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn cached_weighted_frame_index_new(evaluations: usize) -> u64 {
+        cached_weighted_frame_index(evaluations, false)
+    }
+
+    fn uniform_weighted_frame_index(evaluations: usize, arithmetic: bool) -> u64 {
+        let durations = black_box([0.125_f32; 32]);
+        let timing = black_box(SpriteFrameTiming::new(durations.len(), &durations));
+        let scan_timing = SpriteFrameTiming {
+            uniform_duration: None,
+            ..timing
+        };
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
+            let frame = sprite_frame_index_with_timing(
+                durations.len(),
+                AnimationRate::FramesPerSecond(8.0),
+                Some(&durations),
+                Some(if arithmetic { timing } else { scan_timing }),
+                time,
+                0.0,
+            );
+            checksum = frame_checksum(frame, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn uniform_weighted_frame_index_old(evaluations: usize) -> u64 {
+        uniform_weighted_frame_index(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn uniform_weighted_frame_index_new(evaluations: usize) -> u64 {
+        uniform_weighted_frame_index(evaluations, true)
+    }
+
+    fn cached_animated_uv(evaluations: usize, cached: bool) -> u64 {
+        let def = black_box(SpriteDefinition {
+            src: [64, 32],
+            size: [32, 32],
+            rotation_deg: 0,
+            mirror_h: false,
+            mirror_v: false,
+        });
+        let frame_indices = black_box([7, 0, 5, 2, 3, 1, 6, 4]);
+        let texel_scale = black_box([1.0 / 512.0, 1.0 / 256.0]);
+        let frame_size = black_box([32, 32]);
+        let grid = black_box([4, 2]);
+        let frame_count = black_box(frame_indices.len());
+        let cache = black_box(SpriteAnimatedUvCache::new(
+            texel_scale,
+            &def,
+            frame_size,
+            grid,
+            frame_count,
+            true,
+        ));
+        let mut total = [0.0_f32; 4];
+        for index in 0..evaluations {
+            let frame_index = black_box(index & 255);
+            let inset = black_box(index & 1 != 0);
+            let uv = if cached {
+                cache.get(Some(&frame_indices), frame_index, inset)
+            } else {
+                sprite_animated_uv_scaled(
+                    texel_scale,
+                    &def,
+                    frame_size,
+                    grid,
+                    frame_count,
+                    Some(&frame_indices),
+                    frame_index,
+                    inset,
+                )
+            };
+            for (total, value) in total.iter_mut().zip(uv) {
+                *total += value;
+            }
+        }
+        let average = total.map(|value| value / evaluations as f32);
+        normalized_uv_checksum(average, 0)
+    }
+
+    #[must_use]
+    pub fn cached_animated_uv_old(evaluations: usize) -> u64 {
+        cached_animated_uv(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn cached_animated_uv_new(evaluations: usize) -> u64 {
+        cached_animated_uv(evaluations, true)
+    }
+
     #[must_use]
     pub fn normalized_phase_old(evaluations: usize) -> u64 {
         let mut checksum = 0_u64;
@@ -1432,6 +1753,24 @@ pub fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32)
     last
 }
 
+#[inline(always)]
+fn duration_frame_index_with_timing(
+    durations: &[f32],
+    frames: usize,
+    timing: SpriteFrameTiming,
+    position: f32,
+) -> Option<usize> {
+    if let Some(duration) = timing.uniform_duration
+        && position.is_finite()
+        && timing.duration_count > 0
+    {
+        return Some(
+            ((position / duration).floor() as usize).min(timing.duration_count.saturating_sub(1)),
+        );
+    }
+    duration_frame_index(durations, frames, position)
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -1440,18 +1779,19 @@ mod tests {
     use crate::script::{SpriteAnimationCommandPlan, SpriteStatePropertiesPlan};
 
     use super::{
-        AnimationRate, SpriteAnimationPlan, SpriteAtlasUvCache, SpriteDefinition, SpriteSourcePlan,
-        SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan, atlas_sprite_slot_plan,
-        duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
-        generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
-        itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
-        itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
-        neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv,
-        sprite_animated_uv_legacy, sprite_animated_uv_scaled, sprite_animation_plan,
-        sprite_atlas_uv, sprite_atlas_uv_legacy, sprite_atlas_uv_scaled, sprite_frame_index,
-        sprite_frame_index_from_phase, sprite_frame_index_from_phase_legacy,
-        sprite_frame_index_legacy, sprite_scrolled_uv, sprite_scrolled_uv_legacy,
-        sprite_sheet_frame, sprite_state_properties_animation,
+        AnimationRate, SpriteAnimatedUvCache, SpriteAnimationPlan, SpriteAtlasUvCache,
+        SpriteDefinition, SpriteFrameTiming, SpriteSourcePlan, SpriteStatePropertiesAnimation,
+        all_frames_sprite_slot_plan, atlas_sprite_slot_plan, duration_frame_index,
+        frame_duration_total, frame_sprite_slot_plan, generated_animation_sprite_slot_plan,
+        itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
+        itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
+        itg_sprite_slot_plan_from_path, model_vertex_for_sprite, neg_rot_sin_cos,
+        sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animated_uv_legacy,
+        sprite_animated_uv_scaled, sprite_animation_plan, sprite_atlas_uv, sprite_atlas_uv_legacy,
+        sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
+        sprite_frame_index_from_phase_legacy, sprite_frame_index_from_phase_with_timing,
+        sprite_frame_index_legacy, sprite_frame_index_with_timing, sprite_scrolled_uv,
+        sprite_scrolled_uv_legacy, sprite_sheet_frame, sprite_state_properties_animation,
     };
 
     fn assert_uv_close(old: [f32; 4], new: [f32; 4]) {
@@ -1881,6 +2221,86 @@ mod tests {
     }
 
     #[test]
+    fn cached_weighted_timing_matches_legacy_frame_selection() {
+        let nonuniform = [
+            0.031_25, 0.062_5, 0.093_75, 0.125, 0.156_25, 0.187_5, 0.218_75, 0.25,
+        ];
+        let uniform = [0.125; 8];
+        for durations in [nonuniform.as_slice(), uniform.as_slice()] {
+            for frame_count in [2, 7, 8, 13] {
+                let timing = SpriteFrameTiming::new(frame_count, durations);
+                for rate in [
+                    AnimationRate::FramesPerSecond(30.0),
+                    AnimationRate::FramesPerBeat(4.0),
+                ] {
+                    for tick in -8_192..=8_192 {
+                        let time = tick as f32 / 1_024.0;
+                        let beat = tick as f32 / 4_096.0;
+                        assert_eq!(
+                            sprite_frame_index_with_timing(
+                                frame_count,
+                                rate,
+                                Some(durations),
+                                Some(timing),
+                                time,
+                                beat,
+                            ),
+                            sprite_frame_index_legacy(
+                                frame_count,
+                                rate,
+                                Some(durations),
+                                time,
+                                beat,
+                            )
+                        );
+                        let phase = tick as f32 / 4_096.0;
+                        assert_eq!(
+                            sprite_frame_index_from_phase_with_timing(
+                                frame_count,
+                                Some(durations),
+                                Some(timing),
+                                phase,
+                            ),
+                            sprite_frame_index_from_phase_legacy(
+                                frame_count,
+                                Some(durations),
+                                phase,
+                            )
+                        );
+                    }
+                }
+                for value in [
+                    -f32::MAX,
+                    -0.0,
+                    0.0,
+                    f32::MAX,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    assert_eq!(
+                        sprite_frame_index_with_timing(
+                            frame_count,
+                            AnimationRate::FramesPerSecond(30.0),
+                            Some(durations),
+                            Some(timing),
+                            value,
+                            value,
+                        ),
+                        sprite_frame_index_legacy(
+                            frame_count,
+                            AnimationRate::FramesPerSecond(30.0),
+                            Some(durations),
+                            value,
+                            value,
+                        )
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn reciprocal_atlas_uv_normalization_matches_legacy_coordinates() {
         let definitions = [
             SpriteDefinition::default(),
@@ -1922,7 +2342,7 @@ mod tests {
             ..SpriteDefinition::default()
         };
         let indices = [7, 0, 5, 2, 19, 1, 6, 3];
-        for grid in [[8, 1], [1, 8], [4, 2]] {
+        for grid in [[8, 1], [1, 8], [4, 2], [3, 3]] {
             for frame_indices in [None, Some(indices.as_slice())] {
                 for frame_index in 0..32 {
                     for inset in [false, true] {
@@ -1948,6 +2368,46 @@ mod tests {
                             inset,
                         );
                         assert_uv_close(old, new);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cached_animated_uv_matches_uncached_addressing() {
+        let def = SpriteDefinition {
+            src: [64, 32],
+            size: [32, 32],
+            ..SpriteDefinition::default()
+        };
+        let indices = [7, 0, 5, 2, 19, 1, 6, 3];
+        let texel_scale = [1.0 / 512.0, 1.0 / 256.0];
+        for grid in [[8, 1], [1, 8], [4, 2], [3, 3]] {
+            for frame_indices in [None, Some(indices.as_slice())] {
+                let cache = SpriteAnimatedUvCache::new(
+                    texel_scale,
+                    &def,
+                    [32, 32],
+                    grid,
+                    8,
+                    frame_indices.is_some(),
+                );
+                for frame_index in 0..32 {
+                    for inset in [false, true] {
+                        assert_uv_close(
+                            sprite_animated_uv_scaled(
+                                texel_scale,
+                                &def,
+                                [32, 32],
+                                grid,
+                                8,
+                                frame_indices,
+                                frame_index,
+                                inset,
+                            ),
+                            cache.get(frame_indices, frame_index, inset),
+                        );
                     }
                 }
             }
