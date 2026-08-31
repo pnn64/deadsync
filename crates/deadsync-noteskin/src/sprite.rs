@@ -747,6 +747,30 @@ pub fn sprite_frame_index_from_phase(
     if frames <= 1 {
         return 0;
     }
+    let p = if (0.0..1.0).contains(&phase) {
+        phase
+    } else {
+        phase.rem_euclid(1.0)
+    };
+    if let Some(durations) = frame_durations
+        && let Some(total) = frame_duration_total(durations, frames)
+        && let Some(idx) = duration_frame_index(durations, frames, p * total)
+    {
+        return idx;
+    }
+    ((p * frames as f32).floor() as usize).min(frames - 1)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sprite_frame_index_from_phase_legacy(
+    frame_count: usize,
+    frame_durations: Option<&[f32]>,
+    phase: f32,
+) -> usize {
+    let frames = frame_count.max(1);
+    if frames <= 1 {
+        return 0;
+    }
     let p = phase.rem_euclid(1.0);
     if let Some(durations) = frame_durations
         && let Some(total) = frame_duration_total(durations, frames)
@@ -837,6 +861,67 @@ pub fn sprite_scrolled_uv(
         return uv;
     }
 
+    let u_active = uv_velocity[0] != 0.0
+        || uv_offset[0] != 0.0
+        || (uv[0] == 0.0 && uv[0].is_sign_negative())
+        || (uv[2] == 0.0 && uv[2].is_sign_negative());
+    let v_active = uv_velocity[1] != 0.0
+        || uv_offset[1] != 0.0
+        || (uv[1] == 0.0 && uv[1].is_sign_negative())
+        || (uv[3] == 0.0 && uv[3].is_sign_negative());
+    if !elapsed.is_finite() {
+        return sprite_scrolled_uv_legacy(uv, uv_velocity, uv_offset, elapsed, model_cycle_seconds);
+    }
+    if let Some(cycle_seconds) = model_cycle_seconds {
+        let clock = sprite_uv_scroll_clock(elapsed, Some(cycle_seconds));
+        if u_active {
+            let shift = uv_velocity[0].mul_add(clock, uv_offset[0]);
+            uv[0] += shift;
+            uv[2] += shift;
+        }
+        if v_active {
+            let shift = uv_velocity[1].mul_add(clock, uv_offset[1]);
+            uv[1] += shift;
+            uv[3] += shift;
+        }
+    } else {
+        if u_active {
+            let span = (1.0 - (uv[2] - uv[0]).abs()).max(0.0);
+            let shift = uv_velocity[0].mul_add(elapsed, uv_offset[0]);
+            let shift = if span > f32::EPSILON {
+                shift.rem_euclid(span)
+            } else {
+                0.0
+            };
+            uv[0] += shift;
+            uv[2] += shift;
+        }
+        if v_active {
+            let span = (1.0 - (uv[3] - uv[1]).abs()).max(0.0);
+            let shift = uv_velocity[1].mul_add(elapsed, uv_offset[1]);
+            let shift = if span > f32::EPSILON {
+                shift.rem_euclid(span)
+            } else {
+                0.0
+            };
+            uv[1] += shift;
+            uv[3] += shift;
+        }
+    }
+    uv
+}
+
+fn sprite_scrolled_uv_legacy(
+    mut uv: [f32; 4],
+    uv_velocity: [f32; 2],
+    uv_offset: [f32; 2],
+    elapsed: f32,
+    model_cycle_seconds: Option<f32>,
+) -> [f32; 4] {
+    if uv_velocity == [0.0, 0.0] && uv_offset == [0.0, 0.0] {
+        return uv;
+    }
+
     let w = (uv[2] - uv[0]).abs();
     let h = (uv[3] - uv[1]).abs();
     if let Some(cycle_seconds) = model_cycle_seconds {
@@ -868,6 +953,96 @@ pub fn sprite_scrolled_uv(
         uv[3] += v_shift;
     }
     uv
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod sprite_math_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    #[inline(always)]
+    fn frame_checksum(frame: usize, checksum: u64) -> u64 {
+        checksum.wrapping_add(frame as u64).rotate_left(7)
+    }
+
+    #[inline(always)]
+    fn uv_checksum(uv: [f32; 4], checksum: u64) -> u64 {
+        uv.into_iter().fold(checksum, |checksum, value| {
+            checksum
+                .wrapping_add(u64::from(value.to_bits()))
+                .rotate_left(7)
+        })
+    }
+
+    #[must_use]
+    pub fn normalized_phase_old(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let phase = black_box((index & 4_095) as f32 / 4_096.0);
+            let frame = sprite_frame_index_from_phase_legacy(8, None, phase);
+            checksum = frame_checksum(frame, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn normalized_phase_new(evaluations: usize) -> u64 {
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let phase = black_box((index & 4_095) as f32 / 4_096.0);
+            let frame = sprite_frame_index_from_phase(8, None, phase);
+            checksum = frame_checksum(frame, checksum);
+        }
+        checksum
+    }
+
+    fn scroll_old(evaluations: usize, velocity: [f32; 2], offset: [f32; 2]) -> u64 {
+        let uv = black_box([0.0, 0.0, 0.25, 0.5]);
+        let velocity = black_box(velocity);
+        let offset = black_box(offset);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let elapsed = black_box(((index & 8_191) as f32 - 4_096.0) * 0.031_25);
+            let uv = sprite_scrolled_uv_legacy(uv, velocity, offset, elapsed, None);
+            checksum = uv_checksum(uv, checksum);
+        }
+        checksum
+    }
+
+    fn scroll_new(evaluations: usize, velocity: [f32; 2], offset: [f32; 2]) -> u64 {
+        let uv = black_box([0.0, 0.0, 0.25, 0.5]);
+        let velocity = black_box(velocity);
+        let offset = black_box(offset);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let elapsed = black_box(((index & 8_191) as f32 - 4_096.0) * 0.031_25);
+            let uv = sprite_scrolled_uv(uv, velocity, offset, elapsed, None);
+            checksum = uv_checksum(uv, checksum);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn horizontal_scroll_old(evaluations: usize) -> u64 {
+        scroll_old(evaluations, [0.125, 0.0], [0.031_25, 0.0])
+    }
+
+    #[must_use]
+    pub fn horizontal_scroll_new(evaluations: usize) -> u64 {
+        scroll_new(evaluations, [0.125, 0.0], [0.031_25, 0.0])
+    }
+
+    #[must_use]
+    pub fn vertical_scroll_old(evaluations: usize) -> u64 {
+        scroll_old(evaluations, [0.0, -0.125], [0.0, 0.031_25])
+    }
+
+    #[must_use]
+    pub fn vertical_scroll_new(evaluations: usize) -> u64 {
+        scroll_new(evaluations, [0.0, -0.125], [0.0, 0.031_25])
+    }
 }
 
 #[must_use]
@@ -972,7 +1147,8 @@ mod tests {
         itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
         neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv,
         sprite_animation_plan, sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase,
-        sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
+        sprite_frame_index_from_phase_legacy, sprite_scrolled_uv, sprite_scrolled_uv_legacy,
+        sprite_sheet_frame, sprite_state_properties_animation,
     };
 
     #[test]
@@ -1340,6 +1516,73 @@ mod tests {
             1
         );
         assert_eq!(sprite_frame_index_from_phase(2, Some(&durations), -0.05), 1);
+    }
+
+    #[test]
+    fn normalized_phase_fast_path_matches_legacy_frame_selection() {
+        let durations = [0.125, 0.375, 0.25, 0.25];
+        for frame_count in [0, 1, 2, 4, 8, 17] {
+            for frame_durations in [None, Some(durations.as_slice())] {
+                for tick in -8_192..=8_192 {
+                    let phase = tick as f32 / 4_096.0;
+                    assert_eq!(
+                        sprite_frame_index_from_phase(frame_count, frame_durations, phase,),
+                        sprite_frame_index_from_phase_legacy(frame_count, frame_durations, phase,),
+                    );
+                }
+                for phase in [
+                    -f32::MAX,
+                    -0.0,
+                    0.0,
+                    1.0,
+                    f32::MAX,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    assert_eq!(
+                        sprite_frame_index_from_phase(frame_count, frame_durations, phase,),
+                        sprite_frame_index_from_phase_legacy(frame_count, frame_durations, phase,),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn axis_specialized_uv_scrolling_matches_legacy_math() {
+        let uvs = [
+            [0.0, 0.0, 0.25, 0.5],
+            [0.25, 0.5, 0.0, 0.0],
+            [-0.0, -0.0, 1.0, 1.0],
+            [f32::NEG_INFINITY, 0.0, f32::INFINITY, 1.0],
+        ];
+        let motions = [
+            ([0.0, 0.0], [0.0, 0.0]),
+            ([0.125, 0.0], [0.031_25, 0.0]),
+            ([0.0, -0.125], [0.0, 0.031_25]),
+            ([0.125, -0.125], [0.031_25, -0.031_25]),
+        ];
+        for uv in uvs {
+            for (velocity, offset) in motions {
+                for elapsed in [
+                    -128.0,
+                    -0.0,
+                    0.0,
+                    0.125,
+                    128.0,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NAN,
+                ] {
+                    for cycle in [None, Some(10.0), Some(0.0), Some(f32::NAN)] {
+                        let old = sprite_scrolled_uv_legacy(uv, velocity, offset, elapsed, cycle);
+                        let new = sprite_scrolled_uv(uv, velocity, offset, elapsed, cycle);
+                        assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
+                    }
+                }
+            }
+        }
     }
 
     #[test]

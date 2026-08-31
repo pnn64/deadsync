@@ -1,7 +1,7 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, uv_color_bench_support,
+    NotePartTextureTranslate, sprite_math_bench_support, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -480,6 +480,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_SPRITE_MATH_ONLY").is_some() {
+        run_uv_case(
+            "noteskin normalized animation phase",
+            sprite_math_bench_support::normalized_phase_old,
+            sprite_math_bench_support::normalized_phase_new,
+        );
+        run_uv_case(
+            "noteskin horizontal-only UV scrolling",
+            sprite_math_bench_support::horizontal_scroll_old,
+            sprite_math_bench_support::horizontal_scroll_new,
+        );
+        run_uv_case(
+            "noteskin vertical-only UV scrolling",
+            sprite_math_bench_support::vertical_scroll_old,
+            sprite_math_bench_support::vertical_scroll_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_UV_COLOR_ONLY").is_some() {
         run_uv_case(
             "noteskin denominator color lookup",

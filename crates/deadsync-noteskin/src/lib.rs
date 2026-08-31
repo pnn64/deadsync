@@ -70,6 +70,9 @@ pub use runtime::{
     itg_tap_note_layers,
 };
 pub use script::{ItgCommandEffect, model_draw_program};
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use sprite::sprite_math_bench_support;
 pub use sprite::{
     AnimationRate, NoteskinSlot, SpriteAnimationPlan, SpriteDefinition, SpriteFramePlan,
     SpriteSlotPlan, SpriteSourcePlan, SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan,
