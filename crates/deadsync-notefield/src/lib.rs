@@ -78,6 +78,9 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use transforms::transform_cache_bench_support;
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
@@ -211,11 +214,12 @@ pub(crate) use receptors::{
 };
 pub(crate) use transforms::{
     AccelYParams, LaneNoteTransformCache, NoteAlphaParams, NoteAppearanceCache, NoteXParams,
-    VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor,
-    compute_active_note_geometry, fill_gameplay_lane_effects, fill_static_note_x_offsets,
-    gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
-    note_appearance_cache, note_world_z_for_bumpy, note_x_offset, smoothstep01, tipsy_y_extra,
-    visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
+    TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached, beat_factor,
+    compute_active_note_geometry, compute_tornado_lane_caches, fill_gameplay_lane_effects,
+    fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
+    move_col_extra, note_appearance_cache, note_world_z_for_bumpy, note_x_offset,
+    note_x_offset_cached, smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom,
+    visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]

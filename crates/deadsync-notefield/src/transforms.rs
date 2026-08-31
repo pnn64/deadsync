@@ -8,6 +8,11 @@ pub struct TornadoBounds {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct TornadoLaneCache {
+    base_angle: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct NoteAlphaParams {
     pub hidden: f32,
     pub hidden_offset: f32,
@@ -43,6 +48,12 @@ pub(crate) struct LaneNoteTransformCache {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct NoteAppearanceCache {
     identity: bool,
+    center_line: f32,
+    hidden_end: f32,
+    hidden_start: f32,
+    sudden_end: f32,
+    sudden_start: f32,
+    blink_adjust: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -52,6 +63,11 @@ pub(crate) struct AccelYParams {
     pub wave: f32,
     pub expand: f32,
     pub boomerang: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AccelYCache {
+    expand_scale: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -163,6 +179,29 @@ pub(crate) fn accel_y_is_identity(accel: AccelYParams) -> bool {
         || accel.boomerang > f32::EPSILON)
 }
 
+pub(crate) fn accel_y_cache(elapsed: f32, accel: AccelYParams) -> AccelYCache {
+    let expand_scale = if accel.expand > f32::EPSILON {
+        let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
+        let multiplier = sm_scale(
+            (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
+            EXPAND_MULTIPLIER_SCALE_FROM_LOW,
+            EXPAND_MULTIPLIER_SCALE_FROM_HIGH,
+            EXPAND_MULTIPLIER_SCALE_TO_LOW,
+            EXPAND_MULTIPLIER_SCALE_TO_HIGH,
+        );
+        sm_scale(
+            accel.expand,
+            EXPAND_SPEED_SCALE_FROM_LOW,
+            EXPAND_SPEED_SCALE_FROM_HIGH,
+            EXPAND_SPEED_SCALE_TO_LOW,
+            multiplier,
+        )
+    } else {
+        1.0
+    };
+    AccelYCache { expand_scale }
+}
+
 pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
     let offset = if offset.is_finite() { offset } else { 0.0 };
     let period = if period.is_finite() { period } else { 0.0 };
@@ -170,6 +209,7 @@ pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
     100.0f32.mul_add(offset, y) / divisor
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn apply_accel_y_with_peak(
     raw_y: f32,
     elapsed: f32,
@@ -224,6 +264,7 @@ pub(crate) fn apply_accel_y_with_peak(
     (y, before_boomerang_peak)
 }
 
+#[cfg(test)]
 pub(crate) fn apply_accel_y(
     raw_y: f32,
     elapsed: f32,
@@ -232,6 +273,56 @@ pub(crate) fn apply_accel_y(
     accel: AccelYParams,
 ) -> f32 {
     apply_accel_y_with_peak(raw_y, elapsed, effect_height, screen_height, accel).0
+}
+
+pub(crate) fn apply_accel_y_with_peak_cached(
+    raw_y: f32,
+    effect_height: f32,
+    screen_height: f32,
+    accel: AccelYParams,
+    cache: AccelYCache,
+) -> (f32, bool) {
+    if raw_y < 0.0 {
+        return (raw_y, true);
+    }
+    let mut y = raw_y;
+    if accel.boost > f32::EPSILON {
+        let new_y = y * 1.5 / ((y + effect_height / 1.2) / effect_height);
+        let mut adjust = accel.boost * (new_y - y);
+        adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+        y += adjust;
+    }
+    if accel.brake > f32::EPSILON {
+        let scale = sm_scale(y, 0.0, effect_height, 0.0, 1.0);
+        let new_y = y * scale;
+        let mut adjust = accel.brake * (new_y - y);
+        adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
+        y += adjust;
+    }
+    if accel.wave > f32::EPSILON {
+        y = (accel.wave * WAVE_MOD_MAGNITUDE)
+            .mul_add((y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin(), y);
+    }
+    let mut before_boomerang_peak = true;
+    if accel.boomerang > f32::EPSILON {
+        let peak_at_y = screen_height * 0.75;
+        before_boomerang_peak = y < peak_at_y;
+        y = 1.5f32.mul_add(y, -y * y / screen_height);
+    }
+    if accel.expand > f32::EPSILON {
+        y *= cache.expand_scale;
+    }
+    (y, before_boomerang_peak)
+}
+
+pub(crate) fn apply_accel_y_cached(
+    raw_y: f32,
+    effect_height: f32,
+    screen_height: f32,
+    accel: AccelYParams,
+    cache: AccelYCache,
+) -> f32 {
+    apply_accel_y_with_peak_cached(raw_y, effect_height, screen_height, accel, cache).0
 }
 
 pub(crate) fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
@@ -572,9 +663,9 @@ mod common_note_transform_tests {
             },
         ];
         for params in cases {
-            let cache = note_appearance_cache(params);
+            let cache = note_appearance_cache(3.25, 0.2, params);
             for y in [-1.0, 0.0, 64.0, 160.0, 320.0, f32::NAN] {
-                let cached = appearance_note_alpha_glow_cached(y, 3.25, 0.2, params, cache);
+                let cached = appearance_note_alpha_glow_cached(y, params, cache);
                 assert_eq!(
                     cached.0.to_bits(),
                     appearance_note_actor_alpha(y, 3.25, 0.2, params).to_bits(),
@@ -583,6 +674,75 @@ mod common_note_transform_tests {
                     cached.1.to_bits(),
                     appearance_note_glow(y, 3.25, 0.2, params).to_bits(),
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn cached_expand_scale_matches_per_note_reference_math() {
+        let accel = AccelYParams {
+            boost: 0.35,
+            brake: 0.2,
+            wave: 0.4,
+            expand: 0.75,
+            boomerang: 0.3,
+        };
+        for elapsed in [0.0, 0.125, 3.25, 81.75] {
+            let cache = accel_y_cache(elapsed, accel);
+            for raw_y in [-64.0, 0.0, 32.0, 160.0, 384.0, 640.0] {
+                let reference = apply_accel_y_with_peak(raw_y, elapsed, 480.0, 720.0, accel);
+                let cached = apply_accel_y_with_peak_cached(raw_y, 480.0, 720.0, accel, cache);
+                assert_eq!(cached.0.to_bits(), reference.0.to_bits());
+                assert_eq!(cached.1, reference.1);
+            }
+        }
+    }
+
+    #[test]
+    fn cached_tornado_angles_match_per_note_reference_geometry() {
+        let col_offsets = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        let mut bounds = [TornadoBounds::default(); 8];
+        compute_tornado_bounds(&col_offsets, &mut bounds);
+        let mut caches = [TornadoLaneCache::default(); 8];
+        compute_tornado_lane_caches(&col_offsets, &bounds, 0.8, &mut caches);
+        let invert = [17.0, 11.0, 5.0, 2.0, -2.0, -5.0, -11.0, -17.0];
+        let move_x = [0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7];
+        let params = NoteXParams {
+            screen_height: 720.0,
+            flip: 0.25,
+            invert: 0.4,
+            tornado: 0.8,
+            drunk: 0.2,
+            beat: 0.3,
+        };
+        for local_col in 0..col_offsets.len() {
+            for y in [-80.0, 0.0, 96.0, 320.0, 768.0] {
+                let reference = note_x_offset(
+                    local_col,
+                    y,
+                    -0.35,
+                    4.25,
+                    &col_offsets,
+                    &invert,
+                    &bounds,
+                    &move_x,
+                    params,
+                    0.2,
+                );
+                let cached = note_x_offset_cached(
+                    local_col,
+                    y,
+                    -0.35,
+                    4.25,
+                    &col_offsets,
+                    &invert,
+                    &bounds,
+                    &caches,
+                    &move_x,
+                    params,
+                    0.2,
+                );
+                assert_eq!(cached.to_bits(), reference.to_bits());
             }
         }
     }
@@ -770,6 +930,27 @@ pub(crate) fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBoun
     }
 }
 
+pub(crate) fn compute_tornado_lane_caches(
+    col_offsets: &[f32],
+    bounds: &[TornadoBounds],
+    tornado: f32,
+    out: &mut [TornadoLaneCache],
+) {
+    if !signed_effect_active(tornado) {
+        return;
+    }
+    let columns = col_offsets.len().min(bounds.len()).min(out.len());
+    for local_col in 0..columns {
+        let base_x = col_offsets[local_col];
+        let lane_bounds = bounds[local_col];
+        let position_between =
+            sm_scale(base_x, lane_bounds.min_x, lane_bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
+        out[local_col] = TornadoLaneCache {
+            base_angle: position_between.acos(),
+        };
+    }
+}
+
 #[inline(always)]
 pub(crate) fn compute_active_note_geometry(
     visual: &VisualEffects,
@@ -831,6 +1012,20 @@ pub(crate) fn tornado_x_extra(
     }
     let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
     let radians = position_between.acos() + y * TORNADO_X_OFFSET_FREQUENCY / screen_height;
+    let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
+    (adjusted - base_x) * tornado
+}
+
+#[inline(always)]
+fn tornado_x_extra_cached(
+    y: f32,
+    base_x: f32,
+    bounds: TornadoBounds,
+    screen_height: f32,
+    tornado: f32,
+    cache: TornadoLaneCache,
+) -> f32 {
+    let radians = cache.base_angle + y * TORNADO_X_OFFSET_FREQUENCY / screen_height;
     let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
     (adjusted - base_x) * tornado
 }
@@ -910,6 +1105,67 @@ pub(crate) fn note_x_offset(
     base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn note_x_offset_cached(
+    local_col: usize,
+    y: f32,
+    beat_factor_value: f32,
+    elapsed: f32,
+    col_offsets: &[f32],
+    invert: &[f32],
+    tornado: &[TornadoBounds],
+    tornado_cache: &[TornadoLaneCache],
+    move_x: &[f32],
+    params: NoteXParams,
+    tiny_zoom: f32,
+) -> f32 {
+    let base_x = col_offsets.get(local_col).copied().unwrap_or(0.0);
+    let mut extra = 0.0;
+    if signed_effect_active(params.tornado) {
+        let bounds = tornado.get(local_col).copied().unwrap_or_default();
+        extra += tornado_cache.get(local_col).map_or_else(
+            || tornado_x_extra(y, base_x, bounds, params.screen_height, params.tornado),
+            |&cache| {
+                tornado_x_extra_cached(
+                    y,
+                    base_x,
+                    bounds,
+                    params.screen_height,
+                    params.tornado,
+                    cache,
+                )
+            },
+        );
+    }
+    if signed_effect_active(params.drunk) {
+        extra += drunk_x_extra(local_col, y, elapsed, params.screen_height, params.drunk);
+    }
+    if signed_effect_active(params.flip) {
+        let mirrored = col_offsets
+            .get(
+                col_offsets
+                    .len()
+                    .saturating_sub(1)
+                    .saturating_sub(local_col),
+            )
+            .copied()
+            .unwrap_or(base_x);
+        extra = (mirrored - base_x).mul_add(params.flip, extra);
+    }
+    if signed_effect_active(params.invert) {
+        extra = invert
+            .get(local_col)
+            .copied()
+            .unwrap_or(0.0)
+            .mul_add(params.invert, extra);
+    }
+    if signed_effect_active(params.beat) {
+        extra += beat_x_extra(y, beat_factor_value, params.beat);
+    }
+    let base = base_x + extra;
+    base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
+}
+
 pub(crate) fn fill_static_note_x_offsets(
     num_cols: usize,
     col_offsets: &[f32],
@@ -970,24 +1226,63 @@ pub(crate) fn appearance_note_alpha_is_identity(params: NoteAlphaParams) -> bool
 }
 
 #[inline(always)]
-pub(crate) fn note_appearance_cache(params: NoteAlphaParams) -> NoteAppearanceCache {
+pub(crate) fn note_appearance_cache(
+    elapsed: f32,
+    mini: f32,
+    params: NoteAlphaParams,
+) -> NoteAppearanceCache {
+    if appearance_note_alpha_is_identity(params) {
+        return NoteAppearanceCache {
+            identity: true,
+            center_line: 0.0,
+            hidden_end: 0.0,
+            hidden_start: 0.0,
+            sudden_end: 0.0,
+            sudden_start: 0.0,
+            blink_adjust: 0.0,
+        };
+    }
+    let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
+    let center_line = CENTER_LINE_Y / zoom;
+    let hidden_sudden = params.hidden * params.sudden;
+    let hidden_end = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25), center_line)
+        + center_line * params.hidden_offset;
+    let hidden_start = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25), center_line)
+        + center_line * params.hidden_offset;
+    let sudden_end = FADE_DIST_Y.mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25), center_line)
+        + center_line * params.sudden_offset;
+    let sudden_start = FADE_DIST_Y
+        .mul_add(sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25), center_line)
+        + center_line * params.sudden_offset;
+    let blink_adjust = if params.blink > f32::EPSILON {
+        let blink = quantize_step((elapsed * 10.0).sin(), BLINK_MOD_FREQUENCY);
+        sm_scale(blink, 0.0, 1.0, -1.0, 0.0)
+    } else {
+        0.0
+    };
     NoteAppearanceCache {
-        identity: appearance_note_alpha_is_identity(params),
+        identity: false,
+        center_line,
+        hidden_end,
+        hidden_start,
+        sudden_end,
+        sudden_start,
+        blink_adjust,
     }
 }
 
 #[inline(always)]
 pub(crate) fn appearance_note_alpha_glow_cached(
     y: f32,
-    elapsed: f32,
-    mini: f32,
     params: NoteAlphaParams,
     cache: NoteAppearanceCache,
 ) -> (f32, f32) {
     if cache.identity || y < 0.0 {
         return (1.0, 0.0);
     }
-    let percent_visible = appearance_note_alpha_full(y, elapsed, mini, params);
+    let percent_visible = appearance_note_alpha_from_cache(y, params, cache);
     (
         appearance_note_actor_alpha_from_alpha(percent_visible),
         appearance_note_glow_from_alpha(percent_visible),
@@ -995,6 +1290,37 @@ pub(crate) fn appearance_note_alpha_glow_cached(
 }
 
 #[inline(always)]
+fn appearance_note_alpha_from_cache(
+    y: f32,
+    params: NoteAlphaParams,
+    cache: NoteAppearanceCache,
+) -> f32 {
+    let mut visible_adjust = 0.0;
+    if params.hidden > f32::EPSILON {
+        visible_adjust = params.hidden.mul_add(
+            sm_scale(y, cache.hidden_start, cache.hidden_end, 0.0, -1.0).clamp(-1.0, 0.0),
+            visible_adjust,
+        );
+    }
+    if params.sudden > f32::EPSILON {
+        visible_adjust = params.sudden.mul_add(
+            sm_scale(y, cache.sudden_start, cache.sudden_end, -1.0, 0.0).clamp(-1.0, 0.0),
+            visible_adjust,
+        );
+    }
+    if params.stealth > f32::EPSILON {
+        visible_adjust -= params.stealth;
+    }
+    visible_adjust += cache.blink_adjust;
+    if params.random_vanish > f32::EPSILON {
+        let dist = (y - cache.center_line).abs();
+        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * params.random_vanish;
+    }
+    (1.0 + visible_adjust).clamp(0.0, 1.0)
+}
+
+#[inline(always)]
+#[cfg(any(test, feature = "bench-support"))]
 fn appearance_note_alpha_full(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
     let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
     let center_line = CENTER_LINE_Y / zoom;
@@ -1090,4 +1416,176 @@ pub(crate) fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
         .filter(|v| v.is_finite())
         .unwrap_or(0.0)
         * ARROW_EFFECT_PIXEL_SIZE
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod transform_cache_bench_support {
+    use std::hint::black_box;
+
+    use super::*;
+
+    #[must_use]
+    pub fn expand_old(evaluations: usize) -> u64 {
+        let accel = AccelYParams {
+            boost: 0.35,
+            brake: 0.2,
+            wave: 0.4,
+            expand: 0.75,
+            boomerang: 0.3,
+        };
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let raw_y = black_box((index % 1024) as f32 - 96.0);
+            let (y, before_peak) =
+                apply_accel_y_with_peak(raw_y, black_box(37.25), 480.0, 720.0, accel);
+            checksum = checksum
+                .wrapping_add(u64::from(y.to_bits()))
+                .rotate_left(u32::from(before_peak));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn expand_new(evaluations: usize) -> u64 {
+        let accel = AccelYParams {
+            boost: 0.35,
+            brake: 0.2,
+            wave: 0.4,
+            expand: 0.75,
+            boomerang: 0.3,
+        };
+        let cache = accel_y_cache(black_box(37.25), accel);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let raw_y = black_box((index % 1024) as f32 - 96.0);
+            let (y, before_peak) =
+                apply_accel_y_with_peak_cached(raw_y, 480.0, 720.0, accel, cache);
+            checksum = checksum
+                .wrapping_add(u64::from(y.to_bits()))
+                .rotate_left(u32::from(before_peak));
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn appearance_old(evaluations: usize) -> u64 {
+        let params = NoteAlphaParams {
+            hidden: 0.7,
+            hidden_offset: 0.2,
+            sudden: 0.4,
+            sudden_offset: -0.1,
+            stealth: 0.15,
+            blink: 0.1,
+            random_vanish: 0.3,
+        };
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 640) as f32 - 32.0);
+            let alpha = appearance_note_alpha_full(y, black_box(3.25), black_box(0.2), params);
+            let actor = appearance_note_actor_alpha_from_alpha(alpha);
+            let glow = appearance_note_glow_from_alpha(alpha);
+            checksum = checksum
+                .wrapping_add(u64::from(actor.to_bits()))
+                .rotate_left(11)
+                ^ u64::from(glow.to_bits());
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn appearance_new(evaluations: usize) -> u64 {
+        let params = NoteAlphaParams {
+            hidden: 0.7,
+            hidden_offset: 0.2,
+            sudden: 0.4,
+            sudden_offset: -0.1,
+            stealth: 0.15,
+            blink: 0.1,
+            random_vanish: 0.3,
+        };
+        let cache = note_appearance_cache(black_box(3.25), black_box(0.2), params);
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let y = black_box((index % 640) as f32 - 32.0);
+            let alpha = appearance_note_alpha_from_cache(y, params, cache);
+            let actor = appearance_note_actor_alpha_from_alpha(alpha);
+            let glow = appearance_note_glow_from_alpha(alpha);
+            checksum = checksum
+                .wrapping_add(u64::from(actor.to_bits()))
+                .rotate_left(11)
+                ^ u64::from(glow.to_bits());
+        }
+        checksum
+    }
+
+    fn tornado_inputs() -> ([f32; 8], [TornadoBounds; 8]) {
+        let col_offsets = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+        let mut bounds = [TornadoBounds::default(); 8];
+        compute_tornado_bounds(&col_offsets, &mut bounds);
+        (col_offsets, bounds)
+    }
+
+    #[must_use]
+    pub fn tornado_old(evaluations: usize) -> u64 {
+        let (col_offsets, bounds) = tornado_inputs();
+        let zero = [0.0; 8];
+        let params = NoteXParams {
+            screen_height: 720.0,
+            tornado: 0.8,
+            ..NoteXParams::default()
+        };
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let local_col = index & 7;
+            let y = black_box((index % 896) as f32 - 96.0);
+            let x = note_x_offset(
+                local_col,
+                y,
+                0.0,
+                0.0,
+                &col_offsets,
+                &zero,
+                &bounds,
+                &zero,
+                params,
+                0.0,
+            );
+            checksum = checksum.wrapping_add(u64::from(x.to_bits())).rotate_left(7);
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn tornado_new(evaluations: usize) -> u64 {
+        let (col_offsets, bounds) = tornado_inputs();
+        let zero = [0.0; 8];
+        let mut caches = [TornadoLaneCache::default(); 8];
+        compute_tornado_lane_caches(&col_offsets, &bounds, 0.8, &mut caches);
+        let params = NoteXParams {
+            screen_height: 720.0,
+            tornado: 0.8,
+            ..NoteXParams::default()
+        };
+        let mut checksum = 0_u64;
+        for index in 0..evaluations {
+            let local_col = index & 7;
+            let y = black_box((index % 896) as f32 - 96.0);
+            let x = note_x_offset_cached(
+                local_col,
+                y,
+                0.0,
+                0.0,
+                &col_offsets,
+                &zero,
+                &bounds,
+                &caches,
+                &zero,
+                params,
+                0.0,
+            );
+            checksum = checksum.wrapping_add(u64::from(x.to_bits())).rotate_left(7);
+        }
+        checksum
+    }
 }

@@ -10,10 +10,10 @@ use crate::{
     hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
     lane_hold_window_bounds_by_note_row_from_cursor, lane_note_transform_cache,
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, mine_part,
-    note_appearance_cache, note_world_z_for_bumpy, note_x_offset as canonical_note_x_offset,
-    offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
-    visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
+    note_appearance_cache, note_world_z_for_bumpy,
+    note_x_offset_cached as canonical_note_x_offset_cached, offset_center, scale_sprite_to_arrow,
+    share_actor_range, song_lua_note_model_draw, tap_part_for_note_type, tap_replacement_head,
+    translated_uv_rect, visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
     visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
@@ -208,7 +208,7 @@ fn compose_field_contents<S, F>(
     let column_receptor_ys = field.column_receptor_ys;
     let mini = prepared.mini;
     let alpha_params = note_alpha_params(appearance);
-    let appearance_cache = note_appearance_cache(alpha_params);
+    let appearance_cache = note_appearance_cache(elapsed_screen, mini, alpha_params);
     let ns = note_inputs.base;
     let target_arrow_px = note_inputs.target_arrow_px;
     let column_x_offsets = prepared.column_x_offsets;
@@ -286,14 +286,13 @@ fn compose_field_contents<S, F>(
                     &col_offsets[..num_cols],
                     &invert_distances[..num_cols],
                     &tornado_bounds[..num_cols],
+                    &note_inputs.tornado_lane_caches[..num_cols],
                 )
             }
     };
     let alpha_glow_for_adjusted_travel = |local_col: usize, adjusted: f32| -> (f32, f32) {
         appearance_note_alpha_glow_cached(
             adjusted + lane_offsets[local_col],
-            elapsed_screen,
-            mini,
             alpha_params,
             appearance_cache,
         )
@@ -584,7 +583,6 @@ fn compose_field_contents<S, F>(
                 target_arrow_px: hold_target_arrow_px,
                 diffuse: hold_diffuse,
                 elapsed_s: elapsed_screen,
-                mini,
                 lane_offset,
                 appearance: alpha_params,
                 appearance_cache,
@@ -875,7 +873,6 @@ fn compose_visible_notes<S, F>(
     let current_beat = prepared.current_beat;
     let col_start = prepared.frame_plan.col_start;
     let num_cols = prepared.frame_plan.num_cols;
-    let mini = prepared.mini;
     let travel = &notes.travel;
     let ns = notes.base;
     let mine_ns = notes.mine;
@@ -939,8 +936,6 @@ fn compose_visible_notes<S, F>(
                 }
                 let (note_alpha, glow_alpha) = appearance_note_alpha_glow_cached(
                     adjusted_travel + lane_offset,
-                    elapsed,
-                    mini,
                     alpha_params,
                     appearance_cache,
                 );
@@ -962,6 +957,7 @@ fn compose_visible_notes<S, F>(
                             &notes.col_offsets[..num_cols],
                             &notes.invert_distances[..num_cols],
                             &notes.tornado_bounds[..num_cols],
+                            &notes.tornado_lane_caches[..num_cols],
                         )
                     };
                 let y_pos = direction.mul_add(adjusted_travel, receptor_y) + lane_offset;
@@ -1480,8 +1476,9 @@ fn note_x_offset(
     col_offsets: &[f32],
     invert_distances: &[f32],
     tornado_bounds: &[TornadoBounds],
+    tornado_lane_caches: &[crate::TornadoLaneCache],
 ) -> f32 {
-    canonical_note_x_offset(
+    canonical_note_x_offset_cached(
         local_col,
         y,
         beat_factor,
@@ -1489,6 +1486,7 @@ fn note_x_offset(
         col_offsets,
         invert_distances,
         tornado_bounds,
+        tornado_lane_caches,
         &visual.move_x_cols,
         NoteXParams {
             screen_height,

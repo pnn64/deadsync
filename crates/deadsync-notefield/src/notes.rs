@@ -1,8 +1,8 @@
 use crate::holds::{song_time_ns_delta_seconds, translated_uv_rect};
 use crate::measure_lines::{beat_scroll_travel, edit_beat_scroll_travel};
 use crate::transforms::{
-    AccelYParams, accel_y_is_identity, apply_accel_y, apply_accel_y_with_peak, move_col_extra,
-    tipsy_y_extra,
+    AccelYCache, AccelYParams, accel_y_cache, accel_y_is_identity, apply_accel_y_cached,
+    apply_accel_y_with_peak_cached, move_col_extra, tipsy_y_extra,
 };
 use crate::{
     ModelMeshCache, itg_actor_glow_alpha, noteskin_model_flat_draw_cached, song_lua_note_model_draw,
@@ -549,6 +549,7 @@ pub struct ScrollTravel<'a> {
     displayed_speed_percent: f32,
     post_accel_scale: f32,
     accel_is_identity: bool,
+    accel_cache: AccelYCache,
 }
 
 pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_> {
@@ -609,6 +610,7 @@ pub(crate) fn scroll_travel(request: ScrollTravelRequest<'_>) -> ScrollTravel<'_
         displayed_speed_percent,
         post_accel_scale,
         accel_is_identity: accel_y_is_identity(request.accel),
+        accel_cache: accel_y_cache(request.elapsed_screen_s, request.accel),
     }
 }
 
@@ -724,12 +726,12 @@ impl ScrollTravel<'_> {
         if self.accel_is_identity {
             return (raw_travel * self.post_accel_scale, true);
         }
-        let (travel, before_peak) = apply_accel_y_with_peak(
+        let (travel, before_peak) = apply_accel_y_with_peak_cached(
             raw_travel,
-            self.request.elapsed_screen_s,
             self.request.effect_height,
             self.request.screen_height,
             self.request.accel,
+            self.accel_cache,
         );
         (travel * self.post_accel_scale, before_peak)
     }
@@ -740,12 +742,12 @@ impl ScrollTravel<'_> {
         if self.accel_is_identity {
             return raw_travel * self.post_accel_scale;
         }
-        apply_accel_y(
+        apply_accel_y_cached(
             raw_travel,
-            self.request.elapsed_screen_s,
             self.request.effect_height,
             self.request.screen_height,
             self.request.accel,
+            self.accel_cache,
         ) * self.post_accel_scale
     }
 

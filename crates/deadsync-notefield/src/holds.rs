@@ -104,7 +104,6 @@ pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub target_arrow_px: f32,
     pub diffuse: [f32; 4],
     pub elapsed_s: f32,
-    pub mini: f32,
     pub lane_offset: f32,
     pub appearance: NoteAlphaParams,
     pub appearance_cache: NoteAppearanceCache,
@@ -649,8 +648,6 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
 fn hold_alpha_glow<S>(request: &HoldBodyCapRequest<'_, S>, sample: HoldPathSample) -> (f32, f32) {
     let (alpha, glow) = appearance_note_alpha_glow_cached(
         sample.adjusted_travel + request.lane_offset,
-        request.elapsed_s,
-        request.mini,
         request.appearance,
         request.appearance_cache,
     );
@@ -2301,10 +2298,9 @@ mod tests {
             target_arrow_px: 64.0,
             diffuse: [0.5, 0.5, 0.5, 1.0],
             elapsed_s: 9.0,
-            mini: 0.0,
             lane_offset: 0.0,
             appearance,
-            appearance_cache: crate::transforms::note_appearance_cache(appearance),
+            appearance_cache: crate::transforms::note_appearance_cache(9.0, 0.0, appearance),
             use_legacy_sprites: true,
             rotation_y_deg: 0.0,
             depth_test: false,

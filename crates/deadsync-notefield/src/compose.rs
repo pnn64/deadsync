@@ -2,9 +2,10 @@ use crate::{
     ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
     HudLayoutParams, LayoutMiniIndicatorPosition, NotefieldFrameFeatures, NotefieldFramePlan,
     NotefieldFramePlanRequest, ProxyCaptureRequests, ScrollTravel, ScrollTravelRequest,
-    TornadoBounds, ViewOverride, ZmodLayoutParams, beat_factor, compute_active_note_geometry,
-    effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
-    notefield_frame_plan, scroll_travel, song_time_ns_to_seconds,
+    TornadoBounds, TornadoLaneCache, ViewOverride, ZmodLayoutParams, beat_factor,
+    compute_active_note_geometry, compute_tornado_lane_caches, effective_mini_value,
+    field_effect_height, field_layout, fill_lane_col_offsets, notefield_frame_plan, scroll_travel,
+    song_time_ns_to_seconds,
 };
 use deadsync_core::{input::MAX_COLS, song_time::song_time_ns_invalid};
 use deadsync_gameplay::{
@@ -238,6 +239,7 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub col_offsets: [f32; MAX_COLS],
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
+    pub(crate) tornado_lane_caches: [TornadoLaneCache; MAX_COLS],
     pub measure_column_xs: [f32; MAX_COLS],
     pub note_display_time_scale: f32,
     pub travel: ScrollTravel<'a>,
@@ -395,6 +397,13 @@ fn prepare_notes<'a, S>(
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
+    let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
+    compute_tornado_lane_caches(
+        &col_offsets[..num_cols],
+        &tornado_bounds[..num_cols],
+        request.visual.visual.tornado,
+        &mut tornado_lane_caches[..num_cols],
+    );
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -436,6 +445,7 @@ fn prepare_notes<'a, S>(
         col_offsets,
         invert_distances,
         tornado_bounds,
+        tornado_lane_caches,
         measure_column_xs,
         note_display_time_scale: request.geometry.num_players as f32 + 1.0,
         travel,
