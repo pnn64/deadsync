@@ -1,13 +1,57 @@
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::sync::{LazyLock, Mutex};
 
+use arrayvec::ArrayVec;
 use deadsync_input::PAD_ID_COUNT_CAP;
 
 use crate::backend::{PAD_ORDER_BACKENDS, PadOrderBackend};
 
 /// Maximum UUIDs persisted per backend, bounding saved order growth.
 pub const PAD_ORDER_CAP: usize = PAD_ID_COUNT_CAP - 1;
+const PAD_ORDER_BACKEND_COUNT: usize = PAD_ORDER_BACKENDS.len();
+
+type PadOrderList = ArrayVec<[u8; 16], PAD_ORDER_CAP>;
+
+struct PadDeviceOrder {
+    lists: [PadOrderList; PAD_ORDER_BACKEND_COUNT],
+}
+
+impl Default for PadDeviceOrder {
+    fn default() -> Self {
+        Self {
+            lists: std::array::from_fn(|_| PadOrderList::new()),
+        }
+    }
+}
+
+impl PadDeviceOrder {
+    #[inline(always)]
+    fn list(&self, backend: PadOrderBackend) -> &PadOrderList {
+        &self.lists[pad_order_backend_index(backend)]
+    }
+
+    #[inline(always)]
+    fn list_mut(&mut self, backend: PadOrderBackend) -> &mut PadOrderList {
+        &mut self.lists[pad_order_backend_index(backend)]
+    }
+
+    fn clear(&mut self) {
+        for list in &mut self.lists {
+            list.clear();
+        }
+    }
+}
+
+#[inline(always)]
+const fn pad_order_backend_index(backend: PadOrderBackend) -> usize {
+    match backend {
+        PadOrderBackend::RawInput => 0,
+        PadOrderBackend::Wgi => 1,
+        PadOrderBackend::IoHid => 2,
+        PadOrderBackend::Hidraw => 3,
+        PadOrderBackend::LinuxEvdev => 4,
+        PadOrderBackend::FreeBsdEvdev => 5,
+    }
+}
 
 /// Stable pad index assignment result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,9 +61,10 @@ pub struct PadOrderAssignment {
 }
 
 /// Append-only, per-backend order of pad device UUIDs. The index of a UUID in
-/// its backend vec is the stable `PadId` that pad receives.
-static PAD_DEVICE_ORDER: LazyLock<Mutex<BTreeMap<PadOrderBackend, Vec<[u8; 16]>>>> =
-    LazyLock::new(|| Mutex::new(BTreeMap::new()));
+/// its backend list is the stable `PadId` that pad receives. Storage is bounded
+/// and inline so discovering a pad never enters the allocator.
+static PAD_DEVICE_ORDER: LazyLock<Mutex<PadDeviceOrder>> =
+    LazyLock::new(|| Mutex::new(PadDeviceOrder::default()));
 
 /// Stable `PadId` index for `uuid` on the given backend.
 ///
@@ -32,7 +77,7 @@ static PAD_DEVICE_ORDER: LazyLock<Mutex<BTreeMap<PadOrderBackend, Vec<[u8; 16]>>
 /// Panics if an internal synchronization lock is poisoned.
 pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadOrderAssignment {
     let mut order = PAD_DEVICE_ORDER.lock().unwrap();
-    let list = order.entry(backend).or_default();
+    let list = order.list_mut(backend);
     if let Some(i) = list.iter().position(|u| *u == uuid) {
         return PadOrderAssignment {
             index: i as u32,
@@ -57,13 +102,9 @@ pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> PadOrderA
 ///
 /// Panics if an internal synchronization lock is poisoned.
 pub fn load_pad_order_serialized(backend: PadOrderBackend, raw: &str) {
-    let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex).collect());
+    let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex));
     let mut order = PAD_DEVICE_ORDER.lock().unwrap();
-    if parsed.is_empty() {
-        order.remove(&backend);
-    } else {
-        order.insert(backend, parsed);
-    }
+    *order.list_mut(backend) = parsed;
 }
 
 pub const DEFAULT_PAD_ORDER_INI_LINES: [(&str, &str); 6] = [
@@ -138,12 +179,7 @@ pub fn reset_pad_order() {
 ///
 /// Panics if an internal synchronization lock is poisoned.
 pub fn serialized_pad_order(backend: PadOrderBackend) -> String {
-    PAD_DEVICE_ORDER
-        .lock()
-        .unwrap()
-        .get(&backend)
-        .map(|list| list.iter().map(uuid_to_hex).collect::<Vec<_>>().join(","))
-        .unwrap_or_default()
+    serialize_uuid_list(PAD_DEVICE_ORDER.lock().unwrap().list(backend))
 }
 
 /// Input backends that persist stable pad order.
@@ -153,8 +189,8 @@ pub const fn all_pad_order_backends() -> [PadOrderBackend; 6] {
 }
 
 /// Drop duplicates, keeping first occurrence, and cap the list length.
-fn sanitize(list: Vec<[u8; 16]>) -> Vec<[u8; 16]> {
-    let mut out: Vec<[u8; 16]> = Vec::with_capacity(list.len().min(PAD_ORDER_CAP));
+fn sanitize(list: impl IntoIterator<Item = [u8; 16]>) -> PadOrderList {
+    let mut out = PadOrderList::new();
     for u in list {
         if out.len() >= PAD_ORDER_CAP {
             break;
@@ -166,12 +202,38 @@ fn sanitize(list: Vec<[u8; 16]>) -> Vec<[u8; 16]> {
     out
 }
 
+#[cfg(test)]
 fn uuid_to_hex(uuid: &[u8; 16]) -> String {
     let mut s = String::with_capacity(32);
-    for b in uuid {
-        let _ = write!(s, "{b:02x}");
-    }
+    append_uuid_hex(&mut s, uuid);
     s
+}
+
+fn serialize_uuid_list(list: &[[u8; 16]]) -> String {
+    let Some(capacity) = list
+        .len()
+        .checked_mul(33)
+        .and_then(|len| len.checked_sub(1))
+    else {
+        return String::new();
+    };
+    let mut out = String::with_capacity(capacity);
+    for (index, uuid) in list.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        append_uuid_hex(&mut out, uuid);
+    }
+    out
+}
+
+#[inline]
+fn append_uuid_hex(out: &mut String, uuid: &[u8; 16]) {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for &byte in uuid {
+        out.push(char::from(HEX[usize::from(byte >> 4)]));
+        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
 }
 
 fn uuid_from_hex(s: &str) -> Option<[u8; 16]> {
@@ -184,6 +246,131 @@ fn uuid_from_hex(s: &str) -> Option<[u8; 16]> {
         *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
     }
     Some(out)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod bench_support {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    fn fixture_uuid(index: usize) -> [u8; 16] {
+        let mut uuid = [0_u8; 16];
+        let seed = (index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        uuid[..8].copy_from_slice(&seed.to_le_bytes());
+        uuid[8..].copy_from_slice(&seed.rotate_left(29).to_be_bytes());
+        uuid
+    }
+
+    fn checksum_uuids(list: &[[u8; 16]]) -> u64 {
+        list.iter().flatten().fold(0_u64, |checksum, &byte| {
+            checksum.rotate_left(5) ^ u64::from(byte)
+        })
+    }
+
+    fn checksum_text(text: &str) -> u64 {
+        text.bytes().fold(0_u64, |checksum, byte| {
+            checksum.wrapping_mul(131).wrapping_add(u64::from(byte))
+        })
+    }
+
+    fn assignment_checksum(index: usize, changed: bool, list: &[[u8; 16]]) -> u64 {
+        checksum_uuids(list) ^ (index as u64).rotate_left(17) ^ (u64::from(changed) << 63)
+    }
+
+    #[must_use]
+    pub fn assignment_old(seed: usize) -> u64 {
+        let mut order: BTreeMap<PadOrderBackend, Vec<[u8; 16]>> = BTreeMap::new();
+        let list = order.entry(PadOrderBackend::RawInput).or_default();
+        for offset in 0..PAD_ORDER_CAP {
+            let uuid = fixture_uuid(seed.wrapping_add(offset));
+            if !list.contains(&uuid) {
+                list.push(uuid);
+            }
+        }
+        let known = fixture_uuid(seed.wrapping_add(PAD_ORDER_CAP / 2));
+        let index = list.iter().position(|uuid| *uuid == known).unwrap();
+        assignment_checksum(index, false, list)
+    }
+
+    #[must_use]
+    pub fn assignment_new(seed: usize) -> u64 {
+        let mut order = PadDeviceOrder::default();
+        let list = order.list_mut(PadOrderBackend::RawInput);
+        for offset in 0..PAD_ORDER_CAP {
+            let uuid = fixture_uuid(seed.wrapping_add(offset));
+            if !list.contains(&uuid) {
+                list.push(uuid);
+            }
+        }
+        let known = fixture_uuid(seed.wrapping_add(PAD_ORDER_CAP / 2));
+        let index = list.iter().position(|uuid| *uuid == known).unwrap();
+        assignment_checksum(index, false, list)
+    }
+
+    fn sanitize_old(list: Vec<[u8; 16]>) -> Vec<[u8; 16]> {
+        let mut out = Vec::with_capacity(list.len().min(PAD_ORDER_CAP));
+        for uuid in list {
+            if out.len() >= PAD_ORDER_CAP {
+                break;
+            }
+            if !out.contains(&uuid) {
+                out.push(uuid);
+            }
+        }
+        out
+    }
+
+    #[must_use]
+    pub fn parse_old(raw: &str) -> u64 {
+        let parsed = sanitize_old(raw.split(',').filter_map(uuid_from_hex).collect());
+        checksum_uuids(&parsed)
+    }
+
+    #[must_use]
+    pub fn parse_new(raw: &str) -> u64 {
+        let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex));
+        checksum_uuids(&parsed)
+    }
+
+    fn uuid_to_hex_old(uuid: &[u8; 16]) -> String {
+        use std::fmt::Write as _;
+
+        let mut out = String::with_capacity(32);
+        for byte in uuid {
+            let _ = write!(out, "{byte:02x}");
+        }
+        out
+    }
+
+    #[must_use]
+    pub fn serialize_old(seed: usize) -> u64 {
+        let list: [[u8; 16]; PAD_ORDER_CAP] =
+            std::array::from_fn(|offset| fixture_uuid(seed.wrapping_add(offset)));
+        let text = list
+            .iter()
+            .map(uuid_to_hex_old)
+            .collect::<Vec<_>>()
+            .join(",");
+        checksum_text(&text)
+    }
+
+    #[must_use]
+    pub fn serialize_new(seed: usize) -> u64 {
+        let list: [[u8; 16]; PAD_ORDER_CAP] =
+            std::array::from_fn(|offset| fixture_uuid(seed.wrapping_add(offset)));
+        checksum_text(&serialize_uuid_list(&list))
+    }
+
+    #[must_use]
+    pub fn serialized_fixture() -> String {
+        let list: PadOrderList = (0..PAD_ORDER_CAP).map(fixture_uuid).collect();
+        let mut text = serialize_uuid_list(&list);
+        text.push_str(",invalid,");
+        append_uuid_hex(&mut text, &fixture_uuid(0));
+        text
+    }
 }
 
 #[cfg(test)]
@@ -213,7 +400,7 @@ mod tests {
     fn sanitize_dedups_and_caps() {
         let a = [1u8; 16];
         let b = [2u8; 16];
-        assert_eq!(sanitize(vec![a, b, a, b]), vec![a, b]);
+        assert_eq!(sanitize([a, b, a, b]).as_slice(), &[a, b]);
 
         let many: Vec<[u8; 16]> = (0..(PAD_ORDER_CAP as u16 + 10))
             .map(|i| {
@@ -223,6 +410,43 @@ mod tests {
             })
             .collect();
         assert_eq!(sanitize(many).len(), PAD_ORDER_CAP);
+    }
+
+    #[test]
+    fn streaming_sanitize_keeps_first_valid_occurrences() {
+        let first = [0x11_u8; 16];
+        let second = [0xaa_u8; 16];
+        let raw = format!(
+            "bad, {}, {}, {}, short",
+            uuid_to_hex(&first).to_uppercase(),
+            uuid_to_hex(&second),
+            uuid_to_hex(&first)
+        );
+
+        let parsed = sanitize(raw.split(',').filter_map(uuid_from_hex));
+
+        assert_eq!(parsed.as_slice(), &[first, second]);
+    }
+
+    #[test]
+    fn direct_serialization_is_canonical_and_delimited_once() {
+        let first = [0x01_u8; 16];
+        let last = [0xfe_u8; 16];
+
+        let serialized = serialize_uuid_list(&[first, last]);
+
+        assert_eq!(
+            serialized,
+            "01010101010101010101010101010101,fefefefefefefefefefefefefefefefe"
+        );
+        assert_eq!(serialized.matches(',').count(), 1);
+    }
+
+    #[test]
+    fn backend_index_table_matches_public_backend_order() {
+        for (expected, backend) in PAD_ORDER_BACKENDS.into_iter().enumerate() {
+            assert_eq!(pad_order_backend_index(backend), expected);
+        }
     }
 
     #[test]
