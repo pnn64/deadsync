@@ -33,3 +33,8 @@ required-features = ["bench-support"]
 name = "marker_replacement_hot_paths"
 harness = false
 required-features = ["bench-support"]
+
+[[bench]]
+name = "animation_tween_hot_paths"
+harness = false
+required-features = ["bench-support"]
