@@ -1,4 +1,5 @@
 use deadsync_assets::language::LanguageBundle;
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
@@ -133,12 +134,35 @@ pub fn tr_fmt_into(out: &mut String, section: &str, key: &str, args: &[(&str, &s
 }
 
 fn format_translation_template(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    // This covers normal UI translations while keeping enough stack space for
+    // multi-line status text without increasing persistent actor size.
+    const INLINE_BYTES: usize = 256;
+    if let Some(probe) = probe_translation::<INLINE_BYTES>(template, args) {
+        if !probe.overflow {
+            return Arc::from(probe.as_str());
+        }
+
+        let mut text = String::with_capacity(probe.rendered_len);
+        write_translation_template(&mut text, template, args);
+        return Arc::from(text);
+    }
+
     let mut text = String::new();
-    append_translation_template(&mut text, template, args);
+    append_translation_template_sequential(&mut text, template, args);
     Arc::from(text)
 }
 
 fn append_translation_template(out: &mut String, template: &str, args: &[(&str, &str)]) {
+    if let Some(rendered_len) = fast_translation_len(template, args) {
+        out.reserve(rendered_len);
+        write_translation_template(out, template, args);
+        return;
+    }
+
+    append_translation_template_sequential(out, template, args);
+}
+
+fn append_translation_template_sequential(out: &mut String, template: &str, args: &[(&str, &str)]) {
     let extra_capacity = args.iter().fold(0usize, |capacity, (name, value)| {
         capacity.saturating_add(value.len().saturating_sub(name.len().saturating_add(2)))
     });
@@ -148,6 +172,132 @@ fn append_translation_template(out: &mut String, template: &str, args: &[(&str, 
     for (name, value) in args {
         replace_named_placeholder(out, start, name, value);
     }
+}
+
+struct TranslationProbe<const N: usize> {
+    bytes: SmallVec<[u8; N]>,
+    rendered_len: usize,
+    overflow: bool,
+}
+
+impl<const N: usize> TranslationProbe<N> {
+    #[inline(always)]
+    fn new() -> Self {
+        Self {
+            bytes: SmallVec::new(),
+            rendered_len: 0,
+            overflow: false,
+        }
+    }
+
+    #[inline]
+    fn push_str(&mut self, value: &str) -> Option<()> {
+        let end = self.rendered_len.checked_add(value.len())?;
+        if !self.overflow && end <= N {
+            self.bytes.extend_from_slice(value.as_bytes());
+        } else {
+            self.overflow = true;
+        }
+        self.rendered_len = end;
+        Some(())
+    }
+
+    #[inline(always)]
+    fn as_str(&self) -> &str {
+        debug_assert!(!self.overflow);
+        std::str::from_utf8(self.bytes.as_slice())
+            .expect("translation formatting only copies valid UTF-8")
+    }
+}
+
+fn placeholder_value<'a>(name: &str, args: &'a [(&str, &str)]) -> Option<&'a str> {
+    args.iter()
+        .find_map(|(candidate, value)| (*candidate == name).then_some(*value))
+}
+
+fn fast_translation_len(template: &str, args: &[(&str, &str)]) -> Option<usize> {
+    probe_translation::<0>(template, args).map(|probe| probe.rendered_len)
+}
+
+fn probe_translation<const N: usize>(
+    template: &str,
+    args: &[(&str, &str)],
+) -> Option<TranslationProbe<N>> {
+    if args.iter().any(|(name, value)| {
+        name.bytes().any(|byte| matches!(byte, b'{' | b'}'))
+            || value.bytes().any(|byte| matches!(byte, b'{' | b'}'))
+    }) {
+        return None;
+    }
+
+    let mut probe = TranslationProbe::new();
+    let mut cursor = 0usize;
+    while cursor < template.len() {
+        let remaining = &template[cursor..];
+        let special = remaining
+            .bytes()
+            .position(|byte| matches!(byte, b'{' | b'}'));
+        let Some(relative_open) = special else {
+            probe.push_str(remaining)?;
+            return Some(probe);
+        };
+        let open = cursor + relative_open;
+        if template.as_bytes()[open] == b'}' {
+            return None;
+        }
+        probe.push_str(&template[cursor..open])?;
+
+        let name_start = open + 1;
+        let relative_close = template[name_start..].find('}')?;
+        let close = name_start + relative_close;
+        let name = &template[name_start..close];
+        if name.contains('{') {
+            return None;
+        }
+        if let Some(value) = placeholder_value(name, args) {
+            probe.push_str(value)?;
+        } else {
+            probe.push_str(&template[open..=close])?;
+        }
+        cursor = close + 1;
+    }
+    Some(probe)
+}
+
+fn write_translation_template(out: &mut String, template: &str, args: &[(&str, &str)]) {
+    let mut cursor = 0usize;
+    while let Some(relative_open) = template[cursor..].find('{') {
+        let open = cursor + relative_open;
+        out.push_str(&template[cursor..open]);
+        let name_start = open + 1;
+        let relative_close = template[name_start..]
+            .find('}')
+            .expect("preflighted translation placeholder must close");
+        let close = name_start + relative_close;
+        if let Some(value) = placeholder_value(&template[name_start..close], args) {
+            out.push_str(value);
+        } else {
+            out.push_str(&template[open..=close]);
+        }
+        cursor = close + 1;
+    }
+    out.push_str(&template[cursor..]);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_format_translation_reference(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    let mut text = String::new();
+    append_translation_template_sequential(&mut text, template, args);
+    Arc::from(text)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn benchmark_format_translation_current(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+    format_translation_template(template, args)
 }
 
 fn replace_named_placeholder(text: &mut String, start: usize, name: &str, value: &str) {
@@ -291,5 +441,68 @@ mod tests {
         );
 
         assert_eq!(out, "done/done");
+    }
+
+    #[test]
+    fn template_format_handles_repeated_missing_unicode_and_duplicate_arguments() {
+        let text = format_translation_template(
+            "{player} scored {score}/{score} — {missing}",
+            &[("player", "Åsa"), ("score", "12345"), ("score", "ignored")],
+        );
+
+        assert_eq!(text.as_ref(), "Åsa scored 12345/12345 — {missing}");
+    }
+
+    #[test]
+    fn template_format_preserves_cross_boundary_sequential_replacements() {
+        let text =
+            format_translation_template("{{remove}name}", &[("remove", ""), ("name", "ready")]);
+
+        assert_eq!(text.as_ref(), "ready");
+        assert_eq!(
+            text,
+            benchmark_format_translation_reference(
+                "{{remove}name}",
+                &[("remove", ""), ("name", "ready")],
+            )
+        );
+    }
+
+    #[test]
+    fn template_format_long_output_matches_ground_truth_and_reference() {
+        let template = "{value}|".repeat(64);
+        let value = "expanded-placeholder-value";
+        let expected = format!("{}|", value).repeat(64);
+        let args = [("value", value)];
+        let current = format_translation_template(&template, &args);
+
+        assert_eq!(current.as_ref(), expected);
+        assert_eq!(
+            current,
+            benchmark_format_translation_reference(&template, &args)
+        );
+    }
+
+    #[test]
+    fn template_format_matches_reference_matrix() {
+        let fixtures: [(&str, &[(&str, &str)]); 6] = [
+            ("plain text", &[]),
+            ("{a}/{b}/{a}", &[("a", "1"), ("b", "two")]),
+            ("{known} {missing}", &[("known", "yes")]),
+            ("Δ {name} ✓", &[("name", "Miyuki")]),
+            (
+                "{first}/{second}",
+                &[("first", "{second}"), ("second", "done")],
+            ),
+            ("{{remove}name}", &[("remove", ""), ("name", "ready")]),
+        ];
+
+        for (template, args) in fixtures {
+            assert_eq!(
+                format_translation_template(template, args),
+                benchmark_format_translation_reference(template, args),
+                "template={template:?}"
+            );
+        }
     }
 }
