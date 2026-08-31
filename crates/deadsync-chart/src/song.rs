@@ -1,5 +1,6 @@
 use crate::chart::{ChartData, ChartDisplayBpm};
 use std::cmp::Ordering;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -44,19 +45,29 @@ pub fn format_display_bpm_range(range: Option<(f64, f64)>, music_rate: f32) -> S
     let lo = lo * f64::from(rate);
     let hi = hi * f64::from(rate);
     let use_decimals = (rate - 1.0).abs() > 0.001;
-    let fmt_one = |v: f64| {
+    let equal = (lo - hi).abs() < 1.0e-6;
+    let mut out = String::with_capacity(if equal { 8 } else { 19 });
+    let write_one = |out: &mut String, value: f64| {
         if use_decimals {
-            let s = format!("{v:.1}");
-            s.trim_end_matches('0').trim_end_matches('.').to_string()
+            write!(out, "{value:.1}").expect("writing to a String cannot fail");
+            if out.ends_with('0') {
+                out.pop();
+                if out.ends_with('.') {
+                    out.pop();
+                }
+            }
         } else {
-            format!("{v:.0}")
+            write!(out, "{value:.0}").expect("writing to a String cannot fail");
         }
     };
-    if (lo - hi).abs() < 1.0e-6 {
-        fmt_one(lo)
+    if equal {
+        write_one(&mut out, lo);
     } else {
-        format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+        write_one(&mut out, lo.min(hi));
+        out.push_str(" - ");
+        write_one(&mut out, lo.max(hi));
     }
+    out
 }
 
 pub const STANDARD_DIFFICULTY_NAMES: [&str; 5] =
@@ -733,9 +744,40 @@ fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle
     })
 }
 
-#[cfg(feature = "bench-support")]
+#[cfg(any(test, feature = "bench-support"))]
 pub mod bench_support {
     use super::*;
+
+    #[must_use]
+    pub fn format_display_bpm_range_reference(
+        range: Option<(f64, f64)>,
+        music_rate: f32,
+    ) -> String {
+        let Some((lo, hi)) = range else {
+            return String::new();
+        };
+        let rate = if music_rate.is_finite() && music_rate > 0.0 {
+            music_rate
+        } else {
+            1.0
+        };
+        let lo = lo * f64::from(rate);
+        let hi = hi * f64::from(rate);
+        let use_decimals = (rate - 1.0).abs() > 0.001;
+        let fmt_one = |value: f64| {
+            if use_decimals {
+                let text = format!("{value:.1}");
+                text.trim_end_matches('0').trim_end_matches('.').to_string()
+            } else {
+                format!("{value:.0}")
+            }
+        };
+        if (lo - hi).abs() < 1.0e-6 {
+            fmt_one(lo)
+        } else {
+            format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
+        }
+    }
 
     #[inline]
     pub fn chart_for_steps_index_reference<'a>(
@@ -934,6 +976,26 @@ mod tests {
             "100 - 200"
         );
         assert_eq!(format_display_bpm_range(None, 1.0), "");
+    }
+
+    #[test]
+    fn single_buffer_bpm_formatter_matches_reference_edge_cases() {
+        for (range, rate) in [
+            (None, 1.0),
+            (Some((100.0, 200.0)), 1.0),
+            (Some((200.0, 100.0)), 1.5),
+            (Some((150.0, 150.0)), 1.25),
+            (Some((120.04, 120.04)), 0.75),
+            (Some((-0.0, -0.0)), 1.25),
+            (Some((f64::NAN, 180.0)), 1.0),
+            (Some((f64::NEG_INFINITY, f64::INFINITY)), 1.25),
+        ] {
+            assert_eq!(
+                format_display_bpm_range(range, rate),
+                bench_support::format_display_bpm_range_reference(range, rate),
+                "range={range:?}, rate={rate}",
+            );
+        }
     }
 
     #[test]

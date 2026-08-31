@@ -1,6 +1,8 @@
 use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 use deadsync_simfile::song_search::{
+    SongSearchLiveQuery, parse_song_search_live, parse_song_search_live_reference,
     song_passes_search_filters, song_passes_search_filters_reference,
+    song_search_difficulties_text, song_search_difficulties_text_reference,
 };
 use deadsync_theme_simply_love::MusicWheelEntry;
 use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
@@ -423,6 +425,12 @@ fn text_hash(text: &str) -> u64 {
     })
 }
 
+fn query_checksum(query: SongSearchLiveQuery) -> u64 {
+    text_hash(&query.text)
+        ^ u64::from(query.difficulty.unwrap_or(u8::MAX)).rotate_left(17)
+        ^ (query.bpm_tier.unwrap_or(i32::MIN) as u64).rotate_left(31)
+}
+
 fn match_checksum(matches: &[SongSearchMatch]) -> u64 {
     matches.iter().fold(matches.len() as u64, |checksum, item| {
         let (text, score, count) = match item {
@@ -526,6 +534,33 @@ fn main() {
 
     let song_index = build_song_search_index(&song_wheel);
     let pack_index = build_song_search_index(&pack_wheel);
+
+    let old = measure(50_000, || {
+        query_checksum(parse_song_search_live_reference(black_box(
+            "  Finale [12] Song [180] Mix  ",
+        )))
+    });
+    let new = measure(50_000, || {
+        query_checksum(parse_song_search_live(black_box(
+            "  Finale [12] Song [180] Mix  ",
+        )))
+    });
+    print_pair("live query parsing", &old, &new);
+
+    let detail_song = &songs[0];
+    let old = measure(20_000, || {
+        text_hash(&song_search_difficulties_text_reference(
+            black_box(detail_song),
+            black_box("dance-single"),
+        ))
+    });
+    let new = measure(20_000, || {
+        text_hash(&song_search_difficulties_text(
+            black_box(detail_song),
+            black_box("dance-single"),
+        ))
+    });
+    print_pair("standard difficulty detail formatting", &old, &new);
 
     let old = measure(5, || {
         fuzzy_score_checksum(black_box(&songs), black_box("song"), true)

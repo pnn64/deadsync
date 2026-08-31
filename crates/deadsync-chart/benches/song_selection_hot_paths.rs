@@ -309,6 +309,12 @@ fn chart_checksum(chart: Option<&ChartData>) -> u64 {
     })
 }
 
+fn text_checksum(text: String) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        hash.wrapping_mul(0x100_0000_01b3) ^ u64::from(byte)
+    })
+}
+
 #[cfg(target_arch = "x86")]
 fn cycle_counter() -> Option<u64> {
     // SAFETY: the fence and timestamp instructions have no memory operands.
@@ -336,6 +342,20 @@ fn main() {
     let song = fixture_song();
     let first_edit = STANDARD_DIFFICULTY_COUNT;
     let middle_edit = STANDARD_DIFFICULTY_COUNT + 8;
+
+    let old = measure(20_000, || {
+        text_checksum(bench_support::format_display_bpm_range_reference(
+            black_box(Some((123.4, 287.6))),
+            black_box(1.25),
+        ))
+    });
+    let new = measure(20_000, || {
+        text_checksum(deadsync_chart::song::format_display_bpm_range(
+            black_box(Some((123.4, 287.6))),
+            black_box(1.25),
+        ))
+    });
+    print_pair("rate-scaled BPM range formatting", &old, &new);
 
     let old = measure(10_000, || {
         chart_checksum(bench_support::chart_for_steps_index_reference(

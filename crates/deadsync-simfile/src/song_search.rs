@@ -45,13 +45,63 @@ fn song_search_bpm_tier(bpm: f64) -> i32 {
     (((bpm + 0.5) / 10.0).floor() * 10.0) as i32
 }
 
+#[inline(always)]
+fn search_standard_difficulty_index(name: &str) -> Option<usize> {
+    let index = match name.as_bytes().first()?.to_ascii_lowercase() {
+        b'b' => 0,
+        b'e' => 1,
+        b'm' => 2,
+        b'h' => 3,
+        b'c' => 4,
+        _ => return None,
+    };
+    const NAMES: [&str; 5] = ["Beginner", "Easy", "Medium", "Hard", "Challenge"];
+    name.eq_ignore_ascii_case(NAMES[index]).then_some(index)
+}
+
 #[must_use]
 pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
+    let mut meters = [None; 5];
+    let mut found = 0;
+    for chart in &song.charts {
+        if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+            continue;
+        }
+        let Some(index) = search_standard_difficulty_index(&chart.difficulty) else {
+            continue;
+        };
+        if meters[index].is_none() {
+            meters[index] = Some(chart.meter);
+            found += 1;
+            if found == meters.len() {
+                break;
+            }
+        }
+    }
+    if found == 0 {
+        return "-".to_string();
+    }
+
+    let mut out = String::with_capacity(32);
+    for meter in meters.into_iter().flatten() {
+        if !out.is_empty() {
+            out.push_str("   ");
+        }
+        write!(out, "{meter}").expect("writing to a String cannot fail");
+    }
+    out
+}
+
+/// Pre-optimization five-scan formatter retained for benchmark comparisons.
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn song_search_difficulties_text_reference(song: &SongData, chart_type: &str) -> String {
     const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
     let mut out = String::new();
-    for diff in ORDER {
-        if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type) && c.difficulty.eq_ignore_ascii_case(diff)
+    for difficulty in ORDER {
+        if let Some(chart) = song.charts.iter().find(|chart| {
+            chart.chart_type.eq_ignore_ascii_case(chart_type)
+                && chart.difficulty.eq_ignore_ascii_case(difficulty)
         }) {
             if out.is_empty() {
                 out.reserve(32);
@@ -128,6 +178,24 @@ pub struct SongSearchLiveQuery {
 /// The `pack/song` split is deliberately not applied: packs have their own scope.
 #[must_use]
 pub fn parse_song_search_live(input: &str) -> SongSearchLiveQuery {
+    let filter = parse_song_search_filter(input);
+    let mut text = filter.terms;
+    text.truncate(text.trim_end().len());
+    let leading_whitespace = text.len() - text.trim_start().len();
+    if leading_whitespace != 0 {
+        text.drain(..leading_whitespace);
+    }
+    SongSearchLiveQuery {
+        text,
+        difficulty: filter.difficulty,
+        bpm_tier: filter.bpm_tier,
+    }
+}
+
+/// Pre-optimization copying parser retained for benchmark comparisons.
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn parse_song_search_live_reference(input: &str) -> SongSearchLiveQuery {
     let filter = parse_song_search_filter(input);
     SongSearchLiveQuery {
         text: filter.terms.trim().to_string(),
@@ -527,6 +595,25 @@ mod tests {
     }
 
     #[test]
+    fn live_query_move_path_matches_copying_reference() {
+        for input in [
+            "",
+            "   ",
+            "Song",
+            "  FINALs/[12]SoNG [180] Mix  ",
+            "[999999999999999999999999]Overflow",
+            "Pack/[x]ÄBC",
+            "\u{2003}[35] Unicode Mix\u{2002}",
+        ] {
+            assert_eq!(
+                parse_song_search_live(input),
+                parse_song_search_live_reference(input),
+                "input={input:?}",
+            );
+        }
+    }
+
+    #[test]
     fn pack_and_song_terms_filter_candidates() {
         let alpha = test_song_with_bpm("Alpha", "128", 128.0, 128.0);
         let beta = test_song_with_bpm("Beta", "128", 128.0, 128.0);
@@ -658,6 +745,41 @@ mod tests {
 
         song.charts.clear();
         assert_eq!(song_search_difficulties_text(&song, "dance-single"), "-");
+    }
+
+    #[test]
+    fn single_pass_difficulties_preserve_first_chart_and_type_filtering() {
+        let mut song = (*test_song("Song", "")).clone();
+        let mut charts = Vec::new();
+        for (chart_type, difficulty, meter) in [
+            ("dance-single", "Edit", 20),
+            ("pump-single", "Beginner", 99),
+            ("dance-single", "Challenge", 14),
+            ("dance-single", "Easy", 5),
+            ("dance-single", "Easy", 7),
+            ("dance-single", "Medium", 9),
+            ("dance-single", "Hard", 12),
+            ("dance-single", "Beginner", 2),
+        ] {
+            let mut chart = test_chart(chart_type);
+            chart.difficulty = difficulty.to_string();
+            chart.meter = meter;
+            charts.push(chart);
+        }
+        song.charts = charts;
+
+        assert_eq!(
+            song_search_difficulties_text(&song, "dance-single"),
+            "2   5   9   12   14"
+        );
+        assert_eq!(
+            song_search_difficulties_text(&song, "dance-single"),
+            song_search_difficulties_text_reference(&song, "dance-single")
+        );
+        assert_eq!(
+            song_search_difficulties_text(&song, "pump-single"),
+            song_search_difficulties_text_reference(&song, "pump-single")
+        );
     }
 
     #[test]
