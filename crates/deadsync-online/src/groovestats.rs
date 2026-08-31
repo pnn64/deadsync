@@ -51,6 +51,12 @@ pub const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
 pub const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
 const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
 const GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
+// Covers a typical full GrooveStats comment without growing the output buffer.
+const GROOVESTATS_COMMENT_CAPACITY: usize = 128;
+// Covers the fixed QR fields plus ordinary service URLs and chart hashes.
+const GROOVESTATS_QR_URL_CAPACITY: usize = 192;
+// The fixed player-options schema currently serializes to fewer than 512 bytes.
+const GROOVESTATS_PLAYER_OPTIONS_CAPACITY: usize = 512;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Service {
@@ -1066,11 +1072,11 @@ pub fn submit_comment(
     timing_windows: TimingWindowsOption,
     scroll_speed: ScrollSpeedSetting,
 ) -> String {
-    let mut parts = Vec::with_capacity(11);
+    let mut out = String::with_capacity(GROOVESTATS_COMMENT_CAPACITY);
+    out.push_str(GROOVESTATS_COMMENT_PREFIX);
 
     if let Some(ex_score) = fa_plus_ex_score {
-        parts.push("FA+".to_string());
-        parts.push(format!("{ex_score:.2}EX"));
+        write!(out, ", FA+, {ex_score:.2}EX").expect("write GrooveStats comment");
     }
 
     let rate = if music_rate.is_finite() && music_rate > 0.0 {
@@ -1079,7 +1085,9 @@ pub fn submit_comment(
         1.0
     };
     if (rate - 1.0).abs() > 0.0001 {
-        parts.push(format!("{}x Rate", compact_f32_text(rate)));
+        out.push_str(", ");
+        write_compact_f32(&mut out, rate);
+        out.push_str("x Rate");
     }
 
     for (count, suffix) in [
@@ -1091,32 +1099,21 @@ pub fn submit_comment(
         (counts.miss, "m"),
     ] {
         if count != 0 {
-            parts.push(format!("{count}{suffix}"));
+            write!(out, ", {count}{suffix}").expect("write GrooveStats judgment count");
         }
     }
 
     if let Some(timing_windows) = timing_windows_comment(timing_windows) {
-        parts.push(timing_windows.to_string());
+        out.push_str(", ");
+        out.push_str(timing_windows);
     }
 
     if let ScrollSpeedSetting::CMod(value) = scroll_speed {
-        parts.push(format!("C{}", compact_f32_text(value)));
+        out.push_str(", C");
+        write_compact_f32(&mut out, value);
     }
 
-    if parts.is_empty() {
-        GROOVESTATS_COMMENT_PREFIX.to_string()
-    } else {
-        format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
-    }
-}
-
-#[inline(always)]
-fn qr_append_rescore(out: &mut String, label: char, value: u32) {
-    if value == 0 {
-        return;
-    }
-    out.push(label);
-    out.push_str(format!("{value:x}").as_str());
+    out
 }
 
 #[must_use]
@@ -1133,21 +1130,12 @@ pub fn manual_qr_url(
         return None;
     }
 
-    let mut rescored_str = String::with_capacity(24);
-    for (label, value) in [
-        ('G', rescored.fantastic_plus),
-        ('H', rescored.fantastic),
-        ('I', rescored.excellent),
-        ('J', rescored.great),
-        ('K', rescored.decent),
-        ('L', rescored.way_off),
-    ] {
-        qr_append_rescore(&mut rescored_str, label, value);
-    }
-
-    Some(format!(
-        "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F0R{:x}C{}V{:x}",
-        base_url.trim_end_matches('/'),
+    let base_url = base_url.trim_end_matches('/');
+    let mut out =
+        String::with_capacity(GROOVESTATS_QR_URL_CAPACITY.max(base_url.len() + hash.len() + 128));
+    write!(
+        out,
+        "{base_url}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}",
         counts.total_steps,
         counts.fantastic_plus,
         counts.fantastic,
@@ -1162,10 +1150,30 @@ pub fn manual_qr_url(
         counts.total_rolls,
         counts.mines_hit,
         counts.total_mines,
+    )
+    .expect("write GrooveStats QR fields");
+    for (label, value) in [
+        ('G', rescored.fantastic_plus),
+        ('H', rescored.fantastic),
+        ('I', rescored.excellent),
+        ('J', rescored.great),
+        ('K', rescored.decent),
+        ('L', rescored.way_off),
+    ] {
+        if value != 0 {
+            out.push(label);
+            write!(out, "{value:x}").expect("write GrooveStats QR rescore count");
+        }
+    }
+    write!(
+        out,
+        "/F0R{:x}C{}V{:x}",
         rate,
         if used_cmod { '1' } else { '0' },
         GROOVESTATS_CHART_HASH_VERSION,
-    ))
+    )
+    .expect("write GrooveStats QR suffix");
+    Some(out)
 }
 
 /// Effect to dispatch when a raw `GrooveStats` QR-login WebSocket text
@@ -3529,6 +3537,19 @@ pub fn compact_f32_text(value: f32) -> String {
     text
 }
 
+fn write_compact_f32(out: &mut String, value: f32) {
+    let start = out.len();
+    write!(out, "{value:.2}").expect("write compact f32");
+    if out[start..].contains('.') {
+        while out.ends_with('0') {
+            out.pop();
+        }
+        if out.ends_with('.') {
+            out.pop();
+        }
+    }
+}
+
 #[inline(always)]
 #[must_use]
 pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'static str> {
@@ -3538,6 +3559,50 @@ pub const fn timing_windows_comment(setting: TimingWindowsOption) -> Option<&'st
         TimingWindowsOption::DecentsAndWayOffs => Some("No Dec/WO"),
         TimingWindowsOption::FantasticsAndExcellents => Some("No Fan/Exc"),
     }
+}
+
+#[derive(Serialize)]
+struct GrooveStatsPlayerOptions {
+    #[serde(rename = "SpeedModType")]
+    speed_mod_type: u8,
+    #[serde(rename = "SpeedMod")]
+    speed_mod: f64,
+    #[serde(rename = "BackgroundFilter")]
+    background_filter: u8,
+    #[serde(rename = "HideTargets")]
+    hide_targets: bool,
+    #[serde(rename = "HideSongBG")]
+    hide_song_bg: bool,
+    #[serde(rename = "HideCombo")]
+    hide_combo: bool,
+    #[serde(rename = "HideLifebar")]
+    hide_lifebar: bool,
+    #[serde(rename = "HideScore")]
+    hide_score: bool,
+    #[serde(rename = "HideDanger")]
+    hide_danger: bool,
+    #[serde(rename = "HideComboExplosions")]
+    hide_combo_explosions: bool,
+    #[serde(rename = "ColumnFlashOnMiss")]
+    column_flash_on_miss: bool,
+    #[serde(rename = "SubtractiveScoring")]
+    subtractive_scoring: bool,
+    #[serde(rename = "Mini")]
+    mini: i32,
+    #[serde(rename = "VisualDelay")]
+    visual_delay: i32,
+    #[serde(rename = "Cover")]
+    cover: bool,
+    #[serde(rename = "NoMines")]
+    no_mines: bool,
+    #[serde(rename = "Reverse")]
+    reverse: bool,
+    #[serde(rename = "ShowFaPlusWindow")]
+    show_fa_plus_window: bool,
+    #[serde(rename = "ShowExScore")]
+    show_ex_score: bool,
+    #[serde(rename = "ShowFaPlusPane")]
+    show_fa_plus_pane: bool,
 }
 
 #[must_use]
@@ -3550,78 +3615,33 @@ pub fn player_options_json(profile: &Profile) -> String {
         ScrollSpeedSetting::CMod(value) => (2, value),
         ScrollSpeedSetting::MMod(value) => (3, value),
     };
-    let mut options = JsonMap::with_capacity(18);
-    options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
-    options.insert(
-        "SpeedMod".to_string(),
-        JsonValue::from(f64::from(speed_mod)),
-    );
-    options.insert(
-        "BackgroundFilter".to_string(),
-        JsonValue::from(profile.background_filter.percent()),
-    );
-    options.insert(
-        "HideTargets".to_string(),
-        JsonValue::from(profile.hide_targets),
-    );
-    options.insert(
-        "HideSongBG".to_string(),
-        JsonValue::from(profile.hide_song_bg),
-    );
-    options.insert("HideCombo".to_string(), JsonValue::from(profile.hide_combo));
-    options.insert(
-        "HideLifebar".to_string(),
-        JsonValue::from(profile.hide_lifebar),
-    );
-    options.insert("HideScore".to_string(), JsonValue::from(profile.hide_score));
-    options.insert(
-        "HideDanger".to_string(),
-        JsonValue::from(profile.hide_danger),
-    );
-    options.insert(
-        "HideComboExplosions".to_string(),
-        JsonValue::from(profile.hide_combo_explosions),
-    );
-    options.insert(
-        "ColumnFlashOnMiss".to_string(),
-        JsonValue::from(profile.column_flash_on_miss),
-    );
-    options.insert(
-        "SubtractiveScoring".to_string(),
-        JsonValue::from(profile.subtractive_scoring),
-    );
-    options.insert("Mini".to_string(), JsonValue::from(profile.mini_percent));
-    options.insert(
-        "VisualDelay".to_string(),
-        JsonValue::from(profile.visual_delay_ms),
-    );
-    options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
-    options.insert(
-        "NoMines".to_string(),
-        JsonValue::from(profile.remove_active_mask.contains(RemoveMask::NO_MINES)),
-    );
-    options.insert(
-        "Reverse".to_string(),
-        JsonValue::from(
-            profile
-                .scroll_option
-                .contains(profile_data::ScrollOption::Reverse),
-        ),
-    );
-    options.insert(
-        "ShowFaPlusWindow".to_string(),
-        JsonValue::from(profile.show_fa_plus_window),
-    );
-    options.insert(
-        "ShowExScore".to_string(),
-        JsonValue::from(profile.show_ex_score),
-    );
-    options.insert(
-        "ShowFaPlusPane".to_string(),
-        JsonValue::from(profile.show_fa_plus_pane),
-    );
-    serde_json::to_string(&JsonValue::Object(options))
-        .expect("serialize GrooveStats playerOptions JSON")
+    let options = GrooveStatsPlayerOptions {
+        background_filter: profile.background_filter.percent(),
+        column_flash_on_miss: profile.column_flash_on_miss,
+        cover: profile.hide_song_bg,
+        hide_combo: profile.hide_combo,
+        hide_combo_explosions: profile.hide_combo_explosions,
+        hide_danger: profile.hide_danger,
+        hide_lifebar: profile.hide_lifebar,
+        hide_score: profile.hide_score,
+        hide_song_bg: profile.hide_song_bg,
+        hide_targets: profile.hide_targets,
+        mini: profile.mini_percent,
+        no_mines: profile.remove_active_mask.contains(RemoveMask::NO_MINES),
+        reverse: profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Reverse),
+        show_ex_score: profile.show_ex_score,
+        show_fa_plus_pane: profile.show_fa_plus_pane,
+        show_fa_plus_window: profile.show_fa_plus_window,
+        speed_mod: f64::from(speed_mod),
+        speed_mod_type,
+        subtractive_scoring: profile.subtractive_scoring,
+        visual_delay: profile.visual_delay_ms,
+    };
+    let mut json = Vec::with_capacity(GROOVESTATS_PLAYER_OPTIONS_CAPACITY);
+    serde_json::to_writer(&mut json, &options).expect("serialize GrooveStats playerOptions JSON");
+    String::from_utf8(json).expect("GrooveStats playerOptions JSON is UTF-8")
 }
 
 #[cfg(test)]
@@ -3631,6 +3651,163 @@ mod tests {
     use deadsync_score::{
         GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, RejectReason, ScoreImportEndpoint,
     };
+
+    fn reference_submit_comment(
+        counts: &GrooveStatsJudgmentCounts,
+        fa_plus_ex_score: Option<f64>,
+        music_rate: f32,
+        timing_windows: TimingWindowsOption,
+        scroll_speed: ScrollSpeedSetting,
+    ) -> String {
+        let mut parts = Vec::with_capacity(11);
+        if let Some(ex_score) = fa_plus_ex_score {
+            parts.push("FA+".to_string());
+            parts.push(format!("{ex_score:.2}EX"));
+        }
+        let rate = if music_rate.is_finite() && music_rate > 0.0 {
+            music_rate
+        } else {
+            1.0
+        };
+        if (rate - 1.0).abs() > 0.0001 {
+            parts.push(format!("{}x Rate", compact_f32_text(rate)));
+        }
+        for (count, suffix) in [
+            (counts.fantastic, "w"),
+            (counts.excellent, "e"),
+            (counts.great, "g"),
+            (counts.decent_count(), "d"),
+            (counts.way_off_count(), "wo"),
+            (counts.miss, "m"),
+        ] {
+            if count != 0 {
+                parts.push(format!("{count}{suffix}"));
+            }
+        }
+        if let Some(timing_windows) = timing_windows_comment(timing_windows) {
+            parts.push(timing_windows.to_string());
+        }
+        if let ScrollSpeedSetting::CMod(value) = scroll_speed {
+            parts.push(format!("C{}", compact_f32_text(value)));
+        }
+        if parts.is_empty() {
+            GROOVESTATS_COMMENT_PREFIX.to_string()
+        } else {
+            format!("{GROOVESTATS_COMMENT_PREFIX}, {}", parts.join(", "))
+        }
+    }
+
+    fn reference_manual_qr_url(
+        base_url: &str,
+        chart_hash: &str,
+        counts: &GrooveStatsJudgmentCounts,
+        rescored: &GrooveStatsRescoreCounts,
+        rate: u32,
+        used_cmod: bool,
+    ) -> Option<String> {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        let mut rescored_str = String::with_capacity(24);
+        for (label, value) in [
+            ('G', rescored.fantastic_plus),
+            ('H', rescored.fantastic),
+            ('I', rescored.excellent),
+            ('J', rescored.great),
+            ('K', rescored.decent),
+            ('L', rescored.way_off),
+        ] {
+            if value != 0 {
+                rescored_str.push(label);
+                rescored_str.push_str(format!("{value:x}").as_str());
+            }
+        }
+        Some(format!(
+            "{}/QR/{hash}/T{:x}G{:x}H{:x}I{:x}J{:x}K{:x}L{:x}M{:x}H{:x}T{:x}R{:x}T{:x}M{:x}T{:x}{rescored_str}/F0R{:x}C{}V{:x}",
+            base_url.trim_end_matches('/'),
+            counts.total_steps,
+            counts.fantastic_plus,
+            counts.fantastic,
+            counts.excellent,
+            counts.great,
+            counts.decent_count(),
+            counts.way_off_count(),
+            counts.miss,
+            counts.holds_held,
+            counts.total_holds,
+            counts.rolls_held,
+            counts.total_rolls,
+            counts.mines_hit,
+            counts.total_mines,
+            rate,
+            if used_cmod { '1' } else { '0' },
+            GROOVESTATS_CHART_HASH_VERSION,
+        ))
+    }
+
+    fn reference_player_options_json(profile: &Profile) -> String {
+        let (speed_mod_type, speed_mod) = match profile.scroll_speed {
+            ScrollSpeedSetting::XMod(value) => (1, value),
+            ScrollSpeedSetting::CMod(value) => (2, value),
+            ScrollSpeedSetting::MMod(value) => (3, value),
+        };
+        let mut options = JsonMap::with_capacity(18);
+        options.insert("SpeedModType".to_string(), JsonValue::from(speed_mod_type));
+        options.insert(
+            "SpeedMod".to_string(),
+            JsonValue::from(f64::from(speed_mod)),
+        );
+        options.insert(
+            "BackgroundFilter".to_string(),
+            JsonValue::from(profile.background_filter.percent()),
+        );
+        for (key, value) in [
+            ("HideTargets", profile.hide_targets),
+            ("HideSongBG", profile.hide_song_bg),
+            ("HideCombo", profile.hide_combo),
+            ("HideLifebar", profile.hide_lifebar),
+            ("HideScore", profile.hide_score),
+            ("HideDanger", profile.hide_danger),
+            ("HideComboExplosions", profile.hide_combo_explosions),
+            ("ColumnFlashOnMiss", profile.column_flash_on_miss),
+            ("SubtractiveScoring", profile.subtractive_scoring),
+        ] {
+            options.insert(key.to_string(), JsonValue::from(value));
+        }
+        options.insert("Mini".to_string(), JsonValue::from(profile.mini_percent));
+        options.insert(
+            "VisualDelay".to_string(),
+            JsonValue::from(profile.visual_delay_ms),
+        );
+        options.insert("Cover".to_string(), JsonValue::from(profile.hide_song_bg));
+        options.insert(
+            "NoMines".to_string(),
+            JsonValue::from(profile.remove_active_mask.contains(RemoveMask::NO_MINES)),
+        );
+        options.insert(
+            "Reverse".to_string(),
+            JsonValue::from(
+                profile
+                    .scroll_option
+                    .contains(profile_data::ScrollOption::Reverse),
+            ),
+        );
+        options.insert(
+            "ShowFaPlusWindow".to_string(),
+            JsonValue::from(profile.show_fa_plus_window),
+        );
+        options.insert(
+            "ShowExScore".to_string(),
+            JsonValue::from(profile.show_ex_score),
+        );
+        options.insert(
+            "ShowFaPlusPane".to_string(),
+            JsonValue::from(profile.show_fa_plus_pane),
+        );
+        serde_json::to_string(&JsonValue::Object(options))
+            .expect("serialize reference player options")
+    }
 
     fn leaderboard_entry(rank: u32, name: &str, score: f64, is_self: bool) -> LeaderboardApiEntry {
         LeaderboardApiEntry {
@@ -3758,6 +3935,49 @@ mod tests {
         assert_eq!(value["ShowFaPlusWindow"], true);
         assert_eq!(value["ShowExScore"], true);
         assert_eq!(value["ShowFaPlusPane"], true);
+    }
+
+    #[test]
+    fn player_options_json_matches_owned_map_reference_byte_for_byte() {
+        let mut profiles = vec![Profile::default()];
+        let mut enabled = Profile {
+            background_filter: "100".parse().expect("background filter percent"),
+            hide_targets: true,
+            hide_song_bg: true,
+            hide_combo: true,
+            hide_lifebar: true,
+            hide_score: true,
+            hide_danger: true,
+            hide_combo_explosions: true,
+            column_flash_on_miss: true,
+            subtractive_scoring: true,
+            mini_percent: i32::MIN,
+            visual_delay_ms: i32::MAX,
+            show_fa_plus_window: true,
+            show_ex_score: true,
+            show_fa_plus_pane: true,
+            ..Profile::default()
+        };
+        enabled.remove_active_mask |= RemoveMask::NO_MINES;
+        enabled.scroll_option = enabled
+            .scroll_option
+            .union(profile_data::ScrollOption::Reverse);
+        profiles.push(enabled);
+
+        for profile in &profiles {
+            for speed in [
+                ScrollSpeedSetting::XMod(1.25),
+                ScrollSpeedSetting::CMod(650.5),
+                ScrollSpeedSetting::MMod(725.75),
+            ] {
+                let mut profile = profile.clone();
+                profile.scroll_speed = speed;
+                assert_eq!(
+                    player_options_json(&profile),
+                    reference_player_options_json(&profile)
+                );
+            }
+        }
     }
 
     #[test]
@@ -3903,6 +4123,80 @@ mod tests {
             ),
             "[DS]"
         );
+    }
+
+    #[test]
+    fn submit_comment_matches_collection_reference_for_edge_matrix() {
+        let count_sets = [
+            GrooveStatsJudgmentCounts::default(),
+            GrooveStatsJudgmentCounts {
+                fantastic_plus: 1,
+                fantastic: 2,
+                excellent: 30,
+                great: 400,
+                decent: Some(5_000),
+                way_off: None,
+                miss: 60_000,
+                total_steps: 65_432,
+                holds_held: 1,
+                total_holds: 2,
+                mines_hit: 3,
+                total_mines: 4,
+                rolls_held: 5,
+                total_rolls: 6,
+            },
+            GrooveStatsJudgmentCounts {
+                fantastic_plus: u32::MAX,
+                fantastic: u32::MAX,
+                excellent: u32::MAX,
+                great: u32::MAX,
+                decent: Some(u32::MAX),
+                way_off: Some(u32::MAX),
+                miss: u32::MAX,
+                total_steps: u32::MAX,
+                holds_held: u32::MAX,
+                total_holds: u32::MAX,
+                mines_hit: u32::MAX,
+                total_mines: u32::MAX,
+                rolls_held: u32::MAX,
+                total_rolls: u32::MAX,
+            },
+        ];
+        for counts in &count_sets {
+            for ex_score in [None, Some(-0.0), Some(99.999), Some(f64::NAN)] {
+                for rate in [f32::NAN, -1.0, 1.0, 1.0002, 2.35] {
+                    for timing_windows in [
+                        TimingWindowsOption::None,
+                        TimingWindowsOption::WayOffs,
+                        TimingWindowsOption::DecentsAndWayOffs,
+                        TimingWindowsOption::FantasticsAndExcellents,
+                    ] {
+                        for scroll_speed in [
+                            ScrollSpeedSetting::XMod(1.25),
+                            ScrollSpeedSetting::MMod(700.0),
+                            ScrollSpeedSetting::CMod(650.5),
+                        ] {
+                            assert_eq!(
+                                submit_comment(
+                                    counts,
+                                    ex_score,
+                                    rate,
+                                    timing_windows,
+                                    scroll_speed,
+                                ),
+                                reference_submit_comment(
+                                    counts,
+                                    ex_score,
+                                    rate,
+                                    timing_windows,
+                                    scroll_speed,
+                                )
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
@@ -5688,6 +5982,59 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn manual_qr_url_matches_intermediate_string_reference() {
+        let counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: u32::MAX,
+            fantastic: 0,
+            excellent: 0xabcdef,
+            great: 17,
+            decent: None,
+            way_off: Some(9),
+            miss: 123,
+            total_steps: u32::MAX,
+            holds_held: 4,
+            total_holds: 5,
+            mines_hit: 6,
+            total_mines: 7,
+            rolls_held: 8,
+            total_rolls: 9,
+        };
+        for rescored in [
+            GrooveStatsRescoreCounts::default(),
+            GrooveStatsRescoreCounts {
+                fantastic_plus: 1,
+                fantastic: 0,
+                excellent: 0xabcdef,
+                great: 4,
+                decent: u32::MAX,
+                way_off: 6,
+            },
+        ] {
+            for base_url in [
+                "https://www.groovestats.com",
+                "https://www.groovestats.com///",
+                "X",
+            ] {
+                for hash in [" ", " deadbeef ", "ABCDEF0123456789"] {
+                    for used_cmod in [false, true] {
+                        assert_eq!(
+                            manual_qr_url(base_url, hash, &counts, &rescored, u32::MAX, used_cmod,),
+                            reference_manual_qr_url(
+                                base_url,
+                                hash,
+                                &counts,
+                                &rescored,
+                                u32::MAX,
+                                used_cmod,
+                            )
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
