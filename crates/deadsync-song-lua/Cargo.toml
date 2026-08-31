@@ -47,3 +47,8 @@ required-features = ["bench-support"]
 name = "option_row_dispatch_hot_paths"
 harness = false
 required-features = ["bench-support"]
+
+[[bench]]
+name = "overlay_enum_parse_hot_paths"
+harness = false
+required-features = ["bench-support"]

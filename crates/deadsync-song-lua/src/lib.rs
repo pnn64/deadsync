@@ -1822,9 +1822,30 @@ pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMo
     }
 }
 
+const OVERLAY_PARSE_KEY_STACK_BYTES: usize = 32;
+
+#[inline]
+fn with_ascii_lowercase_overlay_key<T>(raw: &str, use_key: impl FnOnce(&str) -> T) -> T {
+    if raw.len() <= OVERLAY_PARSE_KEY_STACK_BYTES {
+        let mut key = [0u8; OVERLAY_PARSE_KEY_STACK_BYTES];
+        key[..raw.len()].copy_from_slice(raw.as_bytes());
+        key[..raw.len()].make_ascii_lowercase();
+        let key = std::str::from_utf8(&key[..raw.len()])
+            .expect("ASCII case folding preserves valid UTF-8");
+        use_key(key)
+    } else {
+        let key = raw.to_ascii_lowercase();
+        use_key(&key)
+    }
+}
+
 #[must_use]
 pub fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
-    match raw.trim().to_ascii_lowercase().as_str() {
+    with_ascii_lowercase_overlay_key(raw.trim(), parse_overlay_effect_mode_normalized)
+}
+
+fn parse_overlay_effect_mode_normalized(key: &str) -> Option<EffectMode> {
+    match key {
         "none" => Some(EffectMode::None),
         "diffuseramp" => Some(EffectMode::DiffuseRamp),
         "diffuseshift" => Some(EffectMode::DiffuseShift),
@@ -1836,6 +1857,13 @@ pub fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
         "spin" => Some(EffectMode::Spin),
         _ => None,
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn parse_overlay_effect_mode_reference_for_bench(raw: &str) -> Option<EffectMode> {
+    parse_overlay_effect_mode_normalized(&raw.trim().to_ascii_lowercase())
 }
 
 #[must_use]
@@ -1858,12 +1886,12 @@ pub fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
 
 #[must_use]
 pub fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
-    let lower = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    match lower.as_str() {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    with_ascii_lowercase_overlay_key(raw, parse_overlay_text_align_normalized)
+}
+
+fn parse_overlay_text_align_normalized(key: &str) -> Option<TextAlign> {
+    match key {
         "left" | "horizalign_left" => Some(TextAlign::Left),
         "center" | "middle" | "horizalign_center" | "horizalign_middle" => Some(TextAlign::Center),
         "right" | "horizalign_right" => Some(TextAlign::Right),
@@ -1871,19 +1899,35 @@ pub fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn parse_overlay_text_align_reference_for_bench(raw: &str) -> Option<TextAlign> {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    parse_overlay_text_align_normalized(&raw.to_ascii_lowercase())
+}
+
 #[must_use]
 pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
-    let lower = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    match lower.as_str() {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    with_ascii_lowercase_overlay_key(raw, parse_overlay_text_glow_mode_normalized)
+}
+
+fn parse_overlay_text_glow_mode_normalized(key: &str) -> Option<SongLuaTextGlowMode> {
+    match key {
         "inner" | "textglowmode_inner" => Some(SongLuaTextGlowMode::Inner),
         "stroke" | "textglowmode_stroke" => Some(SongLuaTextGlowMode::Stroke),
         "both" | "textglowmode_both" => Some(SongLuaTextGlowMode::Both),
         _ => None,
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn parse_overlay_text_glow_mode_reference_for_bench(raw: &str) -> Option<SongLuaTextGlowMode> {
+    let raw = raw.trim().trim_matches('"').trim_matches('\'');
+    parse_overlay_text_glow_mode_normalized(&raw.to_ascii_lowercase())
 }
 
 #[must_use]
@@ -4435,14 +4479,17 @@ mod tests {
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
         overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
         parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-        push_multitap_arrow_sample, push_overlay_sample_eases, push_song_lua_overlay_sound_paths,
-        push_song_lua_video_paths, push_startup_message_if_listened,
-        read_global_function_nested_tables, read_graph_display_body_state,
-        read_graph_display_line_state, read_song_meter_display_state,
-        read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
-        reset_actor_capture, reset_indexed_actor_capture_tables,
-        runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
-        song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
+        parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
+        parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
+        parse_overlay_text_glow_mode_reference_for_bench, push_multitap_arrow_sample,
+        push_overlay_sample_eases, push_song_lua_overlay_sound_paths, push_song_lua_video_paths,
+        push_startup_message_if_listened, read_global_function_nested_tables,
+        read_graph_display_body_state, read_graph_display_line_state,
+        read_song_meter_display_state, read_update_function_nested_tables,
+        read_update_function_tables, record_song_lua_broadcast, reset_actor_capture,
+        reset_indexed_actor_capture_tables, runtime_static_overlay_index_by_path,
+        scale_to_rect_plan, set_compile_song_runtime_values, song_lua_arch_name,
+        song_lua_difficulty_from_value, song_lua_human_player_count,
         song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
         sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
@@ -19144,6 +19191,81 @@ end
             Some(EffectMode::Bounce)
         );
         assert_eq!(parse_overlay_effect_mode("wag"), Some(EffectMode::Wag));
+    }
+
+    #[test]
+    fn stack_normalized_overlay_effect_modes_match_committed_behavior() {
+        let long_unknown = "É".repeat(20);
+        let cases = [
+            (" none ", Some(EffectMode::None)),
+            ("DIFFUSERAMP", Some(EffectMode::DiffuseRamp)),
+            ("DiffuseShift", Some(EffectMode::DiffuseShift)),
+            ("glowSHIFT", Some(EffectMode::GlowShift)),
+            ("Pulse", Some(EffectMode::Pulse)),
+            ("BOB", Some(EffectMode::Bob)),
+            ("Bounce", Some(EffectMode::Bounce)),
+            ("Wag", Some(EffectMode::Wag)),
+            ("SPIN", Some(EffectMode::Spin)),
+            ("\"none\"", None),
+            ("unknown", None),
+            (long_unknown.as_str(), None),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(parse_overlay_effect_mode(raw), expected, "raw={raw:?}");
+            assert_eq!(
+                parse_overlay_effect_mode(raw),
+                parse_overlay_effect_mode_reference_for_bench(raw),
+                "raw={raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_normalized_overlay_text_alignments_match_committed_behavior() {
+        let long_unknown = "É".repeat(20);
+        let cases = [
+            (" LEFT ", Some(TextAlign::Left)),
+            ("'HorizAlign_Left'", Some(TextAlign::Left)),
+            ("\"center\"", Some(TextAlign::Center)),
+            ("Middle", Some(TextAlign::Center)),
+            ("HORIZALIGN_CENTER", Some(TextAlign::Center)),
+            ("horizalign_middle", Some(TextAlign::Center)),
+            ("right", Some(TextAlign::Right)),
+            ("'HORIZALIGN_RIGHT'", Some(TextAlign::Right)),
+            ("unknown", None),
+            (long_unknown.as_str(), None),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(parse_overlay_text_align(raw), expected, "raw={raw:?}");
+            assert_eq!(
+                parse_overlay_text_align(raw),
+                parse_overlay_text_align_reference_for_bench(raw),
+                "raw={raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_normalized_overlay_text_glow_modes_match_committed_behavior() {
+        let long_unknown = "É".repeat(20);
+        let cases = [
+            (" INNER ", Some(SongLuaTextGlowMode::Inner)),
+            ("'TextGlowMode_Inner'", Some(SongLuaTextGlowMode::Inner)),
+            ("Stroke", Some(SongLuaTextGlowMode::Stroke)),
+            ("\"TEXTGLOWMODE_STROKE\"", Some(SongLuaTextGlowMode::Stroke)),
+            ("both", Some(SongLuaTextGlowMode::Both)),
+            ("TextGlowMode_Both", Some(SongLuaTextGlowMode::Both)),
+            ("unknown", None),
+            (long_unknown.as_str(), None),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(parse_overlay_text_glow_mode(raw), expected, "raw={raw:?}");
+            assert_eq!(
+                parse_overlay_text_glow_mode(raw),
+                parse_overlay_text_glow_mode_reference_for_bench(raw),
+                "raw={raw:?}"
+            );
+        }
     }
 
     #[test]
