@@ -1,10 +1,15 @@
 use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::EffectMode;
 use deadsync_song_lua::{
-    SongLuaTextGlowMode, parse_overlay_effect_mode, parse_overlay_effect_mode_reference_for_bench,
-    parse_overlay_text_align, parse_overlay_text_align_reference_for_bench,
-    parse_overlay_text_glow_mode, parse_overlay_text_glow_mode_reference_for_bench,
+    SongLuaDifficulty, SongLuaStyleInfo, SongLuaTextGlowMode, parse_overlay_effect_mode,
+    parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
+    parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
+    parse_overlay_text_glow_mode_reference_for_bench, song_lua_difficulty_from_value,
+    song_lua_difficulty_from_value_reference_for_bench, song_lua_steps_type_is_dance_single,
+    song_lua_steps_type_is_dance_single_reference_for_bench, song_lua_style_info,
+    song_lua_style_info_reference_for_bench,
 };
+use mlua::{Lua, Value};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -215,6 +220,36 @@ fn measure_pair(
 
 fn mix(checksum: u64, value: u64) -> u64 {
     checksum.wrapping_mul(1_099_511_628_211).wrapping_add(value)
+}
+
+fn text_checksum(mut checksum: u64, value: &str) -> u64 {
+    checksum = mix(checksum, value.len() as u64);
+    value
+        .bytes()
+        .fold(checksum, |sum, byte| mix(sum, u64::from(byte)))
+}
+
+fn style_info_checksum(info: SongLuaStyleInfo) -> u64 {
+    let mut checksum = text_checksum(0, info.name);
+    checksum = text_checksum(checksum, info.steps_type);
+    checksum = text_checksum(checksum, info.style_type);
+    checksum = mix(checksum, info.columns as u64);
+    checksum = mix(checksum, u64::from(info.width.to_bits()));
+    info.x_offsets.iter().fold(checksum, |sum, offset| {
+        mix(sum, u64::from(offset.to_bits()))
+    })
+}
+
+fn difficulty_value(value: Option<SongLuaDifficulty>) -> u64 {
+    match value {
+        None => 0,
+        Some(SongLuaDifficulty::Beginner) => 1,
+        Some(SongLuaDifficulty::Easy) => 2,
+        Some(SongLuaDifficulty::Medium) => 3,
+        Some(SongLuaDifficulty::Hard) => 4,
+        Some(SongLuaDifficulty::Challenge) => 5,
+        Some(SongLuaDifficulty::Edit) => 6,
+    }
 }
 
 fn effect_mode_value(value: Option<EffectMode>) -> u64 {
@@ -454,5 +489,132 @@ fn main() {
         "overlay text-glow parsing (7 representative tokens)",
         &old_glow,
         &new_glow,
+    );
+
+    let style_names = [
+        "double",
+        " Dance_Double ",
+        "STEPS-TYPE DANCE DOUBLE",
+        "versus",
+        "VERSUS",
+        "single",
+        "dance-single",
+        "unknown",
+    ];
+    let style_suite = |lookup: fn(&str) -> SongLuaStyleInfo| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for name in style_names {
+                checksum = mix(
+                    checksum,
+                    style_info_checksum(black_box(lookup(black_box(name)))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_style, new_style) = measure_pair(
+        style_names.len() * REPEATS,
+        || style_suite(song_lua_style_info_reference_for_bench),
+        || style_suite(song_lua_style_info),
+    );
+    assert_improved("song style classification", &old_style, &new_style);
+    print_pair(
+        "song style classification (8 representative tokens)",
+        &old_style,
+        &new_style,
+    );
+
+    let lua = Lua::new();
+    let difficulty_names = [
+        "Difficulty_Beginner",
+        " EASY ",
+        "Difficulty-Medium",
+        "difficulty hard",
+        "DIFFICULTY_CHALLENGE",
+        "expert",
+        "Difficulty_Edit",
+        "unknown",
+    ];
+    let difficulty_values: Vec<Value> = difficulty_names
+        .iter()
+        .map(|name| {
+            Value::String(
+                lua.create_string(name)
+                    .expect("static token is valid UTF-8"),
+            )
+        })
+        .collect();
+    let difficulty_suite = |lookup: fn(Value) -> Option<SongLuaDifficulty>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in &difficulty_values {
+                checksum = mix(
+                    checksum,
+                    difficulty_value(black_box(lookup(black_box(value.clone())))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_difficulty, new_difficulty) = measure_pair(
+        difficulty_values.len() * REPEATS,
+        || difficulty_suite(song_lua_difficulty_from_value_reference_for_bench),
+        || difficulty_suite(song_lua_difficulty_from_value),
+    );
+    assert_improved(
+        "song difficulty classification",
+        &old_difficulty,
+        &new_difficulty,
+    );
+    print_pair(
+        "song difficulty classification (8 representative tokens)",
+        &old_difficulty,
+        &new_difficulty,
+    );
+
+    let steps_type_names = [
+        "StepsType_Dance_Single",
+        " DANCE-SINGLE ",
+        "SINGLE",
+        "Steps Type Dance Single",
+        "StepsType_Dance_Double",
+        "unknown",
+    ];
+    let steps_type_values: Vec<Value> = steps_type_names
+        .iter()
+        .map(|name| {
+            Value::String(
+                lua.create_string(name)
+                    .expect("static token is valid UTF-8"),
+            )
+        })
+        .collect();
+    let steps_type_suite = |lookup: fn(Value) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in &steps_type_values {
+                checksum = mix(
+                    checksum,
+                    u64::from(black_box(lookup(black_box(value.clone())))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_steps_type, new_steps_type) = measure_pair(
+        steps_type_values.len() * REPEATS,
+        || steps_type_suite(song_lua_steps_type_is_dance_single_reference_for_bench),
+        || steps_type_suite(song_lua_steps_type_is_dance_single),
+    );
+    assert_improved(
+        "song steps-type classification",
+        &old_steps_type,
+        &new_steps_type,
+    );
+    print_pair(
+        "song steps-type classification (6 representative tokens)",
+        &old_steps_type,
+        &new_steps_type,
     );
 }

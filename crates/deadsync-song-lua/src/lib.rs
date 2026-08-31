@@ -402,14 +402,43 @@ pub struct SongLuaStyleInfo {
     pub x_offsets: &'static [f32],
 }
 
+const SONG_LUA_CLASSIFIER_KEY_STACK_BYTES: usize = 64;
+
+#[inline]
+fn with_compact_ascii_lowercase_song_key<T>(raw: &str, use_key: impl FnOnce(&str) -> T) -> T {
+    let raw = raw.trim();
+    if raw.len() <= SONG_LUA_CLASSIFIER_KEY_STACK_BYTES {
+        let mut key = [0u8; SONG_LUA_CLASSIFIER_KEY_STACK_BYTES];
+        let mut len = 0;
+        for byte in raw.bytes() {
+            if matches!(byte, b'_' | b'-' | b' ') {
+                continue;
+            }
+            key[len] = byte.to_ascii_lowercase();
+            len += 1;
+        }
+        let key = std::str::from_utf8(&key[..len])
+            .expect("removing ASCII separators preserves valid UTF-8");
+        use_key(key)
+    } else {
+        let mut key = String::with_capacity(raw.len());
+        key.extend(
+            raw.chars()
+                .filter(|ch| !matches!(ch, '_' | '-' | ' '))
+                .map(|ch| ch.to_ascii_lowercase()),
+        );
+        use_key(&key)
+    }
+}
+
 #[must_use]
 pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
-    let normalized = style_name
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['_', '-', ' '], "");
+    with_compact_ascii_lowercase_song_key(style_name, song_lua_style_info_normalized)
+}
+
+fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
     if matches!(
-        normalized.as_str(),
+        normalized,
         "double" | "dancedouble" | "stepstypedancedouble"
     ) {
         SongLuaStyleInfo {
@@ -439,6 +468,17 @@ pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
             x_offsets: &SONG_LUA_COLUMN_X,
         }
     }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn song_lua_style_info_reference_for_bench(style_name: &str) -> SongLuaStyleInfo {
+    let normalized = style_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    song_lua_style_info_normalized(&normalized)
 }
 
 #[inline(always)]
@@ -539,11 +579,15 @@ impl SongLuaDifficulty {
 }
 
 pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDifficulty> {
-    let normalized = read_string(value)?
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['_', '-', ' '], "");
-    let raw = normalized.strip_prefix("difficulty").unwrap_or(&normalized);
+    let mlua::Value::String(value) = value else {
+        return None;
+    };
+    let raw = value.to_str().ok()?;
+    with_compact_ascii_lowercase_song_key(raw.as_ref(), song_lua_difficulty_from_normalized)
+}
+
+fn song_lua_difficulty_from_normalized(normalized: &str) -> Option<SongLuaDifficulty> {
+    let raw = normalized.strip_prefix("difficulty").unwrap_or(normalized);
     match raw {
         "beginner" => Some(SongLuaDifficulty::Beginner),
         "easy" => Some(SongLuaDifficulty::Easy),
@@ -555,15 +599,46 @@ pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDiffi
     }
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_lua_difficulty_from_value_reference_for_bench(
+    value: mlua::Value,
+) -> Option<SongLuaDifficulty> {
+    let normalized = read_string(value)?
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    song_lua_difficulty_from_normalized(&normalized)
+}
+
 pub fn song_lua_steps_type_is_dance_single(value: mlua::Value) -> bool {
+    let mlua::Value::String(value) = value else {
+        return false;
+    };
+    let Ok(raw) = value.to_str() else {
+        return false;
+    };
+    with_compact_ascii_lowercase_song_key(
+        raw.as_ref(),
+        song_lua_steps_type_is_dance_single_normalized,
+    )
+}
+
+fn song_lua_steps_type_is_dance_single_normalized(normalized: &str) -> bool {
+    matches!(
+        normalized,
+        "stepstypedancesingle" | "dancesingle" | "single"
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn song_lua_steps_type_is_dance_single_reference_for_bench(value: mlua::Value) -> bool {
     let Some(raw) = read_string(value) else {
         return false;
     };
     let normalized = raw.trim().to_ascii_lowercase().replace(['_', '-', ' '], "");
-    matches!(
-        normalized.as_str(),
-        "stepstypedancesingle" | "dancesingle" | "single"
-    )
+    song_lua_steps_type_is_dance_single_normalized(&normalized)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -4489,8 +4564,10 @@ mod tests {
         read_update_function_tables, record_song_lua_broadcast, reset_actor_capture,
         reset_indexed_actor_capture_tables, runtime_static_overlay_index_by_path,
         scale_to_rect_plan, set_compile_song_runtime_values, song_lua_arch_name,
-        song_lua_difficulty_from_value, song_lua_human_player_count,
-        song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
+        song_lua_difficulty_from_value, song_lua_difficulty_from_value_reference_for_bench,
+        song_lua_human_player_count, song_lua_steps_type_is_dance_single,
+        song_lua_steps_type_is_dance_single_reference_for_bench, song_lua_style_info,
+        song_lua_style_info_reference_for_bench, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
         sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
         sprite_texture_rect, sprite_texture_rect_with_offset, texture_pixel_offset_rect,
@@ -17958,6 +18035,90 @@ return Def.ActorFrame{
         assert!(!song_lua_steps_type_is_dance_single(Value::String(
             lua.create_string("StepsType_Dance_Double").unwrap()
         )));
+    }
+
+    #[test]
+    fn stack_compact_style_classification_matches_committed_behavior() {
+        let long_unknown = "É".repeat(40);
+        let cases = [
+            ("double", "double"),
+            (" Dance_Double ", "double"),
+            ("STEPS-TYPE DANCE DOUBLE", "double"),
+            ("versus", "versus"),
+            ("VERSUS", "versus"),
+            ("single", "single"),
+            ("unknown", "single"),
+            (long_unknown.as_str(), "single"),
+        ];
+        for (raw, expected_name) in cases {
+            let current = song_lua_style_info(raw);
+            assert_eq!(current.name, expected_name, "raw={raw:?}");
+            assert_eq!(
+                current,
+                song_lua_style_info_reference_for_bench(raw),
+                "raw={raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn stack_compact_difficulty_classification_matches_committed_behavior() {
+        let lua = Lua::new();
+        let long_unknown = "É".repeat(40);
+        let cases = [
+            ("Difficulty_Beginner", Some(SongLuaDifficulty::Beginner)),
+            (" EASY ", Some(SongLuaDifficulty::Easy)),
+            ("Difficulty-Medium", Some(SongLuaDifficulty::Medium)),
+            ("difficulty hard", Some(SongLuaDifficulty::Hard)),
+            ("DIFFICULTY_CHALLENGE", Some(SongLuaDifficulty::Challenge)),
+            ("expert", Some(SongLuaDifficulty::Challenge)),
+            ("Difficulty_Edit", Some(SongLuaDifficulty::Edit)),
+            ("unknown", None),
+            (long_unknown.as_str(), None),
+        ];
+        for (raw, expected) in cases {
+            let value = Value::String(lua.create_string(raw).unwrap());
+            assert_eq!(
+                song_lua_difficulty_from_value(value.clone()),
+                expected,
+                "raw={raw:?}"
+            );
+            assert_eq!(
+                song_lua_difficulty_from_value(value.clone()),
+                song_lua_difficulty_from_value_reference_for_bench(value),
+                "raw={raw:?}"
+            );
+        }
+        assert_eq!(song_lua_difficulty_from_value(Value::Integer(4)), None);
+    }
+
+    #[test]
+    fn stack_compact_steps_type_classification_matches_committed_behavior() {
+        let lua = Lua::new();
+        let long_unknown = "É".repeat(40);
+        let cases = [
+            ("StepsType_Dance_Single", true),
+            (" DANCE-SINGLE ", true),
+            ("SINGLE", true),
+            ("Steps Type Dance Single", true),
+            ("StepsType_Dance_Double", false),
+            ("unknown", false),
+            (long_unknown.as_str(), false),
+        ];
+        for (raw, expected) in cases {
+            let value = Value::String(lua.create_string(raw).unwrap());
+            assert_eq!(
+                song_lua_steps_type_is_dance_single(value.clone()),
+                expected,
+                "raw={raw:?}"
+            );
+            assert_eq!(
+                song_lua_steps_type_is_dance_single(value.clone()),
+                song_lua_steps_type_is_dance_single_reference_for_bench(value),
+                "raw={raw:?}"
+            );
+        }
+        assert!(!song_lua_steps_type_is_dance_single(Value::Integer(4)));
     }
 
     #[test]
