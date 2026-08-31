@@ -23,15 +23,18 @@ use deadsync_notefield::transform_cache_bench_support::{
     boost_only_old, bounded_dizzy_new, bounded_dizzy_old, brake_only_new, brake_only_old,
     expand_new, expand_old, expand_only_new, expand_only_old, hidden_blink_appearance_new,
     hidden_blink_appearance_old, hidden_only_appearance_new, hidden_only_appearance_old,
-    hidden_stealth_appearance_new, hidden_stealth_appearance_old, hidden_sudden_appearance_new,
-    hidden_sudden_appearance_old, hidden_sudden_blink_appearance_new,
+    hidden_stealth_appearance_new, hidden_stealth_appearance_old,
+    hidden_stealth_blink_appearance_new, hidden_stealth_blink_appearance_old,
+    hidden_sudden_appearance_new, hidden_sudden_appearance_old, hidden_sudden_blink_appearance_new,
     hidden_sudden_blink_appearance_old, hidden_sudden_stealth_appearance_new,
-    hidden_sudden_stealth_appearance_old, inner_pulse_new, inner_pulse_old, pulse_new, pulse_old,
-    rotation_new, rotation_old, stealth_blink_appearance_new, stealth_blink_appearance_old,
-    stealth_only_appearance_new, stealth_only_appearance_old, sudden_blink_appearance_new,
-    sudden_blink_appearance_old, sudden_only_appearance_new, sudden_only_appearance_old,
-    sudden_stealth_appearance_new, sudden_stealth_appearance_old, tornado_new, tornado_old,
-    wave_only_new, wave_only_old,
+    hidden_sudden_stealth_appearance_old, hidden_sudden_stealth_blink_appearance_new,
+    hidden_sudden_stealth_blink_appearance_old, inner_pulse_new, inner_pulse_old, pulse_new,
+    pulse_old, rotation_new, rotation_old, stealth_blink_appearance_new,
+    stealth_blink_appearance_old, stealth_only_appearance_new, stealth_only_appearance_old,
+    sudden_blink_appearance_new, sudden_blink_appearance_old, sudden_only_appearance_new,
+    sudden_only_appearance_old, sudden_stealth_appearance_new, sudden_stealth_appearance_old,
+    sudden_stealth_blink_appearance_new, sudden_stealth_blink_appearance_old, tornado_new,
+    tornado_old, wave_only_new, wave_only_old,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -295,6 +298,21 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    run(
+        "notefield Hidden+Stealth+Blink appearance",
+        hidden_stealth_blink_appearance_old,
+        hidden_stealth_blink_appearance_new,
+    );
+    run(
+        "notefield Sudden+Stealth+Blink appearance",
+        sudden_stealth_blink_appearance_old,
+        sudden_stealth_blink_appearance_new,
+    );
+    run(
+        "notefield Hidden+Sudden+Stealth+Blink appearance",
+        hidden_sudden_stealth_blink_appearance_old,
+        hidden_sudden_stealth_blink_appearance_new,
+    );
     run(
         "notefield Hidden+Blink appearance",
         hidden_blink_appearance_old,
