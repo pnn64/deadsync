@@ -26,11 +26,21 @@ pub fn is_srpg_event_song(song: &SongData) -> bool {
     song_pack_group(song).is_some_and(is_srpg_event_group)
 }
 
+#[inline]
+fn ascii_case_insensitive_find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
+}
+
 fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
-    let lower = name.to_ascii_lowercase();
-    let itl_pack = lower.contains("itl online ")
-        || (lower.starts_with("itl ") && lower.chars().any(|c| c.is_ascii_digit()));
+    let bytes = name.as_bytes();
+    let itl_pack = ascii_case_insensitive_find(bytes, b"itl online ").is_some()
+        || (bytes
+            .get(..b"itl ".len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"itl "))
+            && bytes.iter().any(u8::is_ascii_digit));
     if !itl_pack {
         return None;
     }
@@ -38,6 +48,30 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     // Personal ITL unlock packs are named "ITL Online <year> Unlocks - <username>".
     // Cut everything from the " Unlocks" marker onward (including any trailing
     // "- <username>") so the footer shows just the event name, e.g. "ITL Online 2026".
+    const UNLOCKS_MARKER: &str = " unlocks";
+    let name = match ascii_case_insensitive_find(bytes, UNLOCKS_MARKER.as_bytes()) {
+        Some(idx) => &name[..idx],
+        None => name,
+    };
+    Some(name.trim().to_string())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub fn itl_event_intro_name_for_bench(pack_group: &str) -> Option<String> {
+    itl_event_intro_name(pack_group)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn itl_event_intro_name_reference_for_bench(pack_group: &str) -> Option<String> {
+    let name = pack_group.trim();
+    let lower = name.to_ascii_lowercase();
+    let itl_pack = lower.contains("itl online ")
+        || (lower.starts_with("itl ") && lower.chars().any(|c| c.is_ascii_digit()));
+    if !itl_pack {
+        return None;
+    }
     const UNLOCKS_MARKER: &str = " unlocks";
     let name = match lower.find(UNLOCKS_MARKER) {
         Some(idx) => &name[..idx],
@@ -49,6 +83,24 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
 #[must_use]
 pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
+    let bytes = name.as_bytes();
+    if ascii_case_insensitive_find(bytes, b"stamina rpg 10").is_some()
+        || ascii_case_insensitive_find(bytes, b"srpg10").is_some()
+    {
+        return Some("Stamina RPG 10".to_string());
+    }
+    if ascii_case_insensitive_find(bytes, b"stamina rpg 9").is_some()
+        || ascii_case_insensitive_find(bytes, b"srpg9").is_some()
+    {
+        return Some("Stamina RPG 9".to_string());
+    }
+    itl_event_intro_name(name)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+pub fn event_intro_name_for_pack_reference_for_bench(pack_group: &str) -> Option<String> {
+    let name = pack_group.trim();
     let lower = name.to_ascii_lowercase();
     if lower.contains("stamina rpg 10") || lower.contains("srpg10") {
         return Some("Stamina RPG 10".to_string());
@@ -56,7 +108,7 @@ pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
         return Some("Stamina RPG 9".to_string());
     }
-    itl_event_intro_name(name)
+    itl_event_intro_name_reference_for_bench(name)
 }
 
 pub fn gameplay_event_intro_text(song: &SongData) -> Arc<str> {
@@ -175,6 +227,61 @@ mod tests {
     fn gameplay_event_intro_uses_srpg_name() {
         let song = test_song("Songs/Stamina RPG 9/Example/song.ssc", ["hard", "medium"]);
         assert_eq!(gameplay_event_intro_text(&song).as_ref(), "Stamina RPG 9");
+    }
+
+    #[test]
+    fn allocation_free_itl_intro_names_match_committed_behavior() {
+        let cases = [
+            ("ITL Online 2026", Some("ITL Online 2026")),
+            (
+                "  itl ONLINE 2026 UnLoCkS - Player  ",
+                Some("itl ONLINE 2026"),
+            ),
+            ("prefix ITL Online 2025", Some("prefix ITL Online 2025")),
+            ("ITL Community 17", Some("ITL Community 17")),
+            ("ITL Online", None),
+            ("ITL Community", None),
+            ("Stamina RPG 10", None),
+            (
+                "\u{00c9}t\u{00e9} ITL Online 2024",
+                Some("\u{00c9}t\u{00e9} ITL Online 2024"),
+            ),
+        ];
+
+        for (pack, expected) in cases {
+            let actual = itl_event_intro_name(pack);
+            assert_eq!(actual.as_deref(), expected, "case: {pack:?}");
+            assert_eq!(
+                actual,
+                itl_event_intro_name_reference_for_bench(pack),
+                "case: {pack:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_event_intro_names_match_committed_behavior() {
+        let cases = [
+            ("Stamina RPG 10 Unlocks", Some("Stamina RPG 10")),
+            ("prefix SRPG10 suffix", Some("Stamina RPG 10")),
+            ("STAMINA rpg 9", Some("Stamina RPG 9")),
+            ("srpg9 unlocks", Some("Stamina RPG 9")),
+            ("ITL Online 2026 Unlocks", Some("ITL Online 2026")),
+            ("ITL 2025", Some("ITL 2025")),
+            ("Regular Pack 12", None),
+            ("Stamina RPG Songs", None),
+            ("\u{00c9}t\u{00e9} SRPG10", Some("Stamina RPG 10")),
+        ];
+
+        for (pack, expected) in cases {
+            let actual = event_intro_name_for_pack(pack);
+            assert_eq!(actual.as_deref(), expected, "case: {pack:?}");
+            assert_eq!(
+                actual,
+                event_intro_name_for_pack_reference_for_bench(pack),
+                "case: {pack:?}"
+            );
+        }
     }
 
     #[test]

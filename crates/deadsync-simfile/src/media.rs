@@ -534,6 +534,19 @@ pub fn is_mac_resource_fork(path: &Path) -> bool {
 
 #[must_use]
 pub fn song_art_file_key(path: &Path) -> String {
+    let path = path.to_string_lossy();
+    let mut key = String::with_capacity(path.len());
+    key.extend(path.chars().map(|ch| match ch {
+        '\\' => '/',
+        _ => ch.to_ascii_lowercase(),
+    }));
+    key
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[doc(hidden)]
+#[must_use]
+pub fn song_art_file_key_reference_for_bench(path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "/")
         .to_ascii_lowercase()
@@ -596,6 +609,29 @@ mod tests {
         let path = PathBuf::from("Visuals").join("Banner.PNG");
         assert_eq!(song_art_file_key(&path), "visuals/banner.png");
         assert_eq!(song_art_file_stem(&path), Some("banner".to_string()));
+    }
+
+    #[test]
+    fn single_pass_song_art_keys_match_committed_behavior() {
+        let cases = [
+            ("Visuals/Banner.PNG", "visuals/banner.png"),
+            (r"Visuals\Pack\BANNER.JpG", "visuals/pack/banner.jpg"),
+            ("already/lower.png", "already/lower.png"),
+            ("MIXED\\slashes/Art.BMP", "mixed/slashes/art.bmp"),
+            ("\u{00c9}t\u{00e9}/ART.PNG", "\u{00c9}t\u{00e9}/art.png"),
+            ("", ""),
+        ];
+
+        for (path, expected) in cases {
+            let path = Path::new(path);
+            let actual = song_art_file_key(path);
+            assert_eq!(actual, expected, "case: {path:?}");
+            assert_eq!(
+                actual,
+                song_art_file_key_reference_for_bench(path),
+                "case: {path:?}"
+            );
+        }
     }
 
     #[test]
