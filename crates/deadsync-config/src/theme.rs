@@ -15,6 +15,144 @@ use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
 use std::str::FromStr;
 
+// All accepted punctuation-insensitive preference aliases fit in this stack
+// buffer. A longer normalized key cannot match any supported alias.
+const NORMALIZED_KEY_CAPACITY: usize = 32;
+
+struct NormalizedAsciiKey {
+    bytes: [u8; NORMALIZED_KEY_CAPACITY],
+    len: u8,
+}
+
+#[cfg(feature = "bench-support")]
+pub mod parse_reference {
+    use super::{
+        AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
+        AUTO_SS_QUADS, AUTO_SS_QUINTS, LanguageFlag, SelectMusicSort, SyncGraphMode,
+        auto_screenshot_bit,
+    };
+
+    fn normalized_key(raw: &str) -> String {
+        let mut key = String::with_capacity(raw.len());
+        for ch in raw.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        key
+    }
+
+    #[must_use]
+    pub fn select_music_sort(raw: &str) -> Option<SelectMusicSort> {
+        match normalized_key(raw).as_str() {
+            "series" => Some(SelectMusicSort::Series),
+            "group" => Some(SelectMusicSort::Group),
+            "title" => Some(SelectMusicSort::Title),
+            "artist" => Some(SelectMusicSort::Artist),
+            "genre" => Some(SelectMusicSort::Genre),
+            "bpm" => Some(SelectMusicSort::Bpm),
+            "length" => Some(SelectMusicSort::Length),
+            "meter" => Some(SelectMusicSort::Meter),
+            "popularity" | "popular" | "mostpopular" => Some(SelectMusicSort::Popularity),
+            "recent" | "recentlyplayed" => Some(SelectMusicSort::Recent),
+            "topgrades" | "grades" | "machinetopscores" => Some(SelectMusicSort::TopGrades),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn sync_graph_mode(raw: &str) -> Option<SyncGraphMode> {
+        match normalized_key(raw).as_str() {
+            "frequency" => Some(SyncGraphMode::Frequency),
+            "beatindex" | "beatdigest" | "digest" => Some(SyncGraphMode::BeatIndex),
+            "postkernelfingerprint" | "postkernel" | "fingerprint" => {
+                Some(SyncGraphMode::PostKernelFingerprint)
+            }
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn language(raw: &str) -> Option<LanguageFlag> {
+        match normalized_key(raw).as_str() {
+            "auto" => Some(LanguageFlag::Auto),
+            "english" | "en" => Some(LanguageFlag::English),
+            "german" | "de" => Some(LanguageFlag::German),
+            "spanish" | "es" => Some(LanguageFlag::Spanish),
+            "french" | "fr" => Some(LanguageFlag::French),
+            "italian" | "it" => Some(LanguageFlag::Italian),
+            "japanese" | "ja" => Some(LanguageFlag::Japanese),
+            "polish" | "pl" => Some(LanguageFlag::Polish),
+            "portuguesebrazil" | "brazilianportuguese" | "ptbr" => {
+                Some(LanguageFlag::PortugueseBrazil)
+            }
+            "russian" | "ru" => Some(LanguageFlag::Russian),
+            "swedish" | "sv" => Some(LanguageFlag::Swedish),
+            "pseudo" => Some(LanguageFlag::Pseudo),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
+        if mask == 0 {
+            return "Off".to_string();
+        }
+        let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+        for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+            if (mask & auto_screenshot_bit(idx)) != 0 {
+                parts.push(*name);
+            }
+        }
+        parts.join("|")
+    }
+
+    #[must_use]
+    pub fn auto_screenshot_mask_from_str(raw: &str) -> u8 {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+            return 0;
+        }
+        let mut mask = 0u8;
+        for part in trimmed.split('|') {
+            match part.trim().to_ascii_lowercase().as_str() {
+                "pbs" => mask |= AUTO_SS_PBS,
+                "fails" => mask |= AUTO_SS_FAILS,
+                "clears" => mask |= AUTO_SS_CLEARS,
+                "quads" => mask |= AUTO_SS_QUADS,
+                "quints" => mask |= AUTO_SS_QUINTS,
+                _ => {}
+            }
+        }
+        mask
+    }
+}
+
+impl NormalizedAsciiKey {
+    fn parse(raw: &str) -> Option<Self> {
+        let mut key = Self {
+            bytes: [0; NORMALIZED_KEY_CAPACITY],
+            len: 0,
+        };
+        for byte in raw.trim().bytes() {
+            if !byte.is_ascii_alphanumeric() {
+                continue;
+            }
+            let index = usize::from(key.len);
+            if index == NORMALIZED_KEY_CAPACITY {
+                return None;
+            }
+            key.bytes[index] = byte.to_ascii_lowercase();
+            key.len += 1;
+        }
+        Some(key)
+    }
+
+    fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..usize::from(self.len)]).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BreakdownStyle {
     Sl,
@@ -83,12 +221,9 @@ impl FromStr for SelectMusicSort {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(value.len());
-        for ch in value.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(value) else {
+            return Err(());
+        };
         match key.as_str() {
             "series" => Ok(Self::Series),
             "group" => Ok(Self::Group),
@@ -152,12 +287,9 @@ impl FromStr for SelectMusicDefaultSort {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(value.len());
-        for ch in value.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(value) else {
+            return Err(());
+        };
         match key.as_str() {
             "series" => Ok(Self::Series),
             "group" => Ok(Self::Group),
@@ -220,12 +352,9 @@ impl FromStr for RandomBackgroundMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "off" | "none" | "false" | "0" => Ok(Self::Off),
             "randommovies" | "randommovie" | "movies" | "movie" | "on" | "true" | "1" => {
@@ -381,12 +510,9 @@ impl FromStr for SelectMusicStepArtistBoxMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "default" | "theme" | "themedefault" => Ok(Self::Default),
             "legacy" | "small" | "sl" | "simplylove" => Ok(Self::Legacy),
@@ -418,12 +544,9 @@ impl FromStr for SelectMusicItlRankMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "none" | "off" | "disabled" | "disable" => Ok(Self::None),
             "chart" | "chartrank" | "leaderboard" | "leaderrank" => Ok(Self::Chart),
@@ -455,12 +578,9 @@ impl FromStr for SelectMusicItlWheelMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "off" | "disable" | "disabled" => Ok(Self::Off),
             "score" | "scores" => Ok(Self::Score),
@@ -493,12 +613,9 @@ impl FromStr for SelectMusicSongSelectBgMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "off" | "none" | "false" | "0" => Ok(Self::Off),
             "banner" | "banners" => Ok(Self::Banner),
@@ -528,12 +645,9 @@ impl FromStr for SelectMusicWheelStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "itg" => Ok(Self::Itg),
             "iidx" => Ok(Self::Iidx),
@@ -628,12 +742,9 @@ impl FromStr for VisualStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "hearts" | "heart" | "default" => Ok(Self::Hearts),
             "arrows" | "arrow" => Ok(Self::Arrows),
@@ -682,12 +793,7 @@ impl SrpgVariant {
 
     #[must_use]
     pub fn from_visual_style_str(s: &str) -> Option<Self> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let key = NormalizedAsciiKey::parse(s)?;
         match key.as_str() {
             "srpg9" | "srpg" => Some(Self::Srpg9),
             "srpg10" => Some(Self::Srpg10),
@@ -726,12 +832,9 @@ impl FromStr for NewPackMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "disabled" | "disable" | "off" => Ok(Self::Disabled),
             "openpack" | "open" => Ok(Self::OpenPack),
@@ -761,12 +864,9 @@ impl FromStr for SelectMusicScoreboxPlacement {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "auto" => Ok(Self::Auto),
             "steppane" | "pane" => Ok(Self::StepPane),
@@ -812,12 +912,9 @@ impl FromStr for GameplayBannerMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "static" | "off" | "false" | "0" => Ok(Self::Static),
             "once" | "playonce" => Ok(Self::Once),
@@ -841,12 +938,9 @@ impl FromStr for GameplayBpmPosition {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "topcenter" | "center" | "centered" | "normal" => Ok(Self::TopCenter),
             "nearfield" | "nearnotefield" | "notefield" | "field" => Ok(Self::NearField),
@@ -898,13 +992,27 @@ pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     if mask == 0 {
         return "Off".to_string();
     }
-    let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+    let mut capacity = 0usize;
+    let mut selected = 0usize;
     for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
         if (mask & auto_screenshot_bit(idx)) != 0 {
-            parts.push(*name);
+            capacity += name.len();
+            selected += 1;
         }
     }
-    parts.join("|")
+    capacity += selected.saturating_sub(1);
+
+    let mut out = String::with_capacity(capacity);
+    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+        if (mask & auto_screenshot_bit(idx)) == 0 {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push('|');
+        }
+        out.push_str(name);
+    }
+    out
 }
 
 #[must_use]
@@ -915,13 +1023,17 @@ pub fn auto_screenshot_mask_from_str(s: &str) -> u8 {
     }
     let mut mask = 0u8;
     for part in trimmed.split('|') {
-        match part.trim().to_ascii_lowercase().as_str() {
-            "pbs" => mask |= AUTO_SS_PBS,
-            "fails" => mask |= AUTO_SS_FAILS,
-            "clears" => mask |= AUTO_SS_CLEARS,
-            "quads" => mask |= AUTO_SS_QUADS,
-            "quints" => mask |= AUTO_SS_QUINTS,
-            _ => {}
+        let part = part.trim();
+        if part.eq_ignore_ascii_case("pbs") {
+            mask |= AUTO_SS_PBS;
+        } else if part.eq_ignore_ascii_case("fails") {
+            mask |= AUTO_SS_FAILS;
+        } else if part.eq_ignore_ascii_case("clears") {
+            mask |= AUTO_SS_CLEARS;
+        } else if part.eq_ignore_ascii_case("quads") {
+            mask |= AUTO_SS_QUADS;
+        } else if part.eq_ignore_ascii_case("quints") {
+            mask |= AUTO_SS_QUINTS;
         }
     }
     mask
@@ -958,12 +1070,9 @@ impl FromStr for SyncGraphMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "frequency" => Ok(Self::Frequency),
             "beatindex" | "beatdigest" | "digest" => Ok(Self::BeatIndex),
@@ -998,12 +1107,9 @@ impl FromStr for MachinePreferredPlayStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "single" | "1player" | "oneplayer" => Ok(Self::Single),
             "versus" | "2player" | "2players" | "twoplayer" | "twoplayers" => Ok(Self::Versus),
@@ -1071,12 +1177,9 @@ impl FromStr for ArrowCloudQrLoginWhen {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "always" => Ok(Self::Always),
             "sometimes" => Ok(Self::Sometimes),
@@ -1117,12 +1220,9 @@ impl FromStr for GrooveStatsQrLoginWhen {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "always" => Ok(Self::Always),
             "sometimes" => Ok(Self::Sometimes),
@@ -1242,12 +1342,9 @@ impl FromStr for MachineBarColor {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "default" => Ok(Self::Default),
             "colored" | "color" | "colour" | "coloured" | "srpg" | "srpg9" => Ok(Self::Colored),
@@ -1289,12 +1386,9 @@ impl FromStr for MachineEvaluationStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "default" | "auto" | "theme" | "themedriven" => Ok(Self::Default),
             "opaque" | "solid" | "hearts" => Ok(Self::Opaque),
@@ -1351,12 +1445,9 @@ impl FromStr for ThemeFlag {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "simplylove" => Ok(Self::SimplyLove),
             _ => Err(()),
@@ -1481,12 +1572,9 @@ impl FromStr for LanguageFlag {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = String::with_capacity(s.len());
-        for ch in s.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
+        let Some(key) = NormalizedAsciiKey::parse(s) else {
+            return Err(());
+        };
         match key.as_str() {
             "auto" => Ok(Self::Auto),
             "english" | "en" => Ok(Self::English),
@@ -2133,6 +2221,65 @@ impl FromStr for LogLevel {
 mod tests {
     use super::*;
 
+    fn legacy_normalized_key(raw: &str) -> String {
+        raw.trim()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|ch| ch.to_ascii_lowercase())
+            .collect()
+    }
+
+    fn legacy_auto_screenshot_mask_to_str(mask: u8) -> String {
+        if mask == 0 {
+            return "Off".to_string();
+        }
+        let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
+        for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
+            if (mask & auto_screenshot_bit(idx)) != 0 {
+                parts.push(*name);
+            }
+        }
+        parts.join("|")
+    }
+
+    fn legacy_auto_screenshot_mask_from_str(raw: &str) -> u8 {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
+            return 0;
+        }
+        let mut mask = 0u8;
+        for part in trimmed.split('|') {
+            match part.trim().to_ascii_lowercase().as_str() {
+                "pbs" => mask |= AUTO_SS_PBS,
+                "fails" => mask |= AUTO_SS_FAILS,
+                "clears" => mask |= AUTO_SS_CLEARS,
+                "quads" => mask |= AUTO_SS_QUADS,
+                "quints" => mask |= AUTO_SS_QUINTS,
+                _ => {}
+            }
+        }
+        mask
+    }
+
+    #[test]
+    fn stack_normalized_keys_match_legacy_behavior() {
+        for raw in [
+            "Simply Love",
+            "  POST-kernel_fingerprint ",
+            "1-player",
+            "sïmply_love",
+            "___",
+            "S----------------------------RPG10",
+        ] {
+            let key = NormalizedAsciiKey::parse(raw).expect("valid-size normalized key");
+            assert_eq!(key.as_str(), legacy_normalized_key(raw), "input {raw:?}");
+        }
+
+        let too_long = "a".repeat(NORMALIZED_KEY_CAPACITY + 1);
+        assert!(NormalizedAsciiKey::parse(&too_long).is_none());
+        assert!(legacy_normalized_key(&too_long).len() > NORMALIZED_KEY_CAPACITY);
+    }
+
     #[test]
     fn game_flag_round_trips_supported_games() {
         for game in [GameFlag::Dance, GameFlag::Pump] {
@@ -2315,6 +2462,27 @@ MachineEvaluationStyle=Default\n\
         let encoded = auto_screenshot_mask_to_str(mask);
         assert_eq!(encoded, "PBs|Clears|Quints");
         assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn streamed_auto_screenshot_codec_matches_legacy_for_every_mask() {
+        for mask in 0u8..(1u8 << AUTO_SS_NUM_FLAGS) {
+            let encoded = auto_screenshot_mask_to_str(mask);
+            assert_eq!(encoded, legacy_auto_screenshot_mask_to_str(mask));
+            assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+        }
+        for raw in [
+            " pBs | FAILS | clears | QUADS | Quints ",
+            "unknown|PBs||fails",
+            "Off",
+            "  ",
+        ] {
+            assert_eq!(
+                auto_screenshot_mask_from_str(raw),
+                legacy_auto_screenshot_mask_from_str(raw),
+                "input {raw:?}"
+            );
+        }
     }
 
     #[test]

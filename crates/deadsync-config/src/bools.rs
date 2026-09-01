@@ -1,9 +1,20 @@
 #[must_use]
 pub fn parse_bool_str(raw: &str) -> Option<bool> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
-        "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
+    let raw = raw.trim();
+    if matches!(raw, "1")
+        || raw.eq_ignore_ascii_case("true")
+        || raw.eq_ignore_ascii_case("yes")
+        || raw.eq_ignore_ascii_case("on")
+    {
+        Some(true)
+    } else if matches!(raw, "0")
+        || raw.eq_ignore_ascii_case("false")
+        || raw.eq_ignore_ascii_case("no")
+        || raw.eq_ignore_ascii_case("off")
+    {
+        Some(false)
+    } else {
+        None
     }
 }
 
@@ -29,6 +40,14 @@ pub fn parse_u8_bool_or_default(raw: Option<&str>, default: bool) -> bool {
 mod tests {
     use super::*;
 
+    fn legacy_parse_bool_str(raw: &str) -> Option<bool> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        }
+    }
+
     #[test]
     fn parses_named_bool_values() {
         for raw in ["1", "true", "TRUE", " yes ", "on"] {
@@ -44,6 +63,20 @@ mod tests {
         assert_eq!(parse_bool_str(""), None);
         assert_eq!(parse_bool_str("2"), None);
         assert_eq!(parse_bool_str("maybe"), None);
+    }
+
+    #[test]
+    fn borrowed_bool_parser_matches_legacy_behavior() {
+        for raw in [
+            "1", "0", "TRUE", "False", "YeS", "oN", " OFF ", "\tno\r\n", "", "2", "truth", "trüe",
+            " true! ",
+        ] {
+            assert_eq!(
+                parse_bool_str(raw),
+                legacy_parse_bool_str(raw),
+                "input {raw:?}"
+            );
+        }
     }
 
     #[test]
@@ -63,5 +96,17 @@ mod tests {
         assert_eq!(parse_u8_bool_str("true"), None);
         assert!(parse_u8_bool_or_default(Some("bad"), true));
         assert!(!parse_u8_bool_or_default(None, false));
+    }
+}
+
+#[cfg(feature = "bench-support")]
+pub mod parse_reference {
+    #[must_use]
+    pub fn bool_str(raw: &str) -> Option<bool> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        }
     }
 }
