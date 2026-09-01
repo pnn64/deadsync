@@ -488,6 +488,129 @@ pub struct PadConfigData {
     pub panel_debounce_us: u16,
 }
 
+#[inline(always)]
+fn push_u8_decimal(out: &mut String, value: u8) {
+    if value >= 100 {
+        out.push(char::from(b'0' + value / 100));
+        out.push(char::from(b'0' + value / 10 % 10));
+    } else if value >= 10 {
+        out.push(char::from(b'0' + value / 10));
+    }
+    out.push(char::from(b'0' + value % 10));
+}
+
+#[inline]
+fn sensor_values_string(values: &[u8; PAD_CONFIG_SENSORS]) -> String {
+    // Four maximum-width byte values plus their three separators.
+    let mut out = String::with_capacity(PAD_CONFIG_SENSORS * 4 - 1);
+    for (index, &value) in values.iter().enumerate() {
+        if index != 0 {
+            out.push(' ');
+        }
+        push_u8_decimal(&mut out, value);
+    }
+    out
+}
+
+#[inline]
+fn parse_sensor_values(raw: &str) -> Option<[u8; PAD_CONFIG_SENSORS]> {
+    let mut tokens = raw.split_whitespace();
+    let mut values = [0; PAD_CONFIG_SENSORS];
+    for value in &mut values {
+        *value = tokens.next()?.parse::<u8>().ok()?;
+    }
+    tokens.next().is_none().then_some(values)
+}
+
+#[derive(Clone, Copy)]
+enum PanelSettingKind {
+    FsrLow,
+    FsrHigh,
+    LoadCellLow,
+    LoadCellHigh,
+    Enabled,
+}
+
+#[derive(Clone, Copy, Default)]
+struct PanelSettingValues<'a> {
+    fsr_low: Option<&'a str>,
+    fsr_high: Option<&'a str>,
+    load_cell_low: Option<&'a str>,
+    load_cell_high: Option<&'a str>,
+    enabled: Option<&'a str>,
+}
+
+impl<'a> PanelSettingValues<'a> {
+    #[inline(always)]
+    fn insert_first(&mut self, kind: PanelSettingKind, value: &'a str) {
+        let slot = match kind {
+            PanelSettingKind::FsrLow => &mut self.fsr_low,
+            PanelSettingKind::FsrHigh => &mut self.fsr_high,
+            PanelSettingKind::LoadCellLow => &mut self.load_cell_low,
+            PanelSettingKind::LoadCellHigh => &mut self.load_cell_high,
+            PanelSettingKind::Enabled => &mut self.enabled,
+        };
+        if slot.is_none() {
+            *slot = Some(value);
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct IndexedPadConfigSettings<'a> {
+    panels: [PanelSettingValues<'a>; PAD_CONFIG_PANELS],
+    auto_calibration_max_tare: Option<&'a str>,
+    debounce_ms: Option<&'a str>,
+}
+
+#[inline]
+fn panel_setting_key(key: &str) -> Option<(usize, PanelSettingKind)> {
+    let (panel, field) = key.strip_prefix("Panel")?.split_once('.')?;
+    // The canonical keys written by `to_settings` use exactly one digit for
+    // the nine physical panels. Reject aliases such as `Panel01` so indexing
+    // retains the old exact-string lookup behavior.
+    let [digit] = panel.as_bytes() else {
+        return None;
+    };
+    let panel = usize::from(digit.checked_sub(b'0')?);
+    if panel >= PAD_CONFIG_PANELS {
+        return None;
+    }
+    let kind = match field {
+        "FsrLow" => PanelSettingKind::FsrLow,
+        "FsrHigh" => PanelSettingKind::FsrHigh,
+        "LoadCellLow" => PanelSettingKind::LoadCellLow,
+        "LoadCellHigh" => PanelSettingKind::LoadCellHigh,
+        "Enabled" => PanelSettingKind::Enabled,
+        _ => return None,
+    };
+    Some((panel, kind))
+}
+
+fn index_pad_config_settings(settings: &[(String, String)]) -> IndexedPadConfigSettings<'_> {
+    let mut indexed = IndexedPadConfigSettings {
+        panels: [PanelSettingValues::default(); PAD_CONFIG_PANELS],
+        auto_calibration_max_tare: None,
+        debounce_ms: None,
+    };
+    for (key, value) in settings {
+        match key.as_str() {
+            "AutoCalibrationMaxTare" => {
+                indexed.auto_calibration_max_tare.get_or_insert(value);
+            }
+            "DebounceMs" => {
+                indexed.debounce_ms.get_or_insert(value);
+            }
+            key => {
+                if let Some((panel, kind)) = panel_setting_key(key) {
+                    indexed.panels[panel].insert_first(kind, value);
+                }
+            }
+        }
+    }
+    indexed
+}
+
 impl PadConfigData {
     /// Encode to a human-readable, hand-editable key/value list for
     /// `padconfig.ini`: per-panel FSR low/high arrays, load-cell low/high, and
@@ -495,11 +618,16 @@ impl PadConfigData {
     /// debounce (in milliseconds).
     #[must_use]
     pub fn to_settings(&self) -> Vec<(String, String)> {
-        let join = |xs: &[u8]| xs.iter().map(u8::to_string).collect::<Vec<_>>().join(" ");
         let mut out = Vec::with_capacity(PAD_CONFIG_PANELS * 5 + 2);
         for (p, panel) in self.panels.iter().enumerate() {
-            out.push((format!("Panel{p}.FsrLow"), join(&panel.fsr_low)));
-            out.push((format!("Panel{p}.FsrHigh"), join(&panel.fsr_high)));
+            out.push((
+                format!("Panel{p}.FsrLow"),
+                sensor_values_string(&panel.fsr_low),
+            ));
+            out.push((
+                format!("Panel{p}.FsrHigh"),
+                sensor_values_string(&panel.fsr_high),
+            ));
             out.push((
                 format!("Panel{p}.LoadCellLow"),
                 panel.load_cell_low.to_string(),
@@ -508,13 +636,11 @@ impl PadConfigData {
                 format!("Panel{p}.LoadCellHigh"),
                 panel.load_cell_high.to_string(),
             ));
-            let enabled: Vec<u8> = (0..PAD_CONFIG_SENSORS)
-                .map(|s| {
-                    let (byte, mask) = enabled_bit(p, s);
-                    u8::from(self.enabled_sensors[byte] & mask != 0)
-                })
-                .collect();
-            out.push((format!("Panel{p}.Enabled"), join(&enabled)));
+            let enabled = std::array::from_fn(|s| {
+                let (byte, mask) = enabled_bit(p, s);
+                u8::from(self.enabled_sensors[byte] & mask != 0)
+            });
+            out.push((format!("Panel{p}.Enabled"), sensor_values_string(&enabled)));
         }
         out.push((
             "AutoCalibrationMaxTare".to_string(),
@@ -531,26 +657,7 @@ impl PadConfigData {
     /// if any expected key is missing or malformed.
     #[must_use]
     pub fn from_settings(settings: &[(String, String)]) -> Option<Self> {
-        let get = |key: &str| {
-            settings
-                .iter()
-                .find(|(k, _)| k == key)
-                .map(|(_, v)| v.as_str())
-        };
-        let arr = |key: &str| -> Option<[u8; PAD_CONFIG_SENSORS]> {
-            let nums: Vec<u8> = get(key)?
-                .split_whitespace()
-                .map(|t| t.parse::<u8>().ok())
-                .collect::<Option<Vec<u8>>>()?;
-            if nums.len() != PAD_CONFIG_SENSORS {
-                return None;
-            }
-            let mut a = [0u8; PAD_CONFIG_SENSORS];
-            a.copy_from_slice(&nums);
-            Some(a)
-        };
-        let byte = |key: &str| get(key)?.trim().parse::<u8>().ok();
-
+        let indexed = index_pad_config_settings(settings);
         let mut panels = [PanelThresholds {
             fsr_low: [0; PAD_CONFIG_SENSORS],
             fsr_high: [0; PAD_CONFIG_SENSORS],
@@ -559,20 +666,24 @@ impl PadConfigData {
         }; PAD_CONFIG_PANELS];
         let mut enabled_sensors = [0u8; 5];
         for (p, panel) in panels.iter_mut().enumerate() {
-            panel.fsr_low = arr(&format!("Panel{p}.FsrLow"))?;
-            panel.fsr_high = arr(&format!("Panel{p}.FsrHigh"))?;
-            panel.load_cell_low = byte(&format!("Panel{p}.LoadCellLow"))?;
-            panel.load_cell_high = byte(&format!("Panel{p}.LoadCellHigh"))?;
-            for (s, &e) in arr(&format!("Panel{p}.Enabled"))?.iter().enumerate() {
+            let values = indexed.panels[p];
+            panel.fsr_low = parse_sensor_values(values.fsr_low?)?;
+            panel.fsr_high = parse_sensor_values(values.fsr_high?)?;
+            panel.load_cell_low = values.load_cell_low?.trim().parse::<u8>().ok()?;
+            panel.load_cell_high = values.load_cell_high?.trim().parse::<u8>().ok()?;
+            for (s, &e) in parse_sensor_values(values.enabled?)?.iter().enumerate() {
                 if e != 0 {
                     let (bidx, mask) = enabled_bit(p, s);
                     enabled_sensors[bidx] |= mask;
                 }
             }
         }
-        let auto_calibration_max_tare =
-            get("AutoCalibrationMaxTare")?.trim().parse::<u16>().ok()?;
-        let debounce_ms = get("DebounceMs")?.trim().parse::<f32>().ok()?;
+        let auto_calibration_max_tare = indexed
+            .auto_calibration_max_tare?
+            .trim()
+            .parse::<u16>()
+            .ok()?;
+        let debounce_ms = indexed.debounce_ms?.trim().parse::<f32>().ok()?;
         let panel_debounce_us = (debounce_ms * 1000.0)
             .round()
             .clamp(0.0, f32::from(u16::MAX)) as u16;
@@ -1244,17 +1355,321 @@ pub fn trigger_label(device: usize, code: u32) -> Option<String> {
     Some(format!("SMX P{player} {panel}"))
 }
 
+#[cfg(any(test, feature = "bench-support"))]
+mod pad_config_reference {
+    use super::{
+        PAD_CONFIG_PANELS, PAD_CONFIG_SENSORS, PadConfigData, PanelThresholds, enabled_bit,
+    };
+
+    pub(super) fn sensor_values_string(values: &[u8; PAD_CONFIG_SENSORS]) -> String {
+        values
+            .iter()
+            .map(u8::to_string)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    pub(super) fn parse_sensor_values(raw: &str) -> Option<[u8; PAD_CONFIG_SENSORS]> {
+        let nums: Vec<u8> = raw
+            .split_whitespace()
+            .map(|token| token.parse::<u8>().ok())
+            .collect::<Option<Vec<u8>>>()?;
+        if nums.len() != PAD_CONFIG_SENSORS {
+            return None;
+        }
+        let mut values = [0; PAD_CONFIG_SENSORS];
+        values.copy_from_slice(&nums);
+        Some(values)
+    }
+
+    pub(super) fn to_settings(data: &PadConfigData) -> Vec<(String, String)> {
+        let mut out = Vec::with_capacity(PAD_CONFIG_PANELS * 5 + 2);
+        for (panel_index, panel) in data.panels.iter().enumerate() {
+            out.push((
+                format!("Panel{panel_index}.FsrLow"),
+                sensor_values_string(&panel.fsr_low),
+            ));
+            out.push((
+                format!("Panel{panel_index}.FsrHigh"),
+                sensor_values_string(&panel.fsr_high),
+            ));
+            out.push((
+                format!("Panel{panel_index}.LoadCellLow"),
+                panel.load_cell_low.to_string(),
+            ));
+            out.push((
+                format!("Panel{panel_index}.LoadCellHigh"),
+                panel.load_cell_high.to_string(),
+            ));
+            let enabled: Vec<u8> = (0..PAD_CONFIG_SENSORS)
+                .map(|sensor| {
+                    let (byte, mask) = enabled_bit(panel_index, sensor);
+                    u8::from(data.enabled_sensors[byte] & mask != 0)
+                })
+                .collect();
+            out.push((
+                format!("Panel{panel_index}.Enabled"),
+                sensor_values_string(enabled.as_slice().try_into().expect("fixed sensor count")),
+            ));
+        }
+        out.push((
+            "AutoCalibrationMaxTare".to_string(),
+            data.auto_calibration_max_tare.to_string(),
+        ));
+        out.push((
+            "DebounceMs".to_string(),
+            format!("{}", f32::from(data.panel_debounce_us) / 1000.0),
+        ));
+        out
+    }
+
+    pub(super) fn from_settings(settings: &[(String, String)]) -> Option<PadConfigData> {
+        let get = |key: &str| {
+            settings
+                .iter()
+                .find(|(candidate, _)| candidate == key)
+                .map(|(_, value)| value.as_str())
+        };
+        let arr = |key: &str| parse_sensor_values(get(key)?);
+        let byte = |key: &str| get(key)?.trim().parse::<u8>().ok();
+
+        let mut panels = [PanelThresholds {
+            fsr_low: [0; PAD_CONFIG_SENSORS],
+            fsr_high: [0; PAD_CONFIG_SENSORS],
+            load_cell_low: 0,
+            load_cell_high: 0,
+        }; PAD_CONFIG_PANELS];
+        let mut enabled_sensors = [0u8; 5];
+        for (panel_index, panel) in panels.iter_mut().enumerate() {
+            panel.fsr_low = arr(&format!("Panel{panel_index}.FsrLow"))?;
+            panel.fsr_high = arr(&format!("Panel{panel_index}.FsrHigh"))?;
+            panel.load_cell_low = byte(&format!("Panel{panel_index}.LoadCellLow"))?;
+            panel.load_cell_high = byte(&format!("Panel{panel_index}.LoadCellHigh"))?;
+            for (sensor, &enabled) in arr(&format!("Panel{panel_index}.Enabled"))?
+                .iter()
+                .enumerate()
+            {
+                if enabled != 0 {
+                    let (byte, mask) = enabled_bit(panel_index, sensor);
+                    enabled_sensors[byte] |= mask;
+                }
+            }
+        }
+        let auto_calibration_max_tare =
+            get("AutoCalibrationMaxTare")?.trim().parse::<u16>().ok()?;
+        let debounce_ms = get("DebounceMs")?.trim().parse::<f32>().ok()?;
+        let panel_debounce_us = (debounce_ms * 1000.0)
+            .round()
+            .clamp(0.0, f32::from(u16::MAX)) as u16;
+        Some(PadConfigData {
+            panels,
+            enabled_sensors,
+            auto_calibration_max_tare,
+            panel_debounce_us,
+        })
+    }
+}
+
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
     use super::{
-        BYTES_PER_PAD_25, BrightnessScale, PLATFORM_LIGHT_FRAME_BYTES, PLATFORM_STRIP_LEDS,
-        PLAYER_LIGHT_FRAME_BYTES, apply_brightness, panels, platform_light_frame,
-        player_light_frame,
+        BYTES_PER_PAD_25, BrightnessScale, PAD_CONFIG_PANELS, PAD_CONFIG_SENSORS,
+        PLATFORM_LIGHT_FRAME_BYTES, PLATFORM_STRIP_LEDS, PLAYER_LIGHT_FRAME_BYTES, PadConfigData,
+        PanelSettingValues, PanelThresholds, apply_brightness, index_pad_config_settings,
+        pad_config_reference, panels, parse_sensor_values, platform_light_frame,
+        player_light_frame, sensor_values_string,
     };
     use std::hint::black_box;
 
     const COLORS: [Option<[u8; 3]>; 2] = [Some([241, 37, 109]), Some([13, 197, 83])];
     const BRIGHTNESS: [u8; 2] = [37, 81];
+
+    pub struct PadConfigBenchmark {
+        data: PadConfigData,
+        settings: Vec<(String, String)>,
+        sensor_values: [u8; PAD_CONFIG_SENSORS],
+        sensor_text: String,
+    }
+
+    impl PadConfigBenchmark {
+        #[must_use]
+        pub fn new() -> Self {
+            let mut data = PadConfigData {
+                panels: [PanelThresholds {
+                    fsr_low: [0; PAD_CONFIG_SENSORS],
+                    fsr_high: [0; PAD_CONFIG_SENSORS],
+                    load_cell_low: 0,
+                    load_cell_high: 0,
+                }; PAD_CONFIG_PANELS],
+                enabled_sensors: [0x12, 0x34, 0x56, 0x78, 0x90],
+                auto_calibration_max_tare: u16::MAX,
+                panel_debounce_us: 4_500,
+            };
+            for (index, panel) in data.panels.iter_mut().enumerate() {
+                let base = (index * 23) as u8;
+                panel.fsr_low = [base, base + 1, base + 2, base + 3];
+                panel.fsr_high = [base + 4, base + 5, base + 6, base + 7];
+                panel.load_cell_low = base + 8;
+                panel.load_cell_high = base + 9;
+            }
+            let settings = pad_config_reference::to_settings(&data);
+            let sensor_values = [0, 9, 87, 255];
+            let sensor_text = "0 9 87 255".to_string();
+            Self {
+                data,
+                settings,
+                sensor_values,
+                sensor_text,
+            }
+        }
+
+        #[must_use]
+        pub fn format_sensor_values_old(&self) -> u64 {
+            text_checksum(&pad_config_reference::sensor_values_string(black_box(
+                &self.sensor_values,
+            )))
+        }
+
+        #[must_use]
+        pub fn format_sensor_values_new(&self) -> u64 {
+            text_checksum(&sensor_values_string(black_box(&self.sensor_values)))
+        }
+
+        #[must_use]
+        pub fn index_settings_old(&self) -> u64 {
+            settings_lookup_checksum_reference(black_box(&self.settings))
+                .expect("benchmark settings are complete")
+        }
+
+        #[must_use]
+        pub fn index_settings_new(&self) -> u64 {
+            settings_lookup_checksum_indexed(black_box(&self.settings))
+                .expect("benchmark settings are complete")
+        }
+
+        #[must_use]
+        pub fn parse_sensor_values_old(&self) -> u64 {
+            sensor_checksum(pad_config_reference::parse_sensor_values(black_box(
+                &self.sensor_text,
+            )))
+        }
+
+        #[must_use]
+        pub fn parse_sensor_values_new(&self) -> u64 {
+            sensor_checksum(parse_sensor_values(black_box(&self.sensor_text)))
+        }
+
+        #[must_use]
+        pub fn encode_old(&self) -> u64 {
+            settings_checksum(&pad_config_reference::to_settings(black_box(&self.data)))
+        }
+
+        #[must_use]
+        pub fn encode_new(&self) -> u64 {
+            settings_checksum(&black_box(&self.data).to_settings())
+        }
+
+        #[must_use]
+        pub fn decode_old(&self) -> u64 {
+            config_checksum(pad_config_reference::from_settings(black_box(
+                &self.settings,
+            )))
+        }
+
+        #[must_use]
+        pub fn decode_new(&self) -> u64 {
+            config_checksum(PadConfigData::from_settings(black_box(&self.settings)))
+        }
+    }
+
+    impl Default for PadConfigBenchmark {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    fn text_checksum(text: &str) -> u64 {
+        text.bytes().fold(text.len() as u64, |checksum, byte| {
+            checksum.rotate_left(5) ^ u64::from(byte)
+        })
+    }
+
+    fn sensor_checksum(values: Option<[u8; PAD_CONFIG_SENSORS]>) -> u64 {
+        values.map_or(u64::MAX, |values| {
+            values.into_iter().fold(0, |checksum, value| {
+                checksum.rotate_left(8) | u64::from(value)
+            })
+        })
+    }
+
+    fn settings_checksum(settings: &[(String, String)]) -> u64 {
+        settings.iter().fold(0, |checksum, (key, value)| {
+            text_checksum(key).wrapping_add(text_checksum(value).rotate_left(17)) ^ checksum
+        })
+    }
+
+    fn config_checksum(data: Option<PadConfigData>) -> u64 {
+        let Some(data) = data else {
+            return u64::MAX;
+        };
+        let mut checksum =
+            u64::from(data.auto_calibration_max_tare) ^ (u64::from(data.panel_debounce_us) << 16);
+        for panel in data.panels {
+            for value in panel.fsr_low.into_iter().chain(panel.fsr_high) {
+                checksum = checksum.rotate_left(5) ^ u64::from(value);
+            }
+            checksum = checksum.rotate_left(5) ^ u64::from(panel.load_cell_low);
+            checksum = checksum.rotate_left(5) ^ u64::from(panel.load_cell_high);
+        }
+        for value in data.enabled_sensors {
+            checksum = checksum.rotate_left(5) ^ u64::from(value);
+        }
+        checksum
+    }
+
+    fn hash_setting(checksum: &mut u64, value: Option<&str>) -> Option<()> {
+        *checksum = checksum.rotate_left(7) ^ text_checksum(value?);
+        Some(())
+    }
+
+    fn settings_lookup_checksum_reference(settings: &[(String, String)]) -> Option<u64> {
+        let get = |key: &str| {
+            settings
+                .iter()
+                .find(|(candidate, _)| candidate == key)
+                .map(|(_, value)| value.as_str())
+        };
+        let mut checksum = 0;
+        for panel in 0..PAD_CONFIG_PANELS {
+            hash_setting(&mut checksum, get(&format!("Panel{panel}.FsrLow")))?;
+            hash_setting(&mut checksum, get(&format!("Panel{panel}.FsrHigh")))?;
+            hash_setting(&mut checksum, get(&format!("Panel{panel}.LoadCellLow")))?;
+            hash_setting(&mut checksum, get(&format!("Panel{panel}.LoadCellHigh")))?;
+            hash_setting(&mut checksum, get(&format!("Panel{panel}.Enabled")))?;
+        }
+        hash_setting(&mut checksum, get("AutoCalibrationMaxTare"))?;
+        hash_setting(&mut checksum, get("DebounceMs"))?;
+        Some(checksum)
+    }
+
+    fn hash_panel_settings(checksum: &mut u64, values: PanelSettingValues<'_>) -> Option<()> {
+        hash_setting(checksum, values.fsr_low)?;
+        hash_setting(checksum, values.fsr_high)?;
+        hash_setting(checksum, values.load_cell_low)?;
+        hash_setting(checksum, values.load_cell_high)?;
+        hash_setting(checksum, values.enabled)
+    }
+
+    fn settings_lookup_checksum_indexed(settings: &[(String, String)]) -> Option<u64> {
+        let indexed = index_pad_config_settings(settings);
+        let mut checksum = 0;
+        for values in indexed.panels {
+            hash_panel_settings(&mut checksum, values)?;
+        }
+        hash_setting(&mut checksum, indexed.auto_calibration_max_tare)?;
+        hash_setting(&mut checksum, indexed.debounce_ms)?;
+        Some(checksum)
+    }
 
     fn preview_frames_old(events: usize) -> u64 {
         let mut checksum = 0u64;
@@ -1574,6 +1989,82 @@ mod tests {
         missing.retain(|(k, _)| k != "Panel3.FsrHigh");
         assert_eq!(PadConfigData::from_settings(&missing), None);
         assert_eq!(PadConfigData::from_settings(&[]), None);
+    }
+
+    #[test]
+    fn direct_sensor_formatting_matches_reference_for_every_byte() {
+        for value in 0..=u8::MAX {
+            let values = [value, value.wrapping_add(1), 10, u8::MAX];
+            assert_eq!(
+                super::sensor_values_string(&values),
+                super::pad_config_reference::sensor_values_string(&values),
+                "value={value}",
+            );
+        }
+    }
+
+    #[test]
+    fn fixed_sensor_parser_matches_reference_edge_cases() {
+        for raw in [
+            "0 1 2 3",
+            "  0\t1\n2  255  ",
+            "0\u{2003}1\u{2003}2\u{2003}3",
+            "0 1 2",
+            "0 1 2 3 4",
+            "0 1 2 256",
+            "0 1 -2 3",
+            "0 1 nope 3",
+            "",
+        ] {
+            assert_eq!(
+                super::parse_sensor_values(raw),
+                super::pad_config_reference::parse_sensor_values(raw),
+                "raw={raw:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn indexed_pad_config_decode_preserves_first_exact_key_semantics() {
+        let data = PadConfigData {
+            panels: std::array::from_fn(|panel| PanelThresholds {
+                fsr_low: [panel as u8, 10, 100, 255],
+                fsr_high: [255, 100, 10, panel as u8],
+                load_cell_low: panel as u8,
+                load_cell_high: 255 - panel as u8,
+            }),
+            enabled_sensors: [0x12, 0x34, 0x56, 0x78, 0x90],
+            auto_calibration_max_tare: 65_535,
+            panel_debounce_us: 4_500,
+        };
+        let expected_settings = super::pad_config_reference::to_settings(&data);
+        assert_eq!(data.to_settings(), expected_settings);
+
+        let mut reordered = expected_settings;
+        reordered.reverse();
+        reordered.insert(0, ("Panel0.FsrLow".to_string(), "9 8 7 6".to_string()));
+        reordered.push(("Panel0.FsrLow".to_string(), "1 1 1 1".to_string()));
+        reordered.insert(0, ("Panel00.FsrLow".to_string(), "2 2 2 2".to_string()));
+        reordered.push(("Unknown".to_string(), "ignored".to_string()));
+
+        assert_eq!(
+            PadConfigData::from_settings(&reordered),
+            super::pad_config_reference::from_settings(&reordered),
+        );
+
+        for malformed in ["0 1 2", "0 1 2 3 4", "0 1 2 999", "0 1 x 3"] {
+            let mut settings = data.to_settings();
+            settings
+                .iter_mut()
+                .find(|(key, _)| key == "Panel4.Enabled")
+                .expect("fixture setting")
+                .1 = malformed.to_string();
+            assert_eq!(
+                PadConfigData::from_settings(&settings),
+                super::pad_config_reference::from_settings(&settings),
+                "malformed={malformed:?}",
+            );
+        }
     }
 
     #[test]

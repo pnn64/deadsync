@@ -17,6 +17,11 @@ name = "gif_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "pad_config_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
