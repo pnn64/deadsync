@@ -8,6 +8,11 @@ use deadsync_noteskin::compiled::compiled_key_bench_support::{
     actor_file_visit_current, actor_file_visit_reference, actor_manifest_current,
     actor_manifest_reference, actor_visit_current, actor_visit_reference,
 };
+use deadsync_noteskin::compiler::compiler_bench_support::{
+    cache_key_current, cache_key_reference, source_label_current, source_label_reference,
+    source_order_current, source_order_reference,
+};
+use deadsync_noteskin::itg::{IniData, NoteskinData};
 use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
@@ -36,7 +41,7 @@ use deadsync_noteskin::script::{
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -1247,5 +1252,112 @@ fn main() {
         "borrowed model material flag scan (8 representative names)",
         &old_materials,
         &new_materials,
+    );
+
+    let cache_key_cases = [
+        (" Dance ", " Default "),
+        ("PUMP", "CeL"),
+        ("techno", "Café"),
+        (" KBX ", " Delta "),
+        ("", ""),
+    ];
+    let cache_key_suite = |build: fn(&str, &str) -> String| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for (game, skin) in cache_key_cases {
+                let key = black_box(build(black_box(game), black_box(skin)));
+                checksum = text_checksum(checksum, black_box(&key));
+            }
+        }
+        checksum
+    };
+    let (old_cache_keys, new_cache_keys) = measure_pair(
+        1_024,
+        cache_key_cases.len() * REPEATS,
+        || cache_key_suite(cache_key_reference),
+        || cache_key_suite(cache_key_current),
+    );
+    assert_improved(
+        "single-buffer compiler hash-cache keys",
+        &old_cache_keys,
+        &new_cache_keys,
+    );
+    print_pair(
+        "single-buffer compiler hash-cache keys (5 representative pairs)",
+        &old_cache_keys,
+        &new_cache_keys,
+    );
+
+    let compiler_dir = PathBuf::from("Assets")
+        .join("NoteSkins")
+        .join("DaNcE")
+        .join("DeFaUlT");
+    let compiler_data = NoteskinData {
+        name: "Default".to_string(),
+        metrics: IniData::default(),
+        search_dirs: vec![compiler_dir.clone()],
+    };
+    let compiler_paths = vec![
+        compiler_dir.join("Zeta.lua"),
+        compiler_dir.join("alpha.lua"),
+        compiler_dir.join("Down Receptor.LUA"),
+        compiler_dir.join("Café Tap Note.lua"),
+        compiler_dir.join("NoteSkin.lua"),
+        compiler_dir.join("metrics.ini"),
+        PathBuf::from("External\\Fallback Actor.lua"),
+        PathBuf::from("ProgramData/ITGmania/Global.lua"),
+    ];
+    let source_label_suite = |build: fn(&NoteskinData, &Path) -> String| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for path in &compiler_paths {
+                let label = black_box(build(black_box(&compiler_data), black_box(path.as_path())));
+                checksum = text_checksum(checksum, black_box(&label));
+            }
+        }
+        checksum
+    };
+    let (old_source_labels, new_source_labels) = measure_pair(
+        1_024,
+        compiler_paths.len() * REPEATS,
+        || source_label_suite(source_label_reference),
+        || source_label_suite(source_label_current),
+    );
+    assert_improved(
+        "single-buffer compiler source labels",
+        &old_source_labels,
+        &new_source_labels,
+    );
+    print_pair(
+        "single-buffer compiler source labels (8 representative paths)",
+        &old_source_labels,
+        &new_source_labels,
+    );
+
+    let source_order_suite = |order: fn(&NoteskinData, &[PathBuf]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(
+                checksum,
+                black_box(order(black_box(&compiler_data), black_box(&compiler_paths))),
+            );
+        }
+        checksum
+    };
+    let (old_source_order, new_source_order) = measure_pair(
+        1_024,
+        compiler_paths.len() * REPEATS,
+        || source_order_suite(source_order_reference),
+        || source_order_suite(source_order_current),
+    );
+    assert_improved(
+        "cached compiler source-label ordering",
+        &old_source_order,
+        &new_source_order,
+    );
+    print_pair(
+        "cached compiler source-label ordering (8 representative paths)",
+        &old_source_order,
+        &new_source_order,
     );
 }

@@ -201,29 +201,42 @@ fn remember_source_hash(game: &str, skin: &str, source_hash: &str) {
 }
 
 fn compiled_hash_cache_key(game: &str, skin: &str) -> String {
-    format!(
-        "{}/{}",
-        game.trim().to_ascii_lowercase(),
-        skin.trim().to_ascii_lowercase()
-    )
+    let game = game.trim();
+    let skin = skin.trim();
+    let mut key = String::with_capacity(game.len() + 1 + skin.len());
+    key.push_str(game);
+    key.push('/');
+    key.push_str(skin);
+    key.make_ascii_lowercase();
+    key
 }
 
 fn source_hash(game: &str, data: &noteskin_itg::NoteskinData) -> Result<String, String> {
-    let mut paths = source_paths(data);
-    paths.sort_by_key(|left| source_label(data, left));
+    let sources = labeled_source_paths(data, source_paths(data));
     let mut hasher = XxHash64::default();
     hasher.write_u32(noteskin_compiled::CACHE_SCHEMA_VERSION);
     hasher.write_u32(COMPILER_VERSION);
     hasher.write(game.as_bytes());
     hasher.write(data.name.as_bytes());
-    for path in paths {
-        let label = source_label(data, &path);
+    for (label, path) in sources {
         hasher.write(label.as_bytes());
         let bytes = fs::read(&path)
             .map_err(|err| format!("failed to read '{}' for hashing: {err}", path.display()))?;
         hasher.write(&bytes);
     }
     Ok(format!("{:016x}", hasher.finish()))
+}
+
+fn labeled_source_paths(
+    data: &noteskin_itg::NoteskinData,
+    paths: Vec<PathBuf>,
+) -> Vec<(String, PathBuf)> {
+    let mut sources: Vec<_> = paths
+        .into_iter()
+        .map(|path| (source_label(data, &path), path))
+        .collect();
+    sources.sort_by(|left, right| left.0.cmp(&right.0));
+    sources
 }
 
 fn source_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
@@ -268,10 +281,62 @@ fn source_label(data: &noteskin_itg::NoteskinData, path: &Path) -> String {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("unknown");
+        let rel = path.strip_prefix(dir).unwrap_or(path).to_string_lossy();
+        let mut label = String::with_capacity(game.len() + skin.len() + rel.len() + 2);
+        label.push_str(game);
+        label.push('/');
+        label.push_str(skin);
+        label.push('/');
+        push_normalized_path(&mut label, &rel);
+        label.make_ascii_lowercase();
+        return label;
+    }
+    let path = path.to_string_lossy();
+    let mut label = String::with_capacity(path.len());
+    push_normalized_path(&mut label, &path);
+    label.make_ascii_lowercase();
+    label
+}
+
+fn push_normalized_path(out: &mut String, path: &str) {
+    let mut parts = path.split('\\');
+    if let Some(first) = parts.next() {
+        out.push_str(first);
+    }
+    for part in parts {
+        out.push('/');
+        out.push_str(part);
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn compiled_hash_cache_key_reference(game: &str, skin: &str) -> String {
+    format!(
+        "{}/{}",
+        game.trim().to_ascii_lowercase(),
+        skin.trim().to_ascii_lowercase()
+    )
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn source_label_reference(data: &noteskin_itg::NoteskinData, path: &Path) -> String {
+    for dir in &data.search_dirs {
+        if !path.starts_with(dir) {
+            continue;
+        }
+        let game = dir
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown");
+        let skin = dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown");
         let rel = path
             .strip_prefix(dir)
             .ok()
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
             .unwrap_or_else(|| path.to_string_lossy().replace('\\', "/"));
         return format!(
             "{}/{}/{}",
@@ -283,6 +348,72 @@ fn source_label(data: &noteskin_itg::NoteskinData, path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "/")
         .to_ascii_lowercase()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn labeled_source_paths_reference(
+    data: &noteskin_itg::NoteskinData,
+    mut paths: Vec<PathBuf>,
+) -> Vec<(String, PathBuf)> {
+    paths.sort_by_key(|path| source_label(data, path));
+    paths
+        .into_iter()
+        .map(|path| (source_label(data, &path), path))
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod compiler_bench_support {
+    use super::{
+        compiled_hash_cache_key, compiled_hash_cache_key_reference, labeled_source_paths,
+        labeled_source_paths_reference, noteskin_itg, source_label,
+    };
+    use std::path::{Path, PathBuf};
+
+    #[must_use]
+    pub fn cache_key_current(game: &str, skin: &str) -> String {
+        compiled_hash_cache_key(game, skin)
+    }
+
+    #[must_use]
+    pub fn cache_key_reference(game: &str, skin: &str) -> String {
+        compiled_hash_cache_key_reference(game, skin)
+    }
+
+    #[must_use]
+    pub fn source_label_current(data: &noteskin_itg::NoteskinData, path: &Path) -> String {
+        source_label(data, path)
+    }
+
+    #[must_use]
+    pub fn source_label_reference(data: &noteskin_itg::NoteskinData, path: &Path) -> String {
+        super::source_label_reference(data, path)
+    }
+
+    fn labels_checksum(sources: Vec<(String, PathBuf)>) -> u64 {
+        sources.into_iter().fold(0_u64, |mut checksum, (label, _)| {
+            checksum = checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(label.len() as u64);
+            for byte in label.bytes() {
+                checksum = checksum
+                    .wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(byte));
+            }
+            checksum
+        })
+    }
+
+    #[must_use]
+    pub fn source_order_current(data: &noteskin_itg::NoteskinData, paths: &[PathBuf]) -> u64 {
+        labels_checksum(labeled_source_paths(data, paths.to_vec()))
+    }
+
+    #[must_use]
+    pub fn source_order_reference(data: &noteskin_itg::NoteskinData, paths: &[PathBuf]) -> u64 {
+        labels_checksum(labeled_source_paths_reference(data, paths.to_vec()))
+    }
 }
 
 fn compile_data(
@@ -870,7 +1001,11 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 
 #[cfg(test)]
 mod tests {
-    use super::{compiled_bundle_path, noteskin_actor, noteskin_compiled, noteskin_itg};
+    use super::{
+        compiled_bundle_path, compiled_hash_cache_key, compiled_hash_cache_key_reference,
+        labeled_source_paths, labeled_source_paths_reference, noteskin_actor, noteskin_compiled,
+        noteskin_itg, source_label, source_label_reference,
+    };
     use std::{
         ffi::OsStr,
         fs,
@@ -890,6 +1025,78 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn compiled_hash_cache_keys_match_owned_normalization() {
+        for (game, skin) in [
+            (" Dance ", " Default "),
+            ("PUMP", "CeL"),
+            ("techno", "Café"),
+            ("  ", ""),
+        ] {
+            assert_eq!(
+                compiled_hash_cache_key(game, skin),
+                compiled_hash_cache_key_reference(game, skin)
+            );
+        }
+        assert_eq!(
+            compiled_hash_cache_key(" Dance ", " Default "),
+            "dance/default"
+        );
+    }
+
+    #[test]
+    fn source_labels_match_replace_and_lowercase_behavior() {
+        let dir = PathBuf::from("Assets")
+            .join("NoteSkins")
+            .join("DaNcE")
+            .join("DeFaUlT");
+        let data = noteskin_itg::NoteskinData {
+            name: "Default".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![dir.clone()],
+        };
+        let cases = [
+            dir.join("Down Receptor.LUA"),
+            dir.join("Café Tap Note.lua"),
+            PathBuf::from("Outside\\MiXeD/Actor.LUA"),
+            PathBuf::new(),
+        ];
+        for path in &cases {
+            assert_eq!(
+                source_label(&data, path),
+                source_label_reference(&data, path),
+                "path {path:?}"
+            );
+        }
+        assert_eq!(
+            source_label(&data, &dir.join("Down Receptor.LUA")),
+            "dance/default/down receptor.lua"
+        );
+    }
+
+    #[test]
+    fn cached_source_labels_preserve_hash_order() {
+        let dir = PathBuf::from("Assets")
+            .join("NoteSkins")
+            .join("Pump")
+            .join("Café");
+        let data = noteskin_itg::NoteskinData {
+            name: "Café".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![dir.clone()],
+        };
+        let paths = vec![
+            dir.join("Zeta.lua"),
+            dir.join("alpha.lua"),
+            dir.join("Center Tap Note.lua"),
+            PathBuf::from("External\\Fallback.lua"),
+        ];
+        assert_eq!(
+            labeled_source_paths(&data, paths.clone()),
+            labeled_source_paths_reference(&data, paths)
+        );
     }
 
     #[test]
