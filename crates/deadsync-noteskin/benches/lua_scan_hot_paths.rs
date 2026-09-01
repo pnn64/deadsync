@@ -8,6 +8,13 @@ use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
 };
+use deadsync_noteskin::runtime::{
+    itg_has_receptor_actor_effect_command_for_bench,
+    itg_has_receptor_actor_effect_command_reference_for_bench,
+    itg_is_common_fallback_hold_explosion_key,
+    itg_is_common_fallback_hold_explosion_key_reference_for_bench, itg_is_common_noteskin_key,
+    itg_is_common_noteskin_key_reference_for_bench,
+};
 use deadsync_noteskin::script::{
     bench_support::{
         borrowed_argument_slices_new, borrowed_blend_scan_new, borrowed_color_wrapper_new,
@@ -913,5 +920,103 @@ fn main() {
         "allocation-free beat-fade body signature scan (6 representative bodies)",
         &old_signature,
         &new_signature,
+    );
+
+    let common_key_cases = [
+        "NoteSkins/common/common/Fallback Hold Explosion.png",
+        "prefix/NOTESKINS/COMMON/COMMON/FALLBACK HOLD EXPLOSION.png",
+        "noteskins/common/common/Fallback Receptor.png",
+        "noteskins/dance/default/Down Hold Explosion.png",
+        "nöteskins/common/common/fallback hold explosion",
+        "",
+    ];
+    let common_key_suite = |classify: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for key in common_key_cases {
+                checksum = mix(checksum, bool_checksum(black_box(classify(black_box(key)))));
+            }
+        }
+        checksum
+    };
+    let (old_fallback_key, new_fallback_key) = measure_pair(
+        1_024,
+        common_key_cases.len() * REPEATS,
+        || common_key_suite(itg_is_common_fallback_hold_explosion_key_reference_for_bench),
+        || common_key_suite(itg_is_common_fallback_hold_explosion_key),
+    );
+    assert_improved(
+        "allocation-free fallback explosion key scan",
+        &old_fallback_key,
+        &new_fallback_key,
+    );
+    assert_eq!(new_fallback_key.alloc.allocs, 0);
+    assert_eq!(new_fallback_key.alloc.reallocs, 0);
+    assert_eq!(new_fallback_key.alloc.frees, 0);
+    assert_eq!(new_fallback_key.alloc.churn(), 0);
+    print_pair(
+        "allocation-free fallback explosion key scan (6 representative keys)",
+        &old_fallback_key,
+        &new_fallback_key,
+    );
+
+    let (old_common_key, new_common_key) = measure_pair(
+        1_024,
+        common_key_cases.len() * REPEATS,
+        || common_key_suite(itg_is_common_noteskin_key_reference_for_bench),
+        || common_key_suite(itg_is_common_noteskin_key),
+    );
+    assert_improved(
+        "allocation-free common noteskin key scan",
+        &old_common_key,
+        &new_common_key,
+    );
+    assert_eq!(new_common_key.alloc.allocs, 0);
+    assert_eq!(new_common_key.alloc.reallocs, 0);
+    assert_eq!(new_common_key.alloc.frees, 0);
+    assert_eq!(new_common_key.alloc.churn(), 0);
+    print_pair(
+        "allocation-free common noteskin key scan (6 representative keys)",
+        &old_common_key,
+        &new_common_key,
+    );
+
+    let receptor_effect_cases = [
+        "effectclock,bgm;DiffuseRamp",
+        "linear,0.2;DIFFUSESHIFT",
+        "sleep,0.1;glOwShIfT",
+        "prefixdiffuseshiftsuffix",
+        "diffuse,1,1,1,1",
+        "glöwshift",
+        "",
+    ];
+    let receptor_effect_suite = |scan: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for command in receptor_effect_cases {
+                checksum = mix(checksum, bool_checksum(black_box(scan(black_box(command)))));
+            }
+        }
+        checksum
+    };
+    let (old_receptor_effect, new_receptor_effect) = measure_pair(
+        1_024,
+        receptor_effect_cases.len() * REPEATS,
+        || receptor_effect_suite(itg_has_receptor_actor_effect_command_reference_for_bench),
+        || receptor_effect_suite(itg_has_receptor_actor_effect_command_for_bench),
+    );
+    assert_improved(
+        "allocation-free receptor actor-effect scan",
+        &old_receptor_effect,
+        &new_receptor_effect,
+    );
+    assert_eq!(new_receptor_effect.alloc.allocs, 0);
+    assert_eq!(new_receptor_effect.alloc.reallocs, 0);
+    assert_eq!(new_receptor_effect.alloc.frees, 0);
+    assert_eq!(new_receptor_effect.alloc.churn(), 0);
+    print_pair(
+        "allocation-free receptor actor-effect scan (7 representative commands)",
+        &old_receptor_effect,
+        &new_receptor_effect,
     );
 }

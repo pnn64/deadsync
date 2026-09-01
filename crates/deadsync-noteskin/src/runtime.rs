@@ -633,21 +633,62 @@ pub fn default_tap_explosions<T: Clone>(
 
 #[must_use]
 pub fn itg_is_common_fallback_hold_explosion_key(texture_key: &str) -> bool {
-    texture_key
-        .to_ascii_lowercase()
-        .contains("noteskins/common/common/fallback hold explosion")
+    contains_ascii_case_insensitive(
+        texture_key,
+        b"noteskins/common/common/fallback hold explosion",
+    )
 }
 
 #[must_use]
 pub fn itg_is_common_noteskin_key(texture_key: &str) -> bool {
-    texture_key
-        .to_ascii_lowercase()
-        .contains("noteskins/common/common/")
+    contains_ascii_case_insensitive(texture_key, b"noteskins/common/common/")
 }
 
 #[must_use]
 pub fn itg_roll_explosion_should_use_hold(roll_key: &str, hold_key: &str) -> bool {
     itg_is_common_fallback_hold_explosion_key(roll_key) && !itg_is_common_noteskin_key(hold_key)
+}
+
+#[inline]
+fn contains_ascii_case_insensitive(haystack: &str, needle: &[u8]) -> bool {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|candidate| candidate.eq_ignore_ascii_case(needle))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_is_common_fallback_hold_explosion_key_reference(texture_key: &str) -> bool {
+    texture_key
+        .to_ascii_lowercase()
+        .contains("noteskins/common/common/fallback hold explosion")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_is_common_noteskin_key_reference(texture_key: &str) -> bool {
+    texture_key
+        .to_ascii_lowercase()
+        .contains("noteskins/common/common/")
+}
+
+#[cfg(test)]
+fn itg_roll_explosion_should_use_hold_reference(roll_key: &str, hold_key: &str) -> bool {
+    itg_is_common_fallback_hold_explosion_key_reference(roll_key)
+        && !itg_is_common_noteskin_key_reference(hold_key)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_is_common_fallback_hold_explosion_key_reference_for_bench(texture_key: &str) -> bool {
+    itg_is_common_fallback_hold_explosion_key_reference(texture_key)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_is_common_noteskin_key_reference_for_bench(texture_key: &str) -> bool {
+    itg_is_common_noteskin_key_reference(texture_key)
 }
 
 pub fn itg_roll_explosion_commands(
@@ -1853,13 +1894,39 @@ fn itg_receptor_actor_effect_layers<T>(
     let [.., off, idle, glow] = layers else {
         return None;
     };
-    let idle_command = idle.commands.get("oncommand")?.to_ascii_lowercase();
-    let has_actor_effect = ["diffuseramp", "diffuseshift", "glowshift"]
-        .iter()
-        .any(|effect| idle_command.contains(effect));
+    let idle_command = idle.commands.get("oncommand")?;
+    let has_actor_effect = itg_has_receptor_actor_effect_command(idle_command);
     let has_press_glow =
         glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
     (has_actor_effect && has_press_glow).then_some([off, idle, glow])
+}
+
+fn itg_has_receptor_actor_effect_command(command: &str) -> bool {
+    [b"diffuseramp".as_slice(), b"diffuseshift", b"glowshift"]
+        .into_iter()
+        .any(|effect| contains_ascii_case_insensitive(command, effect))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_has_receptor_actor_effect_command_reference(command: &str) -> bool {
+    let command = command.to_ascii_lowercase();
+    ["diffuseramp", "diffuseshift", "glowshift"]
+        .iter()
+        .any(|effect| command.contains(effect))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_receptor_actor_effect_command_for_bench(command: &str) -> bool {
+    itg_has_receptor_actor_effect_command(command)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_has_receptor_actor_effect_command_reference_for_bench(command: &str) -> bool {
+    itg_has_receptor_actor_effect_command_reference(command)
 }
 
 fn itg_receptor_visual_layers<T>(layers: &[ItgResolvedSprite<T>]) -> &[ItgResolvedSprite<T>] {
@@ -2906,20 +2973,22 @@ mod tests {
         bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
         itg_apply_child_actor_commands, itg_apply_hold_explosions_by_col, itg_apply_loader_command,
         itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
-        itg_first_resolved_slot_or_fallback, itg_hit_mine_explosion_from_layers,
+        itg_first_resolved_slot_or_fallback, itg_has_receptor_actor_effect_command,
+        itg_has_receptor_actor_effect_command_reference, itg_hit_mine_explosion_from_layers,
         itg_hit_mine_explosion_from_slot, itg_hold_explosion_from_resolved_layers,
         itg_hold_head_layers, itg_hold_visual_parts, itg_hold_visuals_from_parts,
-        itg_is_common_fallback_hold_explosion_key, itg_is_common_noteskin_key,
-        itg_lift_layers_for_col, itg_load_sprite_decl_slot, itg_mine_explosion_from_commands,
-        itg_mine_visuals_from_layers, itg_noteskin_runtime_compiled, itg_receptor_column,
-        itg_receptor_glow_behavior_from_layers, itg_receptor_pulse_from_command,
-        itg_resolve_actor_file_compiled, itg_resolve_actor_sprites_compiled,
-        itg_resolve_actor_sprites_with_ops_compiled, itg_resolve_model_decl,
-        itg_resolve_path_ref_decl, itg_resolve_ref_decl, itg_resolve_sprite_decl,
-        itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
+        itg_is_common_fallback_hold_explosion_key,
+        itg_is_common_fallback_hold_explosion_key_reference, itg_is_common_noteskin_key,
+        itg_is_common_noteskin_key_reference, itg_lift_layers_for_col, itg_load_sprite_decl_slot,
+        itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
+        itg_noteskin_runtime_compiled, itg_receptor_column, itg_receptor_glow_behavior_from_layers,
+        itg_receptor_pulse_from_command, itg_resolve_actor_file_compiled,
+        itg_resolve_actor_sprites_compiled, itg_resolve_actor_sprites_with_ops_compiled,
+        itg_resolve_model_decl, itg_resolve_path_ref_decl, itg_resolve_ref_decl,
+        itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
         itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
-        itg_roll_explosion_should_use_hold, itg_roll_visuals_from_parts,
-        itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
+        itg_roll_explosion_should_use_hold, itg_roll_explosion_should_use_hold_reference,
+        itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
         itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
         itg_tap_note_column, itg_tap_note_layers,
@@ -3321,6 +3390,27 @@ mod tests {
         assert!(!itg_is_common_noteskin_key(
             "noteskins/dance/default/Down Hold Explosion.png"
         ));
+
+        let cases = [
+            "NoteSkins/common/common/Fallback Hold Explosion.png",
+            "prefix/NOTESKINS/COMMON/COMMON/FALLBACK HOLD EXPLOSION.png",
+            "noteskins/common/common/Fallback Receptor.png",
+            "noteskins/dance/default/Down Hold Explosion.png",
+            "nöteskins/common/common/fallback hold explosion",
+            "",
+        ];
+        for key in cases {
+            assert_eq!(
+                itg_is_common_fallback_hold_explosion_key(key),
+                itg_is_common_fallback_hold_explosion_key_reference(key),
+                "fallback case: {key:?}"
+            );
+            assert_eq!(
+                itg_is_common_noteskin_key(key),
+                itg_is_common_noteskin_key_reference(key),
+                "namespace case: {key:?}"
+            );
+        }
     }
 
     #[test]
@@ -3337,6 +3427,60 @@ mod tests {
             "NoteSkins/common/common/Fallback Hold Explosion.png",
             "NoteSkins/common/common/Fallback Hold Explosion.png",
         ));
+
+        let cases = [
+            (
+                "NoteSkins/common/common/Fallback Hold Explosion.png",
+                "NoteSkins/dance/default/Down Hold Explosion.png",
+            ),
+            (
+                "prefix/NOTESKINS/COMMON/COMMON/FALLBACK HOLD EXPLOSION.png",
+                "NoteSkins/dance/default/Down Hold Explosion.png",
+            ),
+            (
+                "NoteSkins/dance/default/Down Roll Explosion.png",
+                "NoteSkins/dance/default/Down Hold Explosion.png",
+            ),
+            (
+                "NoteSkins/common/common/Fallback Hold Explosion.png",
+                "NoteSkins/common/common/Fallback Hold Explosion.png",
+            ),
+            ("nöteskins/common/common/fallback hold explosion", "skin"),
+            ("", ""),
+        ];
+        for (roll, hold) in cases {
+            assert_eq!(
+                itg_roll_explosion_should_use_hold(roll, hold),
+                itg_roll_explosion_should_use_hold_reference(roll, hold),
+                "roll={roll:?} hold={hold:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_free_receptor_effect_scan_matches_committed_behavior() {
+        let cases = [
+            ("effectclock,bgm;DiffuseRamp", true),
+            ("linear,0.2;DIFFUSESHIFT", true),
+            ("sleep,0.1;glOwShIfT", true),
+            ("prefixdiffuseshiftsuffix", true),
+            ("diffuse,1,1,1,1", false),
+            ("glöwshift", false),
+            ("", false),
+        ];
+
+        for (command, expected) in cases {
+            assert_eq!(
+                itg_has_receptor_actor_effect_command(command),
+                expected,
+                "case: {command:?}"
+            );
+            assert_eq!(
+                itg_has_receptor_actor_effect_command(command),
+                itg_has_receptor_actor_effect_command_reference(command),
+                "case: {command:?}"
+            );
+        }
     }
 
     #[test]
