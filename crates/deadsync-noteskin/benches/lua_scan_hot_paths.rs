@@ -10,8 +10,10 @@ use deadsync_noteskin::lua::{
 };
 use deadsync_noteskin::script::{
     bench_support::{
-        borrowed_argument_slices_new, classified_command_new, heap_argument_storage_old,
-        inline_argument_storage_new, lowercase_command_old, owned_argument_slices_old,
+        borrowed_argument_slices_new, borrowed_color_wrapper_new, classified_command_new,
+        classified_judgment_key_new, fixed_rgba_components_new, heap_argument_storage_old,
+        heap_rgba_components_old, inline_argument_storage_new, lowercase_color_wrapper_old,
+        lowercase_command_old, lowercase_judgment_key_old, owned_argument_slices_old,
     },
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
@@ -437,6 +439,119 @@ fn main() {
         "allocation-free command classification (6 mixed-case commands)",
         &old_commands,
         &new_commands,
+    );
+
+    let color_wrapper_cases = [
+        "COLOR('1,0.5,0.25,1')",
+        "color(\"#ff008080\")",
+        " Color(0.25,0.5,0.75,1) ",
+        "#00ff00",
+        "0.1,0.2,0.3,0.4",
+        "Colorful(1,2,3,4)",
+        "Cölör(1,2,3,4)",
+    ];
+    let color_wrapper_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for color in color_wrapper_cases {
+                checksum = mix(checksum, black_box(parse(black_box(color))));
+            }
+        }
+        checksum
+    };
+    let (old_wrapper, new_wrapper) = measure_pair(
+        1_024,
+        color_wrapper_cases.len() * REPEATS,
+        || color_wrapper_suite(lowercase_color_wrapper_old),
+        || color_wrapper_suite(borrowed_color_wrapper_new),
+    );
+    assert_improved(
+        "allocation-free Color wrapper recognition",
+        &old_wrapper,
+        &new_wrapper,
+    );
+    assert_eq!(new_wrapper.alloc.allocs, 0);
+    assert_eq!(new_wrapper.alloc.reallocs, 0);
+    assert_eq!(new_wrapper.alloc.frees, 0);
+    assert_eq!(new_wrapper.alloc.churn(), 0);
+    print_pair(
+        "allocation-free Color wrapper recognition (7 representative values)",
+        &old_wrapper,
+        &new_wrapper,
+    );
+
+    let judgment_color_cases = [
+        "JudgmentLineToColor('judgmentline_w1')",
+        "judgmentlinetocolor(\"JUDGMENTLINE_W3\")",
+        "JUDGMENTLINETOCOLOR('JudgmentLine_W5')",
+        "JudgmentLineToColor('judgmentline_held')",
+        "JudgmentLineToColor('judgmentline_miss')",
+        "JudgmentLineToColor('judgmentline_maxcombo')",
+        "JudgmentLineToStrokeColor('JUDGMENTLINE_W2')",
+        "JudgmentLineToColor('unknown')",
+    ];
+    let judgment_color_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for color in judgment_color_cases {
+                checksum = mix(checksum, black_box(parse(black_box(color))));
+            }
+        }
+        checksum
+    };
+    let (old_judgment, new_judgment) = measure_pair(
+        1_024,
+        judgment_color_cases.len() * REPEATS,
+        || judgment_color_suite(lowercase_judgment_key_old),
+        || judgment_color_suite(classified_judgment_key_new),
+    );
+    assert_improved(
+        "allocation-free judgment color classification",
+        &old_judgment,
+        &new_judgment,
+    );
+    assert_eq!(new_judgment.alloc.allocs, 0);
+    assert_eq!(new_judgment.alloc.reallocs, 0);
+    assert_eq!(new_judgment.alloc.frees, 0);
+    assert_eq!(new_judgment.alloc.churn(), 0);
+    print_pair(
+        "allocation-free judgment color classification (8 representative calls)",
+        &old_judgment,
+        &new_judgment,
+    );
+
+    let rgba_cases = [
+        "1,0.5,0.25,1",
+        "bad,1,0.5,0.25,1",
+        "0,0.1,0.2,0.3,99,100",
+        "(1/2),(3/4),0.25,1",
+        "1,2,3",
+        "bad,worse,1,2,3,4",
+    ];
+    let rgba_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for color in rgba_cases {
+                checksum = mix(checksum, black_box(parse(black_box(color))));
+            }
+        }
+        checksum
+    };
+    let (old_rgba, new_rgba) = measure_pair(
+        1_024,
+        rgba_cases.len() * REPEATS,
+        || rgba_suite(heap_rgba_components_old),
+        || rgba_suite(fixed_rgba_components_new),
+    );
+    assert_improved("fixed-size RGBA component parsing", &old_rgba, &new_rgba);
+    assert_eq!(new_rgba.alloc.allocs, 0);
+    assert_eq!(new_rgba.alloc.reallocs, 0);
+    assert_eq!(new_rgba.alloc.frees, 0);
+    assert_eq!(new_rgba.alloc.churn(), 0);
+    print_pair(
+        "fixed-size RGBA component parsing (6 representative lists)",
+        &old_rgba,
+        &new_rgba,
     );
 
     let linear_cases = [

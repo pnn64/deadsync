@@ -380,7 +380,10 @@ pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
 
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
-    use super::{ScriptCommand, split_script_token};
+    use super::{
+        ScriptCommand, parse_script_judgment_line_color, parse_script_number,
+        parse_script_rgba_list, script_color_value, script_rgba8, split_script_token,
+    };
 
     #[inline(always)]
     fn mix(checksum: u64, value: u64) -> u64 {
@@ -392,6 +395,15 @@ pub mod bench_support {
             checksum = mix(checksum, part.len() as u64);
             part.bytes()
                 .fold(checksum, |sum, byte| mix(sum, u64::from(byte)))
+        })
+    }
+
+    fn checksum_color(color: Option<[f32; 4]>) -> u64 {
+        let Some(color) = color else {
+            return 1;
+        };
+        color.into_iter().fold(2, |checksum, value| {
+            mix(checksum, u64::from(value.to_bits()))
         })
     }
 
@@ -514,12 +526,142 @@ pub mod bench_support {
         let command = ScriptCommand::from(command.trim());
         checksum_parts(std::iter::once(command.as_str()))
     }
+
+    #[must_use]
+    pub fn lowercase_color_wrapper_old(raw: &str) -> u64 {
+        let trimmed = raw.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        let value = if lower.starts_with("color(") && trimmed.ends_with(')') {
+            let inner = &trimmed[6..trimmed.len().saturating_sub(1)];
+            inner.trim().trim_matches('"').trim_matches('\'')
+        } else {
+            trimmed.trim_matches('"').trim_matches('\'')
+        };
+        checksum_parts(std::iter::once(value))
+    }
+
+    #[must_use]
+    pub fn borrowed_color_wrapper_new(raw: &str) -> u64 {
+        checksum_parts(std::iter::once(script_color_value(raw)))
+    }
+
+    fn judgment_line_color_lowercase_reference(raw: &str) -> Option<[f32; 4]> {
+        let trimmed = raw.trim();
+        let open = trimmed.find('(')?;
+        if !trimmed.ends_with(')') || open + 1 >= trimmed.len() {
+            return None;
+        }
+        let name = trimmed[..open].trim();
+        let stroke = if name.eq_ignore_ascii_case("JudgmentLineToStrokeColor") {
+            true
+        } else if name.eq_ignore_ascii_case("JudgmentLineToColor") {
+            false
+        } else {
+            return None;
+        };
+        let key = trimmed[open + 1..trimmed.len() - 1]
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_ascii_lowercase();
+        let mut color = match key.as_str() {
+            "judgmentline_w1" => script_rgba8(0xbf, 0xea, 0xff),
+            "judgmentline_w2" => script_rgba8(0xff, 0xf5, 0x68),
+            "judgmentline_w3" => script_rgba8(0xa4, 0xff, 0x00),
+            "judgmentline_w4" => script_rgba8(0x34, 0xbf, 0xff),
+            "judgmentline_w5" => script_rgba8(0xe4, 0x4d, 0xff),
+            "judgmentline_held" => script_rgba8(0xff, 0xff, 0xff),
+            "judgmentline_miss" => script_rgba8(0xff, 0x3c, 0x3c),
+            "judgmentline_maxcombo" => script_rgba8(0xff, 0xc6, 0x00),
+            _ => script_rgba8(0x00, 0x00, 0x00),
+        };
+        if stroke {
+            color[0] *= 0.5;
+            color[1] *= 0.5;
+            color[2] *= 0.5;
+        }
+        Some(color)
+    }
+
+    #[must_use]
+    pub fn lowercase_judgment_key_old(raw: &str) -> u64 {
+        checksum_color(judgment_line_color_lowercase_reference(raw))
+    }
+
+    #[must_use]
+    pub fn classified_judgment_key_new(raw: &str) -> u64 {
+        checksum_color(parse_script_judgment_line_color(raw))
+    }
+
+    #[must_use]
+    pub fn heap_rgba_components_old(raw: &str) -> u64 {
+        let values: Vec<_> = raw.split(',').filter_map(parse_script_number).collect();
+        let color = (values.len() >= 4).then(|| [values[0], values[1], values[2], values[3]]);
+        checksum_color(color)
+    }
+
+    #[must_use]
+    pub fn fixed_rgba_components_new(raw: &str) -> u64 {
+        checksum_color(parse_script_rgba_list(raw))
+    }
 }
 
 #[inline(always)]
 #[must_use]
 pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
+}
+
+#[must_use]
+pub fn parse_script_float(raw: &str) -> f32 {
+    let raw = raw.trim_start();
+    let bytes = raw.as_bytes();
+    let mut end = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let mut has_digit = false;
+    while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+        has_digit = true;
+        end += 1;
+    }
+    if bytes.get(end) == Some(&b'.') {
+        end += 1;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            has_digit = true;
+            end += 1;
+        }
+    }
+    if !has_digit {
+        return 0.0;
+    }
+    let exponent_start = end;
+    if matches!(bytes.get(end), Some(b'e' | b'E')) {
+        end += 1;
+        if matches!(bytes.get(end), Some(b'+' | b'-')) {
+            end += 1;
+        }
+        let exponent_digits = end;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            end += 1;
+        }
+        if end == exponent_digits {
+            end = exponent_start;
+        }
+    }
+    raw[..end].parse().unwrap_or(0.0)
+}
+
+#[must_use]
+pub fn parse_script_int(raw: &str) -> i32 {
+    let raw = raw.trim_start();
+    let bytes = raw.as_bytes();
+    let mut end = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let digit_start = end;
+    while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+        end += 1;
+    }
+    if end == digit_start {
+        return 0;
+    }
+    raw[..end].parse().unwrap_or(0)
 }
 
 #[inline(always)]
@@ -710,13 +852,34 @@ pub fn apply_sprite_animation_script_plans<T>(
 }
 
 #[inline(always)]
-fn parse_script_f32_list(raw: &str) -> Vec<f32> {
-    raw.split(',').filter_map(parse_script_number).collect()
+fn parse_script_rgba_list(raw: &str) -> Option<[f32; 4]> {
+    let mut values = raw.split(',').filter_map(parse_script_number);
+    Some([
+        values.next()?,
+        values.next()?,
+        values.next()?,
+        values.next()?,
+    ])
 }
 
 #[inline(always)]
 const fn script_rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
+#[inline(always)]
+fn script_judgment_color(key: &str) -> [f32; 4] {
+    match key.len() {
+        15 if key.eq_ignore_ascii_case("judgmentline_w1") => script_rgba8(0xbf, 0xea, 0xff),
+        15 if key.eq_ignore_ascii_case("judgmentline_w2") => script_rgba8(0xff, 0xf5, 0x68),
+        15 if key.eq_ignore_ascii_case("judgmentline_w3") => script_rgba8(0xa4, 0xff, 0x00),
+        15 if key.eq_ignore_ascii_case("judgmentline_w4") => script_rgba8(0x34, 0xbf, 0xff),
+        15 if key.eq_ignore_ascii_case("judgmentline_w5") => script_rgba8(0xe4, 0x4d, 0xff),
+        17 if key.eq_ignore_ascii_case("judgmentline_held") => script_rgba8(0xff, 0xff, 0xff),
+        17 if key.eq_ignore_ascii_case("judgmentline_miss") => script_rgba8(0xff, 0x3c, 0x3c),
+        21 if key.eq_ignore_ascii_case("judgmentline_maxcombo") => script_rgba8(0xff, 0xc6, 0x00),
+        _ => script_rgba8(0x00, 0x00, 0x00),
+    }
 }
 
 #[inline(always)]
@@ -737,19 +900,8 @@ fn parse_script_judgment_line_color(raw: &str) -> Option<[f32; 4]> {
     let key = trimmed[open + 1..trimmed.len() - 1]
         .trim()
         .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    let mut color = match key.as_str() {
-        "judgmentline_w1" => script_rgba8(0xbf, 0xea, 0xff),
-        "judgmentline_w2" => script_rgba8(0xff, 0xf5, 0x68),
-        "judgmentline_w3" => script_rgba8(0xa4, 0xff, 0x00),
-        "judgmentline_w4" => script_rgba8(0x34, 0xbf, 0xff),
-        "judgmentline_w5" => script_rgba8(0xe4, 0x4d, 0xff),
-        "judgmentline_held" => script_rgba8(0xff, 0xff, 0xff),
-        "judgmentline_miss" => script_rgba8(0xff, 0x3c, 0x3c),
-        "judgmentline_maxcombo" => script_rgba8(0xff, 0xc6, 0x00),
-        _ => script_rgba8(0x00, 0x00, 0x00),
-    };
+        .trim_matches('\'');
+    let mut color = script_judgment_color(key);
     if stroke {
         color[0] *= 0.5;
         color[1] *= 0.5;
@@ -759,26 +911,31 @@ fn parse_script_judgment_line_color(raw: &str) -> Option<[f32; 4]> {
 }
 
 #[inline(always)]
+fn script_color_value(raw: &str) -> &str {
+    let trimmed = raw.trim();
+    let value = if trimmed.ends_with(')')
+        && trimmed
+            .get(..6)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("color("))
+    {
+        &trimmed[6..trimmed.len() - 1]
+    } else {
+        trimmed
+    };
+    value.trim().trim_matches('"').trim_matches('\'')
+}
+
+#[inline(always)]
 fn parse_script_color(raw: &str) -> Option<[f32; 4]> {
     let trimmed = raw.trim();
     if let Some(color) = parse_script_judgment_line_color(trimmed) {
         return Some(color);
     }
-    let lower = trimmed.to_ascii_lowercase();
-    let value = if lower.starts_with("color(") && trimmed.ends_with(')') {
-        let inner = &trimmed[6..trimmed.len().saturating_sub(1)];
-        inner.trim().trim_matches('"').trim_matches('\'')
-    } else {
-        trimmed.trim_matches('"').trim_matches('\'')
-    };
+    let value = script_color_value(trimmed);
     if let Some(color) = parse_script_hex_color(value) {
         return Some(color);
     }
-    let values = parse_script_f32_list(value);
-    if values.len() < 4 {
-        return None;
-    }
-    Some([values[0], values[1], values[2], values[3]])
+    parse_script_rgba_list(value)
 }
 
 fn parse_script_hex_color(raw: &str) -> Option<[f32; 4]> {
@@ -805,10 +962,6 @@ fn parse_script_color_args<A: AsRef<str>>(args: &[A]) -> Option<[f32; 4]> {
         let raw = args[0].as_ref();
         if let Some(color) = parse_script_color(raw) {
             return Some(color);
-        }
-        let values = parse_script_f32_list(raw);
-        if values.len() >= 4 {
-            return Some([values[0], values[1], values[2], values[3]]);
         }
     }
     if args.len() < 4 {
@@ -1576,6 +1729,53 @@ mod tests {
             token.args(),
             ["a", "b", "c", "d", "e", "f", "g", "nested(1,2)"]
         );
+    }
+
+    #[test]
+    fn script_color_wrapper_is_ascii_case_insensitive_without_false_prefixes() {
+        assert_eq!(
+            parse_script_color("  CoLoR( '0.25, 0.5, 0.75, 1' )  "),
+            Some([0.25, 0.5, 0.75, 1.0])
+        );
+        assert_eq!(
+            parse_script_color("'0.1,0.2,0.3,0.4'"),
+            Some([0.1, 0.2, 0.3, 0.4])
+        );
+        assert_eq!(parse_script_color("Colorful(1,2,3,4)"), None);
+        assert_eq!(parse_script_color("Cölör(1,2,3,4)"), None);
+    }
+
+    #[test]
+    fn script_judgment_colors_preserve_mixed_case_and_stroke_behavior() {
+        assert_eq!(
+            parse_script_color("jUdGmEnTlInEtOcOlOr('JuDgMeNtLiNe_W4')"),
+            Some(script_rgba8(0x34, 0xbf, 0xff))
+        );
+        let mut stroke = script_rgba8(0xff, 0xf5, 0x68);
+        stroke[0] *= 0.5;
+        stroke[1] *= 0.5;
+        stroke[2] *= 0.5;
+        assert_eq!(
+            parse_script_color("JudgmentLineToStrokeColor(\"JUDGMENTLINE_W2\")"),
+            Some(stroke)
+        );
+        assert_eq!(
+            parse_script_color("JudgmentLineToColor('unknown')"),
+            Some([0.0, 0.0, 0.0, 1.0])
+        );
+    }
+
+    #[test]
+    fn script_rgba_parser_filters_invalid_values_and_takes_first_four() {
+        assert_eq!(
+            parse_script_rgba_list("ignored,0.1,0.2,0.3,0.4,99"),
+            Some([0.1, 0.2, 0.3, 0.4])
+        );
+        assert_eq!(
+            parse_script_color("0.0,0.25,0.5,1.0,42.0"),
+            Some([0.0, 0.25, 0.5, 1.0])
+        );
+        assert_eq!(parse_script_rgba_list("0.1,bad,0.2,0.3"), None);
     }
 
     #[test]
