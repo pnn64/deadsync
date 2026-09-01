@@ -1,12 +1,14 @@
 #[cfg(any(test, feature = "bench-support"))]
 use crate::explosion::itg_mine_explosion_commands;
+#[cfg(test)]
+use crate::explosion::itg_tap_explosion_command_with_init;
 use crate::explosion::{
     ItgTapExplosionMode, ItgTapExplosionSource, itg_direct_tap_explosion_layers,
     itg_has_hit_mine_command, itg_has_tap_explosion_command, itg_hit_mine_command_with_init,
     itg_hit_mine_explosion_slot, itg_hold_explosion_slot, itg_is_hit_mine_explosion_element,
-    itg_mine_explosion_command_refs, itg_partition_tap_explosion_sources,
-    itg_tap_explosion_command_with_init, itg_tap_explosion_key, parse_explosion_animation,
-    parse_explosion_animation_with_init,
+    itg_mine_explosion_command_refs, itg_partition_tap_explosion_sources, itg_tap_explosion_key,
+    parse_explosion_animation, parse_explosion_animation_with_init,
+    parse_itg_tap_explosion_animation,
 };
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
@@ -68,6 +70,24 @@ impl<T: Clone> TapExplosion<T> {
             animation,
             layers,
         }
+    }
+
+    fn from_inline_layers(layers: SmallVec<[TapExplosionLayer<T>; 4]>) -> Option<Self> {
+        let first = layers.first()?.clone();
+        let len = layers.len();
+        let mut output = Arc::<[TapExplosionLayer<T>]>::new_uninit_slice(len);
+        let slots = Arc::get_mut(&mut output).expect("new Arc slice must be uniquely owned");
+        for (slot, layer) in slots.iter_mut().zip(layers) {
+            slot.write(layer);
+        }
+        // SAFETY: `output` and `layers` have the same length, and the loop
+        // moves exactly one initialized layer into every output slot.
+        let layers = unsafe { output.assume_init() };
+        Some(Self {
+            slot: first.slot,
+            animation: first.animation,
+            layers,
+        })
     }
 
     #[must_use]
@@ -1061,7 +1081,118 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     itg_tap_explosion_map_from_partitioned_sources(dim_sprites, bright_sprites, metric_command)
 }
 
+#[derive(Clone, Copy)]
+struct ItgTapExplosionMatch<'a, T> {
+    source: &'a ItgTapExplosionSource<T>,
+    direct_command: Option<&'a str>,
+}
+
+#[inline]
+fn itg_tap_explosion_source_match<'a, T>(
+    source: &'a ItgTapExplosionSource<T>,
+    window: &str,
+    command_key: &str,
+) -> Option<ItgTapExplosionMatch<'a, T>> {
+    let direct_command = source.commands.get(command_key).map(String::as_str);
+    (direct_command.is_some() || source.matches_window(window) || source.is_generic_tap_explosion())
+        .then_some(ItgTapExplosionMatch {
+            source,
+            direct_command,
+        })
+}
+
+fn itg_tap_explosion_matches<'a, T>(
+    sources: &'a [ItgTapExplosionSource<T>],
+    window: &str,
+    command_key: &str,
+) -> SmallVec<[ItgTapExplosionMatch<'a, T>; 4]> {
+    sources
+        .iter()
+        .filter_map(|source| itg_tap_explosion_source_match(source, window, command_key))
+        .collect()
+}
+
 fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
+    dim_sprites: Vec<ItgTapExplosionSource<T>>,
+    bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> TapExplosionMap<T> {
+    if dim_sprites.is_empty() && bright_sprites.is_empty() {
+        return TapExplosionMap::new();
+    }
+
+    let mut tap_explosions = TapExplosionMap::new();
+    for (window, key, metric_key) in [
+        ("W1", "w1command", "W1Command"),
+        ("W2", "w2command", "W2Command"),
+        ("W3", "w3command", "W3Command"),
+        ("W4", "w4command", "W4Command"),
+        ("W5", "w5command", "W5Command"),
+        ("Miss", "misscommand", "MissCommand"),
+        ("Held", "heldcommand", "HeldCommand"),
+    ] {
+        for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
+            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
+                continue;
+            }
+            let (preferred, fallback_sprites) = match mode {
+                ItgTapExplosionMode::Dim => (&dim_sprites, &bright_sprites),
+                ItgTapExplosionMode::Bright => (&bright_sprites, &dim_sprites),
+            };
+            let preferred_matches = itg_tap_explosion_matches(preferred, window, key);
+            let has_preferred = !preferred_matches.is_empty();
+            if mode == ItgTapExplosionMode::Bright && !has_preferred {
+                continue;
+            }
+            let fallback_matches = itg_tap_explosion_matches(fallback_sprites, window, key);
+
+            let mut layers = SmallVec::new();
+            let mut add_source = |matched: &ItgTapExplosionMatch<'_, T>| {
+                let fallback;
+                let command = if let Some(command) = matched.direct_command {
+                    command
+                } else {
+                    let Some(command) = metric_command(matched.source.mode, metric_key) else {
+                        return;
+                    };
+                    fallback = command;
+                    fallback.as_str()
+                };
+                if command.trim().is_empty() {
+                    return;
+                }
+                layers.push(TapExplosionLayer {
+                    slot: matched.source.payload.clone(),
+                    animation: parse_itg_tap_explosion_animation(matched.source, mode, command),
+                });
+            };
+
+            if has_preferred {
+                for matched in preferred_matches.iter().chain(&fallback_matches) {
+                    add_source(matched);
+                }
+            } else if fallback_matches.is_empty() {
+                if let Some(source) = preferred.first().or_else(|| fallback_sprites.first()) {
+                    add_source(&ItgTapExplosionMatch {
+                        source,
+                        direct_command: source.commands.get(key).map(String::as_str),
+                    });
+                }
+            } else {
+                for matched in &fallback_matches {
+                    add_source(matched);
+                }
+            }
+            if let Some(explosion) = TapExplosion::from_inline_layers(layers) {
+                tap_explosions.insert_window(itg_tap_explosion_key(window, mode), explosion);
+            }
+        }
+    }
+    tap_explosions
+}
+
+#[cfg(test)]
+fn itg_tap_explosion_map_from_partitioned_sources_reference<T: Clone>(
     dim_sprites: Vec<ItgTapExplosionSource<T>>,
     bright_sprites: Vec<ItgTapExplosionSource<T>>,
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
@@ -1234,11 +1365,19 @@ fn itg_partition_tap_explosion_layers_reference<L, T>(
 #[doc(hidden)]
 pub mod tap_explosion_bench_support {
     use super::{
-        ItgTapExplosionMode, ItgTapExplosionSource, itg_partition_tap_explosion_layers,
-        itg_partition_tap_explosion_layers_reference,
+        ItgTapExplosionMode, ItgTapExplosionSource, TapExplosion, TapExplosionLayer,
+        itg_partition_tap_explosion_layers, itg_partition_tap_explosion_layers_reference,
+        itg_tap_explosion_matches,
     };
+    use crate::ExplosionAnimation;
+    use crate::explosion::{
+        itg_tap_explosion_command_with_init, parse_explosion_animation,
+        parse_itg_tap_explosion_animation,
+    };
+    use smallvec::SmallVec;
     use std::collections::HashMap;
     use std::hint::black_box;
+    use std::sync::OnceLock;
 
     const SOURCE_COUNT: usize = 12;
 
@@ -1319,6 +1458,161 @@ pub mod tap_explosion_bench_support {
             })
     }
 
+    fn mix(checksum: u64, value: u64) -> u64 {
+        checksum.wrapping_mul(131).wrapping_add(value)
+    }
+
+    fn animation_checksum(mut checksum: u64, animation: &ExplosionAnimation) -> u64 {
+        checksum = mix(checksum, u64::from(animation.initial.zoom.to_bits()));
+        checksum = mix(checksum, animation.segments.len() as u64);
+        checksum = mix(checksum, u64::from(animation.duration().to_bits()));
+        let state = animation.state_at(0.1);
+        checksum = mix(checksum, u64::from(state.zoom.to_bits()));
+        for channel in state.diffuse {
+            checksum = mix(checksum, u64::from(channel.to_bits()));
+        }
+        checksum
+    }
+
+    fn parse_source() -> &'static ItgTapExplosionSource<u64> {
+        static SOURCE: OnceLock<ItgTapExplosionSource<u64>> = OnceLock::new();
+        SOURCE.get_or_init(|| {
+            ItgTapExplosionSource::new(
+                "Tap Explosion Bright W1".to_owned(),
+                17,
+                HashMap::from([
+                    (
+                        "initcommand".to_owned(),
+                        "zoom,0.75;diffusealpha,1".to_owned(),
+                    ),
+                    ("judgmentcommand".to_owned(), "rotationz,15".to_owned()),
+                    ("brightcommand".to_owned(), "blend,add".to_owned()),
+                ]),
+            )
+        })
+    }
+
+    fn matching_sources() -> &'static [ItgTapExplosionSource<u64>] {
+        static SOURCES: OnceLock<Vec<ItgTapExplosionSource<u64>>> = OnceLock::new();
+        SOURCES.get_or_init(|| {
+            vec![
+                ItgTapExplosionSource::new(
+                    "Tap Explosion Dim".to_owned(),
+                    1,
+                    HashMap::from([("w1command".to_owned(), "linear,0.1".to_owned())]),
+                ),
+                ItgTapExplosionSource::new("Tap Explosion Dim W1".to_owned(), 2, HashMap::new()),
+                ItgTapExplosionSource::new(
+                    "Tap Explosion Dim W2".to_owned(),
+                    3,
+                    HashMap::from([("w2command".to_owned(), "linear,0.2".to_owned())]),
+                ),
+                ItgTapExplosionSource::new("Tap Explosion Dim".to_owned(), 4, HashMap::new()),
+            ]
+        })
+    }
+
+    fn parse_commands(evaluations: usize, optimized: bool) -> u64 {
+        const COMMAND: &str = "linear,0.2;zoom,1.5;diffusealpha,0";
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let animation = if optimized {
+                parse_itg_tap_explosion_animation(
+                    black_box(parse_source()),
+                    ItgTapExplosionMode::Bright,
+                    black_box(COMMAND),
+                )
+            } else {
+                let joined = itg_tap_explosion_command_with_init(
+                    black_box(parse_source()),
+                    ItgTapExplosionMode::Bright,
+                    black_box(COMMAND),
+                );
+                parse_explosion_animation(&joined)
+            };
+            animation_checksum(checksum, black_box(&animation))
+        })
+    }
+
+    fn match_sources(evaluations: usize, optimized: bool) -> u64 {
+        (0..evaluations).fold(0_u64, |mut checksum, index| {
+            let (window, key) = if index & 1 == 0 {
+                ("W1", "w1command")
+            } else {
+                ("W2", "w2command")
+            };
+            let sources = black_box(matching_sources());
+            if optimized {
+                let matches = itg_tap_explosion_matches(sources, window, key);
+                checksum = mix(checksum, !matches.is_empty() as u64);
+                for matched in matches {
+                    checksum = mix(checksum, matched.source.payload);
+                    checksum = mix(
+                        checksum,
+                        matched
+                            .direct_command
+                            .map_or(0, |command| command.len() as u64),
+                    );
+                }
+            } else {
+                let has_match = sources
+                    .iter()
+                    .any(|source| source.applies_to_window(window, key));
+                checksum = mix(checksum, has_match as u64);
+                for source in sources
+                    .iter()
+                    .filter(|source| source.applies_to_window(window, key))
+                {
+                    checksum = mix(checksum, source.payload);
+                    checksum = mix(
+                        checksum,
+                        source
+                            .commands
+                            .get(key)
+                            .map_or(0, |command| command.len() as u64),
+                    );
+                }
+            }
+            checksum
+        })
+    }
+
+    fn explosion_checksum(mut checksum: u64, explosion: TapExplosion<u64>) -> u64 {
+        checksum = mix(checksum, explosion.slot);
+        checksum = animation_checksum(checksum, &explosion.animation);
+        for layer in explosion.layers.iter() {
+            checksum = mix(checksum, layer.slot);
+            checksum = animation_checksum(checksum, &layer.animation);
+        }
+        checksum
+    }
+
+    fn build_layers(evaluations: usize, optimized: bool) -> u64 {
+        let animation = ExplosionAnimation::default();
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let explosion = if optimized {
+                let mut layers = SmallVec::new();
+                for slot in 1..=2 {
+                    layers.push(TapExplosionLayer {
+                        slot,
+                        animation: animation.clone(),
+                    });
+                }
+                TapExplosion::from_inline_layers(black_box(layers))
+                    .expect("inline benchmark layers")
+            } else {
+                let mut layers = Vec::new();
+                for slot in 1..=2 {
+                    layers.push(TapExplosionLayer {
+                        slot,
+                        animation: animation.clone(),
+                    });
+                }
+                TapExplosion::from_layers(black_box(layers)).expect("staged benchmark layers")
+            };
+            explosion_checksum(checksum, black_box(explosion))
+        })
+    }
+
     fn run(evaluations: usize, route: Route, optimized: bool) -> u64 {
         let actor_layers = actor_layers();
         let actor_layers = if route == Route::Actor {
@@ -1374,6 +1668,36 @@ pub mod tap_explosion_bench_support {
     #[must_use]
     pub fn partitioned_bright_direct_sources_new(evaluations: usize) -> u64 {
         run(evaluations, Route::DirectBright, true)
+    }
+
+    #[must_use]
+    pub fn joined_command_parsing_old(evaluations: usize) -> u64 {
+        parse_commands(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn borrowed_command_parsing_new(evaluations: usize) -> u64 {
+        parse_commands(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn repeated_source_matching_old(evaluations: usize) -> u64 {
+        match_sources(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn single_pass_source_matching_new(evaluations: usize) -> u64 {
+        match_sources(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn staged_layer_vec_old(evaluations: usize) -> u64 {
+        build_layers(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn inline_layer_arc_new(evaluations: usize) -> u64 {
+        build_layers(evaluations, true)
     }
 }
 
@@ -3824,10 +4148,11 @@ mod tests {
         itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
         itg_roll_explosion_should_use_hold, itg_roll_explosion_should_use_hold_reference,
         itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
-        itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
-        itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-        itg_tap_note_column, itg_tap_note_layers, shared_tap_note_layers,
-        shared_tap_note_layers_reference,
+        itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_partitioned_sources,
+        itg_tap_explosion_map_from_partitioned_sources_reference,
+        itg_tap_explosion_map_from_resolved_layers, itg_tap_explosion_map_from_sources,
+        itg_tap_explosions_by_col_compiled, itg_tap_note_column, itg_tap_note_layers,
+        shared_tap_note_layers, shared_tap_note_layers_reference,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -3838,6 +4163,7 @@ mod tests {
         ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior,
         ReceptorStepBehaviors, Style, TweenType, actor, compiled, itg,
     };
+    use smallvec::SmallVec;
     use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
 
@@ -6290,6 +6616,76 @@ mod tests {
         );
         assert!((map["W1"].duration() - 0.3).abs() <= f32::EPSILON);
         assert!((map["W1Bright"].duration() - 0.3).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn tap_explosion_map_matches_repeated_scan_and_staged_layer_reference() {
+        let dim = vec![
+            ItgTapExplosionSource::new(
+                "Tap Explosion Dim".to_owned(),
+                Slot(1),
+                HashMap::from([
+                    ("initcommand".to_owned(), "zoom,0.5".to_owned()),
+                    ("judgmentcommand".to_owned(), "diffusealpha,1".to_owned()),
+                    (
+                        "w1command".to_owned(),
+                        "linear,0.2;diffusealpha,0".to_owned(),
+                    ),
+                ]),
+            ),
+            ItgTapExplosionSource::new("Tap Explosion Dim W2".to_owned(), Slot(2), HashMap::new()),
+        ];
+        let bright = vec![ItgTapExplosionSource::new(
+            "Tap Explosion Bright".to_owned(),
+            Slot(3),
+            HashMap::from([
+                ("brightcommand".to_owned(), "blend,add".to_owned()),
+                (
+                    "w1command".to_owned(),
+                    "accelerate,0.3;diffusealpha,0".to_owned(),
+                ),
+                ("heldcommand".to_owned(), " ".to_owned()),
+            ]),
+        )];
+        let metric = |_: ItgTapExplosionMode, key: &str| {
+            (key != "HeldCommand").then(|| "sleep,0.1;diffusealpha,0".to_owned())
+        };
+
+        let current =
+            itg_tap_explosion_map_from_partitioned_sources(dim.clone(), bright.clone(), metric);
+        let reference =
+            itg_tap_explosion_map_from_partitioned_sources_reference(dim, bright, metric);
+
+        assert_eq!(format!("{current:?}"), format!("{reference:?}"));
+        assert_eq!(current["W1"].layers.len(), 2);
+        assert_eq!(current["W1Bright"].layers.len(), 2);
+        assert!(current.contains_key("W2"));
+        assert!(!current.contains_key("HeldBright"));
+    }
+
+    #[test]
+    fn inline_tap_explosion_arc_matches_staged_vec_across_spill() {
+        for len in 0..=6_u8 {
+            let layers = (0..len)
+                .map(|index| {
+                    let mut animation = ExplosionAnimation::default();
+                    animation.initial.zoom = f32::from(index) + 0.5;
+                    TapExplosionLayer {
+                        slot: Slot(index),
+                        animation,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let inline = layers
+                .iter()
+                .cloned()
+                .collect::<SmallVec<[TapExplosionLayer<Slot>; 4]>>();
+
+            let current = TapExplosion::from_inline_layers(inline);
+            let reference = TapExplosion::from_layers(layers);
+
+            assert_eq!(format!("{current:?}"), format!("{reference:?}"));
+        }
     }
 
     #[test]

@@ -1071,6 +1071,40 @@ pub fn itg_partition_tap_explosion_sources<T>(
     (dim, bright)
 }
 
+pub(crate) fn parse_itg_tap_explosion_animation<T>(
+    source: &ItgTapExplosionSource<T>,
+    mode: ItgTapExplosionMode,
+    command: &str,
+) -> ExplosionAnimation {
+    let mut sequence = [""; 4];
+    let mut len = 0;
+    for command in [
+        source.commands.get("initcommand"),
+        source.commands.get("judgmentcommand"),
+        source.commands.get(mode.command_key()),
+    ]
+    .into_iter()
+    .flatten()
+    .map(|command| command.trim())
+    .filter(|command| !command.is_empty())
+    {
+        sequence[len] = command;
+        len += 1;
+    }
+    sequence[len] = command.trim();
+    len += 1;
+
+    if sequence[..len]
+        .iter()
+        .all(|command| !command.contains("self:"))
+    {
+        parse_explosion_animation_parts(sequence[..len].iter().copied())
+    } else {
+        parse_explosion_animation(&sequence[..len].join(";"))
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 pub(crate) fn itg_tap_explosion_command_with_init<T>(
     source: &ItgTapExplosionSource<T>,
     mode: ItgTapExplosionMode,
@@ -1648,6 +1682,32 @@ mod tests {
             itg_tap_explosion_command_with_init(&source, ItgTapExplosionMode::Bright, " "),
             "finish;diffuse;glow;"
         );
+    }
+
+    #[test]
+    fn borrowed_tap_explosion_parsing_matches_joined_sequence_behavior() {
+        for commands in [
+            HashMap::from([
+                ("initcommand".to_owned(), " zoom,0.5 ".to_owned()),
+                ("judgmentcommand".to_owned(), " diffusealpha,1 ".to_owned()),
+                ("brightcommand".to_owned(), " blend,add ".to_owned()),
+            ]),
+            HashMap::from([(
+                "initcommand".to_owned(),
+                "function(self) self:zoom(0.5) end".to_owned(),
+            )]),
+        ] {
+            let source =
+                ItgTapExplosionSource::new("Tap Explosion Bright".to_owned(), (), commands);
+            let command = "linear,0.2;diffusealpha,0";
+            let joined =
+                itg_tap_explosion_command_with_init(&source, ItgTapExplosionMode::Bright, command);
+            let reference = parse_explosion_animation(&joined);
+            let borrowed =
+                parse_itg_tap_explosion_animation(&source, ItgTapExplosionMode::Bright, command);
+
+            assert_eq!(format!("{borrowed:?}"), format!("{reference:?}"));
+        }
     }
 
     #[test]

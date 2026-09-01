@@ -569,6 +569,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_TAP_MAP_ONLY").is_some() {
+        run_allocation_case(
+            "noteskin borrowed tap explosion command parsing",
+            tap_explosion_bench_support::joined_command_parsing_old,
+            tap_explosion_bench_support::borrowed_command_parsing_new,
+        );
+        run_uv_case(
+            "noteskin single-pass tap explosion source matching",
+            tap_explosion_bench_support::repeated_source_matching_old,
+            tap_explosion_bench_support::single_pass_source_matching_new,
+        );
+        run_allocation_case(
+            "noteskin inline tap explosion layer Arc",
+            tap_explosion_bench_support::staged_layer_vec_old,
+            tap_explosion_bench_support::inline_layer_arc_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_MINE_EXPLOSION_ONLY").is_some() {
         run_allocation_case(
             "noteskin borrowed mine init parsing",
