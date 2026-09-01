@@ -294,8 +294,13 @@
     "command_execution": true,
     "message_broadcasts": true,
     "modifier_mutations": true,
+    "native_draw_list_memory": false,
     "native_draw_sort": false,
-    "native_tween_queue": false
+    "native_tween_queue": false,
+    "native_tween_queue_memory": false,
+    "stable_draw_order": true,
+    "tween_segments": true,
+    "tween_time_validation": false
   },
   "description": "XO FL FS SK",
   "difficulty": "Difficulty_Challenge",
@@ -305,6 +310,136 @@
     "logical_width": 854,
     "width": 0
   },
+  "draw_orders": [
+    {
+      "final_children": [
+        {
+          "actor": "def-0010",
+          "definition_id": "def-0010",
+          "draw_index": 1,
+          "draw_order": 0.0,
+          "layer_index": 1
+        },
+        {
+          "actor": "def-0002",
+          "definition_id": "def-0002",
+          "draw_index": 2,
+          "draw_order": 0.0,
+          "layer_index": 2
+        },
+        {
+          "actor": "def-0003",
+          "definition_id": "def-0003",
+          "draw_index": 3,
+          "draw_order": 0.0,
+          "layer_index": 3
+        },
+        {
+          "actor": "def-0004",
+          "definition_id": "def-0004",
+          "draw_index": 4,
+          "draw_order": 0.0,
+          "layer_index": 4
+        },
+        {
+          "actor": "def-0005",
+          "definition_id": "def-0005",
+          "draw_index": 5,
+          "draw_order": 0.0,
+          "layer_index": 5
+        },
+        {
+          "actor": "def-0006",
+          "definition_id": "def-0006",
+          "draw_index": 6,
+          "draw_order": 0.0,
+          "layer_index": 6
+        },
+        {
+          "actor": "def-0007",
+          "definition_id": "def-0007",
+          "draw_index": 7,
+          "draw_order": 0.0,
+          "layer_index": 7
+        },
+        {
+          "actor": "def-0011",
+          "definition_id": "def-0011",
+          "draw_index": 8,
+          "draw_order": 0.0,
+          "layer_index": 8
+        }
+      ],
+      "instance": 1,
+      "mode": "stable_draw_order",
+      "parent_actor": "def-0009",
+      "parent_definition_id": "def-0009",
+      "snapshots": [
+        {
+          "cause": "native_load",
+          "children": [
+            {
+              "actor": "def-0010",
+              "definition_id": "def-0010",
+              "draw_index": 1,
+              "draw_order": 0.0,
+              "layer_index": 1
+            },
+            {
+              "actor": "def-0002",
+              "definition_id": "def-0002",
+              "draw_index": 2,
+              "draw_order": 0.0,
+              "layer_index": 2
+            },
+            {
+              "actor": "def-0003",
+              "definition_id": "def-0003",
+              "draw_index": 3,
+              "draw_order": 0.0,
+              "layer_index": 3
+            },
+            {
+              "actor": "def-0004",
+              "definition_id": "def-0004",
+              "draw_index": 4,
+              "draw_order": 0.0,
+              "layer_index": 4
+            },
+            {
+              "actor": "def-0005",
+              "definition_id": "def-0005",
+              "draw_index": 5,
+              "draw_order": 0.0,
+              "layer_index": 5
+            },
+            {
+              "actor": "def-0006",
+              "definition_id": "def-0006",
+              "draw_index": 6,
+              "draw_order": 0.0,
+              "layer_index": 6
+            },
+            {
+              "actor": "def-0007",
+              "definition_id": "def-0007",
+              "draw_index": 7,
+              "draw_order": 0.0,
+              "layer_index": 7
+            },
+            {
+              "actor": "def-0011",
+              "definition_id": "def-0011",
+              "draw_index": 8,
+              "draw_order": 0.0,
+              "layer_index": 8
+            }
+          ],
+          "seq": 29
+        }
+      ]
+    }
+  ],
   "dropped_events": 0,
   "end_position": {
     "beat": 114.02381896972656,
@@ -3129,11 +3264,1496 @@
     }
   ],
   "schema_version": 1,
+  "semantic_derivation": {
+    "draw_model": "ActorFrame::SortByDrawOrder stable sort",
+    "source_files": [
+      "src/Actor.cpp",
+      "src/Actor.h",
+      "src/ActorFrame.cpp"
+    ],
+    "tween_model": "Actor::BeginTweening and Actor::DestTweenState"
+  },
   "simfile": "song:/Delightful Day.ssc",
   "source_simfile": "../lua-songs/Delightful Day/Delightful Day.ssc",
   "steps_type": "StepsType_Dance_Single",
   "style": "single",
   "theme": "Simply-Love-SM5",
   "title": "Delightful Day (w/ visual FX, BG video)",
-  "trace_until_beat": 114
+  "trace_until_beat": 114,
+  "tween_queue_controls": [],
+  "tween_segments": [
+    {
+      "actor": "def-0010",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "duration": 0.0,
+      "enqueue_seq": 2,
+      "kind": "immediate",
+      "line": 203,
+      "operations": [
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 2
+        },
+        {
+          "args": [
+            true
+          ],
+          "operation": "Actor.visible",
+          "seq": 3
+        },
+        {
+          "args": [],
+          "operation": "Actor.Center",
+          "seq": 4
+        },
+        {
+          "args": [
+            427,
+            240
+          ],
+          "operation": "Actor.xy",
+          "seq": 5
+        },
+        {
+          "args": [
+            0.4451383555638413
+          ],
+          "operation": "Actor.zoom",
+          "seq": 6
+        },
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.hibernate",
+          "seq": 7
+        },
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 8
+        }
+      ],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "duration": 0.3,
+      "easing": "linear",
+      "enqueue_seq": 9,
+      "kind": "tween",
+      "line": 203,
+      "operations": [
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 10
+        }
+      ],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "duration": 4.0,
+      "easing": "linear",
+      "enqueue_seq": 11,
+      "kind": "sleep",
+      "line": 203,
+      "operations": [],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 11,
+      "implicit": true,
+      "kind": "tween",
+      "line": 203,
+      "operations": [],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "duration": 0.5,
+      "easing": "linear",
+      "enqueue_seq": 12,
+      "kind": "tween",
+      "line": 203,
+      "operations": [
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 13
+        }
+      ],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "duration": 0.0,
+      "enqueue_seq": 16,
+      "kind": "immediate",
+      "line": 217,
+      "operations": [
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 16
+        }
+      ],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "duration": 0.0,
+      "enqueue_seq": 19,
+      "kind": "immediate",
+      "line": 303,
+      "operations": [
+        {
+          "args": [],
+          "operation": "Actor.Center",
+          "seq": 19
+        },
+        {
+          "args": [
+            427,
+            240
+          ],
+          "operation": "Actor.xy",
+          "seq": 20
+        },
+        {
+          "args": [
+            true
+          ],
+          "operation": "Actor.visible",
+          "seq": 21
+        },
+        {
+          "args": [
+            0.4451383555638413
+          ],
+          "operation": "Actor.zoom",
+          "seq": 22
+        },
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.animate",
+          "seq": 23
+        },
+        {
+          "args": [
+            0.2
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 25
+        },
+        {
+          "args": [],
+          "operation": "Actor.Center",
+          "seq": 115
+        },
+        {
+          "args": [
+            427,
+            240
+          ],
+          "operation": "Actor.xy",
+          "seq": 116
+        },
+        {
+          "args": [
+            0.4451383555638413
+          ],
+          "operation": "Actor.zoom",
+          "seq": 117
+        },
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.hibernate",
+          "seq": 118
+        },
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 119
+        }
+      ],
+      "seconds": 0,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 30,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 30
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0019",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 32,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 32
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0019",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 33,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 34
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0020",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 35,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 35
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0020",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 36,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 37
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0022",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 38,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 38
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0022",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 39,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 40
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0023",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 41,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 41
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0023",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 42,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 43
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0024",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 44,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 44
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0024",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 45,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 46
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0025",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 47,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 47
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0025",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 48,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 49
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0026",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 50,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 50
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0026",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 51,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 52
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0012",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 53,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 53
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0012",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 54,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 55
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0027",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 56,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 56
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0027",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 57,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 58
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 59,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 59
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 60,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 61
+        },
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 62
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0029",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 63,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 63
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0029",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 64,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 65
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0017",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 66,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 66
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0018",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 67,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            true
+          ],
+          "operation": "Actor.visible",
+          "seq": 67
+        },
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 68
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0030",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 69,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 69
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0030",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 70,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 71
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0031",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 72,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 72
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0031",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 73,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 74
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 75,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 75
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 76,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 77
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0033",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 78,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 78
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0033",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 79,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 80
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0034",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 81,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 81
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0034",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 82,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 83
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0035",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 84,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 84
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0035",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 85,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 86
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0038",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 87,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            1.5
+          ],
+          "operation": "Actor.smooth",
+          "seq": 87
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0038",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 1.5,
+      "easing": "custom",
+      "easing_value": "TweenType_Bezier",
+      "enqueue_seq": 88,
+      "kind": "tween",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 89
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0037",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "duration": 0.0,
+      "enqueue_seq": 90,
+      "kind": "immediate",
+      "line": 171,
+      "operations": [
+        {
+          "args": [
+            false
+          ],
+          "operation": "Actor.visible",
+          "seq": 90
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "duration": 1000.0,
+      "easing": "linear",
+      "enqueue_seq": 93,
+      "kind": "sleep",
+      "line": 218,
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 93,
+      "implicit": true,
+      "kind": "tween",
+      "line": 218,
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "duration": 0.0,
+      "enqueue_seq": 96,
+      "kind": "immediate",
+      "line": 237,
+      "operations": [
+        {
+          "args": [],
+          "operation": "Actor.FullScreen",
+          "seq": 96
+        },
+        {
+          "args": [
+            0,
+            0,
+            854,
+            480
+          ],
+          "operation": "Actor.stretchto",
+          "seq": 97
+        },
+        {
+          "args": [],
+          "operation": "Actor.Center",
+          "seq": 98
+        },
+        {
+          "args": [
+            427,
+            240
+          ],
+          "operation": "Actor.xy",
+          "seq": 99
+        },
+        {
+          "args": [
+            0,
+            0,
+            0,
+            0.2
+          ],
+          "operation": "Actor.diffuse",
+          "seq": 100
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0004",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 103,
+      "kind": "command",
+      "line": 246,
+      "name": "Set",
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0005",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 106,
+      "kind": "command",
+      "line": 256,
+      "name": "Set",
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0006",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 109,
+      "kind": "command",
+      "line": 266,
+      "name": "Set",
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0007",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 112,
+      "kind": "command",
+      "line": 277,
+      "name": "Set",
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "duration": 0.3,
+      "easing": "linear",
+      "enqueue_seq": 120,
+      "kind": "tween",
+      "line": 316,
+      "operations": [
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 121
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "duration": 4.0,
+      "easing": "linear",
+      "enqueue_seq": 122,
+      "kind": "sleep",
+      "line": 316,
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "duration": 0.0,
+      "easing": "linear",
+      "enqueue_seq": 122,
+      "implicit": true,
+      "kind": "tween",
+      "line": 316,
+      "operations": [],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "duration": 0.5,
+      "easing": "linear",
+      "enqueue_seq": 123,
+      "kind": "tween",
+      "line": 316,
+      "operations": [
+        {
+          "args": [
+            0.2
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 124
+        },
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 147
+        }
+      ],
+      "seconds": 0.01807256229221821,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "duration": 0.6,
+      "easing": "decelerate",
+      "enqueue_seq": 140,
+      "kind": "tween",
+      "line": 219,
+      "operations": [
+        {
+          "args": [
+            360
+          ],
+          "operation": "Actor.addrotationz",
+          "seq": 141
+        }
+      ],
+      "seconds": 43.00179290771485,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "duration": 0.35,
+      "easing": "linear",
+      "enqueue_seq": 142,
+      "kind": "tween",
+      "line": 219,
+      "operations": [
+        {
+          "args": [
+            1.15
+          ],
+          "operation": "Actor.zoom",
+          "seq": 143
+        }
+      ],
+      "seconds": 43.00179290771485,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "duration": 0.75,
+      "easing": "linear",
+      "enqueue_seq": 148,
+      "kind": "tween",
+      "line": 287,
+      "operations": [
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 149
+        },
+        {
+          "args": [
+            0
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 155
+        }
+      ],
+      "seconds": 43.13829803466797,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "duration": 0.15,
+      "easing": "linear",
+      "enqueue_seq": 156,
+      "kind": "tween",
+      "line": 292,
+      "operations": [
+        {
+          "args": [
+            1
+          ],
+          "operation": "Actor.zoom",
+          "seq": 157
+        }
+      ],
+      "seconds": 43.51203918457031,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "duration": 0.8,
+      "easing": "linear",
+      "enqueue_seq": 158,
+      "kind": "tween",
+      "line": 292,
+      "operations": [
+        {
+          "args": [
+            0.2
+          ],
+          "operation": "Actor.diffusealpha",
+          "seq": 159
+        }
+      ],
+      "seconds": 43.51203918457031,
+      "source": "song:/lua/default.lua"
+    }
+  ]
 }

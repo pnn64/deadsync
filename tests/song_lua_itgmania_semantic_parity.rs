@@ -25,6 +25,8 @@ struct NativeTrace {
     actor_definitions: Vec<NativeDefinition>,
     runtime_actors: Vec<NativeActor>,
     events: Vec<NativeEvent>,
+    #[serde(default)]
+    draw_orders: Vec<NativeDrawOrder>,
     end_position: NativePosition,
     display: NativeDisplay,
 }
@@ -48,6 +50,18 @@ struct NativeChild {
 struct NativeActor {
     id: String,
     path: String,
+}
+
+#[derive(Deserialize)]
+struct NativeDrawOrder {
+    parent_definition_id: String,
+    instance: usize,
+    final_children: Vec<NativeDrawChild>,
+}
+
+#[derive(Deserialize)]
+struct NativeDrawChild {
+    definition_id: String,
 }
 
 #[derive(Deserialize)]
@@ -260,11 +274,29 @@ fn compare_layers(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Ve
         gaps.push("native trace has no actor-definition root".into());
         return;
     };
-    let mut children = root.children.iter().collect::<Vec<_>>();
-    children.sort_by_key(|child| child.layer_index);
-    let native = children
+    let draw_order = trace
+        .draw_orders
         .iter()
-        .filter_map(|child| definitions.get(child.definition_id.as_str()).copied())
+        .find(|order| order.parent_definition_id == root.id && order.instance == 1);
+    let mut source_children = root.children.iter().collect::<Vec<_>>();
+    source_children.sort_by_key(|child| child.layer_index);
+    let child_ids = draw_order
+        .map(|order| {
+            order
+                .final_children
+                .iter()
+                .map(|child| child.definition_id.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| {
+            source_children
+                .iter()
+                .map(|child| child.definition_id.as_str())
+                .collect()
+        });
+    let native = child_ids
+        .iter()
+        .filter_map(|child| definitions.get(child).copied())
         .map(|definition| (definition.class.as_str(), definition.name.as_deref()))
         .collect::<Vec<_>>();
     let deadsync = compiled
