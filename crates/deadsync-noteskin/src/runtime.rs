@@ -823,9 +823,17 @@ pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
 
 pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     sources: impl IntoIterator<Item = ItgTapExplosionSource<T>>,
-    mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+    metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     let (dim_sprites, bright_sprites) = itg_partition_tap_explosion_sources(sources);
+    itg_tap_explosion_map_from_partitioned_sources(dim_sprites, bright_sprites, metric_command)
+}
+
+fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
+    dim_sprites: Vec<ItgTapExplosionSource<T>>,
+    bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> TapExplosionMap<T> {
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
         return TapExplosionMap::new();
     }
@@ -908,13 +916,59 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     tap_explosions
 }
 
-pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
+#[inline]
+fn push_tap_explosion_source<T>(
+    source: ItgTapExplosionSource<T>,
+    dim_sources: &mut Vec<ItgTapExplosionSource<T>>,
+    bright_sources: &mut Vec<ItgTapExplosionSource<T>>,
+) {
+    match source.mode {
+        ItgTapExplosionMode::Dim => dim_sources.push(source),
+        ItgTapExplosionMode::Bright => bright_sources.push(source),
+    }
+}
+
+fn itg_partition_tap_explosion_layers<L, T>(
     explosion_layers: &[L],
     mut layer_has_tap_command: impl FnMut(&L) -> bool,
     mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
     mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
-    metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
-) -> TapExplosionMap<T> {
+) -> (Vec<ItgTapExplosionSource<T>>, Vec<ItgTapExplosionSource<T>>) {
+    let mut dim_sources = Vec::new();
+    let mut bright_sources = Vec::new();
+    let mut has_actor_sources = false;
+    for layer in explosion_layers {
+        if layer_has_tap_command(layer) {
+            has_actor_sources = true;
+            push_tap_explosion_source(
+                source_from_layer(layer),
+                &mut dim_sources,
+                &mut bright_sources,
+            );
+        }
+    }
+
+    if !has_actor_sources {
+        for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
+            for layer in direct_layers(mode) {
+                push_tap_explosion_source(
+                    source_from_layer(&layer),
+                    &mut dim_sources,
+                    &mut bright_sources,
+                );
+            }
+        }
+    }
+    (dim_sources, bright_sources)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_partition_tap_explosion_layers_reference<L, T>(
+    explosion_layers: &[L],
+    mut layer_has_tap_command: impl FnMut(&L) -> bool,
+    mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
+    mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
+) -> (Vec<ItgTapExplosionSource<T>>, Vec<ItgTapExplosionSource<T>>) {
     let actor_sources = explosion_layers
         .iter()
         .filter(|layer| layer_has_tap_command(layer))
@@ -936,13 +990,175 @@ pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
         (Vec::new(), Vec::new())
     };
 
-    itg_tap_explosion_map_from_sources(
+    itg_partition_tap_explosion_sources(
         actor_sources
             .into_iter()
             .chain(direct_dim_sources)
             .chain(direct_bright_sources),
-        metric_command,
     )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod tap_explosion_bench_support {
+    use super::{
+        ItgTapExplosionMode, ItgTapExplosionSource, itg_partition_tap_explosion_layers,
+        itg_partition_tap_explosion_layers_reference,
+    };
+    use std::collections::HashMap;
+    use std::hint::black_box;
+
+    const SOURCE_COUNT: usize = 12;
+
+    #[derive(Clone, Copy)]
+    struct BenchLayer {
+        payload: u64,
+        mode: ItgTapExplosionMode,
+    }
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Route {
+        Actor,
+        DirectDim,
+        DirectBright,
+    }
+
+    fn actor_layers() -> [BenchLayer; SOURCE_COUNT] {
+        std::array::from_fn(|index| BenchLayer {
+            payload: index as u64 + 1,
+            mode: if index & 1 == 0 {
+                ItgTapExplosionMode::Dim
+            } else {
+                ItgTapExplosionMode::Bright
+            },
+        })
+    }
+
+    fn direct_layers(route: Route, mode: ItgTapExplosionMode) -> Vec<BenchLayer> {
+        let selected = match route {
+            Route::Actor => false,
+            Route::DirectDim => mode == ItgTapExplosionMode::Dim,
+            Route::DirectBright => mode == ItgTapExplosionMode::Bright,
+        };
+        if !selected {
+            return Vec::new();
+        }
+        (0..SOURCE_COUNT)
+            .map(|index| BenchLayer {
+                payload: index as u64 + 1,
+                mode,
+            })
+            .collect()
+    }
+
+    fn source_from_layer(layer: &BenchLayer) -> ItgTapExplosionSource<u64> {
+        ItgTapExplosionSource {
+            element: match layer.mode {
+                ItgTapExplosionMode::Dim => "Tap Explosion Dim W1",
+                ItgTapExplosionMode::Bright => "Tap Explosion Bright W1",
+            }
+            .to_owned(),
+            payload: layer.payload,
+            commands: HashMap::new(),
+            mode: layer.mode,
+        }
+    }
+
+    fn source_checksum(
+        checksum: u64,
+        sources: (
+            Vec<ItgTapExplosionSource<u64>>,
+            Vec<ItgTapExplosionSource<u64>>,
+        ),
+    ) -> u64 {
+        sources
+            .0
+            .into_iter()
+            .chain(sources.1)
+            .fold(checksum, |checksum, source| {
+                checksum
+                    .wrapping_mul(131)
+                    .wrapping_add(source.payload)
+                    .wrapping_add(source.element.len() as u64)
+                    .wrapping_add(match source.mode {
+                        ItgTapExplosionMode::Dim => 1,
+                        ItgTapExplosionMode::Bright => 2,
+                    })
+            })
+    }
+
+    fn run(evaluations: usize, route: Route, optimized: bool) -> u64 {
+        let actor_layers = actor_layers();
+        let actor_layers = if route == Route::Actor {
+            actor_layers.as_slice()
+        } else {
+            &[]
+        };
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let sources = if optimized {
+                itg_partition_tap_explosion_layers(
+                    black_box(actor_layers),
+                    |_| true,
+                    |mode| direct_layers(route, mode),
+                    source_from_layer,
+                )
+            } else {
+                itg_partition_tap_explosion_layers_reference(
+                    black_box(actor_layers),
+                    |_| true,
+                    |mode| direct_layers(route, mode),
+                    source_from_layer,
+                )
+            };
+            source_checksum(checksum, black_box(sources))
+        })
+    }
+
+    #[must_use]
+    pub fn staged_actor_sources_old(evaluations: usize) -> u64 {
+        run(evaluations, Route::Actor, false)
+    }
+
+    #[must_use]
+    pub fn partitioned_actor_sources_new(evaluations: usize) -> u64 {
+        run(evaluations, Route::Actor, true)
+    }
+
+    #[must_use]
+    pub fn staged_dim_direct_sources_old(evaluations: usize) -> u64 {
+        run(evaluations, Route::DirectDim, false)
+    }
+
+    #[must_use]
+    pub fn partitioned_dim_direct_sources_new(evaluations: usize) -> u64 {
+        run(evaluations, Route::DirectDim, true)
+    }
+
+    #[must_use]
+    pub fn staged_bright_direct_sources_old(evaluations: usize) -> u64 {
+        run(evaluations, Route::DirectBright, false)
+    }
+
+    #[must_use]
+    pub fn partitioned_bright_direct_sources_new(evaluations: usize) -> u64 {
+        run(evaluations, Route::DirectBright, true)
+    }
+}
+
+pub fn itg_tap_explosion_map_from_layers<L, T: Clone>(
+    explosion_layers: &[L],
+    mut layer_has_tap_command: impl FnMut(&L) -> bool,
+    mut direct_layers: impl FnMut(ItgTapExplosionMode) -> Vec<L>,
+    mut source_from_layer: impl FnMut(&L) -> ItgTapExplosionSource<T>,
+    metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> TapExplosionMap<T> {
+    let (dim_sources, bright_sources) = itg_partition_tap_explosion_layers(
+        explosion_layers,
+        &mut layer_has_tap_command,
+        &mut direct_layers,
+        &mut source_from_layer,
+    );
+    itg_tap_explosion_map_from_partitioned_sources(dim_sources, bright_sources, metric_command)
 }
 
 pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
@@ -3183,14 +3399,16 @@ mod tests {
         itg_is_common_fallback_hold_explosion_key_reference, itg_is_common_noteskin_key,
         itg_is_common_noteskin_key_reference, itg_lift_layers_for_col, itg_load_sprite_decl_slot,
         itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
-        itg_noteskin_runtime_compiled, itg_receptor_column, itg_receptor_command_refs,
-        itg_receptor_command_refs_reference, itg_receptor_glow_behavior_from_layers,
-        itg_receptor_layer_refs, itg_receptor_layer_refs_reference,
-        itg_receptor_pulse_from_command, itg_receptor_visuals_from_resolved,
-        itg_receptor_visuals_from_resolved_reference, itg_resolve_actor_file_compiled,
-        itg_resolve_actor_sprites_compiled, itg_resolve_actor_sprites_with_ops_compiled,
-        itg_resolve_model_decl, itg_resolve_path_ref_decl, itg_resolve_ref_decl,
-        itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
+        itg_noteskin_runtime_compiled, itg_partition_tap_explosion_layers,
+        itg_partition_tap_explosion_layers_reference, itg_receptor_column,
+        itg_receptor_command_refs, itg_receptor_command_refs_reference,
+        itg_receptor_glow_behavior_from_layers, itg_receptor_layer_refs,
+        itg_receptor_layer_refs_reference, itg_receptor_pulse_from_command,
+        itg_receptor_visuals_from_resolved, itg_receptor_visuals_from_resolved_reference,
+        itg_resolve_actor_file_compiled, itg_resolve_actor_sprites_compiled,
+        itg_resolve_actor_sprites_with_ops_compiled, itg_resolve_model_decl,
+        itg_resolve_path_ref_decl, itg_resolve_ref_decl, itg_resolve_sprite_decl,
+        itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
         itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
         itg_roll_explosion_should_use_hold, itg_roll_explosion_should_use_hold_reference,
         itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
@@ -3267,6 +3485,41 @@ mod tests {
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct Slot(u8);
+
+    #[derive(Clone)]
+    struct TapSourceLayer {
+        payload: u8,
+        mode: ItgTapExplosionMode,
+        actor: bool,
+    }
+
+    fn tap_source(layer: &TapSourceLayer) -> ItgTapExplosionSource<u8> {
+        ItgTapExplosionSource {
+            element: match layer.mode {
+                ItgTapExplosionMode::Dim => "Tap Explosion Dim W1",
+                ItgTapExplosionMode::Bright => "Tap Explosion Bright W1",
+            }
+            .to_owned(),
+            payload: layer.payload,
+            commands: HashMap::new(),
+            mode: layer.mode,
+        }
+    }
+
+    fn tap_source_signature(
+        sources: (
+            Vec<ItgTapExplosionSource<u8>>,
+            Vec<ItgTapExplosionSource<u8>>,
+        ),
+    ) -> (Vec<(u8, String)>, Vec<(u8, String)>) {
+        let convert = |sources: Vec<ItgTapExplosionSource<u8>>| {
+            sources
+                .into_iter()
+                .map(|source| (source.payload, source.element))
+                .collect()
+        };
+        (convert(sources.0), convert(sources.1))
+    }
 
     #[test]
     fn hold_visuals_default_does_not_require_default_slot() {
@@ -5542,6 +5795,132 @@ mod tests {
         });
 
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn tap_explosion_actor_sources_match_staged_partitioning() {
+        let layers = [
+            TapSourceLayer {
+                payload: 1,
+                mode: ItgTapExplosionMode::Bright,
+                actor: true,
+            },
+            TapSourceLayer {
+                payload: 2,
+                mode: ItgTapExplosionMode::Dim,
+                actor: false,
+            },
+            TapSourceLayer {
+                payload: 3,
+                mode: ItgTapExplosionMode::Dim,
+                actor: true,
+            },
+            TapSourceLayer {
+                payload: 4,
+                mode: ItgTapExplosionMode::Bright,
+                actor: true,
+            },
+        ];
+        let current = itg_partition_tap_explosion_layers(
+            &layers,
+            |layer| layer.actor,
+            |_| panic!("actor sources must suppress direct resolution"),
+            tap_source,
+        );
+        let reference = itg_partition_tap_explosion_layers_reference(
+            &layers,
+            |layer| layer.actor,
+            |_| panic!("actor sources must suppress direct resolution"),
+            tap_source,
+        );
+
+        assert_eq!(
+            tap_source_signature(current),
+            tap_source_signature(reference)
+        );
+    }
+
+    #[test]
+    fn tap_explosion_dim_direct_sources_match_staged_partitioning() {
+        let direct = |mode| {
+            if mode == ItgTapExplosionMode::Dim {
+                vec![
+                    TapSourceLayer {
+                        payload: 1,
+                        mode,
+                        actor: false,
+                    },
+                    TapSourceLayer {
+                        payload: 2,
+                        mode,
+                        actor: false,
+                    },
+                ]
+            } else {
+                Vec::new()
+            }
+        };
+        let current = itg_partition_tap_explosion_layers(
+            &[] as &[TapSourceLayer],
+            |_| false,
+            direct,
+            tap_source,
+        );
+        let reference = itg_partition_tap_explosion_layers_reference(
+            &[] as &[TapSourceLayer],
+            |_| false,
+            direct,
+            tap_source,
+        );
+
+        assert_eq!(
+            tap_source_signature(current),
+            tap_source_signature(reference)
+        );
+    }
+
+    #[test]
+    fn tap_explosion_bright_direct_sources_match_staged_partitioning() {
+        let direct = |mode| {
+            if mode == ItgTapExplosionMode::Bright {
+                vec![
+                    TapSourceLayer {
+                        payload: 7,
+                        mode,
+                        actor: false,
+                    },
+                    TapSourceLayer {
+                        payload: 8,
+                        mode,
+                        actor: false,
+                    },
+                    TapSourceLayer {
+                        payload: 9,
+                        mode,
+                        actor: false,
+                    },
+                ]
+            } else {
+                Vec::new()
+            }
+        };
+        let current = itg_partition_tap_explosion_layers(
+            &[] as &[TapSourceLayer],
+            |_| false,
+            direct,
+            tap_source,
+        );
+        let reference = itg_partition_tap_explosion_layers_reference(
+            &[] as &[TapSourceLayer],
+            |_| false,
+            direct,
+            tap_source,
+        );
+
+        assert_eq!(
+            tap_source_signature(current),
+            tap_source_signature(reference)
+        );
     }
 
     #[test]

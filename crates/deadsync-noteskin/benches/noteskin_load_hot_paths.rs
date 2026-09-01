@@ -3,7 +3,7 @@ use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
     NotePartTextureTranslate, explosion_bench_support, mine_bench_support,
     model_draw_bench_support, receptor_bench_support, sprite_math_bench_support,
-    uv_color_bench_support,
+    tap_explosion_bench_support, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -568,6 +568,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_EXPLOSION_SOURCE_ONLY").is_some() {
+        run_allocation_case(
+            "noteskin partitioned actor explosion sources",
+            tap_explosion_bench_support::staged_actor_sources_old,
+            tap_explosion_bench_support::partitioned_actor_sources_new,
+        );
+        run_allocation_case(
+            "noteskin partitioned dim direct explosion sources",
+            tap_explosion_bench_support::staged_dim_direct_sources_old,
+            tap_explosion_bench_support::partitioned_dim_direct_sources_new,
+        );
+        run_allocation_case(
+            "noteskin partitioned bright direct explosion sources",
+            tap_explosion_bench_support::staged_bright_direct_sources_old,
+            tap_explosion_bench_support::partitioned_bright_direct_sources_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_MINE_GRADIENT_ONLY").is_some() {
         run_gradient_case(
             "noteskin cached mine-gradient radial geometry",
