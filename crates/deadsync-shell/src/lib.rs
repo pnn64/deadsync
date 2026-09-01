@@ -61,7 +61,11 @@ mod window_state;
 pub use app::benchmark_smx_screen_work;
 pub(crate) use command::Command;
 #[cfg(feature = "bench-support")]
-pub use content_reload::{benchmark_receive_ready, benchmark_sample_progress};
+pub use content_reload::{
+    benchmark_artwork_paths, benchmark_artwork_paths_reference, benchmark_progress_fallback,
+    benchmark_progress_fallback_reference, benchmark_receive_ready, benchmark_replaygain_paths,
+    benchmark_replaygain_paths_reference, benchmark_sample_progress,
+};
 pub(crate) use course::CourseRunState;
 pub(crate) use deadsync_theme::views::FrameStatsSample;
 #[cfg(feature = "bench-support")]

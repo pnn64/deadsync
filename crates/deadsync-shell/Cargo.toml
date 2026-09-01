@@ -60,6 +60,11 @@ name = "sync_analysis_event_batches"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "content_catalog_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
