@@ -13,6 +13,7 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const STREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const STREAM_RESOLVE_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_LOG_CHARS: usize = 256;
 pub type HttpAgent = ureq::Agent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,8 +53,23 @@ impl Error for NetworkError {}
 #[inline(always)]
 #[must_use]
 pub fn is_timeout_message(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    lower.contains("timeout") || lower.contains("timed out")
+    let bytes = text.as_bytes();
+    let mut offset = 0;
+    while let Some(relative) = memchr::memchr2(b't', b'T', &bytes[offset..]) {
+        let start = offset + relative;
+        let candidate = &bytes[start..];
+        if candidate
+            .get(..b"timeout".len())
+            .is_some_and(|window| window.eq_ignore_ascii_case(b"timeout"))
+            || candidate
+                .get(..b"timed out".len())
+                .is_some_and(|window| window.eq_ignore_ascii_case(b"timed out"))
+        {
+            return true;
+        }
+        offset = start + 1;
+    }
+    false
 }
 
 #[inline(always)]
@@ -105,33 +121,48 @@ pub fn read_text_body_bounded(
     max_bytes: usize,
 ) -> Result<String, NetworkError> {
     let mut body = response.into_body();
+    let max_bytes_u64 = u64::try_from(max_bytes).unwrap_or(u64::MAX);
+    let declared_len = body.content_length();
+    if declared_len.is_some_and(|len| len > max_bytes_u64) {
+        return Err(body_too_large(max_bytes));
+    }
+    let initial_capacity = declared_len
+        .and_then(|len| usize::try_from(len).ok())
+        .unwrap_or_else(|| max_bytes.min(64 * 1024));
+    read_utf8_body_bounded(body.as_reader(), max_bytes, initial_capacity)
+}
+
+fn read_utf8_body_bounded(
+    reader: impl Read,
+    max_bytes: usize,
+    initial_capacity: usize,
+) -> Result<String, NetworkError> {
     let limit = u64::try_from(max_bytes)
         .unwrap_or(u64::MAX)
         .saturating_add(1);
-    let mut bytes = Vec::with_capacity(max_bytes.min(64 * 1024));
-    let mut reader = body.as_reader().take(limit);
+    let mut bytes = Vec::with_capacity(initial_capacity.min(max_bytes.saturating_add(1)));
+    let mut reader = reader.take(limit);
     reader
         .read_to_end(&mut bytes)
         .map_err(|error| request_error(error.to_string()))?;
     if bytes.len() > max_bytes {
-        return Err(NetworkError::Decode(format!(
-            "response body exceeds {max_bytes} bytes"
-        )));
+        return Err(body_too_large(max_bytes));
     }
     String::from_utf8(bytes).map_err(|error| NetworkError::Decode(error.to_string()))
 }
 
+#[inline]
+fn body_too_large(max_bytes: usize) -> NetworkError {
+    NetworkError::Decode(format!("response body exceeds {max_bytes} bytes"))
+}
+
 #[must_use]
-pub fn log_body_snippet(text: &str) -> String {
-    const MAX_LOG_CHARS: usize = 256;
-    if text.is_empty() {
-        return String::new();
+pub fn log_body_snippet(text: impl Into<String>) -> String {
+    let mut text = text.into();
+    if let Some((end, _)) = text.char_indices().nth(MAX_LOG_CHARS) {
+        text.truncate(end);
     }
-    let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
-    for ch in text.chars().take(MAX_LOG_CHARS) {
-        out.push(ch);
-    }
-    out
+    text
 }
 
 #[must_use]
@@ -220,6 +251,58 @@ where
     thread::spawn(task)
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::{MAX_LOG_CHARS, is_timeout_message, log_body_snippet, read_utf8_body_bounded};
+    use std::io::Cursor;
+
+    #[inline(never)]
+    #[must_use]
+    pub fn timeout_old(text: &str) -> bool {
+        let lower = text.to_ascii_lowercase();
+        lower.contains("timeout") || lower.contains("timed out")
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn timeout_new(text: &str) -> bool {
+        is_timeout_message(text)
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn known_length_body_old(bytes: &[u8], max_bytes: usize) -> String {
+        read_utf8_body_bounded(Cursor::new(bytes), max_bytes, max_bytes.min(64 * 1024))
+            .expect("benchmark body should be valid UTF-8 within the limit")
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn known_length_body_new(bytes: &[u8], max_bytes: usize) -> String {
+        read_utf8_body_bounded(Cursor::new(bytes), max_bytes, bytes.len())
+            .expect("benchmark body should be valid UTF-8 within the limit")
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn snippet_old(text: &str) -> String {
+        if text.is_empty() {
+            return String::new();
+        }
+        let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
+        for ch in text.chars().take(MAX_LOG_CHARS) {
+            out.push(ch);
+        }
+        out
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn snippet_new(text: String) -> String {
+        log_body_snippet(text)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -243,7 +326,28 @@ mod tests {
     fn is_timeout_message_accepts_common_timeout_text() {
         assert!(is_timeout_message("request timed out"));
         assert!(is_timeout_message("Timeout reading body"));
+        assert!(is_timeout_message("HTTP TIMEOUT"));
+        assert!(is_timeout_message("prefix TiMeD OuT suffix"));
         assert!(!is_timeout_message("connection refused"));
+        assert!(!is_timeout_message("time out"));
+    }
+
+    #[test]
+    fn timeout_classifier_matches_allocating_reference() {
+        for text in [
+            "",
+            "timeout",
+            "prefixTIMEOUTsuffix",
+            "request timed outside the limit",
+            "request time out",
+            "t-i-m-e-o-u-t",
+            "tİmeout",
+            "no matching marker",
+        ] {
+            let lower = text.to_ascii_lowercase();
+            let expected = lower.contains("timeout") || lower.contains("timed out");
+            assert_eq!(is_timeout_message(text), expected, "input: {text:?}");
+        }
     }
 
     #[test]
@@ -312,7 +416,7 @@ mod tests {
     fn bounded_text_body_rejects_one_byte_over_the_limit() {
         let response = ureq::http::Response::builder()
             .status(200)
-            .body(ureq::Body::builder().data("five!"))
+            .body(ureq::Body::builder().reader(std::io::Cursor::new(b"five!".to_vec())))
             .expect("response");
 
         assert!(matches!(
@@ -322,9 +426,28 @@ mod tests {
     }
 
     #[test]
+    fn bounded_text_body_rejects_declared_oversize_without_reading() {
+        let response = ureq::http::Response::builder()
+            .status(200)
+            .body(ureq::Body::builder().data("known length"))
+            .expect("response");
+
+        assert!(matches!(
+            read_text_body_bounded(response, 4),
+            Err(NetworkError::Decode(message)) if message == "response body exceeds 4 bytes"
+        ));
+    }
+
+    #[test]
     fn log_body_snippet_caps_long_text() {
         let text = "a".repeat(300);
-        assert_eq!(log_body_snippet(text.as_str()).len(), 256);
-        assert!(log_body_snippet("").is_empty());
+        assert_eq!(log_body_snippet(text).len(), 256);
+        assert!(log_body_snippet(String::new()).is_empty());
+        assert_eq!(log_body_snippet("short"), "short");
+
+        let unicode = "é".repeat(300);
+        let snippet = log_body_snippet(unicode);
+        assert_eq!(snippet.chars().count(), 256);
+        assert!(snippet.is_char_boundary(snippet.len()));
     }
 }

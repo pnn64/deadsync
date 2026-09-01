@@ -3111,18 +3111,17 @@ pub fn submit_score_request(
     let status = response.status();
     let status_code = status.as_u16();
     let body_text = network::read_text_body_or_empty(response);
-    let body_snippet = network::log_body_snippet(body_text.as_str());
     if !status.is_success() {
         return Err(GrooveStatsSubmitRequestError::Http {
             status: status_code,
-            body_snippet,
+            body_snippet: network::log_body_snippet(body_text),
         });
     }
 
     let response: GrooveStatsSubmitApiResponse =
         serde_json::from_str(body_text.as_str()).map_err(|error| {
             GrooveStatsSubmitRequestError::Decode {
-                message: network::log_body_snippet(error.to_string().as_str()),
+                message: network::log_body_snippet(error.to_string()),
             }
         })?;
     if !response.error.trim().is_empty() {
@@ -3130,6 +3129,8 @@ pub fn submit_score_request(
             message: response.error.trim().to_string(),
         });
     }
+
+    let body_snippet = network::log_body_snippet(body_text);
 
     Ok(GrooveStatsSubmitRequestSuccess {
         response,

@@ -1099,7 +1099,7 @@ pub fn submit_score_request(
     let status = response.status();
     let status_code = status.as_u16();
     let body = network::read_text_body_or_empty(response);
-    let body_snippet = network::log_body_snippet(body.as_str());
+    let body_snippet = network::log_body_snippet(body);
     if status.is_success() {
         return Ok(ArrowCloudSubmitRequestSuccess {
             status: status_code,
