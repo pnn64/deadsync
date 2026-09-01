@@ -1,10 +1,12 @@
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use smallvec::SmallVec;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
 use crate::itg as noteskin_itg;
+use crate::lua::{ItgCallArgs, itg_call_args, itg_quoted_strings};
 use crate::script::parse_linear_frames_expr;
 
 pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
@@ -12,6 +14,7 @@ pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
+type Arg0Aliases<'a> = SmallVec<[&'a str; 4]>;
 const BEAT_UPDATE_MARKER: &[u8] = b"setupdatefunction,";
 const BEAT_FADE_GLOW_SIGNATURES: [&[u8]; 4] = [
     b"part=beat%1",
@@ -515,8 +518,35 @@ pub fn element_contains_hint(element: &str, hint: &str) -> bool {
         .any(|candidate| candidate.eq_ignore_ascii_case(hint))
 }
 
-fn parse_arg0_aliases(content: &str) -> HashSet<String> {
-    let mut out = HashSet::new();
+fn parse_arg0_aliases(content: &str) -> Arg0Aliases<'_> {
+    let mut out = SmallVec::new();
+    for raw in content.lines() {
+        let line = raw.trim().trim_end_matches(';').trim();
+        if !line.starts_with("local ") {
+            continue;
+        }
+        let rest = line[6..].trim();
+        let Some((lhs, rhs)) = rest.split_once('=') else {
+            continue;
+        };
+        if rhs.trim() != "..." {
+            continue;
+        }
+        let name = lhs.trim();
+        if name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            && !out.contains(&name)
+        {
+            out.push(name);
+        }
+    }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_arg0_aliases_reference(content: &str) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
     for raw in content.lines() {
         let line = raw.trim().trim_end_matches(';').trim();
         if !line.starts_with("local ") {
@@ -540,9 +570,9 @@ fn parse_arg0_aliases(content: &str) -> HashSet<String> {
     out
 }
 
-fn rewrite_arg0_expr(expr: &str, arg0_aliases: &HashSet<String>) -> String {
+fn rewrite_arg0_expr(expr: &str, arg0_aliases: &[&str]) -> String {
     let trimmed = expr.trim();
-    if trimmed == "..." || arg0_aliases.contains(trimmed) {
+    if trimmed == "..." || arg0_aliases.contains(&trimmed) {
         ITG_ARG0_TOKEN.to_string()
     } else {
         trimmed.to_string()
@@ -1141,6 +1171,27 @@ fn parse_model_block(
 }
 
 fn parse_loadactor_args(args: &str) -> Option<(Option<String>, String)> {
+    let mut quoted = itg_quoted_strings(args);
+    let first = quoted.next()?;
+    let mut last = first;
+    let mut count = 1usize;
+    for value in quoted {
+        last = value;
+        count += 1;
+    }
+    let element = last.to_string();
+    let button_override = if args.contains("Var \"Button\"") || args.contains("Var 'Button'") {
+        None
+    } else if count >= 2 {
+        Some(first.to_string())
+    } else {
+        None
+    };
+    Some((button_override, element))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_loadactor_args_reference(args: &str) -> Option<(Option<String>, String)> {
     let quoted = extract_quoted_strings(args);
     let element = quoted.last()?.to_string();
     let button_override = if args.contains("Var \"Button\"") || args.contains("Var 'Button'") {
@@ -1457,7 +1508,7 @@ fn parse_self_chain_commands_scoped(
             out.push_str(name);
             for arg in args {
                 out.push(',');
-                out.push_str(&context.resolve_command_arg(&arg, scope));
+                out.push_str(&context.resolve_command_arg(arg, scope));
             }
             cursor = next;
 
@@ -1472,7 +1523,32 @@ fn parse_self_chain_commands_scoped(
     (!out.is_empty()).then_some(out)
 }
 
-fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, Vec<String>, usize)> {
+fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, ItgCallArgs<'_>, usize)> {
+    let bytes = body.as_bytes();
+    let mut name_end = name_start;
+    while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
+        name_end += 1;
+    }
+    if name_end == name_start {
+        return None;
+    }
+    let open = skip_ws(body, name_end);
+    if bytes.get(open).is_none_or(|b| *b != b'(') {
+        return None;
+    }
+    let close = find_matching(body, open, '(', ')')?;
+    Some((
+        body[name_start..name_end].trim(),
+        itg_call_args(&body[open + 1..close]),
+        close + 1,
+    ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_lua_method_call_reference(
+    body: &str,
+    name_start: usize,
+) -> Option<(&str, Vec<String>, usize)> {
     let bytes = body.as_bytes();
     let mut name_end = name_start;
     while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
@@ -1491,6 +1567,42 @@ fn parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, Vec<Str
         split_call_args(&body[open + 1..close]),
         close + 1,
     ))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_self_chain_commands_scoped_reference(
+    body: &str,
+    context: &CommandContext,
+    scope: &HashMap<String, String>,
+) -> Option<String> {
+    let mut out = String::new();
+    let mut cursor = 0usize;
+    while let Some(rel) = body[cursor..].find("self:") {
+        let mut name_start = cursor + rel + 5;
+        loop {
+            let Some((name, args, next)) = parse_lua_method_call_reference(body, name_start) else {
+                cursor = name_start;
+                break;
+            };
+            if !out.is_empty() {
+                out.push(';');
+            }
+            out.push_str(name);
+            for arg in args {
+                out.push(',');
+                out.push_str(&context.resolve_command_arg(&arg, scope));
+            }
+            cursor = next;
+
+            let chain = skip_ws(body, next);
+            if body.as_bytes().get(chain).is_some_and(|b| *b == b':') {
+                name_start = chain + 1;
+                continue;
+            }
+            break;
+        }
+    }
+    (!out.is_empty()).then_some(out)
 }
 
 fn resolve_lua_conditionals(body: &str, scope: &HashMap<String, String>) -> String {
@@ -1699,9 +1811,131 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
         .and_then(|patched| patched.parse::<f32>().ok())
 }
 
+#[cfg(feature = "bench-support")]
+fn alias_checksum<'a>(aliases: impl IntoIterator<Item = &'a str>, len: usize) -> u64 {
+    aliases.into_iter().fold(len as u64, |checksum, alias| {
+        checksum.wrapping_add(identifier_checksum(alias))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn loadactor_args_checksum(args: Option<(Option<String>, String)>) -> u64 {
+    let Some((button, element)) = args else {
+        return 1;
+    };
+    let checksum = button.as_deref().map_or(2, identifier_checksum);
+    checksum
+        .wrapping_mul(1_099_511_628_211)
+        .wrapping_add(identifier_checksum(&element))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_arg0_aliases_for_bench(content: &str) -> u64 {
+    let aliases = parse_arg0_aliases(content);
+    alias_checksum(aliases.iter().copied(), aliases.len())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_arg0_aliases_reference_for_bench(content: &str) -> u64 {
+    let aliases = parse_arg0_aliases_reference(content);
+    alias_checksum(aliases.iter().map(String::as_str), aliases.len())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_loadactor_args_for_bench(args: &str) -> u64 {
+    loadactor_args_checksum(parse_loadactor_args(args))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_loadactor_args_reference_for_bench(args: &str) -> u64 {
+    loadactor_args_checksum(parse_loadactor_args_reference(args))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_parse_actor_self_chain_for_bench(body: &str) -> Option<String> {
+    parse_self_chain_commands_scoped(body, &CommandContext::default(), &HashMap::new())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_parse_actor_self_chain_reference_for_bench(body: &str) -> Option<String> {
+    parse_self_chain_commands_scoped_reference(body, &CommandContext::default(), &HashMap::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn borrowed_inline_arg0_aliases_preserve_rewrite_behavior() {
+        let content =
+            "local path = ...;\nlocal alias_name = ...\nlocal path = ...\nlocal other = 3";
+        let current = parse_arg0_aliases(content);
+        let reference = parse_arg0_aliases_reference(content);
+
+        assert_eq!(current.as_slice(), ["path", "alias_name"]);
+        assert_eq!(current.len(), reference.len());
+        assert!(current.iter().all(|alias| reference.contains(*alias)));
+        assert_eq!(rewrite_arg0_expr(" path ", &current), ITG_ARG0_TOKEN);
+        assert_eq!(rewrite_arg0_expr("...", &current), ITG_ARG0_TOKEN);
+        assert_eq!(rewrite_arg0_expr("other", &current), "other");
+    }
+
+    #[test]
+    fn borrowed_loadactor_quotes_preserve_first_and_last_arguments() {
+        let cases = [
+            "\"Left\", \"Tap Note\"",
+            "Var \"Button\", 'Receptor'",
+            "'Tap Mine'",
+            "'Left', helper('ignored'), \"Hold Body Active\"",
+            "",
+        ];
+        for args in cases {
+            assert_eq!(
+                parse_loadactor_args(args),
+                parse_loadactor_args_reference(args),
+                "arguments {args:?}"
+            );
+        }
+        assert_eq!(
+            parse_loadactor_args("\"Left\", \"Tap Note\""),
+            Some((Some("Left".to_string()), "Tap Note".to_string()))
+        );
+        assert_eq!(
+            parse_loadactor_args("Var \"Button\", 'Receptor'"),
+            Some((None, "Receptor".to_string()))
+        );
+    }
+
+    #[test]
+    fn borrowed_self_chain_arguments_preserve_compiled_commands() {
+        let body = r#"
+self:zoom(1.25):xy(3, 4)
+self:queuecommand("Ready"):visible(true)
+self:diffuse(scale(beat, 0, 1))
+"#;
+        let context = CommandContext::default();
+        let scope = HashMap::new();
+        let current = parse_self_chain_commands_scoped(body, &context, &scope);
+        let reference = parse_self_chain_commands_scoped_reference(body, &context, &scope);
+
+        assert_eq!(current, reference);
+        assert_eq!(
+            current.as_deref(),
+            Some("zoom,1.25;xy,3,4;queuecommand,\"Ready\";visible,true;diffuse,scale(beat, 0, 1)")
+        );
+    }
 
     #[test]
     fn pump_receptor_conditions_follow_button_and_steps_type() {

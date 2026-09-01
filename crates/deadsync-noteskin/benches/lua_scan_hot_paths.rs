@@ -1,8 +1,11 @@
 use deadsync_noteskin::actor::{
+    itg_arg0_aliases_for_bench, itg_arg0_aliases_reference_for_bench,
     itg_has_beat_fade_glow_signature_for_bench,
     itg_has_beat_fade_glow_signature_reference_for_bench, itg_has_beat_update_marker_for_bench,
-    itg_has_beat_update_marker_reference_for_bench, itg_parse_actor_color_for_bench,
-    itg_parse_actor_color_reference_for_bench, itg_update_function_name_for_bench,
+    itg_has_beat_update_marker_reference_for_bench, itg_loadactor_args_for_bench,
+    itg_loadactor_args_reference_for_bench, itg_parse_actor_color_for_bench,
+    itg_parse_actor_color_reference_for_bench, itg_parse_actor_self_chain_for_bench,
+    itg_parse_actor_self_chain_reference_for_bench, itg_update_function_name_for_bench,
     itg_update_function_name_reference_for_bench,
 };
 use deadsync_noteskin::compiled::compiled_key_bench_support::{
@@ -1615,5 +1618,116 @@ fn main() {
         "borrowed actor color-wrapper scan (8 representative expressions)",
         &old_actor_colors,
         &new_actor_colors,
+    );
+
+    let arg0_alias_cases = [
+        "local path = ...",
+        "local path = ...;\nlocal alias_name = ...",
+        "local a = ...\nlocal b = ...\nlocal c = ...\nlocal d = ...",
+        "local repeated = ...\nlocal repeated = ...",
+        "local value = 3\nlocal actor = ...",
+        "-- local ignored = ...\nlocal real = ...",
+        "local spaced_name   =   ... ;",
+        "return Def.ActorFrame {}",
+    ];
+    let arg0_alias_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for content in arg0_alias_cases {
+                checksum = mix(checksum, black_box(parse(black_box(content))));
+            }
+        }
+        checksum
+    };
+    let (old_arg0_aliases, new_arg0_aliases) = measure_pair(
+        2_048,
+        arg0_alias_cases.len() * REPEATS,
+        || arg0_alias_suite(itg_arg0_aliases_reference_for_bench),
+        || arg0_alias_suite(itg_arg0_aliases_for_bench),
+    );
+    assert_improved(
+        "borrowed inline actor argument aliases",
+        &old_arg0_aliases,
+        &new_arg0_aliases,
+    );
+    print_pair(
+        "borrowed inline actor argument aliases (8 representative declarations)",
+        &old_arg0_aliases,
+        &new_arg0_aliases,
+    );
+
+    let loadactor_arg_cases = [
+        "\"Left\", \"Tap Note\"",
+        "'Down', 'Receptor'",
+        "Var \"Button\", \"Hold Body Active\"",
+        "Var 'Button', 'Tap Mine'",
+        "\"Tap Lift\"",
+        "'Left', helper('ignored'), \"Roll Explosion\"",
+        "\"Center\", 'Outline Receptor'",
+        "",
+    ];
+    let loadactor_arg_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for args in loadactor_arg_cases {
+                checksum = mix(checksum, black_box(parse(black_box(args))));
+            }
+        }
+        checksum
+    };
+    let (old_loadactor_args, new_loadactor_args) = measure_pair(
+        1_024,
+        loadactor_arg_cases.len() * REPEATS,
+        || loadactor_arg_suite(itg_loadactor_args_reference_for_bench),
+        || loadactor_arg_suite(itg_loadactor_args_for_bench),
+    );
+    assert_improved(
+        "borrowed NOTESKIN LoadActor arguments",
+        &old_loadactor_args,
+        &new_loadactor_args,
+    );
+    print_pair(
+        "borrowed NOTESKIN LoadActor arguments (8 representative calls)",
+        &old_loadactor_args,
+        &new_loadactor_args,
+    );
+
+    let actor_chain_cases = [
+        "self:zoom(1.25):xy(3, 4)",
+        "self:queuecommand(\"Ready\"):visible(true)",
+        "self:diffuse(scale(beat, 0, 1))",
+        "self:sleep(0.2):linear(0.1):diffusealpha(0)",
+        "if active then self:rotationz(90):zoomx(0.75) end",
+        "self:effectclock('beat'):wag():effectmagnitude(0, 0, 12)",
+        "return self:blend('BlendMode_Add'):ztest(true)",
+        "no actor commands here",
+    ];
+    let actor_chain_suite = |parse: fn(&str) -> Option<String>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for body in actor_chain_cases {
+                checksum = mix(
+                    checksum,
+                    optional_text_checksum(black_box(parse(black_box(body)))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_actor_chains, new_actor_chains) = measure_pair(
+        512,
+        actor_chain_cases.len() * REPEATS,
+        || actor_chain_suite(itg_parse_actor_self_chain_reference_for_bench),
+        || actor_chain_suite(itg_parse_actor_self_chain_for_bench),
+    );
+    assert_improved(
+        "borrowed actor self-chain arguments",
+        &old_actor_chains,
+        &new_actor_chains,
+    );
+    print_pair(
+        "borrowed actor self-chain arguments (8 representative command bodies)",
+        &old_actor_chains,
+        &new_actor_chains,
     );
 }
