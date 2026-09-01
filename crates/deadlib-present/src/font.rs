@@ -639,8 +639,20 @@ fn committed_replace_markers(text: &str) -> Cow<'_, str> {
 
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
-    use super::{committed_replace_markers, replace_markers};
+    use super::{
+        FontPageSettings, committed_replace_markers, get_page_name_from_path,
+        get_page_name_from_path_owned, has_png_suffix, has_png_suffix_casefolded, replace_markers,
+    };
     use std::borrow::Cow;
+    use std::path::PathBuf;
+
+    fn checksum_text(mut checksum: u64, text: &str) -> u64 {
+        checksum = checksum.wrapping_mul(131).wrapping_add(text.len() as u64);
+        for byte in text.bytes() {
+            checksum = checksum.wrapping_mul(31).wrapping_add(u64::from(byte));
+        }
+        checksum
+    }
 
     #[must_use]
     pub fn replace_markers_old(text: &str) -> Cow<'_, str> {
@@ -650,6 +662,60 @@ pub mod bench_support {
     #[must_use]
     pub fn replace_markers_new(text: &str) -> Cow<'_, str> {
         replace_markers(text)
+    }
+
+    #[must_use]
+    pub fn texture_page_suffix_old(names: &[String]) -> u64 {
+        names.iter().fold(0, |checksum, name| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(u64::from(has_png_suffix_casefolded(name)))
+        })
+    }
+
+    #[must_use]
+    pub fn texture_page_suffix_new(names: &[String]) -> u64 {
+        names.iter().fold(0, |checksum, name| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(u64::from(has_png_suffix(name)))
+        })
+    }
+
+    #[must_use]
+    pub fn page_names_old(paths: &[PathBuf]) -> u64 {
+        paths.iter().fold(0, |checksum, path| {
+            checksum_text(checksum, &get_page_name_from_path_owned(path))
+        })
+    }
+
+    #[must_use]
+    pub fn page_names_new(paths: &[PathBuf]) -> u64 {
+        paths.iter().fold(0, |checksum, path| {
+            checksum_text(checksum, &get_page_name_from_path(path))
+        })
+    }
+
+    #[must_use]
+    pub fn texture_hints_old(hints: &[Option<String>]) -> u64 {
+        hints.iter().fold(0, |checksum, hint| {
+            let mut selected = "default".to_string();
+            if let Some(hint) = hint {
+                selected.clone_from(hint);
+            }
+            checksum_text(checksum, &selected)
+        })
+    }
+
+    #[must_use]
+    pub fn texture_hints_new(hints: &[Option<String>]) -> u64 {
+        hints.iter().fold(0, |checksum, hint| {
+            let mut settings = FontPageSettings::default();
+            if let Some(hint) = hint {
+                settings.set_texture_hints(hint);
+            }
+            checksum_text(checksum, settings.texture_hints)
+        })
     }
 }
 
@@ -812,7 +878,7 @@ fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> Box<[Optio
 }
 
 #[derive(Debug)]
-struct FontPageSettings {
+struct FontPageSettings<'a> {
     pub(crate) draw_extra_pixels_left: i32,
     pub(crate) draw_extra_pixels_right: i32,
     pub(crate) add_to_all_widths: i32,
@@ -822,11 +888,11 @@ struct FontPageSettings {
     pub(crate) baseline: i32,             // -1 = “center + line_spacing/2”
     pub(crate) default_width: i32,        // -1 = “use frame width”
     pub(crate) advance_extra_pixels: i32, // SM default is 0
-    pub(crate) texture_hints: String,
+    pub(crate) texture_hints: &'a str,
     pub(crate) glyph_widths: HashMap<usize, i32>,
 }
 
-impl Default for FontPageSettings {
+impl Default for FontPageSettings<'_> {
     #[inline(always)]
     fn default() -> Self {
         Self {
@@ -839,9 +905,16 @@ impl Default for FontPageSettings {
             baseline: -1,
             default_width: -1,
             advance_extra_pixels: 1, // SM default
-            texture_hints: "default".to_string(),
+            texture_hints: "default",
             glyph_widths: HashMap::new(),
         }
+    }
+}
+
+impl<'a> FontPageSettings<'a> {
+    #[inline(always)]
+    fn set_texture_hints(&mut self, texture_hints: &'a str) {
+        self.texture_hints = texture_hints;
     }
 }
 
@@ -1124,9 +1197,41 @@ fn parse_font_ini(text: &str) -> ParsedFontIni {
     parsed
 }
 
+#[inline(always)]
+fn has_png_suffix(name: &str) -> bool {
+    name.as_bytes()
+        .get(name.len().saturating_sub(4)..)
+        .is_some_and(|suffix| suffix.eq_ignore_ascii_case(b".png"))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn has_png_suffix_casefolded(name: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(".png")
+}
+
 /// Page name from filename stem: takes text inside first pair of [...], else "main".
 #[inline(always)]
-fn get_page_name_from_path(path: &Path) -> String {
+fn get_page_name_from_path(path: &Path) -> Cow<'_, str> {
+    let filename = path.file_stem().unwrap_or_default().to_string_lossy();
+    if let (Some(s), Some(e)) = (filename.find('['), filename.find(']'))
+        && s < e
+    {
+        return match filename {
+            Cow::Borrowed(filename) => Cow::Borrowed(&filename[s + 1..e]),
+            Cow::Owned(mut filename) => {
+                filename.truncate(e);
+                filename.drain(..=s);
+                Cow::Owned(filename)
+            }
+        };
+    }
+    Cow::Borrowed("main")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn get_page_name_from_path_owned(path: &Path) -> String {
     let filename = path.file_stem().unwrap_or_default().to_string_lossy();
     if let (Some(s), Some(e)) = (filename.find('['), filename.find(']'))
         && s < e
@@ -1146,7 +1251,7 @@ fn list_texture_pages(font_dir: &Path, prefix: &str) -> std::io::Result<Vec<Path
             continue;
         }
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        if !name.to_ascii_lowercase().ends_with(".png") {
+        if !has_png_suffix(name) {
             continue;
         }
         if !name.starts_with(prefix) {
@@ -2566,6 +2671,7 @@ pub fn parse_with_texture_context(
     // ---- local pages loop (unchanged logic; our pages override imported glyphs)
     for (page_idx, tex_path) in texture_paths.iter().enumerate() {
         let page_name = get_page_name_from_path(tex_path);
+        let page_name = page_name.as_ref();
         let tex_dims = image::image_dimensions(tex_path)?;
         let texture_key = texture_ctx.canonical_texture_key(tex_path);
         required_textures.push(tex_path.clone());
@@ -2575,7 +2681,7 @@ pub fn parse_with_texture_context(
 
         // settings: common → page → legacy
         let mut settings = FontPageSettings::default();
-        let mut sections_to_check = SmallVec::<[&str; 3]>::from_slice(&["common", &page_name]);
+        let mut sections_to_check = SmallVec::<[&str; 3]>::from_slice(&["common", page_name]);
         if page_name == "main" {
             sections_to_check.push("char widths");
         }
@@ -2613,7 +2719,7 @@ pub fn parse_with_texture_context(
                     settings.advance_extra_pixels = n;
                 }
                 if let Some(v) = map.get("texturehints") {
-                    settings.texture_hints.clone_from(v);
+                    settings.set_texture_hints(v);
                 }
 
                 for (key, val) in map {
@@ -3069,6 +3175,61 @@ mod tests {
             advance: advance_i32 as f32,
             advance_i32,
         }
+    }
+
+    #[test]
+    fn png_suffix_check_preserves_case_insensitive_filtering() {
+        let cases = [
+            ("font.png", true),
+            ("font.PNG", true),
+            ("font.PnG", true),
+            ("font.jpg", false),
+            ("font.png.bak", false),
+            ("png", false),
+            ("", false),
+            ("日本語.PNG", true),
+        ];
+
+        for (name, expected) in cases {
+            assert_eq!(has_png_suffix(name), expected, "wrong result for {name:?}");
+            assert_eq!(
+                has_png_suffix(name),
+                has_png_suffix_casefolded(name),
+                "casefolded behavior diverged for {name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn page_name_extraction_borrows_valid_path_text() {
+        let cases = [
+            ("Fonts/Common default [numbers] 4x4.png", "numbers"),
+            ("Fonts/Common default 16x8.png", "main"),
+            ("Fonts/Common default [broken 8x8.png", "main"),
+            ("Fonts/日本語 [kana] 16x16.png", "kana"),
+        ];
+
+        for (raw, expected) in cases {
+            let path = Path::new(raw);
+            let page_name = get_page_name_from_path(path);
+            assert_eq!(page_name, expected);
+            assert_eq!(page_name, get_page_name_from_path_owned(path));
+            assert!(matches!(page_name, Cow::Borrowed(_)));
+        }
+    }
+
+    #[test]
+    fn page_settings_borrow_the_last_texture_hint_overlay() {
+        let common = String::from("doubleres");
+        let page = String::from("mipmaps,stretch");
+        let mut settings = FontPageSettings::default();
+
+        assert_eq!(settings.texture_hints, "default");
+        settings.set_texture_hints(&common);
+        settings.set_texture_hints(&page);
+
+        assert_eq!(settings.texture_hints, page);
+        assert_eq!(settings.texture_hints.as_ptr(), page.as_ptr());
     }
 
     #[test]

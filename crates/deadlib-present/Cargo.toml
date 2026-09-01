@@ -38,3 +38,8 @@ required-features = ["bench-support"]
 name = "animation_tween_hot_paths"
 harness = false
 required-features = ["bench-support"]
+
+[[bench]]
+name = "font_startup_hot_paths"
+harness = false
+required-features = ["bench-support"]
