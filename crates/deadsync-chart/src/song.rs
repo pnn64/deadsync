@@ -374,12 +374,13 @@ impl SongData {
 
     #[must_use]
     pub fn edit_chart_indices_sorted(&self, chart_type: &str) -> Vec<usize> {
-        let mut indices: Vec<usize> = self
-            .charts
-            .iter()
-            .enumerate()
-            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
-            .collect();
+        let mut indices = Vec::with_capacity(self.charts.len());
+        indices.extend(
+            self.charts
+                .iter()
+                .enumerate()
+                .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index)),
+        );
         indices.sort_by(|&left, &right| edit_chart_cmp(&self.charts[left], &self.charts[right]));
         indices
     }
@@ -406,13 +407,18 @@ impl SongData {
         chart_type: &str,
     ) -> [Option<usize>; STANDARD_DIFFICULTY_COUNT] {
         let mut out = [None; STANDARD_DIFFICULTY_COUNT];
+        let mut remaining = STANDARD_DIFFICULTY_COUNT;
         for (chart_ix, chart) in self.charts.iter().enumerate() {
             if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
                 continue;
             }
-            for (diff_ix, diff_name) in STANDARD_DIFFICULTY_NAMES.iter().enumerate() {
-                if out[diff_ix].is_none() && chart.difficulty.eq_ignore_ascii_case(diff_name) {
-                    out[diff_ix] = Some(chart_ix);
+            let Some(diff_ix) = standard_difficulty_index(&chart.difficulty) else {
+                continue;
+            };
+            if out[diff_ix].is_none() {
+                out[diff_ix] = Some(chart_ix);
+                remaining -= 1;
+                if remaining == 0 {
                     break;
                 }
             }
@@ -450,23 +456,31 @@ impl SongData {
 
     #[must_use]
     pub fn steps_index_for_chart_hash(&self, chart_type: &str, chart_hash: &str) -> Option<usize> {
-        let chart = self.charts.iter().find(|chart| {
-            chart.chart_type.eq_ignore_ascii_case(chart_type) && chart.short_hash == chart_hash
-        })?;
+        let mut matching_type = self
+            .charts
+            .iter()
+            .enumerate()
+            .filter(|(_, chart)| chart.chart_type.eq_ignore_ascii_case(chart_type));
+        let (first_index, chart) =
+            matching_type.find(|(_, chart)| chart.short_hash == chart_hash)?;
 
         if let Some(index) = standard_difficulty_index(&chart.difficulty) {
             return Some(index);
         }
         if chart.difficulty.eq_ignore_ascii_case("edit") {
-            let target_index = self
-                .charts
-                .iter()
-                .enumerate()
+            let target_index = matching_type
                 .filter(|(_, candidate)| {
-                    is_edit_chart(candidate, chart_type) && candidate.short_hash == chart_hash
+                    candidate.difficulty.eq_ignore_ascii_case("edit")
+                        && candidate.short_hash == chart_hash
                 })
                 .map(|(index, _)| index)
-                .min_by(|&left, &right| self.edit_chart_index_cmp(left, right))?;
+                .fold(first_index, |best, candidate| {
+                    if self.edit_chart_index_cmp(candidate, best).is_lt() {
+                        candidate
+                    } else {
+                        best
+                    }
+                });
             let rank = self
                 .charts
                 .iter()
@@ -747,6 +761,74 @@ fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle
 #[cfg(any(test, feature = "bench-support"))]
 pub mod bench_support {
     use super::*;
+
+    #[inline]
+    #[must_use]
+    pub fn standard_chart_indices_reference(
+        song: &SongData,
+        chart_type: &str,
+    ) -> [Option<usize>; STANDARD_DIFFICULTY_COUNT] {
+        let mut out = [None; STANDARD_DIFFICULTY_COUNT];
+        for (chart_ix, chart) in song.charts.iter().enumerate() {
+            if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
+                continue;
+            }
+            for (diff_ix, diff_name) in STANDARD_DIFFICULTY_NAMES.iter().enumerate() {
+                if out[diff_ix].is_none() && chart.difficulty.eq_ignore_ascii_case(diff_name) {
+                    out[diff_ix] = Some(chart_ix);
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    #[must_use]
+    pub fn edit_chart_indices_sorted_reference(song: &SongData, chart_type: &str) -> Vec<usize> {
+        let mut indices: Vec<usize> = song
+            .charts
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
+            .collect();
+        indices.sort_by(|&left, &right| edit_chart_cmp(&song.charts[left], &song.charts[right]));
+        indices
+    }
+
+    #[must_use]
+    pub fn steps_index_for_chart_hash_reference(
+        song: &SongData,
+        chart_type: &str,
+        chart_hash: &str,
+    ) -> Option<usize> {
+        let chart = song.charts.iter().find(|chart| {
+            chart.chart_type.eq_ignore_ascii_case(chart_type) && chart.short_hash == chart_hash
+        })?;
+
+        if let Some(index) = standard_difficulty_index(&chart.difficulty) {
+            return Some(index);
+        }
+        if chart.difficulty.eq_ignore_ascii_case("edit") {
+            let target_index = song
+                .charts
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| {
+                    is_edit_chart(candidate, chart_type) && candidate.short_hash == chart_hash
+                })
+                .map(|(index, _)| index)
+                .min_by(|&left, &right| song.edit_chart_index_cmp(left, right))?;
+            let rank = song
+                .charts
+                .iter()
+                .enumerate()
+                .filter(|(_, candidate)| is_edit_chart(candidate, chart_type))
+                .filter(|(index, _)| song.edit_chart_index_cmp(*index, target_index).is_lt())
+                .count();
+            return Some(STANDARD_DIFFICULTY_COUNT + rank);
+        }
+        None
+    }
 
     #[must_use]
     pub fn format_display_bpm_range_reference(
@@ -1055,6 +1137,95 @@ mod tests {
                 .map(|chart| chart.difficulty.as_str()),
             Some("Challenge")
         );
+    }
+
+    #[test]
+    fn edit_chart_index_sort_preserves_stable_ties() {
+        let mut song = song_with_charts(&["Easy"]);
+        for (description, hash) in [
+            ("Zulu", "zulu"),
+            ("same", "first-tie"),
+            ("Alpha", "alpha"),
+            ("Same", "second-tie"),
+        ] {
+            let mut edit = chart_with_difficulty("Edit");
+            edit.meter = 10;
+            edit.stats.total_steps = 100;
+            edit.description = description.to_owned();
+            edit.short_hash = hash.to_owned();
+            song.charts.push(edit);
+        }
+
+        let indices = song.edit_chart_indices_sorted("dance-single");
+        assert_eq!(
+            indices
+                .iter()
+                .map(|&index| song.charts[index].short_hash.as_str())
+                .collect::<Vec<_>>(),
+            ["alpha", "first-tie", "second-tie", "zulu"]
+        );
+        assert_eq!(
+            indices,
+            bench_support::edit_chart_indices_sorted_reference(&song, "dance-single")
+        );
+    }
+
+    #[test]
+    fn standard_chart_slot_scan_preserves_first_matches() {
+        let mut song = song_with_charts(&[
+            "easy",
+            "Beginner",
+            "Medium",
+            "Hard",
+            "Challenge",
+            "Easy",
+            "Edit",
+        ]);
+        let mut other_type = chart_with_difficulty("Beginner");
+        other_type.chart_type = "pump-single".to_owned();
+        song.charts.insert(0, other_type);
+
+        let expected = [Some(2), Some(1), Some(3), Some(4), Some(5)];
+        assert_eq!(song.standard_chart_indices("dance-single"), expected);
+        assert_eq!(
+            song.standard_chart_indices("dance-single"),
+            bench_support::standard_chart_indices_reference(&song, "dance-single")
+        );
+    }
+
+    #[test]
+    fn hash_lookup_scan_preserves_duplicate_edit_ranking() {
+        let mut song = song_with_charts(&["Easy"]);
+        for (meter, steps, description, hash) in [
+            (12, 200, "late", "other"),
+            (10, 180, "zeta", "duplicate"),
+            (8, 220, "middle", "other-2"),
+            (9, 140, "alpha", "duplicate"),
+        ] {
+            let mut edit = chart_with_difficulty("Edit");
+            edit.meter = meter;
+            edit.stats.total_steps = steps;
+            edit.description = description.to_owned();
+            edit.short_hash = hash.to_owned();
+            song.charts.push(edit);
+        }
+
+        assert_eq!(
+            song.steps_index_for_chart_hash("dance-single", "duplicate"),
+            Some(STANDARD_DIFFICULTY_COUNT + 1)
+        );
+        for (chart_type, hash) in [
+            ("dance-single", "duplicate"),
+            ("DANCE-SINGLE", "Easy-hash"),
+            ("dance-single", "missing"),
+            ("pump-single", "duplicate"),
+        ] {
+            assert_eq!(
+                song.steps_index_for_chart_hash(chart_type, hash),
+                bench_support::steps_index_for_chart_hash_reference(&song, chart_type, hash),
+                "chart_type={chart_type:?}, hash={hash:?}",
+            );
+        }
     }
 
     #[test]
