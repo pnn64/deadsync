@@ -284,6 +284,8 @@ pub use theme_colors::{
     song_lua_palette, song_lua_player_color, song_lua_player_dark_color,
     song_lua_player_score_color, stage_color, tone_color,
 };
+#[cfg(any(test, feature = "bench-support"))]
+pub use timing::timing_window_arg_index_reference_for_bench;
 pub use timing::{
     SONG_LUA_TIMING_WINDOW_NAMES, timing_window_arg_index, timing_window_name,
     timing_window_seconds, worst_judgment_from_offsets,
@@ -303,6 +305,8 @@ pub use values::{
     player_number_name, read_boolish, read_easing_name, read_f32, read_i32_value, read_player,
     read_span_mode, read_string, read_u32_value, truthy,
 };
+#[cfg(any(test, feature = "bench-support"))]
+pub use values::{read_boolish_reference_for_bench, read_span_mode_reference_for_bench};
 pub use version::{
     is_minimum_product_version, is_product_version, song_lua_is_minimum_product_version,
     song_lua_is_product_version, version_args, version_parts,

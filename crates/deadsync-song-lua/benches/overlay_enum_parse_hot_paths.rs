@@ -1,16 +1,18 @@
 use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_song_lua::{
-    SongLuaDifficulty, SongLuaStyleInfo, SongLuaTextGlowMode, parse_overlay_effect_clock,
-    parse_overlay_effect_clock_reference_for_bench, parse_overlay_effect_mode,
-    parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
-    parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
-    parse_overlay_text_glow_mode_reference_for_bench, song_lua_difficulty_from_value,
-    song_lua_difficulty_from_value_reference_for_bench, song_lua_steps_type_is_dance_single,
-    song_lua_steps_type_is_dance_single_reference_for_bench, song_lua_style_info,
-    song_lua_style_info_reference_for_bench, theme_pref_default,
+    SongLuaDifficulty, SongLuaSpanMode, SongLuaStyleInfo, SongLuaTextGlowMode,
+    parse_overlay_effect_clock, parse_overlay_effect_clock_reference_for_bench,
+    parse_overlay_effect_mode, parse_overlay_effect_mode_reference_for_bench,
+    parse_overlay_text_align, parse_overlay_text_align_reference_for_bench,
+    parse_overlay_text_glow_mode, parse_overlay_text_glow_mode_reference_for_bench, read_boolish,
+    read_boolish_reference_for_bench, read_span_mode, read_span_mode_reference_for_bench,
+    song_lua_difficulty_from_value, song_lua_difficulty_from_value_reference_for_bench,
+    song_lua_steps_type_is_dance_single, song_lua_steps_type_is_dance_single_reference_for_bench,
+    song_lua_style_info, song_lua_style_info_reference_for_bench, theme_pref_default,
     theme_pref_default_reference_for_bench, theme_screen_fallback_for_bench,
-    theme_screen_fallback_reference_for_bench,
+    theme_screen_fallback_reference_for_bench, timing_window_arg_index,
+    timing_window_arg_index_reference_for_bench,
 };
 use mlua::{Lua, Value};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -317,6 +319,28 @@ fn text_glow_value(value: Option<SongLuaTextGlowMode>) -> u64 {
     }
 }
 
+const fn boolish_value(value: Option<bool>) -> u64 {
+    match value {
+        None => 0,
+        Some(false) => 1,
+        Some(true) => 2,
+    }
+}
+
+const fn span_mode_value(value: Option<SongLuaSpanMode>) -> u64 {
+    match value {
+        None => 0,
+        Some(SongLuaSpanMode::Len) => 1,
+        Some(SongLuaSpanMode::End) => 2,
+    }
+}
+
+fn timing_index_value(value: Option<i32>) -> u64 {
+    value.map_or(0, |value| {
+        (i64::from(value) - i64::from(i32::MIN)) as u64 + 1
+    })
+}
+
 fn assert_relative_improved(name: &str, old: &Row, new: &Row) {
     assert_eq!(old.checksum, new.checksum, "{name} behavior diverged");
     assert!(
@@ -422,6 +446,106 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_VALUE_PARSE_ONLY").is_some() {
+        let lua = Lua::new();
+        let boolish_values: Vec<Value> =
+            [" true ", "YES", "off", "0", "-2.5", "NaN", "unknown", ""]
+                .iter()
+                .map(|value| Value::String(lua.create_string(value).expect("valid boolish text")))
+                .collect();
+        let boolish_suite = |parse: fn(Value) -> Option<bool>| {
+            let mut checksum = 0_u64;
+            for _ in 0..REPEATS {
+                for value in &boolish_values {
+                    checksum = mix(
+                        checksum,
+                        boolish_value(black_box(parse(black_box(value.clone())))),
+                    );
+                }
+            }
+            checksum
+        };
+        let (old_boolish, new_boolish) = measure_pair(
+            boolish_values.len() * REPEATS,
+            || boolish_suite(read_boolish_reference_for_bench),
+            || boolish_suite(read_boolish),
+        );
+        assert_improved("borrowed boolean-like parsing", &old_boolish, &new_boolish);
+        print_pair(
+            "borrowed boolean-like parsing (8 representative strings)",
+            &old_boolish,
+            &new_boolish,
+        );
+
+        let span_values: Vec<Value> = ["len", "LEN", "End", " end ", "unknown", ""]
+            .iter()
+            .map(|value| Value::String(lua.create_string(value).expect("valid span-mode text")))
+            .collect();
+        let span_suite = |parse: fn(Value) -> Option<SongLuaSpanMode>| {
+            let mut checksum = 0_u64;
+            for _ in 0..REPEATS {
+                for value in &span_values {
+                    checksum = mix(
+                        checksum,
+                        span_mode_value(black_box(parse(black_box(value.clone())))),
+                    );
+                }
+            }
+            checksum
+        };
+        let (old_span, new_span) = measure_pair(
+            span_values.len() * REPEATS,
+            || span_suite(read_span_mode_reference_for_bench),
+            || span_suite(read_span_mode),
+        );
+        assert_improved("borrowed span-mode parsing", &old_span, &new_span);
+        print_pair(
+            "borrowed span-mode parsing (6 representative strings)",
+            &old_span,
+            &new_span,
+        );
+
+        let timing_values: Vec<Value> = [
+            "TimingWindow_W1",
+            "TimingWindow_W2",
+            "Judgment_W-2",
+            "TimingWindow_W5 ",
+            "unknown",
+            "",
+        ]
+        .iter()
+        .map(|value| Value::String(lua.create_string(value).expect("valid timing-window text")))
+        .collect();
+        let timing_suite = |parse: fn(Value) -> Option<i32>| {
+            let mut checksum = 0_u64;
+            for _ in 0..REPEATS {
+                for value in &timing_values {
+                    checksum = mix(
+                        checksum,
+                        timing_index_value(black_box(parse(black_box(value.clone())))),
+                    );
+                }
+            }
+            checksum
+        };
+        let (old_timing, new_timing) = measure_pair(
+            timing_values.len() * REPEATS,
+            || timing_suite(timing_window_arg_index_reference_for_bench),
+            || timing_suite(timing_window_arg_index),
+        );
+        assert_improved(
+            "borrowed timing-window argument parsing",
+            &old_timing,
+            &new_timing,
+        );
+        print_pair(
+            "borrowed timing-window argument parsing (6 representative strings)",
+            &old_timing,
+            &new_timing,
+        );
+        return;
+    }
+
     let effect_names = [
         " none ",
         "DIFFUSERAMP",
