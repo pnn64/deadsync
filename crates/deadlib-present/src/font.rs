@@ -642,7 +642,8 @@ pub mod bench_support {
     use super::{
         FontPageSettings, committed_replace_markers, get_page_name_from_path,
         get_page_name_from_path_owned, has_png_suffix, has_png_suffix_casefolded,
-        import_path_candidates, replace_markers, split_import_specs,
+        import_path_candidates, parse_kv_trimmed, parse_line_entry_raw, replace_markers,
+        split_import_specs,
     };
     use std::borrow::Cow;
     use std::collections::HashMap;
@@ -824,6 +825,105 @@ pub mod bench_support {
         let mut map = HashMap::new();
         map.extend(entries.iter().copied());
         checksum_map(&map)
+    }
+
+    fn checksum_entry(key: &str, value: &str) -> u64 {
+        checksum_text(checksum_text(0, key), value)
+    }
+
+    #[must_use]
+    pub fn ini_values_old(lines: &[String]) -> u64 {
+        let mut values = HashMap::<String, String>::new();
+        for line in lines {
+            if let Some((key, value)) = parse_kv_trimmed(line) {
+                values.insert(key, value.to_string());
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (key, value)| {
+                checksum.wrapping_add(checksum_entry(key, value))
+            })
+    }
+
+    #[must_use]
+    pub fn ini_values_new(lines: &[String]) -> u64 {
+        let mut values = HashMap::<String, &str>::new();
+        for line in lines {
+            if let Some((key, value)) = parse_kv_trimmed(line) {
+                values.insert(key, value);
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (key, value)| {
+                checksum.wrapping_add(checksum_entry(key, value))
+            })
+    }
+
+    #[must_use]
+    pub fn raw_lines_old(lines: &[String]) -> u64 {
+        let mut values = HashMap::<u32, String>::new();
+        for line in lines {
+            if let Some((row, value)) = parse_line_entry_raw(line) {
+                values.insert(row, value.to_string());
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (&row, value)| {
+                checksum.wrapping_add(u64::from(row).rotate_left(11) ^ checksum_text(0, value))
+            })
+    }
+
+    #[must_use]
+    pub fn raw_lines_new(lines: &[String]) -> u64 {
+        let mut values = HashMap::<u32, &str>::new();
+        for line in lines {
+            if let Some((row, value)) = parse_line_entry_raw(line) {
+                values.insert(row, value);
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (&row, value)| {
+                checksum.wrapping_add(u64::from(row).rotate_left(11) ^ checksum_text(0, value))
+            })
+    }
+
+    #[inline(always)]
+    fn glyph_frame_checksum(frame: usize) -> u64 {
+        let width = (frame % 31 + 8) as f32;
+        let chop = 64.0 - width;
+        let left = (chop * 0.5).min(2.0);
+        let texture_left = frame as f32 * 64.0 + chop.mul_add(0.5, -left);
+        u64::from(width.to_bits())
+            ^ u64::from(texture_left.to_bits()).rotate_left(23)
+            ^ (frame as u64).rotate_left(41)
+    }
+
+    #[must_use]
+    pub fn glyph_dispatch_old(mappings: &[(u32, usize)], total_frames: usize) -> u64 {
+        let mut checksum = 0u64;
+        for frame in 0..total_frames {
+            let glyph = glyph_frame_checksum(frame);
+            for &(ch, mapped_frame) in mappings {
+                if mapped_frame == frame {
+                    checksum = checksum.wrapping_add(glyph ^ u64::from(ch).rotate_left(7));
+                }
+            }
+        }
+        checksum
+    }
+
+    #[must_use]
+    pub fn glyph_dispatch_new(mappings: &[(u32, usize)], total_frames: usize) -> u64 {
+        mappings
+            .iter()
+            .filter(|(_, frame)| *frame < total_frames)
+            .fold(0, |checksum, &(ch, frame)| {
+                checksum.wrapping_add(glyph_frame_checksum(frame) ^ u64::from(ch).rotate_left(7))
+            })
     }
 }
 
@@ -1061,16 +1161,17 @@ fn parse_section_header(raw: &str) -> Option<&str> {
     }
 }
 
-/// Parse key=value (trimmed key & value). Returns (`key_lower`, `value_string`).
+/// Parse key=value (trimmed key & value). Returns an owned lowercase key and
+/// a value borrowed from the source text.
 #[inline(always)]
-fn parse_kv_trimmed(raw: &str) -> Option<(String, String)> {
+fn parse_kv_trimmed(raw: &str) -> Option<(String, &str)> {
     let mut split = raw.splitn(2, '=');
     let k = split.next()?.trim();
     let v = split.next()?.trim();
     if k.is_empty() {
         return None;
     }
-    Some((as_lower(k), v.to_string()))
+    Some((as_lower(k), v))
 }
 
 /// Parse LINE row with *raw* RHS preserved (no trim). Case-insensitive line.
@@ -1236,26 +1337,26 @@ const fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
 }
 
 #[derive(Debug, Default)]
-struct ParsedFontIniSection {
-    values: HashMap<String, String>,
-    raw_lines: HashMap<u32, String>,
+struct ParsedFontIniSection<'a> {
+    values: HashMap<String, &'a str>,
+    raw_lines: HashMap<u32, &'a str>,
 }
 
 #[derive(Debug, Default)]
-struct ParsedFontIni {
-    sections: HashMap<String, ParsedFontIniSection>,
+struct ParsedFontIni<'a> {
+    sections: HashMap<String, ParsedFontIniSection<'a>>,
 }
 
-impl ParsedFontIni {
+impl<'a> ParsedFontIni<'a> {
     #[inline(always)]
-    fn get(&self, section: &str) -> Option<&ParsedFontIniSection> {
+    fn get(&self, section: &str) -> Option<&ParsedFontIniSection<'a>> {
         self.sections.get(section)
     }
 }
 
 /// Parses normalized key/value settings and raw `Line N` values together.
-fn parse_font_ini(text: &str) -> ParsedFontIni {
-    let mut sections: Vec<(String, ParsedFontIniSection)> = Vec::new();
+fn parse_font_ini(text: &str) -> ParsedFontIni<'_> {
+    let mut sections: Vec<(String, ParsedFontIniSection<'_>)> = Vec::new();
     let mut pending_section = String::from("common");
     let mut current_section = None;
     for raw in text.lines() {
@@ -1294,7 +1395,7 @@ fn parse_font_ini(text: &str) -> ParsedFontIni {
             section.values.insert(key, value);
         }
         if let Some((row, rhs)) = raw_line {
-            section.raw_lines.insert(row, rhs.to_string());
+            section.raw_lines.insert(row, rhs);
         }
     }
 
@@ -2588,11 +2689,11 @@ fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
         .filter(|spec| !spec.is_empty())
 }
 
-fn import_specs(ini: &ParsedFontIni) -> impl Iterator<Item = &str> {
+fn import_specs<'a>(ini: &'a ParsedFontIni<'a>) -> impl Iterator<Item = &'a str> {
     split_import_specs(
         ini.get("main")
             .and_then(|section| section.values.get("import"))
-            .map(String::as_str),
+            .copied(),
     )
 }
 
@@ -2629,6 +2730,19 @@ fn merge_imported_font(
     glyphs.extend(imported.font.glyph_map);
     stroke_textures.extend(imported.font.stroke_texture_map);
     texture_hints.extend(imported.font.texture_hints_map);
+}
+
+#[inline(always)]
+fn visit_valid_mappings(
+    char_to_frame: &HashMap<char, usize>,
+    total_frames: usize,
+    mut visit: impl FnMut(char, usize),
+) {
+    for (&ch, &frame) in char_to_frame {
+        if frame < total_frames {
+            visit(ch, frame);
+        }
+    }
 }
 
 /// # Panics
@@ -2962,10 +3076,7 @@ pub fn parse_with_texture_context(
                             }
                             let first_frame = (row * num_frames_wide) as usize;
 
-                            let line_val = section
-                                .raw_lines
-                                .get(&row)
-                                .map_or(val_str.as_str(), |s| s.as_str());
+                            let line_val = section.raw_lines.get(&row).copied().unwrap_or(*val_str);
 
                             for (i, ch) in line_val.chars().enumerate() {
                                 let idx = first_frame + i;
@@ -3049,7 +3160,7 @@ pub fn parse_with_texture_context(
             .get(texture_key.as_str())
             .map(|key| Arc::<str>::from(key.as_str()));
 
-        for i in 0..total_frames {
+        let glyph_for_frame = |i: usize| {
             let base_w_ini = if let Some(&w) = settings.glyph_widths.get(&i) {
                 w
             } else if settings.default_width != -1 {
@@ -3130,41 +3241,42 @@ pub fn parse_with_texture_context(
                 advance_i32: advance.round_ties_even() as i32,
             };
 
-            for (&ch, &frame_idx) in &char_to_frame {
-                if frame_idx == i {
-                    trace!(
-                        " [{}] GLYPH {} -> frame {} | width_i={} hadv={} chop={} extraL={} extraR={} \
-                         size=[{:.3}x{:.3}] offset=[{:.3},{:.3}] advance={:.3} \
-                         tex_rect=[{:.1},{:.1},{:.1},{:.1}]",
-                        page_name,
-                        fmt_char(ch),
-                        i,
-                        width_i,
-                        hadvance,
-                        chop_i,
-                        extra_left,
-                        extra_right,
-                        glyph.size[0],
-                        glyph.size[1],
-                        glyph.offset[0],
-                        glyph.offset[1],
-                        glyph.advance,
-                        tex_rect[0],
-                        tex_rect[1],
-                        tex_rect[2],
-                        tex_rect[3],
-                    );
-                    // local page overrides any previously-imported glyph
-                    all_glyphs.insert(ch, glyph.clone());
-                }
-            }
+            (glyph, width_i, hadvance, chop_i, extra_left, extra_right)
+        };
 
-            // default glyph from our first page only (not from imports)
-            if is_top_level && page_idx == 0 && i == 0 {
-                all_glyphs
-                    .entry(FONT_DEFAULT_CHAR)
-                    .or_insert_with(|| glyph.clone());
-            }
+        visit_valid_mappings(&char_to_frame, total_frames, |ch, i| {
+            let (glyph, width_i, hadvance, chop_i, extra_left, extra_right) = glyph_for_frame(i);
+            trace!(
+                " [{}] GLYPH {} -> frame {} | width_i={} hadv={} chop={} extraL={} extraR={} \
+                 size=[{:.3}x{:.3}] offset=[{:.3},{:.3}] advance={:.3} \
+                 tex_rect=[{:.1},{:.1},{:.1},{:.1}]",
+                page_name,
+                fmt_char(ch),
+                i,
+                width_i,
+                hadvance,
+                chop_i,
+                extra_left,
+                extra_right,
+                glyph.size[0],
+                glyph.size[1],
+                glyph.offset[0],
+                glyph.offset[1],
+                glyph.advance,
+                glyph.tex_rect[0],
+                glyph.tex_rect[1],
+                glyph.tex_rect[2],
+                glyph.tex_rect[3],
+            );
+            // local page overrides any previously-imported glyph
+            all_glyphs.insert(ch, glyph);
+        });
+
+        // default glyph from our first page only (not from imports)
+        if is_top_level && page_idx == 0 && total_frames > 0 {
+            all_glyphs
+                .entry(FONT_DEFAULT_CHAR)
+                .or_insert_with(|| glyph_for_frame(0).0);
         }
     }
 
@@ -3367,6 +3479,49 @@ mod tests {
         }
         assert_eq!(split_import_specs(None).count(), 0);
         assert_eq!(split_import_specs(Some(" , , ")).count(), 0);
+    }
+
+    #[test]
+    fn parsed_ini_borrows_normalized_values() {
+        let source = String::from("[Main]\nTextureHints = doubleres, mipmaps \n");
+        let ini = parse_font_ini(&source);
+        let value = *ini
+            .get("main")
+            .and_then(|section| section.values.get("texturehints"))
+            .expect("normalized value");
+
+        assert_eq!(value, "doubleres, mipmaps");
+        let source_start = source.as_ptr() as usize;
+        let source_end = source_start + source.len();
+        let value_start = value.as_ptr() as usize;
+        assert!(value_start >= source_start && value_start < source_end);
+    }
+
+    #[test]
+    fn parsed_ini_borrows_untrimmed_line_payloads() {
+        let source = String::from("[main]\nLine 0=  A B  \n");
+        let ini = parse_font_ini(&source);
+        let raw_line = *ini
+            .get("main")
+            .and_then(|section| section.raw_lines.get(&0))
+            .expect("raw line value");
+
+        assert_eq!(raw_line, "  A B  ");
+        let source_start = source.as_ptr() as usize;
+        let source_end = source_start + source.len();
+        let value_start = raw_line.as_ptr() as usize;
+        assert!(value_start >= source_start && value_start < source_end);
+    }
+
+    #[test]
+    fn direct_mapping_visit_emits_each_valid_frame_once() {
+        let mappings = HashMap::from([('A', 0), ('B', 2), ('C', 7), ('D', 1)]);
+        let mut visited = HashMap::new();
+        visit_valid_mappings(&mappings, 3, |ch, frame| {
+            assert!(visited.insert(ch, frame).is_none());
+        });
+
+        assert_eq!(visited, HashMap::from([('A', 0), ('B', 2), ('D', 1)]));
     }
 
     #[test]

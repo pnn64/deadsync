@@ -48,3 +48,8 @@ required-features = ["bench-support"]
 name = "font_import_hot_paths"
 harness = false
 required-features = ["bench-support"]
+
+[[bench]]
+name = "font_parse_hot_paths"
+harness = false
+required-features = ["bench-support"]
