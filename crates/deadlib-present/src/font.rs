@@ -21,7 +21,7 @@ use std::sync::{Arc, OnceLock};
 
 use image;
 use log::{debug, trace, warn};
-use rustc_hash::FxBuildHasher;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 use smallvec::SmallVec;
 
 const FONT_DEFAULT_CHAR: char = '\u{F8FF}'; // SM default glyph (private use)
@@ -29,6 +29,10 @@ const DEFAULT_FONT_IMPORT: &str = "Common default";
 const INTERNAL_ALIAS_START: u32 = 0xE000;
 const M_SKIP_CODEPOINT: u32 = 0xFEFF;
 const DEFAULT_STROKE_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
+// A complete BMP font has 65,536 frames. Capping speculative reservations at
+// that domain avoids trusting malformed sprite-grid metadata with unbounded
+// allocations while covering the largest bundled font without rehash growth.
+const MAX_PREALLOCATED_GLYPH_MAPPINGS: usize = 65_536;
 
 #[derive(Debug)]
 pub enum FontParseError {
@@ -640,14 +644,17 @@ fn committed_replace_markers(text: &str) -> Cow<'_, str> {
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
     use super::{
-        FontPageSettings, committed_replace_markers, get_page_name_from_path,
-        get_page_name_from_path_owned, has_png_suffix, has_png_suffix_casefolded,
-        import_path_candidates, parse_kv_trimmed, parse_line_entry_raw, replace_markers,
-        split_import_specs,
+        AsciiKey, FontPageSettings, committed_replace_markers, get_page_name_from_path,
+        get_page_name_from_path_owned, glyph_mapping_map, has_png_suffix,
+        has_png_suffix_casefolded, import_path_candidates, parse_kv_borrowed, parse_kv_trimmed,
+        parse_line_entry_raw, replace_markers, split_import_specs,
     };
     use std::borrow::Cow;
     use std::collections::HashMap;
+    use std::hint::black_box;
     use std::path::{Path, PathBuf};
+
+    use rustc_hash::FxHashMap;
 
     fn checksum_text(mut checksum: u64, text: &str) -> u64 {
         checksum = checksum.wrapping_mul(131).wrapping_add(text.len() as u64);
@@ -831,6 +838,15 @@ pub mod bench_support {
         checksum_text(checksum_text(0, key), value)
     }
 
+    fn checksum_ci_entry(key: &str, value: &str) -> u64 {
+        let key_checksum = key.bytes().fold(key.len() as u64, |checksum, byte| {
+            checksum
+                .wrapping_mul(31)
+                .wrapping_add(u64::from(byte.to_ascii_lowercase()))
+        });
+        checksum_text(key_checksum, value)
+    }
+
     #[must_use]
     pub fn ini_values_old(lines: &[String]) -> u64 {
         let mut values = HashMap::<String, String>::new();
@@ -889,6 +905,94 @@ pub mod bench_support {
             .fold(values.len() as u64, |checksum, (&row, value)| {
                 checksum.wrapping_add(u64::from(row).rotate_left(11) ^ checksum_text(0, value))
             })
+    }
+
+    #[must_use]
+    pub fn ini_key_storage_old(lines: &[String]) -> u64 {
+        let mut values = HashMap::<String, &str>::new();
+        for line in lines {
+            if let Some((key, value)) = parse_kv_trimmed(line) {
+                values.insert(key, value);
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (key, value)| {
+                checksum.wrapping_add(checksum_entry(key, value))
+            })
+    }
+
+    #[must_use]
+    pub fn ini_key_storage_new(lines: &[String]) -> u64 {
+        let mut values = FxHashMap::<AsciiKey<'_>, &str>::default();
+        for line in lines {
+            if let Some((key, value)) = parse_kv_borrowed(line) {
+                values.insert(AsciiKey(key), value);
+            }
+        }
+        values
+            .iter()
+            .fold(values.len() as u64, |checksum, (key, value)| {
+                checksum.wrapping_add(checksum_ci_entry(key.as_str(), value))
+            })
+    }
+
+    #[must_use]
+    pub fn line_entry_storage_old(lines: &[String]) -> u64 {
+        let mut normalized = HashMap::<String, &str>::new();
+        let mut raw = HashMap::<u32, &str>::new();
+        for line in lines {
+            if let Some((key, value)) = parse_kv_trimmed(line) {
+                normalized.insert(key, value);
+            }
+            if let Some((row, value)) = parse_line_entry_raw(line) {
+                raw.insert(row, value);
+            }
+        }
+        black_box(&normalized);
+        raw.iter()
+            .fold(raw.len() as u64, |checksum, (&row, value)| {
+                checksum.wrapping_add(u64::from(row).rotate_left(11) ^ checksum_text(0, value))
+            })
+    }
+
+    #[must_use]
+    pub fn line_entry_storage_new(lines: &[String]) -> u64 {
+        let mut raw = FxHashMap::<u32, &str>::default();
+        for line in lines {
+            if let Some((row, value)) = parse_line_entry_raw(line) {
+                raw.insert(row, value);
+            }
+        }
+        raw.iter()
+            .fold(raw.len() as u64, |checksum, (&row, value)| {
+                checksum.wrapping_add(u64::from(row).rotate_left(11) ^ checksum_text(0, value))
+            })
+    }
+
+    fn checksum_glyph_map<S: std::hash::BuildHasher>(map: &HashMap<char, usize, S>) -> u64 {
+        map.iter()
+            .fold(map.len() as u64, |checksum, (&ch, &frame)| {
+                checksum.wrapping_add(u64::from(ch as u32).rotate_left(13) ^ frame as u64)
+            })
+    }
+
+    #[must_use]
+    pub fn glyph_mapping_table_old(mappings: &[(char, usize)]) -> u64 {
+        let mut map = HashMap::new();
+        for &(ch, frame) in mappings {
+            map.insert(ch, frame);
+        }
+        checksum_glyph_map(&map)
+    }
+
+    #[must_use]
+    pub fn glyph_mapping_table_new(mappings: &[(char, usize)]) -> u64 {
+        let mut map = glyph_mapping_map(mappings.len());
+        for &(ch, frame) in mappings {
+            map.insert(ch, frame);
+        }
+        checksum_glyph_map(&map)
     }
 
     #[inline(always)]
@@ -1097,7 +1201,7 @@ struct FontPageSettings<'a> {
     pub(crate) default_width: i32,        // -1 = “use frame width”
     pub(crate) advance_extra_pixels: i32, // SM default is 0
     pub(crate) texture_hints: &'a str,
-    pub(crate) glyph_widths: HashMap<usize, i32>,
+    pub(crate) glyph_widths: FxHashMap<usize, i32>,
 }
 
 impl Default for FontPageSettings<'_> {
@@ -1114,7 +1218,7 @@ impl Default for FontPageSettings<'_> {
             default_width: -1,
             advance_extra_pixels: 1, // SM default
             texture_hints: "default",
-            glyph_widths: HashMap::new(),
+            glyph_widths: FxHashMap::default(),
         }
     }
 }
@@ -1142,6 +1246,7 @@ fn is_full_line_comment(s: &str) -> bool {
     t.starts_with(';') || t.starts_with('#') || t.starts_with("//")
 }
 
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn as_lower(s: &str) -> String {
     s.to_ascii_lowercase()
@@ -1163,6 +1268,10 @@ fn parse_section_header(raw: &str) -> Option<&str> {
 
 /// Parse key=value (trimmed key & value). Returns an owned lowercase key and
 /// a value borrowed from the source text.
+///
+/// Retained as the committed benchmark baseline. Production parsing uses
+/// [`parse_kv_borrowed`] so the source buffer owns both slices.
+#[cfg(feature = "bench-support")]
 #[inline(always)]
 fn parse_kv_trimmed(raw: &str) -> Option<(String, &str)> {
     let mut split = raw.splitn(2, '=');
@@ -1172,6 +1281,17 @@ fn parse_kv_trimmed(raw: &str) -> Option<(String, &str)> {
         return None;
     }
     Some((as_lower(k), v))
+}
+
+/// Parses a key/value pair as trimmed slices of the source text.
+#[inline(always)]
+fn parse_kv_borrowed(raw: &str) -> Option<(&str, &str)> {
+    let (key, value) = raw.split_once('=')?;
+    let key = key.trim();
+    if key.is_empty() {
+        return None;
+    }
+    Some((key, value.trim()))
 }
 
 /// Parse LINE row with *raw* RHS preserved (no trim). Case-insensitive line.
@@ -1336,73 +1456,90 @@ const fn is_sprite_sheet_right_boundary(bytes: &[u8], right: usize) -> bool {
         )
 }
 
+#[derive(Clone, Copy, Debug)]
+struct AsciiKey<'a>(&'a str);
+
+impl<'a> AsciiKey<'a> {
+    #[inline(always)]
+    const fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
+impl PartialEq for AsciiKey<'_> {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq_ignore_ascii_case(other.0)
+    }
+}
+
+impl Eq for AsciiKey<'_> {}
+
+impl Hash for AsciiKey<'_> {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for byte in self.0.bytes() {
+            state.write_u8(byte.to_ascii_lowercase());
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct ParsedFontIniSection<'a> {
-    values: HashMap<String, &'a str>,
-    raw_lines: HashMap<u32, &'a str>,
+    values: FxHashMap<AsciiKey<'a>, &'a str>,
+    raw_lines: FxHashMap<u32, &'a str>,
+}
+
+impl<'a> ParsedFontIniSection<'a> {
+    #[inline(always)]
+    fn value(&self, key: &'static str) -> Option<&'a str> {
+        self.values.get(&AsciiKey(key)).copied()
+    }
 }
 
 #[derive(Debug, Default)]
 struct ParsedFontIni<'a> {
-    sections: HashMap<String, ParsedFontIniSection<'a>>,
+    sections: FxHashMap<AsciiKey<'a>, ParsedFontIniSection<'a>>,
 }
 
 impl<'a> ParsedFontIni<'a> {
     #[inline(always)]
     fn get(&self, section: &str) -> Option<&ParsedFontIniSection<'a>> {
-        self.sections.get(section)
+        self.sections.iter().find_map(|(candidate, value)| {
+            candidate.0.eq_ignore_ascii_case(section).then_some(value)
+        })
     }
 }
 
-/// Parses normalized key/value settings and raw `Line N` values together.
+/// Parses case-insensitive settings and raw `Line N` values as borrowed data.
 fn parse_font_ini(text: &str) -> ParsedFontIni<'_> {
-    let mut sections: Vec<(String, ParsedFontIniSection<'_>)> = Vec::new();
-    let mut pending_section = String::from("common");
-    let mut current_section = None;
+    let mut parsed = ParsedFontIni::default();
+    let mut current_section = AsciiKey("common");
     for raw in text.lines() {
         let line = raw.strip_suffix('\r').unwrap_or(raw);
         if is_full_line_comment(line) {
             continue;
         }
         if let Some(section) = parse_section_header(line) {
-            pending_section = as_lower(section.trim());
-            current_section = sections
-                .iter()
-                .position(|(existing, _)| existing == &pending_section);
+            current_section = AsciiKey(section);
             continue;
         }
 
         let trimmed = line.trim();
-        let value = (!trimmed.is_empty())
-            .then(|| parse_kv_trimmed(trimmed))
-            .flatten();
-        let raw_line = parse_line_entry_raw(line);
-        if value.is_none() && raw_line.is_none() {
+        if trimmed.is_empty() {
             continue;
         }
 
-        let section_index = current_section.unwrap_or_else(|| {
-            let index = sections.len();
-            sections.push((
-                std::mem::take(&mut pending_section),
-                ParsedFontIniSection::default(),
-            ));
-            current_section = Some(index);
-            index
-        });
-        let section = &mut sections[section_index].1;
-        if let Some((key, value)) = value {
-            section.values.insert(key, value);
-        }
-        if let Some((row, rhs)) = raw_line {
+        if let Some((row, rhs)) = parse_line_entry_raw(line) {
+            let section = parsed.sections.entry(current_section).or_default();
             section.raw_lines.insert(row, rhs);
+            continue;
+        }
+        if let Some((key, value)) = parse_kv_borrowed(trimmed) {
+            let section = parsed.sections.entry(current_section).or_default();
+            section.values.insert(AsciiKey(key), value);
         }
     }
-
-    let mut parsed = ParsedFontIni {
-        sections: HashMap::with_capacity(sections.len()),
-    };
-    parsed.sections.extend(sections);
     parsed
 }
 
@@ -2546,8 +2683,8 @@ const MAP_NUMBERS: &[u32] = &[
 ];
 
 #[inline(always)]
-fn apply_charmap_range(
-    map: &mut HashMap<char, usize>,
+fn apply_charmap_range<S: BuildHasher>(
+    map: &mut HashMap<char, usize, S>,
     charmap: &[u32],
     map_offset: u32,
     first_frame: usize,
@@ -2585,8 +2722,8 @@ fn apply_charmap_range(
 }
 
 #[inline(always)]
-fn apply_range_mapping(
-    map: &mut HashMap<char, usize>,
+fn apply_range_mapping<S: BuildHasher>(
+    map: &mut HashMap<char, usize, S>,
     codeset: &str,
     hex_range: Option<(u32, u32)>,
     first_frame: usize,
@@ -2690,11 +2827,7 @@ fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
 }
 
 fn import_specs<'a>(ini: &'a ParsedFontIni<'a>) -> impl Iterator<Item = &'a str> {
-    split_import_specs(
-        ini.get("main")
-            .and_then(|section| section.values.get("import"))
-            .copied(),
-    )
+    split_import_specs(ini.get("main").and_then(|section| section.value("import")))
 }
 
 fn import_path_candidates(base_ini: &Path, spec: &str) -> Option<[Option<PathBuf>; 2]> {
@@ -2733,8 +2866,8 @@ fn merge_imported_font(
 }
 
 #[inline(always)]
-fn visit_valid_mappings(
-    char_to_frame: &HashMap<char, usize>,
+fn visit_valid_mappings<S: BuildHasher>(
+    char_to_frame: &HashMap<char, usize, S>,
     total_frames: usize,
     mut visit: impl FnMut(char, usize),
 ) {
@@ -2743,6 +2876,14 @@ fn visit_valid_mappings(
             visit(ch, frame);
         }
     }
+}
+
+#[inline]
+fn glyph_mapping_map(total_frames: usize) -> FxHashMap<char, usize> {
+    FxHashMap::with_capacity_and_hasher(
+        total_frames.min(MAX_PREALLOCATED_GLYPH_MAPPINGS),
+        FxBuildHasher,
+    )
 }
 
 /// # Panics
@@ -2837,12 +2978,12 @@ pub fn parse_with_texture_context(
     let ini = parse_font_ini(&ini_text);
     let default_stroke_color = ini
         .get("common")
-        .and_then(|section| section.values.get("defaultstrokecolor"))
-        .and_then(|s| parse_rgba_string(s))
+        .and_then(|section| section.value("defaultstrokecolor"))
+        .and_then(parse_rgba_string)
         .unwrap_or_else(|| {
             if let Some(v) = ini
                 .get("common")
-                .and_then(|section| section.values.get("defaultstrokecolor"))
+                .and_then(|section| section.value("defaultstrokecolor"))
             {
                 warn!(
                     "Font '{ini_path_str}' has invalid DefaultStrokeColor '{v}'; using transparent."
@@ -2919,8 +3060,12 @@ pub fn parse_with_texture_context(
         for section_name in &sections_to_check {
             if let Some(section) = ini.get(section_name) {
                 let map = &section.values;
-                let get_int = |k: &str| -> Option<i32> { map.get(k).and_then(|s| s.parse().ok()) };
-                let get_f32 = |k: &str| -> Option<f32> { map.get(k).and_then(|s| s.parse().ok()) };
+                let get_int = |key: &'static str| -> Option<i32> {
+                    section.value(key).and_then(|value| value.parse().ok())
+                };
+                let get_f32 = |key: &'static str| -> Option<f32> {
+                    section.value(key).and_then(|value| value.parse().ok())
+                };
 
                 if let Some(n) = get_int("drawextrapixelsleft") {
                     settings.draw_extra_pixels_left = n;
@@ -2949,12 +3094,12 @@ pub fn parse_with_texture_context(
                 if let Some(n) = get_int("advanceextrapixels") {
                     settings.advance_extra_pixels = n;
                 }
-                if let Some(v) = map.get("texturehints") {
+                if let Some(v) = section.value("texturehints") {
                     settings.set_texture_hints(v);
                 }
 
                 for (key, val) in map {
-                    if let Ok(frame_idx) = key.parse::<usize>()
+                    if let Ok(frame_idx) = key.as_str().parse::<usize>()
                         && let Ok(w) = val.parse::<i32>()
                     {
                         settings.glyph_widths.insert(frame_idx, w);
@@ -3064,32 +3209,32 @@ pub fn parse_with_texture_context(
         );
 
         // mapping char → frame (SM spill across row up to total_frames)
-        let mut char_to_frame: HashMap<char, usize> = HashMap::new();
+        let mut char_to_frame = glyph_mapping_map(total_frames);
         for section_name in &sections_to_check {
             if let Some(section) = ini.get(section_name) {
-                let map = &section.values;
-                for (key_lc, val_str) in map {
-                    if let Some(row_str) = key_lc.strip_prefix("line ") {
-                        if let Ok(row) = row_str.trim().parse::<u32>() {
-                            if row >= num_frames_high {
-                                continue;
-                            }
-                            let first_frame = (row * num_frames_wide) as usize;
-
-                            let line_val = section.raw_lines.get(&row).copied().unwrap_or(*val_str);
-
-                            for (i, ch) in line_val.chars().enumerate() {
-                                let idx = first_frame + i;
-                                if idx < total_frames {
-                                    char_to_frame.insert(ch, idx);
-                                } else {
-                                    break;
-                                }
-                            }
+                for (&row, &line_val) in &section.raw_lines {
+                    if row >= num_frames_high {
+                        continue;
+                    }
+                    let first_frame = (row * num_frames_wide) as usize;
+                    for (offset, ch) in line_val.chars().enumerate() {
+                        let frame = first_frame + offset;
+                        if frame >= total_frames {
+                            break;
                         }
-                    } else if key_lc.starts_with("map ") {
+                        char_to_frame.insert(ch, frame);
+                    }
+                }
+
+                let map = &section.values;
+                for (key, val_str) in map {
+                    let key = key.as_str();
+                    if key
+                        .get(..4)
+                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("map "))
+                    {
                         if let Ok(frame_index) = val_str.parse::<usize>() {
-                            let spec = key_lc[4..].trim();
+                            let spec = key[4..].trim();
                             if let Some(hex) =
                                 spec.strip_prefix("U+").or_else(|| spec.strip_prefix("u+"))
                             {
@@ -3105,14 +3250,14 @@ pub fn parse_with_texture_context(
                             {
                                 for ch in spec[1..spec.len() - 1].chars() {
                                     if frame_index < total_frames {
-                                        char_to_frame.insert(ch, frame_index);
+                                        char_to_frame.insert(ch.to_ascii_lowercase(), frame_index);
                                     }
                                 }
                             } else if spec.chars().count() == 1 {
                                 if let Some(ch) = spec.chars().next()
                                     && frame_index < total_frames
                                 {
-                                    char_to_frame.insert(ch, frame_index);
+                                    char_to_frame.insert(ch.to_ascii_lowercase(), frame_index);
                                 }
                             } else if let Some(ch) = lookup_font_char_alias(spec)
                                 && frame_index < total_frames
@@ -3120,9 +3265,11 @@ pub fn parse_with_texture_context(
                                 char_to_frame.insert(ch, frame_index);
                             }
                         }
-                    } else if let Some(spec) = key_lc.strip_prefix("range ")
+                    } else if key
+                        .get(..6)
+                        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("range "))
                         && let Ok(first_frame) = val_str.parse::<usize>()
-                        && let Some((codeset, hex)) = parse_range_spec(spec)
+                        && let Some((codeset, hex)) = parse_range_spec(&key[6..])
                     {
                         apply_range_mapping(&mut char_to_frame, codeset, hex, first_frame);
                     }
@@ -3367,7 +3514,7 @@ pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) 
 /* ======================= LAYOUT HELPERS USED BY UI ======================= */
 
 #[inline(always)]
-fn apply_space_nbsp_symmetry(char_to_frame: &mut std::collections::HashMap<char, usize>) {
+fn apply_space_nbsp_symmetry<S: BuildHasher>(char_to_frame: &mut HashMap<char, usize, S>) {
     // If SPACE exists but NBSP doesn't, map NBSP -> SPACE frame.
     if let Some(&space_idx) = char_to_frame.get(&' ') {
         char_to_frame.entry('\u{00A0}').or_insert(space_idx);
@@ -3466,7 +3613,7 @@ mod tests {
         let ini = parse_font_ini("[main]\nimport= First, ,Second/Sub.ini, 日本語 \n");
         let raw = ini
             .get("main")
-            .and_then(|section| section.values.get("import"))
+            .and_then(|section| section.value("import"))
             .expect("test import value");
         let specs = import_specs(&ini).collect::<Vec<_>>();
 
@@ -3483,23 +3630,38 @@ mod tests {
 
     #[test]
     fn parsed_ini_borrows_normalized_values() {
-        let source = String::from("[Main]\nTextureHints = doubleres, mipmaps \n");
+        let source = String::from(
+            "[Main]\nTextureHints = first \n[mAiN]\ntExTuReHiNtS = doubleres, mipmaps \n",
+        );
         let ini = parse_font_ini(&source);
-        let value = *ini
-            .get("main")
-            .and_then(|section| section.values.get("texturehints"))
-            .expect("normalized value");
+        let section = ini.get("mAiN").expect("case-insensitive section");
+        let value = section
+            .value("tExTuReHiNtS")
+            .expect("case-insensitive value");
 
         assert_eq!(value, "doubleres, mipmaps");
+        assert_eq!(ini.sections.len(), 1, "section casing must deduplicate");
+        assert_eq!(section.values.len(), 1, "key casing must deduplicate");
         let source_start = source.as_ptr() as usize;
         let source_end = source_start + source.len();
         let value_start = value.as_ptr() as usize;
         assert!(value_start >= source_start && value_start < source_end);
+        let key = section.values.keys().next().expect("borrowed key").as_str();
+        let key_start = key.as_ptr() as usize;
+        assert!(key_start >= source_start && key_start < source_end);
+        let section_key = ini
+            .sections
+            .keys()
+            .next()
+            .expect("borrowed section")
+            .as_str();
+        let section_start = section_key.as_ptr() as usize;
+        assert!(section_start >= source_start && section_start < source_end);
     }
 
     #[test]
     fn parsed_ini_borrows_untrimmed_line_payloads() {
-        let source = String::from("[main]\nLine 0=  A B  \n");
+        let source = String::from("[main]\nLine 0=discarded\nlInE 0=  A B  \n");
         let ini = parse_font_ini(&source);
         let raw_line = *ini
             .get("main")
@@ -3507,6 +3669,8 @@ mod tests {
             .expect("raw line value");
 
         assert_eq!(raw_line, "  A B  ");
+        let section = ini.get("main").expect("main section");
+        assert!(section.values.is_empty(), "LINE must not be stored twice");
         let source_start = source.as_ptr() as usize;
         let source_end = source_start + source.len();
         let value_start = raw_line.as_ptr() as usize;

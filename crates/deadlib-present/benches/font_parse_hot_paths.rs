@@ -1,6 +1,7 @@
 use deadlib_present::font::bench_support::{
-    glyph_dispatch_new, glyph_dispatch_old, ini_values_new, ini_values_old, raw_lines_new,
-    raw_lines_old,
+    glyph_dispatch_new, glyph_dispatch_old, glyph_mapping_table_new, glyph_mapping_table_old,
+    ini_key_storage_new, ini_key_storage_old, ini_values_new, ini_values_old,
+    line_entry_storage_new, line_entry_storage_old, raw_lines_new, raw_lines_old,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -337,6 +338,13 @@ fn main() {
         true,
     );
 
+    run_pair(
+        "borrowed case-insensitive INI keys",
+        || ini_key_storage_old(black_box(&values)),
+        || ini_key_storage_new(black_box(&values)),
+        true,
+    );
+
     let raw_lines = (0..ITEMS)
         .map(|index| format!("Line {index}=  glyphs-{index:05}-ABCD  "))
         .collect::<Vec<_>>();
@@ -344,6 +352,25 @@ fn main() {
         "borrowed raw LINE payloads",
         || raw_lines_old(black_box(&raw_lines)),
         || raw_lines_new(black_box(&raw_lines)),
+        true,
+    );
+
+    run_pair(
+        "single-storage LINE entries",
+        || line_entry_storage_old(black_box(&raw_lines)),
+        || line_entry_storage_new(black_box(&raw_lines)),
+        true,
+    );
+
+    let glyph_mappings = (0..ITEMS as u32)
+        .filter_map(char::from_u32)
+        .enumerate()
+        .map(|(frame, ch)| (ch, frame))
+        .collect::<Vec<_>>();
+    run_pair(
+        "pre-sized fast glyph mapping table",
+        || glyph_mapping_table_old(black_box(&glyph_mappings)),
+        || glyph_mapping_table_new(black_box(&glyph_mappings)),
         true,
     );
 
