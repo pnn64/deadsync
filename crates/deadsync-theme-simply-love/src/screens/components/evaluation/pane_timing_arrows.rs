@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 #[cfg(any(test, feature = "bench-support"))]
 use super::pane_column::build_pane3_arrow_preview;
-use super::pane_column::{pane3_arrow_preview_capacity, push_pane3_arrow_preview};
+use super::pane_column::push_pane3_arrow_preview;
 use super::utils::pane_origin_x;
 
 const LEFT_FOOT_RGBA: [f32; 4] = color::rgba_hex("#FF3030");
@@ -22,15 +22,6 @@ const TIMING_ARROWS_TABLE_ACTORS: usize = 37;
 const PANE_WIDTH: f32 = 300.0;
 const PANE_HEIGHT: f32 = 180.0;
 const HEADER_Y: f32 = 24.0;
-
-fn timing_arrows_child_capacity(noteskin: Option<&deadsync_assets::noteskin::Noteskin>) -> usize {
-    TIMING_ARROWS_TABLE_ACTORS
-        + noteskin.map_or(0, |noteskin| {
-            (0..4)
-                .map(|col_idx| pane3_arrow_preview_capacity(noteskin, col_idx))
-                .sum()
-        })
-}
 
 #[derive(Clone)]
 pub(crate) struct TimingArrowsText {
@@ -385,13 +376,19 @@ impl TimingArrowsPaneAppendBenchmark {
     pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
         out.clear();
         let noteskin = Some(&self.noteskin);
+        let child_capacity = TIMING_ARROWS_TABLE_ACTORS
+            + (0..4)
+                .map(|col_idx| {
+                    super::pane_column::pane3_arrow_preview_capacity(&self.noteskin, col_idx)
+                })
+                .sum::<usize>();
         out.push(timing_arrows_pane_actor(
             noteskin,
             &self.text,
             profile_data::PlayerSide::P1,
             1.25,
             MachineFont::Mega,
-            timing_arrows_child_capacity(noteskin),
+            child_capacity,
             |children, noteskin, col_idx, center, elapsed| {
                 push_pane3_arrow_preview(children, noteskin, col_idx, center, None, elapsed, 1.2);
             },
