@@ -42,7 +42,7 @@ use deadsync_audio_analysis::{
 };
 use log::{debug, info, warn};
 use rustc_hash::FxHashMap;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, hash_map::Entry};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -204,12 +204,17 @@ fn enqueue(job: Job, priority: Priority) {
     let w = worker();
     {
         let mut guard = w.inner.lock().unwrap();
-        match priority {
-            Priority::Foreground => guard.fg.push_back(job),
-            Priority::Background => guard.bg.push_back(job),
-        }
+        priority_queue(&mut guard, priority).push_back(job);
     }
     w.cv.notify_one();
+}
+
+#[inline(always)]
+fn priority_queue(inner: &mut WorkerInner, priority: Priority) -> &mut VecDeque<Job> {
+    match priority {
+        Priority::Foreground => &mut inner.fg,
+        Priority::Background => &mut inner.bg,
+    }
 }
 
 /// Returns the linear gain to apply when playing `path`, if it has already
@@ -288,21 +293,202 @@ pub fn prewarm_paths<I>(paths: I, priority: Priority)
 where
     I: IntoIterator<Item = PathBuf>,
 {
+    let mut map = in_memory().lock().unwrap();
+    let mut queue_guard = None;
+    let queued = claim_prewarm_jobs(&mut map, paths, |job, batch_capacity| {
+        let inner = queue_guard.get_or_insert_with(|| {
+            let mut inner = worker().inner.lock().unwrap();
+            priority_queue(&mut inner, priority).reserve(batch_capacity);
+            inner
+        });
+        priority_queue(inner, priority).push_back(job);
+    });
+    drop(queue_guard);
+    drop(map);
+
+    match queued {
+        0 => {}
+        1 => worker().cv.notify_one(),
+        _ => worker().cv.notify_all(),
+    }
+}
+
+/// Claims unseen paths in input order and transfers each resulting job to the
+/// caller. The callback receives the iterator's lower size bound so a batch
+/// queue can reserve once before its first insertion.
+#[inline]
+fn claim_prewarm_jobs<I, F>(map: &mut MemoryCache, paths: I, mut push: F) -> usize
+where
+    I: IntoIterator<Item = PathBuf>,
+    F: FnMut(Job, usize),
+{
+    let paths = paths.into_iter();
+    let batch_capacity = paths.size_hint().0;
+    let mut queued = 0usize;
     for path in paths {
-        {
-            let mut map = in_memory().lock().unwrap();
-            if map.contains_key(&path) {
-                continue;
-            }
-            map.insert(path.clone(), SlotState::Pending);
-        }
-        enqueue(
+        let Entry::Vacant(slot) = map.entry(path) else {
+            continue;
+        };
+        let path = slot.key().clone();
+        slot.insert(SlotState::Pending);
+        push(
             Job {
                 path,
                 track_id: PREWARM_TRACK_ID,
             },
-            priority,
+            batch_capacity,
         );
+        queued += 1;
+    }
+    queued
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub mod bench_support {
+    use super::*;
+
+    pub struct PrewarmBatchFixture {
+        map: MemoryCache,
+        paths: Vec<PathBuf>,
+    }
+
+    pub struct PrewarmBatchOutcome {
+        map: MemoryCache,
+        inner: WorkerInner,
+        checksum: u64,
+    }
+
+    impl PrewarmBatchOutcome {
+        #[must_use]
+        pub const fn checksum(&self) -> u64 {
+            self.checksum
+        }
+
+        #[must_use]
+        pub fn queued_paths(&self, priority: Priority) -> usize {
+            priority_queue_len(&self.inner, priority)
+        }
+
+        #[must_use]
+        pub fn cached_paths(&self) -> usize {
+            self.map.len()
+        }
+    }
+
+    #[must_use]
+    pub fn prewarm_batch_fixture(paths: &[PathBuf], warm_stride: usize) -> PrewarmBatchFixture {
+        PrewarmBatchFixture {
+            map: warm_cache(paths, warm_stride),
+            paths: paths.to_vec(),
+        }
+    }
+
+    /// Models the former per-path cache lock, double hash probe, queue lock,
+    /// reactive queue growth, and notification behavior.
+    #[must_use]
+    pub fn prewarm_batch_reference(
+        fixture: PrewarmBatchFixture,
+        priority: Priority,
+    ) -> PrewarmBatchOutcome {
+        let map = Mutex::new(fixture.map);
+        let inner = Mutex::new(empty_worker_inner());
+        let cv = Condvar::new();
+
+        for path in fixture.paths {
+            {
+                let mut map = map.lock().unwrap();
+                if map.contains_key(&path) {
+                    continue;
+                }
+                map.insert(path.clone(), SlotState::Pending);
+            }
+            priority_queue(&mut inner.lock().unwrap(), priority).push_back(Job {
+                path,
+                track_id: PREWARM_TRACK_ID,
+            });
+            cv.notify_one();
+        }
+
+        outcome(map.into_inner().unwrap(), inner.into_inner().unwrap())
+    }
+
+    /// Models the production batch path without starting the global analyzer
+    /// pool, allowing deterministic old-vs-new allocation and CPU measurement.
+    #[must_use]
+    pub fn prewarm_batch(fixture: PrewarmBatchFixture, priority: Priority) -> PrewarmBatchOutcome {
+        let map_mutex = Mutex::new(fixture.map);
+        let inner = Mutex::new(empty_worker_inner());
+        let cv = Condvar::new();
+        let mut map = map_mutex.lock().unwrap();
+        let mut queue_guard = None;
+        let queued = claim_prewarm_jobs(&mut map, fixture.paths, |job, capacity| {
+            let worker = queue_guard.get_or_insert_with(|| {
+                let mut worker = inner.lock().unwrap();
+                priority_queue(&mut worker, priority).reserve(capacity);
+                worker
+            });
+            priority_queue(worker, priority).push_back(job);
+        });
+        drop(queue_guard);
+
+        match queued {
+            0 => {}
+            1 => cv.notify_one(),
+            _ => cv.notify_all(),
+        }
+        drop(map);
+
+        outcome(map_mutex.into_inner().unwrap(), inner.into_inner().unwrap())
+    }
+
+    fn warm_cache(paths: &[PathBuf], warm_stride: usize) -> MemoryCache {
+        let mut map = MemoryCache::default();
+        if warm_stride != 0 {
+            for (index, path) in paths.iter().enumerate() {
+                if index.is_multiple_of(warm_stride) {
+                    map.insert(path.clone(), SlotState::Pending);
+                }
+            }
+        }
+        map
+    }
+
+    fn empty_worker_inner() -> WorkerInner {
+        WorkerInner {
+            fg: VecDeque::new(),
+            bg: VecDeque::new(),
+            shutdown: false,
+        }
+    }
+
+    fn batch_checksum(map: &MemoryCache, inner: &WorkerInner) -> u64 {
+        let mut checksum = map.len() as u64;
+        for (tag, queue) in [(0x51_u64, &inner.fg), (0xa7, &inner.bg)] {
+            checksum ^= tag.wrapping_mul(queue.len() as u64);
+            for (index, job) in queue.iter().enumerate() {
+                checksum = checksum.rotate_left(9)
+                    ^ job.path.as_os_str().len() as u64
+                    ^ (index as u64).rotate_left(17)
+                    ^ job.track_id;
+            }
+        }
+        checksum
+    }
+
+    fn priority_queue_len(inner: &WorkerInner, priority: Priority) -> usize {
+        match priority {
+            Priority::Foreground => inner.fg.len(),
+            Priority::Background => inner.bg.len(),
+        }
+    }
+
+    fn outcome(map: MemoryCache, inner: WorkerInner) -> PrewarmBatchOutcome {
+        let checksum = batch_checksum(&map, &inner);
+        PrewarmBatchOutcome {
+            map,
+            inner,
+            checksum,
+        }
     }
 }
 
@@ -756,5 +942,71 @@ mod tests {
         );
         assert_eq!(terminal_gain(SlotState::Failed), Some(UNITY_GAIN));
         assert_eq!(terminal_gain(SlotState::Pending), None);
+    }
+
+    #[test]
+    fn prewarm_batch_claims_each_unseen_path_once_in_input_order() {
+        let cached = PathBuf::from("Pack/Cached/music.ogg");
+        let first = PathBuf::from("Pack/First/music.ogg");
+        let second = PathBuf::from("Pack/Second/music.ogg");
+        let third = PathBuf::from("Pack/Third/music.ogg");
+        let paths = vec![
+            first.clone(),
+            cached.clone(),
+            first.clone(),
+            second.clone(),
+            third.clone(),
+            second.clone(),
+        ];
+        let mut map = MemoryCache::default();
+        map.insert(
+            cached,
+            SlotState::Ready(ReplayGainInfo {
+                lufs: -18.0,
+                true_peak_linear: 0.8,
+            }),
+        );
+        let mut jobs = Vec::new();
+        let mut capacities = Vec::new();
+
+        let queued = claim_prewarm_jobs(&mut map, paths, |job, capacity| {
+            jobs.push(job.path);
+            capacities.push(capacity);
+        });
+
+        assert_eq!(queued, 3);
+        assert_eq!(jobs, [first, second, third]);
+        assert_eq!(capacities, [6, 6, 6]);
+        assert_eq!(map.len(), 4);
+        assert!(
+            map.values()
+                .all(|state| matches!(state, SlotState::Pending | SlotState::Ready(_)))
+        );
+    }
+
+    #[test]
+    fn optimized_prewarm_batches_match_the_per_path_reference() {
+        let paths = (0..64)
+            .map(|index| PathBuf::from(format!("Pack/Song {index:03}/music.ogg")))
+            .collect::<Vec<_>>();
+
+        for warm_stride in [0, 1, 3, 7] {
+            for priority in [Priority::Foreground, Priority::Background] {
+                let reference = bench_support::prewarm_batch_reference(
+                    bench_support::prewarm_batch_fixture(&paths, warm_stride),
+                    priority,
+                );
+                let optimized = bench_support::prewarm_batch(
+                    bench_support::prewarm_batch_fixture(&paths, warm_stride),
+                    priority,
+                );
+                assert_eq!(reference.checksum(), optimized.checksum(),);
+                assert_eq!(reference.cached_paths(), optimized.cached_paths());
+                assert_eq!(
+                    reference.queued_paths(priority),
+                    optimized.queued_paths(priority)
+                );
+            }
+        }
     }
 }
