@@ -3,7 +3,7 @@
   "oracle_schema_version": 1,
   "harness_version": "0.1.0",
   "itgmania": {
-    "git_revision": "49fddb40adbdb43e9c03e6856b6c2afeeccf451a",
+    "git_revision": "54e62e5ffedf406a1713ec55a1da3dcecf50817c",
     "git_dirty": "false",
     "execution": "embedded_bundled_lua",
     "launches_executable": false

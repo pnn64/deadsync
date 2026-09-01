@@ -12446,6 +12446,45 @@ fn apply_song_lua_overlay_runtime_eases_for(
     current
 }
 
+fn reapply_active_song_lua_overlay_runtime_eases_for(
+    now: f32,
+    overlay_index: usize,
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
+    overlay_ease_ranges: &[std::ops::Range<usize>],
+    current: &mut SongLuaOverlayState,
+) {
+    let Some(ease_range) = overlay_ease_ranges.get(overlay_index) else {
+        return;
+    };
+    for ease in &overlay_eases[ease_range.clone()] {
+        if now < ease.start_second {
+            break;
+        }
+        if ease
+            .cutoff_second
+            .is_some_and(|cutoff_second| now >= cutoff_second)
+            || now >= ease.sustain_end_second
+        {
+            continue;
+        }
+        if ease.end_second <= ease.start_second || now >= ease.end_second {
+            apply_song_lua_overlay_delta(current, &ease.to.delta);
+            continue;
+        }
+        let t = ease.easing.factor(
+            ((now - ease.start_second) / (ease.end_second - ease.start_second)).clamp(0.0, 1.0),
+            ease.opt1,
+            ease.opt2,
+        );
+        let from_state = song_lua_overlay_state_with_delta(*current, &ease.from.delta);
+        let to_state = song_lua_overlay_state_with_delta(*current, &ease.to.delta);
+        *current = song_lua_overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
+        if ease.from.delta.sprite_state_index.is_some() {
+            current.sprite_animation_epoch = Some(ease.start_second);
+        }
+    }
+}
+
 fn song_lua_overlay_render_state_from(
     now: f32,
     overlay_index: usize,
@@ -12516,6 +12555,17 @@ fn song_lua_overlay_render_state_dynamic(
         update_range,
         update_cursors,
         update_snap,
+        &mut current,
+    );
+    // Exact function eases and sampled UpdateFunction tracks can describe the
+    // same Lua setter. ITGmania executes that function ease every frame, so it
+    // must remain authoritative while active instead of being replaced by the
+    // lower-rate sampled approximation.
+    reapply_active_song_lua_overlay_runtime_eases_for(
+        now,
+        overlay_index,
+        overlay_eases,
+        overlay_ease_ranges,
         &mut current,
     );
     current
@@ -14757,6 +14807,7 @@ fn push_graph_display_tri(
     out.push(MeshVertex { pos: c, color });
 }
 
+#[cfg(test)]
 fn song_lua_project_overlay_point(view_proj: Matrix4, point: [f32; 3]) -> Option<[f32; 2]> {
     let clip = view_proj * Vector4::new(point[0], point[1], point[2], 1.0);
     if !clip.w.is_finite() || clip.w <= f32::EPSILON {
@@ -15121,11 +15172,25 @@ fn song_lua_overlay_fold_xy_rot(
 
 #[inline(always)]
 fn song_lua_overlay_local_transform(rot_deg: [f32; 3], skew_x: f32, skew_y: f32) -> Matrix4 {
-    Matrix4::from_rotation_x(rot_deg[0].to_radians())
-        * Matrix4::from_rotation_y(rot_deg[1].to_radians())
+    // RageMatrix uses row-vector storage for actor transforms. Its positive X/Y
+    // rotations therefore map to negative glam angles; Z has the same sign.
+    Matrix4::from_rotation_x(-rot_deg[0].to_radians())
+        * Matrix4::from_rotation_y(-rot_deg[1].to_radians())
         * Matrix4::from_rotation_z(rot_deg[2].to_radians())
         * song_lua_player_skew_x_matrix(skew_x)
         * song_lua_player_skew_y_matrix(skew_y)
+}
+
+fn song_lua_projected_local_transform(view_proj: Matrix4, model: Matrix4) -> Matrix4 {
+    let screen_projection = glam::camera::rh::proj::opengl::orthographic(
+        0.0,
+        screen_width(),
+        screen_height(),
+        0.0,
+        -1.0,
+        1.0,
+    );
+    screen_projection.inverse() * view_proj * model
 }
 
 fn append_projected_mesh_vertices(
@@ -15151,6 +15216,7 @@ struct SongLuaProjectedMeshParams {
     texture: Arc<str>,
     tint: [f32; 4],
     glow: [f32; 4],
+    local_transform: Matrix4,
     world_z: f32,
     depth_test: bool,
     visible: bool,
@@ -15171,7 +15237,7 @@ fn song_lua_projected_mesh_actor_from_grid(
             offset: [0.0, 0.0],
             world_z: params.world_z,
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-            local_transform: Matrix4::IDENTITY,
+            local_transform: params.local_transform,
             texture: params.texture,
             tint: params.tint,
             glow: params.glow,
@@ -15198,7 +15264,7 @@ fn song_lua_projected_mesh_actor_from_grid(
         offset: [0.0, 0.0],
         world_z: params.world_z,
         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        local_transform: Matrix4::IDENTITY,
+        local_transform: params.local_transform,
         texture: params.texture,
         tint: params.tint,
         glow: params.glow,
@@ -15266,6 +15332,7 @@ fn song_lua_flat_skewed_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
+            local_transform: Matrix4::IDENTITY,
             world_z,
             depth_test: state.depth_test,
             visible: state.visible,
@@ -15307,17 +15374,21 @@ fn song_lua_projected_overlay_actor(
     let ys = song_lua_projected_overlay_axis_slices(edge_fade[2], edge_fade[3]);
     let model = Matrix4::from_translation(Vector3::new(center[0], center[1], center[2]))
         * song_lua_overlay_local_transform(rot_deg, state.skew_x, state.skew_y);
+    // Preserve homogeneous clip-space W until the GPU rasterizer.  ITGmania
+    // submits the actor's world vertices under its perspective camera and lets
+    // the GPU clip triangles which cross the near/camera planes.  Dividing by
+    // W here made one behind-camera corner discard the whole sprite and also
+    // forced affine texture interpolation across projected quads.
+    let local_transform = song_lua_projected_local_transform(view_proj, model);
     let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
     for &y in &ys {
         for &x in &xs {
             let local_x = song_lua_effect_lerp(-half_w, half_w, x);
             let local_y = song_lua_effect_lerp(-half_h, half_h, y);
-            let world = model * Vector4::new(local_x, local_y, 0.0, 1.0);
-            let screen = song_lua_project_overlay_point(view_proj, [world.x, world.y, world.z])?;
             let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
             let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
-                pos: [screen[0], screen[1], 0.0],
+                pos: [local_x, local_y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
                 color: song_lua_overlay_vertex_color(
@@ -15333,6 +15404,7 @@ fn song_lua_projected_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
+            local_transform,
             world_z: state.z_bias,
             depth_test: state.depth_test,
             visible: true,
@@ -24418,6 +24490,245 @@ mod tests {
         );
         assert_eq!(composed.x, 247.0);
         assert_eq!(composed.y, 240.0);
+    }
+
+    #[test]
+    fn song_lua_overlay_nested_center_survives_parent_zoom_and_rotation() {
+        let outer = SongLuaOverlayState {
+            x: 427.0,
+            y: 240.0,
+            ..SongLuaOverlayState::default()
+        };
+        let inner = SongLuaOverlayState {
+            zoom: 1.5,
+            rot_z_deg: 67.0,
+            ..SongLuaOverlayState::default()
+        };
+        let inner = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            outer,
+            inner,
+            854.0,
+            480.0,
+        );
+        let circle = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            inner,
+            SongLuaOverlayState::default(),
+            854.0,
+            480.0,
+        );
+
+        assert!((circle.x - 427.0).abs() <= 0.000_1);
+        assert!((circle.y - 240.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_overlay_rotation_matches_rage_matrix_xyz() {
+        let x_axis = song_lua_overlay_local_transform([0.0, 90.0, 0.0], 0.0, 0.0)
+            * Vector4::new(1.0, 0.0, 0.0, 1.0);
+        assert!(x_axis.x.abs() <= 0.000_1);
+        assert!((x_axis.z - 1.0).abs() <= 0.000_1);
+
+        let y_axis = song_lua_overlay_local_transform([90.0, 0.0, 0.0], 0.0, 0.0)
+            * Vector4::new(0.0, 1.0, 0.0, 1.0);
+        assert!(y_axis.y.abs() <= 0.000_1);
+        assert!((y_axis.z + 1.0).abs() <= 0.000_1);
+
+        let z_axis = song_lua_overlay_local_transform([0.0, 0.0, 90.0], 0.0, 0.0)
+            * Vector4::new(1.0, 0.0, 0.0, 1.0);
+        assert!(z_axis.x.abs() <= 0.000_1);
+        assert!((z_axis.y - 1.0).abs() <= 0.000_1);
+
+        let [rx, ry, rz] = [40.0_f32, 30.0, 17.0].map(f32::to_radians);
+        let (sx, cx) = rx.sin_cos();
+        let (sy, cy) = ry.sin_cos();
+        let (sz, cz) = rz.sin_cos();
+        let point = Vector4::new(123.0, -45.0, 19.0, 1.0);
+        // This is RageMatrixRotationXYZ plus RageVec4TransformCoord, copied as
+        // equations so a combined-axis order regression cannot pass unnoticed.
+        let rage = Vector4::new(
+            (cz * cy) * point.x + (-sz * cy) * point.y + (-sy) * point.z,
+            (cz * sy * sx + sz * cx) * point.x
+                + (-sz * sy * sx + cz * cx) * point.y
+                + (cy * sx) * point.z,
+            (cz * sy * cx - sz * sx) * point.x
+                + (-sz * sy * cx - cz * sx) * point.y
+                + (cy * cx) * point.z,
+            1.0,
+        );
+        let actual = song_lua_overlay_local_transform([40.0, 30.0, 17.0], 0.0, 0.0) * point;
+        assert!((actual - rage).abs().max_element() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_overlay_perspective_keeps_logical_center_fixed() {
+        let camera = SongLuaOverlayState {
+            fov: Some(120.0),
+            ..SongLuaOverlayState::default()
+        };
+        let view_proj = song_lua_overlay_view_proj(camera, 854.0, 480.0)
+            .expect("positive FOV should produce a projection");
+        let projected = song_lua_project_overlay_point(view_proj, [427.0, 240.0, 0.0])
+            .expect("logical center should be projectable");
+
+        assert!((projected[0] - 0.5 * screen_width()).abs() <= 0.000_1);
+        assert!((projected[1] - 0.5 * screen_height()).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn song_lua_projection_preserves_vertices_behind_camera_for_gpu_clipping() {
+        let camera = SongLuaOverlayState {
+            fov: Some(120.0),
+            ..SongLuaOverlayState::default()
+        };
+        let view_proj = song_lua_overlay_view_proj(camera, 854.0, 480.0)
+            .expect("positive FOV should produce a projection");
+        let model = Matrix4::from_translation(Vector3::new(427.0, 240.0, 0.0))
+            * song_lua_overlay_local_transform([50.0, 20.0, 397.350_98], 0.0, 0.0);
+        let local_transform = song_lua_projected_local_transform(view_proj, model);
+        let screen_projection = glam::camera::rh::proj::opengl::orthographic(
+            0.0,
+            screen_width(),
+            screen_height(),
+            0.0,
+            -1.0,
+            1.0,
+        );
+        let corners = [
+            Vector4::new(-266.25, -266.25, 0.0, 1.0),
+            Vector4::new(266.25, -266.25, 0.0, 1.0),
+            Vector4::new(266.25, 266.25, 0.0, 1.0),
+            Vector4::new(-266.25, 266.25, 0.0, 1.0),
+        ];
+        let mut crosses_camera = false;
+        for corner in corners {
+            let native_clip = view_proj * model * corner;
+            let rendered_clip = screen_projection * local_transform * corner;
+            crosses_camera |= native_clip.w <= 0.0;
+            assert!((native_clip - rendered_clip).abs().max_element() <= 0.000_2);
+        }
+        assert!(
+            crosses_camera,
+            "the Step Your Game Up circle regression must exercise GPU clipping"
+        );
+    }
+
+    #[test]
+    fn song_lua_projection_matches_step_your_game_up_fixture() {
+        let fixture_path = workspace_root().join(
+            "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json",
+        );
+        let fixture: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&fixture_path).unwrap_or_else(|error| {
+                panic!("could not read {}: {error}", fixture_path.display())
+            }))
+            .unwrap_or_else(|error| panic!("invalid {}: {error}", fixture_path.display()));
+        let track = fixture["projected_vertex_tracks"]
+            .as_array()
+            .and_then(|tracks| {
+                tracks.iter().find(|track| {
+                    track["texture"]
+                        .as_str()
+                        .is_some_and(|texture| texture.ends_with("tpe3 circ 2.png"))
+                })
+            })
+            .expect("fixture has no projected tpe3 circle");
+        let sample = track["samples"]
+            .as_array()
+            .and_then(|samples| {
+                samples.iter().find(|sample| {
+                    sample[0]
+                        .as_f64()
+                        .is_some_and(|beat| (beat - 200.0).abs() <= f64::EPSILON)
+                })
+            })
+            .expect("fixture has no tpe3 circle sample at beat 200");
+        let camera = sample[7].as_array().expect("fixture sample has no camera");
+        let camera_state = SongLuaOverlayState {
+            fov: Some(camera[0].as_f64().expect("camera FOV is not numeric") as f32),
+            vanishpoint: Some([
+                camera[1].as_f64().expect("camera X is not numeric") as f32,
+                camera[2].as_f64().expect("camera Y is not numeric") as f32,
+            ]),
+            ..SongLuaOverlayState::default()
+        };
+        let view_proj = song_lua_overlay_view_proj(camera_state, 854.0, 480.0)
+            .expect("fixture camera should be projectable");
+        let world = sample[4]
+            .as_array()
+            .expect("fixture sample has no world vertices");
+        let expected_clip = sample[5]
+            .as_array()
+            .expect("fixture sample has no clip vertices");
+        let mut crosses_camera = false;
+        for (world, expected) in world.iter().zip(expected_clip) {
+            let world = world.as_array().expect("world vertex is not an array");
+            let expected = expected.as_array().expect("clip vertex is not an array");
+            let actual = view_proj
+                * Vector4::new(
+                    world[0].as_f64().expect("world X is not numeric") as f32,
+                    world[1].as_f64().expect("world Y is not numeric") as f32,
+                    world[2].as_f64().expect("world Z is not numeric") as f32,
+                    1.0,
+                );
+            let expected = Vector4::new(
+                expected[0].as_f64().expect("clip X is not numeric") as f32,
+                expected[1].as_f64().expect("clip Y is not numeric") as f32,
+                expected[2].as_f64().expect("clip Z is not numeric") as f32,
+                expected[3].as_f64().expect("clip W is not numeric") as f32,
+            );
+            crosses_camera |= actual.w <= 0.0;
+            assert!((actual - expected).abs().max_element() <= 0.002);
+        }
+        assert!(
+            crosses_camera,
+            "fixture no longer exercises near-plane clipping"
+        );
+    }
+
+    #[test]
+    fn active_exact_overlay_ease_overrides_sampled_update_value() {
+        let from = deadsync_profile_gameplay::song_lua_runtime_overlay_state_delta(
+            SongLuaOverlayStateDelta {
+                x: Some(-235.0),
+                ..SongLuaOverlayStateDelta::default()
+            },
+        );
+        let to = deadsync_profile_gameplay::song_lua_runtime_overlay_state_delta(
+            SongLuaOverlayStateDelta {
+                x: Some(-260.0),
+                ..SongLuaOverlayStateDelta::default()
+            },
+        );
+        let eases = [
+            deadsync_gameplay::build_song_lua_overlay_ease_window_runtime(
+                0,
+                1.0,
+                3.0,
+                3.0,
+                None,
+                from,
+                to,
+                Some("linear"),
+                None,
+                None,
+            ),
+        ];
+        let ranges = [0..1];
+        let mut start = SongLuaOverlayState {
+            x: 1.0,
+            ..SongLuaOverlayState::default()
+        };
+        reapply_active_song_lua_overlay_runtime_eases_for(1.0, 0, &eases, &ranges, &mut start);
+        assert!((start.x + 235.0).abs() <= f32::EPSILON);
+
+        let mut middle = SongLuaOverlayState {
+            x: 1.0,
+            ..SongLuaOverlayState::default()
+        };
+        reapply_active_song_lua_overlay_runtime_eases_for(2.0, 0, &eases, &ranges, &mut middle);
+        assert!((middle.x + 247.5).abs() <= 0.000_1);
     }
 
     #[test]

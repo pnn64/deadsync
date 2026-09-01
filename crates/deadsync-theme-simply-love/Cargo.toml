@@ -156,6 +156,7 @@ unicode-normalization = "0.1.25"
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-notefield = { path = "../deadsync-notefield" }
+serde_json = "1.0.149"
 winit = "0.30.13"
 
 [lints.clippy]

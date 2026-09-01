@@ -2723,6 +2723,92 @@ pub struct SongLuaOverlayStateDelta {
     pub sound_play: Option<bool>,
 }
 
+impl SongLuaOverlayStateDelta {
+    #[must_use]
+    pub const fn has_update_target(&self, target: SongLuaOverlayUpdateTarget) -> bool {
+        use SongLuaOverlayUpdateTarget as Target;
+        match target {
+            Target::X => self.x.is_some(),
+            Target::Y => self.y.is_some(),
+            Target::Z => self.z.is_some(),
+            Target::ZBias => self.z_bias.is_some(),
+            Target::DrawOrder => self.draw_order.is_some(),
+            Target::DrawByZPosition => self.draw_by_z_position.is_some(),
+            Target::HAlign => self.halign.is_some(),
+            Target::VAlign => self.valign.is_some(),
+            Target::TextAlign => self.text_align.is_some(),
+            Target::Uppercase => self.uppercase.is_some(),
+            Target::ShadowLen => self.shadow_len.is_some(),
+            Target::ShadowColor => self.shadow_color.is_some(),
+            Target::Glow => self.glow.is_some(),
+            Target::Fov => self.fov.is_some(),
+            Target::Vanishpoint => self.vanishpoint.is_some(),
+            Target::Diffuse => self.diffuse.is_some(),
+            Target::VertexColors => self.vertex_colors.is_some(),
+            Target::Visible => self.visible.is_some(),
+            Target::CropLeft => self.cropleft.is_some(),
+            Target::CropRight => self.cropright.is_some(),
+            Target::CropTop => self.croptop.is_some(),
+            Target::CropBottom => self.cropbottom.is_some(),
+            Target::FadeLeft => self.fadeleft.is_some(),
+            Target::FadeRight => self.faderight.is_some(),
+            Target::FadeTop => self.fadetop.is_some(),
+            Target::FadeBottom => self.fadebottom.is_some(),
+            Target::MaskSource => self.mask_source.is_some(),
+            Target::MaskDest => self.mask_dest.is_some(),
+            Target::DepthTest => self.depth_test.is_some(),
+            Target::Zoom => self.zoom.is_some(),
+            Target::ZoomX => self.zoom_x.is_some(),
+            Target::ZoomY => self.zoom_y.is_some(),
+            Target::ZoomZ => self.zoom_z.is_some(),
+            Target::BaseZoom => self.basezoom.is_some(),
+            Target::BaseZoomX => self.basezoom_x.is_some(),
+            Target::BaseZoomY => self.basezoom_y.is_some(),
+            Target::BaseZoomZ => self.basezoom_z.is_some(),
+            Target::RotationX => self.rot_x_deg.is_some(),
+            Target::RotationY => self.rot_y_deg.is_some(),
+            Target::RotationZ => self.rot_z_deg.is_some(),
+            Target::SkewX => self.skew_x.is_some(),
+            Target::SkewY => self.skew_y.is_some(),
+            Target::Blend => self.blend.is_some(),
+            Target::Vibrate => self.vibrate.is_some(),
+            Target::EffectMagnitude => self.effect_magnitude.is_some(),
+            Target::EffectClock => self.effect_clock.is_some(),
+            Target::EffectMode => self.effect_mode.is_some(),
+            Target::EffectColor1 => self.effect_color1.is_some(),
+            Target::EffectColor2 => self.effect_color2.is_some(),
+            Target::EffectPeriod => self.effect_period.is_some(),
+            Target::EffectOffset => self.effect_offset.is_some(),
+            Target::EffectTiming => self.effect_timing.is_some(),
+            Target::Rainbow => self.rainbow.is_some(),
+            Target::RainbowScroll => self.rainbow_scroll.is_some(),
+            Target::TextJitter => self.text_jitter.is_some(),
+            Target::TextDistortion => self.text_distortion.is_some(),
+            Target::TextGlowMode => self.text_glow_mode.is_some(),
+            Target::MultAttrsWithDiffuse => self.mult_attrs_with_diffuse.is_some(),
+            Target::SpriteAnimate => self.sprite_animate.is_some(),
+            Target::SpriteLoop => self.sprite_loop.is_some(),
+            Target::SpritePlaybackRate => self.sprite_playback_rate.is_some(),
+            Target::SpriteStateDelay => self.sprite_state_delay.is_some(),
+            Target::SpriteStateIndex => self.sprite_state_index.is_some(),
+            Target::VertSpacing => self.vert_spacing.is_some(),
+            Target::WrapWidthPixels => self.wrap_width_pixels.is_some(),
+            Target::MaxWidth => self.max_width.is_some(),
+            Target::MaxHeight => self.max_height.is_some(),
+            Target::MaxWPreZoom => self.max_w_pre_zoom.is_some(),
+            Target::MaxHPreZoom => self.max_h_pre_zoom.is_some(),
+            Target::MaxDimensionUsesZoom => self.max_dimension_uses_zoom.is_some(),
+            Target::TextureFiltering => self.texture_filtering.is_some(),
+            Target::TextureWrapping => self.texture_wrapping.is_some(),
+            Target::TexcoordOffset => self.texcoord_offset.is_some(),
+            Target::CustomTextureRect => self.custom_texture_rect.is_some(),
+            Target::TexcoordVelocity => self.texcoord_velocity.is_some(),
+            Target::Size => self.size.is_some(),
+            Target::StretchRect => self.stretch_rect.is_some(),
+        }
+    }
+}
+
 #[must_use]
 pub fn overlay_delta_uses_repeat_sampler(delta: &SongLuaOverlayStateDelta) -> bool {
     delta.texture_wrapping == Some(true)
@@ -7301,6 +7387,68 @@ return Def.ActorFrame{
             track.samples[next].value,
             SongLuaOverlayUpdateValue::F32(100.0)
         );
+    }
+
+    #[test]
+    fn compile_song_lua_does_not_let_updates_rehide_restored_proxy() {
+        let song_dir = test_dir("persistent-proxy-visibility");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+local action = 1
+local mod_actions = {
+    {0.5, function() target:visible(true) end, true},
+    {1, function() target:visible(false) end, true},
+    {2, function() target:visible(true) end, true},
+}
+
+return Def.ActorFrame{
+    Def.ActorProxy{
+        Name="PlayerProxy",
+        InitCommand=function(self) target = self self:visible(false) end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                while action <= #mod_actions and beat >= mod_actions[action][1] do
+                    mod_actions[action][2]()
+                    action = action + 1
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Persistent Proxy Visibility");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let proxy_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("PlayerProxy"))
+            .unwrap();
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == proxy_index
+                    && track.target == SongLuaOverlayUpdateTarget::Visible
+            })
+            .expect("proxy visibility update track should be captured");
+        let at = |beat| {
+            let next = track.samples.partition_point(|sample| sample.beat <= beat);
+            &track.samples[next.saturating_sub(1)].value
+        };
+        assert_eq!(at(1.0), &SongLuaOverlayUpdateValue::Bool(false));
+        assert_eq!(at(2.0), &SongLuaOverlayUpdateValue::Bool(true));
+        assert_eq!(at(2.5), &SongLuaOverlayUpdateValue::Bool(true));
     }
 
     #[test]
