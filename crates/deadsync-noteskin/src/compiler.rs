@@ -6,9 +6,10 @@ use crate::{
 };
 use log::{info, warn};
 use mlua::{Function, Lua, MultiValue, Table, Value};
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::hash::Hasher;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
@@ -53,6 +54,9 @@ const CORE_ELEMENTS: [&str; 33] = [
     "Tap Mine",
     "Tap Note",
 ];
+const ASCII_CASE_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+const ASCII_CASE_HASH_PRIME: u64 = 0x0100_0000_01b3;
+type TrustedHashSet<T> = HashSet<T, BuildHasherDefault<XxHash64>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileOutcome {
@@ -366,9 +370,12 @@ fn labeled_source_paths_reference(
 #[doc(hidden)]
 pub mod compiler_bench_support {
     use super::{
-        compiled_hash_cache_key, compiled_hash_cache_key_reference, labeled_source_paths,
-        labeled_source_paths_reference, noteskin_itg, source_label,
+        CompiledLoaderEntry, TrustedHashSet, compiled_hash_cache_key,
+        compiled_hash_cache_key_reference, labeled_source_paths, labeled_source_paths_reference,
+        noteskin_itg, push_unique, push_unique_reference, sort_compiled_loader_entries,
+        sort_compiled_loader_entries_reference, source_label,
     };
+    use std::collections::HashSet;
     use std::path::{Path, PathBuf};
 
     #[must_use]
@@ -413,6 +420,79 @@ pub mod compiler_bench_support {
     #[must_use]
     pub fn source_order_reference(data: &noteskin_itg::NoteskinData, paths: &[PathBuf]) -> u64 {
         labels_checksum(labeled_source_paths_reference(data, paths.to_vec()))
+    }
+
+    fn loader_entries(cases: &[(&str, &str)]) -> Vec<CompiledLoaderEntry> {
+        cases
+            .iter()
+            .map(|&(button, element)| CompiledLoaderEntry {
+                button: button.to_string(),
+                element: element.to_string(),
+                load_button: String::new(),
+                load_element: String::new(),
+                blank: false,
+                rotation_x: None,
+                rotation_y: None,
+                rotation_z: None,
+                init_command: None,
+            })
+            .collect()
+    }
+
+    fn loader_entries_checksum(entries: Vec<CompiledLoaderEntry>) -> u64 {
+        entries.into_iter().fold(0_u64, |checksum, entry| {
+            let checksum = entry.button.bytes().fold(checksum, |sum, byte| {
+                sum.wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(byte))
+            });
+            entry.element.bytes().fold(checksum, |sum, byte| {
+                sum.wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(byte))
+            })
+        })
+    }
+
+    #[must_use]
+    pub fn loader_entry_sort_current(cases: &[(&str, &str)]) -> u64 {
+        let mut entries = loader_entries(cases);
+        sort_compiled_loader_entries(&mut entries);
+        loader_entries_checksum(entries)
+    }
+
+    #[must_use]
+    pub fn loader_entry_sort_reference(cases: &[(&str, &str)]) -> u64 {
+        let mut entries = loader_entries(cases);
+        sort_compiled_loader_entries_reference(&mut entries);
+        loader_entries_checksum(entries)
+    }
+
+    fn strings_checksum(values: Vec<String>) -> u64 {
+        values.into_iter().fold(0_u64, |checksum, value| {
+            value.bytes().fold(checksum, |sum, byte| {
+                sum.wrapping_mul(1_099_511_628_211)
+                    .wrapping_add(u64::from(byte))
+            })
+        })
+    }
+
+    #[must_use]
+    pub fn loader_domain_current(values: &[&str]) -> u64 {
+        let mut out = Vec::new();
+        let mut seen = TrustedHashSet::default();
+        for value in values {
+            push_unique(&mut out, &mut seen, value);
+        }
+        strings_checksum(out)
+    }
+
+    #[must_use]
+    pub fn loader_domain_reference(values: &[&str]) -> u64 {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        for value in values {
+            push_unique_reference(&mut out, &mut seen, value);
+        }
+        strings_checksum(out)
     }
 }
 
@@ -783,7 +863,54 @@ fn compile_entries(
     Ok(out)
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct LoaderSortKey {
+    normalized: String,
+    button_len: usize,
+}
+
+impl LoaderSortKey {
+    fn new(button: &str, element: &str) -> Self {
+        let mut normalized = String::with_capacity(button.len() + element.len());
+        normalized.push_str(button);
+        let button_len = normalized.len();
+        normalized.push_str(element);
+        normalized.make_ascii_lowercase();
+        Self {
+            normalized,
+            button_len,
+        }
+    }
+
+    fn button(&self) -> &str {
+        &self.normalized[..self.button_len]
+    }
+
+    fn element(&self) -> &str {
+        &self.normalized[self.button_len..]
+    }
+}
+
+impl Ord for LoaderSortKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.button()
+            .cmp(other.button())
+            .then_with(|| self.element().cmp(other.element()))
+    }
+}
+
+impl PartialOrd for LoaderSortKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 fn sort_compiled_loader_entries(entries: &mut [CompiledLoaderEntry]) {
+    entries.sort_by_cached_key(|entry| LoaderSortKey::new(&entry.button, &entry.element));
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sort_compiled_loader_entries_reference(entries: &mut [CompiledLoaderEntry]) {
     entries.sort_by_cached_key(|entry| {
         (
             entry.button.to_ascii_lowercase(),
@@ -858,13 +985,13 @@ fn collect_loader_domain(
     data: &noteskin_itg::NoteskinData,
 ) -> (Vec<String>, Vec<String>) {
     let mut buttons = Vec::new();
-    let mut button_seen = HashSet::new();
+    let mut button_seen = TrustedHashSet::default();
     let game_buttons = game_buttons(game);
     for &button in game_buttons {
         push_unique(&mut buttons, &mut button_seen, button);
     }
     let mut elements = Vec::new();
-    let mut element_seen = HashSet::new();
+    let mut element_seen = TrustedHashSet::default();
     for element in CORE_ELEMENTS {
         push_unique(&mut elements, &mut element_seen, element);
     }
@@ -890,7 +1017,29 @@ fn collect_loader_domain(
     (buttons, elements)
 }
 
-fn push_unique(out: &mut Vec<String>, seen: &mut HashSet<String>, value: &str) {
+fn ascii_case_hash(value: &str) -> u64 {
+    value.bytes().fold(ASCII_CASE_HASH_OFFSET, |hash, byte| {
+        (hash ^ u64::from(byte.to_ascii_lowercase())).wrapping_mul(ASCII_CASE_HASH_PRIME)
+    })
+}
+
+fn push_unique(out: &mut Vec<String>, seen: &mut TrustedHashSet<u64>, value: &str) {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let fingerprint = ascii_case_hash(trimmed);
+    if seen.insert(fingerprint)
+        || !out
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+    {
+        out.push(trimmed.to_string());
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_unique_reference(out: &mut Vec<String>, seen: &mut HashSet<String>, value: &str) {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return;
@@ -1002,11 +1151,14 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 #[cfg(test)]
 mod tests {
     use super::{
-        compiled_bundle_path, compiled_hash_cache_key, compiled_hash_cache_key_reference,
-        labeled_source_paths, labeled_source_paths_reference, noteskin_actor, noteskin_compiled,
-        noteskin_itg, source_label, source_label_reference,
+        CompiledLoaderEntry, TrustedHashSet, ascii_case_hash, compiled_bundle_path,
+        compiled_hash_cache_key, compiled_hash_cache_key_reference, labeled_source_paths,
+        labeled_source_paths_reference, noteskin_actor, noteskin_compiled, noteskin_itg,
+        push_unique, push_unique_reference, sort_compiled_loader_entries,
+        sort_compiled_loader_entries_reference, source_label, source_label_reference,
     };
     use std::{
+        collections::HashSet,
         ffi::OsStr,
         fs,
         path::{Path, PathBuf},
@@ -1097,6 +1249,62 @@ mod tests {
             labeled_source_paths(&data, paths.clone()),
             labeled_source_paths_reference(&data, paths)
         );
+    }
+
+    #[test]
+    fn single_buffer_loader_sort_keys_preserve_tuple_ordering() {
+        let entries = [
+            ("Up", "Tap Note"),
+            ("left", "Receptor"),
+            ("LEFT", "Hold Body Active"),
+            ("Down", "Tap Mine"),
+            ("CafÃ©", "Ã‰clair"),
+            ("Left", "Explosion"),
+        ];
+        let build = || {
+            entries
+                .iter()
+                .map(|&(button, element)| CompiledLoaderEntry {
+                    button: button.to_string(),
+                    element: element.to_string(),
+                    load_button: button.to_string(),
+                    load_element: element.to_string(),
+                    blank: false,
+                    rotation_x: None,
+                    rotation_y: None,
+                    rotation_z: None,
+                    init_command: None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let mut current = build();
+        let mut reference = build();
+        sort_compiled_loader_entries(&mut current);
+        sort_compiled_loader_entries_reference(&mut reference);
+        assert_eq!(current, reference);
+    }
+
+    #[test]
+    fn hashed_loader_domain_dedup_preserves_case_and_order() {
+        let values = [
+            " Left ", "left", "Tap Note", "TAP NOTE", "CafÃ©", "cafÃ©", "", "  ", "Receptor",
+        ];
+        let mut current = Vec::new();
+        let mut current_seen = TrustedHashSet::default();
+        let mut reference = Vec::new();
+        let mut reference_seen = HashSet::new();
+        for value in values {
+            push_unique(&mut current, &mut current_seen, value);
+            push_unique_reference(&mut reference, &mut reference_seen, value);
+        }
+        assert_eq!(current, reference);
+        assert_eq!(current, ["Left", "Tap Note", "CafÃ©", "Receptor"]);
+
+        let mut collision_out = vec!["Left".to_string()];
+        let mut collision_seen = TrustedHashSet::default();
+        collision_seen.insert(ascii_case_hash("Right"));
+        push_unique(&mut collision_out, &mut collision_seen, "Right");
+        assert_eq!(collision_out, ["Left", "Right"]);
     }
 
     #[test]

@@ -1,7 +1,8 @@
 use deadsync_noteskin::actor::{
     itg_has_beat_fade_glow_signature_for_bench,
     itg_has_beat_fade_glow_signature_reference_for_bench, itg_has_beat_update_marker_for_bench,
-    itg_has_beat_update_marker_reference_for_bench, itg_update_function_name_for_bench,
+    itg_has_beat_update_marker_reference_for_bench, itg_parse_actor_color_for_bench,
+    itg_parse_actor_color_reference_for_bench, itg_update_function_name_for_bench,
     itg_update_function_name_reference_for_bench,
 };
 use deadsync_noteskin::compiled::compiled_key_bench_support::{
@@ -9,8 +10,9 @@ use deadsync_noteskin::compiled::compiled_key_bench_support::{
     actor_manifest_reference, actor_visit_current, actor_visit_reference,
 };
 use deadsync_noteskin::compiler::compiler_bench_support::{
-    cache_key_current, cache_key_reference, source_label_current, source_label_reference,
-    source_order_current, source_order_reference,
+    cache_key_current, cache_key_reference, loader_domain_current, loader_domain_reference,
+    loader_entry_sort_current, loader_entry_sort_reference, source_label_current,
+    source_label_reference, source_order_current, source_order_reference,
 };
 use deadsync_noteskin::itg::{IniData, NoteskinData};
 use deadsync_noteskin::lua::{
@@ -260,6 +262,10 @@ fn text_checksum(mut checksum: u64, value: &str) -> u64 {
     value
         .bytes()
         .fold(checksum, |sum, byte| mix(sum, u64::from(byte)))
+}
+
+fn optional_text_checksum(value: Option<String>) -> u64 {
+    value.map_or(1, |value| text_checksum(2, &value))
 }
 
 fn linear_checksum(value: LinearFrames) -> u64 {
@@ -1470,5 +1476,144 @@ fn main() {
         "cached compiler source-label ordering (8 representative paths)",
         &old_source_order,
         &new_source_order,
+    );
+
+    let loader_sort_cases = [
+        ("Up", "Tap Note"),
+        ("left", "Receptor"),
+        ("LEFT", "Hold Body Active"),
+        ("Down", "Tap Mine"),
+        ("Right", "Roll Body Inactive"),
+        ("Left", "Explosion"),
+        ("Up", "Hold Head Active"),
+        ("Down", "Tap Explosion Dim"),
+        ("Right", "Tap Explosion Bright"),
+        ("Left", "Hold Tail Inactive"),
+        ("Down", "Ready Receptor"),
+        ("Up", "Go Receptor"),
+        ("Right", "HitMine Explosion"),
+        ("Left", "Tap Fake"),
+        ("Down", "Tap Lift"),
+        ("Up", "Roll Explosion"),
+        ("Right", "Hold Explosion"),
+        ("Left", "Roll TopCap Active"),
+        ("Down", "Hold BottomCap Active"),
+        ("Up", "Roll Head Inactive"),
+        ("Right", "Hold Body Inactive"),
+        ("CafÃ©", "Ã‰clair"),
+        ("Center", "Tap Note"),
+        ("DownLeft", "Receptor"),
+    ];
+    let loader_sort_suite = |sort: fn(&[(&str, &str)]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(checksum, black_box(sort(black_box(&loader_sort_cases))));
+        }
+        checksum
+    };
+    let (old_loader_sort, new_loader_sort) = measure_pair(
+        512,
+        loader_sort_cases.len() * REPEATS,
+        || loader_sort_suite(loader_entry_sort_reference),
+        || loader_sort_suite(loader_entry_sort_current),
+    );
+    assert_improved(
+        "single-buffer compiler loader sort keys",
+        &old_loader_sort,
+        &new_loader_sort,
+    );
+    print_pair(
+        "single-buffer compiler loader sort keys (24 representative entries)",
+        &old_loader_sort,
+        &new_loader_sort,
+    );
+
+    let loader_domain_cases = [
+        "Left",
+        "Down",
+        "Up",
+        "Right",
+        " left ",
+        "Tap Note",
+        "TAP NOTE",
+        "Receptor",
+        "Hold Body Active",
+        "hold body active",
+        "Tap Mine",
+        "Tap Lift",
+        "Tap Fake",
+        "Explosion",
+        "Roll Explosion",
+        "Hold Explosion",
+        "CafÃ©",
+        "cafÃ©",
+        "Ã‰clair",
+        "",
+        "   ",
+    ];
+    let loader_domain_suite = |collect: fn(&[&str]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(
+                checksum,
+                black_box(collect(black_box(&loader_domain_cases))),
+            );
+        }
+        checksum
+    };
+    let (old_loader_domain, new_loader_domain) = measure_pair(
+        1_024,
+        loader_domain_cases.len() * REPEATS,
+        || loader_domain_suite(loader_domain_reference),
+        || loader_domain_suite(loader_domain_current),
+    );
+    assert_improved(
+        "allocation-free compiler loader-domain dedup keys",
+        &old_loader_domain,
+        &new_loader_domain,
+    );
+    print_pair(
+        "allocation-free compiler loader-domain dedup keys (21 candidates)",
+        &old_loader_domain,
+        &new_loader_domain,
+    );
+
+    let actor_color_cases = [
+        "Color(\"#ff0080\")",
+        " cOlOr( '#00ff0080' ) ",
+        "\"#102030\"",
+        "0.75, 0.5, 0.25, 1",
+        "Color(1, 0.5, 0.25, 0.75)",
+        "Colorful(#ffffff)",
+        "nÃ¸color(#ffffff)",
+        "",
+    ];
+    let actor_color_suite = |parse: fn(&str) -> Option<String>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in actor_color_cases {
+                checksum = mix(
+                    checksum,
+                    optional_text_checksum(black_box(parse(black_box(value)))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_actor_colors, new_actor_colors) = measure_pair(
+        1_024,
+        actor_color_cases.len() * REPEATS,
+        || actor_color_suite(itg_parse_actor_color_reference_for_bench),
+        || actor_color_suite(itg_parse_actor_color_for_bench),
+    );
+    assert_improved(
+        "borrowed actor color-wrapper scan",
+        &old_actor_colors,
+        &new_actor_colors,
+    );
+    print_pair(
+        "borrowed actor color-wrapper scan (8 representative expressions)",
+        &old_actor_colors,
+        &new_actor_colors,
     );
 }

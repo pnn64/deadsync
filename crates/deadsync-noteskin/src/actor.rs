@@ -587,6 +587,27 @@ fn parse_local_assignment(line: &str) -> Option<(&str, &str)> {
 
 fn parse_lua_color_expr(raw: &str) -> Option<String> {
     let value = raw.trim();
+    let inner = if value
+        .as_bytes()
+        .get(.."color(".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"color("))
+        && value.ends_with(')')
+    {
+        value[6..value.len().saturating_sub(1)]
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+    } else {
+        value.trim_matches('"').trim_matches('\'')
+    };
+    parse_hex_color(inner)
+        .or_else(|| parse_color_list(inner))
+        .map(format_color)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_lua_color_expr_reference(raw: &str) -> Option<String> {
+    let value = raw.trim();
     let lower = value.to_ascii_lowercase();
     let inner = if lower.starts_with("color(") && value.ends_with(')') {
         value[6..value.len().saturating_sub(1)]
@@ -599,6 +620,20 @@ fn parse_lua_color_expr(raw: &str) -> Option<String> {
     parse_hex_color(inner)
         .or_else(|| parse_color_list(inner))
         .map(format_color)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_parse_actor_color_for_bench(raw: &str) -> Option<String> {
+    parse_lua_color_expr(raw)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_parse_actor_color_reference_for_bench(raw: &str) -> Option<String> {
+    parse_lua_color_expr_reference(raw)
 }
 
 fn parse_hex_color(raw: &str) -> Option<[f32; 4]> {
@@ -1908,6 +1943,26 @@ return Def.ActorFrame {
             Some([0.75, 0.5, 0.25, 1.0])
         );
         assert_eq!(parse_color_list("1, bad, 0.5, 0.25"), None);
+    }
+
+    #[test]
+    fn borrowed_actor_color_wrapper_scan_matches_lowercase_behavior() {
+        for value in [
+            "Color(\"#ff0080\")",
+            " cOlOr( '#00ff0080' ) ",
+            "\"#102030\"",
+            "0.75, 0.5, 0.25, 1",
+            "Color(1, 0.5, 0.25, 0.75)",
+            "Colorful(#ffffff)",
+            "nÃ¸color(#ffffff)",
+            "",
+        ] {
+            assert_eq!(
+                parse_lua_color_expr(value),
+                parse_lua_color_expr_reference(value),
+                "value {value:?}"
+            );
+        }
     }
 
     #[test]
