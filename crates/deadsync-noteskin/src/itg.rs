@@ -1,5 +1,6 @@
 use hashbrown::{Equivalent, HashMap as BorrowMap};
 use log::warn;
+use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -11,7 +12,7 @@ use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
     Style,
     actor::ITG_ARG0_TOKEN,
-    lua::{itg_parse_lua_quoted, itg_quoted_strings},
+    lua::itg_quoted_strings,
     script::{parse_script_float, parse_script_int},
 };
 
@@ -19,6 +20,11 @@ const MAX_FALLBACK_DEPTH: usize = 20;
 const MAX_REDIR_DEPTH: usize = 100;
 const DEFAULT_SKIN_NAME: &str = "default";
 const DEFAULT_SKIN_CANDIDATES: &[&str] = &[DEFAULT_SKIN_NAME, "cel"];
+// Covers normal ITG button/element prefixes while retaining heap spill for
+// unusually long third-party names.
+const INLINE_PATH_PREFIX_BYTES: usize = 64;
+
+type ItgPathPrefixBytes = SmallVec<[u8; INLINE_PATH_PREFIX_BYTES]>;
 
 type PathLookupCache = BorrowMap<IniKey, BorrowMap<IniKey, Option<PathBuf>>>;
 type NoteskinDataCache = BorrowMap<NoteskinDataCacheKey, Arc<NoteskinData>>;
@@ -242,7 +248,7 @@ pub fn normalized_skin_name(skin: &str) -> String {
 
 #[must_use]
 pub fn skin_name_is_default(skin: &str) -> bool {
-    normalized_skin_name(skin) == DEFAULT_SKIN_NAME
+    normalized_skin_ref(skin).eq_ignore_ascii_case(DEFAULT_SKIN_NAME)
 }
 
 #[must_use]
@@ -380,6 +386,43 @@ impl IniData {
     }
 }
 
+enum ItgPathPrefix<'a> {
+    Borrowed(&'a str),
+    Inline(ItgPathPrefixBytes),
+}
+
+impl ItgPathPrefix<'_> {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Borrowed(value) => value,
+            Self::Inline(value) => std::str::from_utf8(value)
+                .expect("ITG path prefixes concatenate valid UTF-8 strings"),
+        }
+    }
+}
+
+fn joined_path_prefix(first: &str, second: &str) -> ItgPathPrefixBytes {
+    let mut prefix = ItgPathPrefixBytes::with_capacity(first.len() + 1 + second.len());
+    prefix.extend_from_slice(first.as_bytes());
+    prefix.push(b' ');
+    prefix.extend_from_slice(second.as_bytes());
+    prefix
+}
+
+fn itg_path_prefix<'a>(button: &'a str, element: &'a str) -> ItgPathPrefix<'a> {
+    if button.is_empty() {
+        ItgPathPrefix::Borrowed(element)
+    } else if element.is_empty() {
+        ItgPathPrefix::Borrowed(button)
+    } else {
+        ItgPathPrefix::Inline(joined_path_prefix(button, element))
+    }
+}
+
+fn itg_fallback_path_prefix(element: &str) -> ItgPathPrefix<'_> {
+    ItgPathPrefix::Inline(joined_path_prefix("Fallback", element))
+}
+
 #[derive(Debug, Clone)]
 pub struct NoteskinData {
     pub name: String,
@@ -426,15 +469,9 @@ impl NoteskinData {
     }
 
     fn resolve_path_once(&self, button: &str, element: &str) -> Option<PathBuf> {
-        let pref = if button.is_empty() {
-            element.to_string()
-        } else if element.is_empty() {
-            button.to_string()
-        } else {
-            format!("{button} {element}")
-        };
+        let prefix = itg_path_prefix(button, element);
 
-        if let Some(path) = self.resolve_file_from_search_dirs(&pref) {
+        if let Some(path) = self.resolve_file_from_search_dirs(prefix.as_str()) {
             return Some(path);
         }
 
@@ -442,7 +479,8 @@ impl NoteskinData {
             return None;
         }
 
-        self.resolve_file_from_search_dirs(&format!("Fallback {element}"))
+        let fallback = itg_fallback_path_prefix(element);
+        self.resolve_file_from_search_dirs(fallback.as_str())
     }
 
     fn resolve_file_from_search_dirs(&self, prefix: &str) -> Option<PathBuf> {
@@ -518,6 +556,23 @@ pub fn texture_key_for_path(
     Some(key)
 }
 
+fn parse_lua_quoted_ref(raw: &str) -> Option<&str> {
+    let trimmed = raw
+        .trim()
+        .trim_end_matches(',')
+        .trim_end_matches(';')
+        .trim();
+    if trimmed.len() < 2 {
+        return None;
+    }
+    let bytes = trimmed.as_bytes();
+    let quote = bytes[0];
+    if (quote != b'"' && quote != b'\'') || bytes[trimmed.len() - 1] != quote {
+        return None;
+    }
+    Some(&trimmed[1..trimmed.len() - 1])
+}
+
 pub fn resolve_texture_expr(
     data: &NoteskinData,
     expr: &str,
@@ -540,9 +595,9 @@ pub fn resolve_texture_expr(
                 .or_else(|| data.resolve_path("", first));
         }
     }
-    let name = itg_parse_lua_quoted(value).unwrap_or_else(|| value.to_string());
-    data.resolve_path(&name, "")
-        .or_else(|| data.resolve_path("", &name))
+    let name = parse_lua_quoted_ref(value).unwrap_or(value);
+    data.resolve_path(name, "")
+        .or_else(|| data.resolve_path("", name))
         .or_else(|| {
             if value == "..." {
                 arg0_path.map(Path::to_path_buf)
@@ -1140,6 +1195,71 @@ fn is_redir(path: &Path) -> bool {
 pub mod bench_support {
     use super::*;
 
+    fn text_checksum(mut checksum: u64, value: &str) -> u64 {
+        checksum = checksum.wrapping_mul(131).wrapping_add(value.len() as u64);
+        value.bytes().fold(checksum, |sum, byte| {
+            sum.wrapping_mul(131).wrapping_add(u64::from(byte))
+        })
+    }
+
+    #[must_use]
+    pub fn owned_default_skin_check_old(skin: &str) -> u64 {
+        if normalized_skin_name(skin) == DEFAULT_SKIN_NAME {
+            2
+        } else {
+            1
+        }
+    }
+
+    #[must_use]
+    pub fn borrowed_default_skin_check_new(skin: &str) -> u64 {
+        if skin_name_is_default(skin) { 2 } else { 1 }
+    }
+
+    #[must_use]
+    pub fn owned_texture_expr_name_old(expr: &str) -> u64 {
+        let value = expr.trim();
+        let name = crate::lua::itg_parse_lua_quoted(value).unwrap_or_else(|| value.to_string());
+        text_checksum(0, &name)
+    }
+
+    #[must_use]
+    pub fn borrowed_texture_expr_name_new(expr: &str) -> u64 {
+        let value = expr.trim();
+        text_checksum(0, parse_lua_quoted_ref(value).unwrap_or(value))
+    }
+
+    #[must_use]
+    pub fn owned_path_prefixes_old(cases: &[(&str, &str)]) -> u64 {
+        cases.iter().fold(0, |mut checksum, &(button, element)| {
+            let prefix = if button.is_empty() {
+                element.to_string()
+            } else if element.is_empty() {
+                button.to_string()
+            } else {
+                format!("{button} {element}")
+            };
+            checksum = text_checksum(checksum, &prefix);
+            if !button.is_empty() {
+                checksum = text_checksum(checksum, &format!("Fallback {element}"));
+            }
+            checksum
+        })
+    }
+
+    #[must_use]
+    pub fn inline_path_prefixes_new(cases: &[(&str, &str)]) -> u64 {
+        cases.iter().fold(0, |mut checksum, &(button, element)| {
+            let prefix = itg_path_prefix(button, element);
+            checksum = text_checksum(checksum, prefix.as_str());
+            if !button.is_empty() {
+                let fallback = itg_fallback_path_prefix(element);
+                checksum = text_checksum(checksum, fallback.as_str());
+            }
+            checksum
+        })
+    }
+
     fn lookup_checksum(parsed: &IniData, queries: &[(&str, &str)]) -> u64 {
         queries.iter().fold(0_u64, |checksum, &(section, key)| {
             parsed.get(section, key).map_or(checksum, |value| {
@@ -1324,6 +1444,80 @@ mod tests {
         assert!(skin_name_is_default(""));
         assert!(skin_name_is_default(" DEFAULT "));
         assert!(!skin_name_is_default("cel"));
+    }
+
+    #[test]
+    fn borrowed_default_skin_check_matches_owned_ascii_normalization() {
+        for (skin, expected) in [
+            ("", true),
+            (" \t ", true),
+            ("default", true),
+            (" DeFaUlT ", true),
+            ("defaulted", false),
+            ("cel", false),
+            ("de_fault", false),
+        ] {
+            assert_eq!(skin_name_is_default(skin), expected, "skin={skin:?}");
+            assert_eq!(
+                skin_name_is_default(skin),
+                normalized_skin_name(skin) == default_skin_name(),
+                "skin={skin:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_texture_expression_names_match_owned_quote_parsing() {
+        for expression in [
+            "'Fallback Explosion'",
+            "  \"Down Tap Note\";  ",
+            "'Tap Mine';,",
+            "unquoted texture",
+            "'mismatched\"",
+            "''",
+            "",
+        ] {
+            assert_eq!(
+                super::parse_lua_quoted_ref(expression).map(str::to_owned),
+                crate::lua::itg_parse_lua_quoted(expression),
+                "expression={expression:?}"
+            );
+        }
+
+        let expression = "  'Fallback Explosion'  ";
+        let borrowed = super::parse_lua_quoted_ref(expression).expect("quoted expression");
+        let source_start = expression.as_ptr() as usize;
+        let source_end = source_start + expression.len();
+        let borrowed_start = borrowed.as_ptr() as usize;
+        assert_eq!(borrowed, "Fallback Explosion");
+        assert!(borrowed_start >= source_start && borrowed_start < source_end);
+    }
+
+    #[test]
+    fn inline_path_prefixes_preserve_exact_fallback_and_spill_text() {
+        for (button, element, expected, borrowed) in [
+            ("", "Tap Note", "Tap Note", true),
+            ("Down", "", "Down", true),
+            ("Down", "Tap Note", "Down Tap Note", false),
+        ] {
+            let prefix = super::itg_path_prefix(button, element);
+            assert_eq!(prefix.as_str(), expected);
+            assert_eq!(
+                matches!(prefix, super::ItgPathPrefix::Borrowed(_)),
+                borrowed
+            );
+            if !button.is_empty() {
+                assert_eq!(
+                    super::itg_fallback_path_prefix(element).as_str(),
+                    format!("Fallback {element}")
+                );
+            }
+        }
+
+        let long_element = "x".repeat(super::INLINE_PATH_PREFIX_BYTES + 1);
+        let prefix = super::itg_path_prefix("Down", &long_element);
+        assert_eq!(prefix.as_str(), format!("Down {long_element}"));
+        assert!(matches!(prefix, super::ItgPathPrefix::Inline(_)));
     }
 
     #[test]

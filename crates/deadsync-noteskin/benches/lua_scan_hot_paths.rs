@@ -23,7 +23,13 @@ use deadsync_noteskin::compiler::compiler_bench_support::{
     loader_entry_sort_current, loader_entry_sort_reference, source_label_current,
     source_label_reference, source_order_current, source_order_reference,
 };
-use deadsync_noteskin::itg::{IniData, NoteskinData};
+use deadsync_noteskin::itg::{
+    IniData, NoteskinData,
+    bench_support::{
+        borrowed_default_skin_check_new, borrowed_texture_expr_name_new, inline_path_prefixes_new,
+        owned_default_skin_check_old, owned_path_prefixes_old, owned_texture_expr_name_old,
+    },
+};
 use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
@@ -1968,6 +1974,110 @@ fn main() {
         "direct local-function parameter storage (8 representative lists)",
         &old_local_params,
         &new_local_params,
+    );
+
+    let skin_name_cases = [
+        "",
+        "   ",
+        "default",
+        " DEFAULT ",
+        "DeFaUlT",
+        "cel",
+        "lambda",
+        "defaulted",
+    ];
+    let default_skin_suite = |classify: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for skin in skin_name_cases {
+                checksum = mix(checksum, black_box(classify(black_box(skin))));
+            }
+        }
+        checksum
+    };
+    let (old_default_skin, new_default_skin) = measure_pair(
+        4_096,
+        skin_name_cases.len() * REPEATS,
+        || default_skin_suite(owned_default_skin_check_old),
+        || default_skin_suite(borrowed_default_skin_check_new),
+    );
+    assert_improved(
+        "borrowed default-skin classification",
+        &old_default_skin,
+        &new_default_skin,
+    );
+    print_pair(
+        "borrowed default-skin classification (8 representative names)",
+        &old_default_skin,
+        &new_default_skin,
+    );
+
+    let texture_expr_cases = [
+        "'Fallback Explosion'",
+        "\"Down Tap Note\"",
+        " 'Tap Mine'; ",
+        "unquoted texture",
+        "...",
+        "'mismatched\"",
+        "''",
+    ];
+    let texture_expr_name_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for expression in texture_expr_cases {
+                checksum = mix(checksum, black_box(parse(black_box(expression))));
+            }
+        }
+        checksum
+    };
+    let (old_texture_names, new_texture_names) = measure_pair(
+        2_048,
+        texture_expr_cases.len() * REPEATS,
+        || texture_expr_name_suite(owned_texture_expr_name_old),
+        || texture_expr_name_suite(borrowed_texture_expr_name_new),
+    );
+    assert_improved(
+        "borrowed texture-expression names",
+        &old_texture_names,
+        &new_texture_names,
+    );
+    print_pair(
+        "borrowed texture-expression names (7 representative expressions)",
+        &old_texture_names,
+        &new_texture_names,
+    );
+
+    let path_prefix_cases = [
+        ("", "Tap Note"),
+        ("Down", ""),
+        ("Down", "Tap Note"),
+        ("Left", "Hold Head Inactive"),
+        ("Center", "Tap Explosion Bright W1"),
+        ("UpRight", "Roll Explosion"),
+        ("", "Fallback Explosion"),
+    ];
+    let path_prefix_suite = |build: fn(&[(&str, &str)]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(checksum, black_box(build(black_box(&path_prefix_cases))));
+        }
+        checksum
+    };
+    let (old_path_prefixes, new_path_prefixes) = measure_pair(
+        2_048,
+        path_prefix_cases.len() * REPEATS,
+        || path_prefix_suite(owned_path_prefixes_old),
+        || path_prefix_suite(inline_path_prefixes_new),
+    );
+    assert_improved(
+        "inline ITG path-prefix construction",
+        &old_path_prefixes,
+        &new_path_prefixes,
+    );
+    print_pair(
+        "inline ITG path-prefix construction (7 representative pairs)",
+        &old_path_prefixes,
+        &new_path_prefixes,
     );
 
     let animation_commands = HashMap::from([
