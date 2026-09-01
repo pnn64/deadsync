@@ -18,8 +18,10 @@ use deadsync_noteskin::lua::{
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
 };
 use deadsync_noteskin::model::model_scan_bench_support::{
-    derived_texture_stem_current, derived_texture_stem_reference, extension_kind_current,
-    extension_kind_reference, material_nomove_current, material_nomove_reference,
+    animated_texture_keys_current, animated_texture_keys_reference, auto_rot_keys_current,
+    auto_rot_keys_reference, derived_texture_stem_current, derived_texture_stem_reference,
+    extension_kind_current, extension_kind_reference, material_nomove_current,
+    material_nomove_reference, milkshape_signature_current, milkshape_signature_reference,
 };
 use deadsync_noteskin::runtime::{
     itg_has_receptor_actor_effect_command_for_bench,
@@ -1252,6 +1254,115 @@ fn main() {
         "borrowed model material flag scan (8 representative names)",
         &old_materials,
         &new_materials,
+    );
+
+    let signature_cases = [
+        format!("{}mIlKsHaPe 3D aScIi\nMeshes: 1", "x".repeat(400)),
+        format!("{}MILKSHAPE 3D ASCII", "x".repeat(247)),
+        format!("{}not a model", "x".repeat(768)),
+        format!("{}not a model", "cafÃ©".repeat(192)),
+    ];
+    let signature_suite = |scan: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for content in &signature_cases {
+                checksum = mix(checksum, bool_checksum(black_box(scan(black_box(content)))));
+            }
+        }
+        checksum
+    };
+    let (old_signatures, new_signatures) = measure_pair(
+        1_024,
+        signature_cases.len() * REPEATS,
+        || signature_suite(milkshape_signature_reference),
+        || signature_suite(milkshape_signature_current),
+    );
+    assert_improved(
+        "allocation-free full MilkShape signature scan",
+        &old_signatures,
+        &new_signatures,
+    );
+    print_pair(
+        "allocation-free full MilkShape signature scan (4 long model sources)",
+        &old_signatures,
+        &new_signatures,
+    );
+
+    let animated_key_indices = [0, 1, 9, 10, 99, 100, 999];
+    let animated_key_suite = |build: fn(usize) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for index in animated_key_indices {
+                checksum = mix(checksum, black_box(build(black_box(index))));
+            }
+        }
+        checksum
+    };
+    let (old_animated_keys, new_animated_keys) = measure_pair(
+        1_024,
+        animated_key_indices.len() * REPEATS,
+        || animated_key_suite(animated_texture_keys_reference),
+        || animated_key_suite(animated_texture_keys_current),
+    );
+    assert_improved(
+        "stack-built animated texture INI keys",
+        &old_animated_keys,
+        &new_animated_keys,
+    );
+    print_pair(
+        "stack-built animated texture INI keys (7 frame/delay pairs)",
+        &old_animated_keys,
+        &new_animated_keys,
+    );
+
+    let auto_rotations = [
+        (230.0, -725.0),
+        (220.0, 725.0),
+        (210.0, 540.0),
+        (200.0, -540.0),
+        (190.0, 365.0),
+        (180.0, -365.0),
+        (170.0, 185.0),
+        (160.0, -185.0),
+        (150.0, 350.0),
+        (140.0, -350.0),
+        (130.0, 181.0),
+        (120.0, -181.0),
+        (110.0, 90.0),
+        (100.0, -90.0),
+        (90.0, 270.0),
+        (80.0, -270.0),
+        (70.0, 450.0),
+        (60.0, -450.0),
+        (50.0, 630.0),
+        (40.0, -630.0),
+        (30.0, 10.0),
+        (20.0, -10.0),
+        (10.0, 5.0),
+        (0.0, 0.0),
+    ];
+    let auto_rot_suite = |build: fn(&[(f32, f32)]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(checksum, black_box(build(black_box(&auto_rotations))));
+        }
+        checksum
+    };
+    let (old_auto_rot, new_auto_rot) = measure_pair(
+        1_024,
+        auto_rotations.len() * REPEATS,
+        || auto_rot_suite(auto_rot_keys_reference),
+        || auto_rot_suite(auto_rot_keys_current),
+    );
+    assert_improved(
+        "single-buffer model auto-rotation keys",
+        &old_auto_rot,
+        &new_auto_rot,
+    );
+    print_pair(
+        "single-buffer model auto-rotation keys (24 first-bone rotations)",
+        &old_auto_rot,
+        &new_auto_rot,
     );
 
     let cache_key_cases = [

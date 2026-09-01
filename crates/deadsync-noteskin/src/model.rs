@@ -191,8 +191,14 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
     } else {
         1
     };
-    let frame_key = format!("Frame{first_frame_idx:04}");
-    let frame = ini.get("AnimatedTexture", &frame_key)?;
+    let frame = ini.get(
+        "AnimatedTexture",
+        if first_frame_idx == 0 {
+            "Frame0000"
+        } else {
+            "Frame0001"
+        },
+    )?;
     let rel = itg_normalized_asset_ref(frame)?;
     let rel_path = Path::new(&rel);
     let texture_path = if rel_path.is_absolute() && rel_path.is_file() {
@@ -219,13 +225,16 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
         .unwrap_or(0.0);
     let mut cycle_seconds = 0.0f32;
     for idx in first_frame_idx..1000 {
-        let frame_key = format!("Frame{idx:04}");
-        let delay_key = format!("Delay{idx:04}");
-        if ini.get("AnimatedTexture", &frame_key).is_none() {
+        let frame_key = itg_animated_texture_key(*b"Frame0000", idx);
+        let delay_key = itg_animated_texture_key(*b"Delay0000", idx);
+        if ini
+            .get("AnimatedTexture", itg_animated_texture_key_str(&frame_key))
+            .is_none()
+        {
             break;
         }
         let Some(delay) = ini
-            .get("AnimatedTexture", &delay_key)
+            .get("AnimatedTexture", itg_animated_texture_key_str(&delay_key))
             .and_then(noteskin_itg::parse_ini_float)
         else {
             break;
@@ -241,6 +250,26 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
                 .then_some(cycle_seconds),
         },
     })
+}
+
+#[inline]
+fn itg_animated_texture_key(mut key: [u8; 9], mut index: usize) -> [u8; 9] {
+    debug_assert!(index < 10_000);
+    for digit in key[5..].iter_mut().rev() {
+        *digit = b'0' + (index % 10) as u8;
+        index /= 10;
+    }
+    key
+}
+
+#[inline]
+fn itg_animated_texture_key_str(key: &[u8; 9]) -> &str {
+    std::str::from_utf8(key).expect("animated texture keys are always ASCII")
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_animated_texture_key_reference(prefix: &str, index: usize) -> String {
+    format!("{prefix}{index:04}")
 }
 
 #[derive(Debug, Clone)]
@@ -444,7 +473,46 @@ fn itg_parse_milkshape_mesh_material_index(header: &str) -> i32 {
 }
 
 #[inline]
+fn itg_contains_milkshape_ascii_signature(mut content: &[u8], signature: &[u8]) -> bool {
+    while content.len() >= signature.len() {
+        let candidate_bytes = content.len() - signature.len() + 1;
+        let Some(offset) = content[..candidate_bytes]
+            .iter()
+            .position(|byte| *byte == b'm' || *byte == b'M')
+        else {
+            return false;
+        };
+        content = &content[offset..];
+        if content[..signature.len()].eq_ignore_ascii_case(signature) {
+            return true;
+        }
+        content = &content[1..];
+    }
+    false
+}
+
+#[inline]
 fn has_milkshape_ascii_signature(content: &str) -> bool {
+    const SIGNATURE: &[u8] = b"milkshape 3d ascii";
+    const FAST_PREFIX_BYTES: usize = 256;
+
+    let bytes = content.as_bytes();
+    let prefix_len = bytes.len().min(FAST_PREFIX_BYTES);
+    if itg_contains_milkshape_ascii_signature(&bytes[..prefix_len], SIGNATURE) {
+        return true;
+    }
+    if bytes.len() <= FAST_PREFIX_BYTES {
+        return false;
+    }
+
+    // The overlap preserves matches crossing the fast-prefix boundary while
+    // avoiding a lowercase copy of the complete model source.
+    let suffix_start = FAST_PREFIX_BYTES.saturating_sub(SIGNATURE.len() - 1);
+    itg_contains_milkshape_ascii_signature(&bytes[suffix_start..], SIGNATURE)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn has_milkshape_ascii_signature_reference(content: &str) -> bool {
     const SIGNATURE: &[u8] = b"milkshape 3d ascii";
     const FAST_PREFIX_BYTES: usize = 256;
 
@@ -460,9 +528,46 @@ fn has_milkshape_ascii_signature(content: &str) -> bool {
         return false;
     }
 
-    // Preserve the historical anywhere-in-file behavior for unusual exports
-    // while keeping standard header-first MilkShape files allocation-free.
     content.to_ascii_lowercase().contains("milkshape 3d ascii")
+}
+
+fn itg_finish_model_auto_rot_keys(mut keys: Vec<ModelAutoRotKey>) -> Arc<[ModelAutoRotKey]> {
+    keys.sort_by(|a, b| {
+        a.frame
+            .partial_cmp(&b.frame)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    for idx in 1..keys.len() {
+        let prev_z_deg = keys[idx - 1].z_deg;
+        let z_deg = &mut keys[idx].z_deg;
+        while *z_deg - prev_z_deg > 180.0 {
+            *z_deg -= 360.0;
+        }
+        while *z_deg - prev_z_deg < -180.0 {
+            *z_deg += 360.0;
+        }
+    }
+    Arc::from(keys)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_finish_model_auto_rot_keys_reference(
+    mut first_bone: Vec<(f32, f32)>,
+) -> Arc<[ModelAutoRotKey]> {
+    first_bone.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut keys: Vec<ModelAutoRotKey> = Vec::with_capacity(first_bone.len());
+    for (frame, mut z_deg) in first_bone {
+        if let Some(prev) = keys.last().copied() {
+            while z_deg - prev.z_deg > 180.0 {
+                z_deg -= 360.0;
+            }
+            while z_deg - prev.z_deg < -180.0 {
+                z_deg += 360.0;
+            }
+        }
+        keys.push(ModelAutoRotKey { frame, z_deg });
+    }
+    Arc::from(keys)
 }
 
 pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
@@ -499,6 +604,9 @@ pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot
                 total_frames = total_frames.max(frame);
             }
             let rot_count = lines.next()?.trim().parse::<usize>().ok()?;
+            if bone_idx == 0 {
+                first_bone.reserve_exact(rot_count);
+            }
             for _ in 0..rot_count {
                 let rot_line = lines.next()?;
                 let mut parts = rot_line.split_whitespace();
@@ -508,29 +616,19 @@ pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot
                 let z = parts.next()?.parse::<f32>().ok()?;
                 total_frames = total_frames.max(frame);
                 if bone_idx == 0 {
-                    first_bone.push((frame, z.to_degrees()));
+                    first_bone.push(ModelAutoRotKey {
+                        frame,
+                        z_deg: z.to_degrees(),
+                    });
                 }
             }
         }
         if first_bone.is_empty() || total_frames <= f32::EPSILON {
             return None;
         }
-        first_bone.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let mut keys: Vec<ModelAutoRotKey> = Vec::with_capacity(first_bone.len());
-        for (frame, mut z_deg) in first_bone {
-            if let Some(prev) = keys.last().copied() {
-                while z_deg - prev.z_deg > 180.0 {
-                    z_deg -= 360.0;
-                }
-                while z_deg - prev.z_deg < -180.0 {
-                    z_deg += 360.0;
-                }
-            }
-            keys.push(ModelAutoRotKey { frame, z_deg });
-        }
         return Some(ItgModelAutoRot {
             total_frames,
-            z_keys: Arc::from(keys),
+            z_keys: itg_finish_model_auto_rot_keys(first_bone),
         });
     }
     None
@@ -833,10 +931,33 @@ fn itg_parse_model_material_flags_reference(name: &str) -> ItgModelMaterialFlags
 #[doc(hidden)]
 pub mod model_scan_bench_support {
     use super::{
+        ModelAutoRotKey, has_milkshape_ascii_signature, has_milkshape_ascii_signature_reference,
+        itg_animated_texture_key, itg_animated_texture_key_reference,
         itg_derived_model_texture_stem, itg_derived_model_texture_stem_reference,
+        itg_finish_model_auto_rot_keys, itg_finish_model_auto_rot_keys_reference,
         itg_model_texture_kind, itg_model_texture_kind_reference, itg_parse_model_material_flags,
         itg_parse_model_material_flags_reference,
     };
+
+    fn mix(checksum: u64, value: u64) -> u64 {
+        checksum.wrapping_mul(1_099_511_628_211).wrapping_add(value)
+    }
+
+    fn byte_checksum(mut checksum: u64, value: &[u8]) -> u64 {
+        checksum = mix(checksum, value.len() as u64);
+        value
+            .iter()
+            .fold(checksum, |sum, byte| mix(sum, u64::from(*byte)))
+    }
+
+    fn auto_rot_checksum(keys: &[ModelAutoRotKey]) -> u64 {
+        keys.iter().fold(keys.len() as u64, |checksum, key| {
+            mix(
+                mix(checksum, u64::from(key.frame.to_bits())),
+                u64::from(key.z_deg.to_bits()),
+            )
+        })
+    }
 
     #[must_use]
     pub fn extension_kind_current(ext: &str) -> u8 {
@@ -867,6 +988,48 @@ pub mod model_scan_bench_support {
     pub fn material_nomove_reference(line: &str) -> bool {
         let name = line.trim().to_string();
         itg_parse_model_material_flags_reference(&name).nomove
+    }
+
+    #[must_use]
+    pub fn milkshape_signature_current(content: &str) -> bool {
+        has_milkshape_ascii_signature(content)
+    }
+
+    #[must_use]
+    pub fn milkshape_signature_reference(content: &str) -> bool {
+        has_milkshape_ascii_signature_reference(content)
+    }
+
+    #[must_use]
+    pub fn animated_texture_keys_current(index: usize) -> u64 {
+        let frame = itg_animated_texture_key(*b"Frame0000", index);
+        let delay = itg_animated_texture_key(*b"Delay0000", index);
+        byte_checksum(byte_checksum(0, &frame), &delay)
+    }
+
+    #[must_use]
+    pub fn animated_texture_keys_reference(index: usize) -> u64 {
+        let frame = itg_animated_texture_key_reference("Frame", index);
+        let delay = itg_animated_texture_key_reference("Delay", index);
+        byte_checksum(byte_checksum(0, frame.as_bytes()), delay.as_bytes())
+    }
+
+    #[must_use]
+    pub fn auto_rot_keys_current(rotations: &[(f32, f32)]) -> u64 {
+        let mut keys = Vec::with_capacity(rotations.len());
+        for &(frame, z_deg) in rotations {
+            keys.push(ModelAutoRotKey { frame, z_deg });
+        }
+        auto_rot_checksum(&itg_finish_model_auto_rot_keys(keys))
+    }
+
+    #[must_use]
+    pub fn auto_rot_keys_reference(rotations: &[(f32, f32)]) -> u64 {
+        let mut first_bone = Vec::new();
+        for &rotation in rotations {
+            first_bone.push(rotation);
+        }
+        auto_rot_checksum(&itg_finish_model_auto_rot_keys_reference(first_bone))
     }
 }
 
@@ -952,6 +1115,62 @@ mod tests {
                 itg_parse_model_material_flags_reference(&name).nomove,
                 "material line {line:?}"
             );
+        }
+    }
+
+    #[test]
+    fn milkshape_signature_scan_matches_lowercase_fallback_behavior() {
+        let cases = [
+            String::new(),
+            "MilkShape 3D ASCII\nMeshes: 0".to_string(),
+            format!("{}mIlKsHaPe 3D aScIi\nMeshes: 0", "x".repeat(400)),
+            format!("{}MILKSHAPE 3D ASCII", "x".repeat(247)),
+            format!("{}not a model", "cafÃ©".repeat(160)),
+        ];
+
+        for content in cases {
+            assert_eq!(
+                has_milkshape_ascii_signature(&content),
+                has_milkshape_ascii_signature_reference(&content),
+                "content length {}",
+                content.len()
+            );
+        }
+    }
+
+    #[test]
+    fn animated_texture_stack_keys_match_formatted_keys() {
+        for index in [0, 1, 9, 10, 99, 100, 999] {
+            for (template, prefix) in [(*b"Frame0000", "Frame"), (*b"Delay0000", "Delay")] {
+                let key = itg_animated_texture_key(template, index);
+                assert_eq!(
+                    itg_animated_texture_key_str(&key),
+                    itg_animated_texture_key_reference(prefix, index)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn in_place_auto_rotation_keys_match_two_buffer_behavior() {
+        let rotations = vec![
+            (30.0, -725.0),
+            (0.0, 350.0),
+            (20.0, 725.0),
+            (10.0, 5.0),
+            (40.0, 185.0),
+        ];
+        let keys = rotations
+            .iter()
+            .map(|&(frame, z_deg)| ModelAutoRotKey { frame, z_deg })
+            .collect();
+        let current = itg_finish_model_auto_rot_keys(keys);
+        let reference = itg_finish_model_auto_rot_keys_reference(rotations);
+
+        assert_eq!(current.len(), reference.len());
+        for (current, reference) in current.iter().zip(reference.iter()) {
+            assert_eq!(current.frame.to_bits(), reference.frame.to_bits());
+            assert_eq!(current.z_deg.to_bits(), reference.z_deg.to_bits());
         }
     }
 
