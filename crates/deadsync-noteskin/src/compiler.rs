@@ -6,10 +6,15 @@ use crate::{
 };
 use log::{info, warn};
 use mlua::{Function, Lua, MultiValue, Table, Value};
+use smallvec::SmallVec;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+#[cfg(any(test, feature = "bench-support"))]
+use std::collections::HashSet;
 use std::fs;
-use std::hash::{BuildHasherDefault, Hasher};
+#[cfg(any(test, feature = "bench-support"))]
+use std::hash::BuildHasherDefault;
+use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
@@ -56,7 +61,12 @@ const CORE_ELEMENTS: [&str; 33] = [
 ];
 const ASCII_CASE_HASH_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
 const ASCII_CASE_HASH_PRIME: u64 = 0x0100_0000_01b3;
+#[cfg(any(test, feature = "bench-support"))]
 type TrustedHashSet<T> = HashSet<T, BuildHasherDefault<XxHash64>>;
+// The built-in loader domain has 33 elements. Keeping 64 fingerprints inline
+// also covers typical third-party additions without heap storage.
+const INLINE_LOADER_DOMAIN_KEYS: usize = 64;
+type LoaderFingerprints = SmallVec<[u64; INLINE_LOADER_DOMAIN_KEYS]>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompileOutcome {
@@ -370,13 +380,16 @@ fn labeled_source_paths_reference(
 #[doc(hidden)]
 pub mod compiler_bench_support {
     use super::{
-        CompiledLoaderEntry, TrustedHashSet, compiled_hash_cache_key,
+        CompiledLoaderEntry, LoaderFingerprints, TrustedHashSet, compiled_hash_cache_key,
         compiled_hash_cache_key_reference, labeled_source_paths, labeled_source_paths_reference,
-        noteskin_itg, push_unique, push_unique_reference, sort_compiled_loader_entries,
+        normalize_table_aliases, normalize_table_aliases_reference, noteskin_itg, push_unique,
+        push_unique_full_scan_reference, push_unique_reference, sort_compiled_loader_entries,
         sort_compiled_loader_entries_reference, source_label,
     };
+    use mlua::{Lua, Table, Value};
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
+    use std::sync::OnceLock;
 
     #[must_use]
     pub fn cache_key_current(game: &str, skin: &str) -> String {
@@ -475,14 +488,47 @@ pub mod compiler_bench_support {
         })
     }
 
-    #[must_use]
-    pub fn loader_domain_current(values: &[&str]) -> u64 {
-        let mut out = Vec::new();
-        let mut seen = TrustedHashSet::default();
+    fn indexed_domain(values: &[&str], reserve: bool) -> u64 {
+        let mut out = if reserve {
+            Vec::with_capacity(values.len())
+        } else {
+            Vec::new()
+        };
+        let mut seen = LoaderFingerprints::new();
         for value in values {
             push_unique(&mut out, &mut seen, value);
         }
         strings_checksum(out)
+    }
+
+    #[must_use]
+    pub fn loader_domain_current(values: &[&str]) -> u64 {
+        indexed_domain(values, true)
+    }
+
+    #[must_use]
+    pub fn unreserved_loader_domain_old(values: &[&str]) -> u64 {
+        indexed_domain(values, false)
+    }
+
+    #[must_use]
+    pub fn reserved_loader_domain_new(values: &[&str]) -> u64 {
+        indexed_domain(values, true)
+    }
+
+    #[must_use]
+    pub fn heap_fingerprint_scan_old(values: &[&str]) -> u64 {
+        let mut out = Vec::with_capacity(values.len());
+        let mut seen = TrustedHashSet::with_capacity_and_hasher(values.len(), Default::default());
+        for value in values {
+            push_unique_full_scan_reference(&mut out, &mut seen, value);
+        }
+        strings_checksum(out)
+    }
+
+    #[must_use]
+    pub fn stack_fingerprint_index_new(values: &[&str]) -> u64 {
+        indexed_domain(values, true)
     }
 
     #[must_use]
@@ -493,6 +539,70 @@ pub mod compiler_bench_support {
             push_unique_reference(&mut out, &mut seen, value);
         }
         strings_checksum(out)
+    }
+
+    fn alias_keys() -> &'static [String] {
+        static KEYS: OnceLock<Vec<String>> = OnceLock::new();
+        KEYS.get_or_init(|| ["Left", "Down", "Up", "Right"].map(str::to_owned).into())
+    }
+
+    #[must_use]
+    pub fn alias_fixture(lua: &Lua) -> Table {
+        let noteskin = lua.create_table().expect("benchmark noteskin table");
+        let aliases = lua.create_table().expect("benchmark alias table");
+        for (key, value) in [
+            ("left", "L"),
+            ("DOWN", "D"),
+            ("uP", "U"),
+            ("right", "R"),
+            ("Center", "C"),
+            ("Corner", "X"),
+        ] {
+            aliases.set(key, value).expect("benchmark alias entry");
+        }
+        noteskin
+            .set("ButtonRedir", aliases)
+            .expect("benchmark alias map");
+        noteskin
+    }
+
+    fn alias_normalization(noteskin: &Table, evaluations: usize, optimized: bool) -> u64 {
+        let aliases = noteskin
+            .get::<Table>("ButtonRedir")
+            .expect("benchmark alias map");
+        (0..evaluations).fold(0_u64, |mut checksum, _| {
+            for want in alias_keys() {
+                aliases
+                    .set(want.as_str(), Value::Nil)
+                    .expect("reset canonical alias");
+            }
+            if optimized {
+                normalize_table_aliases(noteskin, "ButtonRedir", alias_keys())
+            } else {
+                normalize_table_aliases_reference(noteskin, "ButtonRedir", alias_keys())
+            }
+            .expect("normalize benchmark aliases");
+            for want in alias_keys() {
+                let value = aliases
+                    .get::<String>(want.as_str())
+                    .expect("normalized benchmark alias");
+                checksum = value.bytes().fold(checksum, |sum, byte| {
+                    sum.wrapping_mul(1_099_511_628_211)
+                        .wrapping_add(u64::from(byte))
+                });
+            }
+            checksum
+        })
+    }
+
+    #[must_use]
+    pub fn owned_alias_snapshot_old(noteskin: &Table, evaluations: usize) -> u64 {
+        alias_normalization(noteskin, evaluations, false)
+    }
+
+    #[must_use]
+    pub fn stack_alias_snapshot_new(noteskin: &Table, evaluations: usize) -> u64 {
+        alias_normalization(noteskin, evaluations, true)
     }
 }
 
@@ -947,6 +1057,44 @@ fn normalize_table_aliases(
     let Some(table) = noteskin.get::<Option<Table>>(table_key)? else {
         return Ok(());
     };
+    let mut existing = SmallVec::<[(u64, mlua::LuaString, Value); 8]>::new();
+    for pair in table.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Value::String(text) = key else {
+            continue;
+        };
+        let Ok(text_ref) = text.to_str() else {
+            continue;
+        };
+        let fingerprint = ascii_case_hash(&text_ref);
+        existing.push((fingerprint, text, value));
+    }
+    for want in canonical_keys {
+        if table.contains_key(want.as_str())? {
+            continue;
+        }
+        let fingerprint = ascii_case_hash(want);
+        if let Some((_, _, value)) = existing.iter().find(|(hash, have, _)| {
+            *hash == fingerprint
+                && have
+                    .to_str()
+                    .is_ok_and(|have| have.eq_ignore_ascii_case(want))
+        }) {
+            table.set(want.as_str(), value.clone())?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn normalize_table_aliases_reference(
+    noteskin: &Table,
+    table_key: &str,
+    canonical_keys: &[String],
+) -> mlua::Result<()> {
+    let Some(table) = noteskin.get::<Option<Table>>(table_key)? else {
+        return Ok(());
+    };
     let mut existing = Vec::new();
     for pair in table.pairs::<Value, Value>() {
         let (key, value) = pair?;
@@ -984,14 +1132,14 @@ fn collect_loader_domain(
     game: &str,
     data: &noteskin_itg::NoteskinData,
 ) -> (Vec<String>, Vec<String>) {
-    let mut buttons = Vec::new();
-    let mut button_seen = TrustedHashSet::default();
     let game_buttons = game_buttons(game);
+    let mut buttons = Vec::with_capacity(game_buttons.len());
+    let mut button_seen = LoaderFingerprints::new();
     for &button in game_buttons {
         push_unique(&mut buttons, &mut button_seen, button);
     }
-    let mut elements = Vec::new();
-    let mut element_seen = TrustedHashSet::default();
+    let mut elements = Vec::with_capacity(CORE_ELEMENTS.len());
+    let mut element_seen = LoaderFingerprints::new();
     for element in CORE_ELEMENTS {
         push_unique(&mut elements, &mut element_seen, element);
     }
@@ -1023,7 +1171,27 @@ fn ascii_case_hash(value: &str) -> u64 {
     })
 }
 
-fn push_unique(out: &mut Vec<String>, seen: &mut TrustedHashSet<u64>, value: &str) {
+fn push_unique(out: &mut Vec<String>, seen: &mut LoaderFingerprints, value: &str) {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let fingerprint = ascii_case_hash(trimmed);
+    for (index, &existing_fingerprint) in seen.iter().enumerate() {
+        if existing_fingerprint == fingerprint && out[index].eq_ignore_ascii_case(trimmed) {
+            return;
+        }
+    }
+    seen.push(fingerprint);
+    out.push(trimmed.to_string());
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn push_unique_full_scan_reference(
+    out: &mut Vec<String>,
+    seen: &mut TrustedHashSet<u64>,
+    value: &str,
+) {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return;
@@ -1151,12 +1319,15 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 #[cfg(test)]
 mod tests {
     use super::{
-        CompiledLoaderEntry, TrustedHashSet, ascii_case_hash, compiled_bundle_path,
-        compiled_hash_cache_key, compiled_hash_cache_key_reference, labeled_source_paths,
-        labeled_source_paths_reference, noteskin_actor, noteskin_compiled, noteskin_itg,
-        push_unique, push_unique_reference, sort_compiled_loader_entries,
-        sort_compiled_loader_entries_reference, source_label, source_label_reference,
+        CompiledLoaderEntry, LoaderFingerprints, TrustedHashSet, ascii_case_hash,
+        compiled_bundle_path, compiled_hash_cache_key, compiled_hash_cache_key_reference,
+        labeled_source_paths, labeled_source_paths_reference, normalize_table_aliases,
+        normalize_table_aliases_reference, noteskin_actor, noteskin_compiled, noteskin_itg,
+        push_unique, push_unique_full_scan_reference, push_unique_reference,
+        sort_compiled_loader_entries, sort_compiled_loader_entries_reference, source_label,
+        source_label_reference,
     };
+    use mlua::Lua;
     use std::{
         collections::HashSet,
         ffi::OsStr,
@@ -1290,21 +1461,62 @@ mod tests {
             " Left ", "left", "Tap Note", "TAP NOTE", "CafÃ©", "cafÃ©", "", "  ", "Receptor",
         ];
         let mut current = Vec::new();
-        let mut current_seen = TrustedHashSet::default();
+        let mut current_seen = LoaderFingerprints::new();
+        let mut prior = Vec::new();
+        let mut prior_seen = TrustedHashSet::default();
         let mut reference = Vec::new();
         let mut reference_seen = HashSet::new();
         for value in values {
             push_unique(&mut current, &mut current_seen, value);
+            push_unique_full_scan_reference(&mut prior, &mut prior_seen, value);
             push_unique_reference(&mut reference, &mut reference_seen, value);
         }
+        assert_eq!(current, prior);
         assert_eq!(current, reference);
         assert_eq!(current, ["Left", "Tap Note", "CafÃ©", "Receptor"]);
 
         let mut collision_out = vec!["Left".to_string()];
-        let mut collision_seen = TrustedHashSet::default();
-        collision_seen.insert(ascii_case_hash("Right"));
+        let mut collision_seen = LoaderFingerprints::new();
+        collision_seen.push(ascii_case_hash("Right"));
         push_unique(&mut collision_out, &mut collision_seen, "Right");
         assert_eq!(collision_out, ["Left", "Right"]);
+    }
+
+    #[test]
+    fn borrowed_alias_snapshot_matches_owned_key_normalization() {
+        let canonical = ["Left", "Down", "Up", "Right"].map(str::to_owned);
+        let build = |lua: &Lua| {
+            let noteskin = lua.create_table().unwrap();
+            let aliases = lua.create_table().unwrap();
+            for (key, value) in [
+                ("left", "L"),
+                ("DOWN", "D"),
+                ("uP", "U"),
+                ("Right", "exact"),
+                ("right", "fallback"),
+            ] {
+                aliases.set(key, value).unwrap();
+            }
+            noteskin.set("ButtonRedir", aliases).unwrap();
+            noteskin
+        };
+        let current_lua = Lua::new();
+        let reference_lua = Lua::new();
+        let current = build(&current_lua);
+        let reference = build(&reference_lua);
+
+        normalize_table_aliases(&current, "ButtonRedir", &canonical).unwrap();
+        normalize_table_aliases_reference(&reference, "ButtonRedir", &canonical).unwrap();
+
+        let current = current.get::<mlua::Table>("ButtonRedir").unwrap();
+        let reference = reference.get::<mlua::Table>("ButtonRedir").unwrap();
+        for key in canonical {
+            assert_eq!(
+                current.get::<String>(key.as_str()).unwrap(),
+                reference.get::<String>(key.as_str()).unwrap(),
+                "key {key:?}"
+            );
+        }
     }
 
     #[test]

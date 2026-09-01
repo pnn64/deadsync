@@ -19,9 +19,11 @@ use deadsync_noteskin::compiled::compiled_key_bench_support::{
     actor_manifest_reference, actor_visit_current, actor_visit_reference,
 };
 use deadsync_noteskin::compiler::compiler_bench_support::{
-    cache_key_current, cache_key_reference, loader_domain_current, loader_domain_reference,
-    loader_entry_sort_current, loader_entry_sort_reference, source_label_current,
-    source_label_reference, source_order_current, source_order_reference,
+    alias_fixture, cache_key_current, cache_key_reference, heap_fingerprint_scan_old,
+    loader_domain_current, loader_domain_reference, loader_entry_sort_current,
+    loader_entry_sort_reference, owned_alias_snapshot_old, reserved_loader_domain_new,
+    source_label_current, source_label_reference, source_order_current, source_order_reference,
+    stack_alias_snapshot_new, stack_fingerprint_index_new, unreserved_loader_domain_old,
 };
 use deadsync_noteskin::itg::{
     IniData, NoteskinData,
@@ -64,6 +66,7 @@ use deadsync_noteskin::script::{
     },
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
+use mlua::Lua;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::hint::black_box;
@@ -339,6 +342,36 @@ fn assert_improved(name: &str, old: &Row, new: &Row) {
     assert!(new.alloc.churn() < old.alloc.churn());
 }
 
+fn assert_capacity_improved(name: &str, old: &Row, new: &Row) {
+    assert_eq!(old.checksum, new.checksum, "{name} behavior diverged");
+    assert!(
+        new.median_ns < old.median_ns,
+        "{name} median regressed: old={} ns new={} ns",
+        old.median_ns,
+        new.median_ns
+    );
+    assert!(
+        new.p95_ns < old.p95_ns,
+        "{name} p95 regressed: old={} ns new={} ns",
+        old.p95_ns,
+        new.p95_ns
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{name} cycles regressed: old={old_cycles} new={new_cycles}"
+        );
+    }
+    assert!(new.alloc.allocs <= old.alloc.allocs);
+    assert!(
+        new.alloc.reallocs < old.alloc.reallocs,
+        "{name} reallocations did not fall"
+    );
+    assert!(new.alloc.frees <= old.alloc.frees);
+    assert!(new.alloc.allocated_bytes < old.alloc.allocated_bytes);
+    assert!(new.alloc.churn() < old.alloc.churn());
+}
+
 fn print_pair(name: &str, old: &Row, new: &Row) {
     println!("{name}");
     print_row("old", old);
@@ -410,6 +443,134 @@ fn cycle_counter() -> Option<u64> {
 
 fn main() {
     const REPEATS: usize = 32;
+
+    if std::env::var_os("DEADSYNC_COMPILER_DOMAIN_ONLY").is_some() {
+        let distinct_values = [
+            "Left",
+            "Down",
+            "Up",
+            "Right",
+            "Explosion",
+            "Go Receptor",
+            "HitMine Explosion",
+            "Hold Body Active",
+            "Hold Body Inactive",
+            "Hold BottomCap Active",
+            "Hold BottomCap Inactive",
+            "Hold Explosion",
+            "Hold Head Active",
+            "Hold Head Inactive",
+            "Hold Tail Active",
+            "Hold Tail Inactive",
+            "Hold TopCap Active",
+            "Hold TopCap Inactive",
+            "Ready Receptor",
+            "Receptor",
+            "Roll Body Active",
+            "Roll Body Inactive",
+            "Roll BottomCap Active",
+            "Roll BottomCap Inactive",
+            "Roll Explosion",
+            "Roll Head Active",
+            "Roll Head Inactive",
+            "Roll Tail Active",
+            "Roll Tail Inactive",
+            "Roll TopCap Active",
+            "Roll TopCap Inactive",
+            "Tap Explosion Bright",
+            "Tap Explosion Dim",
+            "Tap Fake",
+            "Tap Lift",
+            "Tap Mine",
+            "Tap Note",
+        ];
+        let (old_capacity, new_capacity) = measure_pair(
+            512,
+            distinct_values.len(),
+            || unreserved_loader_domain_old(black_box(&distinct_values)),
+            || reserved_loader_domain_new(black_box(&distinct_values)),
+        );
+        assert_capacity_improved(
+            "reserved loader-domain storage",
+            &old_capacity,
+            &new_capacity,
+        );
+        print_pair(
+            "reserved loader-domain storage (37 guaranteed names)",
+            &old_capacity,
+            &new_capacity,
+        );
+
+        let duplicate_values = [
+            "Left",
+            "left",
+            " LEFT ",
+            "Down",
+            "DOWN",
+            "down",
+            "Tap Note",
+            "TAP NOTE",
+            "tap note",
+            "Receptor",
+            "RECEPTOR",
+            "receptor",
+            "Hold Body Active",
+            "HOLD BODY ACTIVE",
+            "hold body active",
+            "Roll Body Active",
+            "ROLL BODY ACTIVE",
+            "roll body active",
+            "Tap Explosion Bright",
+            "TAP EXPLOSION BRIGHT",
+            "tap explosion bright",
+            "Tap Explosion Dim",
+            "TAP EXPLOSION DIM",
+            "tap explosion dim",
+            "Tap Mine",
+            "TAP MINE",
+            "tap mine",
+            "Hold Explosion",
+            "HOLD EXPLOSION",
+            "hold explosion",
+            "Roll Explosion",
+            "ROLL EXPLOSION",
+            "roll explosion",
+        ];
+        let (old_index, new_index) = measure_pair(
+            512,
+            duplicate_values.len(),
+            || heap_fingerprint_scan_old(black_box(&duplicate_values)),
+            || stack_fingerprint_index_new(black_box(&duplicate_values)),
+        );
+        assert_improved(
+            "stack loader-domain fingerprint index",
+            &old_index,
+            &new_index,
+        );
+        print_pair(
+            "stack loader-domain fingerprint index (33 repeated names)",
+            &old_index,
+            &new_index,
+        );
+
+        let old_lua = Lua::new();
+        let new_lua = Lua::new();
+        let old_aliases = alias_fixture(&old_lua);
+        let new_aliases = alias_fixture(&new_lua);
+        let (old_alias, new_alias) = measure_pair(
+            256,
+            32 * 4,
+            || owned_alias_snapshot_old(black_box(&old_aliases), 32),
+            || stack_alias_snapshot_new(black_box(&new_aliases), 32),
+        );
+        assert_improved("borrowed Lua alias snapshot", &old_alias, &new_alias);
+        print_pair(
+            "borrowed Lua alias snapshot (32 four-key normalizations)",
+            &old_alias,
+            &new_alias,
+        );
+        return;
+    }
 
     let token_cases = [
         "Diffuse, 1, 0.5, 0.25, 1",
