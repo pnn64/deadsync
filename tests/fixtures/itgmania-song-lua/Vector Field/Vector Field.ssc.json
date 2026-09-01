@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Vector Field/Vector Field.ssc",
+  "song_dir": "Vector Field",
+  "title": "Vector Field",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "template/main.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Vector Field/template/main.lua"
+    }
+  ]
+}

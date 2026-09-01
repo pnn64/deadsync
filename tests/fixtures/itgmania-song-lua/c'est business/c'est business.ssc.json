@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "simfile": "c'est business/c'est business.ssc",
+  "song_dir": "c'est business",
+  "title": "c'est business",
+  "changes": [
+    {
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 8.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "background",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "c'est business/background/default.lua"
+    },
+    {
+      "layer": "background1",
+      "index": 1,
+      "start_beat": 99999.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "-nosongbg-",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": ""
+    },
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "StretchNoLoop",
+      "file1": "c'est business/c'est business.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "c'est business/c'est business/c'est business.lua"
+    }
+  ]
+}

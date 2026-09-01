@@ -1,0 +1,263 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "itgmania": {
+    "git_revision": "49fddb40adbdb43e9c03e6856b6c2afeeccf451a",
+    "git_dirty": "false"
+  },
+  "simfiles": [
+    {
+      "simfile": "(R5) Let Me Hear That/let me hear that.sm",
+      "fixture": "(R5) Let Me Hear That/let me hear that.sm.json",
+      "title": "Let Me Hear That",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+      "fixture": "(R6) Waltz Capriccio/waltz_capriccio.ssc.json",
+      "title": "Waltz Capriccio",
+      "lua_entries": 2
+    },
+    {
+      "simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "fixture": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc.json",
+      "title": "280|MODS|[MASTER] Sharkmode",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "7th Gear/7th Gear.ssc",
+      "fixture": "7th Gear/7th Gear.ssc.json",
+      "title": "7th Gear",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "After Dark/After Dark.ssc",
+      "fixture": "After Dark/After Dark.ssc.json",
+      "title": "After Dark",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Bad Apple!!/Bad Apple!!.sm",
+      "fixture": "Bad Apple!!/Bad Apple!!.sm.json",
+      "title": "Bad Apple!!",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Brain Power - [Cardboard Box]/Brain Power.sm",
+      "fixture": "Brain Power - [Cardboard Box]/Brain Power.sm.json",
+      "title": "Brain Power",
+      "lua_entries": 3
+    },
+    {
+      "simfile": "Brain Power - [Cardboard Box]/Brain Power.ssc",
+      "fixture": "Brain Power - [Cardboard Box]/Brain Power.ssc.json",
+      "title": "Brain Power",
+      "lua_entries": 3
+    },
+    {
+      "simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "fixture": "Cuphead [TaroNuke]/botanic.sm.json",
+      "title": "Botanic Panic",
+      "lua_entries": 2
+    },
+    {
+      "simfile": "Delightful Day/Delightful Day.sm",
+      "fixture": "Delightful Day/Delightful Day.sm.json",
+      "title": "Delightful Day",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Delightful Day/Delightful Day.ssc",
+      "fixture": "Delightful Day/Delightful Day.ssc.json",
+      "title": "Delightful Day",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Flying Castle/flying castle.sm",
+      "fixture": "Flying Castle/flying castle.sm.json",
+      "title": "Flying Castle",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Flying Castle/flying castle.ssc",
+      "fixture": "Flying Castle/flying castle.ssc.json",
+      "title": "Flying Castle",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+      "fixture": "Gemini in Clockland/Gemini in Clockland.ssc.json",
+      "title": "Gemini in Clockland",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Jumper/Jumper.sm",
+      "fixture": "Jumper/Jumper.sm.json",
+      "title": "Jumper",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Jumper/Jumper.ssc",
+      "fixture": "Jumper/Jumper.ssc.json",
+      "title": "Jumper",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Karachi/Jorts - Karachi.ssc",
+      "fixture": "Karachi/Jorts - Karachi.ssc.json",
+      "title": "Karachi",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "fixture": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc.json",
+      "title": "Lake of Lost Nostalgia",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "fixture": "Megalovania SM5 [TaroNuke]/megalovania.ssc.json",
+      "title": "MEGALOVANIA",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Paradise/Paradise.sm",
+      "fixture": "Paradise/Paradise.sm.json",
+      "title": "Episode 09",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Paradise/Paradise.ssc",
+      "fixture": "Paradise/Paradise.ssc.json",
+      "title": "Episode 09",
+      "lua_entries": 2
+    },
+    {
+      "simfile": "Riddle/Riddle.ssc",
+      "fixture": "Riddle/Riddle.ssc.json",
+      "title": "Riddle",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Save Your Tears/SaveYourTears.sm",
+      "fixture": "Save Your Tears/SaveYourTears.sm.json",
+      "title": "Episode 02",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Save Your Tears/SaveYourTears.ssc",
+      "fixture": "Save Your Tears/SaveYourTears.ssc.json",
+      "title": "Episode 01 (expects 2 players)",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Slamurai/Slamurai.ssc",
+      "fixture": "Slamurai/Slamurai.ssc.json",
+      "title": "Slamurai",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Spectrum Sequence/spectrumsequence.ssc",
+      "fixture": "Spectrum Sequence/spectrumsequence.ssc.json",
+      "title": "Spectrum Sequence",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc",
+      "fixture": "Step Your Game Up (Director's Cut)/stepyourgameup.ssc.json",
+      "title": "Step Your Game Up",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "Ultimate taste/Ultimate taste.ssc",
+      "fixture": "Ultimate taste/Ultimate taste.ssc.json",
+      "title": "Ultimate taste",
+      "lua_entries": 2
+    },
+    {
+      "simfile": "Vector Field/Vector Field.ssc",
+      "fixture": "Vector Field/Vector Field.ssc.json",
+      "title": "Vector Field",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+      "fixture": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc.json",
+      "title": "[1115] [07] Spooky (Medium)",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+      "fixture": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.json",
+      "title": "[3752] [09] Who the Hell Is Edgar?",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
+      "fixture": "[10] media offline (SM) [Snap]/media offline.ssc.json",
+      "title": "[4252] [10] media offline (Medium)",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+      "fixture": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc.json",
+      "title": "[5800] [11] KENPO SAITO",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+      "fixture": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc.json",
+      "title": "[6804] [12] Godspeed",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",
+      "fixture": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm.json",
+      "title": "[CRYSTAL_ACCESS]",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc",
+      "fixture": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].ssc.json",
+      "title": "[CRYSTAL_ACCESS]",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc",
+      "fixture": "[FULL SONG] ChikuTaku [wrsw]/ChikuTaku.ssc.json",
+      "title": "[FULL SONG] ChikuTaku",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "c'est business/c'est business.ssc",
+      "fixture": "c'est business/c'est business.ssc.json",
+      "title": "c'est business",
+      "lua_entries": 2
+    },
+    {
+      "simfile": "finite/sta - Finite.sm",
+      "fixture": "finite/sta - Finite.sm.json",
+      "title": "finite",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "fof_guys/fof.ssc",
+      "fixture": "fof_guys/fof.ssc.json",
+      "title": "Fof Guys",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "fixture": "kaboooooom!/KABOOOOOM!!!!.sm.json",
+      "title": "KABOOOOOM!!!!",
+      "lua_entries": 1
+    },
+    {
+      "simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "fixture": "kaboooooom!/KABOOOOOM!!!!.ssc.json",
+      "title": "KABOOOOOM!!!!",
+      "lua_entries": 1
+    }
+  ]
+}

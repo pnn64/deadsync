@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "simfile": "(R6) Waltz Capriccio/waltz_capriccio.ssc",
+  "song_dir": "(R6) Waltz Capriccio",
+  "title": "Waltz Capriccio",
+  "changes": [
+    {
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "bg",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "(R6) Waltz Capriccio/bg/default.lua"
+    },
+    {
+      "layer": "background1",
+      "index": 1,
+      "start_beat": 99999.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "-nosongbg-",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": ""
+    },
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "(R6) Waltz Capriccio/lua/default.lua"
+    }
+  ]
+}

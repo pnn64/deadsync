@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
+  "song_dir": "[11] KENPO SAITO (DX) [Scrypts]",
+  "title": "[5800] [11] KENPO SAITO",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": -10000.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "template/main.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[11] KENPO SAITO (DX) [Scrypts]/template/main.lua"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Gemini in Clockland/Gemini in Clockland.ssc",
+  "song_dir": "Gemini in Clockland",
+  "title": "Gemini in Clockland",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Gemini in Clockland/lua/default.lua"
+    }
+  ]
+}

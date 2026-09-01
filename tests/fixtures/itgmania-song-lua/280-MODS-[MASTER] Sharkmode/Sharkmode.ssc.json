@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+  "song_dir": "280-MODS-[MASTER] Sharkmode",
+  "title": "280|MODS|[MASTER] Sharkmode",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": -24.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "./",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "280-MODS-[MASTER] Sharkmode/default.lua"
+    }
+  ]
+}

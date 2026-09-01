@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Flying Castle/flying castle.ssc",
+  "song_dir": "Flying Castle",
+  "title": "Flying Castle",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Flying Castle/lua/default.lua"
+    }
+  ]
+}

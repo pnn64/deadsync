@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Spectrum Sequence/spectrumsequence.ssc",
+  "song_dir": "Spectrum Sequence",
+  "title": "Spectrum Sequence",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Spectrum Sequence/lua/default.lua"
+    }
+  ]
+}

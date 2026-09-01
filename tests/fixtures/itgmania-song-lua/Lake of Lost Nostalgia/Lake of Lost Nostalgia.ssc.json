@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+  "song_dir": "Lake of Lost Nostalgia",
+  "title": "Lake of Lost Nostalgia",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": -10.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "./",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Lake of Lost Nostalgia/default.lua"
+    }
+  ]
+}

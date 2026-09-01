@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Slamurai/Slamurai.ssc",
+  "song_dir": "Slamurai",
+  "title": "Slamurai",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "StretchNoLoop",
+      "file1": "lua/default.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Slamurai/lua/default.lua"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "7th Gear/7th Gear.ssc",
+  "song_dir": "7th Gear",
+  "title": "7th Gear",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "7th Gear/lua/default.lua"
+    }
+  ]
+}

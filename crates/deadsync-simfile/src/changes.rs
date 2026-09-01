@@ -28,6 +28,11 @@ pub fn simfile_uses_lua(song_dir: &Path, simfile_data: &[u8], background_tag: &s
     bgchange_values_use_lua(song_dir, bgchanges_values(simfile_data), &entries)
         || bgchange_values_use_lua(
             song_dir,
+            named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
+            &entries,
+        )
+        || bgchange_values_use_lua(
+            song_dir,
             named_tag_values(simfile_data, &[b"#FGCHANGES:"]),
             &entries,
         )
@@ -145,11 +150,11 @@ pub fn extract_background_lua_change_set(
     background_tag: &str,
 ) -> BackgroundLuaChangeSet {
     let entries = list_song_dir_rel_entries(song_dir);
-    let mut out = Vec::new();
+    let mut layer_1 = Vec::new();
     let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
         let path = song_lua_entry_path_like_itg(path);
-        out.push(SerializableSongBackgroundLuaChange {
+        layer_1.push(SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
         });
@@ -162,10 +167,48 @@ pub fn extract_background_lua_change_set(
         push_change(0.0, path);
     }
 
-    for raw in bgchanges_values(simfile_data) {
+    uses_lua |= append_background_lua_changes(
+        song_dir,
+        bgchanges_values(simfile_data),
+        &entries,
+        &mut layer_1,
+    );
+    sort_dedup_path_changes(
+        &mut layer_1,
+        |change| change.start_beat,
+        |change| &change.path,
+    );
+
+    let mut layer_2 = Vec::new();
+    uses_lua |= append_background_lua_changes(
+        song_dir,
+        named_tag_values(simfile_data, &[b"#BGCHANGES2:"]),
+        &entries,
+        &mut layer_2,
+    );
+    sort_dedup_path_changes(
+        &mut layer_2,
+        |change| change.start_beat,
+        |change| &change.path,
+    );
+    layer_1.extend(layer_2);
+    BackgroundLuaChangeSet {
+        changes: layer_1,
+        uses_lua,
+    }
+}
+
+fn append_background_lua_changes<'a>(
+    song_dir: &Path,
+    values: impl IntoIterator<Item = &'a [u8]>,
+    entries: &[String],
+    out: &mut Vec<SerializableSongBackgroundLuaChange>,
+) -> bool {
+    let mut uses_lua = false;
+    for raw in values {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
+        for fields in split_bgchange_sets_like_itg(text.as_ref(), entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -178,15 +221,14 @@ pub fn extract_background_lua_change_set(
             let Some(start_beat) = parse_start_beat(&fields) else {
                 continue;
             };
-            push_change(start_beat, path);
+            let path = song_lua_entry_path_like_itg(path);
+            out.push(SerializableSongBackgroundLuaChange {
+                start_beat,
+                path: path.to_string_lossy().into_owned(),
+            });
         }
     }
-
-    sort_dedup_path_changes(&mut out, |change| change.start_beat, |change| &change.path);
-    BackgroundLuaChangeSet {
-        changes: out,
-        uses_lua,
-    }
+    uses_lua
 }
 
 #[must_use]
@@ -709,6 +751,31 @@ mod tests {
         assert_eq!(PathBuf::from(&changes[0].path), tagged_lua);
         assert_eq!(changes[1].start_beat, 2.0);
         assert_eq!(PathBuf::from(&changes[1].path), bg_default);
+    }
+
+    #[test]
+    fn extracts_second_background_layer_after_first() {
+        let root = test_dir("bgchanges2");
+        let song_dir = root.join("Song");
+        let layer_1 = song_dir.join("Layer1");
+        let layer_2 = song_dir.join("Layer2");
+        fs::create_dir_all(&layer_1).unwrap();
+        fs::create_dir_all(&layer_2).unwrap();
+        let layer_1_lua = layer_1.join("default.lua");
+        let layer_2_lua = layer_2.join("default.lua");
+        fs::write(&layer_1_lua, b"lua").unwrap();
+        fs::write(&layer_2_lua, b"lua").unwrap();
+
+        let simfile = b"#BGCHANGES:8=Layer1=1=0=0=0=0;\
+            #BGCHANGES2:0=Layer2=1=0=0=0=0;";
+        let changes = extract_background_lua_changes(&song_dir, simfile, "");
+
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[0].start_beat, 8.0);
+        assert_eq!(PathBuf::from(&changes[0].path), layer_1_lua);
+        assert_eq!(changes[1].start_beat, 0.0);
+        assert_eq!(PathBuf::from(&changes[1].path), layer_2_lua);
+        assert!(simfile_uses_lua(&song_dir, simfile, ""));
     }
 
     #[test]

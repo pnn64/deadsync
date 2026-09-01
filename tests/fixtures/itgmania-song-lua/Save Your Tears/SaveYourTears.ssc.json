@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Save Your Tears/SaveYourTears.ssc",
+  "song_dir": "Save Your Tears",
+  "title": "Episode 01 (expects 2 players)",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Save Your Tears/lua/default.lua"
+    }
+  ]
+}

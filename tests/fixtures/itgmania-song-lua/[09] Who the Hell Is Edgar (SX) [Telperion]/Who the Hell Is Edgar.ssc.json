@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
+  "song_dir": "[09] Who the Hell Is Edgar (SX) [Telperion]",
+  "title": "[3752] [09] Who the Hell Is Edgar?",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "multitap",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[09] Who the Hell Is Edgar (SX) [Telperion]/multitap/Default.lua"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "fof_guys/fof.ssc",
+  "song_dir": "fof_guys",
+  "title": "Fof Guys",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "fof/fof.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "fof_guys/fof/fof.lua"
+    }
+  ]
+}

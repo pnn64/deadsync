@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "simfile": "Bad Apple!!/Bad Apple!!.sm",
+  "song_dir": "Bad Apple!!",
+  "title": "Bad Apple!!",
+  "changes": [
+    {
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "_black.png",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": ""
+    },
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "animations",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Bad Apple!!/animations/Default.lua"
+    }
+  ]
+}

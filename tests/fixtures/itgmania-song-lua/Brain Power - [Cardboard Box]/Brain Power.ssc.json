@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "simfile": "Brain Power - [Cardboard Box]/Brain Power.ssc",
+  "song_dir": "Brain Power - [Cardboard Box]",
+  "title": "Brain Power",
+  "changes": [
+    {
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 2.25,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "bg",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Brain Power - [Cardboard Box]/bg/Default.lua"
+    },
+    {
+      "layer": "background1",
+      "index": 1,
+      "start_beat": 99999.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "-nosongbg-",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": ""
+    },
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "mods",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Brain Power - [Cardboard Box]/mods/Default.lua"
+    },
+    {
+      "layer": "foreground",
+      "index": 1,
+      "start_beat": 207.6,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "video",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Brain Power - [Cardboard Box]/video/Default.lua"
+    }
+  ]
+}

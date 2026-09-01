@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
+  "song_dir": "[12] Godspeed (SX) [G. Rosewood]",
+  "title": "[6804] [12] Godspeed",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "StretchNoLoop",
+      "file1": "lua/default.lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[12] Godspeed (SX) [G. Rosewood]/lua/default.lua"
+    }
+  ]
+}

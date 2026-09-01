@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
+  "song_dir": "[10] media offline (SM) [Snap]",
+  "title": "[4252] [10] media offline (Medium)",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "StretchNoLoop",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[10] media offline (SM) [Snap]/lua/default.lua"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "Paradise/Paradise.sm",
+  "song_dir": "Paradise",
+  "title": "Episode 09",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Paradise/lua/default.lua"
+    }
+  ]
+}

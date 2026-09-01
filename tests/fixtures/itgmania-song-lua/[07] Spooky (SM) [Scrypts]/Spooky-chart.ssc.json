@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
+  "song_dir": "[07] Spooky (SM) [Scrypts]",
+  "title": "[1115] [07] Spooky (Medium)",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[07] Spooky (SM) [Scrypts]/lua/default.lua"
+    }
+  ]
+}

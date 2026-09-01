@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "simfile": "Delightful Day/Delightful Day.sm",
+  "song_dir": "Delightful Day",
+  "title": "Delightful Day",
+  "changes": [
+    {
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 99999.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "-nosongbg-",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": ""
+    },
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "Delightful Day/lua/default.lua"
+    }
+  ]
+}
