@@ -345,20 +345,57 @@ pub fn rollback_candidates(
     current: &Version,
     target: HostTarget,
 ) -> Vec<(ReleaseInfo, ReleaseAsset)> {
-    let mut out: Vec<(ReleaseInfo, ReleaseAsset)> = releases
-        .into_iter()
-        .filter(|info| info.version < *current)
-        .filter_map(|info| {
-            pick_asset_for_host(&info.assets, &info.tag, target)
-                .cloned()
-                .map(|asset| (info, asset))
-        })
-        .collect();
-    // Newest-first so the picker lists the closest prior version at the
-    // top.  GitHub already returns newest-first, but sorting explicitly
-    // keeps us robust to feed ordering changes.
-    out.sort_by(|a, b| b.0.version.cmp(&a.0.version));
-    out.truncate(ROLLBACK_VERSION_LIMIT);
+    bounded_rollback_candidates(releases, current, target)
+}
+
+trait ReleaseEntry {
+    fn info(&self) -> &ReleaseInfo;
+}
+
+impl ReleaseEntry for ReleaseInfo {
+    fn info(&self) -> &ReleaseInfo {
+        self
+    }
+}
+
+#[cfg(feature = "bench-support")]
+impl ReleaseEntry for &ReleaseInfo {
+    fn info(&self) -> &ReleaseInfo {
+        self
+    }
+}
+
+fn bounded_rollback_candidates<T>(
+    releases: impl IntoIterator<Item = T>,
+    current: &Version,
+    target: HostTarget,
+) -> Vec<(T, ReleaseAsset)>
+where
+    T: ReleaseEntry,
+{
+    let mut out: Vec<(T, ReleaseAsset)> = Vec::with_capacity(ROLLBACK_VERSION_LIMIT);
+    for release in releases {
+        let candidate = {
+            let info = release.info();
+            if info.version >= *current {
+                None
+            } else {
+                pick_asset_for_host(&info.assets, &info.tag, target).and_then(|asset| {
+                    let insert_at = out
+                        .partition_point(|(candidate, _)| candidate.info().version >= info.version);
+                    (insert_at < ROLLBACK_VERSION_LIMIT).then(|| (insert_at, asset.clone()))
+                })
+            }
+        };
+        let Some((insert_at, asset)) = candidate else {
+            continue;
+        };
+
+        if out.len() == ROLLBACK_VERSION_LIMIT {
+            out.pop();
+        }
+        out.insert(insert_at, (release, asset));
+    }
     out
 }
 
@@ -455,8 +492,34 @@ pub fn pick_asset_for_host<'a>(
     version_tag: &str,
     target: HostTarget,
 ) -> Option<&'a ReleaseAsset> {
-    let expected = expected_asset_name(version_tag, target);
-    assets.iter().find(|a| a.name == expected)
+    assets
+        .iter()
+        .find(|asset| asset_name_matches(&asset.name, version_tag, target))
+}
+
+#[inline]
+fn asset_name_matches(name: &str, version_tag: &str, target: HostTarget) -> bool {
+    let Some(rest) = name.strip_prefix("deadsync-") else {
+        return false;
+    };
+    let rest = if version_tag.starts_with('v') {
+        rest.strip_prefix(version_tag)
+    } else {
+        rest.strip_prefix('v')
+            .and_then(|rest| rest.strip_prefix(version_tag))
+    };
+    let Some(rest) = rest.and_then(|rest| rest.strip_prefix('-')) else {
+        return false;
+    };
+    let Some(rest) = rest
+        .strip_prefix(target.arch)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .and_then(|rest| rest.strip_prefix(target.os))
+        .and_then(|rest| rest.strip_prefix('.'))
+    else {
+        return false;
+    };
+    rest == target.ext
 }
 
 /// Returns true when this build can perform the in-app extract + swap
@@ -581,6 +644,94 @@ pub fn fetch_releases(agent: &ureq::Agent) -> Result<Vec<ReleaseInfo>, UpdaterEr
     parse_releases_json(&bytes)
 }
 
+#[cfg(feature = "bench-support")]
+pub mod bench_support {
+    use super::*;
+    use std::fmt::Write as _;
+
+    #[inline(never)]
+    #[must_use]
+    pub fn sha256_hex_old(digest: &[u8; 32]) -> String {
+        let mut out = String::with_capacity(64);
+        for byte in digest {
+            let _ = write!(out, "{byte:02x}");
+        }
+        out
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn sha256_hex_new(digest: &[u8; 32]) -> String {
+        download::sha256_hex(digest)
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn pick_asset_old(
+        assets: &[ReleaseAsset],
+        version_tag: &str,
+        target: HostTarget,
+    ) -> Option<usize> {
+        let expected = expected_asset_name(version_tag, target);
+        assets.iter().position(|asset| asset.name == expected)
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn pick_asset_new(
+        assets: &[ReleaseAsset],
+        version_tag: &str,
+        target: HostTarget,
+    ) -> Option<usize> {
+        assets
+            .iter()
+            .position(|asset| asset_name_matches(&asset.name, version_tag, target))
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn rollback_old_checksum(
+        releases: &[ReleaseInfo],
+        current: &Version,
+        target: HostTarget,
+    ) -> u64 {
+        let mut out: Vec<(&ReleaseInfo, ReleaseAsset)> = releases
+            .iter()
+            .filter(|info| info.version < *current)
+            .filter_map(|info| {
+                pick_asset_for_host(&info.assets, &info.tag, target)
+                    .cloned()
+                    .map(|asset| (info, asset))
+            })
+            .collect();
+        out.sort_by(|a, b| b.0.version.cmp(&a.0.version));
+        out.truncate(ROLLBACK_VERSION_LIMIT);
+        rollback_checksum(out.iter().map(|(info, asset)| (*info, asset)))
+    }
+
+    #[inline(never)]
+    #[must_use]
+    pub fn rollback_new_checksum(
+        releases: &[ReleaseInfo],
+        current: &Version,
+        target: HostTarget,
+    ) -> u64 {
+        let out = bounded_rollback_candidates(releases, current, target);
+        rollback_checksum(out.iter().map(|(info, asset)| (*info, asset)))
+    }
+
+    fn rollback_checksum<'a>(
+        candidates: impl Iterator<Item = (&'a ReleaseInfo, &'a ReleaseAsset)>,
+    ) -> u64 {
+        candidates.fold(0xcbf2_9ce4_8422_2325, |mut hash, (info, asset)| {
+            for byte in info.tag.bytes().chain(asset.name.bytes()) {
+                hash = hash.wrapping_mul(0x100_0000_01b3) ^ u64::from(byte);
+            }
+            hash
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,7 +850,8 @@ mod tests {
 
     #[test]
     fn rollback_candidates_filters_sorts_and_caps() {
-        let releases = parse_releases_json(RELEASES_FIXTURE).unwrap();
+        let mut releases = parse_releases_json(RELEASES_FIXTURE).unwrap();
+        releases.reverse();
         let current = Version::new(0, 3, 875);
         let picks = rollback_candidates(releases, &current, WIN_X64);
         let tags: Vec<&str> = picks.iter().map(|(info, _)| info.tag.as_str()).collect();
@@ -819,6 +971,23 @@ mod tests {
             pick_asset_for_host(&assets, "v0.3.871", target("x86_64", "windows", "tar.gz"))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn asset_picker_requires_exact_tag_and_accepts_unprefixed_version() {
+        let mut assets = fixture_assets();
+        assets.insert(
+            0,
+            ReleaseAsset {
+                name: "deadsync-v0.3.8710-x86_64-windows.zip".into(),
+                browser_download_url: "decoy".into(),
+                size: 1,
+                digest: None,
+            },
+        );
+
+        let chosen = pick_asset_for_host(&assets, "0.3.871", WIN_X64).expect("exact asset");
+        assert_eq!(chosen.name, "deadsync-v0.3.871-x86_64-windows.zip");
     }
 
     #[test]
