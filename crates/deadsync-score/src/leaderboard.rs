@@ -62,7 +62,7 @@ pub struct MachineReplayPlay {
     pub replay: Vec<LocalReplayEdge>,
 }
 
-fn local_score_date_string(played_at_ms: i64) -> String {
+pub(crate) fn local_score_date_string(played_at_ms: i64) -> String {
     let Some(dt) = Local.timestamp_millis_opt(played_at_ms).single() else {
         return String::new();
     };
@@ -310,16 +310,10 @@ pub fn machine_leaderboard_entries(
     let take_len = max_entries.min(plays.len());
     let mut out = Vec::with_capacity(take_len);
     for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        out.push(LeaderboardEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.name,
-            machine_tag: play.machine_tag,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_rival: false,
-            is_self: false,
-            is_fail: play.is_fail,
-        });
+        out.push(machine_leaderboard_entry(
+            (i as u32).saturating_add(1),
+            play,
+        ));
     }
     out
 }
@@ -340,29 +334,49 @@ pub fn machine_replay_entries(
     let take_len = max_entries.min(plays.len());
     let mut out = Vec::with_capacity(take_len);
     for (i, play) in plays.into_iter().take(take_len).enumerate() {
-        let mut replay = Vec::with_capacity(play.replay.len());
-        for edge in play.replay {
-            if song_time_ns_invalid(edge.event_music_time_ns) {
-                continue;
-            }
-            replay.push(ReplayEdge {
-                event_music_time_ns: edge.event_music_time_ns,
-                lane_index: edge.lane,
-                pressed: edge.pressed,
-                source: edge.input_source(),
-            });
-        }
-        out.push(MachineReplayEntry {
-            rank: (i as u32).saturating_add(1),
-            name: play.initials,
-            score: (play.score_percent * 10000.0).round(),
-            date: local_score_date_string(play.played_at_ms),
-            is_fail: play.is_fail,
-            replay_beat0_time_ns: play.replay_beat0_time_ns,
-            replay,
-        });
+        out.push(machine_replay_entry((i as u32).saturating_add(1), play));
     }
     out
+}
+
+pub(crate) fn machine_leaderboard_entry(
+    rank: u32,
+    play: MachineLeaderboardPlay,
+) -> LeaderboardEntry {
+    LeaderboardEntry {
+        rank,
+        name: play.name,
+        machine_tag: play.machine_tag,
+        score: (play.score_percent * 10000.0).round(),
+        date: local_score_date_string(play.played_at_ms),
+        is_rival: false,
+        is_self: false,
+        is_fail: play.is_fail,
+    }
+}
+
+pub(crate) fn machine_replay_entry(rank: u32, play: MachineReplayPlay) -> MachineReplayEntry {
+    let mut replay = Vec::with_capacity(play.replay.len());
+    for edge in play.replay {
+        if song_time_ns_invalid(edge.event_music_time_ns) {
+            continue;
+        }
+        replay.push(ReplayEdge {
+            event_music_time_ns: edge.event_music_time_ns,
+            lane_index: edge.lane,
+            pressed: edge.pressed,
+            source: edge.input_source(),
+        });
+    }
+    MachineReplayEntry {
+        rank,
+        name: play.initials,
+        score: (play.score_percent * 10000.0).round(),
+        date: local_score_date_string(play.played_at_ms),
+        is_fail: play.is_fail,
+        replay_beat0_time_ns: play.replay_beat0_time_ns,
+        replay,
+    }
 }
 
 #[inline(always)]

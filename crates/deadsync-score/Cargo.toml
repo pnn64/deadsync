@@ -22,6 +22,11 @@ harness = false
 required-features = ["bench-support"]
 
 [[bench]]
+name = "local_score_presentation_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
+[[bench]]
 name = "profile_score_merge_hot_paths"
 harness = false
 required-features = ["bench-support"]
