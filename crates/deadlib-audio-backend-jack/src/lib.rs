@@ -328,7 +328,7 @@ impl JackCallbackState {
             },
             self.sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         // SAFETY: JACK owns the port buffers for exactly this callback invocation,
         // and `port_buffer` returns slices over those frame-local buffers.
         let left = unsafe { port_buffer(self.api, self.port_l, nframes) };

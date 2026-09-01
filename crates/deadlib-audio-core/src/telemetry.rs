@@ -388,13 +388,18 @@ pub fn note_output_clock_fallback(at_host_nanos: u64, stutter_diag_enabled: bool
 
 pub fn report_audio_render_callback(
     result: crate::RenderReport,
-    at_host_nanos: u64,
     stutter_diag_enabled: bool,
+    now_nanos: impl FnOnce() -> u64,
 ) {
-    if result.callback_gap_ns != 0
+    let report_callback_gap = result.callback_gap_ns != 0
         && stutter_diag_enabled
-        && result.callback_gap_ns >= stutter_diag_callback_gap_threshold_ns()
-    {
+        && result.callback_gap_ns >= stutter_diag_callback_gap_threshold_ns();
+    let at_host_nanos = if report_callback_gap || (result.output_underrun && stutter_diag_enabled) {
+        now_nanos()
+    } else {
+        0
+    };
+    if report_callback_gap {
         record_stutter_diag_event(
             StutterDiagAudioEventKind::CallbackGap,
             at_host_nanos,
@@ -668,7 +673,9 @@ pub struct StutterDiagAudioEvent {
 
 #[cfg(test)]
 mod tests {
-    use super::OutputTelemetryBackend;
+    use super::{OutputTelemetryBackend, report_audio_render_callback};
+    use crate::RenderReport;
+    use std::cell::Cell;
 
     #[test]
     fn backend_diagnostic_ids_round_trip_on_every_target() {
@@ -689,5 +696,56 @@ mod tests {
                 backend
             );
         }
+    }
+
+    #[test]
+    fn clean_callbacks_do_not_read_the_host_clock() {
+        let clock_reads = Cell::new(0);
+        report_audio_render_callback(
+            RenderReport {
+                output_underrun: false,
+                callback_gap_ns: 0,
+            },
+            false,
+            || {
+                clock_reads.set(clock_reads.get() + 1);
+                123
+            },
+        );
+        assert_eq!(clock_reads.get(), 0);
+    }
+
+    #[test]
+    fn diagnostics_read_the_host_clock_at_most_once_per_callback() {
+        let clock_reads = Cell::new(0);
+        report_audio_render_callback(
+            RenderReport {
+                output_underrun: true,
+                callback_gap_ns: u64::MAX,
+            },
+            true,
+            || {
+                clock_reads.set(clock_reads.get() + 1);
+                456
+            },
+        );
+        assert_eq!(clock_reads.get(), 1);
+    }
+
+    #[test]
+    fn untraced_underruns_do_not_read_the_host_clock() {
+        let clock_reads = Cell::new(0);
+        report_audio_render_callback(
+            RenderReport {
+                output_underrun: true,
+                callback_gap_ns: 0,
+            },
+            false,
+            || {
+                clock_reads.set(clock_reads.get() + 1);
+                789
+            },
+        );
+        assert_eq!(clock_reads.get(), 0);
     }
 }

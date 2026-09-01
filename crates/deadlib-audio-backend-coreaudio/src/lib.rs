@@ -253,7 +253,7 @@ pub fn start(
                 },
                 sfx_receiver.try_iter(),
             );
-            report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+            report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
             let period_frames = args.num_frames.max(1) as u32;
             let buffered_frames = buffer_frames.max(period_frames);
             let latency_frames = buffered_frames

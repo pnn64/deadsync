@@ -408,7 +408,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         stream.write_i16(&mix)?;
         let timing_after = playback_timing(&stream, prep.sample_rate_hz, &mut clock_health);
         publish_output_timing_quality(worst_quality(

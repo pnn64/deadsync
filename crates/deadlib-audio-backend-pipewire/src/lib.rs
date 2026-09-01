@@ -241,7 +241,7 @@ impl CallbackState {
             },
             self.sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         let period_ns = frames_to_nanos(sample_rate_hz, frames as u32);
         publish_output_timing(
             sample_rate_hz,

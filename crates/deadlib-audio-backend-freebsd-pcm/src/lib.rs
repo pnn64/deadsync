@@ -316,7 +316,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         write_all(file.as_raw_fd(), &mix, stop_flag, &prep.device_name)?;
         let timing_after = playback_timing(
             file.as_raw_fd(),

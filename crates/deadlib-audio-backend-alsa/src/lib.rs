@@ -436,7 +436,7 @@ fn render_thread_inner(
             },
             sfx_receiver.try_iter(),
         );
-        report_audio_render_callback(result, now_nanos(), log::log_enabled!(log::Level::Trace));
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         write_period(
             &pcm,
             &io,
