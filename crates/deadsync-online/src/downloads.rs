@@ -1,8 +1,11 @@
 use crate::groovestats::ConnectionStatus;
 use deadsync_net as network;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::cmp::Ordering as CmpOrdering;
 use std::collections::HashMap;
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -644,11 +647,7 @@ pub(crate) fn pack_paths_in_roots(pack_name: &str, roots: &[PathBuf]) -> Vec<Pat
             .map(|entry| entry.path())
             .filter(|path| path.is_dir())
             .collect::<Vec<_>>();
-        top_dirs.sort_by_cached_key(|path| {
-            path.file_name()
-                .map(|name| name.to_string_lossy().to_ascii_lowercase())
-                .unwrap_or_default()
-        });
+        sort_pack_paths(&mut top_dirs);
         for top in top_dirs {
             if path_name_eq(&top, pack_name) {
                 paths.push(top);
@@ -666,21 +665,19 @@ pub(crate) fn pack_paths_in_roots(pack_name: &str, roots: &[PathBuf]) -> Vec<Pat
 }
 
 fn base_pack_name(destination: &str) -> Option<&str> {
-    let lower = destination.to_ascii_lowercase();
-    let split = lower.find(" unlocks").or_else(|| lower.find(" - "))?;
+    let split = find_ascii_case_insensitive(destination, b" unlocks")
+        .or_else(|| find_ascii_case_insensitive(destination, b" - "))?;
     let base = destination[..split].trim();
     (!base.is_empty()).then_some(base)
 }
 
 fn child_path_ci(parent: &Path, name: &str) -> Option<PathBuf> {
-    let mut matches = fs::read_dir(parent)
+    fs::read_dir(parent)
         .ok()?
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| path_name_eq(path, name))
-        .collect::<Vec<_>>();
-    matches.sort_by_cached_key(|path| path.to_string_lossy().to_ascii_lowercase());
-    matches.pop()
+        .max_by(|left, right| cmp_path_ci(left, right))
 }
 
 fn path_name_eq(path: &Path, name: &str) -> bool {
@@ -689,7 +686,7 @@ fn path_name_eq(path: &Path, name: &str) -> bool {
 }
 
 fn looks_like_pack(path: &Path) -> bool {
-    if child_path_ci(path, "Pack.ini").is_some() {
+    if has_child_path_ci(path, "Pack.ini") {
         return true;
     }
     let Ok(entries) = fs::read_dir(path) else {
@@ -699,6 +696,186 @@ fn looks_like_pack(path: &Path) -> bool {
         let song_dir = entry.path();
         song_dir.is_dir() && contains_simfile(&song_dir)
     })
+}
+
+fn has_child_path_ci(parent: &Path, name: &str) -> bool {
+    fs::read_dir(parent).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(name)
+        })
+    })
+}
+
+fn sort_pack_paths(paths: &mut [PathBuf]) {
+    struct PackPathKey {
+        key_start: u32,
+        key_end: u32,
+        original_index: usize,
+    }
+
+    let key_bytes = paths
+        .iter()
+        .map(|path| path_file_name_lossy(path).len())
+        .sum::<usize>();
+    if key_bytes > u32::MAX as usize {
+        paths.sort_by(|left, right| {
+            cmp_ascii_case_insensitive(
+                path_file_name_lossy(left).as_ref(),
+                path_file_name_lossy(right).as_ref(),
+            )
+        });
+        return;
+    }
+
+    let permutation_bytes = paths.len() * std::mem::size_of::<usize>();
+    let mut keys = Vec::with_capacity(key_bytes.max(permutation_bytes));
+    let mut path_keys = Vec::with_capacity(paths.len());
+    for (original_index, path) in paths.iter().enumerate() {
+        let key_start = keys.len();
+        keys.extend(
+            path_file_name_lossy(path)
+                .bytes()
+                .map(|byte| byte.to_ascii_lowercase()),
+        );
+        path_keys.push(PackPathKey {
+            key_start: key_start as u32,
+            key_end: keys.len() as u32,
+            original_index,
+        });
+    }
+    path_keys.sort_unstable_by(|left, right| {
+        keys[left.key_start as usize..left.key_end as usize]
+            .cmp(&keys[right.key_start as usize..right.key_end as usize])
+            .then_with(|| left.original_index.cmp(&right.original_index))
+    });
+
+    keys.clear();
+    keys.resize(permutation_bytes, 0);
+    for (destination_index, path_key) in path_keys.iter().enumerate() {
+        set_permutation_value(&mut keys, path_key.original_index, destination_index);
+    }
+    for original_index in 0..paths.len() {
+        loop {
+            let destination_index = permutation_value(&keys, original_index);
+            if destination_index == original_index {
+                break;
+            }
+            paths.swap(original_index, destination_index);
+            swap_permutation_values(&mut keys, original_index, destination_index);
+        }
+    }
+}
+
+fn permutation_value(bytes: &[u8], index: usize) -> usize {
+    const WIDTH: usize = std::mem::size_of::<usize>();
+    let start = index * WIDTH;
+    usize::from_ne_bytes(bytes[start..start + WIDTH].try_into().expect("usize width"))
+}
+
+fn set_permutation_value(bytes: &mut [u8], index: usize, value: usize) {
+    const WIDTH: usize = std::mem::size_of::<usize>();
+    let start = index * WIDTH;
+    bytes[start..start + WIDTH].copy_from_slice(&value.to_ne_bytes());
+}
+
+fn swap_permutation_values(bytes: &mut [u8], left: usize, right: usize) {
+    const WIDTH: usize = std::mem::size_of::<usize>();
+    for offset in 0..WIDTH {
+        bytes.swap(left * WIDTH + offset, right * WIDTH + offset);
+    }
+}
+
+fn path_file_name_lossy(path: &Path) -> Cow<'_, str> {
+    path.file_name()
+        .map_or(Cow::Borrowed(""), OsStr::to_string_lossy)
+}
+
+fn cmp_path_ci(left: &Path, right: &Path) -> CmpOrdering {
+    cmp_ascii_case_insensitive(
+        left.to_string_lossy().as_ref(),
+        right.to_string_lossy().as_ref(),
+    )
+}
+
+fn cmp_ascii_case_insensitive(left: &str, right: &str) -> CmpOrdering {
+    left.bytes()
+        .map(|byte| byte.to_ascii_lowercase())
+        .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
+}
+
+fn find_ascii_case_insensitive(haystack: &str, needle: &[u8]) -> Option<usize> {
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .position(|window| window.eq_ignore_ascii_case(needle))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn base_pack_name_reference_for_bench(destination: &str) -> Option<&str> {
+    let lower = destination.to_ascii_lowercase();
+    let split = lower.find(" unlocks").or_else(|| lower.find(" - "))?;
+    let base = destination[..split].trim();
+    (!base.is_empty()).then_some(base)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn base_pack_name_for_bench(destination: &str) -> Option<&str> {
+    base_pack_name(destination)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+pub fn sort_pack_paths_reference_for_bench(paths: &mut [PathBuf]) {
+    paths.sort_by_cached_key(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default()
+    });
+}
+
+#[cfg(feature = "bench-support")]
+pub fn sort_pack_paths_for_bench(paths: &mut [PathBuf]) {
+    sort_pack_paths(paths);
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn select_child_candidate_reference_for_bench<'a>(
+    paths: &'a [PathBuf],
+    name: &str,
+) -> Option<&'a Path> {
+    let mut matches = paths
+        .iter()
+        .filter(|path| path_name_eq(path, name))
+        .collect::<Vec<_>>();
+    matches.sort_by_cached_key(|path| path.to_string_lossy().to_ascii_lowercase());
+    matches.pop().map(PathBuf::as_path)
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn select_child_candidate_for_bench<'a>(paths: &'a [PathBuf], name: &str) -> Option<&'a Path> {
+    paths
+        .iter()
+        .filter(|path| path_name_eq(path, name))
+        .max_by(|left, right| cmp_path_ci(left, right))
+        .map(PathBuf::as_path)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn contains_child_candidate_reference_for_bench(paths: &[PathBuf], name: &str) -> bool {
+    select_child_candidate_reference_for_bench(paths, name).is_some()
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn contains_child_candidate_for_bench(paths: &[PathBuf], name: &str) -> bool {
+    paths.iter().any(|path| path_name_eq(path, name))
 }
 
 fn contains_simfile(path: &Path) -> bool {
@@ -1525,6 +1702,87 @@ mod tests {
         assert_eq!(
             pack_paths_in_roots("stamina rpg 10 - shops", &[primary, extra]),
             vec![flat, nested]
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn optimized_base_pack_parser_matches_reference() {
+        for destination in [
+            "ITL Online 2026 Unlocks",
+            "ITL Online 2026 UNLOCKS - Player",
+            "Stamina RPG 10 - Shops",
+            "  Stamina RPG 10 UnLoCkS  ",
+            "Café Pack - Défis",
+            "Tournament - Shops Unlocks",
+            "No delimiter",
+            " Unlocks",
+            " - Empty",
+            "アンロック",
+        ] {
+            assert_eq!(
+                base_pack_name(destination),
+                base_pack_name_reference_for_bench(destination),
+                "destination={destination:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn packed_path_sort_matches_cached_key_sort() {
+        let paths = vec![
+            PathBuf::from("Songs/zeta Pack"),
+            PathBuf::from("Songs/Alpha Pack"),
+            PathBuf::from("Songs/éclair Pack"),
+            PathBuf::from("Songs/alpha pack"),
+            PathBuf::from("Songs/BETA Pack"),
+            PathBuf::new(),
+        ];
+        let mut expected = paths.clone();
+        let mut actual = paths;
+        sort_pack_paths_reference_for_bench(&mut expected);
+        sort_pack_paths(&mut actual);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn single_pass_child_candidate_helpers_match_reference() {
+        let paths = vec![
+            PathBuf::from("Songs/Series/other"),
+            PathBuf::from("Songs/Series/PACK.INI"),
+            PathBuf::from("Songs/Series/pack.ini"),
+            PathBuf::from("Songs/Series/Pack.ini"),
+        ];
+        for name in ["pack.ini", "PACK.INI", "missing.ini"] {
+            assert_eq!(
+                paths
+                    .iter()
+                    .filter(|path| path_name_eq(path, name))
+                    .max_by(|left, right| cmp_path_ci(left, right))
+                    .map(PathBuf::as_path),
+                select_child_candidate_reference_for_bench(&paths, name),
+                "name={name:?}"
+            );
+            assert_eq!(
+                paths.iter().any(|path| path_name_eq(path, name)),
+                contains_child_candidate_reference_for_bench(&paths, name),
+                "name={name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn pack_paths_accept_case_insensitive_pack_ini_marker() {
+        let root = temp_root("pack-ini-marker");
+        let songs = root.join("songs");
+        let series = songs.join("Tournament Series");
+        let pack = series.join("ITL Online 2026 Unlocks");
+        fs::create_dir_all(&pack).expect("create pack directory");
+        fs::write(pack.join("pAcK.InI"), b"[Group]\nVersion=1\n").expect("write pack marker");
+
+        assert_eq!(
+            pack_paths_in_roots("itl online 2026 unlocks", std::slice::from_ref(&songs)),
+            vec![pack]
         );
         fs::remove_dir_all(root).expect("remove test root");
     }
