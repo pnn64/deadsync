@@ -8,8 +8,10 @@ pub(super) struct ReloadUiState {
     pub(super) songs_total: usize,
     pub(super) courses_done: usize,
     pub(super) courses_total: usize,
+    pub(super) replaygain_done: usize,
+    pub(super) replaygain_total: usize,
     pub(super) done: bool,
-    pub(super) started_at: Instant,
+    pub(super) phase_started_at: Instant,
     /// One game-thread-owned initialization-tree entry. It is used only while
     /// total work is unknown (and therefore no elapsed speed is displayed),
     /// replaced by worker/color/viewport changes, and dropped with the modal.
@@ -40,8 +42,10 @@ impl ReloadUiState {
             songs_total: 0,
             courses_done: 0,
             courses_total: 0,
+            replaygain_done: 0,
+            replaygain_total: 0,
             done: false,
-            started_at: Instant::now(),
+            phase_started_at: Instant::now(),
             presentation_revision: 0,
             presentation: RefCell::new(None),
         }
@@ -51,6 +55,13 @@ impl ReloadUiState {
     pub(super) fn invalidate_presentation(&mut self) {
         self.presentation_revision = self.presentation_revision.wrapping_add(1);
         self.presentation.get_mut().take();
+    }
+
+    fn set_phase(&mut self, phase: crate::views::SimplyLoveContentReloadPhase) {
+        if self.phase != phase {
+            self.phase = phase;
+            self.phase_started_at = Instant::now();
+        }
     }
 }
 
@@ -97,7 +108,7 @@ pub fn sync_reload_events(
         reload.invalidate_presentation();
         match event {
             crate::views::SimplyLoveContentReloadEvent::Phase(phase) => {
-                reload.phase = phase;
+                reload.set_phase(phase);
                 reload.line2.clear();
                 reload.line3.clear();
             }
@@ -107,7 +118,7 @@ pub fn sync_reload_events(
                 pack,
                 song,
             } => {
-                reload.phase = crate::views::SimplyLoveContentReloadPhase::Songs;
+                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::Songs);
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
@@ -119,15 +130,26 @@ pub fn sync_reload_events(
                 group,
                 course,
             } => {
-                reload.phase = crate::views::SimplyLoveContentReloadPhase::Courses;
+                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::Courses);
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
+            crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+                done,
+                total,
+                line2,
+                line3,
+            } => {
+                reload.set_phase(crate::views::SimplyLoveContentReloadPhase::ReplayGain);
+                reload.replaygain_done = done;
+                reload.replaygain_total = total;
+                reload.line2 = line2;
+                reload.line3 = line3;
+            }
             crate::views::SimplyLoveContentReloadEvent::Artwork { .. }
-            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. }
-            | crate::views::SimplyLoveContentReloadEvent::ReplayGain { .. } => {}
+            | crate::views::SimplyLoveContentReloadEvent::Noteskins { .. } => {}
             crate::views::SimplyLoveContentReloadEvent::Finished { .. } => {
                 reload.done = true;
             }
@@ -137,8 +159,15 @@ pub fn sync_reload_events(
 
 #[inline(always)]
 pub(super) fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
-    let done = reload.songs_done.saturating_add(reload.courses_done);
-    let mut total = reload.songs_total.saturating_add(reload.courses_total);
+    let (done, mut total) =
+        if reload.phase == crate::views::SimplyLoveContentReloadPhase::ReplayGain {
+            (reload.replaygain_done, reload.replaygain_total)
+        } else {
+            (
+                reload.songs_done.saturating_add(reload.courses_done),
+                reload.songs_total.saturating_add(reload.courses_total),
+            )
+        };
     if total < done {
         total = done;
     }
@@ -200,7 +229,7 @@ pub(super) fn push_reload_overlay_actors_unreserved(
     active_color_index: i32,
 ) {
     let (done, total, progress) = reload_progress(reload);
-    let elapsed = reload.started_at.elapsed().as_secs_f32().max(0.0);
+    let elapsed = reload.phase_started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {
         String::new()
     } else {

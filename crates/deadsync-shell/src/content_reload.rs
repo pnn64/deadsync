@@ -327,9 +327,19 @@ fn analyze_replaygain(
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::ReplayGain,
     ));
+    let total = paths.len();
+    // Publish the new phase's bounds before any decoder finishes.  Without an
+    // explicit zero-progress event, reload overlays can keep displaying the
+    // completed song-scan count while the first loudness analysis is running.
+    let _ = tx.send(SimplyLoveContentReloadEvent::ReplayGain {
+        done: 0,
+        total,
+        line2: String::new(),
+        line3: String::new(),
+    });
     info!(
         "Init loading: analyzing ReplayGain loudness for {} song(s)...",
-        paths.len()
+        total
     );
     let mut gate = ProgressGate::default();
     let mut on_song = |done: usize, total: usize, path: &Path| {

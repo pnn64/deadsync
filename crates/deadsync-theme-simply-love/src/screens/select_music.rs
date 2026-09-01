@@ -1086,9 +1086,11 @@ struct ReloadUiState {
     songs_total: usize,
     courses_done: usize,
     courses_total: usize,
+    replaygain_done: usize,
+    replaygain_total: usize,
     done: bool,
     song_packs: Option<Vec<SongPack>>,
-    started_at: Instant,
+    phase_started_at: Instant,
 }
 
 impl ReloadUiState {
@@ -1101,9 +1103,18 @@ impl ReloadUiState {
             songs_total: 0,
             courses_done: 0,
             courses_total: 0,
+            replaygain_done: 0,
+            replaygain_total: 0,
             done: false,
             song_packs: None,
-            started_at: Instant::now(),
+            phase_started_at: Instant::now(),
+        }
+    }
+
+    fn set_phase(&mut self, phase: SimplyLoveContentReloadPhase) {
+        if self.phase != phase {
+            self.phase = phase;
+            self.phase_started_at = Instant::now();
         }
     }
 }
@@ -5899,7 +5910,7 @@ pub fn sync_reload_events(
     for event in events {
         match event {
             SimplyLoveContentReloadEvent::Phase(phase) => {
-                reload.phase = phase;
+                reload.set_phase(phase);
                 reload.line2.clear();
                 reload.line3.clear();
             }
@@ -5909,7 +5920,7 @@ pub fn sync_reload_events(
                 pack,
                 song,
             } => {
-                reload.phase = SimplyLoveContentReloadPhase::Songs;
+                reload.set_phase(SimplyLoveContentReloadPhase::Songs);
                 reload.songs_done = done;
                 reload.songs_total = total;
                 reload.line2 = pack;
@@ -5921,15 +5932,26 @@ pub fn sync_reload_events(
                 group,
                 course,
             } => {
-                reload.phase = SimplyLoveContentReloadPhase::Courses;
+                reload.set_phase(SimplyLoveContentReloadPhase::Courses);
                 reload.courses_done = done;
                 reload.courses_total = total;
                 reload.line2 = group;
                 reload.line3 = course;
             }
+            SimplyLoveContentReloadEvent::ReplayGain {
+                done,
+                total,
+                line2,
+                line3,
+            } => {
+                reload.set_phase(SimplyLoveContentReloadPhase::ReplayGain);
+                reload.replaygain_done = done;
+                reload.replaygain_total = total;
+                reload.line2 = line2;
+                reload.line3 = line3;
+            }
             SimplyLoveContentReloadEvent::Artwork { .. }
-            | SimplyLoveContentReloadEvent::Noteskins { .. }
-            | SimplyLoveContentReloadEvent::ReplayGain { .. } => {}
+            | SimplyLoveContentReloadEvent::Noteskins { .. } => {}
             SimplyLoveContentReloadEvent::Finished { song_packs } => {
                 reload.done = true;
                 reload.song_packs = Some(song_packs);
@@ -5940,8 +5962,14 @@ pub fn sync_reload_events(
 
 #[inline(always)]
 fn reload_progress(reload: &ReloadUiState) -> (usize, usize, f32) {
-    let done = reload.songs_done.saturating_add(reload.courses_done);
-    let mut total = reload.songs_total.saturating_add(reload.courses_total);
+    let (done, mut total) = if reload.phase == SimplyLoveContentReloadPhase::ReplayGain {
+        (reload.replaygain_done, reload.replaygain_total)
+    } else {
+        (
+            reload.songs_done.saturating_add(reload.courses_done),
+            reload.songs_total.saturating_add(reload.courses_total),
+        )
+    };
     if total < done {
         total = done;
     }
@@ -5962,7 +5990,7 @@ fn reload_detail_lines(reload: &ReloadUiState) -> (String, String) {
 
 fn push_reload_overlay(actors: &mut Vec<Actor>, reload: &ReloadUiState, active_color_index: i32) {
     let (done, total, progress) = reload_progress(reload);
-    let elapsed = reload.started_at.elapsed().as_secs_f32().max(0.0);
+    let elapsed = reload.phase_started_at.elapsed().as_secs_f32().max(0.0);
     let count_text = if total == 0 {
         String::new()
     } else {
@@ -18716,6 +18744,47 @@ mod tests {
         assert!(matches!(effect, ThemeEffect::None));
         assert!(state.reload_ui.is_none());
         assert!(state.song_packs.is_empty());
+    }
+
+    #[test]
+    fn replaygain_progress_replaces_completed_song_scan_progress() {
+        let mut state = init_placeholder();
+        assert!(super::begin_reload_ui(&mut state));
+
+        super::sync_reload_events(
+            &mut state,
+            [
+                crate::views::SimplyLoveContentReloadEvent::Song {
+                    done: 156,
+                    total: 156,
+                    pack: "Downloaded Pack".to_owned(),
+                    song: "Last Song".to_owned(),
+                },
+                crate::views::SimplyLoveContentReloadEvent::Phase(
+                    crate::views::SimplyLoveContentReloadPhase::ReplayGain,
+                ),
+            ],
+        );
+
+        let reload = state.reload_ui.as_ref().expect("reload chrome");
+        assert_eq!(super::reload_progress(reload), (0, 0, 0.0));
+
+        super::sync_reload_events(
+            &mut state,
+            [crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+                done: 2,
+                total: 10,
+                line2: "Downloaded Pack".to_owned(),
+                line3: "Analyzed Song".to_owned(),
+            }],
+        );
+
+        let reload = state.reload_ui.as_ref().expect("reload chrome");
+        assert_eq!(super::reload_progress(reload), (2, 10, 0.2));
+        assert_eq!(
+            (reload.line2.as_str(), reload.line3.as_str()),
+            ("Downloaded Pack", "Analyzed Song")
+        );
     }
 
     #[test]

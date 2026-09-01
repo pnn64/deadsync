@@ -3441,6 +3441,47 @@ fn shell_content_events_drive_reload_progress_and_completion() {
     assert!(state.reload_ui.is_none());
 }
 
+#[test]
+fn replaygain_progress_replaces_completed_song_scan_progress() {
+    let mut state = init();
+    let _ = start_reload_songs_and_courses(&mut state);
+
+    sync_reload_events(
+        &mut state,
+        [
+            crate::views::SimplyLoveContentReloadEvent::Song {
+                done: 156,
+                total: 156,
+                pack: "Downloaded Pack".to_owned(),
+                song: "Last Song".to_owned(),
+            },
+            crate::views::SimplyLoveContentReloadEvent::Phase(
+                crate::views::SimplyLoveContentReloadPhase::ReplayGain,
+            ),
+        ],
+    );
+
+    let reload = state.reload_ui.as_ref().expect("reload chrome");
+    assert_eq!(reload_progress(reload), (0, 0, 0.0));
+
+    sync_reload_events(
+        &mut state,
+        [crate::views::SimplyLoveContentReloadEvent::ReplayGain {
+            done: 2,
+            total: 10,
+            line2: "Downloaded Pack".to_owned(),
+            line3: "Analyzed Song".to_owned(),
+        }],
+    );
+
+    let reload = state.reload_ui.as_ref().expect("reload chrome");
+    assert_eq!(reload_progress(reload), (2, 10, 0.2));
+    assert_eq!(
+        (reload.line2.as_str(), reload.line3.as_str()),
+        ("Downloaded Pack", "Analyzed Song")
+    );
+}
+
 /// Run pending submenu fades to completion (cap iterations so a stuck transition
 /// fails the test rather than hanging).
 fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
