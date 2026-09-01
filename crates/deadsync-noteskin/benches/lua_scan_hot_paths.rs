@@ -12,6 +12,10 @@ use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
 };
+use deadsync_noteskin::model::model_scan_bench_support::{
+    derived_texture_stem_current, derived_texture_stem_reference, extension_kind_current,
+    extension_kind_reference, material_nomove_current, material_nomove_reference,
+};
 use deadsync_noteskin::runtime::{
     itg_has_receptor_actor_effect_command_for_bench,
     itg_has_receptor_actor_effect_command_reference_for_bench,
@@ -1141,5 +1145,107 @@ fn main() {
         "single-buffer actor manifest keys (5 representative paths)",
         &old_manifest,
         &new_manifest,
+    );
+
+    let extension_cases = [
+        "png", "PNG", "JpG", "jpeg", "BMP", "Gif", "WEBP", "ini", "INI", "txt", "model", "", "café",
+    ];
+    let extension_suite = |classify: fn(&str) -> u8| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for ext in extension_cases {
+                checksum = mix(checksum, u64::from(black_box(classify(black_box(ext)))) + 1);
+            }
+        }
+        checksum
+    };
+    let (old_extensions, new_extensions) = measure_pair(
+        1_024,
+        extension_cases.len() * REPEATS,
+        || extension_suite(extension_kind_reference),
+        || extension_suite(extension_kind_current),
+    );
+    assert_improved(
+        "borrowed model texture extension classification",
+        &old_extensions,
+        &new_extensions,
+    );
+    print_pair(
+        "borrowed model texture extension classification (13 representative extensions)",
+        &old_extensions,
+        &new_extensions,
+    );
+
+    let stem_cases = [
+        "Down Tap Note Model",
+        "Center Hold MODEL",
+        "Up Lift model",
+        "FallbackModel",
+        "model",
+        "Café Model",
+        "Arrow",
+        "",
+    ];
+    let stem_suite = |derive: fn(&str) -> String| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for stem in stem_cases {
+                let derived = black_box(derive(black_box(stem)));
+                checksum = text_checksum(checksum, black_box(&derived));
+            }
+        }
+        checksum
+    };
+    let (old_stems, new_stems) = measure_pair(
+        1_024,
+        stem_cases.len() * REPEATS,
+        || stem_suite(derived_texture_stem_reference),
+        || stem_suite(derived_texture_stem_current),
+    );
+    assert_improved(
+        "single-buffer model texture stem derivation",
+        &old_stems,
+        &new_stems,
+    );
+    print_pair(
+        "single-buffer model texture stem derivation (8 representative stems)",
+        &old_stems,
+        &new_stems,
+    );
+
+    let material_cases = [
+        "material",
+        "NoMove",
+        "tap NOMOVE glow",
+        "xnomovey",
+        "no move",
+        "nømove",
+        "",
+        "  MixedNoMove  ",
+    ];
+    let material_suite = |parse: fn(&str) -> bool| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for line in material_cases {
+                checksum = mix(checksum, bool_checksum(black_box(parse(black_box(line)))));
+            }
+        }
+        checksum
+    };
+    let (old_materials, new_materials) = measure_pair(
+        1_024,
+        material_cases.len() * REPEATS,
+        || material_suite(material_nomove_reference),
+        || material_suite(material_nomove_current),
+    );
+    assert_improved(
+        "borrowed model material flag scan",
+        &old_materials,
+        &new_materials,
+    );
+    print_pair(
+        "borrowed model material flag scan (8 representative names)",
+        &old_materials,
+        &new_materials,
     );
 }

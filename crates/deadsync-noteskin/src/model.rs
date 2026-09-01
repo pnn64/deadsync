@@ -46,16 +46,15 @@ pub fn itg_resolve_model_texture_path(
     if !model_path.is_file() {
         return None;
     }
-    let ext = model_path
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(str::to_ascii_lowercase);
-    if let Some(ref ext) = ext {
-        if itg_is_texture_image_ext(ext) {
-            return Some(ItgResolvedModelTexture::from_path(model_path.to_path_buf()));
-        }
-        if ext == "ini" {
-            return itg_resolve_animated_texture_ini(model_path);
+    if let Some(ext) = model_path.extension().and_then(|s| s.to_str()) {
+        match itg_model_texture_kind(ext) {
+            ItgModelTextureKind::Image => {
+                return Some(ItgResolvedModelTexture::from_path(model_path.to_path_buf()));
+            }
+            ItgModelTextureKind::Animated => {
+                return itg_resolve_animated_texture_ini(model_path);
+            }
+            ItgModelTextureKind::Other => {}
         }
     }
     let content = fs::read_to_string(model_path).ok()?;
@@ -68,45 +67,56 @@ pub fn itg_resolve_model_texture_path(
         else {
             continue;
         };
-        let ext = candidate_path
-            .extension()
-            .and_then(|s| s.to_str())
-            .map(str::to_ascii_lowercase);
-        let Some(ext) = ext else {
+        let Some(ext) = candidate_path.extension().and_then(|s| s.to_str()) else {
             continue;
         };
-        if itg_is_texture_image_ext(&ext) {
-            return Some(ItgResolvedModelTexture::from_path(candidate_path));
-        }
-        if ext == "ini"
-            && let Some(resolved) = itg_resolve_animated_texture_ini(&candidate_path)
-        {
-            return Some(resolved);
+        match itg_model_texture_kind(ext) {
+            ItgModelTextureKind::Image => {
+                return Some(ItgResolvedModelTexture::from_path(candidate_path));
+            }
+            ItgModelTextureKind::Animated => {
+                if let Some(resolved) = itg_resolve_animated_texture_ini(&candidate_path) {
+                    return Some(resolved);
+                }
+            }
+            ItgModelTextureKind::Other => {}
         }
     }
     let stem = model_path.file_stem().and_then(|s| s.to_str())?;
-    let stem_lower = stem.to_ascii_lowercase();
-    let derived = if stem_lower.ends_with(" model") {
-        format!("{} tex", &stem[..stem.len().saturating_sub(6)])
-    } else if stem_lower.ends_with("model") {
-        format!("{}tex", &stem[..stem.len().saturating_sub(5)])
-    } else {
-        format!("{stem} tex")
-    };
+    let derived = itg_derived_model_texture_stem(stem);
     data.resolve_path("", &derived).and_then(|path| {
         let ext = path
             .extension()
             .and_then(|s| s.to_str())
-            .map(str::to_ascii_lowercase)
             .unwrap_or_default();
-        if itg_is_texture_image_ext(&ext) {
-            Some(ItgResolvedModelTexture::from_path(path))
-        } else if ext == "ini" {
-            itg_resolve_animated_texture_ini(&path)
-        } else {
-            None
+        match itg_model_texture_kind(ext) {
+            ItgModelTextureKind::Image => Some(ItgResolvedModelTexture::from_path(path)),
+            ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(&path),
+            ItgModelTextureKind::Other => None,
         }
     })
+}
+
+#[inline]
+fn itg_ascii_suffix_start(value: &str, suffix: &[u8]) -> Option<usize> {
+    let start = value.len().checked_sub(suffix.len())?;
+    value.as_bytes()[start..]
+        .eq_ignore_ascii_case(suffix)
+        .then_some(start)
+}
+
+fn itg_derived_model_texture_stem(stem: &str) -> String {
+    let (base, suffix) = if let Some(start) = itg_ascii_suffix_start(stem, b" model") {
+        (&stem[..start], " tex")
+    } else if let Some(start) = itg_ascii_suffix_start(stem, b"model") {
+        (&stem[..start], "tex")
+    } else {
+        (stem, " tex")
+    };
+    let mut derived = String::with_capacity(base.len() + suffix.len());
+    derived.push_str(base);
+    derived.push_str(suffix);
+    derived
 }
 
 fn itg_resolve_relative_or_noteskin_path(
@@ -410,9 +420,11 @@ pub fn itg_load_model_slots_from_path<T>(
 }
 
 fn itg_parse_model_material_flags(name: &str) -> ItgModelMaterialFlags {
-    let lower = name.to_ascii_lowercase();
     ItgModelMaterialFlags {
-        nomove: lower.contains("nomove"),
+        nomove: name
+            .as_bytes()
+            .windows(b"nomove".len())
+            .any(|candidate| candidate.eq_ignore_ascii_case(b"nomove")),
     }
 }
 
@@ -537,16 +549,14 @@ fn itg_resolve_model_material_texture(
     let ext = texture_path
         .extension()
         .and_then(|s| s.to_str())
-        .map(str::to_ascii_lowercase)
         .unwrap_or_default();
-    if itg_is_texture_image_ext(&ext) {
-        Some(ItgResolvedModelTexture::from_path(texture_path))
-    } else if ext == "ini" {
-        itg_resolve_animated_texture_ini(&texture_path)
-    } else if texture_path.is_file() {
-        itg_resolve_model_texture_path(data, &texture_path)
-    } else {
-        None
+    match itg_model_texture_kind(ext) {
+        ItgModelTextureKind::Image => Some(ItgResolvedModelTexture::from_path(texture_path)),
+        ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(&texture_path),
+        ItgModelTextureKind::Other if texture_path.is_file() => {
+            itg_resolve_model_texture_path(data, &texture_path)
+        }
+        ItgModelTextureKind::Other => None,
     }
 }
 
@@ -683,7 +693,7 @@ pub fn itg_parse_milkshape_model_layers(
     };
     let mut material_textures = Vec::with_capacity(material_count);
     for _ in 0..material_count {
-        let name = lines.next()?.trim().to_string();
+        let name = lines.next()?.trim();
         let _ambient = lines.next()?;
         let _diffuse = lines.next()?;
         let _specular = lines.next()?;
@@ -692,7 +702,7 @@ pub fn itg_parse_milkshape_model_layers(
         let _transparency = lines.next()?;
         let texture_line = lines.next()?.trim().to_string();
         let _alpha_map = lines.next()?;
-        material_textures.push((texture_line, itg_parse_model_material_flags(&name)));
+        material_textures.push((texture_line, itg_parse_model_material_flags(name)));
     }
 
     let fallback_texture = itg_resolve_model_texture_path(data, path);
@@ -758,8 +768,106 @@ pub fn itg_parse_milkshape_model(
         .and_then(|layers| layers.into_iter().next().map(|layer| layer.mesh))
 }
 
-fn itg_is_texture_image_ext(ext: &str) -> bool {
-    matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp")
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum ItgModelTextureKind {
+    Image,
+    Animated,
+    Other,
+}
+
+#[inline]
+fn itg_model_texture_kind(ext: &str) -> ItgModelTextureKind {
+    match ext.len() {
+        3 if ext.eq_ignore_ascii_case("png")
+            || ext.eq_ignore_ascii_case("jpg")
+            || ext.eq_ignore_ascii_case("bmp")
+            || ext.eq_ignore_ascii_case("gif") =>
+        {
+            ItgModelTextureKind::Image
+        }
+        4 if ext.eq_ignore_ascii_case("jpeg") || ext.eq_ignore_ascii_case("webp") => {
+            ItgModelTextureKind::Image
+        }
+        3 if ext.eq_ignore_ascii_case("ini") => ItgModelTextureKind::Animated,
+        _ => ItgModelTextureKind::Other,
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_model_texture_kind_reference(ext: &str) -> ItgModelTextureKind {
+    let ext = ext.to_ascii_lowercase();
+    if matches!(
+        ext.as_str(),
+        "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp"
+    ) {
+        ItgModelTextureKind::Image
+    } else if ext == "ini" {
+        ItgModelTextureKind::Animated
+    } else {
+        ItgModelTextureKind::Other
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_derived_model_texture_stem_reference(stem: &str) -> String {
+    let stem_lower = stem.to_ascii_lowercase();
+    if stem_lower.ends_with(" model") {
+        format!("{} tex", &stem[..stem.len().saturating_sub(6)])
+    } else if stem_lower.ends_with("model") {
+        format!("{}tex", &stem[..stem.len().saturating_sub(5)])
+    } else {
+        format!("{stem} tex")
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_parse_model_material_flags_reference(name: &str) -> ItgModelMaterialFlags {
+    let lower = name.to_ascii_lowercase();
+    ItgModelMaterialFlags {
+        nomove: lower.contains("nomove"),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod model_scan_bench_support {
+    use super::{
+        itg_derived_model_texture_stem, itg_derived_model_texture_stem_reference,
+        itg_model_texture_kind, itg_model_texture_kind_reference, itg_parse_model_material_flags,
+        itg_parse_model_material_flags_reference,
+    };
+
+    #[must_use]
+    pub fn extension_kind_current(ext: &str) -> u8 {
+        itg_model_texture_kind(ext) as u8
+    }
+
+    #[must_use]
+    pub fn extension_kind_reference(ext: &str) -> u8 {
+        itg_model_texture_kind_reference(ext) as u8
+    }
+
+    #[must_use]
+    pub fn derived_texture_stem_current(stem: &str) -> String {
+        itg_derived_model_texture_stem(stem)
+    }
+
+    #[must_use]
+    pub fn derived_texture_stem_reference(stem: &str) -> String {
+        itg_derived_model_texture_stem_reference(stem)
+    }
+
+    #[must_use]
+    pub fn material_nomove_current(line: &str) -> bool {
+        itg_parse_model_material_flags(line.trim()).nomove
+    }
+
+    #[must_use]
+    pub fn material_nomove_reference(line: &str) -> bool {
+        let name = line.trim().to_string();
+        itg_parse_model_material_flags_reference(&name).nomove
+    }
 }
 
 #[cfg(test)]
@@ -791,6 +899,60 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
         })
+    }
+
+    #[test]
+    fn model_extension_classifier_matches_owned_lowercase_behavior() {
+        for ext in [
+            "png", "PNG", "JpG", "jpeg", "BMP", "Gif", "WEBP", "ini", "INI", "txt", "", "café",
+        ] {
+            assert_eq!(
+                itg_model_texture_kind(ext),
+                itg_model_texture_kind_reference(ext),
+                "extension {ext:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn derived_model_texture_stem_matches_owned_lowercase_behavior() {
+        for stem in [
+            "Down Tap Note Model",
+            "Center Hold MODEL",
+            "Up Lift model",
+            "FallbackModel",
+            "model",
+            "Café Model",
+            "Arrow",
+            "",
+        ] {
+            assert_eq!(
+                itg_derived_model_texture_stem(stem),
+                itg_derived_model_texture_stem_reference(stem),
+                "stem {stem:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn model_material_flags_match_copied_lowercase_behavior() {
+        for line in [
+            "material",
+            "NoMove",
+            "tap NOMOVE glow",
+            "xnomovey",
+            "no move",
+            "nømove",
+            "",
+            "  MixedNoMove  ",
+        ] {
+            let name = line.trim().to_string();
+            assert_eq!(
+                itg_parse_model_material_flags(line.trim()).nomove,
+                itg_parse_model_material_flags_reference(&name).nomove,
+                "material line {line:?}"
+            );
+        }
     }
 
     #[test]
