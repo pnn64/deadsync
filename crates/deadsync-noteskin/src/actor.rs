@@ -914,6 +914,36 @@ fn parse_frame_override_block(block: &str) -> Option<usize> {
     let frame_key_idx = frames.find("Frame")?;
     let frame_tail = &frames[frame_key_idx + "Frame".len()..];
     let frame_eq = frame_tail.find('=')?;
+    let digits = frame_tail[frame_eq + 1..].trim_start();
+    let end = digits
+        .bytes()
+        .position(|byte| !byte.is_ascii_digit())
+        .unwrap_or(digits.len());
+    if end == 0 {
+        return None;
+    }
+    digits[..end].parse::<usize>().ok()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_frame_override_block_reference(block: &str) -> Option<usize> {
+    let marker_idx = block.find("Frames")?;
+    let tail = &block[marker_idx + "Frames".len()..];
+    let eq_idx = tail.find('=')?;
+    let after_eq = marker_idx + "Frames".len() + eq_idx + 1;
+    let bytes = block.as_bytes();
+    let mut open = after_eq;
+    while open < bytes.len() && bytes[open].is_ascii_whitespace() {
+        open += 1;
+    }
+    if bytes.get(open).is_none_or(|b| *b != b'{') {
+        return None;
+    }
+    let close = find_matching(block, open, '{', '}')?;
+    let frames = &block[open + 1..close];
+    let frame_key_idx = frames.find("Frame")?;
+    let frame_tail = &frames[frame_key_idx + "Frame".len()..];
+    let frame_eq = frame_tail.find('=')?;
     let digits: String = frame_tail[frame_eq + 1..]
         .trim()
         .chars()
@@ -1357,11 +1387,8 @@ fn resolve_command_expr(
     if value.starts_with("function") {
         return Some(resolve_lua_function_command(value, command_context).unwrap_or_default());
     }
-    if value.starts_with("NOTESKIN:GetMetricA(") {
-        let args = extract_quoted_strings(value);
-        if args.len() >= 2 {
-            return metrics.get(&args[0], &args[1]).map(str::to_string);
-        }
+    if let Some(metric) = resolve_metric_command_expr(value, metrics) {
+        return metric;
     }
     if value.starts_with("cmd(") && value.ends_with(')') {
         return Some(value[4..value.len() - 1].trim().to_string());
@@ -1373,6 +1400,34 @@ fn resolve_command_expr(
         return Some(q);
     }
     Some(value.to_string())
+}
+
+fn resolve_metric_command_expr(
+    value: &str,
+    metrics: &noteskin_itg::IniData,
+) -> Option<Option<String>> {
+    if !value.starts_with("NOTESKIN:GetMetricA(") {
+        return None;
+    }
+    let mut args = itg_quoted_strings(value);
+    let section = args.next()?;
+    let key = args.next()?;
+    Some(metrics.get(section, key).map(str::to_string))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn resolve_metric_command_expr_reference(
+    value: &str,
+    metrics: &noteskin_itg::IniData,
+) -> Option<Option<String>> {
+    if !value.starts_with("NOTESKIN:GetMetricA(") {
+        return None;
+    }
+    let args = extract_quoted_strings(value);
+    if args.len() < 2 {
+        return None;
+    }
+    Some(metrics.get(&args[0], &args[1]).map(str::to_string))
 }
 
 fn resolve_lua_function_command(value: &str, context: &CommandContext) -> Option<String> {
@@ -1395,7 +1450,7 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
     let scope = function
         .params
         .iter()
-        .zip(args.iter())
+        .zip(args)
         .map(|(param, arg)| {
             (
                 param.to_ascii_lowercase(),
@@ -1716,7 +1771,21 @@ fn eval_lua_condition(condition: &str, scope: &HashMap<String, String>) -> bool 
         .map_or_else(|| parse_lua_bool(condition), |value| parse_lua_bool(value))
 }
 
-fn split_lua_call(value: &str) -> Option<(&str, Vec<String>)> {
+fn split_lua_call(value: &str) -> Option<(&str, ItgCallArgs<'_>)> {
+    let open = value.find('(')?;
+    let name = value[..open].trim();
+    if name.is_empty() || !name.as_bytes().iter().all(|b| is_lua_ident(*b)) {
+        return None;
+    }
+    let close = find_matching(value, open, '(', ')')?;
+    if close + 1 != value.len() {
+        return None;
+    }
+    Some((name, itg_call_args(&value[open + 1..close])))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn split_lua_call_reference(value: &str) -> Option<(&str, Vec<String>)> {
     let open = value.find('(')?;
     let name = value[..open].trim();
     if name.is_empty() || !name.as_bytes().iter().all(|b| is_lua_ident(*b)) {
@@ -1734,6 +1803,7 @@ fn parse_lua_bool(raw: &str) -> bool {
     value.eq_ignore_ascii_case("true") || value == "1"
 }
 
+#[cfg(any(test, feature = "bench-support"))]
 fn extract_quoted_strings(input: &str) -> Vec<String> {
     let mut out = Vec::new();
     let bytes = input.as_bytes();
@@ -1830,6 +1900,32 @@ fn loadactor_args_checksum(args: Option<(Option<String>, String)>) -> u64 {
 }
 
 #[cfg(feature = "bench-support")]
+fn frame_override_checksum(frame: Option<usize>) -> u64 {
+    frame.map_or(1, |frame| frame as u64 + 2)
+}
+
+#[cfg(feature = "bench-support")]
+fn metric_command_checksum(metric: Option<Option<String>>) -> u64 {
+    match metric {
+        None => 1,
+        Some(None) => 2,
+        Some(Some(value)) => identifier_checksum(&value).wrapping_add(3),
+    }
+}
+
+#[cfg(feature = "bench-support")]
+fn lua_call_checksum<'a>(name: &str, args: impl IntoIterator<Item = &'a str>) -> u64 {
+    args.into_iter().fold(
+        identifier_checksum(name).wrapping_add(1),
+        |checksum, arg| {
+            checksum
+                .wrapping_mul(1_099_511_628_211)
+                .wrapping_add(identifier_checksum(arg))
+        },
+    )
+}
+
+#[cfg(feature = "bench-support")]
 #[doc(hidden)]
 #[must_use]
 pub fn itg_arg0_aliases_for_bench(content: &str) -> u64 {
@@ -1871,6 +1967,54 @@ pub fn itg_parse_actor_self_chain_for_bench(body: &str) -> Option<String> {
 #[must_use]
 pub fn itg_parse_actor_self_chain_reference_for_bench(body: &str) -> Option<String> {
     parse_self_chain_commands_scoped_reference(body, &CommandContext::default(), &HashMap::new())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_frame_override_for_bench(block: &str) -> u64 {
+    frame_override_checksum(parse_frame_override_block(block))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_frame_override_reference_for_bench(block: &str) -> u64 {
+    frame_override_checksum(parse_frame_override_block_reference(block))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_metric_command_for_bench(value: &str, metrics: &noteskin_itg::IniData) -> u64 {
+    metric_command_checksum(resolve_metric_command_expr(value, metrics))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_metric_command_reference_for_bench(value: &str, metrics: &noteskin_itg::IniData) -> u64 {
+    metric_command_checksum(resolve_metric_command_expr_reference(value, metrics))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_helper_call_for_bench(value: &str) -> u64 {
+    let Some((name, args)) = split_lua_call(value) else {
+        return 1;
+    };
+    lua_call_checksum(name, args).wrapping_add(2)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_helper_call_reference_for_bench(value: &str) -> u64 {
+    let Some((name, args)) = split_lua_call_reference(value) else {
+        return 1;
+    };
+    lua_call_checksum(name, args.iter().map(String::as_str)).wrapping_add(2)
 }
 
 #[cfg(test)]
@@ -1934,6 +2078,107 @@ self:diffuse(scale(beat, 0, 1))
         assert_eq!(
             current.as_deref(),
             Some("zoom,1.25;xy,3,4;queuecommand,\"Ready\";visible,true;diffuse,scale(beat, 0, 1)")
+        );
+    }
+
+    #[test]
+    fn borrowed_frame_digits_preserve_frame_overrides() {
+        let cases = [
+            ("Frames = { Frame = 12, Delay = 0.1 }", Some(12)),
+            ("Frames={ Delay=0.1, Frame = 007 }", Some(7)),
+            ("Frames = { Frame = 3frames }", Some(3)),
+            ("Frames = { Frame = -1 }", None),
+            ("Frames = { Frame = }", None),
+            ("Other = { Frame = 2 }", None),
+            ("Frames = nope", None),
+            ("Frames = { Nested = {}; Frame = 42 }", Some(42)),
+        ];
+
+        for (block, expected) in cases {
+            assert_eq!(
+                parse_frame_override_block(block),
+                expected,
+                "block {block:?}"
+            );
+            assert_eq!(
+                parse_frame_override_block(block),
+                parse_frame_override_block_reference(block),
+                "block {block:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn borrowed_metric_arguments_preserve_command_resolution() {
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-metric-command-test-{}.ini",
+            std::process::id()
+        ));
+        std::fs::write(
+            &path,
+            "[ReceptorArrow]\nNoneCommand=diffusealpha,0.5\nPressCommand=zoom,1.2\n",
+        )
+        .expect("write test metrics");
+        let metrics = noteskin_itg::IniData::parse_file(&path).expect("parse test metrics");
+        let _ = std::fs::remove_file(&path);
+        let cases = [
+            "NOTESKIN:GetMetricA(\"ReceptorArrow\", \"NoneCommand\")",
+            "NOTESKIN:GetMetricA('receptorarrow', 'presscommand')",
+            "NOTESKIN:GetMetricA(\"ReceptorArrow\", \"MissingCommand\")",
+            "NOTESKIN:GetMetricA(\"ReceptorArrow\")",
+            "cmd(diffusealpha,0)",
+        ];
+
+        for value in cases {
+            assert_eq!(
+                resolve_metric_command_expr(value, &metrics),
+                resolve_metric_command_expr_reference(value, &metrics),
+                "expression {value:?}"
+            );
+        }
+        assert_eq!(
+            resolve_metric_command_expr(cases[0], &metrics),
+            Some(Some("diffusealpha,0.5".to_string()))
+        );
+        assert_eq!(resolve_metric_command_expr(cases[2], &metrics), Some(None));
+        assert_eq!(resolve_metric_command_expr(cases[3], &metrics), None);
+    }
+
+    #[test]
+    fn borrowed_helper_arguments_preserve_top_level_splitting() {
+        let cases = [
+            "pulse(1.25, 0.5)",
+            "colorize(Color(1, 0.5, 0.25, 1), 'Ready,Set')",
+            "nested(scale(beat, 0, 1), {1, 2}, values[3])",
+            "empty()",
+            "spaced ( first , second )",
+            "invalid-name(1)",
+            "helper(1) trailing",
+            "not a call",
+        ];
+
+        for value in cases {
+            match (split_lua_call(value), split_lua_call_reference(value)) {
+                (Some((current_name, current_args)), Some((reference_name, reference_args))) => {
+                    assert_eq!(current_name, reference_name, "call {value:?}");
+                    assert_eq!(
+                        current_args.collect::<Vec<_>>(),
+                        reference_args
+                            .iter()
+                            .map(String::as_str)
+                            .collect::<Vec<_>>(),
+                        "call {value:?}"
+                    );
+                }
+                (None, None) => {}
+                _ => panic!("call behavior diverged for {value:?}"),
+            }
+        }
+
+        let (_, args) = split_lua_call(cases[1]).expect("valid helper call");
+        assert_eq!(
+            args.collect::<Vec<_>>(),
+            ["Color(1, 0.5, 0.25, 1)", "'Ready,Set'"]
         );
     }
 

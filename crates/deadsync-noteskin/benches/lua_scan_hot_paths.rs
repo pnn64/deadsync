@@ -1,9 +1,11 @@
 use deadsync_noteskin::actor::{
-    itg_arg0_aliases_for_bench, itg_arg0_aliases_reference_for_bench,
-    itg_has_beat_fade_glow_signature_for_bench,
+    itg_arg0_aliases_for_bench, itg_arg0_aliases_reference_for_bench, itg_frame_override_for_bench,
+    itg_frame_override_reference_for_bench, itg_has_beat_fade_glow_signature_for_bench,
     itg_has_beat_fade_glow_signature_reference_for_bench, itg_has_beat_update_marker_for_bench,
-    itg_has_beat_update_marker_reference_for_bench, itg_loadactor_args_for_bench,
-    itg_loadactor_args_reference_for_bench, itg_parse_actor_color_for_bench,
+    itg_has_beat_update_marker_reference_for_bench, itg_helper_call_for_bench,
+    itg_helper_call_reference_for_bench, itg_loadactor_args_for_bench,
+    itg_loadactor_args_reference_for_bench, itg_metric_command_for_bench,
+    itg_metric_command_reference_for_bench, itg_parse_actor_color_for_bench,
     itg_parse_actor_color_reference_for_bench, itg_parse_actor_self_chain_for_bench,
     itg_parse_actor_self_chain_reference_for_bench, itg_update_function_name_for_bench,
     itg_update_function_name_reference_for_bench,
@@ -1729,5 +1731,120 @@ fn main() {
         "borrowed actor self-chain arguments (8 representative command bodies)",
         &old_actor_chains,
         &new_actor_chains,
+    );
+
+    let frame_override_cases = [
+        "Frames = { Frame = 12, Delay = 0.1 }",
+        "Frames={ Delay=0.1, Frame = 007 }",
+        "Frames = { Frame = 3frames }",
+        "Frames = { Frame = -1 }",
+        "Frames = { Frame = }",
+        "Other = { Frame = 2 }",
+        "Frames = nope",
+        "Frames = { Nested = {}; Frame = 42 }",
+    ];
+    let frame_override_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for block in frame_override_cases {
+                checksum = mix(checksum, black_box(parse(black_box(block))));
+            }
+        }
+        checksum
+    };
+    let (old_frame_overrides, new_frame_overrides) = measure_pair(
+        2_048,
+        frame_override_cases.len() * REPEATS,
+        || frame_override_suite(itg_frame_override_reference_for_bench),
+        || frame_override_suite(itg_frame_override_for_bench),
+    );
+    assert_improved(
+        "borrowed actor frame digits",
+        &old_frame_overrides,
+        &new_frame_overrides,
+    );
+    print_pair(
+        "borrowed actor frame digits (8 representative frame blocks)",
+        &old_frame_overrides,
+        &new_frame_overrides,
+    );
+
+    let metrics = deadsync_noteskin::itg::bench_support::parse_ini(
+        "[ReceptorArrow]\nNoneCommand=diffusealpha,0.5\nPressCommand=zoom,1.2\n\
+         [GhostArrow]\nHitCommand=blend,add;diffusealpha,1\n",
+    );
+    let metric_command_cases = [
+        "NOTESKIN:GetMetricA(\"ReceptorArrow\", \"NoneCommand\")",
+        "NOTESKIN:GetMetricA('receptorarrow', 'presscommand')",
+        "NOTESKIN:GetMetricA(\"GhostArrow\", \"HitCommand\")",
+        "NOTESKIN:GetMetricA('GHOSTARROW', 'hitcommand', 'ignored')",
+        "NOTESKIN:GetMetricA(\"ReceptorArrow\", \"MissingCommand\")",
+        "NOTESKIN:GetMetricA(\"MissingSection\", \"NoneCommand\")",
+        "NOTESKIN:GetMetricA(\"ReceptorArrow\")",
+        "cmd(diffusealpha,0)",
+    ];
+    let metric_command_suite = |resolve: fn(&str, &IniData) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in metric_command_cases {
+                checksum = mix(
+                    checksum,
+                    black_box(resolve(black_box(value), black_box(&metrics))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_metric_commands, new_metric_commands) = measure_pair(
+        1_024,
+        metric_command_cases.len() * REPEATS,
+        || metric_command_suite(itg_metric_command_reference_for_bench),
+        || metric_command_suite(itg_metric_command_for_bench),
+    );
+    assert_improved(
+        "borrowed NOTESKIN metric arguments",
+        &old_metric_commands,
+        &new_metric_commands,
+    );
+    print_pair(
+        "borrowed NOTESKIN metric arguments (8 representative expressions)",
+        &old_metric_commands,
+        &new_metric_commands,
+    );
+
+    let helper_call_cases = [
+        "pulse(1.25, 0.5)",
+        "colorize(Color(1, 0.5, 0.25, 1), 'Ready,Set')",
+        "nested(scale(beat, 0, 1), {1, 2}, values[3])",
+        "queue(\"Ready\", true, 0.25)",
+        "single(diffusealpha)",
+        "empty()",
+        "helper(1) trailing",
+        "not a call",
+    ];
+    let helper_call_suite = |split: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in helper_call_cases {
+                checksum = mix(checksum, black_box(split(black_box(value))));
+            }
+        }
+        checksum
+    };
+    let (old_helper_calls, new_helper_calls) = measure_pair(
+        2_048,
+        helper_call_cases.len() * REPEATS,
+        || helper_call_suite(itg_helper_call_reference_for_bench),
+        || helper_call_suite(itg_helper_call_for_bench),
+    );
+    assert_improved(
+        "borrowed local helper-call arguments",
+        &old_helper_calls,
+        &new_helper_calls,
+    );
+    print_pair(
+        "borrowed local helper-call arguments (8 representative calls)",
+        &old_helper_calls,
+        &new_helper_calls,
     );
 }
