@@ -138,14 +138,14 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         let Some(close) = find_matching(content, open, '(', ')') else {
             break;
         };
-        let args = split_call_args(&content[open + 1..close]);
+        let args = parse_path_loadactor_args(&content[open + 1..close], &arg0_aliases);
         let (commands, next_cursor) =
             find_post_call_commands(content, close, metrics, &command_context);
         let frame_override = find_post_call_frame_override(content, close);
-        if !args.is_empty() {
+        if let Some((path_expr, arg_expr)) = args {
             decl.path_refs.push(ItgLuaPathRefDecl {
-                path_expr: rewrite_arg0_expr(&args[0], &arg0_aliases),
-                arg_expr: args.get(1).map(|arg| rewrite_arg0_expr(arg, &arg0_aliases)),
+                path_expr,
+                arg_expr,
                 frame_override,
                 commands,
             });
@@ -171,11 +171,10 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
         let mut frame_override = find_post_call_frame_override(content, close);
         let mut condition_expr = find_post_call_property(content, close, "Condition");
         if commands.is_empty()
-            && let Some((outer_args, outer_close)) =
+            && let Some((wrapper, outer_close)) =
                 find_enclosing_loadactor_for_noteskin(content, call_start, close)
-            && outer_args.len() >= 2
         {
-            wrapper_expr = Some(outer_args[0].clone());
+            wrapper_expr = Some(wrapper.to_string());
             let (outer_commands, outer_next_cursor) =
                 find_post_call_commands(content, outer_close, metrics, &command_context);
             let outer_frame_override = find_post_call_frame_override(content, outer_close);
@@ -579,6 +578,24 @@ fn rewrite_arg0_expr(expr: &str, arg0_aliases: &[&str]) -> String {
     }
 }
 
+fn parse_path_loadactor_args(raw: &str, arg0_aliases: &[&str]) -> Option<(String, Option<String>)> {
+    let mut args = itg_call_args(raw);
+    let path_expr = rewrite_arg0_expr(args.next()?, arg0_aliases);
+    let arg_expr = args.next().map(|arg| rewrite_arg0_expr(arg, arg0_aliases));
+    Some((path_expr, arg_expr))
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_path_loadactor_args_reference(
+    raw: &str,
+    arg0_aliases: &[&str],
+) -> Option<(String, Option<String>)> {
+    let args = split_call_args(raw);
+    let path_expr = rewrite_arg0_expr(args.first()?, arg0_aliases);
+    let arg_expr = args.get(1).map(|arg| rewrite_arg0_expr(arg, arg0_aliases));
+    Some((path_expr, arg_expr))
+}
+
 fn command_context(content: &str) -> CommandContext {
     let mut context = CommandContext::default();
     for raw in content.lines() {
@@ -734,10 +751,7 @@ fn parse_local_functions(content: &str) -> HashMap<String, LocalFunction> {
             cursor = close + 1;
             continue;
         };
-        let params = split_call_args(&content[open + 1..close])
-            .into_iter()
-            .filter(|param| param.as_bytes().iter().all(|b| is_lua_ident(*b)))
-            .collect();
+        let params = parse_local_function_params(&content[open + 1..close]);
         functions.insert(
             name.to_ascii_lowercase(),
             LocalFunction {
@@ -750,6 +764,22 @@ fn parse_local_functions(content: &str) -> HashMap<String, LocalFunction> {
     functions
 }
 
+fn parse_local_function_params(raw: &str) -> Vec<String> {
+    itg_call_args(raw)
+        .filter(|param| param.as_bytes().iter().all(|b| is_lua_ident(*b)))
+        .map(str::to_owned)
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn parse_local_function_params_reference(raw: &str) -> Vec<String> {
+    split_call_args(raw)
+        .into_iter()
+        .filter(|param| param.as_bytes().iter().all(|b| is_lua_ident(*b)))
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
 fn split_call_args(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut start = 0usize;
@@ -957,6 +987,38 @@ fn parse_frame_override_block_reference(block: &str) -> Option<usize> {
 }
 
 fn find_enclosing_loadactor_for_noteskin(
+    content: &str,
+    call_start: usize,
+    call_close: usize,
+) -> Option<(&str, usize)> {
+    let mut search_end = call_start;
+    while let Some(pos) = content[..search_end].rfind("LoadActor(") {
+        if content
+            .as_bytes()
+            .get(pos.saturating_sub(1))
+            .is_some_and(|b| *b == b':')
+        {
+            search_end = pos;
+            continue;
+        }
+        let open = pos + "LoadActor".len();
+        let Some(outer_close) = find_matching(content, open, '(', ')') else {
+            search_end = pos;
+            continue;
+        };
+        if pos < call_start && outer_close >= call_close {
+            let mut args = itg_call_args(&content[open + 1..outer_close]);
+            let wrapper = args.next()?;
+            args.next()?;
+            return Some((wrapper, outer_close));
+        }
+        search_end = pos;
+    }
+    None
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn find_enclosing_loadactor_for_noteskin_reference(
     content: &str,
     call_start: usize,
     call_close: usize,
@@ -1926,6 +1988,42 @@ fn lua_call_checksum<'a>(name: &str, args: impl IntoIterator<Item = &'a str>) ->
 }
 
 #[cfg(feature = "bench-support")]
+fn path_loadactor_checksum(args: Option<(String, Option<String>)>) -> u64 {
+    let Some((path, arg)) = args else {
+        return 1;
+    };
+    identifier_checksum(&path)
+        .wrapping_mul(1_099_511_628_211)
+        .wrapping_add(arg.as_deref().map_or(2, identifier_checksum))
+}
+
+#[cfg(feature = "bench-support")]
+fn enclosing_wrapper_checksum(wrapper: Option<(String, usize)>) -> u64 {
+    let Some((wrapper, close)) = wrapper else {
+        return 1;
+    };
+    identifier_checksum(&wrapper)
+        .wrapping_mul(1_099_511_628_211)
+        .wrapping_add(close as u64)
+}
+
+#[cfg(feature = "bench-support")]
+fn local_params_checksum(params: &[String]) -> u64 {
+    params.iter().fold(params.len() as u64, |checksum, param| {
+        checksum
+            .wrapping_mul(1_099_511_628_211)
+            .wrapping_add(identifier_checksum(param))
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn noteskin_loadactor_bounds(content: &str) -> Option<(usize, usize)> {
+    let call_start = content.find("NOTESKIN:LoadActor(")?;
+    let open = call_start + "NOTESKIN:LoadActor".len();
+    Some((call_start, find_matching(content, open, '(', ')')?))
+}
+
+#[cfg(feature = "bench-support")]
 #[doc(hidden)]
 #[must_use]
 pub fn itg_arg0_aliases_for_bench(content: &str) -> u64 {
@@ -2015,6 +2113,60 @@ pub fn itg_helper_call_reference_for_bench(value: &str) -> u64 {
         return 1;
     };
     lua_call_checksum(name, args.iter().map(String::as_str)).wrapping_add(2)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_path_loadactor_args_for_bench(raw: &str) -> u64 {
+    path_loadactor_checksum(parse_path_loadactor_args(raw, &["path", "alias_name"]))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_path_loadactor_args_reference_for_bench(raw: &str) -> u64 {
+    path_loadactor_checksum(parse_path_loadactor_args_reference(
+        raw,
+        &["path", "alias_name"],
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_enclosing_loadactor_wrapper_for_bench(content: &str) -> u64 {
+    let wrapper = noteskin_loadactor_bounds(content).and_then(|(start, close)| {
+        find_enclosing_loadactor_for_noteskin(content, start, close)
+            .map(|(wrapper, outer_close)| (wrapper.to_string(), outer_close))
+    });
+    enclosing_wrapper_checksum(wrapper)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_enclosing_loadactor_wrapper_reference_for_bench(content: &str) -> u64 {
+    let wrapper = noteskin_loadactor_bounds(content).and_then(|(start, close)| {
+        let (args, outer_close) =
+            find_enclosing_loadactor_for_noteskin_reference(content, start, close)?;
+        (args.len() >= 2).then(|| (args[0].clone(), outer_close))
+    });
+    enclosing_wrapper_checksum(wrapper)
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_local_function_params_for_bench(raw: &str) -> u64 {
+    local_params_checksum(&parse_local_function_params(raw))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_local_function_params_reference_for_bench(raw: &str) -> u64 {
+    local_params_checksum(&parse_local_function_params_reference(raw))
 }
 
 #[cfg(test)]
@@ -2179,6 +2331,101 @@ self:diffuse(scale(beat, 0, 1))
         assert_eq!(
             args.collect::<Vec<_>>(),
             ["Color(1, 0.5, 0.25, 1)", "'Ready,Set'"]
+        );
+    }
+
+    #[test]
+    fn borrowed_path_loadactor_arguments_preserve_rewrites() {
+        let aliases = ["path", "alias_name"];
+        let cases = [
+            "\"actor.lua\"",
+            "\"actor.lua\", \"Left\"",
+            "..., Var \"Button\"",
+            "path, alias_name",
+            "helper(1, 2), { Color = 'red,blue' }",
+            ", \"fallback.lua\"",
+            "\"actor.lua\", \"Left\", \"ignored\"",
+            "",
+        ];
+
+        for raw in cases {
+            assert_eq!(
+                parse_path_loadactor_args(raw, &aliases),
+                parse_path_loadactor_args_reference(raw, &aliases),
+                "arguments {raw:?}"
+            );
+        }
+        assert_eq!(
+            parse_path_loadactor_args("path, \"Left\"", &aliases),
+            Some((ITG_ARG0_TOKEN.to_string(), Some("\"Left\"".to_string())))
+        );
+    }
+
+    #[test]
+    fn borrowed_enclosing_loadactor_arguments_preserve_wrappers() {
+        let cases = [
+            "LoadActor(\"wrapper.png\", NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+            "LoadActor(path, NOTESKIN:LoadActor('Down', 'Receptor')) .. {}",
+            "LoadActor(helper(1, 2), NOTESKIN:LoadActor(Var \"Button\", \"Tap Mine\"))",
+            "LoadActor(NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+            "Actor:LoadActor(\"wrapper.png\", NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+            "NOTESKIN:LoadActor(\"Left\", \"Tap Note\")",
+        ];
+
+        for content in cases {
+            let call_start = content
+                .find("NOTESKIN:LoadActor(")
+                .expect("case contains NOTESKIN call");
+            let open = call_start + "NOTESKIN:LoadActor".len();
+            let close = find_matching(content, open, '(', ')').expect("balanced NOTESKIN call");
+            let current = find_enclosing_loadactor_for_noteskin(content, call_start, close);
+            let reference =
+                find_enclosing_loadactor_for_noteskin_reference(content, call_start, close)
+                    .and_then(|(args, outer_close)| {
+                        (args.len() >= 2).then(|| (args[0].clone(), outer_close))
+                    });
+
+            assert_eq!(
+                current.map(|(wrapper, outer_close)| (wrapper.to_string(), outer_close)),
+                reference,
+                "content {content:?}"
+            );
+        }
+
+        let content = cases[0];
+        let call_start = content.find("NOTESKIN:LoadActor(").unwrap();
+        let open = call_start + "NOTESKIN:LoadActor".len();
+        let close = find_matching(content, open, '(', ')').unwrap();
+        assert_eq!(
+            find_enclosing_loadactor_for_noteskin(content, call_start, close)
+                .map(|(wrapper, _)| wrapper),
+            Some("\"wrapper.png\"")
+        );
+    }
+
+    #[test]
+    fn borrowed_local_function_params_preserve_identifiers() {
+        let cases = [
+            "self",
+            "self, color, amount",
+            " first , second_2 , third3 ",
+            "self, invalid-name, valid",
+            "self, helper(1, 2), tail",
+            "self, 'quoted', tail",
+            ", self, , value,",
+            "",
+        ];
+
+        for raw in cases {
+            assert_eq!(
+                parse_local_function_params(raw),
+                parse_local_function_params_reference(raw),
+                "parameters {raw:?}"
+            );
+        }
+        assert_eq!(
+            parse_local_function_params("self, color, amount"),
+            ["self", "color", "amount"]
         );
     }
 

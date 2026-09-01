@@ -1,13 +1,17 @@
 use deadsync_noteskin::actor::{
-    itg_arg0_aliases_for_bench, itg_arg0_aliases_reference_for_bench, itg_frame_override_for_bench,
-    itg_frame_override_reference_for_bench, itg_has_beat_fade_glow_signature_for_bench,
+    itg_arg0_aliases_for_bench, itg_arg0_aliases_reference_for_bench,
+    itg_enclosing_loadactor_wrapper_for_bench, itg_enclosing_loadactor_wrapper_reference_for_bench,
+    itg_frame_override_for_bench, itg_frame_override_reference_for_bench,
+    itg_has_beat_fade_glow_signature_for_bench,
     itg_has_beat_fade_glow_signature_reference_for_bench, itg_has_beat_update_marker_for_bench,
     itg_has_beat_update_marker_reference_for_bench, itg_helper_call_for_bench,
     itg_helper_call_reference_for_bench, itg_loadactor_args_for_bench,
-    itg_loadactor_args_reference_for_bench, itg_metric_command_for_bench,
+    itg_loadactor_args_reference_for_bench, itg_local_function_params_for_bench,
+    itg_local_function_params_reference_for_bench, itg_metric_command_for_bench,
     itg_metric_command_reference_for_bench, itg_parse_actor_color_for_bench,
     itg_parse_actor_color_reference_for_bench, itg_parse_actor_self_chain_for_bench,
-    itg_parse_actor_self_chain_reference_for_bench, itg_update_function_name_for_bench,
+    itg_parse_actor_self_chain_reference_for_bench, itg_path_loadactor_args_for_bench,
+    itg_path_loadactor_args_reference_for_bench, itg_update_function_name_for_bench,
     itg_update_function_name_reference_for_bench,
 };
 use deadsync_noteskin::compiled::compiled_key_bench_support::{
@@ -1846,5 +1850,113 @@ fn main() {
         "borrowed local helper-call arguments (8 representative calls)",
         &old_helper_calls,
         &new_helper_calls,
+    );
+
+    let path_loadactor_cases = [
+        "\"actor.lua\"",
+        "\"actor.lua\", \"Left\"",
+        "..., Var \"Button\"",
+        "path, alias_name",
+        "helper(1, 2), { Color = 'red,blue' }",
+        ", \"fallback.lua\"",
+        "\"actor.lua\", \"Left\", \"ignored\"",
+        "",
+    ];
+    let path_loadactor_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for raw in path_loadactor_cases {
+                checksum = mix(checksum, black_box(parse(black_box(raw))));
+            }
+        }
+        checksum
+    };
+    let (old_path_loadactors, new_path_loadactors) = measure_pair(
+        1_024,
+        path_loadactor_cases.len() * REPEATS,
+        || path_loadactor_suite(itg_path_loadactor_args_reference_for_bench),
+        || path_loadactor_suite(itg_path_loadactor_args_for_bench),
+    );
+    assert_improved(
+        "borrowed path LoadActor arguments",
+        &old_path_loadactors,
+        &new_path_loadactors,
+    );
+    print_pair(
+        "borrowed path LoadActor arguments (8 representative calls)",
+        &old_path_loadactors,
+        &new_path_loadactors,
+    );
+
+    let enclosing_loadactor_cases = [
+        "LoadActor(\"wrapper.png\", NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+        "LoadActor(path, NOTESKIN:LoadActor('Down', 'Receptor')) .. {}",
+        "LoadActor(helper(1, 2), NOTESKIN:LoadActor(Var \"Button\", \"Tap Mine\"))",
+        "LoadActor(\"wrapper.png\", 2, NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+        "LoadActor(\"wrapper.png\", NOTESKIN:LoadActor(\"Left\", \"Tap Note\"), tail)",
+        "LoadActor(NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+        "Actor:LoadActor(\"wrapper.png\", NOTESKIN:LoadActor(\"Left\", \"Tap Note\"))",
+        "NOTESKIN:LoadActor(\"Left\", \"Tap Note\")",
+    ];
+    let enclosing_loadactor_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for content in enclosing_loadactor_cases {
+                checksum = mix(checksum, black_box(parse(black_box(content))));
+            }
+        }
+        checksum
+    };
+    let (old_enclosing_loadactors, new_enclosing_loadactors) = measure_pair(
+        1_024,
+        enclosing_loadactor_cases.len() * REPEATS,
+        || enclosing_loadactor_suite(itg_enclosing_loadactor_wrapper_reference_for_bench),
+        || enclosing_loadactor_suite(itg_enclosing_loadactor_wrapper_for_bench),
+    );
+    assert_improved(
+        "borrowed enclosing LoadActor arguments",
+        &old_enclosing_loadactors,
+        &new_enclosing_loadactors,
+    );
+    print_pair(
+        "borrowed enclosing LoadActor arguments (8 representative wrappers)",
+        &old_enclosing_loadactors,
+        &new_enclosing_loadactors,
+    );
+
+    let local_param_cases = [
+        "self",
+        "self, color, amount",
+        " first , second_2 , third3 ",
+        "self, invalid-name, valid",
+        "self, helper(1, 2), tail",
+        "self, 'quoted', tail",
+        ", self, , value,",
+        "",
+    ];
+    let local_param_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for raw in local_param_cases {
+                checksum = mix(checksum, black_box(parse(black_box(raw))));
+            }
+        }
+        checksum
+    };
+    let (old_local_params, new_local_params) = measure_pair(
+        1_024,
+        local_param_cases.len() * REPEATS,
+        || local_param_suite(itg_local_function_params_reference_for_bench),
+        || local_param_suite(itg_local_function_params_for_bench),
+    );
+    assert_improved(
+        "direct local-function parameter storage",
+        &old_local_params,
+        &new_local_params,
+    );
+    print_pair(
+        "direct local-function parameter storage (8 representative lists)",
+        &old_local_params,
+        &new_local_params,
     );
 }
