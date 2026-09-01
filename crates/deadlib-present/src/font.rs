@@ -641,10 +641,12 @@ fn committed_replace_markers(text: &str) -> Cow<'_, str> {
 pub mod bench_support {
     use super::{
         FontPageSettings, committed_replace_markers, get_page_name_from_path,
-        get_page_name_from_path_owned, has_png_suffix, has_png_suffix_casefolded, replace_markers,
+        get_page_name_from_path_owned, has_png_suffix, has_png_suffix_casefolded,
+        import_path_candidates, replace_markers, split_import_specs,
     };
     use std::borrow::Cow;
-    use std::path::PathBuf;
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
 
     fn checksum_text(mut checksum: u64, text: &str) -> u64 {
         checksum = checksum.wrapping_mul(131).wrapping_add(text.len() as u64);
@@ -716,6 +718,112 @@ pub mod bench_support {
             }
             checksum_text(checksum, settings.texture_hints)
         })
+    }
+
+    #[must_use]
+    pub fn import_specs_old(raw: &str, is_top_level: bool) -> u64 {
+        let mut specs = Vec::new();
+        for spec in raw
+            .split(',')
+            .map(str::trim)
+            .filter(|spec| !spec.is_empty())
+        {
+            specs.push(spec.to_string());
+        }
+
+        let mut imports = Vec::new();
+        if is_top_level {
+            imports.push((super::DEFAULT_FONT_IMPORT.to_string(), true));
+        }
+        imports.extend(specs.into_iter().map(|spec| (spec, false)));
+        imports.iter().fold(0, |checksum, (spec, is_implicit)| {
+            checksum_text(checksum, spec)
+                .wrapping_mul(2)
+                .wrapping_add(u64::from(*is_implicit))
+        })
+    }
+
+    #[must_use]
+    pub fn import_specs_new(raw: &str, is_top_level: bool) -> u64 {
+        is_top_level
+            .then_some((super::DEFAULT_FONT_IMPORT, true))
+            .into_iter()
+            .chain(split_import_specs(Some(raw)).map(|spec| (spec, false)))
+            .fold(0, |checksum, (spec, is_implicit)| {
+                checksum_text(checksum, spec)
+                    .wrapping_mul(2)
+                    .wrapping_add(u64::from(is_implicit))
+            })
+    }
+
+    fn import_path_old(base_ini: &Path, spec: &str) -> Option<PathBuf> {
+        let mut rel = PathBuf::from(spec);
+        if rel.extension().is_none() {
+            rel.set_extension("ini");
+        }
+        let font_dir = base_ini.parent()?;
+        let fonts_root = base_ini
+            .ancestors()
+            .find(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case("fonts"))
+            })
+            .or_else(|| font_dir.parent());
+        let candidates = [
+            fonts_root.map(|root| root.join(&rel)),
+            Some(font_dir.join(&rel)),
+        ];
+        candidates.iter().flatten().next().cloned()
+    }
+
+    #[must_use]
+    pub fn import_paths_old(base_inis: &[PathBuf], specs: &[String]) -> u64 {
+        base_inis
+            .iter()
+            .zip(specs)
+            .fold(0, |checksum, (base_ini, spec)| {
+                let path = import_path_old(base_ini, spec).expect("benchmark path has a parent");
+                checksum_text(checksum, path.to_string_lossy().as_ref())
+            })
+    }
+
+    #[must_use]
+    pub fn import_paths_new(base_inis: &[PathBuf], specs: &[String]) -> u64 {
+        base_inis
+            .iter()
+            .zip(specs)
+            .fold(0, |checksum, (base_ini, spec)| {
+                let mut candidates =
+                    import_path_candidates(base_ini, spec).expect("benchmark path has a parent");
+                let path = candidates[0]
+                    .take()
+                    .expect("primary import candidate is always present");
+                checksum_text(checksum, path.to_string_lossy().as_ref())
+            })
+    }
+
+    fn checksum_map(map: &HashMap<u64, u64>) -> u64 {
+        map.iter()
+            .fold(map.len() as u64, |checksum, (&key, &value)| {
+                checksum.wrapping_add(key.rotate_left(17) ^ value)
+            })
+    }
+
+    #[must_use]
+    pub fn import_map_merge_old(entries: &[(u64, u64)]) -> u64 {
+        let mut map = HashMap::new();
+        for &(key, value) in entries {
+            map.insert(key, value);
+        }
+        checksum_map(&map)
+    }
+
+    #[must_use]
+    pub fn import_map_merge_new(entries: &[(u64, u64)]) -> u64 {
+        let mut map = HashMap::new();
+        map.extend(entries.iter().copied());
+        checksum_map(&map)
     }
 }
 
@@ -2472,6 +2580,57 @@ fn font_import_candidate_matches(target_stem: &str, path: &Path) -> bool {
             .is_some_and(|rest| rest.starts_with(|ch: char| ch.is_ascii_digit() || ch == '('))
 }
 
+fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
+    value
+        .into_iter()
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .filter(|spec| !spec.is_empty())
+}
+
+fn import_specs(ini: &ParsedFontIni) -> impl Iterator<Item = &str> {
+    split_import_specs(
+        ini.get("main")
+            .and_then(|section| section.values.get("import"))
+            .map(String::as_str),
+    )
+}
+
+fn import_path_candidates(base_ini: &Path, spec: &str) -> Option<[Option<PathBuf>; 2]> {
+    // Resolve from the theme's Fonts root first, with the immediate parent as
+    // a fallback for nested and standalone font trees.
+    let mut rel = PathBuf::from(spec);
+    if rel.extension().is_none() {
+        rel.set_extension("ini");
+    }
+
+    let font_dir = base_ini.parent()?;
+    let fonts_root = base_ini
+        .ancestors()
+        .find(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.eq_ignore_ascii_case("fonts"))
+        })
+        .or_else(|| font_dir.parent());
+    let primary_dir = fonts_root.unwrap_or(font_dir);
+    let local = (primary_dir != font_dir).then(|| font_dir.join(&rel));
+    Some([Some(primary_dir.join(rel)), local])
+}
+
+fn merge_imported_font(
+    required_textures: &mut Vec<PathBuf>,
+    glyphs: &mut GlyphMap,
+    stroke_textures: &mut HashMap<String, String>,
+    texture_hints: &mut HashMap<String, String>,
+    imported: FontLoadData,
+) {
+    required_textures.extend(imported.required_textures);
+    glyphs.extend(imported.font.glyph_map);
+    stroke_textures.extend(imported.font.stroke_texture_map);
+    texture_hints.extend(imported.font.texture_hints_map);
+}
+
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -2482,29 +2641,10 @@ pub fn parse_with_texture_context(
     use std::collections::HashMap;
 
     fn resolve_import_path(base_ini: &Path, spec: &str) -> Option<PathBuf> {
-        // Accept either "Folder/Name" or ".../Name.ini"
-        let mut rel = PathBuf::from(spec);
-        if rel.extension().is_none() {
-            rel.set_extension("ini");
-        }
-
-        // ITGmania resolves imports from the theme's Fonts root even when the
-        // current font lives in nested directories such as `_Combo Fonts/X`.
-        // Keep the immediate parent fallback for standalone/test font trees.
-        let font_dir = base_ini.parent()?;
-        let fonts_root = base_ini
-            .ancestors()
-            .find(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.eq_ignore_ascii_case("fonts"))
-            })
-            .or_else(|| font_dir.parent());
-
-        let candidates = [fonts_root.map(|r| r.join(&rel)), Some(font_dir.join(&rel))];
-        for c in candidates.iter().flatten() {
-            if c.is_file() {
-                return Some(c.clone());
+        let mut candidates = import_path_candidates(base_ini, spec)?;
+        for candidate in &mut candidates {
+            if candidate.as_ref().is_some_and(|path| path.is_file()) {
+                return candidate.take();
             }
         }
 
@@ -2514,7 +2654,7 @@ pub fn parse_with_texture_context(
         // lines often omit them. Scan the candidate directories for a `.ini`
         // whose stem begins with the requested stem followed by a separator
         // we recognise (end-of-stem, a space + digit/`(`).
-        let target_stem = rel.file_stem()?.to_string_lossy();
+        let target_stem = candidates[0].as_ref()?.file_stem()?.to_string_lossy();
         for dir in candidates.iter().flatten().filter_map(|p| p.parent()) {
             let Ok(entries) = std::fs::read_dir(dir) else {
                 continue;
@@ -2527,18 +2667,6 @@ pub fn parse_with_texture_context(
             }
         }
         None
-    }
-
-    fn gather_import_specs(ini: &ParsedFontIni) -> Vec<String> {
-        let mut specs: Vec<String> = Vec::new();
-        if let Some(section) = ini.get("main")
-            && let Some(v) = section.values.get("import")
-        {
-            for s in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-                specs.push(s.to_string());
-            }
-        }
-        specs
     }
 
     // ---- original parse begins
@@ -2623,32 +2751,21 @@ pub fn parse_with_texture_context(
 
     // The implicit default layer (`is_implicit == true`) comes first so local
     // pages and explicit imports can override it.
-    let mut import_specs: Vec<(String, bool)> = Vec::new();
-    if is_top_level {
-        import_specs.push((DEFAULT_FONT_IMPORT.to_string(), true));
-    }
-    import_specs.extend(
-        gather_import_specs(&ini)
-            .into_iter()
-            .map(|spec| (spec, false)),
-    );
-
-    for (spec, is_implicit) in import_specs {
-        if let Some(import_ini) = resolve_import_path(ini_path, &spec) {
+    let implicit_import = is_top_level.then_some((DEFAULT_FONT_IMPORT, true));
+    let explicit_imports = import_specs(&ini).map(|spec| (spec, false));
+    for (spec, is_implicit) in implicit_import.into_iter().chain(explicit_imports) {
+        if let Some(import_ini) = resolve_import_path(ini_path, spec) {
             match parse_with_texture_context(import_ini.to_string_lossy().as_ref(), texture_ctx) {
                 Ok(imported) => {
-                    // Merge textures
-                    required_textures.extend(imported.required_textures.into_iter());
-                    // Merge glyphs: imported -> base; local pages will override later
-                    for (ch, g) in imported.font.glyph_map {
-                        all_glyphs.insert(ch, g);
-                    }
-                    for (k, v) in imported.font.stroke_texture_map {
-                        stroke_texture_map.insert(k, v);
-                    }
-                    for (k, v) in imported.font.texture_hints_map {
-                        texture_hints_map.insert(k, v);
-                    }
+                    // Imported entries override prior import layers; local pages
+                    // are merged afterward and retain final precedence.
+                    merge_imported_font(
+                        &mut required_textures,
+                        &mut all_glyphs,
+                        &mut stroke_texture_map,
+                        &mut texture_hints_map,
+                        imported,
+                    );
                     debug!("Imported font '{spec}' merged.");
                 }
                 Err(e) if is_implicit => {
@@ -3230,6 +3347,133 @@ mod tests {
 
         assert_eq!(settings.texture_hints, page);
         assert_eq!(settings.texture_hints.as_ptr(), page.as_ptr());
+    }
+
+    #[test]
+    fn import_specs_borrow_trimmed_values_in_order() {
+        let ini = parse_font_ini("[main]\nimport= First, ,Second/Sub.ini, 日本語 \n");
+        let raw = ini
+            .get("main")
+            .and_then(|section| section.values.get("import"))
+            .expect("test import value");
+        let specs = import_specs(&ini).collect::<Vec<_>>();
+
+        assert_eq!(specs, ["First", "Second/Sub.ini", "日本語"]);
+        let raw_start = raw.as_ptr() as usize;
+        let raw_end = raw_start + raw.len();
+        for spec in specs {
+            let spec_start = spec.as_ptr() as usize;
+            assert!(spec_start >= raw_start && spec_start < raw_end);
+        }
+        assert_eq!(split_import_specs(None).count(), 0);
+        assert_eq!(split_import_specs(Some(" , , ")).count(), 0);
+    }
+
+    #[test]
+    fn import_candidates_are_unique_and_keep_root_precedence() {
+        let root_font = Path::new("Theme").join("Fonts").join("Main.ini");
+        let root_candidates =
+            import_path_candidates(&root_font, "Common default").expect("root font has a parent");
+        assert_eq!(
+            root_candidates,
+            [
+                Some(Path::new("Theme").join("Fonts").join("Common default.ini")),
+                None,
+            ]
+        );
+
+        let nested_font = Path::new("Theme")
+            .join("Fonts")
+            .join("_Combo Fonts")
+            .join("Main.ini");
+        let nested_candidates = import_path_candidates(&nested_font, "Shared/Base.ini")
+            .expect("nested font has a parent");
+        assert_eq!(
+            nested_candidates,
+            [
+                Some(
+                    Path::new("Theme")
+                        .join("Fonts")
+                        .join("Shared")
+                        .join("Base.ini")
+                ),
+                Some(
+                    Path::new("Theme")
+                        .join("Fonts")
+                        .join("_Combo Fonts")
+                        .join("Shared")
+                        .join("Base.ini")
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn batched_import_merge_preserves_order_and_overrides() {
+        let mut required_textures = vec![PathBuf::from("base.png")];
+        let mut glyphs = GlyphMap::default();
+        glyphs.insert('A', test_glyph(1));
+        let mut stroke_textures = HashMap::from([("base".to_string(), "old".to_string())]);
+        let mut texture_hints = HashMap::from([("base".to_string(), "old".to_string())]);
+
+        let mut imported_glyphs = GlyphMap::default();
+        imported_glyphs.insert('A', test_glyph(2));
+        imported_glyphs.insert('B', test_glyph(3));
+        let imported = FontLoadData {
+            font: Font {
+                glyph_map: imported_glyphs,
+                ascii_glyphs: empty_ascii_glyphs(),
+                default_glyph: None,
+                height: 0,
+                line_spacing: 0,
+                fallback_font_name: None,
+                cache_tag: 0,
+                chain_key: 0,
+                default_stroke_color: [0.0; 4],
+                stroke_texture_map: HashMap::from([
+                    ("base".to_string(), "new".to_string()),
+                    ("extra".to_string(), "stroke".to_string()),
+                ]),
+                texture_hints_map: HashMap::from([
+                    ("base".to_string(), "doubleres".to_string()),
+                    ("extra".to_string(), "mipmaps".to_string()),
+                ]),
+            },
+            required_textures: vec![
+                PathBuf::from("import-main.png"),
+                PathBuf::from("import-stroke.png"),
+            ],
+        };
+
+        merge_imported_font(
+            &mut required_textures,
+            &mut glyphs,
+            &mut stroke_textures,
+            &mut texture_hints,
+            imported,
+        );
+
+        assert_eq!(
+            required_textures,
+            ["base.png", "import-main.png", "import-stroke.png"]
+                .map(PathBuf::from)
+                .to_vec()
+        );
+        assert_eq!(glyphs.get(&'A').map(|glyph| glyph.advance_i32), Some(2));
+        assert_eq!(glyphs.get(&'B').map(|glyph| glyph.advance_i32), Some(3));
+        assert_eq!(stroke_textures.get("base").map(String::as_str), Some("new"));
+        assert_eq!(
+            stroke_textures.get("extra").map(String::as_str),
+            Some("stroke")
+        );
+        assert_eq!(
+            texture_hints.get("base").map(String::as_str),
+            Some("doubleres")
+        );
+        assert_eq!(
+            texture_hints.get("extra").map(String::as_str),
+            Some("mipmaps")
+        );
     }
 
     #[test]
