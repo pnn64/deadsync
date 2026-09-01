@@ -19,6 +19,11 @@ name = "evaluation_mods_text_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "pad_config_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [features]
 bench-support = []
 
