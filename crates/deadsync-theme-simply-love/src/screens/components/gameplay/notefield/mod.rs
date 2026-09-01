@@ -610,6 +610,8 @@ pub(crate) fn compose_frame(
     placement: FieldPlacement,
     play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
+    song_lua_judgment_visible: bool,
+    song_lua_combo_visible: bool,
     capture_requests: ProxyCaptureRequests,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
@@ -863,11 +865,12 @@ pub(crate) fn compose_frame(
         );
     }
 
-    let combo_active = NotefieldHudFrameView::combo_active(
-        request.view.hide_combo,
-        blind_active,
-        options.frame_features.combo_visible,
-    );
+    let combo_active = song_lua_combo_visible
+        && NotefieldHudFrameView::combo_active(
+            request.view.hide_combo,
+            blind_active,
+            options.frame_features.combo_visible,
+        );
     let combo_milestone_assets =
         (combo_active && !options.hide_combo_explosions && !p.combo_milestones.is_empty())
             .then(|| resolved_combo_assets.resolve(visual_effects));
@@ -947,7 +950,8 @@ pub(crate) fn compose_frame(
             },
         );
 
-    let tap = if !blind_active
+    let tap = if song_lua_judgment_visible
+        && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
         && TapJudgmentHudFrame::render_active(render, elapsed_screen)
         && let Some(texture) = judgment_texture
@@ -965,16 +969,17 @@ pub(crate) fn compose_frame(
     } else {
         None
     };
-    let held_misses = if !blind_active && held_miss_texture.is_some() {
+    let held_misses = if song_lua_judgment_visible && !blind_active && held_miss_texture.is_some() {
         state.held_miss_judgments_for_columns(col_start, num_cols)
     } else {
         &[]
     };
-    let hold_judgments = if !blind_active && hold_judgment_texture.is_some() {
-        state.hold_judgments_for_columns(col_start, num_cols)
-    } else {
-        &[]
-    };
+    let hold_judgments =
+        if song_lua_judgment_visible && !blind_active && hold_judgment_texture.is_some() {
+            state.hold_judgments_for_columns(col_start, num_cols)
+        } else {
+            &[]
+        };
     let held_miss_sprite = held_misses
         .iter()
         .any(Option::is_some)

@@ -41,11 +41,11 @@ use deadlib_render_core::{
 };
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode,
-    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayMeshVertex,
-    SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
-    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
-    compile_song_lua, compile_song_lua_layers,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaCapturedChildActor, SongLuaOverlayActor,
+    SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
+    SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget,
+    SongLuaTextGlowMode, compile_song_lua, compile_song_lua_layers,
 };
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
@@ -2001,6 +2001,8 @@ struct GameplayFrameScratch {
     song_lua_background_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
     song_lua_foreground_layer_message_state_cache: Vec<Vec<SongLuaMessageStateCache>>,
     song_lua_player_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
+    song_lua_player_judgment_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
+    song_lua_player_combo_message_state_cache: [SongLuaMessageStateCache; MAX_PLAYERS],
     song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache,
     song_lua_background_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
     song_lua_foreground_song_foreground_message_state_cache: Vec<SongLuaMessageStateCache>,
@@ -2777,6 +2779,10 @@ impl State {
             song_lua_background_layer_message_state_cache,
             song_lua_foreground_layer_message_state_cache,
             song_lua_player_message_state_cache: [SongLuaMessageStateCache::default(); MAX_PLAYERS],
+            song_lua_player_judgment_message_state_cache: [SongLuaMessageStateCache::default();
+                MAX_PLAYERS],
+            song_lua_player_combo_message_state_cache: [SongLuaMessageStateCache::default();
+                MAX_PLAYERS],
             song_lua_song_foreground_message_state_cache: SongLuaMessageStateCache::default(),
             song_lua_background_song_foreground_message_state_cache,
             song_lua_foreground_song_foreground_message_state_cache,
@@ -3895,9 +3901,14 @@ fn build_song_lua_runtime_windows_for_data(
             },
             message_commands: Vec::new(),
             manual_hud_draw: false,
+            ..SongLuaCapturedActor::default()
         }
     });
     let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut player_judgment_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut player_combo_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
@@ -3924,6 +3935,8 @@ fn build_song_lua_runtime_windows_for_data(
                 foreground_visual_layers,
                 player_actors,
                 player_events,
+                player_judgment_events,
+                player_combo_events,
                 song_foreground,
                 song_foreground_events,
                 hidden_players,
@@ -3979,6 +3992,26 @@ fn build_song_lua_runtime_windows_for_data(
                     &compiled.messages,
                     &message_seconds,
                     &actor.message_commands,
+                )
+            },
+        );
+        player_judgment_events = deadsync_gameplay::build_song_lua_player_message_events(
+            &compiled.player_actors,
+            |actor| {
+                deadsync_profile_gameplay::build_song_lua_actor_message_events_for_commands(
+                    &compiled.messages,
+                    &message_seconds,
+                    &actor.judgment.message_commands,
+                )
+            },
+        );
+        player_combo_events = deadsync_gameplay::build_song_lua_player_message_events(
+            &compiled.player_actors,
+            |actor| {
+                deadsync_profile_gameplay::build_song_lua_actor_message_events_for_commands(
+                    &compiled.messages,
+                    &message_seconds,
+                    &actor.combo.message_commands,
                 )
             },
         );
@@ -4107,6 +4140,8 @@ fn build_song_lua_runtime_windows_for_data(
             foreground_visual_layers,
             player_actors,
             player_events,
+            player_judgment_events,
+            player_combo_events,
             song_foreground,
             song_foreground_events,
             hidden_players,
@@ -12651,17 +12686,42 @@ fn song_lua_captured_actor_state_from(
     events: Option<&[SongLuaOverlayMessageRuntime]>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
-    if events.is_none_or(<[_]>::is_empty) {
-        message_cache.initialized = false;
-        return actor.initial_state;
-    }
-    song_lua_message_state_cached(
+    song_lua_captured_state_from(
         now,
         actor.initial_state,
         &actor.message_commands,
         events,
         message_cache,
     )
+}
+
+fn song_lua_captured_child_state_from(
+    now: f32,
+    actor: &SongLuaCapturedChildActor,
+    events: &[SongLuaOverlayMessageRuntime],
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
+    song_lua_captured_state_from(
+        now,
+        actor.initial_state,
+        &actor.message_commands,
+        Some(events),
+        message_cache,
+    )
+}
+
+fn song_lua_captured_state_from(
+    now: f32,
+    initial_state: SongLuaOverlayState,
+    message_commands: &[SongLuaOverlayMessageCommand],
+    events: Option<&[SongLuaOverlayMessageRuntime]>,
+    message_cache: &mut SongLuaMessageStateCache,
+) -> SongLuaOverlayState {
+    if events.is_none_or(<[_]>::is_empty) {
+        message_cache.initialized = false;
+        return initial_state;
+    }
+    song_lua_message_state_cached(now, initial_state, message_commands, events, message_cache)
 }
 
 fn song_lua_song_foreground_state(
@@ -18457,6 +18517,8 @@ pub fn push_actors(
         song_lua_background_layer_message_state_cache,
         song_lua_foreground_layer_message_state_cache,
         song_lua_player_message_state_cache,
+        song_lua_player_judgment_message_state_cache,
+        song_lua_player_combo_message_state_cache,
         song_lua_song_foreground_message_state_cache,
         song_lua_background_song_foreground_message_state_cache,
         song_lua_foreground_song_foreground_message_state_cache,
@@ -18885,6 +18947,20 @@ pub fn push_actors(
             let flat_draw_scratch = &mut notefield_flat_draw_scratch[player_idx];
             let hud_scratch = &mut notefield_hud_actor_scratch[player_idx];
             let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
+            let player_actor = &song_lua_visuals.player_actors[player_idx];
+            let song_lua_now = state.current_music_time_display();
+            let judgment_state = song_lua_captured_child_state_from(
+                song_lua_now,
+                &player_actor.judgment,
+                &song_lua_visuals.player_judgment_events[player_idx],
+                &mut song_lua_player_judgment_message_state_cache[player_idx],
+            );
+            let combo_state = song_lua_captured_child_state_from(
+                song_lua_now,
+                &player_actor.combo,
+                &song_lua_visuals.player_combo_events[player_idx],
+                &mut song_lua_player_combo_message_state_cache[player_idx],
+            );
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -18915,6 +18991,8 @@ pub fn push_actors(
                 placement,
                 play_style,
                 center_1player_notefield,
+                judgment_state.visible,
+                combo_state.visible,
                 ProxyCaptureRequests {
                     player: requests.player && !direct_player_candidates[player_idx],
                     // Whole-player captures consume the same field source, so
@@ -18936,7 +19014,6 @@ pub fn push_actors(
                 hud_scratch,
                 hud_flat_draw_scratch,
             );
-            let player_actor = &song_lua_visuals.player_actors[player_idx];
             let player_state = song_lua_player_render_state(
                 state,
                 player_idx,
@@ -21670,6 +21747,7 @@ mod tests {
             },
             message_commands: Vec::new(),
             manual_hud_draw: false,
+            ..SongLuaCapturedActor::default()
         };
         let mut expected_cache = SongLuaMessageStateCache::default();
         let mut fast_cache = SongLuaMessageStateCache::default();
@@ -29775,6 +29853,8 @@ mod tests {
             foreground_visual_layers: vec![layer(10.0, overlay())],
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             player_events: std::array::from_fn(|_| Vec::new()),
+            player_judgment_events: std::array::from_fn(|_| Vec::new()),
+            player_combo_events: std::array::from_fn(|_| Vec::new()),
             song_foreground: SongLuaCapturedActor::default(),
             song_foreground_events: Vec::new(),
             hidden_players: [false; MAX_PLAYERS],

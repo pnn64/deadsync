@@ -1,6 +1,8 @@
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayCommandBlock,
-    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua_layers,
+    SongLuaOverlayKind, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
+    SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua_layers,
+    overlay_state_after_blocks,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use serde::Deserialize;
@@ -32,6 +34,7 @@ struct NativeTrace {
     end_position: NativePosition,
     display: NativeDisplay,
     fixture_context: NativeFixtureContext,
+    trace_until_beat: f32,
 }
 
 #[derive(Deserialize)]
@@ -41,6 +44,8 @@ struct NativeDefinition {
     name: Option<String>,
     #[serde(default)]
     children: Vec<NativeChild>,
+    #[serde(default)]
+    runtime_actors: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -97,6 +102,7 @@ struct NativeTweenSegment {
 
 #[derive(Deserialize)]
 struct NativeTweenOperation {
+    seq: u64,
     operation: String,
     #[serde(default)]
     args: Vec<Value>,
@@ -364,6 +370,430 @@ fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut 
                 native.get(first),
                 deadsync.get(first)
             ));
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NativeFinalRenderState {
+    alpha: f32,
+    visible: bool,
+    wrote_alpha: bool,
+    wrote_visible: bool,
+}
+
+impl Default for NativeFinalRenderState {
+    fn default() -> Self {
+        Self {
+            alpha: 1.0,
+            visible: true,
+            wrote_alpha: false,
+            wrote_visible: false,
+        }
+    }
+}
+
+fn collect_native_drawable_definitions<'a>(
+    trace: &'a NativeTrace,
+    parent: &'a NativeDefinition,
+    definitions: &HashMap<&'a str, &'a NativeDefinition>,
+    out: &mut Vec<&'a NativeDefinition>,
+) {
+    let draw_order = trace
+        .draw_orders
+        .iter()
+        .find(|order| order.parent_definition_id == parent.id && order.instance == 1);
+    let mut source_children = parent.children.iter().collect::<Vec<_>>();
+    source_children.sort_by_key(|child| child.layer_index);
+    let children = draw_order
+        .map(|order| {
+            order
+                .final_children
+                .iter()
+                .map(|child| child.definition_id.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| {
+            source_children
+                .iter()
+                .map(|child| child.definition_id.as_str())
+                .collect()
+        });
+    for child in children {
+        let Some(definition) = definitions.get(child).copied() else {
+            continue;
+        };
+        if !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
+            out.push(definition);
+        }
+        collect_native_drawable_definitions(trace, definition, definitions, out);
+    }
+}
+
+fn native_color_alpha(args: &[Value]) -> Option<f32> {
+    args.first()
+        .and_then(Value::as_array)
+        .and_then(|color| value_f32(color.get(3)))
+        .or_else(|| value_f32(args.get(3)))
+}
+
+fn native_final_render_state(
+    trace: &NativeTrace,
+    definition: &NativeDefinition,
+) -> NativeFinalRenderState {
+    let actor = definition
+        .runtime_actors
+        .first()
+        .map_or(definition.id.as_str(), String::as_str);
+    let mut operations = trace
+        .tween_tracks
+        .iter()
+        .filter(|track| track.actor == actor)
+        .flat_map(|track| &track.segments)
+        .flat_map(|segment| &segment.operations)
+        .collect::<Vec<_>>();
+    operations.sort_by_key(|operation| operation.seq);
+    let mut state = NativeFinalRenderState::default();
+    for operation in operations {
+        let method = operation
+            .operation
+            .rsplit('.')
+            .next()
+            .unwrap_or(&operation.operation)
+            .to_ascii_lowercase();
+        match method.as_str() {
+            "diffusealpha" => {
+                if let Some(alpha) = value_f32(operation.args.first()) {
+                    state.alpha = alpha;
+                    state.wrote_alpha = true;
+                }
+            }
+            "diffuse" => {
+                if let Some(alpha) = native_color_alpha(&operation.args) {
+                    state.alpha = alpha;
+                    state.wrote_alpha = true;
+                }
+            }
+            "visible" => {
+                if let Some(visible) = operation.args.first().and_then(Value::as_bool) {
+                    state.visible = visible;
+                    state.wrote_visible = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    state
+}
+
+fn apply_compiled_delta(
+    state: SongLuaOverlayState,
+    delta: SongLuaOverlayStateDelta,
+) -> SongLuaOverlayState {
+    overlay_state_after_blocks(
+        state,
+        &[SongLuaOverlayCommandBlock {
+            start: 0.0,
+            duration: 0.0,
+            easing: None,
+            opt1: None,
+            opt2: None,
+            delta,
+        }],
+        0.0,
+    )
+}
+
+fn compiled_final_render_state(
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+) -> SongLuaOverlayState {
+    let overlay = &compiled.overlays[overlay_index];
+    let mut state = overlay.initial_state;
+    let mut messages = compiled.messages.iter().collect::<Vec<_>>();
+    messages.sort_by(|left, right| left.beat.total_cmp(&right.beat));
+    for event in messages {
+        for command in overlay
+            .message_commands
+            .iter()
+            .filter(|command| command.message == event.message)
+        {
+            state = overlay_state_after_blocks(state, &command.blocks, f32::MAX);
+        }
+    }
+    for ease in compiled
+        .overlay_eases
+        .iter()
+        .filter(|ease| ease.overlay_index == overlay_index)
+    {
+        state = apply_compiled_delta(state, ease.to);
+    }
+    for update in compiled
+        .overlay_updates
+        .iter()
+        .filter(|update| update.overlay_index == overlay_index)
+    {
+        let Some(sample) = update.samples.last() else {
+            continue;
+        };
+        match (update.target, &sample.value) {
+            (SongLuaOverlayUpdateTarget::Diffuse, SongLuaOverlayUpdateValue::Vec4(value)) => {
+                state.diffuse = *value;
+            }
+            (SongLuaOverlayUpdateTarget::Visible, SongLuaOverlayUpdateValue::Bool(value)) => {
+                state.visible = *value;
+            }
+            _ => {}
+        }
+    }
+    state
+}
+
+fn compare_final_render_states(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    gaps: &mut Vec<String>,
+) {
+    let definitions = trace
+        .actor_definitions
+        .iter()
+        .map(|definition| (definition.id.as_str(), definition))
+        .collect::<HashMap<_, _>>();
+    for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
+        let Some(root) = definitions.get(root_id.as_str()).copied() else {
+            continue;
+        };
+        let mut native = Vec::new();
+        collect_native_drawable_definitions(trace, root, &definitions, &mut native);
+        let deadsync = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| {
+                !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound")
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        if native.len() != deadsync.len() {
+            continue;
+        }
+        for (definition, overlay_index) in native.into_iter().zip(deadsync) {
+            let expected = native_final_render_state(trace, definition);
+            let actual = compiled_final_render_state(compiled, overlay_index);
+            if expected.wrote_alpha && (expected.alpha - actual.diffuse[3]).abs() > EPSILON {
+                gaps.push(format!(
+                    "layer {layer} final alpha differs for {}/{}: ITGmania {:.4}, DeadSync {:.4}",
+                    definition.id, definition.class, expected.alpha, actual.diffuse[3]
+                ));
+            }
+            if expected.wrote_visible && expected.visible != actual.visible {
+                gaps.push(format!(
+                    "layer {layer} final visibility differs for {}/{}: ITGmania {}, DeadSync {}",
+                    definition.id, definition.class, expected.visible, actual.visible
+                ));
+            }
+        }
+    }
+}
+
+fn native_update_render_writes(
+    trace: &NativeTrace,
+    definition: &NativeDefinition,
+) -> (Vec<(f32, f32)>, Vec<(f32, bool)>) {
+    let actor = definition
+        .runtime_actors
+        .first()
+        .map_or(definition.id.as_str(), String::as_str);
+    let mut alpha = Vec::<(u64, f32, f32)>::new();
+    let mut visible = Vec::<(u64, f32, bool)>::new();
+    for track in trace.tween_tracks.iter().filter(|track| {
+        track.actor == actor
+            && track.command.as_deref() == Some("UpdateCommand")
+            && track.kind == "immediate"
+    }) {
+        for segment in &track.segments {
+            for operation in &segment.operations {
+                let method = operation
+                    .operation
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(&operation.operation)
+                    .to_ascii_lowercase();
+                match method.as_str() {
+                    "diffusealpha" => {
+                        if let Some(value) = value_f32(operation.args.first()) {
+                            alpha.push((operation.seq, segment.beat, value));
+                        }
+                    }
+                    "diffuse" => {
+                        if let Some(value) = native_color_alpha(&operation.args) {
+                            alpha.push((operation.seq, segment.beat, value));
+                        }
+                    }
+                    "visible" => {
+                        if let Some(value) = operation.args.first().and_then(Value::as_bool) {
+                            visible.push((operation.seq, segment.beat, value));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    alpha.sort_by_key(|(seq, _, _)| *seq);
+    visible.sort_by_key(|(seq, _, _)| *seq);
+    let mut alpha_writes = Vec::<(f32, f32)>::new();
+    for (_, beat, value) in alpha {
+        if let Some(last) = alpha_writes.last_mut()
+            && (last.0 - beat).abs() <= EPSILON
+        {
+            *last = (beat, value);
+        } else {
+            alpha_writes.push((beat, value));
+        }
+    }
+    let mut visible_writes = Vec::<(f32, bool)>::new();
+    for (_, beat, value) in visible {
+        if let Some(last) = visible_writes.last_mut()
+            && (last.0 - beat).abs() <= EPSILON
+        {
+            *last = (beat, value);
+        } else {
+            visible_writes.push((beat, value));
+        }
+    }
+    (alpha_writes, visible_writes)
+}
+
+fn compiled_update_alpha_at(
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+) -> Option<f32> {
+    let samples = &compiled
+        .overlay_updates
+        .iter()
+        .find(|track| {
+            track.overlay_index == overlay_index
+                && track.target == SongLuaOverlayUpdateTarget::Diffuse
+        })?
+        .samples;
+    let next = samples.partition_point(|sample| sample.beat <= beat);
+    let current = samples.get(next.saturating_sub(1))?;
+    let SongLuaOverlayUpdateValue::Vec4(from) = current.value else {
+        return None;
+    };
+    let Some(next) = samples.get(next) else {
+        return Some(from[3]);
+    };
+    let SongLuaOverlayUpdateValue::Vec4(to) = next.value else {
+        return Some(from[3]);
+    };
+    let span = next.beat - current.beat;
+    if span <= f32::EPSILON {
+        return Some(to[3]);
+    }
+    let t = ((beat - current.beat) / span).clamp(0.0, 1.0);
+    Some((to[3] - from[3]).mul_add(t, from[3]))
+}
+
+fn compiled_update_visibility_at(
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+) -> Option<bool> {
+    let samples = &compiled
+        .overlay_updates
+        .iter()
+        .find(|track| {
+            track.overlay_index == overlay_index
+                && track.target == SongLuaOverlayUpdateTarget::Visible
+        })?
+        .samples;
+    let next = samples.partition_point(|sample| sample.beat <= beat);
+    let SongLuaOverlayUpdateValue::Bool(value) = samples.get(next.saturating_sub(1))?.value else {
+        return None;
+    };
+    Some(value)
+}
+
+fn persistence_probes<T: Copy>(
+    writes: &[(f32, T)],
+    beat_step: f32,
+    end_beat: f32,
+) -> Vec<(f32, T)> {
+    writes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, &(beat, value))| {
+            let next = writes.get(index + 1).map_or(end_beat, |write| write.0);
+            let probe = beat + beat_step;
+            (probe < next - EPSILON && probe <= end_beat + EPSILON).then_some((probe, value))
+        })
+        .collect()
+}
+
+fn compare_update_render_persistence(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    gaps: &mut Vec<String>,
+) {
+    let definitions = trace
+        .actor_definitions
+        .iter()
+        .map(|definition| (definition.id.as_str(), definition))
+        .collect::<HashMap<_, _>>();
+    for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
+        let Some(root) = definitions.get(root_id.as_str()).copied() else {
+            continue;
+        };
+        let mut native = Vec::new();
+        collect_native_drawable_definitions(trace, root, &definitions, &mut native);
+        let deadsync = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| {
+                !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound")
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        if native.len() != deadsync.len() {
+            continue;
+        }
+        for (definition, overlay_index) in native.into_iter().zip(deadsync) {
+            let (alpha_writes, visible_writes) = native_update_render_writes(trace, definition);
+            for (beat, expected) in persistence_probes(
+                &alpha_writes,
+                trace.fixture_context.beat_step,
+                trace.trace_until_beat,
+            ) {
+                let Some(actual) = compiled_update_alpha_at(compiled, overlay_index, beat) else {
+                    continue;
+                };
+                if (expected - actual).abs() > 0.03 {
+                    gaps.push(format!(
+                        "layer {layer} alpha persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected:.4}, DeadSync {actual:.4}",
+                        definition.id, definition.class
+                    ));
+                }
+            }
+            for (beat, expected) in persistence_probes(
+                &visible_writes,
+                trace.fixture_context.beat_step,
+                trace.trace_until_beat,
+            ) {
+                let Some(actual) = compiled_update_visibility_at(compiled, overlay_index, beat)
+                else {
+                    continue;
+                };
+                if expected != actual {
+                    gaps.push(format!(
+                        "layer {layer} visibility persistence differs for {}/{} at beat {beat:.3}: ITGmania {expected}, DeadSync {actual}",
+                        definition.id, definition.class
+                    ));
+                }
+            }
         }
     }
 }
@@ -832,14 +1262,90 @@ fn compare_commands(
     }
 }
 
+fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
+    for (layer, compiled) in compiled.iter().enumerate() {
+        gaps.extend(
+            compiled
+                .info
+                .unsupported_function_ease_captures
+                .iter()
+                .map(|detail| format!("layer {layer} unsupported function ease: {detail}")),
+        );
+        gaps.extend(
+            compiled
+                .info
+                .unsupported_function_action_captures
+                .iter()
+                .map(|detail| format!("layer {layer} unsupported function action: {detail}")),
+        );
+        gaps.extend(
+            compiled
+                .info
+                .unsupported_perframe_captures
+                .iter()
+                .map(|detail| format!("layer {layer} unsupported perframe: {detail}")),
+        );
+        gaps.extend(
+            compiled
+                .info
+                .skipped_message_command_captures
+                .iter()
+                .map(|detail| format!("layer {layer} skipped message command: {detail}")),
+        );
+    }
+}
+
 #[test]
 #[ignore = "reports the current known song-Lua parity gaps"]
 fn native_song_lua_semantics_match_deadsync() {
     let trace = read_trace();
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let (compiled, primary_index) = compile_trace_song(&trace);
+    eprintln!(
+        "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
+        compiled.len(),
+        compiled
+            .iter()
+            .map(|layer| layer.overlays.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.overlay_eases.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.overlay_updates.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.beat_mods.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.messages.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.info.unsupported_function_eases)
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.info.unsupported_function_actions)
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.info.unsupported_perframes)
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.info.skipped_message_command_captures.len())
+            .sum::<usize>(),
+    );
     let mut gaps = Vec::new();
+    compare_compile_info(&compiled, &mut gaps);
     compare_layers(&trace, &compiled, &mut gaps);
+    compare_final_render_states(&trace, &compiled, &mut gaps);
+    compare_update_render_persistence(&trace, &compiled, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);
     compare_commands(&trace, &compiled, primary_index, &mut gaps);
     assert!(

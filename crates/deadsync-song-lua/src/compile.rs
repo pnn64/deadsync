@@ -4,10 +4,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::{
-    CompiledSongLua, SongLuaCompileContext, SongLuaCompileTimer, SongLuaHostState,
-    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
-    SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaTimeUnit,
+    CompiledSongLua, SongLuaCapturedChildActor, SongLuaCompileContext, SongLuaCompileTimer,
+    SongLuaHostState, SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock,
+    SongLuaOverlayKind, SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer,
+    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaTimeUnit,
     SongLuaTrackedActorTarget as TrackedCompileActorTarget,
     add_actor_child_from_path as add_host_actor_child_from_path,
     capture_stable_cross_actor_message_commands, compile_multitap_update_overlays_for_actors,
@@ -581,6 +581,18 @@ where
     for tracked in tracked_actors {
         match tracked.target {
             TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
+            TrackedCompileActorTarget::PlayerJudgment(player) => {
+                out.player_actors[player].judgment = SongLuaCapturedChildActor {
+                    initial_state: tracked.actor.initial_state,
+                    message_commands: tracked.actor.message_commands,
+                };
+            }
+            TrackedCompileActorTarget::PlayerCombo(player) => {
+                out.player_actors[player].combo = SongLuaCapturedChildActor {
+                    initial_state: tracked.actor.initial_state,
+                    message_commands: tracked.actor.message_commands,
+                };
+            }
             TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
         }
     }

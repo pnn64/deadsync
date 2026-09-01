@@ -631,21 +631,47 @@ pub fn read_tracked_compile_actors(
             .map_err(|err| err.to_string())?;
         actor
     };
-    Ok(vec![
-        tracked_song_lua_actor(
-            globals
-                .get::<Table>("__songlua_top_screen_player_1")
-                .map_err(|err| err.to_string())?,
-            SongLuaTrackedActorTarget::Player(0),
-        )?,
-        tracked_song_lua_actor(
-            globals
-                .get::<Table>("__songlua_top_screen_player_2")
-                .map_err(|err| err.to_string())?,
-            SongLuaTrackedActorTarget::Player(1),
-        )?,
-        tracked_song_lua_actor(song_foreground, SongLuaTrackedActorTarget::SongForeground)?,
-    ])
+    let players = [
+        globals
+            .get::<Table>("__songlua_top_screen_player_1")
+            .map_err(|err| err.to_string())?,
+        globals
+            .get::<Table>("__songlua_top_screen_player_2")
+            .map_err(|err| err.to_string())?,
+    ];
+    let mut out = Vec::with_capacity(7);
+    for (player_index, player) in players.into_iter().enumerate() {
+        out.push(tracked_song_lua_actor(
+            player.clone(),
+            SongLuaTrackedActorTarget::Player(player_index),
+        )?);
+        let children = actor_children(lua, &player).map_err(|err| err.to_string())?;
+        for (name, target) in [
+            (
+                "Judgment",
+                SongLuaTrackedActorTarget::PlayerJudgment(player_index),
+            ),
+            (
+                "Combo",
+                SongLuaTrackedActorTarget::PlayerCombo(player_index),
+            ),
+        ] {
+            let child = if let Some(child) = children
+                .get::<Option<Table>>(name)
+                .map_err(|err| err.to_string())?
+            {
+                child
+            } else {
+                create_named_child_actor(lua, &player, name).map_err(|err| err.to_string())?
+            };
+            out.push(tracked_song_lua_actor(child, target)?);
+        }
+    }
+    out.push(tracked_song_lua_actor(
+        song_foreground,
+        SongLuaTrackedActorTarget::SongForeground,
+    )?);
+    Ok(out)
 }
 
 pub fn read_top_screen_hidden_layers(lua: &Lua) -> Result<[bool; 2], String> {
@@ -10263,6 +10289,7 @@ pub fn tracked_song_lua_actor(
             initial_state,
             message_commands: Vec::new(),
             manual_hud_draw,
+            ..SongLuaCapturedActor::default()
         },
         table,
         target,

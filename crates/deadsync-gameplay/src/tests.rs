@@ -979,6 +979,8 @@ mod tests {
             foreground_visual_layers: Vec::new(),
             player_actors: [9_u16; MAX_PLAYERS],
             player_events: std::array::from_fn(|_| Vec::new()),
+            player_judgment_events: std::array::from_fn(|_| Vec::new()),
+            player_combo_events: std::array::from_fn(|_| Vec::new()),
             song_foreground: 11_u16,
             song_foreground_events: vec![build_song_lua_overlay_message_runtime(5.0, 4)],
             hidden_players: [false; MAX_PLAYERS],

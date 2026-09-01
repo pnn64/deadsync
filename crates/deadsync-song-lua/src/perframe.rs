@@ -1,5 +1,5 @@
 use mlua::{Function, Lua, Table, Value};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaColumnOffsetBuildParams,
@@ -509,18 +509,13 @@ fn update_function_boundary_beats(
     Ok(out)
 }
 
-struct SongLuaUpdateReplay {
-    beats: Vec<f32>,
-    reset_beats: HashSet<u32>,
-}
-
 fn update_function_replay_beats(
     lua: &Lua,
     root: &Value,
     context: &SongLuaCompileContext,
     start: f32,
     end: f32,
-) -> Result<SongLuaUpdateReplay, String> {
+) -> Result<Vec<f32>, String> {
     let step = update_function_frame_step(context, end - start);
     let mut out = vec![start];
     let mut beat = start;
@@ -538,7 +533,7 @@ fn update_function_replay_beats(
     let reference_step =
         song_display_bps(context) * song_music_rate(context) / SONG_LUA_UPDATE_REFERENCE_FPS;
     // ITGmania reaches the frames immediately around a zero-ending callback.
-    // Capture both so properties abandoned by the next Update can close cleanly.
+    // Capture both without inventing a property write after the callback stops.
     out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
         let beat = *end_beat - reference_step;
         (beat.is_finite() && beat > start && beat < end).then_some(beat)
@@ -549,17 +544,7 @@ fn update_function_replay_beats(
     }));
     out.sort_by(f32::total_cmp);
     out.dedup_by(|left, right| left.to_bits() == right.to_bits());
-    let reset_beats = boundaries
-        .zero_ends
-        .into_iter()
-        .flat_map(|beat| [beat, beat + reference_step])
-        .filter(|beat| beat.is_finite() && *beat > start && *beat <= end)
-        .map(f32::to_bits)
-        .collect();
-    Ok(SongLuaUpdateReplay {
-        beats: out,
-        reset_beats,
-    })
+    Ok(out)
 }
 
 #[must_use]
@@ -1130,10 +1115,8 @@ fn capture_update_overlay_samples<Kind>(
     >,
     beat: f32,
     next_beat: f32,
-    reset_missing_from: Option<&HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>>,
-    message_applied: &[bool],
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
-) -> Result<HashSet<(usize, crate::SongLuaOverlayUpdateTarget)>, String> {
+) -> Result<(), String> {
     merge_completed_scheduled_overlay_samples(
         tracks,
         track_indices,
@@ -1141,7 +1124,6 @@ fn capture_update_overlay_samples<Kind>(
         scheduled_samples,
         next_beat,
     );
-    let mut touched = HashSet::new();
     let mut reset_indices = Vec::new();
     crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values, scheduled| {
         let Some(baseline) = baseline.get(overlay_index) else {
@@ -1150,7 +1132,6 @@ fn capture_update_overlay_samples<Kind>(
         debug_assert!(overlay_index < overlays.len());
         reset_indices.push(overlay_index);
         for (target, next) in values {
-            touched.insert((overlay_index, *target));
             let current = track_indices
                 .get(&(overlay_index, *target))
                 .and_then(|index| tracks[*index].samples.last())
@@ -1183,35 +1164,7 @@ fn capture_update_overlay_samples<Kind>(
     for overlay_index in reset_indices {
         reset_actor_capture(lua, &overlays[overlay_index].table).map_err(|err| err.to_string())?;
     }
-    if let Some(previous) = reset_missing_from {
-        for &(overlay_index, target) in previous.difference(&touched) {
-            let Some(baseline) = baseline.get(overlay_index) else {
-                continue;
-            };
-            let reset_state = if message_applied.get(overlay_index).copied().unwrap_or(false) {
-                actor_overlay_initial_state(&overlays[overlay_index].table)?
-            } else {
-                *baseline
-            };
-            let next = overlay_state_update_value(&reset_state, target);
-            let current = track_indices
-                .get(&(overlay_index, target))
-                .and_then(|index| tracks[*index].samples.last())
-                .map(|sample| sample.value.clone())
-                .unwrap_or_else(|| next.clone());
-            push_update_overlay_value(
-                tracks,
-                track_indices,
-                overlay_index,
-                target,
-                beat,
-                current,
-                next_beat,
-                next,
-            );
-        }
-    }
-    Ok(touched)
+    Ok(())
 }
 
 struct SongLuaScheduledOverlaySample {
@@ -1384,7 +1337,7 @@ pub fn compile_update_functions<Kind>(
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
     let mut scheduled_overlay_samples = Vec::new();
-    let mut prior_overlay_touches = capture_update_overlay_samples(
+    capture_update_overlay_samples(
         lua,
         context,
         overlays,
@@ -1393,15 +1346,13 @@ pub fn compile_update_functions<Kind>(
         &mut overlay_track_indices,
         start,
         start,
-        None,
-        message_replay.applied(),
         &mut scheduled_overlay_samples,
     )?;
 
     let replay = update_function_replay_beats(lua, root, context, start, end)?;
     let mut beat = start;
     let mut transform_masks = player_transform_masks(&player_tables)?;
-    for next_beat in replay.beats.into_iter().skip(1) {
+    for next_beat in replay.into_iter().skip(1) {
         let delta_beats = next_beat - beat;
         let delta_seconds = perframe_delta_seconds(context, delta_beats);
         reset_tracked_capture_tables(lua, tracked_actors)?;
@@ -1436,8 +1387,7 @@ pub fn compile_update_functions<Kind>(
             &option_tables,
         )?);
         column_samples.push(read_note_column_transform_samples(lua)?);
-        let reset_missing = replay.reset_beats.contains(&next_beat.to_bits());
-        let next_overlay_touches = capture_update_overlay_samples(
+        capture_update_overlay_samples(
             lua,
             context,
             overlays,
@@ -1446,11 +1396,8 @@ pub fn compile_update_functions<Kind>(
             &mut overlay_track_indices,
             beat,
             next_beat,
-            reset_missing.then_some(&prior_overlay_touches),
-            message_replay.applied(),
             &mut scheduled_overlay_samples,
         )?;
-        prior_overlay_touches = next_overlay_touches;
         beat = next_beat;
     }
 
@@ -1524,7 +1471,6 @@ struct SongLuaPerframeMessageReplay<'a> {
     order: Vec<usize>,
     next: usize,
     active: Vec<Option<SongLuaPerframeActiveMessage>>,
-    applied: Vec<bool>,
 }
 
 impl<'a> SongLuaPerframeMessageReplay<'a> {
@@ -1536,12 +1482,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
             order,
             next: 0,
             active: vec![None; overlay_count],
-            applied: vec![false; overlay_count],
         }
-    }
-
-    fn applied(&self) -> &[bool] {
-        &self.applied
     }
 
     fn advance<Kind>(
@@ -1583,7 +1524,6 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                     start_beat: event.beat,
                     base: actor_overlay_initial_state(&overlay.table)?,
                 });
-                self.applied[overlay_index] = true;
                 apply_perframe_active_message(
                     lua,
                     context,

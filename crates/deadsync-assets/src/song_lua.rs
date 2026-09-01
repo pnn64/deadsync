@@ -9,16 +9,17 @@ use deadsync_song_lua::{
 };
 
 pub use deadsync_song_lua::{
-    SONG_LUA_INITIAL_LIFE, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
-    SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaNoteskinResolver,
-    SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-    SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
-    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext, SongLuaProxyTarget,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD,
-    file_path_string, overlay_state_after_blocks, parse_overlay_blend_mode,
-    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
-    parse_overlay_text_glow_mode,
+    SONG_LUA_INITIAL_LIFE, SongLuaCapturedActor, SongLuaCapturedChildActor,
+    SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty,
+    SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
+    SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayMeshVertex,
+    SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
+    SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod,
+    SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, file_path_string,
+    overlay_state_after_blocks, parse_overlay_blend_mode, parse_overlay_effect_clock,
+    parse_overlay_effect_mode, parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
 
 pub type SongLuaOverlayModelLayer = deadsync_song_lua::SongLuaOverlayModelLayer<TexturedMeshVertex>;

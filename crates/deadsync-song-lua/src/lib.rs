@@ -4247,9 +4247,17 @@ pub struct SongLuaOverlayRuntimeUpdateTrack {
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
+pub struct SongLuaCapturedChildActor {
+    pub initial_state: SongLuaOverlayState,
+    pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+    pub judgment: SongLuaCapturedChildActor,
+    pub combo: SongLuaCapturedChildActor,
     /// The chart directly draws a Judgment or Combo child outside the Player draw.
     pub manual_hud_draw: bool,
 }
@@ -4257,6 +4265,8 @@ pub struct SongLuaCapturedActor {
 #[derive(Clone, Copy)]
 pub enum SongLuaTrackedActorTarget {
     Player(usize),
+    PlayerJudgment(usize),
+    PlayerCombo(usize),
     SongForeground,
 }
 
@@ -7349,6 +7359,7 @@ mods_ease = {
     {0.13, 0.37, 1, 0, function(value) level = value end, "len",
         function(t, b, c, d) return b + c * t / d end},
 }
+local action_done = false
 local function Update()
     local beat = GAMESTATE:GetSongBeat()
     for _, ease in ipairs(mods_ease) do
@@ -7385,7 +7396,73 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn compile_song_lua_resets_targets_abandoned_at_zero_ease_end() {
+    fn compile_song_lua_keeps_zero_alpha_after_function_ease() {
+        let song_dir = test_dir("update-function-alpha-persistence");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local flash
+mod_actions = {
+    {0, function() flash:diffusealpha(1) end, true},
+}
+mods_ease = {
+    {0.13, 0.37, 1, 0, function(value) flash:diffusealpha(value) end, "len",
+        function(t, b, c, d) return b + c * t / d end},
+}
+local function Update()
+    local beat = GAMESTATE:GetSongBeat()
+    if not action_done and beat >= mod_actions[1][1] then
+        action_done = true
+        mod_actions[1][2]()
+    end
+    for _, ease in ipairs(mods_ease) do
+        if beat >= ease[1] and beat <= ease[1] + ease[2] then
+            ease[5](ease[7](beat - ease[1], ease[3], ease[4] - ease[3], ease[2]))
+        end
+    end
+end
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Flash",
+        InitCommand=function(self) flash = self self:diffusealpha(0) end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self) self:SetUpdateFunction(Update) end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Alpha Persistence");
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let flash_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Flash"))
+            .unwrap();
+        let alpha = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == flash_index
+                    && track.target == SongLuaOverlayUpdateTarget::Diffuse
+            })
+            .unwrap();
+        assert_eq!(
+            alpha.samples.last().map(|sample| &sample.value),
+            Some(&SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0]))
+        );
+        assert!(alpha.samples.iter().all(|sample| {
+            sample.beat <= 0.5
+                || sample.value != SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_preserves_targets_abandoned_at_zero_ease_end() {
         let song_dir = test_dir("update-function-zero-end-reset");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -7428,19 +7505,16 @@ return Def.ActorFrame{
                 .iter()
                 .find(|track| track.target == target)
                 .unwrap();
-            assert!(track.samples.iter().any(|sample| {
-                (sample.beat - 0.5).abs() <= f32::EPSILON
-                    && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
-            }));
-            assert_eq!(
+            assert!(track.samples.iter().all(|sample| sample.beat <= 0.5));
+            assert!(matches!(
                 track.samples.last().map(|sample| &sample.value),
-                Some(&SongLuaOverlayUpdateValue::F32(0.0))
-            );
+                Some(SongLuaOverlayUpdateValue::F32(value)) if *value > 0.0
+            ));
         }
     }
 
     #[test]
-    fn compile_song_lua_resets_targets_one_frame_after_zero_ease_end() {
+    fn compile_song_lua_preserves_last_write_after_update_stops() {
         let song_dir = test_dir("update-function-post-end-reset");
         let entry = song_dir.join("default.lua");
         fs::write(
@@ -7478,14 +7552,10 @@ return Def.ActorFrame{
             .iter()
             .find(|track| track.target == SongLuaOverlayUpdateTarget::X)
             .unwrap();
-        assert!(track.samples.iter().any(|sample| {
-            sample.beat > 0.5
-                && sample.beat <= 0.5 + 1.0 / 60.0 + f32::EPSILON
-                && sample.value == SongLuaOverlayUpdateValue::F32(0.0)
-        }));
+        assert!(track.samples.iter().all(|sample| sample.beat <= 0.5));
         assert_eq!(
             track.samples.last().map(|sample| &sample.value),
-            Some(&SongLuaOverlayUpdateValue::F32(0.0))
+            Some(&SongLuaOverlayUpdateValue::F32(80.0))
         );
     }
 
@@ -7749,6 +7819,59 @@ return Def.ActorFrame{
         assert_eq!(block.delta.z, Some(3.0));
         assert_eq!(block.delta.zoom, Some(0.5));
         assert_eq!(block.delta.rot_z_deg, Some(20.0));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_player_hud_child_actions() {
+        let song_dir = test_dir("player-hud-child-actions");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local player = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
+local judgment = player:GetChild("Judgment")
+local combo = player:GetChild("Combo")
+mod_actions = {
+    {8, function()
+        judgment:visible(false)
+        combo:visible(false)
+    end, true},
+    {24, function() combo:visible(true) end, true},
+    {71, function() judgment:visible(true) end, true},
+}
+return Def.ActorFrame{}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Player HUD Child Actions"),
+        )
+        .unwrap();
+
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.messages.len(), 3);
+        assert_eq!(compiled.player_actors[0].judgment.message_commands.len(), 2);
+        assert_eq!(compiled.player_actors[0].combo.message_commands.len(), 2);
+        assert_eq!(
+            compiled.player_actors[0].judgment.message_commands[0].blocks[0]
+                .delta
+                .visible,
+            Some(false)
+        );
+        assert_eq!(
+            compiled.player_actors[0].judgment.message_commands[1].blocks[0]
+                .delta
+                .visible,
+            Some(true)
+        );
+        assert_eq!(
+            compiled.player_actors[0].combo.message_commands[1].blocks[0]
+                .delta
+                .visible,
+            Some(true)
+        );
     }
 
     #[test]

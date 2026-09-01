@@ -255,6 +255,8 @@ mod runtime_regression_tests {
                     Vec::new(),
                     [(); MAX_PLAYERS],
                     std::array::from_fn(|_| Vec::new()),
+                    std::array::from_fn(|_| Vec::new()),
+                    std::array::from_fn(|_| Vec::new()),
                     (),
                     Vec::new(),
                     [false; MAX_PLAYERS],
