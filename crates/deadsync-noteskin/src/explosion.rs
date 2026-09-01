@@ -617,6 +617,38 @@ impl PendingSegment {
 
 #[must_use]
 pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
+    let script = normalized_script_command(script);
+    parse_explosion_animation_parts([script.as_ref()])
+}
+
+pub(crate) fn parse_explosion_animation_with_init(
+    init_command: Option<&str>,
+    command: &str,
+) -> Option<ExplosionAnimation> {
+    let command = command.trim();
+    if command.is_empty() {
+        return None;
+    }
+    let init_command = init_command
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if !command.contains("self:")
+        && init_command.is_none_or(|init_command| !init_command.contains("self:"))
+    {
+        return Some(parse_explosion_animation_parts(
+            init_command.into_iter().chain([command]),
+        ));
+    }
+
+    itg_command_with_init(init_command, command)
+        .as_deref()
+        .map(parse_explosion_animation)
+}
+
+fn parse_explosion_animation_parts<'a>(
+    scripts: impl IntoIterator<Item = &'a str>,
+) -> ExplosionAnimation {
     let mut animation = ExplosionAnimation {
         initial: ExplosionState::default(),
         segments: Vec::new(),
@@ -642,8 +674,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
         }
     };
 
-    let script = normalized_script_command(script);
-    for raw_token in script.split(';') {
+    for raw_token in scripts.into_iter().flat_map(|script| script.split(';')) {
         let token = raw_token.trim();
         if token.is_empty() {
             continue;
@@ -1001,6 +1032,15 @@ pub fn itg_mine_explosion_commands(commands: &HashMap<String, String>) -> Vec<St
             )
         })
         .collect()
+}
+
+pub(crate) fn itg_mine_explosion_command_refs(
+    commands: &HashMap<String, String>,
+) -> [Option<&str>; 2] {
+    [
+        commands.get("ecommand").map(String::as_str),
+        commands.get("e2command").map(String::as_str),
+    ]
 }
 
 #[must_use]
@@ -1562,6 +1602,30 @@ mod tests {
             Some("diffusealpha,0".to_string())
         );
         assert_eq!(itg_command_with_init(Some("zoom,2"), "  "), None);
+    }
+
+    #[test]
+    fn borrowed_init_parsing_matches_joined_command_behavior() {
+        for (init_command, command) in [
+            (
+                Some(" zoom,0.5;diffusealpha,1 "),
+                " linear,0.2;diffusealpha,0 ",
+            ),
+            (None, "sleep,0.1;visible,false"),
+            (Some("  "), "accelerate,0.4;rotationz,90"),
+            (
+                Some("function(self) self:zoom(0.5) end"),
+                "linear,0.2;diffusealpha,0",
+            ),
+        ] {
+            let joined = itg_command_with_init(init_command, command)
+                .as_deref()
+                .map(parse_explosion_animation);
+            let borrowed = parse_explosion_animation_with_init(init_command, command);
+            assert_eq!(format!("{borrowed:?}"), format!("{joined:?}"));
+        }
+
+        assert!(parse_explosion_animation_with_init(Some("zoom,2"), "  ").is_none());
     }
 
     #[test]

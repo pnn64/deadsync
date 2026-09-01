@@ -1,9 +1,12 @@
+#[cfg(any(test, feature = "bench-support"))]
+use crate::explosion::itg_mine_explosion_commands;
 use crate::explosion::{
     ItgTapExplosionMode, ItgTapExplosionSource, itg_direct_tap_explosion_layers,
     itg_has_hit_mine_command, itg_has_tap_explosion_command, itg_hit_mine_command_with_init,
     itg_hit_mine_explosion_slot, itg_hold_explosion_slot, itg_is_hit_mine_explosion_element,
-    itg_mine_explosion_commands, itg_partition_tap_explosion_sources,
+    itg_mine_explosion_command_refs, itg_partition_tap_explosion_sources,
     itg_tap_explosion_command_with_init, itg_tap_explosion_key, parse_explosion_animation,
+    parse_explosion_animation_with_init,
 };
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
@@ -33,12 +36,38 @@ pub struct TapExplosion<T> {
 }
 
 impl<T: Clone> TapExplosion<T> {
-    /// # Panics
-    ///
-    /// Panics if an internal state invariant is violated.
     pub fn from_single(slot: T, animation: ExplosionAnimation) -> Self {
-        Self::from_layers(vec![TapExplosionLayer { slot, animation }])
-            .expect("single tap explosion layer must build")
+        let layers: Arc<[TapExplosionLayer<T>]> = Arc::new([TapExplosionLayer {
+            slot: slot.clone(),
+            animation: animation.clone(),
+        }]);
+        Self {
+            slot,
+            animation,
+            layers,
+        }
+    }
+
+    fn from_pair(
+        slot: T,
+        animation: ExplosionAnimation,
+        second_animation: ExplosionAnimation,
+    ) -> Self {
+        let layers: Arc<[TapExplosionLayer<T>]> = Arc::new([
+            TapExplosionLayer {
+                slot: slot.clone(),
+                animation: animation.clone(),
+            },
+            TapExplosionLayer {
+                slot: slot.clone(),
+                animation: second_animation,
+            },
+        ]);
+        Self {
+            slot,
+            animation,
+            layers,
+        }
     }
 
     #[must_use]
@@ -796,6 +825,26 @@ pub fn itg_mine_explosion_from_commands<T: Clone>(
     slot: T,
     commands: &HashMap<String, String>,
 ) -> Option<TapExplosion<T>> {
+    let init_command = commands.get("initcommand").map(String::as_str);
+    let [first, second] = itg_mine_explosion_command_refs(commands).map(|command| {
+        command.and_then(|command| parse_explosion_animation_with_init(init_command, command))
+    });
+    match (first, second) {
+        (None, None) => None,
+        (Some(animation), None) | (None, Some(animation)) => {
+            Some(TapExplosion::from_single(slot, animation))
+        }
+        (Some(animation), Some(second_animation)) => {
+            Some(TapExplosion::from_pair(slot, animation, second_animation))
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_mine_explosion_from_commands_reference<T: Clone>(
+    slot: T,
+    commands: &HashMap<String, String>,
+) -> Option<TapExplosion<T>> {
     let layers = itg_mine_explosion_commands(commands)
         .into_iter()
         .map(|command_with_init| TapExplosionLayer {
@@ -819,6 +868,189 @@ pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
             .map(parse_explosion_animation)
             .unwrap_or_default(),
     )
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod mine_explosion_bench_support {
+    use super::{
+        TapExplosion, TapExplosionLayer, itg_mine_explosion_from_commands,
+        itg_mine_explosion_from_commands_reference,
+    };
+    use crate::ExplosionAnimation;
+    use crate::explosion::{
+        itg_command_with_init, parse_explosion_animation, parse_explosion_animation_with_init,
+    };
+    use std::collections::HashMap;
+    use std::hint::black_box;
+    use std::sync::OnceLock;
+
+    const INIT_COMMAND: &str = "zoom,0.75;diffuse,0.9,0.8,0.7,1";
+    const FIRST_COMMAND: &str = "linear,0.2;zoom,1.4;diffusealpha,0";
+    const SECOND_COMMAND: &str = "accelerate,0.35;rotationz,90;diffusealpha,0";
+
+    fn commands() -> &'static HashMap<String, String> {
+        static COMMANDS: OnceLock<HashMap<String, String>> = OnceLock::new();
+        COMMANDS.get_or_init(|| {
+            HashMap::from([
+                ("initcommand".to_owned(), INIT_COMMAND.to_owned()),
+                ("ecommand".to_owned(), FIRST_COMMAND.to_owned()),
+                ("e2command".to_owned(), SECOND_COMMAND.to_owned()),
+            ])
+        })
+    }
+
+    fn animation_templates() -> &'static (ExplosionAnimation, ExplosionAnimation) {
+        static ANIMATIONS: OnceLock<(ExplosionAnimation, ExplosionAnimation)> = OnceLock::new();
+        ANIMATIONS.get_or_init(|| {
+            (
+                parse_explosion_animation_with_init(Some(INIT_COMMAND), FIRST_COMMAND)
+                    .expect("first benchmark command"),
+                parse_explosion_animation_with_init(Some(INIT_COMMAND), SECOND_COMMAND)
+                    .expect("second benchmark command"),
+            )
+        })
+    }
+
+    fn mix(checksum: u64, value: u64) -> u64 {
+        checksum.wrapping_mul(131).wrapping_add(value)
+    }
+
+    fn animation_checksum(mut checksum: u64, animation: &ExplosionAnimation) -> u64 {
+        checksum = mix(checksum, u64::from(animation.initial.zoom.to_bits()));
+        for channel in animation.initial.color {
+            checksum = mix(checksum, u64::from(channel.to_bits()));
+        }
+        checksum = mix(checksum, u64::from(animation.initial.rotation_z.to_bits()));
+        checksum = mix(checksum, animation.initial.visible as u64);
+        checksum = mix(checksum, animation.blend_add as u64);
+        checksum = mix(checksum, animation.segments.len() as u64);
+        for segment in &animation.segments {
+            checksum = mix(checksum, u64::from(segment.duration.to_bits()));
+            checksum = mix(checksum, segment.tween as u64);
+            checksum = mix(
+                checksum,
+                u64::from(segment.end_zoom.unwrap_or(f32::NAN).to_bits()),
+            );
+            checksum = mix(
+                checksum,
+                u64::from(segment.end_rotation_z.unwrap_or(f32::NAN).to_bits()),
+            );
+            checksum = mix(checksum, segment.end_visible.map_or(2, u64::from));
+            if let Some(color) = segment.end_color {
+                for channel in color {
+                    checksum = mix(checksum, u64::from(channel.to_bits()));
+                }
+            }
+        }
+        if let Some(glow) = animation.glow {
+            checksum = mix(checksum, u64::from(glow.period.to_bits()));
+            for channel in glow.color1.into_iter().chain(glow.color2) {
+                checksum = mix(checksum, u64::from(channel.to_bits()));
+            }
+        }
+        checksum
+    }
+
+    fn explosion_checksum(mut checksum: u64, explosion: Option<TapExplosion<u64>>) -> u64 {
+        let Some(explosion) = explosion else {
+            return mix(checksum, u64::MAX);
+        };
+        checksum = mix(checksum, explosion.slot);
+        checksum = animation_checksum(checksum, &explosion.animation);
+        checksum = mix(checksum, explosion.layers.len() as u64);
+        for layer in explosion.layers.iter() {
+            checksum = mix(checksum, layer.slot);
+            checksum = animation_checksum(checksum, &layer.animation);
+        }
+        checksum
+    }
+
+    fn parse_init_commands(evaluations: usize, optimized: bool) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, index| {
+            let command = if index & 1 == 0 {
+                FIRST_COMMAND
+            } else {
+                SECOND_COMMAND
+            };
+            let animation = if optimized {
+                parse_explosion_animation_with_init(Some(INIT_COMMAND), black_box(command))
+                    .expect("borrowed benchmark command")
+            } else {
+                let joined = itg_command_with_init(Some(INIT_COMMAND), black_box(command))
+                    .expect("joined benchmark command");
+                parse_explosion_animation(&joined)
+            };
+            animation_checksum(checksum, black_box(&animation))
+        })
+    }
+
+    fn resolve_commands(evaluations: usize, optimized: bool) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let explosion = if optimized {
+                itg_mine_explosion_from_commands(black_box(17_u64), black_box(commands()))
+            } else {
+                itg_mine_explosion_from_commands_reference(black_box(17_u64), black_box(commands()))
+            };
+            explosion_checksum(checksum, black_box(explosion))
+        })
+    }
+
+    fn build_layers(evaluations: usize, optimized: bool) -> u64 {
+        let (first, second) = animation_templates();
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let explosion = if optimized {
+                TapExplosion::from_pair(
+                    black_box(17_u64),
+                    black_box(first.clone()),
+                    black_box(second.clone()),
+                )
+            } else {
+                TapExplosion::from_layers(vec![
+                    TapExplosionLayer {
+                        slot: black_box(17_u64),
+                        animation: black_box(first.clone()),
+                    },
+                    TapExplosionLayer {
+                        slot: black_box(17_u64),
+                        animation: black_box(second.clone()),
+                    },
+                ])
+                .expect("staged benchmark layers")
+            };
+            explosion_checksum(checksum, Some(black_box(explosion)))
+        })
+    }
+
+    #[must_use]
+    pub fn joined_init_parsing_old(evaluations: usize) -> u64 {
+        parse_init_commands(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn borrowed_init_parsing_new(evaluations: usize) -> u64 {
+        parse_init_commands(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn staged_command_resolution_old(evaluations: usize) -> u64 {
+        resolve_commands(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn direct_command_resolution_new(evaluations: usize) -> u64 {
+        resolve_commands(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn staged_layer_buffer_old(evaluations: usize) -> u64 {
+        build_layers(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn direct_layer_arc_new(evaluations: usize) -> u64 {
+        build_layers(evaluations, true)
+    }
 }
 
 pub fn itg_tap_explosion_map_from_sources<T: Clone>(
@@ -3578,10 +3810,10 @@ mod tests {
         itg_is_common_fallback_hold_explosion_key_reference, itg_is_common_noteskin_key,
         itg_is_common_noteskin_key_reference, itg_lift_layers_for_col,
         itg_lift_layers_for_col_shared, itg_load_sprite_decl_slot,
-        itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
-        itg_noteskin_runtime_compiled, itg_partition_tap_explosion_layers,
-        itg_partition_tap_explosion_layers_reference, itg_receptor_column,
-        itg_receptor_command_refs, itg_receptor_command_refs_reference,
+        itg_mine_explosion_from_commands, itg_mine_explosion_from_commands_reference,
+        itg_mine_visuals_from_layers, itg_noteskin_runtime_compiled,
+        itg_partition_tap_explosion_layers, itg_partition_tap_explosion_layers_reference,
+        itg_receptor_column, itg_receptor_command_refs, itg_receptor_command_refs_reference,
         itg_receptor_glow_behavior_from_layers, itg_receptor_layer_refs,
         itg_receptor_layer_refs_reference, itg_receptor_pulse_from_command,
         itg_receptor_visuals_from_resolved, itg_receptor_visuals_from_resolved_reference,
@@ -4318,6 +4550,76 @@ mod tests {
         assert_eq!(explosion.layers.len(), 1);
         assert_eq!(explosion.animation.initial.zoom, 0.5);
         assert!((explosion.duration() - 0.2).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn itg_mine_explosion_matches_staged_reference_for_all_command_shapes() {
+        let cases = [
+            HashMap::new(),
+            HashMap::from([("ecommand".to_owned(), "  ".to_owned())]),
+            HashMap::from([(
+                "e2command".to_owned(),
+                "sleep,0.1;diffusealpha,0".to_owned(),
+            )]),
+            HashMap::from([
+                ("initcommand".to_owned(), "zoom,0.5".to_owned()),
+                (
+                    "ecommand".to_owned(),
+                    "linear,0.2;diffusealpha,0".to_owned(),
+                ),
+                (
+                    "e2command".to_owned(),
+                    "accelerate,0.4;rotationz,90".to_owned(),
+                ),
+            ]),
+            HashMap::from([
+                (
+                    "initcommand".to_owned(),
+                    "function(self) self:zoom(0.5) end".to_owned(),
+                ),
+                (
+                    "ecommand".to_owned(),
+                    "linear,0.2;diffusealpha,0".to_owned(),
+                ),
+            ]),
+        ];
+
+        for commands in cases {
+            let current = itg_mine_explosion_from_commands(Slot(7), &commands);
+            let reference = itg_mine_explosion_from_commands_reference(Slot(7), &commands);
+            assert_eq!(format!("{current:?}"), format!("{reference:?}"));
+        }
+    }
+
+    #[test]
+    fn itg_mine_explosion_preserves_fixed_layer_order_and_primary_animation() {
+        let explosion = itg_mine_explosion_from_commands(
+            Slot(7),
+            &HashMap::from([
+                ("initcommand".to_owned(), "zoom,0.5".to_owned()),
+                (
+                    "ecommand".to_owned(),
+                    "linear,0.2;diffusealpha,0".to_owned(),
+                ),
+                (
+                    "e2command".to_owned(),
+                    "accelerate,0.4;rotationz,90".to_owned(),
+                ),
+            ]),
+        )
+        .expect("two actor mine commands should build two layers");
+
+        assert_eq!(explosion.layers.len(), 2);
+        assert_eq!(explosion.layers[0].slot, Slot(7));
+        assert_eq!(explosion.layers[1].slot, Slot(7));
+        assert_eq!(explosion.animation.initial.zoom, 0.5);
+        assert_eq!(explosion.animation.duration(), 0.2);
+        assert_eq!(explosion.layers[0].animation.duration(), 0.2);
+        assert_eq!(explosion.layers[1].animation.duration(), 0.4);
+        assert_eq!(
+            explosion.layers[1].animation.segments[0].end_rotation_z,
+            Some(90.0)
+        );
     }
 
     #[test]

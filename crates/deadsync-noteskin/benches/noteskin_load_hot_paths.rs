@@ -2,8 +2,9 @@ use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
     NotePartTextureTranslate, explosion_bench_support, mine_bench_support,
-    model_draw_bench_support, receptor_bench_support, sprite_math_bench_support,
-    tap_column_bench_support, tap_explosion_bench_support, uv_color_bench_support,
+    mine_explosion_bench_support, model_draw_bench_support, receptor_bench_support,
+    sprite_math_bench_support, tap_column_bench_support, tap_explosion_bench_support,
+    uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -568,6 +569,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_MINE_EXPLOSION_ONLY").is_some() {
+        run_allocation_case(
+            "noteskin borrowed mine init parsing",
+            mine_explosion_bench_support::joined_init_parsing_old,
+            mine_explosion_bench_support::borrowed_init_parsing_new,
+        );
+        run_allocation_case(
+            "noteskin direct mine command resolution",
+            mine_explosion_bench_support::staged_command_resolution_old,
+            mine_explosion_bench_support::direct_command_resolution_new,
+        );
+        run_allocation_case(
+            "noteskin direct fixed mine layer Arc",
+            mine_explosion_bench_support::staged_layer_buffer_old,
+            mine_explosion_bench_support::direct_layer_arc_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_TAP_COLUMN_ONLY").is_some() {
         run_allocation_case(
             "noteskin direct shared tap layers",
