@@ -1577,6 +1577,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
         ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::ArrowCloudResultDialogs,
+        yes_no_choice_index(cfg.show_arrowcloud_result_dialogs),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::ArrowCloudQrLogin,
         arrowcloud_qr_login_when_choice_index(cfg.arrowcloud_qr_login_when),
     );

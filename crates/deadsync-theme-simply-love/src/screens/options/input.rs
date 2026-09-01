@@ -1147,6 +1147,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::ArrowCloudSubmitFails => {
                 crate::SimplyLoveOnlineConfigRequest::SubmitArrowCloudFails(enabled)
             }
+            SubRowId::ArrowCloudResultDialogs => {
+                crate::SimplyLoveOnlineConfigRequest::ShowArrowCloudResultDialogs(enabled)
+            }
             SubRowId::ArrowCloudQrLogin => crate::SimplyLoveOnlineConfigRequest::ArrowCloudQrLogin(
                 qr_login_policy_from_index(new_index),
             ),

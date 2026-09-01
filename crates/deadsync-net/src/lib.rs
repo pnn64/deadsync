@@ -132,6 +132,43 @@ pub fn read_text_body_bounded(
     read_utf8_body_bounded(body.as_reader(), max_bytes, initial_capacity)
 }
 
+/// Reads a binary response body without allowing an untrusted endpoint to grow
+/// memory beyond `max_bytes`.
+pub fn read_bytes_body_bounded(
+    response: ureq::http::Response<ureq::Body>,
+    max_bytes: usize,
+) -> Result<Box<[u8]>, NetworkError> {
+    let mut body = response.into_body();
+    let max_bytes_u64 = u64::try_from(max_bytes).unwrap_or(u64::MAX);
+    let declared_len = body.content_length();
+    if declared_len.is_some_and(|len| len > max_bytes_u64) {
+        return Err(body_too_large(max_bytes));
+    }
+    let initial_capacity = declared_len
+        .and_then(|len| usize::try_from(len).ok())
+        .unwrap_or_else(|| max_bytes.min(64 * 1024));
+    read_binary_body_bounded(body.as_reader(), max_bytes, initial_capacity)
+}
+
+fn read_binary_body_bounded(
+    reader: impl Read,
+    max_bytes: usize,
+    initial_capacity: usize,
+) -> Result<Box<[u8]>, NetworkError> {
+    let limit = u64::try_from(max_bytes)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
+    let mut bytes = Vec::with_capacity(initial_capacity.min(max_bytes.saturating_add(1)));
+    let mut reader = reader.take(limit);
+    reader
+        .read_to_end(&mut bytes)
+        .map_err(|error| request_error(error.to_string()))?;
+    if bytes.len() > max_bytes {
+        return Err(body_too_large(max_bytes));
+    }
+    Ok(bytes.into_boxed_slice())
+}
+
 fn read_utf8_body_bounded(
     reader: impl Read,
     max_bytes: usize,
@@ -435,6 +472,27 @@ mod tests {
         assert!(matches!(
             read_text_body_bounded(response, 4),
             Err(NetworkError::Decode(message)) if message == "response body exceeds 4 bytes"
+        ));
+    }
+
+    #[test]
+    fn bounded_binary_body_accepts_the_limit_and_rejects_oversize() {
+        let response = ureq::http::Response::builder()
+            .status(200)
+            .body(ureq::Body::builder().data([1_u8, 2, 3, 4]))
+            .expect("response");
+        assert_eq!(
+            read_bytes_body_bounded(response, 4).unwrap().as_ref(),
+            &[1, 2, 3, 4]
+        );
+
+        let response = ureq::http::Response::builder()
+            .status(200)
+            .body(ureq::Body::builder().data([1_u8, 2, 3, 4, 5]))
+            .expect("response");
+        assert!(matches!(
+            read_bytes_body_bounded(response, 4),
+            Err(NetworkError::Decode(message)) if message.contains("exceeds 4 bytes")
         ));
     }
 

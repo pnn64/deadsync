@@ -465,6 +465,10 @@ pub fn set_submit_arrowcloud_fails(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.submit_arrowcloud_fails, enabled)
 }
 
+pub fn set_show_arrowcloud_result_dialogs(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.show_arrowcloud_result_dialogs, enabled)
+}
+
 pub fn set_auto_download_unlocks(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.auto_download_unlocks, enabled)
 }

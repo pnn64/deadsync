@@ -457,6 +457,7 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         enable_arrowcloud: cfg.enable_arrowcloud,
         enable_boogiestats: cfg.enable_boogiestats,
         submit_arrowcloud_fails: cfg.submit_arrowcloud_fails,
+        show_arrowcloud_result_dialogs: cfg.show_arrowcloud_result_dialogs,
         arrowcloud_qr_login_when: cfg.arrowcloud_qr_login_when,
         groovestats_qr_login_when: cfg.groovestats_qr_login_when,
         separate_unlocks_by_player: cfg.separate_unlocks_by_player,

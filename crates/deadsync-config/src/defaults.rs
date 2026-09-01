@@ -108,6 +108,7 @@ pub const DEFAULT_ENABLE_GROOVESTATS: bool = false;
 pub const DEFAULT_SHOW_LOCAL_IP: bool = false;
 pub const DEFAULT_SHOW_SRPG_SHOP: bool = true;
 pub const DEFAULT_SUBMIT_ARROWCLOUD_FAILS: bool = false;
+pub const DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS: bool = false;
 pub const DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER: bool = false;
 pub const DEFAULT_FASTLOAD: bool = true;
 pub const DEFAULT_CACHE_SONGS: bool = true;

@@ -252,6 +252,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
+    cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;
     cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
     cfg.groovestats_qr_login_when = loaded.groovestats_qr_login_when;
     cfg.separate_unlocks_by_player = loaded.separate_unlocks_by_player;

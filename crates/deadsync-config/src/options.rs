@@ -16,7 +16,8 @@ use crate::defaults::{
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
-    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHOW_CONSOLE,
+    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
+    DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS, DEFAULT_SHOW_CONSOLE,
     DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_LOCAL_IP, DEFAULT_SHOW_MOST_PLAYED_COURSES,
     DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
     DEFAULT_SHOW_SELECT_MUSIC_BANNERS, DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
@@ -246,6 +247,7 @@ pub struct SystemOptions {
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub submit_arrowcloud_fails: bool,
+    pub show_arrowcloud_result_dialogs: bool,
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
@@ -311,6 +313,7 @@ impl Default for SystemOptions {
             enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
             enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
             submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
+            show_arrowcloud_result_dialogs: DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
@@ -615,6 +618,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "SubmitArrowCloudFails"),
             default.submit_arrowcloud_fails,
         ),
+        show_arrowcloud_result_dialogs: parse_u8_bool_or_default(
+            conf.get("Options", "ShowArrowCloudResultDialogs"),
+            default.show_arrowcloud_result_dialogs,
+        ),
         arrowcloud_qr_login_when: conf
             .get("Options", "ArrowCloudQrLoginWhen")
             .and_then(|value| ArrowCloudQrLoginWhen::from_str(value).ok())
@@ -873,6 +880,11 @@ pub fn push_system_online_option_lines(content: &mut String, options: SystemOpti
         content,
         "SubmitArrowCloudFails",
         options.submit_arrowcloud_fails,
+    );
+    push_bool(
+        content,
+        "ShowArrowCloudResultDialogs",
+        options.show_arrowcloud_result_dialogs,
     );
     push_line(
         content,
@@ -2532,6 +2544,7 @@ mod tests {
             enable_arrowcloud: false,
             enable_boogiestats: false,
             submit_arrowcloud_fails: false,
+            show_arrowcloud_result_dialogs: false,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: false,
@@ -2822,6 +2835,7 @@ mod tests {
             EnableArrowCloud=1
             EnableBoogieStats=1
             SubmitArrowCloudFails=1
+            ShowArrowCloudResultDialogs=1
             ArrowCloudQrLoginWhen=Always
             GrooveStatsQrLoginWhen=Disabled
             SeparateUnlocksByPlayer=1
@@ -2877,6 +2891,7 @@ mod tests {
         assert!(loaded.enable_arrowcloud);
         assert!(loaded.enable_boogiestats);
         assert!(loaded.submit_arrowcloud_fails);
+        assert!(loaded.show_arrowcloud_result_dialogs);
         assert_eq!(
             loaded.arrowcloud_qr_login_when,
             ArrowCloudQrLoginWhen::Always
@@ -2989,6 +3004,7 @@ mod tests {
         options.enable_boogiestats = false;
         options.enable_groovestats = true;
         options.submit_arrowcloud_fails = true;
+        options.show_arrowcloud_result_dialogs = true;
         options.arrowcloud_qr_login_when = ArrowCloudQrLoginWhen::Always;
         options.groovestats_qr_login_when = GrooveStatsQrLoginWhen::Disabled;
         options.gfx_debug = true;
@@ -3024,6 +3040,7 @@ mod tests {
                 "ShowSrpgShop=1\n",
                 "SrpgShopFolder=Unlocks\n",
                 "SubmitArrowCloudFails=1\n",
+                "ShowArrowCloudResultDialogs=1\n",
                 "ArrowCloudQrLoginWhen=Always\n",
                 "GrooveStatsQrLoginWhen=Disabled\n",
                 "GfxDebug=1\n",

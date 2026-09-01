@@ -161,6 +161,7 @@ update_config_fn!(pub fn update_srpg_shop_folder(folder: SrpgShopFolder) => set_
 update_config_fn!(pub fn update_enable_boogiestats(enabled: bool) => set_enable_boogiestats);
 update_config_fn!(pub fn update_enable_arrowcloud(enabled: bool) => set_enable_arrowcloud);
 update_config_fn!(pub fn update_submit_arrowcloud_fails(enabled: bool) => set_submit_arrowcloud_fails);
+update_config_fn!(pub fn update_show_arrowcloud_result_dialogs(enabled: bool) => set_show_arrowcloud_result_dialogs);
 update_config_fn!(pub fn update_arrowcloud_qr_login_when(when: ArrowCloudQrLoginWhen) => set_arrowcloud_qr_login_when);
 update_config_fn!(pub fn update_groovestats_qr_login_when(when: GrooveStatsQrLoginWhen) => set_groovestats_qr_login_when);
 update_config_fn!(pub fn update_auto_download_unlocks(enabled: bool) => set_auto_download_unlocks);

@@ -97,6 +97,15 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ArrowCloudResultDialogs,
+        label: lookup_key("OptionsGrooveStats", "ArrowCloudResultDialogs"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ArrowCloudQrLogin,
         label: lookup_key("OptionsGrooveStats", "ArrowCloudQRLogin"),
         choices: &[
@@ -219,6 +228,14 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGrooveStatsHelp",
             "ArrowCloudSubmitFailsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::AcResultDialogs,
+        name: lookup_key("OptionsGrooveStats", "ArrowCloudResultDialogs"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ArrowCloudResultDialogsHelp",
         ))],
     },
     Item {

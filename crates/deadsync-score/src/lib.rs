@@ -2539,6 +2539,16 @@ impl<S: Copy> SubmitUiState<S> {
     }
 
     #[must_use]
+    pub fn token_matches(&self, side_index: usize, chart_hash: &str, token: u64) -> bool {
+        let hash = chart_hash.trim();
+        !hash.is_empty()
+            && self
+                .entries(side_index)
+                .iter()
+                .any(|entry| entry.token == token && entry.chart_hash.eq_ignore_ascii_case(hash))
+    }
+
+    #[must_use]
     pub fn get(&self, side_index: usize, chart_hash: &str) -> Option<S> {
         let hash = chart_hash.trim();
         if hash.is_empty() {
@@ -6898,6 +6908,20 @@ pub fn arrowcloud_update_submit_ui_status_if_token(
 }
 
 #[inline(always)]
+/// Returns whether `token` still identifies the current submit for this chart and side.
+///
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
+#[must_use]
+pub fn arrowcloud_submit_ui_token_matches(side_index: usize, chart_hash: &str, token: u64) -> bool {
+    ARROWCLOUD_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .token_matches(side_index, chart_hash, token)
+}
+
+#[inline(always)]
 pub fn arrowcloud_next_submit_ui_token() -> u64 {
     ARROWCLOUD_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
 }
@@ -8787,6 +8811,8 @@ mod tests {
             state.get(0, "ABC"),
             Some(GrooveStatsSubmitUiStatus::Submitting)
         );
+        assert!(state.token_matches(0, "ABC", 11));
+        assert!(!state.token_matches(0, "abc", 12));
         assert!(!state.update_if_token(0, "abc", 12, GrooveStatsSubmitUiStatus::Submitted));
         assert_eq!(
             state.get(0, "abc"),
@@ -8800,6 +8826,7 @@ mod tests {
 
         state.reset(0, "ABC");
         assert_eq!(state.get(0, "abc"), None);
+        assert!(!state.token_matches(0, "abc", 11));
     }
 
     #[test]

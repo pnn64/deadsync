@@ -287,6 +287,9 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         }
         Request::EnableArrowCloud(enabled) => config::update_enable_arrowcloud(enabled),
         Request::SubmitArrowCloudFails(enabled) => config::update_submit_arrowcloud_fails(enabled),
+        Request::ShowArrowCloudResultDialogs(enabled) => {
+            config::update_show_arrowcloud_result_dialogs(enabled);
+        }
         Request::ArrowCloudQrLogin(policy) => {
             config::update_arrowcloud_qr_login_when(match policy {
                 SimplyLoveQrLoginPolicy::Always => config::ArrowCloudQrLoginWhen::Always,

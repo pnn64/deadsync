@@ -165,6 +165,9 @@ const SUBMIT_FOOTER_SPRITE_FRAMES: u32 = 30;
 const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
 const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
 const SUBMIT_FOOTER_SPRITE_PX: f32 = 16.2;
+const RESULT_DIALOG_OVERLAY_Z: i16 = 1400;
+const RESULT_DIALOG_SCREEN_MARGIN: f32 = 32.0;
+const RESULT_DIALOG_PANEL_GAP: f32 = 24.0;
 // Semantic tints for submit footer status icons. Indexes into
 // `color::JUDGMENT_RGBA` so the icons share the gameplay judgment palette.
 const SUBMIT_FOOTER_TINT_OK: [f32; 4] = color::JUDGMENT_RGBA[2]; // Great (green)
@@ -1100,8 +1103,16 @@ mod tests {
     use crate::views::EvaluationRuntimeView;
     use deadlib_present::actors::{Actor, TextAlign};
     use deadsync_chart::ChartData;
+    use deadsync_core::input::InputSource;
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_score as score_data;
     use std::sync::Arc;
+    use std::time::Instant;
+
+    fn press(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
+    }
 
     #[test]
     fn fail_label_appends_stream_measure_progress() {
@@ -1197,6 +1208,64 @@ mod tests {
         super::sync_elapsed(&mut state, 66.0, 3_601.0);
         assert_eq!(state.session_timer.text(), "01:06");
         assert_ne!(state.session_timer.text(), session_text);
+    }
+
+    #[test]
+    fn result_dialog_pages_wrap_without_rebuilding_immutable_keys() {
+        let keys: Box<[Arc<str>]> =
+            vec![Arc::from("first"), Arc::from("second")].into_boxed_slice();
+        let mut dialog = super::ResultDialog::new(keys).unwrap();
+        let first_key = Arc::clone(&dialog.texture_keys[0]);
+
+        assert_eq!(dialog.page, 0);
+        assert!(dialog.shift_page(-1));
+        assert_eq!(dialog.page, 1);
+        assert_eq!(dialog.page_text.as_ref(), "2 / 2");
+        assert!(dialog.shift_page(1));
+        assert_eq!(dialog.page, 0);
+        assert!(Arc::ptr_eq(&first_key, &dialog.texture_keys[0]));
+    }
+
+    #[test]
+    fn result_dialog_and_event_overlays_open_sequentially() {
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        state.event_overlay_visible = true;
+        state.result_dialogs[0] =
+            super::ResultDialog::new(vec![Arc::<str>::from("result")].into_boxed_slice());
+
+        assert!(!super::show_pending_result_dialogs(&mut state));
+        assert!(!state.result_dialog_visible);
+        super::dismiss_event_overlay(&mut state);
+        assert!(state.result_dialog_visible);
+        assert!(!state.event_overlay_visible);
+
+        state.event_overlay_pending = true;
+        super::dismiss_result_dialogs(&mut state);
+        assert!(!state.result_dialog_visible);
+        assert!(state.event_overlay_visible);
+        assert!(state.result_dialogs[0].is_none());
+    }
+
+    #[test]
+    fn result_dialog_input_pages_and_dismisses_before_normal_evaluation_actions() {
+        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        state.result_dialogs[0] = super::ResultDialog::new(
+            vec![Arc::<str>::from("first"), Arc::<str>::from("second")].into_boxed_slice(),
+        );
+        assert!(super::show_pending_result_dialogs(&mut state));
+
+        assert!(matches!(
+            super::handle_input(&mut state, &press(VirtualAction::p1_right)),
+            crate::screens::ThemeEffect::None
+        ));
+        assert_eq!(state.result_dialogs[0].as_ref().unwrap().page, 1);
+
+        assert!(matches!(
+            super::handle_input(&mut state, &press(VirtualAction::p1_start)),
+            crate::screens::ThemeEffect::None
+        ));
+        assert!(!state.result_dialog_visible);
+        assert!(state.result_dialogs[0].is_none());
     }
 
     #[test]
@@ -2540,6 +2609,44 @@ fn fnv1a_str(s: &str) -> u64 {
     h
 }
 
+#[derive(Clone, Debug)]
+struct ResultDialog {
+    texture_keys: Box<[Arc<str>]>,
+    page: usize,
+    page_text: Arc<str>,
+    shown: bool,
+}
+
+impl ResultDialog {
+    fn new(texture_keys: Box<[Arc<str>]>) -> Option<Self> {
+        if texture_keys.is_empty() {
+            return None;
+        }
+        let page_text = result_dialog_page_text(0, texture_keys.len());
+        Some(Self {
+            texture_keys,
+            page: 0,
+            page_text,
+            shown: false,
+        })
+    }
+
+    fn shift_page(&mut self, direction: i32) -> bool {
+        if self.texture_keys.len() <= 1 {
+            return false;
+        }
+        let old_page = self.page;
+        self.page =
+            (self.page as i32 + direction).rem_euclid(self.texture_keys.len() as i32) as usize;
+        self.page_text = result_dialog_page_text(self.page, self.texture_keys.len());
+        self.page != old_page
+    }
+}
+
+fn result_dialog_page_text(page: usize, page_count: usize) -> Arc<str> {
+    Arc::from(format!("{} / {page_count}", page + 1))
+}
+
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
@@ -2592,6 +2699,9 @@ pub struct State {
     pub auto_screenshot_taken: bool,
     pub event_overlay_visible: bool,
     event_overlay_shown: bool,
+    event_overlay_pending: bool,
+    result_dialog_visible: bool,
+    result_dialogs: [Option<ResultDialog>; MAX_PLAYERS],
     submit_record_sfx_played: bool,
     nice_sfx_played: bool,
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
@@ -2682,6 +2792,9 @@ impl Clone for State {
             auto_screenshot_taken: self.auto_screenshot_taken,
             event_overlay_visible: self.event_overlay_visible,
             event_overlay_shown: self.event_overlay_shown,
+            event_overlay_pending: self.event_overlay_pending,
+            result_dialog_visible: self.result_dialog_visible,
+            result_dialogs: self.result_dialogs.clone(),
             submit_record_sfx_played: self.submit_record_sfx_played,
             nice_sfx_played: self.nice_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
@@ -3404,6 +3517,9 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         auto_screenshot_taken: false,
         event_overlay_visible: false,
         event_overlay_shown: false,
+        event_overlay_pending: false,
+        result_dialog_visible: false,
+        result_dialogs: std::array::from_fn(|_| None),
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
@@ -3716,6 +3832,9 @@ pub fn init_from_score_info(
         auto_screenshot_taken: false,
         event_overlay_visible: false,
         event_overlay_shown: false,
+        event_overlay_pending: false,
+        result_dialog_visible: false,
+        result_dialogs: std::array::from_fn(|_| None),
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
@@ -3770,6 +3889,65 @@ fn event_progress_page(
     progress.first().map(|event| (event, 0))
 }
 
+fn show_pending_result_dialogs(state: &mut State) -> bool {
+    if state.event_overlay_visible {
+        return false;
+    }
+    let mut found = false;
+    for dialog in state.result_dialogs.iter_mut().flatten() {
+        if !dialog.shown {
+            dialog.shown = true;
+            found = true;
+        }
+    }
+    state.result_dialog_visible |= found;
+    found
+}
+
+fn dismiss_event_overlay(state: &mut State) {
+    state.event_overlay_visible = false;
+    let _ = show_pending_result_dialogs(state);
+}
+
+fn dismiss_result_dialogs(state: &mut State) {
+    state.result_dialog_visible = false;
+    for dialog in &mut state.result_dialogs {
+        if dialog.as_ref().is_some_and(|dialog| dialog.shown) {
+            *dialog = None;
+        }
+    }
+    if state.event_overlay_pending {
+        state.event_overlay_pending = false;
+        state.event_overlay_visible = true;
+    }
+}
+
+/// Adds decoded `ArrowCloud` result-dialog textures for a player. The shell
+/// validates the chart/token before this handoff; this function also requires
+/// the side to be present in the current Evaluation state.
+pub fn sync_arrowcloud_result_dialog(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    texture_keys: Box<[Arc<str>]>,
+) -> bool {
+    if !state
+        .score_info
+        .iter()
+        .flatten()
+        .any(|score| score.side == side)
+    {
+        return false;
+    }
+    let Some(dialog) = ResultDialog::new(texture_keys) else {
+        return false;
+    };
+    state.result_dialogs[profile_data::player_side_index(side)] = Some(dialog);
+    if !state.event_overlay_visible {
+        let _ = show_pending_result_dialogs(state);
+    }
+    true
+}
+
 fn sync_submit_event_progress(state: &mut State) {
     let mut found_new = false;
     for player_idx in 0..MAX_PLAYERS {
@@ -3793,8 +3971,12 @@ fn sync_submit_event_progress(state: &mut State) {
         state.event_progress[player_idx].clone_from(progress);
     }
     if found_new && !state.event_overlay_shown {
-        state.event_overlay_visible = true;
         state.event_overlay_shown = true;
+        if state.result_dialog_visible {
+            state.event_overlay_pending = true;
+        } else {
+            state.event_overlay_visible = true;
+        }
     }
 }
 
@@ -4519,6 +4701,97 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
     actors
 }
 
+fn push_result_dialog_overlay(actors: &mut Vec<Actor>, state: &State) {
+    let panel_count = state
+        .result_dialogs
+        .iter()
+        .flatten()
+        .filter(|dialog| dialog.shown)
+        .count();
+    if panel_count == 0 {
+        return;
+    }
+
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(0.0, 0.0):
+        setsize(screen_width(), screen_height()):
+        diffuse(0.0, 0.0, 0.0, 0.88): z(RESULT_DIALOG_OVERLAY_Z)
+    ));
+
+    let total_width = screen_width() - RESULT_DIALOG_SCREEN_MARGIN * 2.0;
+    let panel_width = if panel_count == 1 {
+        total_width
+    } else {
+        (total_width - RESULT_DIALOG_PANEL_GAP) * 0.5
+    };
+    let max_image_width = panel_width - 24.0;
+    let max_image_height = screen_height() - 96.0;
+    let title = tr("OptionsGrooveStats", "ArrowCloudResultDialogs");
+    let mut ordinal = 0_usize;
+    for dialog in state
+        .result_dialogs
+        .iter()
+        .flatten()
+        .filter(|dialog| dialog.shown)
+    {
+        let Some(texture_key) = dialog.texture_keys.get(dialog.page) else {
+            continue;
+        };
+        let Some(meta) = deadlib_assets::texture_dims(texture_key.as_ref()) else {
+            continue;
+        };
+        if meta.w == 0 || meta.h == 0 {
+            continue;
+        }
+        let scale = (max_image_width / meta.w as f32)
+            .min(max_image_height / meta.h as f32)
+            .min(1.0);
+        let image_width = meta.w as f32 * scale;
+        let image_height = meta.h as f32 * scale;
+        let center_x = if panel_count == 1 {
+            screen_center_x()
+        } else {
+            RESULT_DIALOG_SCREEN_MARGIN
+                + panel_width * 0.5
+                + ordinal as f32 * (panel_width + RESULT_DIALOG_PANEL_GAP)
+        };
+        let center_y = screen_center_y() - 8.0;
+        actors.push(act!(quad:
+            align(0.5, 0.5): xy(center_x, center_y):
+            setsize(image_width + 8.0, image_height + 8.0):
+            diffuse(1.0, 1.0, 1.0, 1.0): z(RESULT_DIALOG_OVERLAY_Z + 1)
+        ));
+        actors.push(act!(sprite(Arc::clone(texture_key)):
+            align(0.5, 0.5): xy(center_x, center_y): zoom(scale):
+            z(RESULT_DIALOG_OVERLAY_Z + 2)
+        ));
+        actors.push(act!(text:
+            font("miso"): settext(Arc::clone(&title)):
+            align(0.5, 0.5): xy(center_x, 18.0): zoom(0.8):
+            z(RESULT_DIALOG_OVERLAY_Z + 3)
+        ));
+        if dialog.texture_keys.len() > 1 {
+            let page_y = screen_height() - 20.0;
+            actors.push(act!(text:
+                font("miso"): settext(Arc::clone(&dialog.page_text)):
+                align(0.5, 0.5): xy(center_x, page_y): zoom(0.72):
+                z(RESULT_DIALOG_OVERLAY_Z + 3)
+            ));
+            actors.push(act!(text:
+                font("miso"): settext("<"):
+                align(0.5, 0.5): xy(center_x - 48.0, page_y): zoom(0.8):
+                z(RESULT_DIALOG_OVERLAY_Z + 3)
+            ));
+            actors.push(act!(text:
+                font("miso"): settext(">"):
+                align(0.5, 0.5): xy(center_x + 48.0, page_y): zoom(0.8):
+                z(RESULT_DIALOG_OVERLAY_Z + 3)
+            ));
+        }
+        ordinal += 1;
+    }
+}
+
 /// Phases of the eval auto-screenshot state machine. Advances strictly forward
 /// as eval-screen state evolves; the screenshot is taken when we reach `Ready`.
 ///
@@ -4528,16 +4801,15 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
 ///   WaitingForGrooveStats
 ///        v   (GS submit reaches a terminal status; the network layer
 ///             times out / errors on its own, so no extra cap here)
-///   WaitingForEventOverlayDismissal
-///        v   (user dismisses the overlay; skipped entirely if no event
-///             overlay opened)
+///   WaitingForModalDismissal
+///        v   (user dismisses event/result dialogs; skipped if none opened)
 ///   Ready
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AutoScreenshotPhase {
     IntroPlaying,
     WaitingForGrooveStats,
-    WaitingForEventOverlayDismissal,
+    WaitingForModalDismissal,
     Ready,
 }
 
@@ -4557,8 +4829,16 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
         return AutoScreenshotPhase::WaitingForGrooveStats;
     }
 
-    if state.event_overlay_visible {
-        return AutoScreenshotPhase::WaitingForEventOverlayDismissal;
+    if state.event_overlay_visible
+        || state.event_overlay_pending
+        || state.result_dialog_visible
+        || state
+            .result_dialogs
+            .iter()
+            .flatten()
+            .any(|dialog| !dialog.shown)
+    {
+        return AutoScreenshotPhase::WaitingForModalDismissal;
     }
 
     AutoScreenshotPhase::Ready
@@ -5073,7 +5353,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 | VirtualAction::p1_start
                 | VirtualAction::p2_back
                 | VirtualAction::p2_start => {
-                    state.event_overlay_visible = false;
+                    dismiss_event_overlay(state);
                     ThemeEffect::None
                 }
                 VirtualAction::p1_left | VirtualAction::p1_menu_left => {
@@ -5110,6 +5390,80 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     state.menu_lr_undo
                         [profile_data::player_side_index(profile_data::PlayerSide::P2)] =
                         if shift_event_page(profile_data::PlayerSide::P2, 1) {
+                            -1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                _ => ThemeEffect::None,
+            },
+        );
+    }
+    if state.result_dialog_visible {
+        let mut shift_result_page = |controller: profile_data::PlayerSide, direction: i32| {
+            state.result_dialogs[profile_data::player_side_index(controller)]
+                .as_mut()
+                .is_some_and(|dialog| dialog.shift_page(direction))
+        };
+        if let Some(side) = chord_side {
+            let side_idx = profile_data::player_side_index(side);
+            let undo = state.menu_lr_undo[side_idx];
+            state.menu_lr_undo[side_idx] = 0;
+            if undo != 0 {
+                let _ = shift_result_page(side, i32::from(undo));
+            }
+            return ThemeEffect::sequence(
+                favorite_effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                    crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+                )),
+            );
+        }
+        return ThemeEffect::sequence(
+            favorite_effect,
+            match ev.action {
+                VirtualAction::p1_back
+                | VirtualAction::p1_start
+                | VirtualAction::p2_back
+                | VirtualAction::p2_start => {
+                    dismiss_result_dialogs(state);
+                    ThemeEffect::None
+                }
+                VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P1)] =
+                        if shift_result_page(profile_data::PlayerSide::P1, -1) {
+                            1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P1)] =
+                        if shift_result_page(profile_data::PlayerSide::P1, 1) {
+                            -1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P2)] =
+                        if shift_result_page(profile_data::PlayerSide::P2, -1) {
+                            1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P2)] =
+                        if shift_result_page(profile_data::PlayerSide::P2, 1) {
                             -1
                         } else {
                             0
@@ -6950,6 +7304,9 @@ pub fn push_actors(
             panels.as_slice(),
             policy.machine_font,
         );
+    }
+    if state.result_dialog_visible {
+        push_result_dialog_overlay(actors, state);
     }
 }
 

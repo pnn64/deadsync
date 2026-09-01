@@ -332,6 +332,8 @@ pub struct Config {
     pub show_srpg_shop: bool,
     pub srpg_shop_folder: SrpgShopFolder,
     pub submit_arrowcloud_fails: bool,
+    /// Download and show result dialogs returned by successful `ArrowCloud` submits.
+    pub show_arrowcloud_result_dialogs: bool,
     /// When to auto-show the `ArrowCloud` QR-login screen after Select
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
@@ -554,6 +556,7 @@ impl Default for Config {
             show_srpg_shop: system.show_srpg_shop,
             srpg_shop_folder: system.srpg_shop_folder,
             submit_arrowcloud_fails: system.submit_arrowcloud_fails,
+            show_arrowcloud_result_dialogs: system.show_arrowcloud_result_dialogs,
             arrowcloud_qr_login_when: system.arrowcloud_qr_login_when,
             groovestats_qr_login_when: system.groovestats_qr_login_when,
             separate_unlocks_by_player: system.separate_unlocks_by_player,

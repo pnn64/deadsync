@@ -201,6 +201,7 @@ pub enum SubRowId {
     // ArrowCloud Options
     EnableArrowCloud,
     ArrowCloudSubmitFails,
+    ArrowCloudResultDialogs,
     ArrowCloudQrLogin,
     // Online Scoring (launcher)
     GsBsOptions,

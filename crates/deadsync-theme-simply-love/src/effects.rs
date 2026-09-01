@@ -805,6 +805,7 @@ pub enum SimplyLoveOnlineConfigRequest {
     GrooveStatsQrLogin(SimplyLoveQrLoginPolicy),
     EnableArrowCloud(bool),
     SubmitArrowCloudFails(bool),
+    ShowArrowCloudResultDialogs(bool),
     ArrowCloudQrLogin(SimplyLoveQrLoginPolicy),
 }
 

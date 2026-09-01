@@ -2,6 +2,7 @@ use deadsync_profile as profile_data;
 #[cfg(test)]
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
+mod arrowcloud_result_dialog;
 mod audio_requests;
 mod commands;
 mod config_requests;
@@ -1516,6 +1517,11 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    /// Lazily started after the opt-in feature first receives data. The single
+    /// bounded worker decodes off the frame thread and fixed texture keys bound
+    /// registry growth for the app lifetime.
+    arrowcloud_result_dialog: Option<arrowcloud_result_dialog::Service>,
+    arrowcloud_result_ready_scratch: Vec<arrowcloud_result_dialog::ReadyResultDialog>,
     /// Sole application-thread audio command and SFX producer owner.
     audio: deadsync_audio_stream::AudioControl,
     /// Resolved song-lifetime gameplay sounds; replaced at Gameplay/Practice
@@ -2160,7 +2166,55 @@ impl App {
         retried
     }
 
+    fn sync_arrowcloud_result_dialogs(&mut self) {
+        let evaluation_active = self.state.screens.current_screen == CurrentScreen::Evaluation;
+        let enabled = self.frame_config.show_arrowcloud_result_dialogs;
+        for download in deadsync_online::arrowcloud::take_result_dialog_downloads() {
+            if !evaluation_active || !enabled {
+                continue;
+            }
+            self.arrowcloud_result_dialog
+                .get_or_insert_with(arrowcloud_result_dialog::Service::new)
+                .submit(download);
+        }
+
+        self.arrowcloud_result_ready_scratch.clear();
+        if let Some(service) = self.arrowcloud_result_dialog.as_ref() {
+            service.drain_ready(&mut self.arrowcloud_result_ready_scratch);
+        }
+        if self.arrowcloud_result_ready_scratch.is_empty() {
+            return;
+        }
+        if !evaluation_active || !enabled {
+            self.arrowcloud_result_ready_scratch.clear();
+            return;
+        }
+
+        let state = &mut self.state.screens.evaluation_state;
+        for ready in self.arrowcloud_result_ready_scratch.drain(..) {
+            let current_chart_matches = state.score_info.iter().flatten().any(|score| {
+                score.side == ready.side
+                    && score
+                        .chart
+                        .short_hash
+                        .eq_ignore_ascii_case(ready.chart_hash.as_ref())
+            });
+            if !current_chart_matches
+                || !deadsync_score::arrowcloud_submit_ui_token_matches(
+                    profile_data::player_side_index(ready.side),
+                    ready.chart_hash.as_ref(),
+                    ready.token,
+                )
+            {
+                continue;
+            }
+            let _ =
+                evaluation::sync_arrowcloud_result_dialog(state, ready.side, ready.texture_keys);
+        }
+    }
+
     fn sync_active_online_runtime_view(&mut self, now: Instant) {
+        self.sync_arrowcloud_result_dialogs();
         match self.state.screens.current_screen {
             CurrentScreen::Gameplay => {
                 // Offline stages cannot become lobby stages mid-song. Avoid the
@@ -3981,6 +4035,8 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            arrowcloud_result_dialog: None,
+            arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
             audio,
             gameplay_sfx: GameplaySfx::default(),
             music_clock,

@@ -52,6 +52,14 @@ pub const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 pub const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
 const ARROWCLOUD_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
+/// The submit response is small JSON; cap it so a malformed endpoint cannot
+/// grow the submission worker without bound.
+const ARROWCLOUD_SUBMIT_RESPONSE_MAX_BYTES: usize = 64 * 1024;
+/// A result set is UI paging, not an image gallery. Fixed limits keep the
+/// download and GPU handoff bounded for both players.
+const ARROWCLOUD_RESULT_DIALOG_MAX_IMAGES: usize = 4;
+const ARROWCLOUD_RESULT_DIALOG_MAX_URL_BYTES: usize = 2 * 1024;
+const ARROWCLOUD_RESULT_DIALOG_MAX_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
 const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Drunk",
@@ -230,7 +238,26 @@ pub fn fetch_player_leaderboards(
 pub struct ArrowCloudSubmitRequestSuccess {
     pub status: u16,
     pub body_snippet: String,
+    pub result_dialog_urls: Box<[Box<str>]>,
 }
+
+#[derive(Debug)]
+pub struct ArrowCloudResultDialogDownload {
+    pub side: profile_data::PlayerSide,
+    pub chart_hash: Box<str>,
+    pub token: u64,
+    pub images: Box<[Box<[u8]>]>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ArrowCloudSubmitResponse {
+    #[serde(default, rename = "resultImages")]
+    result_images: Vec<String>,
+}
+
+static ARROWCLOUD_RESULT_DIALOG_DOWNLOADS: LazyLock<Mutex<Vec<ArrowCloudResultDialogDownload>>> =
+    LazyLock::new(|| Mutex::new(Vec::with_capacity(MAX_PLAYERS)));
+static ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArrowCloudSubmitRequestError {
@@ -619,10 +646,119 @@ pub fn submit_job_request(job: &ArrowCloudSubmitJob) -> Result<(), ArrowCloudSub
                     success.body_snippet.as_str()
                 );
             }
+            spawn_result_dialog_download_if_enabled(job, success.result_dialog_urls);
             Ok(())
         }
         Err(error) => Err(arrowcloud_submit_error_from_request(error)),
     }
+}
+
+fn result_dialog_urls_from_body(body: &str) -> Box<[Box<str>]> {
+    if body.trim().is_empty() {
+        return Box::default();
+    }
+    let Ok(response) = serde_json::from_str::<ArrowCloudSubmitResponse>(body) else {
+        return Box::default();
+    };
+    response
+        .result_images
+        .into_iter()
+        .filter_map(|url| {
+            let url = url.trim();
+            (url.starts_with("https://") && url.len() <= ARROWCLOUD_RESULT_DIALOG_MAX_URL_BYTES)
+                .then(|| Box::<str>::from(url))
+        })
+        .take(ARROWCLOUD_RESULT_DIALOG_MAX_IMAGES)
+        .collect::<Vec<_>>()
+        .into_boxed_slice()
+}
+
+fn download_result_dialog_images(urls: &[Box<str>]) -> Box<[Box<[u8]>]> {
+    let agent = network::get_agent();
+    let mut images = Vec::with_capacity(urls.len());
+    for (index, url) in urls.iter().enumerate() {
+        let result = agent
+            .get(url.as_ref())
+            .call()
+            .map_err(network::error_from_ureq)
+            .and_then(|response| {
+                let status = response.status().as_u16();
+                if !(200..300).contains(&status) {
+                    return Err(NetworkError::HttpStatus(status));
+                }
+                network::read_bytes_body_bounded(response, ARROWCLOUD_RESULT_DIALOG_MAX_IMAGE_BYTES)
+            });
+        match result {
+            Ok(bytes) if !bytes.is_empty() => images.push(bytes),
+            Ok(_) => log::warn!(
+                "ArrowCloud result dialog image {} returned an empty body.",
+                index + 1
+            ),
+            Err(error) => log::warn!(
+                "ArrowCloud result dialog image {} could not be downloaded: {error}.",
+                index + 1
+            ),
+        }
+    }
+    images.into_boxed_slice()
+}
+
+fn publish_result_dialog_download(download: ArrowCloudResultDialogDownload) {
+    let side = download.side;
+    let mut pending = ARROWCLOUD_RESULT_DIALOG_DOWNLOADS.lock().unwrap();
+    if let Some(slot) = pending.iter_mut().find(|entry| entry.side == side) {
+        *slot = download;
+    } else if pending.len() < MAX_PLAYERS {
+        pending.push(download);
+    } else {
+        return;
+    }
+    drop(pending);
+    ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING.store(true, Ordering::Release);
+}
+
+fn spawn_result_dialog_download_if_enabled(job: &ArrowCloudSubmitJob, urls: Box<[Box<str>]>) {
+    if urls.is_empty() || !deadsync_config::prelude::get().show_arrowcloud_result_dialogs {
+        return;
+    }
+    let side = job.side;
+    let chart_hash = Box::<str>::from(job.payload.hash.as_str());
+    let token = job.token;
+    let spawn = thread::Builder::new()
+        .name(format!("arrowcloud-result-{:?}", side))
+        .spawn(move || {
+            let images = download_result_dialog_images(&urls);
+            if images.is_empty()
+                || !deadsync_config::prelude::get().show_arrowcloud_result_dialogs
+                || !deadsync_score::arrowcloud_submit_ui_token_matches(
+                    profile_data::player_side_index(side),
+                    chart_hash.as_ref(),
+                    token,
+                )
+            {
+                return;
+            }
+            publish_result_dialog_download(ArrowCloudResultDialogDownload {
+                side,
+                chart_hash,
+                token,
+                images,
+            });
+        });
+    if let Err(error) = spawn {
+        log::warn!("Could not start the ArrowCloud result dialog worker: {error}.");
+    }
+}
+
+/// Takes completed compressed result-dialog downloads. The atomic gate keeps
+/// stable frames from acquiring the queue lock.
+#[must_use]
+pub fn take_result_dialog_downloads() -> Vec<ArrowCloudResultDialogDownload> {
+    if !ARROWCLOUD_RESULT_DIALOG_DOWNLOADS_PENDING.swap(false, Ordering::AcqRel) {
+        return Vec::new();
+    }
+    let mut pending = ARROWCLOUD_RESULT_DIALOG_DOWNLOADS.lock().unwrap();
+    std::mem::replace(&mut *pending, Vec::with_capacity(MAX_PLAYERS))
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1098,14 +1234,25 @@ pub fn submit_score_request(
         })?;
     let status = response.status();
     let status_code = status.as_u16();
-    let body = network::read_text_body_or_empty(response);
-    let body_snippet = network::log_body_snippet(body);
+    let body = match network::read_text_body_bounded(response, ARROWCLOUD_SUBMIT_RESPONSE_MAX_BYTES)
+    {
+        Ok(body) => body,
+        Err(error) => {
+            log::warn!("Could not read the bounded ArrowCloud submit response: {error}.");
+            String::new()
+        }
+    };
     if status.is_success() {
+        let result_dialog_urls = result_dialog_urls_from_body(body.as_str());
+        let body_snippet = network::log_body_snippet(body);
         return Ok(ArrowCloudSubmitRequestSuccess {
             status: status_code,
             body_snippet,
+            result_dialog_urls,
         });
     }
+
+    let body_snippet = network::log_body_snippet(body);
 
     Err(ArrowCloudSubmitRequestError::Http {
         status: status_code,
@@ -4434,5 +4581,37 @@ mod tests {
         assert!(s.contains("\"machineLabel\":\"cab-1\""));
         assert!(s.contains("\"clientVersion\":\"deadsync 0.1\""));
         assert!(!s.contains("themeVersion"));
+    }
+
+    #[test]
+    fn result_dialog_urls_parse_protocol_name_filter_and_bound_results() {
+        let body = r#"{
+            "resultImages": [
+                "https://cdn.example/one.png",
+                "http://cdn.example/not-secure.png",
+                "https://cdn.example/two.png",
+                "https://cdn.example/three.png",
+                "https://cdn.example/four.png",
+                "https://cdn.example/five.png"
+            ]
+        }"#;
+
+        let urls = result_dialog_urls_from_body(body);
+
+        assert_eq!(urls.len(), ARROWCLOUD_RESULT_DIALOG_MAX_IMAGES);
+        assert_eq!(urls[0].as_ref(), "https://cdn.example/one.png");
+        assert_eq!(urls[1].as_ref(), "https://cdn.example/two.png");
+        assert_eq!(urls[3].as_ref(), "https://cdn.example/four.png");
+    }
+
+    #[test]
+    fn result_dialog_urls_ignore_empty_malformed_and_oversized_values() {
+        assert!(result_dialog_urls_from_body("").is_empty());
+        assert!(result_dialog_urls_from_body("not json").is_empty());
+        let oversized = format!(
+            r#"{{"resultImages":["https://cdn.example/{}"]}}"#,
+            "a".repeat(ARROWCLOUD_RESULT_DIALOG_MAX_URL_BYTES)
+        );
+        assert!(result_dialog_urls_from_body(&oversized).is_empty());
     }
 }
