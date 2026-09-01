@@ -271,11 +271,20 @@ pub fn ensure_cached_dynamic_image_on_disk(
     let Some((cache_path, path_hex)) = dynamic_image_cache_path_for(path, opts, cache_dir) else {
         return Ok(false);
     };
-    if load_cached_banner_image(&cache_path, path).is_some() {
+    ensure_cached_dynamic_image_at(path, opts, &cache_path, &path_hex)
+}
+
+fn ensure_cached_dynamic_image_at(
+    path: &Path,
+    opts: BannerCacheOptions,
+    cache_path: &Path,
+    path_hex: &str,
+) -> image::ImageResult<bool> {
+    if load_cached_banner_image(cache_path, path).is_some() {
         return Ok(false);
     }
     let rgba = build_cached_banner_rgba(path, opts)?;
-    save_cached_banner_image(&cache_path, &path_hex, &rgba);
+    save_cached_banner_image(cache_path, path_hex, &rgba);
     Ok(true)
 }
 
@@ -302,8 +311,15 @@ pub enum DynamicImagePrewarmOutcome {
 pub struct DynamicImagePrewarmJob {
     pub path: PathBuf,
     pub opts: BannerCacheOptions,
-    pub cache_dir: PathBuf,
+    pub cache_dir: Arc<Path>,
     pub label: &'static str,
+    cache_location: Option<DynamicImageCacheLocation>,
+}
+
+#[derive(Clone)]
+struct DynamicImageCacheLocation {
+    path: PathBuf,
+    path_hex: String,
 }
 
 struct DynamicImagePrewarmResult {
@@ -323,14 +339,22 @@ pub fn push_dynamic_image_prewarm_jobs<S: BuildHasher>(
         return 0;
     }
     let mut duplicate = 0usize;
+    let mut shared_cache_dir = None;
     for path in paths {
-        let dedupe_key = dynamic_image_prewarm_dedupe_key(path, opts, cache_dir);
+        let cache_location = dynamic_image_cache_path_for(path, opts, cache_dir)
+            .map(|(path, path_hex)| DynamicImageCacheLocation { path, path_hex });
+        let dedupe_key = cache_location.as_ref().map_or_else(
+            || path.to_string_lossy().replace('\\', "/"),
+            |location| location.path.to_string_lossy().replace('\\', "/"),
+        );
         if unique.insert(dedupe_key) {
+            let cache_dir = shared_cache_dir.get_or_insert_with(|| Arc::<Path>::from(cache_dir));
             jobs.push(DynamicImagePrewarmJob {
                 path: path.clone(),
                 opts,
-                cache_dir: cache_dir.to_path_buf(),
+                cache_dir: Arc::clone(cache_dir),
                 label,
+                cache_location,
             });
         } else {
             duplicate += 1;
@@ -364,11 +388,14 @@ pub fn dynamic_image_prewarm_workers(job_count: usize) -> usize {
 }
 
 #[inline(always)]
-fn prewarm_one_dynamic_image(
-    path: PathBuf,
-    opts: BannerCacheOptions,
-    cache_dir: &Path,
-) -> DynamicImagePrewarmOutcome {
+fn prewarm_one_dynamic_image(job: DynamicImagePrewarmJob) -> DynamicImagePrewarmOutcome {
+    let DynamicImagePrewarmJob {
+        path,
+        opts,
+        cache_dir,
+        cache_location,
+        ..
+    } = job;
     if !path.is_file() {
         return DynamicImagePrewarmOutcome::SkippedNonFile { path };
     }
@@ -377,7 +404,11 @@ fn prewarm_one_dynamic_image(
     }
 
     let started = Instant::now();
-    match ensure_cached_dynamic_image_on_disk(&path, opts, cache_dir) {
+    let cached = cache_location.map_or_else(
+        || ensure_cached_dynamic_image_on_disk(&path, opts, &cache_dir),
+        |location| ensure_cached_dynamic_image_at(&path, opts, &location.path, &location.path_hex),
+    );
+    match cached {
         Ok(true) => DynamicImagePrewarmOutcome::Built {
             path,
             millis: started.elapsed().as_secs_f64() * 1000.0,
@@ -391,6 +422,228 @@ fn prewarm_one_dynamic_image(
             msg: e.to_string(),
         },
     }
+}
+
+// Eight jobs amortize each scheduler and result-channel operation while still
+// redistributing work often enough for differently sized artwork files.
+const DYNAMIC_IMAGE_PREWARM_BATCH_SIZE: usize = 8;
+
+struct DynamicImagePrewarmResultBatch<R> {
+    items: [Option<R>; DYNAMIC_IMAGE_PREWARM_BATCH_SIZE],
+}
+
+impl<R> DynamicImagePrewarmResultBatch<R> {
+    fn new() -> Self {
+        Self {
+            items: std::array::from_fn(|_| None),
+        }
+    }
+
+    fn push(&mut self, index: usize, result: R) {
+        self.items[index] = Some(result);
+    }
+}
+
+fn claim_dynamic_image_prewarm_batch<T>(
+    jobs: &Mutex<std::vec::IntoIter<T>>,
+    batch: &mut Vec<T>,
+) -> bool {
+    batch.clear();
+    let Ok(mut jobs) = jobs.lock() else {
+        return false;
+    };
+    for _ in 0..DYNAMIC_IMAGE_PREWARM_BATCH_SIZE {
+        let Some(job) = jobs.next() else {
+            break;
+        };
+        batch.push(job);
+    }
+    !batch.is_empty()
+}
+
+fn parallel_map_dynamic_image_prewarm_batches<T, R>(
+    jobs: Vec<T>,
+    worker_count: usize,
+    work: impl Fn(T) -> R + Sync,
+    mut consume: impl FnMut(DynamicImagePrewarmResultBatch<R>),
+) where
+    T: Send,
+    R: Send,
+{
+    let jobs = Mutex::new(jobs.into_iter());
+    let (result_tx, result_rx) = mpsc::channel();
+    std::thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let result_tx = result_tx.clone();
+            let jobs = &jobs;
+            let work = &work;
+            workers.push(scope.spawn(move || {
+                let mut job_batch = Vec::with_capacity(DYNAMIC_IMAGE_PREWARM_BATCH_SIZE);
+                while claim_dynamic_image_prewarm_batch(jobs, &mut job_batch) {
+                    let mut results = DynamicImagePrewarmResultBatch::new();
+                    for (index, job) in job_batch.drain(..).enumerate() {
+                        results.push(index, work(job));
+                    }
+                    if result_tx.send(results).is_err() {
+                        return;
+                    }
+                }
+            }));
+        }
+        drop(result_tx);
+        for results in result_rx {
+            consume(results);
+        }
+        for worker in workers {
+            let _ = worker.join();
+        }
+    });
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_dynamic_image_prewarm_work(value: u64) -> u64 {
+    let rounds = 4 + ((value.wrapping_mul(0x9e37_79b1) >> 27) & 31);
+    let mut output = value ^ 0xa24b_aed4_963e_e407;
+    for round in 0..rounds {
+        output ^= output.rotate_left(((value + round) & 31) as u32);
+        output = output.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    }
+    output
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_prewarm_cache_paths_reference(paths: &[PathBuf], cache_dir: &Path) -> u64 {
+    let jobs = paths
+        .iter()
+        .map(|path| (path.clone(), cache_dir.to_path_buf()))
+        .collect::<Vec<_>>();
+    std::hint::black_box(&jobs);
+    jobs.iter()
+        .fold(jobs.len() as u64, |checksum, (path, cache)| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(path.as_os_str().len() as u64)
+                .wrapping_add(cache.as_os_str().len() as u64)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_prewarm_cache_paths_shared(paths: &[PathBuf], cache_dir: &Path) -> u64 {
+    let cache_dir = Arc::<Path>::from(cache_dir);
+    let jobs = paths
+        .iter()
+        .map(|path| (path.clone(), Arc::clone(&cache_dir)))
+        .collect::<Vec<_>>();
+    std::hint::black_box(&jobs);
+    jobs.iter()
+        .fold(jobs.len() as u64, |checksum, (path, cache)| {
+            checksum
+                .wrapping_mul(131)
+                .wrapping_add(path.as_os_str().len() as u64)
+                .wrapping_add(cache.as_os_str().len() as u64)
+        })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_prewarm_cache_location_reference(paths: &[PathBuf], cache_dir: &Path) -> u64 {
+    let opts = BannerCacheOptions { enabled: true };
+    paths.iter().fold(paths.len() as u64, |checksum, path| {
+        let planned = dynamic_image_cache_path_for(path, opts, cache_dir);
+        std::hint::black_box(planned);
+        let executed = dynamic_image_cache_path_for(path, opts, cache_dir);
+        let len = executed.as_ref().map_or(0, |(path, path_hex)| {
+            path.as_os_str().len().saturating_add(path_hex.len())
+        });
+        checksum.wrapping_mul(131).wrapping_add(len as u64)
+    })
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_prewarm_cache_location_prepared(paths: &[PathBuf], cache_dir: &Path) -> u64 {
+    let opts = BannerCacheOptions { enabled: true };
+    paths.iter().fold(paths.len() as u64, |checksum, path| {
+        let prepared = dynamic_image_cache_path_for(path, opts, cache_dir);
+        let len = prepared.as_ref().map_or(0, |(path, path_hex)| {
+            path.as_os_str().len().saturating_add(path_hex.len())
+        });
+        checksum.wrapping_mul(131).wrapping_add(len as u64)
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn benchmark_dynamic_prewarm_scheduler_reference(
+    values: Vec<u64>,
+    worker_count: usize,
+) -> Vec<u64> {
+    if values.is_empty() || worker_count == 0 {
+        return Vec::new();
+    }
+    let worker_count = worker_count.min(values.len());
+    let (job_tx, job_rx) = mpsc::channel::<u64>();
+    let job_rx = Arc::new(Mutex::new(job_rx));
+    let (result_tx, result_rx) = mpsc::channel::<u64>();
+    let mut workers = Vec::with_capacity(worker_count);
+    for _ in 0..worker_count {
+        let job_rx = Arc::clone(&job_rx);
+        let result_tx = result_tx.clone();
+        workers.push(std::thread::spawn(move || {
+            loop {
+                let job = {
+                    let Ok(receiver) = job_rx.lock() else {
+                        return;
+                    };
+                    receiver.recv()
+                };
+                let Ok(job) = job else {
+                    return;
+                };
+                if result_tx
+                    .send(benchmark_dynamic_image_prewarm_work(job))
+                    .is_err()
+                {
+                    return;
+                }
+            }
+        }));
+    }
+    drop(result_tx);
+    for value in values {
+        let _ = job_tx.send(value);
+    }
+    drop(job_tx);
+    let mut results = result_rx.into_iter().collect::<Vec<_>>();
+    for worker in workers {
+        let _ = worker.join();
+    }
+    results.sort_unstable();
+    results
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn benchmark_dynamic_prewarm_scheduler_batched_results(
+    values: Vec<u64>,
+    worker_count: usize,
+) -> Vec<u64> {
+    if values.is_empty() || worker_count == 0 {
+        return Vec::new();
+    }
+    let worker_count = worker_count.min(values.len());
+    let mut results = Vec::with_capacity(values.len());
+    parallel_map_dynamic_image_prewarm_batches(
+        values,
+        worker_count,
+        benchmark_dynamic_image_prewarm_work,
+        |batch| results.extend(batch.items.into_iter().flatten()),
+    );
+    results.sort_unstable();
+    results
 }
 
 pub fn prewarm_dynamic_image_jobs_with_progress<F>(
@@ -410,36 +663,6 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
         "{label} cache prewarm start: {input_count} input, {total_jobs} unique, {duplicate} duplicate, {worker_count} worker threads."
     );
 
-    let (job_tx, job_rx) = mpsc::channel::<DynamicImagePrewarmJob>();
-    let job_rx = Arc::new(Mutex::new(job_rx));
-    let (res_tx, res_rx) = mpsc::channel::<DynamicImagePrewarmResult>();
-    let mut workers = Vec::with_capacity(worker_count);
-    for _ in 0..worker_count {
-        let job_rx = Arc::clone(&job_rx);
-        let res_tx = res_tx.clone();
-        workers.push(std::thread::spawn(move || {
-            loop {
-                let job = {
-                    let Ok(rx) = job_rx.lock() else { return };
-                    rx.recv()
-                };
-                let Ok(job) = job else {
-                    return;
-                };
-                let outcome = prewarm_one_dynamic_image(job.path, job.opts, &job.cache_dir);
-                let _ = res_tx.send(DynamicImagePrewarmResult {
-                    label: job.label,
-                    outcome,
-                });
-            }
-        }));
-    }
-    drop(res_tx);
-    for job in jobs {
-        let _ = job_tx.send(job);
-    }
-    drop(job_tx);
-
     let mut prepared = 0usize;
     let mut built = 0usize;
     let mut reused = 0usize;
@@ -449,44 +672,51 @@ pub fn prewarm_dynamic_image_jobs_with_progress<F>(
     let mut built_ms = 0.0f64;
     let mut reused_ms = 0.0f64;
     let mut completed = 0usize;
-    for result in res_rx {
-        let current_path = match &result.outcome {
-            DynamicImagePrewarmOutcome::Built { path, .. }
-            | DynamicImagePrewarmOutcome::Reused { path, .. }
-            | DynamicImagePrewarmOutcome::SkippedNonFile { path }
-            | DynamicImagePrewarmOutcome::SkippedNonImage { path }
-            | DynamicImagePrewarmOutcome::Failed { path, .. } => Some(path.as_path()),
-        };
-        completed = completed.saturating_add(1);
-        progress(completed, total_jobs, current_path);
-        match result.outcome {
-            DynamicImagePrewarmOutcome::Built { millis, .. } => {
-                prepared += 1;
-                built += 1;
-                built_ms += millis;
+    parallel_map_dynamic_image_prewarm_batches(
+        jobs,
+        worker_count,
+        |job| {
+            let label = job.label;
+            let outcome = prewarm_one_dynamic_image(job);
+            DynamicImagePrewarmResult { label, outcome }
+        },
+        |results| {
+            for result in results.items.into_iter().flatten() {
+                let current_path = match &result.outcome {
+                    DynamicImagePrewarmOutcome::Built { path, .. }
+                    | DynamicImagePrewarmOutcome::Reused { path, .. }
+                    | DynamicImagePrewarmOutcome::SkippedNonFile { path }
+                    | DynamicImagePrewarmOutcome::SkippedNonImage { path }
+                    | DynamicImagePrewarmOutcome::Failed { path, .. } => Some(path.as_path()),
+                };
+                completed = completed.saturating_add(1);
+                progress(completed, total_jobs, current_path);
+                match result.outcome {
+                    DynamicImagePrewarmOutcome::Built { millis, .. } => {
+                        prepared += 1;
+                        built += 1;
+                        built_ms += millis;
+                    }
+                    DynamicImagePrewarmOutcome::Reused { millis, .. } => {
+                        prepared += 1;
+                        reused += 1;
+                        reused_ms += millis;
+                    }
+                    DynamicImagePrewarmOutcome::SkippedNonFile { .. } => skipped_non_file += 1,
+                    DynamicImagePrewarmOutcome::SkippedNonImage { .. } => skipped_non_image += 1,
+                    DynamicImagePrewarmOutcome::Failed { path, msg } => {
+                        failed += 1;
+                        warn!(
+                            "{} cache prewarm failed for '{}': {}",
+                            result.label,
+                            path.display(),
+                            msg
+                        );
+                    }
+                }
             }
-            DynamicImagePrewarmOutcome::Reused { millis, .. } => {
-                prepared += 1;
-                reused += 1;
-                reused_ms += millis;
-            }
-            DynamicImagePrewarmOutcome::SkippedNonFile { .. } => skipped_non_file += 1,
-            DynamicImagePrewarmOutcome::SkippedNonImage { .. } => skipped_non_image += 1,
-            DynamicImagePrewarmOutcome::Failed { path, msg } => {
-                failed += 1;
-                warn!(
-                    "{} cache prewarm failed for '{}': {}",
-                    result.label,
-                    path.display(),
-                    msg
-                );
-            }
-        }
-    }
-
-    for worker in workers {
-        let _ = worker.join();
-    }
+        },
+    );
 
     let elapsed = started.elapsed().as_secs_f64();
     let prep_per_sec = if elapsed > 0.0 {
@@ -712,6 +942,129 @@ mod tests {
     }
 
     #[test]
+    fn dynamic_image_prewarm_jobs_share_one_cache_directory_allocation() {
+        let opts = BannerCacheOptions { enabled: true };
+        let cache_dir = Path::new("cache/artwork");
+        let mut jobs = Vec::new();
+        let mut unique = HashSet::new();
+        let paths = [PathBuf::from("a.png"), PathBuf::from("b.png")];
+
+        assert_eq!(
+            push_dynamic_image_prewarm_jobs(
+                &mut jobs,
+                &mut unique,
+                &paths,
+                opts,
+                cache_dir,
+                "Banner",
+            ),
+            0
+        );
+
+        assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].cache_dir.as_ref(), cache_dir);
+        assert!(Arc::ptr_eq(&jobs[0].cache_dir, &jobs[1].cache_dir));
+    }
+
+    #[test]
+    fn prepared_dynamic_image_cache_location_builds_the_expected_entry() {
+        let dir = TempDir::new("prepared-prewarm-location");
+        let cache_dir = dir.path().join("cache");
+        let source = dir.path().join("banner.png");
+        let opts = BannerCacheOptions { enabled: true };
+        write_test_png(&source, [4, 3, 2, 1]);
+        let expected_cache = dynamic_image_cache_path_for(&source, opts, &cache_dir)
+            .expect("test source canonicalizes")
+            .0;
+        let mut jobs = Vec::new();
+        let mut unique = HashSet::new();
+        assert_eq!(
+            push_dynamic_image_prewarm_jobs(
+                &mut jobs,
+                &mut unique,
+                std::slice::from_ref(&source),
+                opts,
+                &cache_dir,
+                "Banner",
+            ),
+            0
+        );
+        let mut progress = Vec::new();
+
+        prewarm_dynamic_image_jobs_with_progress(
+            1,
+            jobs,
+            0,
+            "Artwork",
+            &mut |completed, total, path| {
+                progress.push((completed, total, path.map(Path::to_path_buf)));
+            },
+        );
+
+        assert!(expected_cache.is_file());
+        assert_eq!(progress, [(0, 1, None), (1, 1, Some(source))]);
+    }
+
+    #[test]
+    fn batched_dynamic_image_prewarm_scheduler_matches_channel_reference() {
+        let values = (0..257).map(|value| value * 17 + 3).collect::<Vec<_>>();
+        let reference = benchmark_dynamic_prewarm_scheduler_reference(values.clone(), 4);
+        let batched = benchmark_dynamic_prewarm_scheduler_batched_results(values, 4);
+
+        assert_eq!(batched, reference);
+    }
+
+    #[test]
+    fn batched_dynamic_image_prewarm_reports_every_job() {
+        let opts = BannerCacheOptions { enabled: true };
+        let cache_dir = Path::new("cache/artwork");
+        let paths = (0..19)
+            .map(|index| PathBuf::from(format!("missing-{index}.png")))
+            .collect::<Vec<_>>();
+        let mut jobs = Vec::with_capacity(paths.len());
+        let mut unique = HashSet::with_capacity(paths.len());
+        let duplicate = push_dynamic_image_prewarm_jobs(
+            &mut jobs,
+            &mut unique,
+            &paths,
+            opts,
+            cache_dir,
+            "Banner",
+        );
+        let mut progress = Vec::new();
+
+        prewarm_dynamic_image_jobs_with_progress(
+            paths.len(),
+            jobs,
+            duplicate,
+            "Artwork",
+            &mut |completed, total, path| {
+                progress.push((completed, total, path.map(Path::to_path_buf)));
+            },
+        );
+
+        assert_eq!(progress.len(), paths.len() + 1);
+        assert_eq!(progress[0], (0, paths.len(), None));
+        assert!(
+            progress
+                .iter()
+                .enumerate()
+                .all(|(index, (completed, total, _))| {
+                    *completed == index && *total == paths.len()
+                })
+        );
+        let mut reported = progress
+            .into_iter()
+            .skip(1)
+            .filter_map(|(_, _, path)| path)
+            .collect::<Vec<_>>();
+        reported.sort_unstable();
+        let mut expected = paths;
+        expected.sort_unstable();
+        assert_eq!(reported, expected);
+    }
+
+    #[test]
     fn push_dynamic_image_prewarm_jobs_dedupes_by_cache_path() {
         let dir = TempDir::new("prewarm-job-dedupe");
         let cache_dir = dir.path().join("cache");
@@ -732,7 +1085,7 @@ mod tests {
         assert_eq!(duplicates, 1);
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].label, "Banner");
-        assert_eq!(jobs[0].cache_dir, cache_dir);
+        assert_eq!(jobs[0].cache_dir.as_ref(), cache_dir);
     }
 
     #[test]
