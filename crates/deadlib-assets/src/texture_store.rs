@@ -1,5 +1,6 @@
 use crate::registry::{
     drain_pending_generated_textures, register_texture_dims_shared, register_texture_handle_shared,
+    reserve_texture_registries,
 };
 use crate::{
     GeneratedTexture, TexMeta, clear_texture_handles, register_texture_dims, remove_texture_handle,
@@ -73,6 +74,15 @@ impl<T> TextureStore<T> {
         clear_texture_handles();
         self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
+    }
+
+    pub(crate) fn reserve_initial_textures(&mut self, additional: usize) {
+        let dense_additional = additional.saturating_add(1);
+        self.textures.reserve(dense_additional);
+        self.uploaded_texture_dims.reserve(dense_additional);
+        self.texture_handles.reserve(additional);
+        self.texture_keys.reserve(dense_additional);
+        reserve_texture_registries(additional);
     }
 
     pub fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {

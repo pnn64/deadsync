@@ -31,6 +31,10 @@ struct TextureMetadataRegistry {
 }
 
 impl TextureMetadataRegistry {
+    fn reserve(&mut self, additional: usize) {
+        self.entries.reserve(additional);
+    }
+
     fn register(
         &mut self,
         key: impl AsRef<str> + Into<Arc<str>>,
@@ -304,6 +308,15 @@ pub fn register_texture_handle(key: &str, handle: TextureHandle) {
 
 pub(crate) fn register_texture_handle_shared(key: Arc<str>, handle: TextureHandle) {
     register_texture_handle_inner(key, handle);
+}
+
+/// # Panics
+///
+/// Panics if an internal synchronization lock is poisoned.
+pub(crate) fn reserve_texture_registries(additional: usize) {
+    TEXTURE_METADATA.write().unwrap().reserve(additional);
+    TEXTURE_HANDLES.write().unwrap().reserve(additional);
+    TEXTURE_HANDLE_ALIASES.write().unwrap().reserve(additional);
 }
 
 /// # Panics

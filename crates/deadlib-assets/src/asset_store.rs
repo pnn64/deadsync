@@ -268,10 +268,25 @@ impl<T> AssetStore<T> {
         &mut self,
         jobs: Vec<TextureDecodeJob>,
         needs_repeat_sampler: impl Fn(&str) -> bool,
+        create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
+    ) -> Result<Vec<InitialTextureLoad<T>>, E> {
+        let prepared = prepare_initial_texture_images(jobs, needs_repeat_sampler);
+        self.load_prepared_textures_with(prepared, true, create)
+    }
+
+    fn load_prepared_textures_with<E>(
+        &mut self,
+        prepared: Vec<crate::PreparedTextureImage>,
+        reserve: bool,
         mut create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
     ) -> Result<Vec<InitialTextureLoad<T>>, E> {
-        let mut loaded = Vec::new();
-        for prepared in prepare_initial_texture_images(jobs, needs_repeat_sampler) {
+        let mut loaded = if reserve {
+            self.texture_store.reserve_initial_textures(prepared.len());
+            Vec::with_capacity(prepared.len())
+        } else {
+            Vec::new()
+        };
+        for prepared in prepared {
             let texture = create(prepared.image.as_ref(), prepared.sampler)?;
             register_texture_dims(
                 &prepared.key,
@@ -291,6 +306,24 @@ impl<T> AssetStore<T> {
             });
         }
         Ok(loaded)
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub fn benchmark_load_prepared<E>(
+        &mut self,
+        prepared: Vec<crate::PreparedTextureImage>,
+        create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
+    ) -> Result<Vec<InitialTextureLoad<T>>, E> {
+        self.load_prepared_textures_with(prepared, true, create)
+    }
+
+    #[cfg(feature = "bench-support")]
+    pub fn benchmark_load_prepared_reference<E>(
+        &mut self,
+        prepared: Vec<crate::PreparedTextureImage>,
+        create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
+    ) -> Result<Vec<InitialTextureLoad<T>>, E> {
+        self.load_prepared_textures_with(prepared, false, create)
     }
 
     pub fn load_texture_key_with<E>(
@@ -350,6 +383,7 @@ impl<T> Default for AssetStore<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::sync::mpsc::sync_channel;
 
     #[test]
@@ -519,5 +553,41 @@ mod tests {
         assert!(loaded.iter().all(|load| load.retired.is_none()));
         assert!(store.has_uploaded_texture_key(crate::WHITE_TEXTURE_KEY));
         assert!(store.has_uploaded_texture_key(crate::BLACK_TEXTURE_KEY));
+    }
+
+    #[test]
+    fn reserved_bulk_load_matches_growing_reference() {
+        fn prepared() -> Vec<crate::PreparedTextureImage> {
+            (0..32)
+                .map(|index| crate::PreparedTextureImage {
+                    key: format!("bulk-load-parity-{index}"),
+                    image: Arc::new(RgbaImage::new(2, 3)),
+                    sampler: SamplerDesc::default(),
+                    built_in: index < 2,
+                })
+                .collect()
+        }
+
+        let mut reference_store = AssetStore::<u32>::new();
+        let reference = reference_store
+            .load_prepared_textures_with(prepared(), false, |image, _| {
+                Ok::<u32, ()>(image.width() * image.height())
+            })
+            .unwrap();
+        let mut reserved_store = AssetStore::<u32>::new();
+        let reserved = reserved_store
+            .load_prepared_textures_with(prepared(), true, |image, _| {
+                Ok::<u32, ()>(image.width() * image.height())
+            })
+            .unwrap();
+
+        assert_eq!(reserved.len(), reference.len());
+        for (actual, expected) in reserved.iter().zip(&reference) {
+            assert_eq!(actual.key, expected.key);
+            assert_eq!(actual.built_in, expected.built_in);
+            assert_eq!(actual.retired, expected.retired);
+            assert!(reserved_store.has_uploaded_texture_key(&actual.key));
+            assert!(reference_store.has_uploaded_texture_key(&actual.key));
+        }
     }
 }

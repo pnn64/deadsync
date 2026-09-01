@@ -9,8 +9,14 @@ use image::RgbaImage;
 use log::warn;
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Mutex},
 };
+
+/// Number of decode jobs claimed under one queue lock.
+///
+/// Eight amortizes synchronization while leaving enough batches to balance
+/// differently sized texture files across the available workers.
+const DECODE_JOB_BATCH_SIZE: usize = 8;
 
 pub struct TextureDecodeJob {
     pub key: String,
@@ -124,7 +130,15 @@ pub fn prepare_initial_texture_images(
     jobs: Vec<TextureDecodeJob>,
     needs_repeat_sampler: impl Fn(&str) -> bool,
 ) -> Vec<PreparedTextureImage> {
-    let mut prepared = Vec::new();
+    let results = decode_texture_jobs_parallel(jobs);
+    prepare_texture_results(results, needs_repeat_sampler)
+}
+
+fn prepare_texture_results(
+    results: Vec<TextureDecodeResult>,
+    needs_repeat_sampler: impl Fn(&str) -> bool,
+) -> Vec<PreparedTextureImage> {
+    let mut prepared = Vec::with_capacity(results.len().saturating_add(2));
     for built_in in [white_texture_image(), black_texture_image()] {
         prepared.push(PreparedTextureImage {
             key: built_in.key.to_string(),
@@ -135,7 +149,7 @@ pub fn prepare_initial_texture_images(
     }
 
     let fallback_image = Arc::new(fallback_texture_image());
-    for result in decode_texture_jobs_parallel(jobs) {
+    for result in results {
         match result {
             TextureDecodeResult::Decoded { key, image } => {
                 let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
@@ -159,6 +173,56 @@ pub fn prepare_initial_texture_images(
         }
     }
     prepared
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn prepare_texture_results_reference(
+    results: Vec<TextureDecodeResult>,
+) -> Vec<PreparedTextureImage> {
+    let mut prepared = Vec::new();
+    for built_in in [white_texture_image(), black_texture_image()] {
+        prepared.push(PreparedTextureImage {
+            key: built_in.key.to_string(),
+            image: Arc::new(built_in.image),
+            sampler: SamplerDesc::default(),
+            built_in: true,
+        });
+    }
+
+    let fallback_image = Arc::new(fallback_texture_image());
+    for result in results {
+        match result {
+            TextureDecodeResult::Decoded { key, image } => {
+                let sampler = initial_texture_sampler(&key, false);
+                prepared.push(PreparedTextureImage {
+                    key,
+                    image: Arc::new(image),
+                    sampler,
+                    built_in: false,
+                });
+            }
+            TextureDecodeResult::Failed { key, message } => {
+                warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
+                let sampler = initial_texture_sampler(&key, false);
+                prepared.push(PreparedTextureImage {
+                    key,
+                    image: Arc::clone(&fallback_image),
+                    sampler,
+                    built_in: false,
+                });
+            }
+        }
+    }
+    prepared
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn prepare_texture_results_batched(
+    results: Vec<TextureDecodeResult>,
+) -> Vec<PreparedTextureImage> {
+    prepare_texture_results(results, |_| false)
 }
 
 pub fn prepare_texture_key_load(
@@ -227,50 +291,185 @@ pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureD
         .unwrap_or(1)
         .min(job_count);
 
-    let (job_tx, job_rx) = mpsc::channel::<TextureDecodeJob>();
-    let job_rx = Arc::new(Mutex::new(job_rx));
-    let (res_tx, res_rx) = mpsc::channel::<TextureDecodeResult>();
+    parallel_map_batches(jobs, worker_count, decode_rgba)
+}
 
-    let mut workers = Vec::with_capacity(worker_count);
-    for _ in 0..worker_count {
-        let job_rx = Arc::clone(&job_rx);
-        let res_tx = res_tx.clone();
-        workers.push(std::thread::spawn(move || {
-            loop {
-                let job = {
-                    let Ok(rx) = job_rx.lock() else { return };
-                    rx.recv()
-                };
-                let Ok(job) = job else { return };
-                let _ = res_tx.send(decode_rgba(job));
-            }
-        }));
+fn parallel_map_batches<T, R>(
+    jobs: Vec<T>,
+    worker_count: usize,
+    work: impl Fn(T) -> R + Sync,
+) -> Vec<R>
+where
+    T: Send,
+    R: Send,
+{
+    if jobs.is_empty() {
+        return Vec::new();
     }
-    drop(res_tx);
-
-    for job in jobs {
-        let _ = job_tx.send(job);
-    }
-    drop(job_tx);
-
-    let mut results = Vec::with_capacity(job_count);
-    for result in res_rx {
-        results.push(result);
+    let worker_count = worker_count.clamp(1, jobs.len());
+    if worker_count == 1 {
+        return jobs.into_iter().map(work).collect();
     }
 
-    for worker in workers {
-        worker.join().expect("texture decode worker panicked");
-    }
+    let job_count = jobs.len();
+    let jobs = Mutex::new(jobs.into_iter());
+    let results = Mutex::new(Vec::with_capacity(job_count));
+    std::thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(worker_count);
+        let work = &work;
+        for _ in 0..worker_count {
+            let jobs = &jobs;
+            let results = &results;
+            workers.push(scope.spawn(move || {
+                let mut batch = Vec::with_capacity(DECODE_JOB_BATCH_SIZE);
+                let mut completed = Vec::with_capacity(DECODE_JOB_BATCH_SIZE);
+                loop {
+                    {
+                        let mut jobs = jobs.lock().expect("texture decode job queue poisoned");
+                        batch.extend(jobs.by_ref().take(DECODE_JOB_BATCH_SIZE));
+                    }
+                    if batch.is_empty() {
+                        return;
+                    }
+                    completed.extend(batch.drain(..).map(work));
+                    results
+                        .lock()
+                        .expect("texture decode result queue poisoned")
+                        .extend(completed.drain(..));
+                }
+            }));
+        }
+
+        for worker in workers {
+            worker.join().expect("texture decode worker panicked");
+        }
+    });
     results
+        .into_inner()
+        .expect("texture decode result queue poisoned")
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_parallel_map_batched(jobs: Vec<u64>, worker_count: usize) -> Vec<u64> {
+    parallel_map_batches(jobs, worker_count, benchmark_decode_work)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[must_use]
+pub fn benchmark_parallel_map_reference(jobs: Vec<u64>, worker_count: usize) -> Vec<u64> {
+    use std::sync::mpsc;
+
+    if jobs.is_empty() {
+        return Vec::new();
+    }
+    let job_count = jobs.len();
+    let worker_count = worker_count.clamp(1, job_count);
+    let (job_tx, job_rx) = mpsc::channel::<u64>();
+    let job_rx = Mutex::new(job_rx);
+    let (result_tx, result_rx) = mpsc::channel::<u64>();
+    std::thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let job_rx = &job_rx;
+            let result_tx = result_tx.clone();
+            workers.push(scope.spawn(move || {
+                loop {
+                    let job = {
+                        let Ok(receiver) = job_rx.lock() else {
+                            return;
+                        };
+                        receiver.recv()
+                    };
+                    let Ok(job) = job else { return };
+                    let _ = result_tx.send(benchmark_decode_work(job));
+                }
+            }));
+        }
+        drop(result_tx);
+        for job in jobs {
+            let _ = job_tx.send(job);
+        }
+        drop(job_tx);
+
+        let mut results = Vec::with_capacity(job_count);
+        results.extend(result_rx);
+        for worker in workers {
+            worker.join().expect("texture decode worker panicked");
+        }
+        results
+    })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn benchmark_decode_work(mut value: u64) -> u64 {
+    let rounds = 4 + ((value.wrapping_mul(0x9e37_79b1) >> 27) as u32 & 31);
+    for round in 0..rounds {
+        value = value
+            .wrapping_mul(0x9e37_79b1_85eb_ca87)
+            .rotate_left(round.wrapping_add(7))
+            ^ u64::from(round);
+    }
+    value
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn result_fixture() -> Vec<TextureDecodeResult> {
+        vec![
+            TextureDecodeResult::Decoded {
+                key: "decoded (stretch).png".to_string(),
+                image: RgbaImage::new(3, 2),
+            },
+            TextureDecodeResult::Failed {
+                key: "failed.png".to_string(),
+                message: "fixture failure".to_string(),
+            },
+        ]
+    }
+
+    fn prepared_signature(
+        prepared: &[PreparedTextureImage],
+    ) -> Vec<(&str, bool, u32, u32, SamplerDesc)> {
+        prepared
+            .iter()
+            .map(|item| {
+                (
+                    item.key.as_str(),
+                    item.built_in,
+                    item.image.width(),
+                    item.image.height(),
+                    item.sampler,
+                )
+            })
+            .collect()
+    }
+
     #[test]
     fn decodes_empty_job_list() {
         assert!(decode_texture_jobs_parallel(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn batched_workers_match_channel_scheduler_results() {
+        let jobs = (0..257).collect::<Vec<_>>();
+        let mut reference = benchmark_parallel_map_reference(jobs.clone(), 4);
+        let mut batched = parallel_map_batches(jobs, 4, benchmark_decode_work);
+        reference.sort_unstable();
+        batched.sort_unstable();
+        assert_eq!(batched, reference);
+    }
+
+    #[test]
+    fn capacity_sized_preparation_matches_growing_reference() {
+        let reference = prepare_texture_results_reference(result_fixture());
+        let prepared = prepare_texture_results(result_fixture(), |_| false);
+        assert_eq!(
+            prepared_signature(&prepared),
+            prepared_signature(&reference)
+        );
     }
 
     #[test]

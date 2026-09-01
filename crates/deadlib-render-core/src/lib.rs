@@ -160,6 +160,12 @@ impl<V> Default for TextureHandleMap<V> {
 }
 
 impl<V> TextureHandleMap<V> {
+    /// Reserves storage for at least `additional` more handle slots.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.slots.reserve(additional);
+    }
+
     #[inline(always)]
     fn slot(handle: TextureHandle) -> Option<usize> {
         usize::try_from(handle).ok()
