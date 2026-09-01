@@ -1,0 +1,3139 @@
+{
+  "actor_definitions": [
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 217,
+          "line": 217,
+          "name": "InitCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 218,
+          "line": 218,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 234,
+          "line": 227,
+          "name": "RotateEm2MessageCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 226,
+          "line": 219,
+          "name": "RotateEmMessageCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0002",
+      "layer_index": 2,
+      "line": 215,
+      "name": "I may be sleeping, but I preserve the world.",
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0002"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Quad",
+      "commands": [
+        {
+          "last_line": 243,
+          "line": 237,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0003",
+      "layer_index": 3,
+      "line": 236,
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0003"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "ActorProxy",
+      "commands": [
+        {
+          "last_line": 248,
+          "line": 246,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 253,
+          "line": 249,
+          "name": "SetCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0004",
+      "layer_index": 4,
+      "line": 245,
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0004"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "ActorProxy",
+      "commands": [
+        {
+          "last_line": 258,
+          "line": 256,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 263,
+          "line": 259,
+          "name": "SetCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0005",
+      "layer_index": 5,
+      "line": 255,
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0005"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "ActorProxy",
+      "commands": [
+        {
+          "last_line": 268,
+          "line": 266,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 273,
+          "line": 269,
+          "name": "SetCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0006",
+      "layer_index": 6,
+      "line": 265,
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0006"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "ActorProxy",
+      "commands": [
+        {
+          "last_line": 279,
+          "line": 277,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 284,
+          "line": 280,
+          "name": "SetCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0007",
+      "layer_index": 7,
+      "line": 276,
+      "parent_id": "def-0009",
+      "properties": [],
+      "runtime_actors": [
+        "def-0007"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [
+        {
+          "definition_id": "def-0010",
+          "layer_index": 1
+        },
+        {
+          "definition_id": "def-0002",
+          "layer_index": 2
+        },
+        {
+          "definition_id": "def-0003",
+          "layer_index": 3
+        },
+        {
+          "definition_id": "def-0004",
+          "layer_index": 4
+        },
+        {
+          "definition_id": "def-0005",
+          "layer_index": 5
+        },
+        {
+          "definition_id": "def-0006",
+          "layer_index": 6
+        },
+        {
+          "definition_id": "def-0007",
+          "layer_index": 7
+        },
+        {
+          "definition_id": "def-0011",
+          "layer_index": 8
+        }
+      ],
+      "class": "ActorFrame",
+      "commands": [
+        {
+          "last_line": 201,
+          "line": 171,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0009",
+      "line": -1,
+      "properties": [],
+      "runtime_actors": [
+        "def-0009"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 213,
+          "line": 203,
+          "name": "InitCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0010",
+      "layer_index": 1,
+      "line": 202,
+      "parent_id": "def-0009",
+      "properties": {
+        "Texture": "song:/lua/Delightful Day.mp4"
+      },
+      "runtime_actors": [
+        "def-0010"
+      ],
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "children": [],
+      "class": "Sprite",
+      "commands": [
+        {
+          "last_line": 315,
+          "line": 303,
+          "name": "InitCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 291,
+          "line": 287,
+          "name": "LightsOffMessageCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 302,
+          "line": 292,
+          "name": "LightsOnMessageCommand",
+          "source": "song:/lua/default.lua"
+        },
+        {
+          "last_line": 325,
+          "line": 316,
+          "name": "OnCommand",
+          "source": "song:/lua/default.lua"
+        }
+      ],
+      "id": "def-0011",
+      "layer_index": 8,
+      "line": 286,
+      "parent_id": "def-0009",
+      "properties": {
+        "Texture": "song:/lua/Delightful Day.mp4"
+      },
+      "runtime_actors": [
+        "def-0011"
+      ],
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "capabilities": {
+    "actor_definitions": true,
+    "actor_method_calls": true,
+    "callback_calls": true,
+    "child_layer_order": true,
+    "command_execution": true,
+    "message_broadcasts": true,
+    "modifier_mutations": true,
+    "native_draw_sort": false,
+    "native_tween_queue": false
+  },
+  "description": "XO FL FS SK",
+  "difficulty": "Difficulty_Challenge",
+  "display": {
+    "height": 0,
+    "logical_height": 480,
+    "logical_width": 854,
+    "width": 0
+  },
+  "dropped_events": 0,
+  "end_position": {
+    "beat": 114.02381896972656,
+    "seconds": 43.872314453125
+  },
+  "events": [
+    {
+      "actor": "def-0010",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 203,
+      "operation": "command.begin",
+      "seconds": 0,
+      "seq": 1,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        false
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.visible",
+      "seconds": 0,
+      "seq": 2,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        true
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.visible",
+      "seconds": 0,
+      "seq": 3,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.Center",
+      "seconds": 0,
+      "seq": 4,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        427,
+        240
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.xy",
+      "seconds": 0,
+      "seq": 5,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        0.4451383555638413
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.zoom",
+      "seconds": 0,
+      "seq": 6,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        0
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.hibernate",
+      "seconds": 0,
+      "seq": 7,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        0
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0,
+      "seq": 8,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        0.3
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.linear",
+      "seconds": 0,
+      "seq": 9,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0,
+      "seq": 10,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        4
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.sleep",
+      "seconds": 0,
+      "seq": 11,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        0.5
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.linear",
+      "seconds": 0,
+      "seq": 12,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "kind": "call",
+      "line": 203,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0,
+      "seq": 13,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0010",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0010",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 203,
+      "operation": "command.end",
+      "seconds": 0,
+      "seq": 14,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 217,
+      "operation": "command.begin",
+      "seconds": 0,
+      "seq": 15,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [
+        false
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 217,
+      "operation": "Actor.visible",
+      "seconds": 0,
+      "seq": 16,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 217,
+      "operation": "command.end",
+      "seconds": 0,
+      "seq": 17,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 303,
+      "operation": "command.begin",
+      "seconds": 0,
+      "seq": 18,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.Center",
+      "seconds": 0,
+      "seq": 19,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        427,
+        240
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.xy",
+      "seconds": 0,
+      "seq": 20,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        true
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.visible",
+      "seconds": 0,
+      "seq": 21,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.4451383555638413
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.zoom",
+      "seconds": 0,
+      "seq": 22,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        false
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.animate",
+      "seconds": 0,
+      "seq": 23,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        false
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Sprite.loop",
+      "seconds": 0,
+      "seq": 24,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.2
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0,
+      "seq": 25,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Sprite.rate",
+      "seconds": 0,
+      "seq": 26,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        1
+      ],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 303,
+      "operation": "Sprite.rate",
+      "seconds": 0,
+      "seq": 27,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0,
+      "command": "InitCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "InitCommand"
+      },
+      "kind": "command",
+      "line": 303,
+      "operation": "command.end",
+      "seconds": 0,
+      "seq": 28,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0009",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 171,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 29,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        false
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.visible",
+      "seconds": 0.01807256229221821,
+      "seq": 30,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0009",
+      "args": [
+        {
+          "last_line": 166,
+          "line": 121,
+          "source": "song:/lua/default.lua",
+          "type": "function"
+        }
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "ActorFrame.SetUpdateFunction",
+      "seconds": 0.01807256229221821,
+      "seq": 31,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0019",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 32,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0019",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 33,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0019",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 34,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0020",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 35,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0020",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 36,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0020",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 37,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0022",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 38,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0022",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 39,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0022",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 40,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0023",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 41,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0023",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 42,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0023",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 43,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0024",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 44,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0024",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 45,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0024",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 46,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0025",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 47,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0025",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 48,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0025",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 49,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0026",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 50,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0026",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 51,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0026",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 52,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0012",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 53,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0012",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 54,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0012",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 55,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0027",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 56,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0027",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 57,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0027",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 58,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 59,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 60,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 61,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0028",
+      "args": [
+        false
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.visible",
+      "seconds": 0.01807256229221821,
+      "seq": 62,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0029",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 63,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0029",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 64,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0029",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 65,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0017",
+      "args": [
+        false
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.visible",
+      "seconds": 0.01807256229221821,
+      "seq": 66,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0018",
+      "args": [
+        true
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.visible",
+      "seconds": 0.01807256229221821,
+      "seq": 67,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0018",
+      "args": [
+        1
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 68,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0030",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 69,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0030",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 70,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0030",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 71,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0031",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 72,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0031",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 73,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0031",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 74,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 75,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 76,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0032",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 77,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0033",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 78,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0033",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 79,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0033",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 80,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0034",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 81,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0034",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 82,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0034",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 83,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0035",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 84,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0035",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 85,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0035",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 86,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0038",
+      "args": [
+        1.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.smooth",
+      "seconds": 0.01807256229221821,
+      "seq": 87,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0038",
+      "args": [
+        1.5,
+        "TweenType_Bezier",
+        [
+          0,
+          0,
+          1,
+          1
+        ]
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.tween",
+      "seconds": 0.01807256229221821,
+      "seq": 88,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0038",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 89,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0037",
+      "args": [
+        false
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "call",
+      "line": 171,
+      "operation": "Actor.visible",
+      "seconds": 0.01807256229221821,
+      "seq": 90,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0009",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 171,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 91,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 218,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 92,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [
+        1000
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 218,
+      "operation": "Actor.sleep",
+      "seconds": 0.01807256229221821,
+      "seq": 93,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 218,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 94,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 237,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 95,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "call",
+      "line": 237,
+      "operation": "Actor.FullScreen",
+      "seconds": 0.01807256229221821,
+      "seq": 96,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [
+        0,
+        0,
+        854,
+        480
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "call",
+      "line": 237,
+      "operation": "Actor.stretchto",
+      "seconds": 0.01807256229221821,
+      "seq": 97,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "call",
+      "line": 237,
+      "operation": "Actor.Center",
+      "seconds": 0.01807256229221821,
+      "seq": 98,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [
+        427,
+        240
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "call",
+      "line": 237,
+      "operation": "Actor.xy",
+      "seconds": 0.01807256229221821,
+      "seq": 99,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [
+        0,
+        0,
+        0,
+        0.2
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "kind": "call",
+      "line": 237,
+      "operation": "Actor.diffuse",
+      "seconds": 0.01807256229221821,
+      "seq": 100,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0003",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0003",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 237,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 101,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0004",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 246,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 102,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [
+        "Set"
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0004",
+      "kind": "call",
+      "line": 246,
+      "operation": "Actor.queuecommand",
+      "seconds": 0.01807256229221821,
+      "seq": 103,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0004",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 246,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 104,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0005",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 256,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 105,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "args": [
+        "Set"
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0005",
+      "kind": "call",
+      "line": 256,
+      "operation": "Actor.queuecommand",
+      "seconds": 0.01807256229221821,
+      "seq": 106,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0005",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 256,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 107,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0006",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 266,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 108,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [
+        "Set"
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0006",
+      "kind": "call",
+      "line": 266,
+      "operation": "Actor.queuecommand",
+      "seconds": 0.01807256229221821,
+      "seq": 109,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0006",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 266,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 110,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0007",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 277,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 111,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "args": [
+        "Set"
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0007",
+      "kind": "call",
+      "line": 277,
+      "operation": "Actor.queuecommand",
+      "seconds": 0.01807256229221821,
+      "seq": 112,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0007",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 277,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 113,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 316,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 114,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.Center",
+      "seconds": 0.01807256229221821,
+      "seq": 115,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        427,
+        240
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.xy",
+      "seconds": 0.01807256229221821,
+      "seq": 116,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.4451383555638413
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.zoom",
+      "seconds": 0.01807256229221821,
+      "seq": 117,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.hibernate",
+      "seconds": 0.01807256229221821,
+      "seq": 118,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 119,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.3
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.linear",
+      "seconds": 0.01807256229221821,
+      "seq": 120,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        1
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 121,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        4
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.sleep",
+      "seconds": 0.01807256229221821,
+      "seq": 122,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.5
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.linear",
+      "seconds": 0.01807256229221821,
+      "seq": 123,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.2
+      ],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 316,
+      "operation": "Actor.diffusealpha",
+      "seconds": 0.01807256229221821,
+      "seq": 124,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "OnCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "OnCommand"
+      },
+      "kind": "command",
+      "line": 316,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 125,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0004",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 249,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 126,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [
+        {
+          "actor": "external-0018",
+          "name": "P1Score",
+          "path": "ScreenGameplay/Underlay/P1Score"
+        }
+      ],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0004",
+      "kind": "call",
+      "line": 249,
+      "operation": "ActorProxy.SetTarget",
+      "seconds": 0.01807256229221821,
+      "seq": 127,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0004",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0004",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 249,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 128,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0005",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 259,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 129,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0005",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0005",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 259,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 130,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0006",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 269,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 131,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [
+        {
+          "actor": "external-0011",
+          "name": "PlayerP1",
+          "path": "ScreenGameplay/PlayerP1"
+        }
+      ],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0006",
+      "kind": "call",
+      "line": 269,
+      "operation": "ActorProxy.SetTarget",
+      "seconds": 0.01807256229221821,
+      "seq": 132,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0006",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0006",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 269,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 133,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0007",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 280,
+      "operation": "command.begin",
+      "seconds": 0.01807256229221821,
+      "seq": 134,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0007",
+      "args": [],
+      "beat": 0.002788661979138851,
+      "command": "SetCommand",
+      "definition_id": "def-0007",
+      "detail": {
+        "name": "SetCommand"
+      },
+      "kind": "command",
+      "line": 280,
+      "operation": "command.end",
+      "seconds": 0.01807256229221821,
+      "seq": 135,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "player-state:PlayerNumber_P1",
+      "args": [
+        "ModsLevel_Song",
+        "NoHideLights, PlayerAutoPlay, Overhead, *1 95% dark, *2 80% stealth, *1 100% Beat"
+      ],
+      "beat": 111.5604248046875,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "modifier",
+      "line": 171,
+      "operation": "PlayerState.SetPlayerOptions",
+      "seconds": 42.92485427856445,
+      "seq": 136,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "player-state:PlayerNumber_P2",
+      "args": [
+        "ModsLevel_Song",
+        "NoHideLights, Overhead, *1 95% dark, *2 80% stealth, *1 100% Beat"
+      ],
+      "beat": 111.5604248046875,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "modifier",
+      "line": 171,
+      "operation": "PlayerState.SetPlayerOptions",
+      "seconds": 42.92485427856445,
+      "seq": 137,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        "RotateEm"
+      ],
+      "beat": 111.76045989990234,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "message",
+      "line": 171,
+      "operation": "MessageManager.Broadcast",
+      "seconds": 43.00179290771485,
+      "seq": 138,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "RotateEmMessageCommand"
+      },
+      "kind": "command",
+      "line": 219,
+      "operation": "command.begin",
+      "seconds": 43.00179290771485,
+      "seq": 139,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        0.6
+      ],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 219,
+      "operation": "Actor.decelerate",
+      "seconds": 43.00179290771485,
+      "seq": 140,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        360
+      ],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 219,
+      "operation": "Actor.addrotationz",
+      "seconds": 43.00179290771485,
+      "seq": 141,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        0.35
+      ],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 219,
+      "operation": "Actor.linear",
+      "seconds": 43.00179290771485,
+      "seq": 142,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        1.15
+      ],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "kind": "call",
+      "line": 219,
+      "operation": "Actor.zoom",
+      "seconds": 43.00179290771485,
+      "seq": 143,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0002",
+      "args": [],
+      "beat": 111.76045989990234,
+      "command": "RotateEmMessageCommand",
+      "definition_id": "def-0002",
+      "detail": {
+        "name": "RotateEmMessageCommand"
+      },
+      "kind": "command",
+      "line": 219,
+      "operation": "command.end",
+      "seconds": 43.00179290771485,
+      "seq": 144,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        "LightsOff"
+      ],
+      "beat": 112.11537170410156,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "message",
+      "line": 171,
+      "operation": "MessageManager.Broadcast",
+      "seconds": 43.13829803466797,
+      "seq": 145,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "LightsOffMessageCommand"
+      },
+      "kind": "command",
+      "line": 287,
+      "operation": "command.begin",
+      "seconds": 43.13829803466797,
+      "seq": 146,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        1
+      ],
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 287,
+      "operation": "Actor.diffusealpha",
+      "seconds": 43.13829803466797,
+      "seq": 147,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.75
+      ],
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 287,
+      "operation": "Actor.linear",
+      "seconds": 43.13829803466797,
+      "seq": 148,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0
+      ],
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 287,
+      "operation": "Actor.diffusealpha",
+      "seconds": 43.13829803466797,
+      "seq": 149,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 112.11537170410156,
+      "command": "LightsOffMessageCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "LightsOffMessageCommand"
+      },
+      "kind": "command",
+      "line": 287,
+      "operation": "command.end",
+      "seconds": 43.13829803466797,
+      "seq": 150,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "player-state:PlayerNumber_P1",
+      "args": [
+        "ModsLevel_Song",
+        "NoHideLights, Beat, 80% Stealth, 95% Dark, PlayerAutoPlay, Overhead, *1 no dark, *1 no stealth, *1 no Blink"
+      ],
+      "beat": 112.3193130493164,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "modifier",
+      "line": 171,
+      "operation": "PlayerState.SetPlayerOptions",
+      "seconds": 43.21673583984375,
+      "seq": 151,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "player-state:PlayerNumber_P2",
+      "args": [
+        "ModsLevel_Song",
+        "NoHideLights, Beat, 80% Stealth, 95% Dark, Overhead, *1 no dark, *1 no stealth, *1 no Blink"
+      ],
+      "beat": 112.3193130493164,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "modifier",
+      "line": 171,
+      "operation": "PlayerState.SetPlayerOptions",
+      "seconds": 43.21673583984375,
+      "seq": 152,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "args": [
+        "LightsOn"
+      ],
+      "beat": 113.08710479736328,
+      "callback": "SetUpdateFunction",
+      "command": "OnCommand",
+      "definition_id": "def-0009",
+      "kind": "message",
+      "line": 171,
+      "operation": "MessageManager.Broadcast",
+      "seconds": 43.51203918457031,
+      "seq": 153,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "LightsOnMessageCommand"
+      },
+      "kind": "command",
+      "line": 292,
+      "operation": "command.begin",
+      "seconds": 43.51203918457031,
+      "seq": 154,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0
+      ],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 292,
+      "operation": "Actor.diffusealpha",
+      "seconds": 43.51203918457031,
+      "seq": 155,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        0.15
+      ],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 292,
+      "operation": "Actor.linear",
+      "seconds": 43.51203918457031,
+      "seq": 156,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "external-0011",
+      "args": [
+        1
+      ],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 292,
+      "operation": "Actor.zoom",
+      "seconds": 43.51203918457031,
+      "seq": 157,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.8
+      ],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 292,
+      "operation": "Actor.linear",
+      "seconds": 43.51203918457031,
+      "seq": 158,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [
+        0.2
+      ],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "kind": "call",
+      "line": 292,
+      "operation": "Actor.diffusealpha",
+      "seconds": 43.51203918457031,
+      "seq": 159,
+      "source": "song:/lua/default.lua"
+    },
+    {
+      "actor": "def-0011",
+      "args": [],
+      "beat": 113.08710479736328,
+      "command": "LightsOnMessageCommand",
+      "definition_id": "def-0011",
+      "detail": {
+        "name": "LightsOnMessageCommand"
+      },
+      "kind": "command",
+      "line": 292,
+      "operation": "command.end",
+      "seconds": 43.51203918457031,
+      "seq": 160,
+      "source": "song:/lua/default.lua"
+    }
+  ],
+  "game": "dance",
+  "harness_version": "0.1.0",
+  "itgmania_version": "1.3.0",
+  "oracle": "itgmania_song_lua_semantic_trace",
+  "roots": [
+    "def-0009"
+  ],
+  "runtime_actors": [
+    {
+      "id": "external-0001",
+      "name": "quad",
+      "path": "/quad"
+    },
+    {
+      "id": "external-0002",
+      "name": "ScreenSongLuaHarness",
+      "path": "ScreenGameplay"
+    },
+    {
+      "id": "external-0003",
+      "name": "JudgmentWithOffsets",
+      "path": "Player Judgment/JudgmentWithOffsets"
+    },
+    {
+      "definition_id": "def-0010",
+      "id": "def-0010",
+      "name": "",
+      "path": "def-0010"
+    },
+    {
+      "definition_id": "def-0002",
+      "id": "def-0002",
+      "name": "I may be sleeping, but I preserve the world.",
+      "path": "def-0002"
+    },
+    {
+      "definition_id": "def-0011",
+      "id": "def-0011",
+      "name": "",
+      "path": "def-0011"
+    },
+    {
+      "id": "external-0007",
+      "name": "Holds_Label",
+      "path": "HoldsMinesRolls/Holds_Label"
+    },
+    {
+      "id": "external-0008",
+      "name": "Mines_Label",
+      "path": "HoldsMinesRolls/Mines_Label"
+    },
+    {
+      "id": "external-0009",
+      "name": "Rolls_Label",
+      "path": "HoldsMinesRolls/Rolls_Label"
+    },
+    {
+      "id": "external-0010",
+      "name": "ScreenGameplay",
+      "path": "ScreenGameplay"
+    },
+    {
+      "id": "external-0011",
+      "name": "PlayerP1",
+      "path": "ScreenGameplay/PlayerP1"
+    },
+    {
+      "id": "external-0012",
+      "name": "LifeP1",
+      "path": "ScreenGameplay/LifeP1"
+    },
+    {
+      "id": "external-0013",
+      "name": "NoteField",
+      "path": "ScreenGameplay/PlayerP1/NoteField"
+    },
+    {
+      "id": "external-0014",
+      "name": "Column4",
+      "path": "/Column4"
+    },
+    {
+      "id": "external-0015",
+      "name": "ColumnFlash",
+      "path": "/Column4/ColumnFlash"
+    },
+    {
+      "definition_id": "def-0009",
+      "id": "def-0009",
+      "name": "lua",
+      "path": "def-0009"
+    },
+    {
+      "id": "external-0017",
+      "name": "Underlay",
+      "path": "ScreenGameplay/Underlay"
+    },
+    {
+      "id": "external-0018",
+      "name": "P1Score",
+      "path": "ScreenGameplay/Underlay/P1Score"
+    },
+    {
+      "id": "external-0019",
+      "name": "SongOptions",
+      "path": "ScreenGameplay/SongOptions"
+    },
+    {
+      "id": "external-0020",
+      "name": "Cancel",
+      "path": "ScreenGameplay/Cancel"
+    },
+    {
+      "id": "external-0021",
+      "name": "SongForeground",
+      "path": "ScreenGameplay/SongForeground"
+    },
+    {
+      "id": "external-0022",
+      "name": "OniGameOverP1",
+      "path": "ScreenGameplay/OniGameOverP1"
+    },
+    {
+      "id": "external-0023",
+      "name": "ScoreP1",
+      "path": "ScreenGameplay/ScoreP1"
+    },
+    {
+      "id": "external-0024",
+      "name": "LyricDisplay",
+      "path": "ScreenGameplay/LyricDisplay"
+    },
+    {
+      "id": "external-0025",
+      "name": "ActiveAttackListP2",
+      "path": "ScreenGameplay/ActiveAttackListP2"
+    },
+    {
+      "id": "external-0026",
+      "name": "Debug",
+      "path": "ScreenGameplay/Debug"
+    },
+    {
+      "id": "external-0027",
+      "name": "Out",
+      "path": "ScreenGameplay/Out"
+    },
+    {
+      "id": "external-0028",
+      "name": "In",
+      "path": "ScreenGameplay/In"
+    },
+    {
+      "id": "external-0029",
+      "name": "ActiveAttackListP1",
+      "path": "ScreenGameplay/ActiveAttackListP1"
+    },
+    {
+      "id": "external-0030",
+      "name": "StepsDisplayP1",
+      "path": "ScreenGameplay/StepsDisplayP1"
+    },
+    {
+      "id": "external-0031",
+      "name": "Overlay",
+      "path": "ScreenGameplay/Overlay"
+    },
+    {
+      "id": "external-0032",
+      "name": "Header",
+      "path": "ScreenGameplay/Header"
+    },
+    {
+      "id": "external-0033",
+      "name": "Footer",
+      "path": "ScreenGameplay/Footer"
+    },
+    {
+      "id": "external-0034",
+      "name": "StepsDescriptionP1",
+      "path": "ScreenGameplay/StepsDescriptionP1"
+    },
+    {
+      "id": "external-0035",
+      "name": "PlayerOptionsP1",
+      "path": "ScreenGameplay/PlayerOptionsP1"
+    },
+    {
+      "id": "external-0036",
+      "name": "",
+      "path": "ScreenGameplay/"
+    },
+    {
+      "id": "external-0037",
+      "name": "SongBackground",
+      "path": "ScreenGameplay/SongBackground"
+    },
+    {
+      "id": "external-0038",
+      "name": "",
+      "path": "external-0038"
+    },
+    {
+      "definition_id": "def-0003",
+      "id": "def-0003",
+      "name": "",
+      "path": "def-0003"
+    },
+    {
+      "definition_id": "def-0004",
+      "id": "def-0004",
+      "name": "",
+      "path": "def-0004"
+    },
+    {
+      "definition_id": "def-0005",
+      "id": "def-0005",
+      "name": "",
+      "path": "def-0005"
+    },
+    {
+      "definition_id": "def-0006",
+      "id": "def-0006",
+      "name": "",
+      "path": "def-0006"
+    },
+    {
+      "definition_id": "def-0007",
+      "id": "def-0007",
+      "name": "",
+      "path": "def-0007"
+    }
+  ],
+  "schema_version": 1,
+  "simfile": "song:/Delightful Day.ssc",
+  "source_simfile": "../lua-songs/Delightful Day/Delightful Day.ssc",
+  "steps_type": "StepsType_Dance_Single",
+  "style": "single",
+  "theme": "Simply-Love-SM5",
+  "title": "Delightful Day (w/ visual FX, BG video)",
+  "trace_until_beat": 114
+}

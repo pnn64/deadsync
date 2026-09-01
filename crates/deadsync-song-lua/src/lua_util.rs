@@ -1123,6 +1123,29 @@ pub fn create_actor_child_group(lua: &Lua) -> mlua::Result<Table> {
     let group = lua.create_table()?;
     let mt = lua.create_table()?;
     mt.set(SONG_LUA_CHILD_GROUP_KEY, true)?;
+    mt.set(
+        "__index",
+        lua.create_function(|lua, (group, key): (Table, Value)| {
+            let Some(actor) = group.raw_get::<Option<Table>>(group.raw_len())? else {
+                return Ok(Value::Nil);
+            };
+            let value = actor.get::<Value>(key)?;
+            let Value::Function(method) = value else {
+                return Ok(value);
+            };
+            Ok(Value::Function(lua.create_function(
+                move |_, args: MultiValue| {
+                    let mut args = args.into_vec();
+                    if args.is_empty() {
+                        args.push(Value::Table(actor.clone()));
+                    } else {
+                        args[0] = Value::Table(actor.clone());
+                    }
+                    method.call::<MultiValue>(MultiValue::from_vec(args))
+                },
+            )?))
+        })?,
+    )?;
     let _ = group.set_metatable(Some(mt));
     Ok(group)
 }
@@ -8004,7 +8027,7 @@ pub fn create_top_screen_table(
     for player_actor in &player_actors {
         player_actor.set("__songlua_parent", top_screen.clone())?;
     }
-    let nameless_children = lua.create_table()?;
+    let nameless_children = create_actor_child_group(lua)?;
     for (player_index, player_actor) in player_actors.iter().enumerate() {
         if players[player_index].enabled {
             nameless_children.raw_set(nameless_children.raw_len() + 1, player_actor.clone())?;

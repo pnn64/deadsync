@@ -8368,7 +8368,13 @@ return Def.ActorFrame{
         mod_actions = {
             {
                 1,
-                string.format("%d:%s:%d", count, panel and panel:GetName() or "nil", type(lines) == "table" and #lines or 0),
+                string.format(
+                    "%d:%s:%d:%s",
+                    count,
+                    panel and panel:GetName() or "nil",
+                    type(lines) == "table" and #lines or 0,
+                    lines:GetName()
+                ),
                 true,
             },
         }
@@ -8387,7 +8393,7 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "2:Panel:2");
+        assert_eq!(compiled.messages[0].message, "2:Panel:2:Line");
     }
 
     #[test]
