@@ -4,6 +4,10 @@ use deadsync_noteskin::actor::{
     itg_has_beat_update_marker_reference_for_bench, itg_update_function_name_for_bench,
     itg_update_function_name_reference_for_bench,
 };
+use deadsync_noteskin::compiled::compiled_key_bench_support::{
+    actor_file_visit_current, actor_file_visit_reference, actor_manifest_current,
+    actor_manifest_reference, actor_visit_current, actor_visit_reference,
+};
 use deadsync_noteskin::lua::{
     itg_extract_quoted_strings_reference_for_bench, itg_parse_self_chain_commands,
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
@@ -28,6 +32,7 @@ use deadsync_noteskin::script::{
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -1018,5 +1023,123 @@ fn main() {
         "allocation-free receptor actor-effect scan (7 representative commands)",
         &old_receptor_effect,
         &new_receptor_effect,
+    );
+
+    let actor_visit_cases = [
+        ("Down", "Tap Note"),
+        ("PUMP-CENTER", "Hold Head Active"),
+        ("UpLeft", "Tap Explosion Bright W1"),
+        ("MenuLeft", "Fallback Hold Explosion"),
+        ("Café", "Éclair"),
+        ("", ""),
+    ];
+    let actor_visit_suite = |build: fn(&str, &str) -> String| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for (button, element) in actor_visit_cases {
+                let key = black_box(build(black_box(button), black_box(element)));
+                checksum = text_checksum(checksum, black_box(&key));
+            }
+        }
+        checksum
+    };
+    let (old_actor_visit, new_actor_visit) = measure_pair(
+        1_024,
+        actor_visit_cases.len() * REPEATS,
+        || actor_visit_suite(actor_visit_reference),
+        || actor_visit_suite(actor_visit_current),
+    );
+    assert_improved(
+        "single-buffer actor recursion keys",
+        &old_actor_visit,
+        &new_actor_visit,
+    );
+    print_pair(
+        "single-buffer actor recursion keys (6 representative pairs)",
+        &old_actor_visit,
+        &new_actor_visit,
+    );
+
+    let actor_file_cases = [
+        Path::new("Dance/Default/Down Receptor.lua"),
+        Path::new("NoteSkins/Pump/CENTER Tap Note.LUA"),
+        Path::new("NoteSkins/Dance/Cel/Down Tap Mine.MODEL"),
+        Path::new("ProgramData/ITGmania/NoteSkins/Common/Fallback.lua"),
+        Path::new("Skins/Café/Éclair.lua"),
+        Path::new(""),
+    ];
+    let actor_file_suite = |build: fn(&Path) -> String| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for path in actor_file_cases {
+                let key = black_box(build(black_box(path)));
+                checksum = text_checksum(checksum, black_box(&key));
+            }
+        }
+        checksum
+    };
+    let (old_actor_file, new_actor_file) = measure_pair(
+        1_024,
+        actor_file_cases.len() * REPEATS,
+        || actor_file_suite(actor_file_visit_reference),
+        || actor_file_suite(actor_file_visit_current),
+    );
+    assert_improved(
+        "single-buffer actor file recursion keys",
+        &old_actor_file,
+        &new_actor_file,
+    );
+    print_pair(
+        "single-buffer actor file recursion keys (6 representative paths)",
+        &old_actor_file,
+        &new_actor_file,
+    );
+
+    let manifest_cases = [
+        (
+            Path::new("assets/noteskins/DANCE/DeFaUlT"),
+            Path::new("assets/noteskins/DANCE/DeFaUlT/DOWN RECEPTOR.LUA"),
+        ),
+        (
+            Path::new("assets/noteskins/Pump/CmdStack"),
+            Path::new("assets/noteskins/Pump/CmdStack/Center Tap Note.lua"),
+        ),
+        (
+            Path::new("ProgramData/ITGmania/NoteSkins/Common/Fallback"),
+            Path::new("ProgramData/ITGmania/NoteSkins/Common/Fallback/Receptor.lua"),
+        ),
+        (
+            Path::new("root/NoteSkins/PuMp/Café"),
+            Path::new("root/NoteSkins/PuMp/Café/Éclair.lua"),
+        ),
+        (Path::new("dance/default"), Path::new("Tap Note.lua")),
+    ];
+    let manifest_suite = |build: fn(&Path, &Path) -> Option<String>| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for (dir, path) in manifest_cases {
+                checksum = match black_box(build(black_box(dir), black_box(path))) {
+                    Some(key) => text_checksum(checksum, black_box(&key)),
+                    None => mix(checksum, 1),
+                };
+            }
+        }
+        checksum
+    };
+    let (old_manifest, new_manifest) = measure_pair(
+        1_024,
+        manifest_cases.len() * REPEATS,
+        || manifest_suite(actor_manifest_reference),
+        || manifest_suite(actor_manifest_current),
+    );
+    assert_improved(
+        "single-buffer actor manifest keys",
+        &old_manifest,
+        &new_manifest,
+    );
+    print_pair(
+        "single-buffer actor manifest keys (5 representative paths)",
+        &old_manifest,
+        &new_manifest,
     );
 }

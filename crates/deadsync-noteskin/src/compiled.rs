@@ -1,6 +1,7 @@
 use bincode::{Decode, Encode};
 use log::warn;
 use std::cmp::Ordering as CmpOrdering;
+use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -148,6 +149,24 @@ impl CompiledActors {
 
 #[must_use]
 pub fn actor_visit_key(button: &str, element: &str) -> String {
+    let mut key = String::with_capacity(button.len() + 1 + element.len());
+    key.push_str(button);
+    key.push('|');
+    key.push_str(element);
+    key.make_ascii_lowercase();
+    key
+}
+
+#[must_use]
+pub fn actor_file_visit_key(path: &Path) -> String {
+    let mut key = String::with_capacity("file:".len() + path.as_os_str().len());
+    write!(&mut key, "file:{}", path.display()).expect("writing to a String cannot fail");
+    key.make_ascii_lowercase();
+    key
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_visit_key_reference(button: &str, element: &str) -> String {
     format!(
         "{}|{}",
         button.to_ascii_lowercase(),
@@ -155,8 +174,8 @@ pub fn actor_visit_key(button: &str, element: &str) -> String {
     )
 }
 
-#[must_use]
-pub fn actor_file_visit_key(path: &Path) -> String {
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_file_visit_key_reference(path: &Path) -> String {
     format!("file:{}", path.display().to_string().to_ascii_lowercase())
 }
 
@@ -245,7 +264,58 @@ pub fn actor_manifest_key_for_dir(dir: &Path, path: &Path) -> Option<String> {
     let game = dir.parent()?.file_name()?.to_str()?;
     let skin = dir.file_name()?.to_str()?;
     let file = path.file_name()?.to_str()?;
+    let mut key = String::with_capacity(game.len() + 1 + skin.len() + 1 + file.len());
+    key.push_str(game);
+    key.push('/');
+    key.push_str(skin);
+    key.push('/');
+    key.push_str(file);
+    key.make_ascii_lowercase();
+    Some(key)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn actor_manifest_key_for_dir_reference(dir: &Path, path: &Path) -> Option<String> {
+    let game = dir.parent()?.file_name()?.to_str()?;
+    let skin = dir.file_name()?.to_str()?;
+    let file = path.file_name()?.to_str()?;
     Some(format!("{game}/{skin}/{file}").to_ascii_lowercase())
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod compiled_key_bench_support {
+    use super::*;
+
+    #[must_use]
+    pub fn actor_visit_reference(button: &str, element: &str) -> String {
+        actor_visit_key_reference(button, element)
+    }
+
+    #[must_use]
+    pub fn actor_visit_current(button: &str, element: &str) -> String {
+        actor_visit_key(button, element)
+    }
+
+    #[must_use]
+    pub fn actor_file_visit_reference(path: &Path) -> String {
+        actor_file_visit_key_reference(path)
+    }
+
+    #[must_use]
+    pub fn actor_file_visit_current(path: &Path) -> String {
+        actor_file_visit_key(path)
+    }
+
+    #[must_use]
+    pub fn actor_manifest_reference(dir: &Path, path: &Path) -> Option<String> {
+        actor_manifest_key_for_dir_reference(dir, path)
+    }
+
+    #[must_use]
+    pub fn actor_manifest_current(dir: &Path, path: &Path) -> Option<String> {
+        actor_manifest_key_for_dir(dir, path)
+    }
 }
 
 #[cfg(test)]
@@ -325,6 +395,56 @@ mod tests {
             actor_file_visit_key(Path::new("Dance/Default/Down Receptor.lua")),
             "file:dance/default/down receptor.lua"
         );
+
+        let actor_cases = [
+            ("Down", "Tap Note"),
+            ("PUMP-CENTER", "HoLd HeAd AcTiVe"),
+            ("Café", "Éclair"),
+            ("", ""),
+        ];
+        for (button, element) in actor_cases {
+            assert_eq!(
+                actor_visit_key(button, element),
+                actor_visit_key_reference(button, element),
+                "button={button:?} element={element:?}"
+            );
+        }
+
+        let path_cases = [
+            Path::new("Dance/Default/Down Receptor.lua"),
+            Path::new("NoteSkins/PuMp/CENTER Tap Note.LUA"),
+            Path::new("Skins/Café/Éclair.lua"),
+            Path::new(""),
+        ];
+        for path in path_cases {
+            assert_eq!(
+                actor_file_visit_key(path),
+                actor_file_visit_key_reference(path),
+                "path={path:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn single_buffer_manifest_keys_match_committed_behavior() {
+        let cases = [
+            (
+                Path::new("assets/noteskins/DANCE/DeFaUlT"),
+                Path::new("assets/noteskins/DANCE/DeFaUlT/DOWN RECEPTOR.LUA"),
+            ),
+            (
+                Path::new("root/NoteSkins/PuMp/Café"),
+                Path::new("root/NoteSkins/PuMp/Café/Éclair.lua"),
+            ),
+            (Path::new("dance/default"), Path::new("Tap Note.lua")),
+        ];
+        for (dir, path) in cases {
+            assert_eq!(
+                actor_manifest_key_for_dir(dir, path),
+                actor_manifest_key_for_dir_reference(dir, path),
+                "dir={dir:?} path={path:?}"
+            );
+        }
     }
 
     #[test]
