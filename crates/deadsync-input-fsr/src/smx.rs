@@ -6,6 +6,7 @@ use deadsync_input::fsr::{
 };
 use deadsync_smx::{self as smx, SensorTestData, SensorTestMode, SmxConfig};
 use std::fmt::Write as _;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 pub const PANEL_SENSOR_COUNT: usize = 4;
@@ -44,11 +45,20 @@ pub const SENSOR_DISPLAY_ORDER: [usize; PANEL_SENSOR_COUNT] = [0, 3, 2, 1];
 pub struct Monitor {
     /// Whether the config screen has requested live reads (sensor test mode).
     read_active: bool,
+    device_names: [Option<CachedDeviceName>; 2],
+}
+
+struct CachedDeviceName {
+    serial: String,
+    label: Arc<str>,
 }
 
 impl Monitor {
     pub const fn new() -> Self {
-        Self { read_active: false }
+        Self {
+            read_active: false,
+            device_names: [None, None],
+        }
     }
 
     /// Toggle live sensor reads (test mode) on all connected pads. Called by
@@ -71,8 +81,7 @@ impl Monitor {
     }
 
     /// Enumerate every connected `StepManiaX` pad (FSR or load cell) as a `PadView`.
-    pub fn poll_pads(&self) -> Vec<PadView> {
-        let mut pads = Vec::new();
+    pub fn poll_pads_into(&mut self, pads: &mut Vec<PadView>) {
         for pad in 0..2 {
             let info = smx::get_info(pad);
             if !info.connected {
@@ -90,11 +99,7 @@ impl Monitor {
             let input_state = smx::manager().map_or(0, |m| m.get_input_state(pad));
             // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2
             // per the pad→player assignment), not the raw jumper bit.
-            let device_name = format!(
-                "StepManiaX P{} [{}]",
-                if pad == 1 { 2 } else { 1 },
-                smx::serial_prefix(&info.serial),
-            );
+            let device_name = self.device_name(pad, &info.serial);
 
             let buttons: ButtonViews = VIEW_PANELS
                 .iter()
@@ -127,7 +132,26 @@ impl Monitor {
                 debounce_micros: if fsr { Some(debounce_us) } else { None },
             });
         }
-        pads
+    }
+
+    fn device_name(&mut self, pad: usize, serial: &str) -> Arc<str> {
+        let cached = &mut self.device_names[pad];
+        if let Some(cached) = cached.as_ref()
+            && cached.serial == serial
+        {
+            return Arc::clone(&cached.label);
+        }
+        let label: Arc<str> = format!(
+            "StepManiaX P{} [{}]",
+            if pad == 1 { 2 } else { 1 },
+            smx::serial_prefix(serial),
+        )
+        .into();
+        *cached = Some(CachedDeviceName {
+            serial: serial.to_owned(),
+            label: Arc::clone(&label),
+        });
+        label
     }
 
     /// Set an FSR panel threshold: we write `high = value`, `low = value - 1`.
@@ -640,5 +664,18 @@ mod tests {
         assert_eq!(load_cell.aggregate_threshold, 90);
         assert_eq!(load_cell.release_threshold, Some(70));
         assert!(load_cell.sensors.iter().all(|sensor| !sensor.active));
+    }
+
+    #[test]
+    fn device_name_cache_reuses_identity_and_refreshes_on_serial_change() {
+        let mut monitor = Monitor::new();
+        let first = monitor.device_name(0, "40eabc");
+        let same = monitor.device_name(0, "40eabc");
+        let changed = monitor.device_name(0, "91ff00");
+
+        assert!(Arc::ptr_eq(&first, &same));
+        assert!(!Arc::ptr_eq(&first, &changed));
+        assert_eq!(first.as_ref(), "StepManiaX P1 [40ea]");
+        assert_eq!(changed.as_ref(), "StepManiaX P1 [91ff]");
     }
 }

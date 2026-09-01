@@ -232,20 +232,18 @@ pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
 
 /// Replace the live pad snapshot (called by the app loop each frame while this
 /// screen is active), applying the active pad filter. Keeps selections in range.
-pub fn set_pads(state: &mut State, pads: Vec<PadView>) {
-    state.pads = pads
-        .into_iter()
-        .filter(|p| match state.filter {
-            PadFilter::All => true,
-            PadFilter::Sides { p1, p2 } => {
-                if p.is_p2_side {
-                    p2
-                } else {
-                    p1
-                }
+pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
+    pads.retain(|p| match state.filter {
+        PadFilter::All => true,
+        PadFilter::Sides { p1, p2 } => {
+            if p.is_p2_side {
+                p2
+            } else {
+                p1
             }
-        })
-        .collect();
+        }
+    });
+    state.pads = pads;
 
     let total = total_bars(state);
     if total == 0 {
@@ -272,6 +270,12 @@ pub fn set_pads(state: &mut State, pads: Vec<PadView>) {
         }
         None => {}
     }
+}
+
+/// Temporarily hand the live snapshot storage back to the shell so the next
+/// hardware poll can refill the same allocation.
+pub fn take_pads(state: &mut State) -> Vec<PadView> {
+    std::mem::take(&mut state.pads)
 }
 
 /// Drain queued edits so the app loop can apply them to hardware.
@@ -767,7 +771,7 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
     let cx = screen_center_x();
     let pad_name = selected_device(state)
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
-        .map_or("", |p| p.device_name.as_str());
+        .map_or("", |p| p.device_name.as_ref());
     actors.push(act!(text:
         font("miso"): settext(format!("PROFILES  -  {pad_name}")): align(0.5, 0.0):
         xy(cx, 84.0): zoom(0.95): horizalign(center):
@@ -902,7 +906,7 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
     );
     let pad_name = selected_device(state)
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
-        .map_or("", |p| p.device_name.as_str());
+        .map_or("", |p| p.device_name.as_ref());
     let title = if draft.rename_of.is_some() {
         "Rename profile".to_owned()
     } else {
@@ -2804,7 +2808,7 @@ mod tests {
                 backend: BackendKind::Smx,
                 index,
             },
-            device_name: format!("SMX {index}"),
+            device_name: format!("SMX {index}").into(),
             is_p2_side,
             buttons: [
                 mk_button("L", 30),
@@ -2848,7 +2852,7 @@ mod tests {
                 backend: BackendKind::Fsrio,
                 index: 0,
             },
-            device_name: "FSRIO".to_owned(),
+            device_name: "FSRIO".into(),
             is_p2_side: false,
             buttons: buttons
                 .iter()
@@ -3042,6 +3046,33 @@ mod tests {
         set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
         assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT); // only the P1 pad survives
         assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+    }
+
+    #[test]
+    fn live_snapshot_storage_survives_take_refill_and_filter() {
+        let mut state = init();
+        let mut pads = Vec::with_capacity(4);
+        pads.extend([smx_pad(0, false), smx_pad(1, true)]);
+        let storage = pads.as_ptr();
+        set_pads(&mut state, pads);
+
+        let mut pads = take_pads(&mut state);
+        assert_eq!(pads.as_ptr(), storage);
+        pads.clear();
+        pads.extend([smx_pad(0, false), smx_pad(1, true)]);
+        set_filter(
+            &mut state,
+            PadFilter::Sides {
+                p1: false,
+                p2: true,
+            },
+        );
+        set_pads(&mut state, pads);
+
+        let pads = take_pads(&mut state);
+        assert_eq!(pads.as_ptr(), storage);
+        assert_eq!(pads.len(), 1);
+        assert!(pads[0].is_p2_side);
     }
 
     #[test]

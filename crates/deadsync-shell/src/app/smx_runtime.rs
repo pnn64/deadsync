@@ -99,7 +99,8 @@ impl App {
         }
 
         {
-            let pads = self.fsr_monitor.poll_pads();
+            let mut pads = pad_config::take_pads(target!());
+            self.fsr_monitor.poll_pads_into(&mut pads);
             // Drain queued edits in a short-lived borrow so we can touch
             // `smx_applied` (a sibling of `target`) below without a borrow clash.
             let commands = {

@@ -12,6 +12,11 @@ name = "fsr_hot_paths"
 harness = false
 required-features = ["bench-support"]
 
+[[bench]]
+name = "pad_snapshot_hot_paths"
+harness = false
+required-features = ["bench-support"]
+
 [dependencies]
 arrayvec = "0.7.8"
 deadsync-input = { path = "../deadsync-input" }

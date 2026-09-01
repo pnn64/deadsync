@@ -17,6 +17,7 @@ use super::smx::{
 };
 use deadsync_input::fsr::{BackendKind, ButtonViews, PadDeviceId, PadView};
 use std::fmt::Write as _;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Starting thresholds: the Low preset's load-cell pair and Medium's FSR value.
@@ -32,6 +33,7 @@ enum MockKind {
 }
 
 struct MockPad {
+    device_name: Arc<str>,
     kind: MockKind,
     /// Per-button per-sensor press (high) thresholds. Load-cell buttons keep
     /// all four in lockstep (one threshold per panel).
@@ -47,12 +49,13 @@ struct MockPad {
 }
 
 impl MockPad {
-    const fn new(kind: MockKind) -> Self {
+    fn new(kind: MockKind, index: usize) -> Self {
         let press = match kind {
             MockKind::LoadCell => INIT_LOADCELL_PRESS,
             MockKind::Fsr => INIT_FSR_THRESHOLD,
         };
         Self {
+            device_name: format!("StepManiaX P{} [MOCK]", index + 1).into(),
             kind,
             press: [[press; PANEL_SENSOR_COUNT]; SMX_BUTTON_COUNT],
             release: [INIT_LOADCELL_RELEASE; SMX_BUTTON_COUNT],
@@ -91,40 +94,47 @@ impl Monitor {
         }
         log::info!("SMX mock: providing {} fake pad(s): {kinds:?}", kinds.len());
         Self {
-            pads: kinds.into_iter().map(MockPad::new).collect(),
+            pads: kinds
+                .into_iter()
+                .enumerate()
+                .map(|(index, kind)| MockPad::new(kind, index))
+                .collect(),
             started: Instant::now(),
         }
     }
 
-    pub fn poll_pads(&mut self) -> Vec<PadView> {
+    pub fn poll_pads_into(&mut self, pads: &mut Vec<PadView>) {
         let t = self.started.elapsed().as_secs_f32();
-        self.pads
-            .iter_mut()
-            .enumerate()
-            .map(|(i, pad)| {
-                let buttons: ButtonViews = (0..SMX_BUTTON_COUNT)
-                    .map(|b| match pad.kind {
-                        MockKind::LoadCell => load_cell_button(pad, i, b, t),
-                        MockKind::Fsr => fsr_button(pad, i, b, t),
-                    })
-                    .collect();
-                let fsr = pad.kind == MockKind::Fsr;
-                PadView {
-                    device_id: PadDeviceId {
-                        backend: BackendKind::Smx,
-                        index: i,
-                    },
-                    device_name: format!("StepManiaX P{} [MOCK]", i + 1),
-                    is_p2_side: i == 1,
-                    buttons,
-                    supports_advanced: fsr,
-                    simple_per_sensor_bars: !fsr,
-                    supports_sensor_toggle: fsr,
-                    auto_recalibration: fsr.then_some(pad.auto_recal),
-                    debounce_micros: fsr.then_some(pad.debounce_us),
-                }
-            })
-            .collect()
+        pads.extend(self.pads.iter_mut().enumerate().map(|(i, pad)| {
+            let buttons: ButtonViews = (0..SMX_BUTTON_COUNT)
+                .map(|b| match pad.kind {
+                    MockKind::LoadCell => load_cell_button(pad, i, b, t),
+                    MockKind::Fsr => fsr_button(pad, i, b, t),
+                })
+                .collect();
+            let fsr = pad.kind == MockKind::Fsr;
+            PadView {
+                device_id: PadDeviceId {
+                    backend: BackendKind::Smx,
+                    index: i,
+                },
+                device_name: Arc::clone(&pad.device_name),
+                is_p2_side: i == 1,
+                buttons,
+                supports_advanced: fsr,
+                simple_per_sensor_bars: !fsr,
+                supports_sensor_toggle: fsr,
+                auto_recalibration: fsr.then_some(pad.auto_recal),
+                debounce_micros: fsr.then_some(pad.debounce_us),
+            }
+        }));
+    }
+
+    #[cfg(test)]
+    fn poll_pads(&mut self) -> Vec<PadView> {
+        let mut pads = Vec::new();
+        self.poll_pads_into(&mut pads);
+        pads
     }
 
     /// Single-threshold (FSR-style) edit; load-cell pads use the pair edit.
@@ -352,5 +362,26 @@ mod tests {
             .unwrap();
         assert_eq!(s3.raw_threshold, 60);
         assert!(!s3.enabled);
+    }
+
+    #[test]
+    fn polling_reuses_snapshot_storage_and_shared_device_names() {
+        let mut monitor = Monitor::from_spec("loadcell,fsr");
+        let mut pads = Vec::with_capacity(2);
+        monitor.poll_pads_into(&mut pads);
+        let storage = pads.as_ptr();
+        let names = [
+            Arc::clone(&pads[0].device_name),
+            Arc::clone(&pads[1].device_name),
+        ];
+
+        pads.clear();
+        monitor.poll_pads_into(&mut pads);
+
+        assert_eq!(pads.as_ptr(), storage);
+        assert!(Arc::ptr_eq(&pads[0].device_name, &names[0]));
+        assert!(Arc::ptr_eq(&pads[1].device_name, &names[1]));
+        assert_eq!(pads[0].device_name.as_ref(), "StepManiaX P1 [MOCK]");
+        assert_eq!(pads[1].device_name.as_ref(), "StepManiaX P2 [MOCK]");
     }
 }

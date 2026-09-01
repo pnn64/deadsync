@@ -74,12 +74,20 @@ impl Monitor {
 
     /// Enumerate every connected FSR pad across all backends.
     pub fn poll_pads(&mut self) -> Vec<PadView> {
-        let mut pads = self.fsrio.poll_pads();
-        match &mut self.mock {
-            Some(m) => pads.extend(m.poll_pads()),
-            None => pads.extend(self.smx.poll_pads()),
-        }
+        let mut pads = Vec::new();
+        self.poll_pads_into(&mut pads);
         pads
+    }
+
+    /// Refresh every connected FSR pad into caller-owned storage. Reusing the
+    /// previous UI snapshot keeps steady-state polling allocation-free.
+    pub fn poll_pads_into(&mut self, pads: &mut Vec<PadView>) {
+        pads.clear();
+        self.fsrio.poll_pads_into(pads);
+        match &mut self.mock {
+            Some(m) => m.poll_pads_into(pads),
+            None => self.smx.poll_pads_into(pads),
+        }
     }
 
     /// Set a single threshold on a specific pad (the backend derives its own
@@ -336,5 +344,15 @@ pub mod bench_support {
     #[must_use]
     pub fn normalization_new(events: usize) -> u64 {
         crate::fsrio::bench_support::normalization_new(events)
+    }
+
+    #[must_use]
+    pub fn button_synthesis_old(events: usize) -> u64 {
+        crate::fsrio::bench_support::button_synthesis_old(events)
+    }
+
+    #[must_use]
+    pub fn button_synthesis_new(events: usize) -> u64 {
+        crate::fsrio::bench_support::button_synthesis_new(events)
     }
 }

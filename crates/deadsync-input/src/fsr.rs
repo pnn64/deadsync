@@ -1,4 +1,5 @@
 use arrayvec::ArrayVec;
+use std::sync::Arc;
 
 /// Maximum logical button groups exposed by one controller. Analog Dance Pad
 /// firmware reports up to sixteen HID buttons; SMX uses four named panels.
@@ -147,7 +148,10 @@ pub type ButtonViews = ArrayVec<ButtonView, MAX_PAD_BUTTONS>;
 #[derive(Clone, Debug)]
 pub struct PadView {
     pub device_id: PadDeviceId,
-    pub device_name: String,
+    /// Immutable hardware label shared across live snapshots. Backends update
+    /// this only when device identity changes, so cloning a frame never copies
+    /// or reallocates the label text.
+    pub device_name: Arc<str>,
     /// Player side the pad maps to (P2 vs P1), used to filter by play style. Taken
     /// from the device slot (slot 1 = P2 for SMX), not the hardware jumper.
     pub is_p2_side: bool,
