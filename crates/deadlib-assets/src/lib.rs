@@ -42,6 +42,12 @@ pub use font::{
     parse_font_with_asset_context, parse_font_with_asset_dirs, prepare_font_texture,
     prepare_required_font_textures, set_font_fallback,
 };
+#[cfg(feature = "bench-support")]
+pub use font::{
+    benchmark_font_contexts_borrowed_roots, benchmark_font_contexts_owned_roots,
+    benchmark_font_texture_keys_borrowed_roots, benchmark_font_texture_keys_cloned_roots,
+    benchmark_required_font_texture_keys_recomputed, benchmark_required_font_texture_keys_reused,
+};
 pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{

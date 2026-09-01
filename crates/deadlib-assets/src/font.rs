@@ -22,7 +22,29 @@ impl AssetFontTextureContext {
 
 impl font::FontTextureContext for AssetFontTextureContext {
     fn canonical_texture_key(&self, path: &Path) -> String {
-        canonical_texture_key_with_asset_roots(path, self.asset_roots.iter().cloned())
+        canonical_texture_key_with_asset_roots(path, &self.asset_roots)
+    }
+
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        parse_sprite_sheet_dims(key)
+    }
+
+    fn texture_hint_is_default(&self, raw: &str) -> bool {
+        texture_hint_is_default(raw)
+    }
+
+    fn texture_hint_doubleres(&self, raw: &str) -> bool {
+        texture_hint_doubleres(raw)
+    }
+}
+
+struct BorrowedAssetFontTextureContext<'a> {
+    asset_roots: &'a [PathBuf],
+}
+
+impl font::FontTextureContext for BorrowedAssetFontTextureContext<'_> {
+    fn canonical_texture_key(&self, path: &Path) -> String {
+        canonical_texture_key_with_asset_roots(path, self.asset_roots)
     }
 
     fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
@@ -60,9 +82,11 @@ pub struct ParsedFontAsset {
 
 pub fn parse_font_with_asset_context(
     ini_path: &Path,
-    asset_roots: Vec<PathBuf>,
+    asset_roots: impl AsRef<[PathBuf]>,
 ) -> Result<FontLoadData, FontParseError> {
-    let context = AssetFontTextureContext::new(asset_roots);
+    let context = BorrowedAssetFontTextureContext {
+        asset_roots: asset_roots.as_ref(),
+    };
     font::parse_with_texture_context(&ini_path.to_string_lossy(), &context)
 }
 
@@ -86,7 +110,7 @@ pub fn parse_font_asset_specs(
             let FontLoadData {
                 mut font,
                 required_textures,
-            } = parse_font_with_asset_context(&resolved, asset_roots.to_vec())?;
+            } = parse_font_with_asset_context(&resolved, asset_roots)?;
             set_font_fallback(&mut font, spec.fallback_font_name);
             Ok(ParsedFontAsset {
                 name: spec.name,
@@ -100,15 +124,14 @@ pub fn parse_font_asset_specs(
 
 #[must_use]
 pub fn font_texture_key(tex_path: &Path, asset_roots: &[PathBuf]) -> String {
-    canonical_texture_key_with_asset_roots(tex_path, asset_roots.iter().cloned())
+    canonical_texture_key_with_asset_roots(tex_path, asset_roots)
 }
 
-pub fn prepare_font_texture(
+fn prepare_font_texture_with_key(
     tex_path: &Path,
+    key: String,
     texture_hints_map: &HashMap<String, String>,
-    asset_roots: &[PathBuf],
 ) -> image::ImageResult<PreparedFontTexture> {
-    let key = font_texture_key(tex_path, asset_roots);
     let hints = texture_hints_map
         .get(&key)
         .map(|s| parse_texture_hints(s))
@@ -117,25 +140,128 @@ pub fn prepare_font_texture(
     Ok(PreparedFontTexture { key, image, hints })
 }
 
-pub fn prepare_required_font_textures(
-    font: &Font,
+pub fn prepare_font_texture(
+    tex_path: &Path,
+    texture_hints_map: &HashMap<String, String>,
+    asset_roots: &[PathBuf],
+) -> image::ImageResult<PreparedFontTexture> {
+    let key = font_texture_key(tex_path, asset_roots);
+    prepare_font_texture_with_key(tex_path, key, texture_hints_map)
+}
+
+fn prepare_required_font_textures_with<T, E>(
     required_textures: &[PathBuf],
     asset_roots: &[PathBuf],
     has_texture_key: impl Fn(&str) -> bool,
-) -> image::ImageResult<Vec<PreparedFontTexture>> {
+    mut prepare: impl FnMut(&Path, String) -> Result<T, E>,
+) -> Result<Vec<T>, E> {
     let mut prepared = Vec::new();
     for tex_path in required_textures {
         let key = font_texture_key(tex_path, asset_roots);
         if has_texture_key(&key) {
             continue;
         }
-        prepared.push(prepare_font_texture(
-            tex_path,
-            &font.texture_hints_map,
-            asset_roots,
-        )?);
+        prepared.push(prepare(tex_path, key)?);
     }
     Ok(prepared)
+}
+
+pub fn prepare_required_font_textures(
+    font: &Font,
+    required_textures: &[PathBuf],
+    asset_roots: &[PathBuf],
+    has_texture_key: impl Fn(&str) -> bool,
+) -> image::ImageResult<Vec<PreparedFontTexture>> {
+    prepare_required_font_textures_with(
+        required_textures,
+        asset_roots,
+        has_texture_key,
+        |tex_path, key| prepare_font_texture_with_key(tex_path, key, &font.texture_hints_map),
+    )
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_font_texture_keys_cloned_roots(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    texture_paths
+        .iter()
+        .map(|path| canonical_texture_key_with_asset_roots(path, asset_roots.iter().cloned()))
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_font_texture_keys_borrowed_roots(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    texture_paths
+        .iter()
+        .map(|path| font_texture_key(path, asset_roots))
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_font_contexts_owned_roots(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    texture_paths
+        .iter()
+        .map(|path| {
+            let roots = asset_roots.to_vec();
+            canonical_texture_key_with_asset_roots(path, &roots)
+        })
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_font_contexts_borrowed_roots(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    texture_paths
+        .iter()
+        .map(|path| {
+            let context = BorrowedAssetFontTextureContext { asset_roots };
+            font::FontTextureContext::canonical_texture_key(&context, path)
+        })
+        .collect()
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_required_font_texture_keys_recomputed(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    prepare_required_font_textures_with(
+        texture_paths,
+        asset_roots,
+        |_| false,
+        |path, _key| Ok::<_, std::convert::Infallible>(font_texture_key(path, asset_roots)),
+    )
+    .expect("infallible benchmark preparation")
+}
+
+#[cfg(feature = "bench-support")]
+#[must_use]
+pub fn benchmark_required_font_texture_keys_reused(
+    texture_paths: &[PathBuf],
+    asset_roots: &[PathBuf],
+) -> Vec<String> {
+    prepare_required_font_textures_with(
+        texture_paths,
+        asset_roots,
+        |_| false,
+        |_path, key| Ok::<_, std::convert::Infallible>(key),
+    )
+    .expect("infallible benchmark preparation")
 }
 
 #[must_use]
@@ -167,9 +293,26 @@ mod tests {
     fn font_texture_key_strips_known_asset_roots() {
         let roots = vec![PathBuf::from("/data/assets"), PathBuf::from("/exe/assets")];
 
+        let path = Path::new("/data/assets/fonts/foo.png");
+        let reference = canonical_texture_key_with_asset_roots(path, roots.iter().cloned());
+        let borrowed = font_texture_key(path, &roots);
+
+        assert_eq!(borrowed, reference);
+        assert_eq!(borrowed, "fonts/foo.png");
+    }
+
+    #[test]
+    fn borrowed_font_context_matches_owned_context() {
+        let roots = vec![PathBuf::from("/data/assets"), PathBuf::from("/exe/assets")];
+        let path = Path::new("/exe/assets/fonts/foo.png");
+        let owned = AssetFontTextureContext::new(roots.clone());
+        let borrowed = BorrowedAssetFontTextureContext {
+            asset_roots: &roots,
+        };
+
         assert_eq!(
-            font_texture_key(Path::new("/data/assets/fonts/foo.png"), &roots),
-            "fonts/foo.png"
+            font::FontTextureContext::canonical_texture_key(&borrowed, path),
+            font::FontTextureContext::canonical_texture_key(&owned, path)
         );
     }
 
@@ -207,6 +350,32 @@ mod tests {
         .unwrap();
 
         assert!(prepared.is_empty());
+    }
+
+    #[test]
+    fn required_font_texture_preparation_carries_selected_keys_in_order() {
+        let roots = vec![PathBuf::from("/data/assets")];
+        let required = vec![
+            PathBuf::from("/data/assets/fonts/first.png"),
+            PathBuf::from("/data/assets/fonts/cached.png"),
+            PathBuf::from("/data/assets/fonts/last.png"),
+        ];
+
+        let prepared = prepare_required_font_textures_with(
+            &required,
+            &roots,
+            |key| key == "fonts/cached.png",
+            |path, key| Ok::<_, std::convert::Infallible>((path.to_path_buf(), key)),
+        )
+        .unwrap();
+
+        assert_eq!(
+            prepared,
+            [
+                (required[0].clone(), "fonts/first.png".to_string()),
+                (required[2].clone(), "fonts/last.png".to_string()),
+            ]
+        );
     }
 
     #[test]

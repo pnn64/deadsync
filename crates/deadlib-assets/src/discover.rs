@@ -327,12 +327,15 @@ pub fn texture_choices_from_discovered(
     choices
 }
 
-pub fn canonical_texture_key_with_asset_roots(
+pub fn canonical_texture_key_with_asset_roots<P>(
     path: &Path,
-    asset_roots: impl IntoIterator<Item = PathBuf>,
-) -> String {
+    asset_roots: impl IntoIterator<Item = P>,
+) -> String
+where
+    P: AsRef<Path>,
+{
     for root in asset_roots {
-        if let Ok(rel) = path.strip_prefix(root) {
+        if let Ok(rel) = path.strip_prefix(root.as_ref()) {
             return rel.to_string_lossy().replace('\\', "/");
         }
     }
