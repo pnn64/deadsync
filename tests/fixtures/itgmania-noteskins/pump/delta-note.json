@@ -1,0 +1,2881 @@
+{
+  "schema_version": 1,
+  "oracle_schema_version": 1,
+  "game": "pump",
+  "skin": "delta-note",
+  "metrics": [
+    {
+      "section": "Center",
+      "key": "TapNoteAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "AvoidMineCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "HeldCommand",
+      "raw": "diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "HitMineCommand",
+      "raw": "blend,\"BlendMode_Add\";diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "InitCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "LetGoCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "MissCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "NoneCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "W1Command",
+      "raw": "diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "W2Command",
+      "raw": "diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "W3Command",
+      "raw": "diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "W4Command",
+      "raw": "diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowBright",
+      "key": "W5Command",
+      "raw": "diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "AvoidMineCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "HeldCommand",
+      "raw": "diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "HitMineCommand",
+      "raw": "blend,\"BlendMode_Add\";diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "InitCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "LetGoCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "MissCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "NoneCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "W1Command",
+      "raw": "diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "W2Command",
+      "raw": "diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "W3Command",
+      "raw": "diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "W4Command",
+      "raw": "diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "GhostArrowDim",
+      "key": "W5Command",
+      "raw": "diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Global",
+      "key": "FallbackNoteSkin",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "HoldGhostArrow",
+      "key": "HoldingOffCommand",
+      "raw": "visible,false",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "HoldGhostArrow",
+      "key": "HoldingOnCommand",
+      "raw": "visible,true",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "HoldGhostArrow",
+      "key": "InitCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "HoldGhostArrow",
+      "key": "RollOffCommand",
+      "raw": "visible,false",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "HoldGhostArrow",
+      "key": "RollOnCommand",
+      "raw": "visible,true",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Mine",
+      "key": "InitCommand",
+      "raw": "spin;effectclock,'beat'",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "AnimationIsBeatBased",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "DrawHoldHeadForTapsOnSameRow",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "DrawRollHeadForTapsOnSameRow",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "FlipHeadAndTailWhenReverse",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "FlipHoldBodyWhenReverse",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldActiveIsAddLayer",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBodyNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldBottomCapNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadIsAboveWavyParts",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadNoteColorTextureCoordSpacingY",
+      "raw": "0.125",
+      "integer": 0,
+      "float": 0.125,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldHeadNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldLetGoGrayPercent",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailIsAboveWavyParts",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTailNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "HoldTopCapNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "ReverseDrawOrder",
+      "raw": "1101",
+      "integer": 1101,
+      "float": 1101.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyAdditionTextureCoordOffsetX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyAdditionTextureCoordOffsetY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyAnimationIsVivid",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBodyNoteColorTextureCoordSpacingY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapAdditionTextureCoordOffsetX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapAdditionTextureCoordOffsetY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapAnimationIsVivid",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollBottomCapNoteColorTextureCoordSpacingY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadAdditionTextureCoordOffsetX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadAdditionTextureCoordOffsetY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadAnimationIsVivid",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollHeadNoteColorTextureCoordSpacingY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailAdditionTextureCoordOffsetX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailAdditionTextureCoordOffsetY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailAnimationIsVivid",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTailNoteColorTextureCoordSpacingY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapAdditionTextureCoordOffsetX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapAdditionTextureCoordOffsetY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapAnimationIsVivid",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "RollTopCapNoteColorTextureCoordSpacingY",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "StartDrawingHoldBodyOffsetFromHead",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "StopDrawingHoldBodyOffsetFromTail",
+      "raw": "-32\t// top of tail",
+      "integer": -32,
+      "float": -32.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapAdditionAnimationLength",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapAdditionNoteColorTextureCoordSpacingX",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapFakeNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapHoldRollOnRowMeansHold",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapLiftNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineAnimationIsVivid",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineNoteColorTextureCoordSpacingY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapMineNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteAdditionTextureCoordOffsetX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteAdditionTextureCoordOffsetY",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteAnimationIsVivid",
+      "raw": "1",
+      "integer": 1,
+      "float": 1.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteAnimationLength",
+      "raw": "0.25",
+      "integer": 0,
+      "float": 0.25,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteNoteColorCount",
+      "raw": "8",
+      "integer": 8,
+      "float": 8.0,
+      "boolean": true
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteNoteColorTextureCoordSpacingX",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteNoteColorTextureCoordSpacingY",
+      "raw": "0.125",
+      "integer": 0,
+      "float": 0.125,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TapNoteNoteColorType",
+      "raw": "Denominator",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "TopHoldAnchorWhenReverse",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "NoteDisplay",
+      "key": "UseLighting",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Press",
+      "key": "LiftCommand",
+      "raw": "visible,false",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Press",
+      "key": "PressCommand",
+      "raw": "visible,true",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Press",
+      "key": "ReverseOffCommand",
+      "raw": "vertalign,top",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "Press",
+      "key": "ReverseOnCommand",
+      "raw": "vertalign,bottom",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "AvoidMineCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "HitMineCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "InitCommand",
+      "raw": "effectclock,'beat';diffuseramp;effectcolor1,color(\"0.35,0.35,0.35,1\");effectcolor2,color(\"1,1,1,1\");",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "LiftCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "MissCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "NoneCommand",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "PressCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "W1Command",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "W2Command",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "W3Command",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "W4Command",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorArrow",
+      "key": "W5Command",
+      "raw": "stoptweening;zoom,.75;linear,0.11;zoom,1",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorOverlay",
+      "key": "InitCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorOverlay",
+      "key": "LiftCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "ReceptorOverlay",
+      "key": "PressCommand",
+      "raw": "",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "UpLeft",
+      "key": "StartDrawingHoldBodyOffsetFromHead",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    },
+    {
+      "section": "UpRight",
+      "key": "StartDrawingHoldBodyOffsetFromHead",
+      "raw": "0",
+      "integer": 0,
+      "float": 0.0,
+      "boolean": false
+    }
+  ],
+  "paths": [
+    {
+      "button": "",
+      "element": "_blank",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "",
+      "element": "_Center Explosion"
+    },
+    {
+      "button": "",
+      "element": "_Center Tap Note",
+      "path": "pump/delta-note/_Center Tap Note 6x8.png"
+    },
+    {
+      "button": "",
+      "element": "_CenterHit",
+      "path": "pump/delta-note/_CenterHit 3x1.png"
+    },
+    {
+      "button": "",
+      "element": "_CenterP1 Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "_CenterP1 Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "_CenterP1 Tap Note"
+    },
+    {
+      "button": "",
+      "element": "_Down Explosion"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Mine Base2"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Mine Overlay"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Mine Underlay"
+    },
+    {
+      "button": "",
+      "element": "_Down Tap Note"
+    },
+    {
+      "button": "",
+      "element": "_DownLeft Tap Note",
+      "path": "pump/delta-note/_DownLeft Tap Note 6x8.png"
+    },
+    {
+      "button": "",
+      "element": "_DownLeftHit",
+      "path": "pump/delta-note/_DownLeftHit 3x1.png"
+    },
+    {
+      "button": "",
+      "element": "_DownLeftP1 Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "_DownLeftP1 Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "_DownLeftP1 Tap Note"
+    },
+    {
+      "button": "",
+      "element": "_flash",
+      "path": "pump/default/_flash (doubleres).png"
+    },
+    {
+      "button": "",
+      "element": "_mine",
+      "path": "common/common/_mine (doubleres).png"
+    },
+    {
+      "button": "",
+      "element": "_Tap Lead-in Receptor",
+      "path": "common/common/_Tap Lead-in Receptor.lua"
+    },
+    {
+      "button": "",
+      "element": "_Tap Press",
+      "path": "common/common/_Tap Press.lua"
+    },
+    {
+      "button": "",
+      "element": "_Tap Receptor",
+      "path": "common/common/_Tap Receptor.lua"
+    },
+    {
+      "button": "",
+      "element": "_UpLeft Tap Note",
+      "path": "pump/delta-note/_UpLeft Tap Note 6x8.png"
+    },
+    {
+      "button": "",
+      "element": "_upleftsolo underlay"
+    },
+    {
+      "button": "",
+      "element": "Center_blend"
+    },
+    {
+      "button": "",
+      "element": "Center_feet",
+      "path": "pump/delta-note/Center_feet.png"
+    },
+    {
+      "button": "",
+      "element": "Center_fill"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Hold Head Active"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Hold Head Inactive"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Receptor"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "CenterP1 Tap Note"
+    },
+    {
+      "button": "",
+      "element": "Down Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "Down Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Hold BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Down Hold BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Hold Explosion"
+    },
+    {
+      "button": "",
+      "element": "Down Hold Head Active"
+    },
+    {
+      "button": "",
+      "element": "Down Hold Head Inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Hold TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Down Hold TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Receptor"
+    },
+    {
+      "button": "",
+      "element": "Down Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "Down Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Roll BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Down Roll BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Roll TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Down Roll TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Explosion Bright"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Explosion Dim"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Mine"
+    },
+    {
+      "button": "",
+      "element": "Down Tap Note"
+    },
+    {
+      "button": "",
+      "element": "DownLeft_blend"
+    },
+    {
+      "button": "",
+      "element": "DownLeft_fill"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Hold Head Active"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Hold Head Inactive"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Receptor"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Tap Fake"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Tap Lift"
+    },
+    {
+      "button": "",
+      "element": "DownLeftP1 Tap Note"
+    },
+    {
+      "button": "",
+      "element": "Left Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "Left Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Left Hold BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Left Hold BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Left Hold TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Left Hold TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Left Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "Left Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Left Roll BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Left Roll BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Left Roll TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Left Roll TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "metrics",
+      "path": "pump/delta-note/metrics.ini"
+    },
+    {
+      "button": "",
+      "element": "Mine_Base",
+      "path": "pump/delta-note/Mine_Base.png"
+    },
+    {
+      "button": "",
+      "element": "Mine_Border",
+      "path": "pump/delta-note/Mine_Border.png"
+    },
+    {
+      "button": "",
+      "element": "Mine_Fill",
+      "path": "pump/delta-note/Mine_Fill.png"
+    },
+    {
+      "button": "",
+      "element": "Mine_Light",
+      "path": "pump/delta-note/Mine_Light.png"
+    },
+    {
+      "button": "",
+      "element": "Mine_Overlay",
+      "path": "pump/delta-note/Mine_Overlay.png"
+    },
+    {
+      "button": "",
+      "element": "NoteSkin",
+      "path": "pump/default/NoteSkin.lua"
+    },
+    {
+      "button": "",
+      "element": "reminder",
+      "path": "pump/delta-note/reminder.txt"
+    },
+    {
+      "button": "",
+      "element": "Right Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "Right Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Right Hold BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Right Hold BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Right Hold TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Right Hold TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Right Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "Right Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Right Roll BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Right Roll BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Right Roll TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Right Roll TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold BottomCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold BottomCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold Head Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold Head Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold TopCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Hold TopCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll BottomCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll BottomCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll TopCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpLeft Roll TopCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold BottomCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold BottomCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold Head Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold Head Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold TopCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Hold TopCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll BottomCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll BottomCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll TopCap Active"
+    },
+    {
+      "button": "",
+      "element": "SoloUpRight Roll TopCap Inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Hold Body Active"
+    },
+    {
+      "button": "",
+      "element": "Up Hold Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Hold BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Up Hold BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Hold TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Up Hold TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Roll Body Active"
+    },
+    {
+      "button": "",
+      "element": "Up Roll Body Inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Roll BottomCap active"
+    },
+    {
+      "button": "",
+      "element": "Up Roll BottomCap inactive"
+    },
+    {
+      "button": "",
+      "element": "Up Roll TopCap active"
+    },
+    {
+      "button": "",
+      "element": "Up Roll TopCap inactive"
+    },
+    {
+      "button": "",
+      "element": "UpLeft_blend"
+    },
+    {
+      "button": "",
+      "element": "UpLeft_fill"
+    },
+    {
+      "button": "Center",
+      "element": "border"
+    },
+    {
+      "button": "Center",
+      "element": "Explosion",
+      "path": "common/common/Fallback Explosion.lua"
+    },
+    {
+      "button": "Center",
+      "element": "Go Receptor",
+      "path": "common/common/Fallback Ready Receptor 3x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "HitMine Explosion",
+      "path": "common/common/Fallback HitMine Explosion.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Body Active",
+      "path": "pump/delta-note/Center Hold Body Active.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Body Inactive",
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold BottomCap Active",
+      "path": "pump/delta-note/Center Hold BottomCap Active.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold BottomCap Inactive",
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Head",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold TopCap Active",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Hold TopCap Inactive",
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "NoteHit",
+      "path": "pump/delta-note/Center NoteHit.lua"
+    },
+    {
+      "button": "Center",
+      "element": "Outline Receptor",
+      "path": "pump/default/Center Outline Receptor.png"
+    },
+    {
+      "button": "Center",
+      "element": "Ready Receptor",
+      "path": "pump/delta-note/Center Ready Receptor 3x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Receptor",
+      "path": "common/common/Fallback Receptor.lua"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Body Active",
+      "path": "common/common/Fallback Roll Body active (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Body Inactive",
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll BottomCap Active",
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll BottomCap Inactive",
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll TopCap Active",
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Roll TopCap Inactive",
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Explosion Bright",
+      "path": "common/common/Fallback Tap Explosion Bright.png"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Explosion Dim",
+      "path": "common/common/Fallback Tap Explosion Dim.png"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Fake",
+      "path": "common/common/Fallback Tap Fake 4x1.png"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Lift",
+      "path": "pump/default/Center Tap Lift.lua"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Mine",
+      "path": "common/common/Fallback Tap Mine.lua"
+    },
+    {
+      "button": "Center",
+      "element": "Tap Note",
+      "path": "pump/delta-note/Center Tap Note.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "border"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Explosion",
+      "path": "common/common/Fallback Explosion.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Go Receptor",
+      "path": "common/common/Fallback Ready Receptor 3x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "HitMine Explosion",
+      "path": "common/common/Fallback HitMine Explosion.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Body Active",
+      "path": "pump/delta-note/DownLeft Hold Body Active.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Body Inactive",
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold BottomCap Active",
+      "path": "pump/delta-note/DownLeft Hold BottomCap Active.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold BottomCap Inactive",
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Head",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold TopCap Active",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Hold TopCap Inactive",
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "NoteHit",
+      "path": "pump/delta-note/DownLeft NoteHit.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Outline Receptor",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Ready Receptor",
+      "path": "pump/delta-note/DownLeft Ready Receptor 3x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Receptor",
+      "path": "common/common/Fallback Receptor.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Body Active",
+      "path": "common/common/Fallback Roll Body active (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Body Inactive",
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll BottomCap Active",
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll BottomCap Inactive",
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll TopCap Active",
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Roll TopCap Inactive",
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Explosion Bright",
+      "path": "common/common/Fallback Tap Explosion Bright.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Explosion Dim",
+      "path": "common/common/Fallback Tap Explosion Dim.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Fake",
+      "path": "common/common/Fallback Tap Fake 4x1.png"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Lift",
+      "path": "pump/default/DownLeft Tap Lift.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Mine",
+      "path": "common/common/Fallback Tap Mine.lua"
+    },
+    {
+      "button": "DownLeft",
+      "element": "Tap Note",
+      "path": "pump/delta-note/DownLeft Tap Note.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "border"
+    },
+    {
+      "button": "DownRight",
+      "element": "Explosion",
+      "path": "common/common/Fallback Explosion.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Go Receptor",
+      "path": "common/common/Fallback Ready Receptor 3x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "HitMine Explosion",
+      "path": "common/common/Fallback HitMine Explosion.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Body Active",
+      "path": "pump/delta-note/DownRight Hold Body Active.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Body Inactive",
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold BottomCap Active",
+      "path": "pump/delta-note/DownRight Hold BottomCap Active.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold BottomCap Inactive",
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Head",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold TopCap Active",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold TopCap Active(doubleres)"
+    },
+    {
+      "button": "DownRight",
+      "element": "Hold TopCap Inactive",
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "NoteHit",
+      "path": "pump/delta-note/DownRight NoteHit.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Ready Receptor",
+      "path": "pump/delta-note/DownRight Ready Receptor.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Receptor",
+      "path": "common/common/Fallback Receptor.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Body Active",
+      "path": "common/common/Fallback Roll Body active (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Body Inactive",
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll BottomCap Active",
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll BottomCap Inactive",
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll TopCap Active",
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Roll TopCap Inactive",
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Explosion Bright",
+      "path": "common/common/Fallback Tap Explosion Bright.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Explosion Dim",
+      "path": "common/common/Fallback Tap Explosion Dim.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Fake",
+      "path": "common/common/Fallback Tap Fake 4x1.png"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Lift",
+      "path": "pump/default/DownRight Tap Lift.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Mine",
+      "path": "common/common/Fallback Tap Mine.lua"
+    },
+    {
+      "button": "DownRight",
+      "element": "Tap Note",
+      "path": "pump/delta-note/DownRight Tap Note.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "border"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Explosion",
+      "path": "pump/delta-note/UpLeft Explosion.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Go Receptor",
+      "path": "common/common/Fallback Ready Receptor 3x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "HitMine Explosion",
+      "path": "common/common/Fallback HitMine Explosion.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Body Active",
+      "path": "pump/delta-note/UpLeft Hold Body Active.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Body Inactive",
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold BottomCap Active",
+      "path": "pump/delta-note/UpLeft Hold BottomCap Active.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold BottomCap Inactive",
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Head",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold TopCap",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold TopCap Active",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Hold TopCap Inactive",
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "NoteHit",
+      "path": "pump/delta-note/UpLeft NoteHit.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Ready Receptor",
+      "path": "pump/delta-note/UpLeft Ready Receptor 3x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Receptor",
+      "path": "pump/delta-note/UpLeft Receptor.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Body Active",
+      "path": "common/common/Fallback Roll Body active (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Body Inactive",
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll BottomCap Active",
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll BottomCap Inactive",
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll TopCap Active",
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Roll TopCap Inactive",
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Explosion Bright",
+      "path": "common/common/Fallback Tap Explosion Bright.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Explosion Dim",
+      "path": "common/common/Fallback Tap Explosion Dim.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Fake",
+      "path": "common/common/Fallback Tap Fake 4x1.png"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Lift",
+      "path": "pump/default/UpLeft Tap Lift.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Mine",
+      "path": "pump/delta-note/UpLeft Tap Mine.lua"
+    },
+    {
+      "button": "UpLeft",
+      "element": "Tap Note",
+      "path": "pump/delta-note/UpLeft Tap Note.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "border"
+    },
+    {
+      "button": "UpRight",
+      "element": "Explosion",
+      "path": "common/common/Fallback Explosion.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Go Receptor",
+      "path": "common/common/Fallback Ready Receptor 3x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "HitMine Explosion",
+      "path": "common/common/Fallback HitMine Explosion.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Body Active",
+      "path": "pump/delta-note/UpRight Hold Body Active.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Body Inactive",
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold BottomCap Active",
+      "path": "pump/delta-note/UpRight Hold BottomCap Active.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold BottomCap Inactive",
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Head",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold TopCap",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold TopCap Active",
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Hold TopCap Inactive",
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "NoteHit",
+      "path": "pump/delta-note/UpRight NoteHit.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Ready Receptor",
+      "path": "pump/delta-note/UpRight Ready Receptor.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Receptor",
+      "path": "common/common/Fallback Receptor.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Body Active",
+      "path": "common/common/Fallback Roll Body active (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Body Inactive",
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll BottomCap Active",
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll BottomCap Inactive",
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Explosion",
+      "path": "common/common/Fallback Hold Explosion 2x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Head Active",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Head Inactive",
+      "path": "common/common/Fallback Tap Note 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Tail Active",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll Tail Inactive",
+      "path": "pump/delta-note/_blank.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll TopCap Active",
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Roll TopCap Inactive",
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Explosion Bright",
+      "path": "common/common/Fallback Tap Explosion Bright.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Explosion Dim",
+      "path": "common/common/Fallback Tap Explosion Dim.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Fake",
+      "path": "common/common/Fallback Tap Fake 4x1.png"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Lift",
+      "path": "pump/default/UpRight Tap Lift.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Mine",
+      "path": "common/common/Fallback Tap Mine.lua"
+    },
+    {
+      "button": "UpRight",
+      "element": "Tap Note",
+      "path": "pump/delta-note/UpRight Tap Note.lua"
+    }
+  ]
+}

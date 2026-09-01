@@ -12,7 +12,7 @@ use crate::{
     Style,
     actor::ITG_ARG0_TOKEN,
     lua::{itg_parse_lua_quoted, itg_quoted_strings},
-    script::{parse_script_bool, parse_script_number},
+    script::{parse_script_float, parse_script_int},
 };
 
 const MAX_FALLBACK_DEPTH: usize = 20;
@@ -813,9 +813,9 @@ pub fn song_lua_noteskin_metric_f_from_roots(
     element: &str,
     value: &str,
 ) -> Option<f32> {
-    parse_script_number(
+    Some(parse_script_float(
         song_lua_noteskin_metric_from_roots(roots, game, skin, element, value)?.as_str(),
-    )
+    ))
 }
 
 #[must_use]
@@ -826,9 +826,11 @@ pub fn song_lua_noteskin_metric_b_from_roots(
     element: &str,
     value: &str,
 ) -> Option<bool> {
-    Some(parse_script_bool(
-        song_lua_noteskin_metric_from_roots(roots, game, skin, element, value)?.as_str(),
-    ))
+    Some(
+        parse_script_int(
+            song_lua_noteskin_metric_from_roots(roots, game, skin, element, value)?.as_str(),
+        ) != 0,
+    )
 }
 
 #[must_use]

@@ -1,0 +1,4134 @@
+{
+  "fixture_schema_version": 1,
+  "oracle_schema_version": 1,
+  "harness_version": "0.1.0",
+  "corpus": {
+    "metrics": "every section/key authored by a bundled metrics.ini",
+    "paths": "canonical loader elements plus every bundled button/element filename",
+    "source_snapshot": "exact paths and INI/redirect text; other resources are zero-byte placeholders"
+  },
+  "itgmania": {
+    "git_revision": "49fddb40adbdb43e9c03e6856b6c2afeeccf451a",
+    "git_dirty": "false"
+  },
+  "games": [
+    {
+      "game": "dance",
+      "buttons": [
+        "Left",
+        "Right",
+        "Up",
+        "Down",
+        "UpLeft",
+        "UpRight"
+      ],
+      "skins": [
+        "cel",
+        "cyber",
+        "ddr-note",
+        "ddr-rainbow",
+        "ddr-vivid",
+        "default",
+        "enchantment",
+        "flat",
+        "lambda",
+        "metal",
+        "robot",
+        "vivid"
+      ]
+    },
+    {
+      "game": "pump",
+      "buttons": [
+        "UpLeft",
+        "UpRight",
+        "Center",
+        "DownLeft",
+        "DownRight"
+      ],
+      "skins": [
+        "cmd",
+        "cmd-routine-p1",
+        "cmd-routine-p2",
+        "complex",
+        "default",
+        "delta",
+        "delta-note",
+        "delta-routine-p1",
+        "delta-routine-p2",
+        "frame5p",
+        "newextra",
+        "pad",
+        "rhythm",
+        "simple"
+      ]
+    },
+    {
+      "game": "techno",
+      "buttons": [
+        "Left",
+        "Right",
+        "Up",
+        "Down",
+        "UpLeft",
+        "UpRight",
+        "Center",
+        "DownLeft",
+        "DownRight"
+      ],
+      "skins": [
+        "default"
+      ]
+    },
+    {
+      "game": "lights",
+      "buttons": [
+        "MarqueeUpLeft",
+        "MarqueeUpRight",
+        "MarqueeLrLeft",
+        "MarqueeLrRight",
+        "ButtonsLeft",
+        "ButtonsRight",
+        "BassLeft",
+        "BassRight"
+      ],
+      "skins": [
+        "default"
+      ]
+    }
+  ],
+  "fixtures": [
+    {
+      "game": "dance",
+      "skin": "cel",
+      "fixture": "dance/cel.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "cyber",
+      "fixture": "dance/cyber.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "ddr-note",
+      "fixture": "dance/ddr-note.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "ddr-rainbow",
+      "fixture": "dance/ddr-rainbow.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "ddr-vivid",
+      "fixture": "dance/ddr-vivid.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "default",
+      "fixture": "dance/default.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "enchantment",
+      "fixture": "dance/enchantment.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "flat",
+      "fixture": "dance/flat.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "lambda",
+      "fixture": "dance/lambda.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "metal",
+      "fixture": "dance/metal.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "robot",
+      "fixture": "dance/robot.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "dance",
+      "skin": "vivid",
+      "fixture": "dance/vivid.json",
+      "metrics": 172,
+      "paths": 306
+    },
+    {
+      "game": "pump",
+      "skin": "cmd",
+      "fixture": "pump/cmd.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "cmd-routine-p1",
+      "fixture": "pump/cmd-routine-p1.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "cmd-routine-p2",
+      "fixture": "pump/cmd-routine-p2.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "complex",
+      "fixture": "pump/complex.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "default",
+      "fixture": "pump/default.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "delta",
+      "fixture": "pump/delta.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "delta-note",
+      "fixture": "pump/delta-note.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "delta-routine-p1",
+      "fixture": "pump/delta-routine-p1.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "delta-routine-p2",
+      "fixture": "pump/delta-routine-p2.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "frame5p",
+      "fixture": "pump/frame5p.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "newextra",
+      "fixture": "pump/newextra.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "pad",
+      "fixture": "pump/pad.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "rhythm",
+      "fixture": "pump/rhythm.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "pump",
+      "skin": "simple",
+      "fixture": "pump/simple.json",
+      "metrics": 172,
+      "paths": 324
+    },
+    {
+      "game": "techno",
+      "skin": "default",
+      "fixture": "techno/default.json",
+      "metrics": 172,
+      "paths": 359
+    },
+    {
+      "game": "lights",
+      "skin": "default",
+      "fixture": "lights/default.json",
+      "metrics": 172,
+      "paths": 398
+    }
+  ],
+  "source_files": [
+    {
+      "path": "common/_Editor/Center Hold Body Active (res 64x32).png",
+      "bytes": 3068
+    },
+    {
+      "path": "common/_Editor/Center Hold Body Inactive (res 64x32).png",
+      "bytes": 3048
+    },
+    {
+      "path": "common/_Editor/Center Hold BottomCap active (res 64x32).png",
+      "bytes": 5484
+    },
+    {
+      "path": "common/_Editor/Center Hold BottomCap inactive (res 64x32).png",
+      "bytes": 5314
+    },
+    {
+      "path": "common/_Editor/Center Hold Explosion.lua",
+      "bytes": 192
+    },
+    {
+      "path": "common/_Editor/Center Hold TopCap active (res 64x32).png",
+      "bytes": 5493
+    },
+    {
+      "path": "common/_Editor/Center Hold TopCap inactive (res 64x32).png",
+      "bytes": 5198
+    },
+    {
+      "path": "common/_Editor/Center Roll Body Active (res 64x32).png",
+      "bytes": 3098
+    },
+    {
+      "path": "common/_Editor/Center Roll Body Inactive (res 64x32).png",
+      "bytes": 3069
+    },
+    {
+      "path": "common/_Editor/Center Roll BottomCap active (res 64x32).png",
+      "bytes": 6377
+    },
+    {
+      "path": "common/_Editor/Center Roll BottomCap inactive (res 64x32).png",
+      "bytes": 6100
+    },
+    {
+      "path": "common/_Editor/Center Roll TopCap active (res 64x32).png",
+      "bytes": 6475
+    },
+    {
+      "path": "common/_Editor/Center Roll TopCap inactive (res 64x32).png",
+      "bytes": 6024
+    },
+    {
+      "path": "common/_Editor/Center Tap Explosion Bright.lua",
+      "bytes": 650
+    },
+    {
+      "path": "common/_Editor/CenterP1 Hold Head Active.lua",
+      "bytes": 104
+    },
+    {
+      "path": "common/_Editor/CenterP1 Hold Head Inactive.lua",
+      "bytes": 104
+    },
+    {
+      "path": "common/_Editor/CenterP1 Receptor.lua",
+      "bytes": 1120
+    },
+    {
+      "path": "common/_Editor/CenterP1 Tap Fake.lua",
+      "bytes": 116
+    },
+    {
+      "path": "common/_Editor/CenterP1 Tap Lift.lua",
+      "bytes": 116
+    },
+    {
+      "path": "common/_Editor/CenterP1 Tap Note.lua",
+      "bytes": 116
+    },
+    {
+      "path": "common/_Editor/Down Hold Body Active (res 64x32).png",
+      "bytes": 5898
+    },
+    {
+      "path": "common/_Editor/Down Hold Body Inactive (res 64x32).png",
+      "bytes": 5560
+    },
+    {
+      "path": "common/_Editor/Down Hold BottomCap active (res 64x64).png",
+      "bytes": 8363
+    },
+    {
+      "path": "common/_Editor/Down Hold BottomCap inactive (res 64x64).png",
+      "bytes": 8475
+    },
+    {
+      "path": "common/_Editor/Down Hold Explosion.lua",
+      "bytes": 214
+    },
+    {
+      "path": "common/_Editor/Down Hold Head Active.lua",
+      "bytes": 100
+    },
+    {
+      "path": "common/_Editor/Down Hold Head Inactive.lua",
+      "bytes": 100
+    },
+    {
+      "path": "common/_Editor/Down Hold TopCap active (res 64x32).png",
+      "bytes": 7841
+    },
+    {
+      "path": "common/_Editor/Down Hold TopCap inactive (res 64x32).png",
+      "bytes": 7732
+    },
+    {
+      "path": "common/_Editor/Down Receptor.lua",
+      "bytes": 1116
+    },
+    {
+      "path": "common/_Editor/Down Roll Body Active (res 64x32).png",
+      "bytes": 6933
+    },
+    {
+      "path": "common/_Editor/Down Roll Body Inactive (res 64x32).png",
+      "bytes": 6139
+    },
+    {
+      "path": "common/_Editor/Down Roll BottomCap active (res 64x64).png",
+      "bytes": 10299
+    },
+    {
+      "path": "common/_Editor/Down Roll BottomCap inactive (res 64x64).png",
+      "bytes": 10027
+    },
+    {
+      "path": "common/_Editor/Down Roll TopCap active (res 64x32).png",
+      "bytes": 9556
+    },
+    {
+      "path": "common/_Editor/Down Roll TopCap inactive (res 64x32).png",
+      "bytes": 9170
+    },
+    {
+      "path": "common/_Editor/Down Tap Explosion Bright.lua",
+      "bytes": 101
+    },
+    {
+      "path": "common/_Editor/Down Tap Explosion Dim.lua",
+      "bytes": 102
+    },
+    {
+      "path": "common/_Editor/Down Tap Fake.lua",
+      "bytes": 297
+    },
+    {
+      "path": "common/_Editor/Down Tap Lift.lua",
+      "bytes": 297
+    },
+    {
+      "path": "common/_Editor/Down Tap Mine.lua",
+      "bytes": 622
+    },
+    {
+      "path": "common/_Editor/Down Tap Note.lua",
+      "bytes": 299
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Hold Head Active.lua",
+      "bytes": 106
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Hold Head Inactive.lua",
+      "bytes": 106
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Receptor.lua",
+      "bytes": 1122
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Tap Fake.lua",
+      "bytes": 118
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Tap Lift.lua",
+      "bytes": 118
+    },
+    {
+      "path": "common/_Editor/DownLeftP1 Tap Note.lua",
+      "bytes": 118
+    },
+    {
+      "path": "common/_Editor/Left Hold Body Active (res 64x32).png",
+      "bytes": 5785
+    },
+    {
+      "path": "common/_Editor/Left Hold Body Inactive (res 64x32).png",
+      "bytes": 5461
+    },
+    {
+      "path": "common/_Editor/Left Hold BottomCap active (res 64x32).png",
+      "bytes": 7976
+    },
+    {
+      "path": "common/_Editor/Left Hold BottomCap inactive (res 64x32).png",
+      "bytes": 7831
+    },
+    {
+      "path": "common/_Editor/Left Hold TopCap active (res 64x32).png",
+      "bytes": 7754
+    },
+    {
+      "path": "common/_Editor/Left Hold TopCap inactive (res 64x32).png",
+      "bytes": 7570
+    },
+    {
+      "path": "common/_Editor/Left Roll Body Active (res 64x32).png",
+      "bytes": 6706
+    },
+    {
+      "path": "common/_Editor/Left Roll Body Inactive (res 64x32).png",
+      "bytes": 6136
+    },
+    {
+      "path": "common/_Editor/Left Roll BottomCap active (res 64x32).png",
+      "bytes": 9772
+    },
+    {
+      "path": "common/_Editor/Left Roll BottomCap inactive (res 64x32).png",
+      "bytes": 9338
+    },
+    {
+      "path": "common/_Editor/Left Roll TopCap active (res 64x32).png",
+      "bytes": 9487
+    },
+    {
+      "path": "common/_Editor/Left Roll TopCap inactive (res 64x32).png",
+      "bytes": 9039
+    },
+    {
+      "path": "common/_Editor/NoteSkin.lua",
+      "bytes": 9726
+    },
+    {
+      "path": "common/_Editor/Right Hold Body Active (res 64x32).png",
+      "bytes": 5768
+    },
+    {
+      "path": "common/_Editor/Right Hold Body Inactive (res 64x32).png",
+      "bytes": 5362
+    },
+    {
+      "path": "common/_Editor/Right Hold BottomCap active (res 64x32).png",
+      "bytes": 7852
+    },
+    {
+      "path": "common/_Editor/Right Hold BottomCap inactive (res 64x32).png",
+      "bytes": 7720
+    },
+    {
+      "path": "common/_Editor/Right Hold TopCap active (res 64x32).png",
+      "bytes": 7854
+    },
+    {
+      "path": "common/_Editor/Right Hold TopCap inactive (res 64x32).png",
+      "bytes": 7708
+    },
+    {
+      "path": "common/_Editor/Right Roll Body Active (res 64x32).png",
+      "bytes": 6704
+    },
+    {
+      "path": "common/_Editor/Right Roll Body Inactive (res 64x32).png",
+      "bytes": 6057
+    },
+    {
+      "path": "common/_Editor/Right Roll BottomCap active (res 64x32).png",
+      "bytes": 9640
+    },
+    {
+      "path": "common/_Editor/Right Roll BottomCap inactive (res 64x32).png",
+      "bytes": 9158
+    },
+    {
+      "path": "common/_Editor/Right Roll TopCap active (res 64x32).png",
+      "bytes": 9514
+    },
+    {
+      "path": "common/_Editor/Right Roll TopCap inactive (res 64x32).png",
+      "bytes": 9025
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold Body Active (res 64x32).png",
+      "bytes": 5888
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold Body Inactive (res 64x32).png",
+      "bytes": 5480
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold BottomCap Active (res 64x32).png",
+      "bytes": 7512
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold BottomCap Inactive (res 64x32).png",
+      "bytes": 7265
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold Head Active.lua",
+      "bytes": 298
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold Head Inactive.lua",
+      "bytes": 298
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold TopCap Active (res 64x32).png",
+      "bytes": 5402
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Hold TopCap Inactive (res 64x32).png",
+      "bytes": 5307
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll Body Active (res 64x32).png",
+      "bytes": 6983
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll Body Inactive (res 64x32).png",
+      "bytes": 6191
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll BottomCap Active (res 64x32).png",
+      "bytes": 9328
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll BottomCap Inactive (res 64x32).png",
+      "bytes": 8722
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll TopCap Active (res 64x32).png",
+      "bytes": 6708
+    },
+    {
+      "path": "common/_Editor/SoloUpLeft Roll TopCap Inactive (res 64x32).png",
+      "bytes": 6450
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold Body Active (res 64x32).png",
+      "bytes": 6019
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold Body Inactive (res 64x32).png",
+      "bytes": 5663
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold BottomCap Active (res 64x32).png",
+      "bytes": 7607
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold BottomCap Inactive (res 64x32).png",
+      "bytes": 7339
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold Head Active.lua",
+      "bytes": 307
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold Head Inactive.lua",
+      "bytes": 307
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold TopCap Active (res 64x32).png",
+      "bytes": 5448
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Hold TopCap Inactive (res 64x32).png",
+      "bytes": 5338
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll Body Active (res 64x32).png",
+      "bytes": 7325
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll Body Inactive (res 64x32).png",
+      "bytes": 6515
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll BottomCap Active (res 64x32).png",
+      "bytes": 9554
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll BottomCap Inactive (res 64x32).png",
+      "bytes": 8869
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll TopCap Active (res 64x32).png",
+      "bytes": 6850
+    },
+    {
+      "path": "common/_Editor/SoloUpRight Roll TopCap Inactive (res 64x32).png",
+      "bytes": 6547
+    },
+    {
+      "path": "common/_Editor/Up Hold Body Active (res 64x32).png",
+      "bytes": 5798
+    },
+    {
+      "path": "common/_Editor/Up Hold Body Inactive (res 64x32).png",
+      "bytes": 5514
+    },
+    {
+      "path": "common/_Editor/Up Hold BottomCap active (res 64x32).png",
+      "bytes": 7952
+    },
+    {
+      "path": "common/_Editor/Up Hold BottomCap inactive (res 64x32).png",
+      "bytes": 7825
+    },
+    {
+      "path": "common/_Editor/Up Hold TopCap active (res 64x64).png",
+      "bytes": 8273
+    },
+    {
+      "path": "common/_Editor/Up Hold TopCap inactive (res 64x64).png",
+      "bytes": 8225
+    },
+    {
+      "path": "common/_Editor/Up Roll Body Active (res 64x32).png",
+      "bytes": 6874
+    },
+    {
+      "path": "common/_Editor/Up Roll Body Inactive (res 64x32).png",
+      "bytes": 6064
+    },
+    {
+      "path": "common/_Editor/Up Roll BottomCap active (res 64x32).png",
+      "bytes": 9644
+    },
+    {
+      "path": "common/_Editor/Up Roll BottomCap inactive (res 64x32).png",
+      "bytes": 9232
+    },
+    {
+      "path": "common/_Editor/Up Roll TopCap active (res 64x64).png",
+      "bytes": 10193
+    },
+    {
+      "path": "common/_Editor/Up Roll TopCap inactive (res 64x64).png",
+      "bytes": 9900
+    },
+    {
+      "path": "common/_Editor/_Center Explosion (res 128x128).png",
+      "bytes": 20122
+    },
+    {
+      "path": "common/_Editor/_CenterP1 Tap Fake 6x9 (res 384x576).png",
+      "bytes": 364196
+    },
+    {
+      "path": "common/_Editor/_CenterP1 Tap Lift 6x9 (res 384x576).png",
+      "bytes": 341787
+    },
+    {
+      "path": "common/_Editor/_CenterP1 Tap Note 12x9 (res 768x576).png",
+      "bytes": 541204
+    },
+    {
+      "path": "common/_Editor/_Down Explosion 2x1 (res 128x64).png",
+      "bytes": 12673
+    },
+    {
+      "path": "common/_Editor/_Down Tap Fake 4x9 (res 256x576).png",
+      "bytes": 224670
+    },
+    {
+      "path": "common/_Editor/_Down Tap Lift 4x9 (res 256x576).png",
+      "bytes": 192914
+    },
+    {
+      "path": "common/_Editor/_Down Tap Mine Base2 1x9 (res 64x576).png",
+      "bytes": 140088
+    },
+    {
+      "path": "common/_Editor/_Down Tap Mine Overlay 1x9 (res 64x576).png",
+      "bytes": 72141
+    },
+    {
+      "path": "common/_Editor/_Down Tap Mine Underlay 1x9 (res 64x576).png",
+      "bytes": 7766
+    },
+    {
+      "path": "common/_Editor/_Down Tap Note 8x9 (res 512x576).png",
+      "bytes": 357740
+    },
+    {
+      "path": "common/_Editor/_DownLeftP1 Tap Fake 6x9 (res 384x576).png",
+      "bytes": 219033
+    },
+    {
+      "path": "common/_Editor/_DownLeftP1 Tap Lift 6x9 (res 384x576).png",
+      "bytes": 228536
+    },
+    {
+      "path": "common/_Editor/_DownLeftP1 Tap Note 12x9 (res 768x576).png",
+      "bytes": 286876
+    },
+    {
+      "path": "common/_Editor/_upleftsolo underlay 1x9 (res 64x576).png",
+      "bytes": 19241
+    },
+    {
+      "path": "common/_Editor/metrics.ini",
+      "bytes": 8157,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=4\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=1\nHoldTopCapAnimationLength=4\nHoldBottomCapAnimationLength=4\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\n##Roll Parts\nRollHeadAnimationLength=1\nRollTopCapAnimationLength=4\nRollBottomCapAnimationLength=4\nRollBodyAnimationLength=4\nRollTailAnimationLength=4\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0.5\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0.0625\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0.0625\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0.0625\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0.0625\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0.0625\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0.0625\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=1\nDrawRollHeadForTapsOnSameRow=1\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=1\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=0\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Good explosion\nW4Command=diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Great explosion\nW3Command=diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Perfect explosion\nW2Command=diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Marvelous explosion\nW1Command=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Good explosion\nW4Command=diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Great explosion\nW3Command=diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Perfect explosion\nW2Command=diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Marvelous explosion\nW1Command=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false\n\n\n"
+    },
+    {
+      "path": "common/common/Fallback Explosion.lua",
+      "bytes": 1986
+    },
+    {
+      "path": "common/common/Fallback Go Receptor.redir",
+      "bytes": 24,
+      "text": "Fallback Ready Receptor\n"
+    },
+    {
+      "path": "common/common/Fallback HitMine Explosion.png",
+      "bytes": 12807
+    },
+    {
+      "path": "common/common/Fallback Hold Body active (doubleres).png",
+      "bytes": 1364
+    },
+    {
+      "path": "common/common/Fallback Hold Body inactive (doubleres).png",
+      "bytes": 1369
+    },
+    {
+      "path": "common/common/Fallback Hold BottomCap active (doubleres).png",
+      "bytes": 4385
+    },
+    {
+      "path": "common/common/Fallback Hold BottomCap inactive (doubleres).png",
+      "bytes": 4377
+    },
+    {
+      "path": "common/common/Fallback Hold Explosion 2x1.png",
+      "bytes": 5255
+    },
+    {
+      "path": "common/common/Fallback Hold Head Active.redir",
+      "bytes": 18,
+      "text": "Fallback Tap Note\n"
+    },
+    {
+      "path": "common/common/Fallback Hold Head Inactive.redir",
+      "bytes": 18,
+      "text": "Fallback Tap Note\n"
+    },
+    {
+      "path": "common/common/Fallback Hold Tail Active.redir",
+      "bytes": 7,
+      "text": "_blank\n"
+    },
+    {
+      "path": "common/common/Fallback Hold Tail Inactive.redir",
+      "bytes": 7,
+      "text": "_blank\n"
+    },
+    {
+      "path": "common/common/Fallback Hold TopCap Active (doubleres).png",
+      "bytes": 4309
+    },
+    {
+      "path": "common/common/Fallback Hold TopCap Inactive (doubleres).png",
+      "bytes": 4283
+    },
+    {
+      "path": "common/common/Fallback Ready Receptor 3x1.png",
+      "bytes": 3504
+    },
+    {
+      "path": "common/common/Fallback Receptor.lua",
+      "bytes": 67
+    },
+    {
+      "path": "common/common/Fallback Roll Body active (doubleres).png",
+      "bytes": 2114
+    },
+    {
+      "path": "common/common/Fallback Roll Body inactive (doubleres).png",
+      "bytes": 2091
+    },
+    {
+      "path": "common/common/Fallback Roll BottomCap active (doubleres).png",
+      "bytes": 4398
+    },
+    {
+      "path": "common/common/Fallback Roll BottomCap inactive (doubleres).png",
+      "bytes": 4387
+    },
+    {
+      "path": "common/common/Fallback Roll Explosion.redir",
+      "bytes": 24,
+      "text": "Fallback Hold Explosion\n"
+    },
+    {
+      "path": "common/common/Fallback Roll Head Active.redir",
+      "bytes": 18,
+      "text": "Fallback Tap Note\n"
+    },
+    {
+      "path": "common/common/Fallback Roll Head Inactive.redir",
+      "bytes": 18,
+      "text": "Fallback Tap Note\n"
+    },
+    {
+      "path": "common/common/Fallback Roll Tail Active.redir",
+      "bytes": 7,
+      "text": "_blank\n"
+    },
+    {
+      "path": "common/common/Fallback Roll Tail Inactive.redir",
+      "bytes": 7,
+      "text": "_blank\n"
+    },
+    {
+      "path": "common/common/Fallback Roll TopCap Active (doubleres).png",
+      "bytes": 4298
+    },
+    {
+      "path": "common/common/Fallback Roll TopCap Inactive (doubleres).png",
+      "bytes": 4306
+    },
+    {
+      "path": "common/common/Fallback Tap Explosion Bright.png",
+      "bytes": 5360
+    },
+    {
+      "path": "common/common/Fallback Tap Explosion Dim.png",
+      "bytes": 5000
+    },
+    {
+      "path": "common/common/Fallback Tap Fake 4x1.png",
+      "bytes": 7256
+    },
+    {
+      "path": "common/common/Fallback Tap Lift 4x1.png",
+      "bytes": 4852
+    },
+    {
+      "path": "common/common/Fallback Tap Mine.lua",
+      "bytes": 203
+    },
+    {
+      "path": "common/common/Fallback Tap Note 4x1.png",
+      "bytes": 5342
+    },
+    {
+      "path": "common/common/NoteSkin.lua",
+      "bytes": 1169
+    },
+    {
+      "path": "common/common/_Tap Lead-in Receptor.lua",
+      "bytes": 665
+    },
+    {
+      "path": "common/common/_Tap Press.lua",
+      "bytes": 346
+    },
+    {
+      "path": "common/common/_Tap Receptor.lua",
+      "bytes": 644
+    },
+    {
+      "path": "common/common/_blank.png",
+      "bytes": 1003
+    },
+    {
+      "path": "common/common/_mine (doubleres).png",
+      "bytes": 16093
+    },
+    {
+      "path": "common/common/metrics.ini",
+      "bytes": 5151,
+      "text": "[NoteDisplay]\nDrawHoldHeadForTapsOnSameRow=1\nDrawRollHeadForTapsOnSameRow=1\nTapHoldRollOnRowMeansHold=1\nAnimationIsBeatBased=1\nTapNoteAnimationLength=1\nTapMineAnimationLength=1\nTapLiftAnimationLength=1\nTapFakeAnimationLength=1\nHoldHeadAnimationLength=1\nHoldTopCapAnimationLength=1\nHoldBottomCapAnimationLength=1\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\nTapNoteAnimationIsVivid=1\nTapMineAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0\nTapNoteNoteColorCount=8\nTapNoteNoteColorType=Denominator\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapMineNoteColorCount=8\nTapMineNoteColorType=Denominator\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapLiftNoteColorCount=8\nTapLiftNoteColorType=Denominator\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0\nTapFakeNoteColorCount=8\nTapFakeNoteColorType=Denominator\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldHeadNoteColorCount=8\nHoldHeadNoteColorType=Denominator\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldTopCapNoteColorCount=8\nHoldTopCapNoteColorType=Denominator\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBodyNoteColorCount=8\nHoldBodyNoteColorType=Denominator\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldBottomCapNoteColorCount=8\nHoldBottomCapNoteColorType=Denominator\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\nHoldTailNoteColorCount=8\nHoldTailNoteColorType=Denominator\n\n\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=-32\t// top of tail\nHoldLetGoGrayPercent=0.25\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nFlipHeadAndTailWhenReverse=0\nFlipHoldBodyWhenReverse=0\nTopHoldAnchorWhenReverse=0\nHoldActiveIsAddLayer=0\n\n[GhostArrowDim]\nHitMineCommand=blend,\"BlendMode_Add\";diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nW5Command=diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW4Command=diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW3Command=diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nHeldCommand=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,\"BlendMode_Add\";diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=diffuse,0.8,0.0,0.6,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW4Command=diffuse,0.3,0.8,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW3Command=diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nHeldCommand=diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n\n[ReceptorArrow]\nInitCommand=effectclock,'beat';diffuseramp;effectcolor1,color(\"0.35,0.35,0.35,1\");effectcolor2,color(\"1,1,1,1\");\n# By default, always step.  Individual game skins can override this.\nNoneCommand=stoptweening;zoom,.75;linear,0.11;zoom,1\nHitMineCommand=\nAvoidMineCommand=\nMissCommand=\nW5Command=stoptweening;zoom,.75;linear,0.11;zoom,1\nW4Command=stoptweening;zoom,.75;linear,0.11;zoom,1\nW3Command=stoptweening;zoom,.75;linear,0.11;zoom,1\nW2Command=stoptweening;zoom,.75;linear,0.11;zoom,1\nW1Command=stoptweening;zoom,.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\n\n[HoldGhostArrow]\nHoldingOnCommand=visible,true\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false\n\n[Mine]\nInitCommand=spin;effectclock,'beat'\n"
+    },
+    {
+      "path": "dance/cel/Down Hold Body Active.png",
+      "bytes": 7626
+    },
+    {
+      "path": "dance/cel/Down Hold Body Inactive.png",
+      "bytes": 7055
+    },
+    {
+      "path": "dance/cel/Down Hold BottomCap active.png",
+      "bytes": 5850
+    },
+    {
+      "path": "dance/cel/Down Hold BottomCap inactive.png",
+      "bytes": 6189
+    },
+    {
+      "path": "dance/cel/Down Receptor.lua",
+      "bytes": 2875
+    },
+    {
+      "path": "dance/cel/Down Roll Body Inactive.png",
+      "bytes": 38724
+    },
+    {
+      "path": "dance/cel/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/cel/Down Roll BottomCap Inactive.png",
+      "bytes": 3114
+    },
+    {
+      "path": "dance/cel/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Bright W1.png",
+      "bytes": 20997
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Dim W1.png",
+      "bytes": 9145
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Dim W2.png",
+      "bytes": 8970
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Dim W3.png",
+      "bytes": 9657
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Dim W4.png",
+      "bytes": 8953
+    },
+    {
+      "path": "dance/cel/Down Tap Explosion Dim W5.png",
+      "bytes": 9756
+    },
+    {
+      "path": "dance/cel/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/cel/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/cel/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/cel/Fallback Explosion.lua",
+      "bytes": 5131
+    },
+    {
+      "path": "dance/cel/NoteSkin.lua",
+      "bytes": 3255
+    },
+    {
+      "path": "dance/cel/_Down Receptor Go 4x1 (doubleres).png",
+      "bytes": 13153
+    },
+    {
+      "path": "dance/cel/_Down Roll Body active 4x1.png",
+      "bytes": 75406
+    },
+    {
+      "path": "dance/cel/_Down Roll BottomCap active 4x1.png",
+      "bytes": 5836
+    },
+    {
+      "path": "dance/cel/_down tap lift model.txt",
+      "bytes": 10699
+    },
+    {
+      "path": "dance/cel/_down tap note model.txt",
+      "bytes": 10695
+    },
+    {
+      "path": "dance/cel/_mine ani tex.ini",
+      "bytes": 70,
+      "text": "[AnimatedTexture]\nTexVelocityX=+1\nFrame0000=_mine tex.png\nDelay0000=1\n"
+    },
+    {
+      "path": "dance/cel/_mine model.txt",
+      "bytes": 5010
+    },
+    {
+      "path": "dance/cel/_mine tex.png",
+      "bytes": 8690
+    },
+    {
+      "path": "dance/cel/down hold explosion.png",
+      "bytes": 5770
+    },
+    {
+      "path": "dance/cel/metrics.ini",
+      "bytes": 8364,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=2\nHoldTopCapAnimationLength=2\nHoldBottomCapAnimationLength=2\nHoldBodyAnimationLength=2\nHoldTailAnimationLength=2\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0.03125\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0.03125\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0.03125\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0.03125\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=stoptweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/cel/model.txt",
+      "bytes": 3974
+    },
+    {
+      "path": "dance/cel/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 9051
+    },
+    {
+      "path": "dance/cel/textures/Tap Note ani texture.ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/cel/textures/Tap Note parts (mipmaps).png",
+      "bytes": 14224
+    },
+    {
+      "path": "dance/cyber/Down Hold Body Active.png",
+      "bytes": 7203
+    },
+    {
+      "path": "dance/cyber/Down Hold Body Inactive.png",
+      "bytes": 5442
+    },
+    {
+      "path": "dance/cyber/Down Hold BottomCap active.png",
+      "bytes": 4776
+    },
+    {
+      "path": "dance/cyber/Down Hold BottomCap inactive.png",
+      "bytes": 4510
+    },
+    {
+      "path": "dance/cyber/Down Receptor.lua",
+      "bytes": 2875
+    },
+    {
+      "path": "dance/cyber/Down Roll Body Inactive.png",
+      "bytes": 38724
+    },
+    {
+      "path": "dance/cyber/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/cyber/Down Roll BottomCap Inactive.png",
+      "bytes": 3114
+    },
+    {
+      "path": "dance/cyber/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Bright W1.png",
+      "bytes": 7917
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Dim W1.png",
+      "bytes": 8614
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Dim W2.png",
+      "bytes": 8607
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Dim W3.png",
+      "bytes": 9483
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Dim W4.png",
+      "bytes": 8577
+    },
+    {
+      "path": "dance/cyber/Down Tap Explosion Dim W5.png",
+      "bytes": 9370
+    },
+    {
+      "path": "dance/cyber/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/cyber/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/cyber/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/cyber/Fallback Explosion.lua",
+      "bytes": 5131
+    },
+    {
+      "path": "dance/cyber/NoteSkin.lua",
+      "bytes": 3255
+    },
+    {
+      "path": "dance/cyber/_Down Receptor Go 4x1 (doubleres).png",
+      "bytes": 48373
+    },
+    {
+      "path": "dance/cyber/_Down Roll Body active 4x1.png",
+      "bytes": 75406
+    },
+    {
+      "path": "dance/cyber/_Down Roll BottomCap active 4x1.png",
+      "bytes": 5836
+    },
+    {
+      "path": "dance/cyber/_down tap lift model.txt",
+      "bytes": 8094
+    },
+    {
+      "path": "dance/cyber/_down tap note model.txt",
+      "bytes": 8094
+    },
+    {
+      "path": "dance/cyber/_mine ani tex.ini",
+      "bytes": 70,
+      "text": "[AnimatedTexture]\nTexVelocityX=+1\nFrame0000=_mine tex.png\nDelay0000=1\n"
+    },
+    {
+      "path": "dance/cyber/_mine model.txt",
+      "bytes": 5010
+    },
+    {
+      "path": "dance/cyber/_mine tex.png",
+      "bytes": 11990
+    },
+    {
+      "path": "dance/cyber/down hold explosion.png",
+      "bytes": 7124
+    },
+    {
+      "path": "dance/cyber/metrics.ini",
+      "bytes": 8328,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=2\nHoldTopCapAnimationLength=2\nHoldBottomCapAnimationLength=2\nHoldBodyAnimationLength=2\nHoldTailAnimationLength=2\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offset Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0.125\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0.125\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0.125\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0.125\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/cyber/textures/Tap Lift ani texture.ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Lift parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/cyber/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 23351
+    },
+    {
+      "path": "dance/cyber/textures/Tap Note ani texture.ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/cyber/textures/Tap Note parts (mipmaps).png",
+      "bytes": 34264
+    },
+    {
+      "path": "dance/ddr-note/Down Hold Body Active (doubleres).png",
+      "bytes": 5904
+    },
+    {
+      "path": "dance/ddr-note/Down Hold Body Inactive (doubleres).png",
+      "bytes": 6024
+    },
+    {
+      "path": "dance/ddr-note/Down Hold BottomCap Active (doubleres).png",
+      "bytes": 1098
+    },
+    {
+      "path": "dance/ddr-note/Down Hold BottomCap Inactive (doubleres).png",
+      "bytes": 1087
+    },
+    {
+      "path": "dance/ddr-note/Down Hold Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-note/Down Hold Head active 16x1 (doubleres).png",
+      "bytes": 6461
+    },
+    {
+      "path": "dance/ddr-note/Down Hold Head inactive 16x1 (doubleres).png",
+      "bytes": 6170
+    },
+    {
+      "path": "dance/ddr-note/Down Receptor.lua",
+      "bytes": 1058
+    },
+    {
+      "path": "dance/ddr-note/Down Roll Body Active (doubleres).png",
+      "bytes": 4141
+    },
+    {
+      "path": "dance/ddr-note/Down Roll Body Inactive (doubleres).png",
+      "bytes": 4257
+    },
+    {
+      "path": "dance/ddr-note/Down Roll BottomCap Active (doubleres).png",
+      "bytes": 1934
+    },
+    {
+      "path": "dance/ddr-note/Down Roll BottomCap Inactive (doubleres).png",
+      "bytes": 2001
+    },
+    {
+      "path": "dance/ddr-note/Down Roll Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-note/Down Roll Head active 16x1 (doubleres).png",
+      "bytes": 6461
+    },
+    {
+      "path": "dance/ddr-note/Down Roll Head inactive 16x1 (doubleres).png",
+      "bytes": 6170
+    },
+    {
+      "path": "dance/ddr-note/Down Roll TopCap Active (doubleres).png",
+      "bytes": 2598
+    },
+    {
+      "path": "dance/ddr-note/Down Roll TopCap Inactive (doubleres).png",
+      "bytes": 2725
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Explosion Bright.png",
+      "bytes": 4488
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Explosion Dim (doubleres).png",
+      "bytes": 883
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Fake.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/ddr-note/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-note/Fallback Explosion.lua",
+      "bytes": 1795
+    },
+    {
+      "path": "dance/ddr-note/Left Hold Body active (doubleres).png",
+      "bytes": 4261
+    },
+    {
+      "path": "dance/ddr-note/Left Hold Body inactive (doubleres).png",
+      "bytes": 4316
+    },
+    {
+      "path": "dance/ddr-note/Left Hold BottomCap active (doubleres).png",
+      "bytes": 972
+    },
+    {
+      "path": "dance/ddr-note/Left Hold BottomCap inactive (doubleres).png",
+      "bytes": 951
+    },
+    {
+      "path": "dance/ddr-note/NoteSkin.lua",
+      "bytes": 2821
+    },
+    {
+      "path": "dance/ddr-note/Right Hold Body active (doubleres).png",
+      "bytes": 4705
+    },
+    {
+      "path": "dance/ddr-note/Right Hold Body inactive (doubleres).png",
+      "bytes": 4760
+    },
+    {
+      "path": "dance/ddr-note/Right Hold BottomCap active (doubleres).png",
+      "bytes": 1031
+    },
+    {
+      "path": "dance/ddr-note/Right Hold BottomCap inactive (doubleres).png",
+      "bytes": 992
+    },
+    {
+      "path": "dance/ddr-note/Up Hold Body active (doubleres).png",
+      "bytes": 2580
+    },
+    {
+      "path": "dance/ddr-note/Up Hold Body inactive (doubleres).png",
+      "bytes": 5771
+    },
+    {
+      "path": "dance/ddr-note/Up Hold BottomCap active (doubleres).png",
+      "bytes": 1090
+    },
+    {
+      "path": "dance/ddr-note/Up Hold BottomCap inactive (doubleres).png",
+      "bytes": 1084
+    },
+    {
+      "path": "dance/ddr-note/UpLeft Hold Body Active (doubleres).png",
+      "bytes": 4260
+    },
+    {
+      "path": "dance/ddr-note/UpLeft Hold Body Inactive (doubleres).png",
+      "bytes": 4266
+    },
+    {
+      "path": "dance/ddr-note/UpLeft Hold BottomCap Active (doubleres).png",
+      "bytes": 3415
+    },
+    {
+      "path": "dance/ddr-note/UpLeft Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3399
+    },
+    {
+      "path": "dance/ddr-note/UpRight Hold Body Active (doubleres).png",
+      "bytes": 4510
+    },
+    {
+      "path": "dance/ddr-note/UpRight Hold Body Inactive (doubleres).png",
+      "bytes": 4459
+    },
+    {
+      "path": "dance/ddr-note/UpRight Hold BottomCap Active (doubleres).png",
+      "bytes": 3416
+    },
+    {
+      "path": "dance/ddr-note/UpRight Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3391
+    },
+    {
+      "path": "dance/ddr-note/_Down Go Receptor Go 2x1 (res 128x64).png",
+      "bytes": 37473
+    },
+    {
+      "path": "dance/ddr-note/_Down Hold Explosion 4x1 (doubleres).png",
+      "bytes": 26929
+    },
+    {
+      "path": "dance/ddr-note/_down tap lift model.txt",
+      "bytes": 4989
+    },
+    {
+      "path": "dance/ddr-note/_down tap note model.txt",
+      "bytes": 8125
+    },
+    {
+      "path": "dance/ddr-note/_mine ani tex.ini",
+      "bytes": 84,
+      "text": "[AnimatedTexture]\nTexVelocityX=1\nTexOffsetX=0\nFrame0000=_mine tex.png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-note/_mine model.txt",
+      "bytes": 9778
+    },
+    {
+      "path": "dance/ddr-note/_mine tex.png",
+      "bytes": 22358
+    },
+    {
+      "path": "dance/ddr-note/metrics.ini",
+      "bytes": 5647,
+      "text": "[Global]\n#Noteskin this noteskin falls back on\nFallbackNoteSkin=common\n\n[NoteDisplay]\nAnimationIsBeatBased=1\n\nTapNoteAnimationLength=4\nTapMineAnimationLength=1\nTapLiftAnimationLength=4\nTapFakeAnimationLength=4\nHoldHeadAnimationLength=0\nHoldTopCapAnimationLength=4\nHoldBottomCapAnimationLength=4\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\nRollHeadAnimationLength=0\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0.0625\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0.0625\nTapFakeNoteColorTextureCoordSpacingY=0\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=1\nDrawRollHeadForTapsOnSameRow=1\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=-32\nHoldLetGoGrayPercent=0.33\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=0\nFlipHeadAndTailWhenReverse=0\nTopHoldAnchorWhenReverse=0\n\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,0.8,0.8,1.0,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;stoptweening;glow,color(\"#000000F0\");zoom,0.75;linear,0.06;zoom,1;glow,color(\"#00000000\")\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\nW5Command=stoptweening\nW4Command=stoptweening\nW3Command=stoptweening\nW2Command=stoptweening\nW1Command=stoptweening\n\n[HoldGhostArrow]\nHoldingOnCommand=visible,true\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Lift parts (mipmaps).ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityX=-1\nTexOffsetX=0\nFrame0000=Tap Lift parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 30916
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Lift2 parts (mipmaps).ini",
+      "bytes": 101,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Lift2 parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Lift2 parts (mipmaps).png",
+      "bytes": 3701
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Note parts (mipmaps).ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-note/textures/Tap Note parts (mipmaps).png",
+      "bytes": 3903
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold Body Active (doubleres).png",
+      "bytes": 5904
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold Body Inactive (doubleres).png",
+      "bytes": 6024
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold BottomCap Active (doubleres).png",
+      "bytes": 1098
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold BottomCap Inactive (doubleres).png",
+      "bytes": 1087
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold Head active 16x1 (doubleres).png",
+      "bytes": 6461
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Hold Head inactive 16x1 (doubleres).png",
+      "bytes": 6170
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Receptor.lua",
+      "bytes": 1058
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll Body Active (doubleres).png",
+      "bytes": 4141
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll Body Inactive (doubleres).png",
+      "bytes": 4257
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll BottomCap Active (doubleres).png",
+      "bytes": 1934
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll BottomCap Inactive (doubleres).png",
+      "bytes": 2001
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll Head active 16x1 (doubleres).png",
+      "bytes": 6461
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll Head inactive 16x1 (doubleres).png",
+      "bytes": 6170
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll TopCap Active (doubleres).png",
+      "bytes": 2598
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Roll TopCap Inactive (doubleres).png",
+      "bytes": 2725
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Explosion Bright.png",
+      "bytes": 4488
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Explosion Dim (doubleres).png",
+      "bytes": 883
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Fake.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/ddr-rainbow/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-rainbow/Fallback Explosion.lua",
+      "bytes": 1795
+    },
+    {
+      "path": "dance/ddr-rainbow/Left Hold Body active (doubleres).png",
+      "bytes": 4261
+    },
+    {
+      "path": "dance/ddr-rainbow/Left Hold Body inactive (doubleres).png",
+      "bytes": 4316
+    },
+    {
+      "path": "dance/ddr-rainbow/Left Hold BottomCap active (doubleres).png",
+      "bytes": 972
+    },
+    {
+      "path": "dance/ddr-rainbow/Left Hold BottomCap inactive (doubleres).png",
+      "bytes": 951
+    },
+    {
+      "path": "dance/ddr-rainbow/NoteSkin.lua",
+      "bytes": 2821
+    },
+    {
+      "path": "dance/ddr-rainbow/Right Hold Body active (doubleres).png",
+      "bytes": 4705
+    },
+    {
+      "path": "dance/ddr-rainbow/Right Hold Body inactive (doubleres).png",
+      "bytes": 4760
+    },
+    {
+      "path": "dance/ddr-rainbow/Right Hold BottomCap active (doubleres).png",
+      "bytes": 1031
+    },
+    {
+      "path": "dance/ddr-rainbow/Right Hold BottomCap inactive (doubleres).png",
+      "bytes": 992
+    },
+    {
+      "path": "dance/ddr-rainbow/Up Hold Body active (doubleres).png",
+      "bytes": 2580
+    },
+    {
+      "path": "dance/ddr-rainbow/Up Hold Body inactive (doubleres).png",
+      "bytes": 5771
+    },
+    {
+      "path": "dance/ddr-rainbow/Up Hold BottomCap active (doubleres).png",
+      "bytes": 1090
+    },
+    {
+      "path": "dance/ddr-rainbow/Up Hold BottomCap inactive (doubleres).png",
+      "bytes": 1084
+    },
+    {
+      "path": "dance/ddr-rainbow/UpLeft Hold Body Active (doubleres).png",
+      "bytes": 4260
+    },
+    {
+      "path": "dance/ddr-rainbow/UpLeft Hold Body Inactive (doubleres).png",
+      "bytes": 4266
+    },
+    {
+      "path": "dance/ddr-rainbow/UpLeft Hold BottomCap Active (doubleres).png",
+      "bytes": 3415
+    },
+    {
+      "path": "dance/ddr-rainbow/UpLeft Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3399
+    },
+    {
+      "path": "dance/ddr-rainbow/UpRight Hold Body Active (doubleres).png",
+      "bytes": 4510
+    },
+    {
+      "path": "dance/ddr-rainbow/UpRight Hold Body Inactive (doubleres).png",
+      "bytes": 4459
+    },
+    {
+      "path": "dance/ddr-rainbow/UpRight Hold BottomCap Active (doubleres).png",
+      "bytes": 3416
+    },
+    {
+      "path": "dance/ddr-rainbow/UpRight Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3391
+    },
+    {
+      "path": "dance/ddr-rainbow/_Down Go Receptor Go 2x1 (res 128x64).png",
+      "bytes": 37473
+    },
+    {
+      "path": "dance/ddr-rainbow/_Down Hold Explosion 4x1 (doubleres).png",
+      "bytes": 26929
+    },
+    {
+      "path": "dance/ddr-rainbow/_down tap lift model.txt",
+      "bytes": 4989
+    },
+    {
+      "path": "dance/ddr-rainbow/_down tap note model.txt",
+      "bytes": 8125
+    },
+    {
+      "path": "dance/ddr-rainbow/_mine ani tex.ini",
+      "bytes": 84,
+      "text": "[AnimatedTexture]\nTexVelocityX=1\nTexOffsetX=0\nFrame0000=_mine tex.png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-rainbow/_mine model.txt",
+      "bytes": 9778
+    },
+    {
+      "path": "dance/ddr-rainbow/_mine tex.png",
+      "bytes": 22358
+    },
+    {
+      "path": "dance/ddr-rainbow/metrics.ini",
+      "bytes": 5647,
+      "text": "[Global]\n#Noteskin this noteskin falls back on\nFallbackNoteSkin=common\n\n[NoteDisplay]\nAnimationIsBeatBased=1\n\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\nHoldHeadAnimationLength=0\nHoldTopCapAnimationLength=4\nHoldBottomCapAnimationLength=4\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\nRollHeadAnimationLength=0\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0.0625\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0.0625\nTapFakeNoteColorTextureCoordSpacingY=0\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=1\nDrawRollHeadForTapsOnSameRow=1\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=-32\nHoldLetGoGrayPercent=0.33\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=0\nFlipHeadAndTailWhenReverse=0\nTopHoldAnchorWhenReverse=0\n\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,0.8,0.8,1.0,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;stoptweening;glow,color(\"#000000F0\");zoom,0.75;linear,0.06;zoom,1;glow,color(\"#00000000\")\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\nW5Command=stoptweening\nW4Command=stoptweening\nW3Command=stoptweening\nW2Command=stoptweening\nW1Command=stoptweening\n\n[HoldGhostArrow]\nHoldingOnCommand=visible,true\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Lift parts (mipmaps).ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityX=-1\nTexOffsetX=0\nFrame0000=Tap Lift parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 30916
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Lift2 parts (mipmaps).ini",
+      "bytes": 101,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Lift2 parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Lift2 parts (mipmaps).png",
+      "bytes": 2597
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Note parts (mipmaps).ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-rainbow/textures/Tap Note parts (mipmaps).png",
+      "bytes": 3962
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold Body Active (doubleres).png",
+      "bytes": 5904
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold Body Inactive (doubleres).png",
+      "bytes": 6024
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold BottomCap Active (doubleres).png",
+      "bytes": 1098
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold BottomCap Inactive (doubleres).png",
+      "bytes": 1087
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold Head active 8x1 (doubleres).png",
+      "bytes": 4577
+    },
+    {
+      "path": "dance/ddr-vivid/Down Hold Head inactive 8x1 (doubleres).png",
+      "bytes": 4296
+    },
+    {
+      "path": "dance/ddr-vivid/Down Receptor.lua",
+      "bytes": 1058
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll Body Active (doubleres).png",
+      "bytes": 4141
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll Body Inactive (doubleres).png",
+      "bytes": 4257
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll BottomCap Active (doubleres).png",
+      "bytes": 1934
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll BottomCap Inactive (doubleres).png",
+      "bytes": 2001
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll Explosion.lua",
+      "bytes": 247
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll Head active 8x1 (doubleres).png",
+      "bytes": 4577
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll Head inactive 8x1 (doubleres).png",
+      "bytes": 4296
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll TopCap Active (doubleres).png",
+      "bytes": 2598
+    },
+    {
+      "path": "dance/ddr-vivid/Down Roll TopCap Inactive (doubleres).png",
+      "bytes": 2725
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Explosion Bright.png",
+      "bytes": 4488
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Explosion Dim (doubleres).png",
+      "bytes": 883
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Fake.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/ddr-vivid/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/ddr-vivid/Fallback Explosion.lua",
+      "bytes": 1795
+    },
+    {
+      "path": "dance/ddr-vivid/Left Hold Body active (doubleres).png",
+      "bytes": 4261
+    },
+    {
+      "path": "dance/ddr-vivid/Left Hold Body inactive (doubleres).png",
+      "bytes": 4316
+    },
+    {
+      "path": "dance/ddr-vivid/Left Hold BottomCap active (doubleres).png",
+      "bytes": 972
+    },
+    {
+      "path": "dance/ddr-vivid/Left Hold BottomCap inactive (doubleres).png",
+      "bytes": 951
+    },
+    {
+      "path": "dance/ddr-vivid/NoteSkin.lua",
+      "bytes": 2821
+    },
+    {
+      "path": "dance/ddr-vivid/Right Hold Body active (doubleres).png",
+      "bytes": 4705
+    },
+    {
+      "path": "dance/ddr-vivid/Right Hold Body inactive (doubleres).png",
+      "bytes": 4760
+    },
+    {
+      "path": "dance/ddr-vivid/Right Hold BottomCap active (doubleres).png",
+      "bytes": 1031
+    },
+    {
+      "path": "dance/ddr-vivid/Right Hold BottomCap inactive (doubleres).png",
+      "bytes": 992
+    },
+    {
+      "path": "dance/ddr-vivid/Up Hold Body active (doubleres).png",
+      "bytes": 2580
+    },
+    {
+      "path": "dance/ddr-vivid/Up Hold Body inactive (doubleres).png",
+      "bytes": 5771
+    },
+    {
+      "path": "dance/ddr-vivid/Up Hold BottomCap active (doubleres).png",
+      "bytes": 1090
+    },
+    {
+      "path": "dance/ddr-vivid/Up Hold BottomCap inactive (doubleres).png",
+      "bytes": 1084
+    },
+    {
+      "path": "dance/ddr-vivid/UpLeft Hold Body Active (doubleres).png",
+      "bytes": 4260
+    },
+    {
+      "path": "dance/ddr-vivid/UpLeft Hold Body Inactive (doubleres).png",
+      "bytes": 4266
+    },
+    {
+      "path": "dance/ddr-vivid/UpLeft Hold BottomCap Active (doubleres).png",
+      "bytes": 3415
+    },
+    {
+      "path": "dance/ddr-vivid/UpLeft Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3399
+    },
+    {
+      "path": "dance/ddr-vivid/UpRight Hold Body Active (doubleres).png",
+      "bytes": 4510
+    },
+    {
+      "path": "dance/ddr-vivid/UpRight Hold Body Inactive (doubleres).png",
+      "bytes": 4459
+    },
+    {
+      "path": "dance/ddr-vivid/UpRight Hold BottomCap Active (doubleres).png",
+      "bytes": 3416
+    },
+    {
+      "path": "dance/ddr-vivid/UpRight Hold BottomCap Inactive (doubleres).png",
+      "bytes": 3391
+    },
+    {
+      "path": "dance/ddr-vivid/_Down Go Receptor Go 2x1 (res 128x64).png",
+      "bytes": 37473
+    },
+    {
+      "path": "dance/ddr-vivid/_Down Hold Explosion 4x1 (doubleres).png",
+      "bytes": 26929
+    },
+    {
+      "path": "dance/ddr-vivid/_down tap lift model.txt",
+      "bytes": 4989
+    },
+    {
+      "path": "dance/ddr-vivid/_down tap note model.txt",
+      "bytes": 8302
+    },
+    {
+      "path": "dance/ddr-vivid/_mine ani tex.ini",
+      "bytes": 84,
+      "text": "[AnimatedTexture]\nTexVelocityX=1\nTexOffsetX=0\nFrame0000=_mine tex.png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-vivid/_mine model.txt",
+      "bytes": 9778
+    },
+    {
+      "path": "dance/ddr-vivid/_mine tex.png",
+      "bytes": 22358
+    },
+    {
+      "path": "dance/ddr-vivid/metrics.ini",
+      "bytes": 7731,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=4\nTapMineAnimationLength=1\nTapLiftAnimationLength=4\nTapFakeAnimationLength=4\n##Hold Parts\nHoldHeadAnimationLength=4\nHoldTopCapAnimationLength=4\nHoldBottomCapAnimationLength=4\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=1\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=1\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=1\nDrawRollHeadForTapsOnSameRow=1\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=-32\nHoldLetGoGrayPercent=0.33\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=0\nFlipHeadAndTailWhenReverse=0\nTopHoldAnchorWhenReverse=0\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,1.0,1.0,1.0,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.3;rotationz,90;linear,0.3;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\nW5Command=\nW4Command=\nW3Command=blend,'BlendMode_Add';diffuse,0.0,1.0,0.4,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW2Command=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,1;linear,0.06;zoom,1.1;linear,0.06;diffusealpha,0\nW1Command=blend,'BlendMode_Add';diffuse,0.8,0.8,1.0,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n#Hold end commands\nLetGoCommand=\nHeldCommand=blend,'BlendMode_Add';diffuse,1.0,1.0,0.3,1;zoom,0.8;linear,0.06;zoom,1;linear,0.06;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;stoptweening;glow,color(\"#000000F0\");zoom,0.75;linear,0.06;zoom,1;glow,color(\"#00000000\")\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\nW5Command=stoptweening\nW4Command=stoptweening\nW3Command=stoptweening\nW2Command=stoptweening\nW1Command=stoptweening\n\n[HoldGhostArrow]\nHoldingOnCommand=visible,true\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/ddr-vivid/textures/Tap Lift parts (mipmaps).ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityX=-1\nTexOffsetX=0\nFrame0000=Tap Lift parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-vivid/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 30916
+    },
+    {
+      "path": "dance/ddr-vivid/textures/Tap Lift2 parts (mipmaps).ini",
+      "bytes": 101,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Lift2 parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/ddr-vivid/textures/Tap Lift2 parts (mipmaps).png",
+      "bytes": 3701
+    },
+    {
+      "path": "dance/ddr-vivid/textures/colours.ini",
+      "bytes": 81,
+      "text": "[AnimatedTexture]\nTexVelocityX=1\nTexOffsetX=0\nFrame0000=colours.png\nDelay0000=1.0"
+    },
+    {
+      "path": "dance/ddr-vivid/textures/colours.png",
+      "bytes": 13702
+    },
+    {
+      "path": "dance/ddr-vivid/textures/frame.ini",
+      "bytes": 80,
+      "text": "[AnimatedTexture]\nTexVelocityY=-4\nTexOffsetX=0\nFrame0000=frame.png\nDelay0000=1.0"
+    },
+    {
+      "path": "dance/ddr-vivid/textures/frame.png",
+      "bytes": 478
+    },
+    {
+      "path": "dance/default/Down Hold Body Active (doubleres).png",
+      "bytes": 1364
+    },
+    {
+      "path": "dance/default/Down Hold Body Inactive (doubleres).png",
+      "bytes": 1369
+    },
+    {
+      "path": "dance/default/Down Hold BottomCap Active (doubleres).png",
+      "bytes": 4385
+    },
+    {
+      "path": "dance/default/Down Hold BottomCap Inactive (doubleres).png",
+      "bytes": 4377
+    },
+    {
+      "path": "dance/default/Down Hold TopCap Active (doubleres).png",
+      "bytes": 4309
+    },
+    {
+      "path": "dance/default/Down Hold TopCap Inactive (doubleres).png",
+      "bytes": 4283
+    },
+    {
+      "path": "dance/default/Down Receptor.lua",
+      "bytes": 590
+    },
+    {
+      "path": "dance/default/Down Roll Body Active (doubleres).png",
+      "bytes": 2114
+    },
+    {
+      "path": "dance/default/Down Roll Body Inactive (doubleres).png",
+      "bytes": 2091
+    },
+    {
+      "path": "dance/default/Down Roll BottomCap Active (doubleres).png",
+      "bytes": 4398
+    },
+    {
+      "path": "dance/default/Down Roll BottomCap Inactive (doubleres).png",
+      "bytes": 4387
+    },
+    {
+      "path": "dance/default/Down Roll TopCap Active (doubleres).png",
+      "bytes": 4298
+    },
+    {
+      "path": "dance/default/Down Roll TopCap Inactive (doubleres).png",
+      "bytes": 4306
+    },
+    {
+      "path": "dance/default/Down Tap Explosion Bright.redir",
+      "bytes": 5,
+      "text": "_glow"
+    },
+    {
+      "path": "dance/default/Down Tap Explosion Dim.redir",
+      "bytes": 25,
+      "text": "Down Tap Explosion Bright"
+    },
+    {
+      "path": "dance/default/Down Tap Lift.lua",
+      "bytes": 191
+    },
+    {
+      "path": "dance/default/Down Tap Note.lua",
+      "bytes": 928
+    },
+    {
+      "path": "dance/default/NoteSkin.lua",
+      "bytes": 1566
+    },
+    {
+      "path": "dance/default/_arrow 1x8 (doubleres).png",
+      "bytes": 103967
+    },
+    {
+      "path": "dance/default/_circle (doubleres).png",
+      "bytes": 1306
+    },
+    {
+      "path": "dance/default/_glow (doubleres).png",
+      "bytes": 6367
+    },
+    {
+      "path": "dance/default/_receptor (doubleres).png",
+      "bytes": 11711
+    },
+    {
+      "path": "dance/default/_rflash (doubleres).png",
+      "bytes": 3714
+    },
+    {
+      "path": "dance/default/metrics.ini",
+      "bytes": 3331,
+      "text": "[Global]\nFallbackNoteSkin=common\n\n[NoteDisplay]\nTapNoteAnimationIsVivid=0\nDrawHoldHeadForTapsOnSameRow=1\nTapNoteAnimationLength=1 // none of these matter because Lua is handling the animation, not sprites.\nTapAdditionAnimationLength=1\nTapMineAnimationLength=1\nTapLiftAnimationLength=1\nTapFakeAnimationLength=1\nHoldHeadAnimationLength=1\nHoldTopCapAnimationLength=1\nHoldBottomCapAnimationLength=1\nHoldBodyAnimationLength=1\nHoldTailAnimationLength=1\n\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\n\nHoldLetGoGrayPercent=.25\n\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\n\nReverseDrawOrder=1101\nFlipHeadAndTailWhenReverse=1\nFlipHoldBodyWhenReverse=1\n\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=.125\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=.125\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=.125\n\n[GhostArrowDim]\nInitCommand=\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,color(\"1,1,1,1\");zoom,1;rotationz,0;decelerate,.3;rotationz,90;linear,.3;rotationz,180;diffusealpha,0\nMissCommand=\nW5Command=finishtweening;diffuse,color(\"1,.5,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW4Command=finishtweening;diffuse,color(\".5,1,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW3Command=finishtweening;diffuse,color(\".5,1,.75,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW2Command=finishtweening;diffuse,color(\"1,1,.85,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW1Command=finishtweening;diffuse,color(\"1,1,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nLetGoCommand=stoptweening;decelerate,.2;diffusealpha,0;\nHeldCommand=finishtweening;diffuse,color(\"1,1,1,1\");zoom,1;linear,.2;zoom,.9;linear,.1;diffusealpha,0\n\n[GhostArrowBright]\nInitCommand=\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,color(\"1,1,1,1\");zoom,1;rotationz,0;decelerate,.3;rotationz,90;linear,.3;rotationz,180;diffusealpha,0\nMissCommand=\nW5Command=finishtweening;diffuse,color(\"1,.6,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW4Command=finishtweening;diffuse,color(\".6,1,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW3Command=finishtweening;diffuse,color(\".6,1,.8,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW2Command=finishtweening;diffuse,color(\"1,1,.9,1\");sleep,.1;decelerate,.5;diffusealpha,0\nW1Command=finishtweening;diffuse,color(\"1,1,1,1\");sleep,.1;decelerate,.5;diffusealpha,0\nLetGoCommand=stoptweening;decelerate,.2;diffusealpha,0;\nHeldCommand=finishtweening;diffuse,color(\"1,1,1,1\");zoom,1;linear,.2;zoom,.9;linear,.1;diffusealpha,0\n\n[HoldGhostArrow]\nHoldingOnCommand=diffusealpha,1;glowshift;effectcolor1,color(\"1,1,1,0\");effectcolor2,color(\"1,1,1,.7\");effectperiod,.1\nHoldingOffCommand=diffusealpha,0\nInitCommand=finishtweening;playcommand,\"HoldingOff\"\n\n[ReceptorArrow]\nInitCommand=effectclock,\"beat\";diffuseramp;effectcolor1,color(\".8,.8,.8,1\");effectcolor2,color(\"1,1,1,1\");effecttiming,.2,0,.8,0;effectoffset,.05\nNoneCommand=finishtweening;zoom,.85;diffusealpha,.9;linear,.11;diffusealpha,1;zoom,1\n\n[ReceptorOverlay]\nInitCommand=diffusealpha,0\nPressCommand=finishtweening;zoom,1;blend,\"BlendMode_Add\";diffusealpha,.8;decelerate,0.2;diffusealpha,0.4\nLiftCommand=stoptweening;decelerate,.2;diffusealpha,0;zoom,1.2\n"
+    },
+    {
+      "path": "dance/enchantment/Down Hold Body Active.png",
+      "bytes": 16369
+    },
+    {
+      "path": "dance/enchantment/Down Hold Body Inactive.png",
+      "bytes": 3889
+    },
+    {
+      "path": "dance/enchantment/Down Hold BottomCap active (stretch).png",
+      "bytes": 6100
+    },
+    {
+      "path": "dance/enchantment/Down Hold BottomCap inactive (stretch).png",
+      "bytes": 5013
+    },
+    {
+      "path": "dance/enchantment/Down Receptor.lua",
+      "bytes": 2875
+    },
+    {
+      "path": "dance/enchantment/Down Roll Body Inactive.png",
+      "bytes": 34560
+    },
+    {
+      "path": "dance/enchantment/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/enchantment/Down Roll BottomCap Inactive.png",
+      "bytes": 5535
+    },
+    {
+      "path": "dance/enchantment/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Bright W1.png",
+      "bytes": 20997
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Dim W1.png",
+      "bytes": 9145
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Dim W2.png",
+      "bytes": 8970
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Dim W3.png",
+      "bytes": 9657
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Dim W4.png",
+      "bytes": 8953
+    },
+    {
+      "path": "dance/enchantment/Down Tap Explosion Dim W5.png",
+      "bytes": 9756
+    },
+    {
+      "path": "dance/enchantment/Down Tap Lift.lua",
+      "bytes": 164
+    },
+    {
+      "path": "dance/enchantment/Down Tap Mine.lua",
+      "bytes": 149
+    },
+    {
+      "path": "dance/enchantment/Down Tap Note.lua",
+      "bytes": 164
+    },
+    {
+      "path": "dance/enchantment/Fallback Explosion.lua",
+      "bytes": 5131
+    },
+    {
+      "path": "dance/enchantment/NoteSkin.lua",
+      "bytes": 3255
+    },
+    {
+      "path": "dance/enchantment/_Down Receptor Go (doubleres) 4x1.png",
+      "bytes": 14648
+    },
+    {
+      "path": "dance/enchantment/_Down Roll Body active 4x1.png",
+      "bytes": 43635
+    },
+    {
+      "path": "dance/enchantment/_Down Roll BottomCap active 4x1.png",
+      "bytes": 6398
+    },
+    {
+      "path": "dance/enchantment/_Down Tap Lift (doubleres) 16x1.png",
+      "bytes": 182344
+    },
+    {
+      "path": "dance/enchantment/_Down Tap Mine (doubleres) 8x1.png",
+      "bytes": 59696
+    },
+    {
+      "path": "dance/enchantment/_Down Tap Note (doubleres) 16x8.png",
+      "bytes": 561618
+    },
+    {
+      "path": "dance/enchantment/down hold explosion.png",
+      "bytes": 5770
+    },
+    {
+      "path": "dance/enchantment/metrics.ini",
+      "bytes": 8356,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=2\nHoldTopCapAnimationLength=2\nHoldBottomCapAnimationLength=2\nHoldBodyAnimationLength=2\nHoldTailAnimationLength=2\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0.125\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0.125\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0.125\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0.125\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=stoptweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/flat/metrics.ini",
+      "bytes": 209,
+      "text": "[Global]\nFallbackNoteSkin=metal\n\n[NoteDisplay]\nTapNoteNoteColorTextureCoordSpacingX=0\nTapAdditionNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingX=0\n"
+    },
+    {
+      "path": "dance/lambda/Down Hold Body Active (doubleres).png",
+      "bytes": 3795
+    },
+    {
+      "path": "dance/lambda/Down Hold Body Inactive (doubleres).png",
+      "bytes": 3554
+    },
+    {
+      "path": "dance/lambda/Down Hold BottomCap Active (doubleres).png",
+      "bytes": 4635
+    },
+    {
+      "path": "dance/lambda/Down Hold BottomCap Inactive (doubleres).png",
+      "bytes": 4050
+    },
+    {
+      "path": "dance/lambda/Down Hold Explosion 2x1 (doubleres).png",
+      "bytes": 8783
+    },
+    {
+      "path": "dance/lambda/Down Hold TopCap Active (doubleres).png",
+      "bytes": 4455
+    },
+    {
+      "path": "dance/lambda/Down Hold TopCap Inactive (doubleres).png",
+      "bytes": 3943
+    },
+    {
+      "path": "dance/lambda/Down Receptor.lua",
+      "bytes": 590
+    },
+    {
+      "path": "dance/lambda/Down Roll Body Active (doubleres).png",
+      "bytes": 4150
+    },
+    {
+      "path": "dance/lambda/Down Roll Body Inactive (doubleres).png",
+      "bytes": 4575
+    },
+    {
+      "path": "dance/lambda/Down Roll BottomCap Active (doubleres).png",
+      "bytes": 4251
+    },
+    {
+      "path": "dance/lambda/Down Roll BottomCap Inactive (doubleres).png",
+      "bytes": 4408
+    },
+    {
+      "path": "dance/lambda/Down Roll TopCap Active (doubleres).png",
+      "bytes": 4103
+    },
+    {
+      "path": "dance/lambda/Down Roll TopCap Inactive (doubleres).png",
+      "bytes": 4242
+    },
+    {
+      "path": "dance/lambda/Down Tap Explosion Bright.redir",
+      "bytes": 5,
+      "text": "_glow"
+    },
+    {
+      "path": "dance/lambda/Down Tap Explosion Dim.redir",
+      "bytes": 25,
+      "text": "Down Tap Explosion Bright"
+    },
+    {
+      "path": "dance/lambda/Down Tap Lift.lua",
+      "bytes": 255
+    },
+    {
+      "path": "dance/lambda/Down Tap Mine.lua",
+      "bytes": 207
+    },
+    {
+      "path": "dance/lambda/Down Tap Note.lua",
+      "bytes": 972
+    },
+    {
+      "path": "dance/lambda/Fallback Explosion.lua",
+      "bytes": 3122
+    },
+    {
+      "path": "dance/lambda/NoteSkin.lua",
+      "bytes": 1566
+    },
+    {
+      "path": "dance/lambda/_Down Tap Lift (doubleres).png",
+      "bytes": 10593
+    },
+    {
+      "path": "dance/lambda/_Down Tap Mine (doubleres).png",
+      "bytes": 14855
+    },
+    {
+      "path": "dance/lambda/_arrow 1x8 (res 64x512).png",
+      "bytes": 199822
+    },
+    {
+      "path": "dance/lambda/_circle (doubleres).png",
+      "bytes": 1131
+    },
+    {
+      "path": "dance/lambda/_glow (doubleres).png",
+      "bytes": 2441
+    },
+    {
+      "path": "dance/lambda/_receptor (res 64x64).png",
+      "bytes": 57732
+    },
+    {
+      "path": "dance/lambda/_rflash (doubleres).png",
+      "bytes": 3483
+    },
+    {
+      "path": "dance/lambda/metrics.ini",
+      "bytes": 3767,
+      "text": "[Global]\nFallbackNoteSkin=common\n\n[NoteDisplay]\nTapNoteAnimationIsVivid=0\nDrawHoldHeadForTapsOnSameRow=1\nTapNoteAnimationLength=1 // none of these matter because Lua is handling the animation, not sprites.\nTapAdditionAnimationLength=1\nTapMineAnimationLength=1\nTapLiftAnimationLength=1\nTapFakeAnimationLength=1\nHoldHeadAnimationLength=1\nHoldTopCapAnimationLength=1\nHoldBottomCapAnimationLength=1\nHoldBodyAnimationLength=1\nHoldTailAnimationLength=1\n\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\n\nHoldLetGoGrayPercent=.25\n\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\n\nReverseDrawOrder=1101\nFlipHeadAndTailWhenReverse=1\nFlipHoldBodyWhenReverse=1\n\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=.125\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=.125\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=.125\n\n[GhostArrowDim]\nInitCommand=\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,color(\"1,1,1,1\");zoom,1;rotationz,0;decelerate,.3;rotationz,90;linear,.3;rotationz,180;diffusealpha,0\nMissCommand=\nW5Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W5\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW4Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W4\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW3Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W3\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW2Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W2\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW1Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W1\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nLetGoCommand=stoptweening;decelerate,.2;diffusealpha,0;\nHeldCommand=finishtweening;diffuse,color(\"1,1,1,1\");zoom,1;linear,.2;zoom,.9;linear,.1;diffusealpha,0\n\n[GhostArrowBright]\nInitCommand=\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,color(\"1,1,1,1\");zoom,1;rotationz,0;decelerate,.3;rotationz,90;linear,.3;rotationz,180;diffusealpha,0\nMissCommand=\nW5Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W5\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW4Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W4\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW3Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W3\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW2Command=finishtweening;diffuse,JudgmentLineToColor(\"JudgmentLine_W2\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nW1Command=finishtweening;diffuse,color(\"1,1,1,1\");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0;zoom,1.1;\nLetGoCommand=stoptweening;decelerate,.2;diffusealpha,0;\nHeldCommand=finishtweening;diffuse,color(\"1,1,1,1\");zoom,1;linear,.2;zoom,.9;linear,.1;diffusealpha,0\n\n[HoldGhostArrow]\nHoldingOnCommand=diffusealpha,1;glowshift;effectcolor1,color(\"1,1,1,0\");effectcolor2,color(\"1,1,1,.7\");effectperiod,.1\nHoldingOffCommand=diffusealpha,0\nInitCommand=finishtweening;playcommand,\"HoldingOff\"\n\n[ReceptorArrow]\nInitCommand=effectclock,\"beat\";diffuseramp;effectcolor1,color(\".8,.8,.8,1\");effectcolor2,color(\"1,1,1,1\");effecttiming,.2,0,.8,0;effectoffset,.05\nNoneCommand=finishtweening;zoom,.85;diffusealpha,.9;linear,.11;diffusealpha,1;zoom,1\n\n[ReceptorOverlay]\nInitCommand=diffusealpha,0\nPressCommand=finishtweening;zoom,1;blend,\"BlendMode_Add\";diffusealpha,.8;decelerate,0.2;diffusealpha,0.4\nLiftCommand=stoptweening;decelerate,.2;diffusealpha,0;zoom,1.2\n"
+    },
+    {
+      "path": "dance/metal/Down Hold Body Active.png",
+      "bytes": 11172
+    },
+    {
+      "path": "dance/metal/Down Hold Body Inactive.png",
+      "bytes": 12300
+    },
+    {
+      "path": "dance/metal/Down Hold BottomCap active.png",
+      "bytes": 2130
+    },
+    {
+      "path": "dance/metal/Down Hold BottomCap inactive.png",
+      "bytes": 2083
+    },
+    {
+      "path": "dance/metal/Down Receptor.lua",
+      "bytes": 2875
+    },
+    {
+      "path": "dance/metal/Down Roll Body Inactive.png",
+      "bytes": 38724
+    },
+    {
+      "path": "dance/metal/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/metal/Down Roll BottomCap Inactive.png",
+      "bytes": 3114
+    },
+    {
+      "path": "dance/metal/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Bright W1.png",
+      "bytes": 20997
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Dim W1.png",
+      "bytes": 9145
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Dim W2.png",
+      "bytes": 8970
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Dim W3.png",
+      "bytes": 9657
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Dim W4.png",
+      "bytes": 8953
+    },
+    {
+      "path": "dance/metal/Down Tap Explosion Dim W5.png",
+      "bytes": 9756
+    },
+    {
+      "path": "dance/metal/Down Tap Lift.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/metal/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/metal/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/metal/Fallback Explosion.lua",
+      "bytes": 5131
+    },
+    {
+      "path": "dance/metal/NoteSkin.lua",
+      "bytes": 3255
+    },
+    {
+      "path": "dance/metal/_Down Receptor Go 4x1 (doubleres).png",
+      "bytes": 13153
+    },
+    {
+      "path": "dance/metal/_Down Roll Body active 4x1.png",
+      "bytes": 75406
+    },
+    {
+      "path": "dance/metal/_Down Roll BottomCap active 4x1.png",
+      "bytes": 5836
+    },
+    {
+      "path": "dance/metal/_down tap lift model.txt",
+      "bytes": 15936
+    },
+    {
+      "path": "dance/metal/_down tap note model.txt",
+      "bytes": 15862
+    },
+    {
+      "path": "dance/metal/_mine ani tex.ini",
+      "bytes": 70,
+      "text": "[AnimatedTexture]\nTexVelocityX=+1\nFrame0000=_mine tex.png\nDelay0000=1\n"
+    },
+    {
+      "path": "dance/metal/_mine model.txt",
+      "bytes": 5010
+    },
+    {
+      "path": "dance/metal/_mine tex.png",
+      "bytes": 8690
+    },
+    {
+      "path": "dance/metal/beta2.txt",
+      "bytes": 3959
+    },
+    {
+      "path": "dance/metal/down hold explosion.png",
+      "bytes": 5770
+    },
+    {
+      "path": "dance/metal/metrics.ini",
+      "bytes": 8364,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=2\nHoldTopCapAnimationLength=2\nHoldBottomCapAnimationLength=2\nHoldBodyAnimationLength=2\nHoldTailAnimationLength=2\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0.03125\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0.03125\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0.03125\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0.03125\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=stoptweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=finishtweening;blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/metal/textures/Note.png",
+      "bytes": 17613
+    },
+    {
+      "path": "dance/metal/textures/Tap Lift parts (mipmaps).png",
+      "bytes": 9954
+    },
+    {
+      "path": "dance/metal/textures/Tap Note ani texture.ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/metal/textures/Tap Note parts (mipmaps).png",
+      "bytes": 17613
+    },
+    {
+      "path": "dance/robot/Down Hold Body Active.png",
+      "bytes": 11172
+    },
+    {
+      "path": "dance/robot/Down Hold Body Inactive.png",
+      "bytes": 12300
+    },
+    {
+      "path": "dance/robot/Down Hold BottomCap active.png",
+      "bytes": 2130
+    },
+    {
+      "path": "dance/robot/Down Hold BottomCap inactive.png",
+      "bytes": 2083
+    },
+    {
+      "path": "dance/robot/Down Receptor.lua",
+      "bytes": 2875
+    },
+    {
+      "path": "dance/robot/Down Roll Body Inactive.png",
+      "bytes": 38724
+    },
+    {
+      "path": "dance/robot/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/robot/Down Roll BottomCap Inactive.png",
+      "bytes": 3114
+    },
+    {
+      "path": "dance/robot/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/robot/Down Tap Explosion Dim W1.png",
+      "bytes": 9145
+    },
+    {
+      "path": "dance/robot/Down Tap Explosion Dim W2.png",
+      "bytes": 8970
+    },
+    {
+      "path": "dance/robot/Down Tap Explosion Dim W3.png",
+      "bytes": 9657
+    },
+    {
+      "path": "dance/robot/Down Tap Explosion Dim W4.png",
+      "bytes": 8953
+    },
+    {
+      "path": "dance/robot/Down Tap Explosion Dim W5.png",
+      "bytes": 9756
+    },
+    {
+      "path": "dance/robot/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/robot/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/robot/Fallback Explosion.lua",
+      "bytes": 5127
+    },
+    {
+      "path": "dance/robot/NoteSkin.lua",
+      "bytes": 3233
+    },
+    {
+      "path": "dance/robot/_Down Receptor Go 4x1 (doubleres).png",
+      "bytes": 13153
+    },
+    {
+      "path": "dance/robot/_Down Roll Body active 4x1.png",
+      "bytes": 75406
+    },
+    {
+      "path": "dance/robot/_Down Roll BottomCap active 4x1.png",
+      "bytes": 5836
+    },
+    {
+      "path": "dance/robot/_down tap note model.txt",
+      "bytes": 15862
+    },
+    {
+      "path": "dance/robot/_mine ani tex.ini",
+      "bytes": 70,
+      "text": "[AnimatedTexture]\nTexVelocityX=+1\nFrame0000=_mine tex.png\nDelay0000=1\n"
+    },
+    {
+      "path": "dance/robot/_mine model.txt",
+      "bytes": 5010
+    },
+    {
+      "path": "dance/robot/_mine tex.png",
+      "bytes": 8690
+    },
+    {
+      "path": "dance/robot/down hold explosion.png",
+      "bytes": 5770
+    },
+    {
+      "path": "dance/robot/metrics.ini",
+      "bytes": 8312,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=2\nTapMineAnimationLength=1\nTapLiftAnimationLength=2\nTapFakeAnimationLength=2\n##Hold Parts\nHoldHeadAnimationLength=2\nHoldTopCapAnimationLength=2\nHoldBottomCapAnimationLength=2\nHoldBodyAnimationLength=2\nHoldTailAnimationLength=2\n##Roll Parts\nRollHeadAnimationLength=2\nRollTopCapAnimationLength=2\nRollBottomCapAnimationLength=2\nRollBodyAnimationLength=2\nRollTailAnimationLength=2\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=0\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=0\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=0\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=0\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/robot/textures/Tap Note ani texture.ini",
+      "bytes": 100,
+      "text": "[AnimatedTexture]\nTexVelocityY=-1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/robot/textures/Tap Note parts (mipmaps).png",
+      "bytes": 14472
+    },
+    {
+      "path": "dance/vivid/Down Hold Body Active.png",
+      "bytes": 11172
+    },
+    {
+      "path": "dance/vivid/Down Hold Body Inactive.png",
+      "bytes": 12300
+    },
+    {
+      "path": "dance/vivid/Down Hold BottomCap active.png",
+      "bytes": 2130
+    },
+    {
+      "path": "dance/vivid/Down Hold BottomCap inactive.png",
+      "bytes": 2083
+    },
+    {
+      "path": "dance/vivid/Down Receptor.lua",
+      "bytes": 2983
+    },
+    {
+      "path": "dance/vivid/Down Roll Body Inactive.png",
+      "bytes": 38724
+    },
+    {
+      "path": "dance/vivid/Down Roll Body active.lua",
+      "bytes": 279
+    },
+    {
+      "path": "dance/vivid/Down Roll BottomCap Inactive.png",
+      "bytes": 3114
+    },
+    {
+      "path": "dance/vivid/Down Roll BottomCap active.lua",
+      "bytes": 284
+    },
+    {
+      "path": "dance/vivid/Down Tap Explosion Dim W1.png",
+      "bytes": 9145
+    },
+    {
+      "path": "dance/vivid/Down Tap Explosion Dim W2.png",
+      "bytes": 8970
+    },
+    {
+      "path": "dance/vivid/Down Tap Explosion Dim W3.png",
+      "bytes": 9657
+    },
+    {
+      "path": "dance/vivid/Down Tap Explosion Dim W4.png",
+      "bytes": 8953
+    },
+    {
+      "path": "dance/vivid/Down Tap Explosion Dim W5.png",
+      "bytes": 9756
+    },
+    {
+      "path": "dance/vivid/Down Tap Mine.lua",
+      "bytes": 120
+    },
+    {
+      "path": "dance/vivid/Down Tap Note.lua",
+      "bytes": 194
+    },
+    {
+      "path": "dance/vivid/Fallback Explosion.lua",
+      "bytes": 6345
+    },
+    {
+      "path": "dance/vivid/NoteSkin.lua",
+      "bytes": 3233
+    },
+    {
+      "path": "dance/vivid/_Down Receptor Go 4x1.png",
+      "bytes": 6895
+    },
+    {
+      "path": "dance/vivid/_Down Roll Body active 4x1.png",
+      "bytes": 75406
+    },
+    {
+      "path": "dance/vivid/_Down Roll BottomCap active 4x1.png",
+      "bytes": 5836
+    },
+    {
+      "path": "dance/vivid/_down tap note model.txt",
+      "bytes": 3981
+    },
+    {
+      "path": "dance/vivid/_mine ani tex.ini",
+      "bytes": 70,
+      "text": "[AnimatedTexture]\nTexVelocityX=+1\nFrame0000=_mine tex.png\nDelay0000=1\n"
+    },
+    {
+      "path": "dance/vivid/_mine model.txt",
+      "bytes": 5010
+    },
+    {
+      "path": "dance/vivid/_mine tex.png",
+      "bytes": 8690
+    },
+    {
+      "path": "dance/vivid/down hold explosion.png",
+      "bytes": 5770
+    },
+    {
+      "path": "dance/vivid/metrics.ini",
+      "bytes": 8312,
+      "text": "#USW Metric Version V2\n#Made for Version Stepmania 5 Preview 2\n\n#I am the bone of my noteskin\n#Arrows are my body, and explosions are my blood\n#I have created over a thousand noteskins\n#Unknown to death\n#Nor known to life\n#Have withstood pain to create many noteskins\n#Yet these hands will never hold anything\n#So as I pray, Unlimited Stepman Works\n\n[Global]\n#Noteskin this noteskin falls back on\n#We normaly make this fallback on common\n#Because its the global noteskin every default fallsback on to\nFallbackNoteSkin=common\n\n[NoteDisplay]\n#Noteskin Animation Lengths\nAnimationIsBeatBased=1\n\n##Tap Parts\nTapNoteAnimationLength=4\nTapMineAnimationLength=1\nTapLiftAnimationLength=4\nTapFakeAnimationLength=4\n##Hold Parts\nHoldHeadAnimationLength=4\nHoldTopCapAnimationLength=4\nHoldBottomCapAnimationLength=4\nHoldBodyAnimationLength=4\nHoldTailAnimationLength=4\n##Roll Parts\nRollHeadAnimationLength=4\nRollTopCapAnimationLength=4\nRollBottomCapAnimationLength=4\nRollBodyAnimationLength=4\nRollTailAnimationLength=4\n\n\n#Define if noteskin is Vivid or not\n#Value 1 = true, Value 0 = false\n\n##Tap Parts\nTapNoteAnimationIsVivid=1\nTapMineAnimationIsVivid=0\nTapFakeAnimationIsVivid=1\nTapLiftAnimationIsVivid=0\n##Hold Parts\nHoldHeadAnimationIsVivid=1\nHoldTopCapAnimationIsVivid=0\nHoldBodyAnimationIsVivid=0\nHoldBottomCapAnimationIsVivid=0\nHoldTailAnimationIsVivid=0\n##Roll Parts\nRollHeadAnimationIsVivid=1\nRollTopCapAnimationIsVivid=0\nRollBodyAnimationIsVivid=0\nRollBottomCapAnimationIsVivid=0\nRollTailAnimationIsVivid=0\n\n\n#Texture Coord Offest Info\n\n#This is the TextureCoordOffset which we use for Rhythm colored noteskins\n#If you dont want to use it, just keep the value 0\n#Rhythm colored noteskins are noteskins that have different colors for every\n#4th, 8th, 12th, 16th and so on\n#To use this you need to use simple math because it isnt based on the size of \n#the image but its based on the total value of the size which is 1\n#So if you got 9 frames (including  192nd)\n#You need to run this simple math\n# 1 / 9 = 0.11111111111111111111111111 (and so on)\n#Because using the entire value is to long, lets make it smaler to 6 digits\n#You can make it longer if you want but lets keep it nice to 6 digits\n\n##Tap Parts\nTapNoteAdditionTextureCoordOffsetX=0\nTapNoteAdditionTextureCoordOffsetY=0\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0\nTapMineAdditionTextureCoordOffsetX=0\nTapMineAdditionTextureCoordOffsetY=0\nTapMineNoteColorTextureCoordSpacingX=0\nTapMineNoteColorTextureCoordSpacingY=0\nTapLiftAdditionTextureCoordOffsetX=0\nTapLiftAdditionTextureCoordOffsetY=0\nTapLiftNoteColorTextureCoordSpacingX=0\nTapLiftNoteColorTextureCoordSpacingY=0\nTapFakeAdditionTextureCoordOffsetX=0\nTapFakeAdditionTextureCoordOffsetY=0\nTapFakeNoteColorTextureCoordSpacingX=0\nTapFakeNoteColorTextureCoordSpacingY=0\n##Hold Parts\nHoldHeadAdditionTextureCoordOffsetX=0\nHoldHeadAdditionTextureCoordOffsetY=0\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0\nHoldTopCapAdditionTextureCoordOffsetX=0\nHoldTopCapAdditionTextureCoordOffsetY=0\nHoldTopCapNoteColorTextureCoordSpacingX=0\nHoldTopCapNoteColorTextureCoordSpacingY=0\nHoldBodyAdditionTextureCoordOffsetX=0\nHoldBodyAdditionTextureCoordOffsetY=0\nHoldBodyNoteColorTextureCoordSpacingX=0\nHoldBodyNoteColorTextureCoordSpacingY=0\nHoldBottomCapAdditionTextureCoordOffsetX=0\nHoldBottomCapAdditionTextureCoordOffsetY=0\nHoldBottomCapNoteColorTextureCoordSpacingX=0\nHoldBottomCapNoteColorTextureCoordSpacingY=0\nHoldTailAdditionTextureCoordOffsetX=0\nHoldTailAdditionTextureCoordOffsetY=0\nHoldTailNoteColorTextureCoordSpacingX=0\nHoldTailNoteColorTextureCoordSpacingY=0\n##Roll Parts\nRollHeadAdditionTextureCoordOffsetX=0\nRollHeadAdditionTextureCoordOffsetY=0\nRollHeadNoteColorTextureCoordSpacingX=0\nRollHeadNoteColorTextureCoordSpacingY=0\nRollTopCapAdditionTextureCoordOffsetX=0\nRollTopCapAdditionTextureCoordOffsetY=0\nRollTopCapNoteColorTextureCoordSpacingX=0\nRollTopCapNoteColorTextureCoordSpacingY=0\nRollBodyAdditionTextureCoordOffsetX=0\nRollBodyAdditionTextureCoordOffsetY=0\nRollBodyNoteColorTextureCoordSpacingX=0\nRollBodyNoteColorTextureCoordSpacingY=0\nRollBottomCapAdditionTextureCoordOffsetX=0\nRollBottomCapAdditionTextureCoordOffsetY=0\nRollBottomCapNoteColorTextureCoordSpacingX=0\nRollBottomCapNoteColorTextureCoordSpacingY=0\nRollTailAdditionTextureCoordOffsetX=0\nRollTailAdditionTextureCoordOffsetY=0\nRollTailNoteColorTextureCoordSpacingX=0\nRollTailNoteColorTextureCoordSpacingY=0\n\n\n#Other Stuff\nDrawHoldHeadForTapsOnSameRow=0\nDrawRollHeadForTapsOnSameRow=0\nTapHoldRollOnRowMeansHold=1\nStartDrawingHoldBodyOffsetFromHead=0\nStopDrawingHoldBodyOffsetFromTail=0\nHoldLetGoGrayPercent=0.25\nUseLighting=0\nReverseDrawOrder=1101\nHoldHeadIsAboveWavyParts=1\nHoldTailIsAboveWavyParts=1\nHoldActiveIsAddLayer=0\n\n\n#Edit this incase you want to make noteskin for reverse or both\nFlipHoldBodyWhenReverse=1\nFlipHeadAndTailWhenReverse=1\nTopHoldAnchorWhenReverse=1\n\n\n#Diffuse Info v2\n\n#Diffuse uses a color code to define the diffuse\n#You can use diffusealpha to make noteskins disapear with value = 0 or reapear with value = 1\n#The way it works is pretty easy\n#It is based on the Red,Blue,Green,Alpha value that you get with color\n#But instead of 255,255,255,255 it uses 1,1,1,1\n#So if you want to use a RBG value from an image like for example Taupe\n#Which has a value of 72,60,50 , What we just do is / 254 on every value\n#And we also add a Alpha (for transparent) value between 0.1 and 1\n#So We get 0.283464,0.236220,0.196850,0.6\n#You can go over the 6 digits after the . (which I don't do because I like to keep it clean and not to big)\n#diffuse,1,1,1,1 is the basic code\n#Change them to which value you want\n#add ; at the end of your command incase you add more commands\n\n[GhostArrowDim]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[GhostArrowBright]\nNoneCommand=\nHitMineCommand=blend,'BlendMode_Add';diffuse,1,1,1,1;zoom,1;rotationz,0;linear,0.2;rotationz,90;linear,0.2;rotationz,180;diffusealpha,0\nAvoidMineCommand=\nMissCommand=\n#Boo explosion\nW5Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Good explosion\nW4Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Great explosion\nW3Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Perfect explosion\nW2Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0\n#Marvelous explosion\nW1Command=diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1.0;diffusealpha,0;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\n#Hold end commands\nLetGoCommand=\nHeldCommand=diffusealpha,1.2;zoom,1.1;accelerate,0.09;zoom,1.0;diffusealpha,0\n\n[ReceptorArrow]\n#For InitCommand take a look at \"Down Receptor.lua\"\n#InitCommand=\nNoneCommand=stoptweening;zoom,0.75;linear,0.11;zoom,1\nPressCommand=\nLiftCommand=\nAvoidMineCommand=\n#The way the receptor responds when you hit an arrow on specified judgment\n#Boo command\nW5Command=stoptweening\n#Good command\nW4Command=stoptweening\n#Great command\nW3Command=stoptweening\n#Perfect command\nW2Command=stoptweening\n#Marvelous command\nW1Command=stoptweening\n\n[HoldGhostArrow]\n#The way the hold arrow reacts\nHoldingOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nHoldingOffCommand=visible,false\nRollOnCommand=visible,true;glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5\nRollOffCommand=visible,false\n\n[Press]\nReverseOnCommand=vertalign,bottom\nReverseOffCommand=vertalign,top\nPressCommand=visible,true\nLiftCommand=visible,false"
+    },
+    {
+      "path": "dance/vivid/model.txt",
+      "bytes": 3974
+    },
+    {
+      "path": "dance/vivid/textures/Tap Note ani texture.ini",
+      "bytes": 99,
+      "text": "[AnimatedTexture]\nTexVelocityY=1\nTexOffsetX=0\nFrame0000=Tap Note parts (mipmaps).png\nDelay0000=1.0\n"
+    },
+    {
+      "path": "dance/vivid/textures/Tap Note parts (mipmaps).png",
+      "bytes": 12200
+    },
+    {
+      "path": "instructions.txt",
+      "bytes": 1142
+    },
+    {
+      "path": "lights/default/metrics.ini",
+      "bytes": 0,
+      "text": ""
+    },
+    {
+      "path": "pump/cmd/Center Hold Body active (doubleres) 6x1.png",
+      "bytes": 3876
+    },
+    {
+      "path": "pump/cmd/Center Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 21780
+    },
+    {
+      "path": "pump/cmd/Center Outline Receptor (doubleres).png",
+      "bytes": 5004
+    },
+    {
+      "path": "pump/cmd/Center Ready Receptor (doubleres) 1x3.png",
+      "bytes": 44346
+    },
+    {
+      "path": "pump/cmd/Center Roll Head Active (doubleres) 3x2.png",
+      "bytes": 62004
+    },
+    {
+      "path": "pump/cmd/Center Tap Note (doubleres) 3x2.png",
+      "bytes": 30192
+    },
+    {
+      "path": "pump/cmd/DownLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3855
+    },
+    {
+      "path": "pump/cmd/DownLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 29311
+    },
+    {
+      "path": "pump/cmd/DownLeft Ready Receptor (doubleres) 1x3.png",
+      "bytes": 40533
+    },
+    {
+      "path": "pump/cmd/DownLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 62309
+    },
+    {
+      "path": "pump/cmd/DownLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 26148
+    },
+    {
+      "path": "pump/cmd/DownRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3845
+    },
+    {
+      "path": "pump/cmd/DownRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 29475
+    },
+    {
+      "path": "pump/cmd/DownRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 68042
+    },
+    {
+      "path": "pump/cmd/UpLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3839
+    },
+    {
+      "path": "pump/cmd/UpLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 38877
+    },
+    {
+      "path": "pump/cmd/UpLeft Ready Receptor (doubleres) 1x3.png",
+      "bytes": 39883
+    },
+    {
+      "path": "pump/cmd/UpLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 70119
+    },
+    {
+      "path": "pump/cmd/UpLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 26097
+    },
+    {
+      "path": "pump/cmd/UpRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3845
+    },
+    {
+      "path": "pump/cmd/UpRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 38550
+    },
+    {
+      "path": "pump/cmd/UpRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 70066
+    },
+    {
+      "path": "pump/cmd/metrics.ini",
+      "bytes": 97,
+      "text": "[UpLeft]\nStartDrawingHoldBodyOffsetFromHead=-22\n\n[UpRight]\nStartDrawingHoldBodyOffsetFromHead=-22"
+    },
+    {
+      "path": "pump/cmd-routine-p1/Center Hold Body active (doubleres) 6x1.png",
+      "bytes": 3848
+    },
+    {
+      "path": "pump/cmd-routine-p1/Center Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 24654
+    },
+    {
+      "path": "pump/cmd-routine-p1/Center Roll Head Active (doubleres) 3x2.png",
+      "bytes": 67645
+    },
+    {
+      "path": "pump/cmd-routine-p1/Center Tap Note (doubleres) 3x2.png",
+      "bytes": 33476
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3855
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 29311
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 66811
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 28779
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3845
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 29475
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 72067
+    },
+    {
+      "path": "pump/cmd-routine-p1/DownRight Tap Note (doubleres) 3x2.png",
+      "bytes": 28407
+    },
+    {
+      "path": "pump/cmd-routine-p1/NoteSkin.lua",
+      "bytes": 193
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3836
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 42785
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 77612
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 29619
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3835
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 42758
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 79010
+    },
+    {
+      "path": "pump/cmd-routine-p1/UpRight Tap Note (doubleres) 3x2.png",
+      "bytes": 30096
+    },
+    {
+      "path": "pump/cmd-routine-p1/metrics.ini",
+      "bytes": 29,
+      "text": "[Global]\nFallbackNoteSkin=cmd"
+    },
+    {
+      "path": "pump/cmd-routine-p2/Center Hold Body active (doubleres) 6x1.png",
+      "bytes": 3862
+    },
+    {
+      "path": "pump/cmd-routine-p2/Center Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 21747
+    },
+    {
+      "path": "pump/cmd-routine-p2/Center Roll Head Active (doubleres) 3x2.png",
+      "bytes": 67286
+    },
+    {
+      "path": "pump/cmd-routine-p2/Center Tap Note (doubleres) 3x2.png",
+      "bytes": 32082
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3839
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 26746
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 66417
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 28457
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3842
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 26767
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 71241
+    },
+    {
+      "path": "pump/cmd-routine-p2/DownRight Tap Note (doubleres) 3x2.png",
+      "bytes": 27980
+    },
+    {
+      "path": "pump/cmd-routine-p2/NoteSkin.lua",
+      "bytes": 193
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpLeft Hold Body active (doubleres) 6x1.png",
+      "bytes": 3839
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpLeft Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 38877
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpLeft Roll Head Active (doubleres) 3x2.png",
+      "bytes": 77660
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpLeft Tap Note (doubleres) 3x2.png",
+      "bytes": 28882
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpRight Hold Body active (doubleres) 6x1.png",
+      "bytes": 3845
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpRight Hold BottomCap active (doubleres) 6x1.png",
+      "bytes": 38550
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpRight Roll Head Active (doubleres) 3x2.png",
+      "bytes": 77505
+    },
+    {
+      "path": "pump/cmd-routine-p2/UpRight Tap Note (doubleres) 3x2.png",
+      "bytes": 29061
+    },
+    {
+      "path": "pump/cmd-routine-p2/metrics.ini",
+      "bytes": 29,
+      "text": "[Global]\nFallbackNoteSkin=cmd"
+    },
+    {
+      "path": "pump/complex/Center Hold Body active (doubleres).png",
+      "bytes": 421
+    },
+    {
+      "path": "pump/complex/Center Hold BottomCap active (doubleres).png",
+      "bytes": 4031
+    },
+    {
+      "path": "pump/complex/Center Outline Receptor.redir",
+      "bytes": 6,
+      "text": "_blank"
+    },
+    {
+      "path": "pump/complex/Center Ready Receptor 3x1 (doubleres).png",
+      "bytes": 14239
+    },
+    {
+      "path": "pump/complex/Center Tap Note 5x1 (doubleres).png",
+      "bytes": 38961
+    },
+    {
+      "path": "pump/complex/DownLeft Hold Body active (doubleres).png",
+      "bytes": 437
+    },
+    {
+      "path": "pump/complex/DownLeft Hold BottomCap active (doubleres).png",
+      "bytes": 7902
+    },
+    {
+      "path": "pump/complex/DownLeft Ready Receptor 3x1 (doubleres).png",
+      "bytes": 13032
+    },
+    {
+      "path": "pump/complex/DownLeft Tap Note 6x1 (doubleres).png",
+      "bytes": 21086
+    },
+    {
+      "path": "pump/complex/DownRight Hold Body active (doubleres).png",
+      "bytes": 431
+    },
+    {
+      "path": "pump/complex/DownRight Hold BottomCap active (doubleres).png",
+      "bytes": 7774
+    },
+    {
+      "path": "pump/complex/UpLeft Hold Body active (doubleres).png",
+      "bytes": 442
+    },
+    {
+      "path": "pump/complex/UpLeft Hold BottomCap active (doubleres).png",
+      "bytes": 9085
+    },
+    {
+      "path": "pump/complex/UpLeft Ready Receptor 3x1 (doubleres).png",
+      "bytes": 12820
+    },
+    {
+      "path": "pump/complex/UpLeft Tap Note 6x1 (doubleres).png",
+      "bytes": 22912
+    },
+    {
+      "path": "pump/complex/UpRight Hold Body active (doubleres).png",
+      "bytes": 434
+    },
+    {
+      "path": "pump/complex/UpRight Hold BottomCap active (doubleres).png",
+      "bytes": 8938
+    },
+    {
+      "path": "pump/complex/metrics.ini",
+      "bytes": 35,
+      "text": "[Center]\nTapNoteAnimationLength=0.3"
+    },
+    {
+      "path": "pump/default/Center Hold Body Active 6x1.png",
+      "bytes": 4010
+    },
+    {
+      "path": "pump/default/Center Hold BottomCap Active 6x1.png",
+      "bytes": 28777
+    },
+    {
+      "path": "pump/default/Center Outline Receptor.png",
+      "bytes": 1103
+    },
+    {
+      "path": "pump/default/Center Ready Receptor 1x3.png",
+      "bytes": 8461
+    },
+    {
+      "path": "pump/default/Center Tap Lift.lua",
+      "bytes": 114
+    },
+    {
+      "path": "pump/default/Center Tap Note 3x2.png",
+      "bytes": 35365
+    },
+    {
+      "path": "pump/default/DownLeft Hold Body Active 6x1.png",
+      "bytes": 3260
+    },
+    {
+      "path": "pump/default/DownLeft Hold BottomCap Active 6x1.png",
+      "bytes": 13152
+    },
+    {
+      "path": "pump/default/DownLeft Outline Receptor.redir",
+      "bytes": 6,
+      "text": "_blank"
+    },
+    {
+      "path": "pump/default/DownLeft Ready Receptor 1x3.png",
+      "bytes": 5713
+    },
+    {
+      "path": "pump/default/DownLeft Tap Lift.lua",
+      "bytes": 115
+    },
+    {
+      "path": "pump/default/DownLeft Tap Note 3x2.png",
+      "bytes": 10276
+    },
+    {
+      "path": "pump/default/DownRight Hold Body Active 6x1.png",
+      "bytes": 3265
+    },
+    {
+      "path": "pump/default/DownRight Hold BottomCap Active 6x1.png",
+      "bytes": 13470
+    },
+    {
+      "path": "pump/default/DownRight Ready Receptor.lua",
+      "bytes": 140
+    },
+    {
+      "path": "pump/default/DownRight Tap Lift.lua",
+      "bytes": 116
+    },
+    {
+      "path": "pump/default/DownRight Tap Note.lua",
+      "bytes": 53
+    },
+    {
+      "path": "pump/default/NoteSkin.lua",
+      "bytes": 3228
+    },
+    {
+      "path": "pump/default/UpLeft Explosion.lua",
+      "bytes": 1583
+    },
+    {
+      "path": "pump/default/UpLeft Hold Body Active 6x1.png",
+      "bytes": 3248
+    },
+    {
+      "path": "pump/default/UpLeft Hold BottomCap Active 6x1.png",
+      "bytes": 11519
+    },
+    {
+      "path": "pump/default/UpLeft Ready Receptor 1x3.png",
+      "bytes": 5403
+    },
+    {
+      "path": "pump/default/UpLeft Receptor.lua",
+      "bytes": 1913
+    },
+    {
+      "path": "pump/default/UpLeft Tap Lift.lua",
+      "bytes": 113
+    },
+    {
+      "path": "pump/default/UpLeft Tap Note 3x2.png",
+      "bytes": 10490
+    },
+    {
+      "path": "pump/default/UpRight Hold Body Active 6x1.png",
+      "bytes": 3253
+    },
+    {
+      "path": "pump/default/UpRight Hold BottomCap Active 6x1.png",
+      "bytes": 11739
+    },
+    {
+      "path": "pump/default/UpRight Ready Receptor.lua",
+      "bytes": 138
+    },
+    {
+      "path": "pump/default/UpRight Tap Lift.lua",
+      "bytes": 114
+    },
+    {
+      "path": "pump/default/UpRight Tap Note.lua",
+      "bytes": 51
+    },
+    {
+      "path": "pump/default/_flash (doubleres).png",
+      "bytes": 21250
+    },
+    {
+      "path": "pump/default/metrics.ini",
+      "bytes": 488,
+      "text": "[NoteDisplay]\nAnimationIsBeatBased=0\n\nTapNoteAnimationLength=0.25\nTapMineAnimationLength=0.25\nTapLiftAnimationLength=0.25\nTapFakeAnimationLength=0.25\nHoldHeadAnimationLength=0.25\nHoldTopCapAnimationLength=0.25\nHoldBottomCapAnimationLength=0.25\nHoldBodyAnimationLength=0.25\nHoldTailAnimationLength=0.25\n\nHoldLetGoGrayPercent=1\n\nFlipHeadAndTailWhenReverse=1\nFlipHoldBodyWhenReverse=1\nTopHoldAnchorWhenReverse=0\nHoldActiveIsAddLayer=0\n\n[Center]\n\n[DownLeft]\n\n[DownRight]\n\n[UpLeft]\n\n[UpRight]\n"
+    },
+    {
+      "path": "pump/delta/Center Hold Body Active.png",
+      "bytes": 350
+    },
+    {
+      "path": "pump/delta/Center Hold BottomCap Active.png",
+      "bytes": 3979
+    },
+    {
+      "path": "pump/delta/Center Hold Head.lua",
+      "bytes": 668
+    },
+    {
+      "path": "pump/delta/Center NoteHit.lua",
+      "bytes": 62
+    },
+    {
+      "path": "pump/delta/Center Ready Receptor 3x1.png",
+      "bytes": 8710
+    },
+    {
+      "path": "pump/delta/Center Tap Note.lua",
+      "bytes": 804
+    },
+    {
+      "path": "pump/delta/Center border.png",
+      "bytes": 3572
+    },
+    {
+      "path": "pump/delta/Center_blend.png",
+      "bytes": 2978
+    },
+    {
+      "path": "pump/delta/Center_feet.png",
+      "bytes": 4272
+    },
+    {
+      "path": "pump/delta/Center_fill.png",
+      "bytes": 3903
+    },
+    {
+      "path": "pump/delta/DownLeft Hold Body Active.png",
+      "bytes": 276
+    },
+    {
+      "path": "pump/delta/DownLeft Hold BottomCap Active.png",
+      "bytes": 4459
+    },
+    {
+      "path": "pump/delta/DownLeft Hold Head.lua",
+      "bytes": 583
+    },
+    {
+      "path": "pump/delta/DownLeft NoteHit.lua",
+      "bytes": 64
+    },
+    {
+      "path": "pump/delta/DownLeft Ready Receptor 3x1.png",
+      "bytes": 7357
+    },
+    {
+      "path": "pump/delta/DownLeft Tap Note.lua",
+      "bytes": 721
+    },
+    {
+      "path": "pump/delta/DownLeft border.png",
+      "bytes": 3988
+    },
+    {
+      "path": "pump/delta/DownLeft_blend.png",
+      "bytes": 3243
+    },
+    {
+      "path": "pump/delta/DownLeft_fill.png",
+      "bytes": 3010
+    },
+    {
+      "path": "pump/delta/DownRight Hold Body Active.png",
+      "bytes": 342
+    },
+    {
+      "path": "pump/delta/DownRight Hold BottomCap Active.png",
+      "bytes": 4440
+    },
+    {
+      "path": "pump/delta/DownRight Hold Head.lua",
+      "bytes": 90
+    },
+    {
+      "path": "pump/delta/DownRight NoteHit.lua",
+      "bytes": 83
+    },
+    {
+      "path": "pump/delta/DownRight Ready Receptor.lua",
+      "bytes": 163
+    },
+    {
+      "path": "pump/delta/DownRight Tap Note.lua",
+      "bytes": 89
+    },
+    {
+      "path": "pump/delta/DownRight border.redir",
+      "bytes": 15,
+      "text": "DownLeft border"
+    },
+    {
+      "path": "pump/delta/Mine_Base.png",
+      "bytes": 5319
+    },
+    {
+      "path": "pump/delta/Mine_Border.png",
+      "bytes": 6350
+    },
+    {
+      "path": "pump/delta/Mine_Fill.png",
+      "bytes": 4363
+    },
+    {
+      "path": "pump/delta/Mine_Light.png",
+      "bytes": 4601
+    },
+    {
+      "path": "pump/delta/Mine_Overlay.png",
+      "bytes": 4793
+    },
+    {
+      "path": "pump/delta/NoteSkin.lua",
+      "bytes": 3430
+    },
+    {
+      "path": "pump/delta/UpLeft Explosion.lua",
+      "bytes": 1406
+    },
+    {
+      "path": "pump/delta/UpLeft Hold Body Active.png",
+      "bytes": 277
+    },
+    {
+      "path": "pump/delta/UpLeft Hold BottomCap Active.png",
+      "bytes": 4696
+    },
+    {
+      "path": "pump/delta/UpLeft Hold Head.lua",
+      "bytes": 576
+    },
+    {
+      "path": "pump/delta/UpLeft NoteHit.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta/UpLeft Ready Receptor 3x1.png",
+      "bytes": 7436
+    },
+    {
+      "path": "pump/delta/UpLeft Receptor.lua",
+      "bytes": 774
+    },
+    {
+      "path": "pump/delta/UpLeft Tap Mine.lua",
+      "bytes": 747
+    },
+    {
+      "path": "pump/delta/UpLeft Tap Note.lua",
+      "bytes": 714
+    },
+    {
+      "path": "pump/delta/UpLeft border.png",
+      "bytes": 3908
+    },
+    {
+      "path": "pump/delta/UpLeft_blend.png",
+      "bytes": 3230
+    },
+    {
+      "path": "pump/delta/UpLeft_fill.png",
+      "bytes": 3008
+    },
+    {
+      "path": "pump/delta/UpRight Hold Body Active.png",
+      "bytes": 341
+    },
+    {
+      "path": "pump/delta/UpRight Hold BottomCap Active.png",
+      "bytes": 4640
+    },
+    {
+      "path": "pump/delta/UpRight Hold Head.lua",
+      "bytes": 110
+    },
+    {
+      "path": "pump/delta/UpRight NoteHit.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta/UpRight Ready Receptor.lua",
+      "bytes": 161
+    },
+    {
+      "path": "pump/delta/UpRight Tap Note.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta/UpRight border.redir",
+      "bytes": 13,
+      "text": "UpLeft border"
+    },
+    {
+      "path": "pump/delta/_CenterHit 3x1.png",
+      "bytes": 115594
+    },
+    {
+      "path": "pump/delta/_DownLeftHit 3x1.png",
+      "bytes": 109382
+    },
+    {
+      "path": "pump/delta/_blank.png",
+      "bytes": 2792
+    },
+    {
+      "path": "pump/delta/metrics.ini",
+      "bytes": 489,
+      "text": "[NoteDisplay]\nAnimationIsBeatBased=0\n\nTapNoteAnimationLength=0.25\nTapMineAnimationLength=0.25\nTapLiftAnimationLength=0.25\nTapFakeAnimationLength=0.25\nHoldHeadAnimationLength=0.25\nHoldTopCapAnimationLength=0.25\nHoldBottomCapAnimationLength=0.25\nHoldBodyAnimationLength=0.25\nHoldTailAnimationLength=0.25\n\nHoldLetGoGrayPercent=1\n\nFlipHeadAndTailWhenReverse=1\nFlipHoldBodyWhenReverse=1\nTopHoldAnchorWhenReverse=0\nHoldActiveIsAddLayer=0\n\n[Center]\n\n[DownLeft]\n\n[DownRight]\n\n[UpLeft]\n\n[UpRight]\n\n"
+    },
+    {
+      "path": "pump/delta-note/Center Hold Body Active.png",
+      "bytes": 353
+    },
+    {
+      "path": "pump/delta-note/Center Hold BottomCap Active.png",
+      "bytes": 3072
+    },
+    {
+      "path": "pump/delta-note/Center NoteHit.lua",
+      "bytes": 62
+    },
+    {
+      "path": "pump/delta-note/Center Ready Receptor 3x1.png",
+      "bytes": 8710
+    },
+    {
+      "path": "pump/delta-note/Center Tap Note.lua",
+      "bytes": 113
+    },
+    {
+      "path": "pump/delta-note/Center_feet.png",
+      "bytes": 4272
+    },
+    {
+      "path": "pump/delta-note/DownLeft Hold Body Active.png",
+      "bytes": 279
+    },
+    {
+      "path": "pump/delta-note/DownLeft Hold BottomCap Active.png",
+      "bytes": 4344
+    },
+    {
+      "path": "pump/delta-note/DownLeft NoteHit.lua",
+      "bytes": 64
+    },
+    {
+      "path": "pump/delta-note/DownLeft Ready Receptor 3x1.png",
+      "bytes": 7357
+    },
+    {
+      "path": "pump/delta-note/DownLeft Tap Note.lua",
+      "bytes": 115
+    },
+    {
+      "path": "pump/delta-note/DownRight Hold Body Active.png",
+      "bytes": 281
+    },
+    {
+      "path": "pump/delta-note/DownRight Hold BottomCap Active.png",
+      "bytes": 4351
+    },
+    {
+      "path": "pump/delta-note/DownRight NoteHit.lua",
+      "bytes": 83
+    },
+    {
+      "path": "pump/delta-note/DownRight Ready Receptor.lua",
+      "bytes": 163
+    },
+    {
+      "path": "pump/delta-note/DownRight Tap Note.lua",
+      "bytes": 89
+    },
+    {
+      "path": "pump/delta-note/DownRight border.redir",
+      "bytes": 15,
+      "text": "DownLeft border"
+    },
+    {
+      "path": "pump/delta-note/Mine_Base.png",
+      "bytes": 5319
+    },
+    {
+      "path": "pump/delta-note/Mine_Border.png",
+      "bytes": 6350
+    },
+    {
+      "path": "pump/delta-note/Mine_Fill.png",
+      "bytes": 4363
+    },
+    {
+      "path": "pump/delta-note/Mine_Light.png",
+      "bytes": 4601
+    },
+    {
+      "path": "pump/delta-note/Mine_Overlay.png",
+      "bytes": 4793
+    },
+    {
+      "path": "pump/delta-note/UpLeft Explosion.lua",
+      "bytes": 1406
+    },
+    {
+      "path": "pump/delta-note/UpLeft Hold Body Active.png",
+      "bytes": 275
+    },
+    {
+      "path": "pump/delta-note/UpLeft Hold BottomCap Active.png",
+      "bytes": 4574
+    },
+    {
+      "path": "pump/delta-note/UpLeft NoteHit.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta-note/UpLeft Ready Receptor 3x1.png",
+      "bytes": 7436
+    },
+    {
+      "path": "pump/delta-note/UpLeft Receptor.lua",
+      "bytes": 797
+    },
+    {
+      "path": "pump/delta-note/UpLeft Tap Mine.lua",
+      "bytes": 747
+    },
+    {
+      "path": "pump/delta-note/UpLeft Tap Note.lua",
+      "bytes": 113
+    },
+    {
+      "path": "pump/delta-note/UpRight Hold Body Active.png",
+      "bytes": 276
+    },
+    {
+      "path": "pump/delta-note/UpRight Hold BottomCap Active.png",
+      "bytes": 4515
+    },
+    {
+      "path": "pump/delta-note/UpRight NoteHit.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta-note/UpRight Ready Receptor.lua",
+      "bytes": 161
+    },
+    {
+      "path": "pump/delta-note/UpRight Tap Note.lua",
+      "bytes": 109
+    },
+    {
+      "path": "pump/delta-note/UpRight border.redir",
+      "bytes": 13,
+      "text": "UpLeft border"
+    },
+    {
+      "path": "pump/delta-note/_Center Tap Note 6x8.png",
+      "bytes": 163492
+    },
+    {
+      "path": "pump/delta-note/_CenterHit 3x1.png",
+      "bytes": 115594
+    },
+    {
+      "path": "pump/delta-note/_DownLeft Tap Note 6x8.png",
+      "bytes": 45611
+    },
+    {
+      "path": "pump/delta-note/_DownLeftHit 3x1.png",
+      "bytes": 109382
+    },
+    {
+      "path": "pump/delta-note/_UpLeft Tap Note 6x8.png",
+      "bytes": 44748
+    },
+    {
+      "path": "pump/delta-note/_blank.png",
+      "bytes": 2792
+    },
+    {
+      "path": "pump/delta-note/metrics.ini",
+      "bytes": 659,
+      "text": "[NoteDisplay]\nAnimationIsBeatBased=0\n\nTapNoteAnimationLength=0.25\nTapMineAnimationLength=0.25\nTapLiftAnimationLength=0.25\nTapFakeAnimationLength=0.25\nHoldHeadAnimationLength=0.25\nHoldTopCapAnimationLength=0.25\nHoldBottomCapAnimationLength=0.25\nHoldBodyAnimationLength=0.25\nHoldTailAnimationLength=0.25\n\nHoldLetGoGrayPercent=1\n\nFlipHeadAndTailWhenReverse=1\nFlipHoldBodyWhenReverse=1\nTopHoldAnchorWhenReverse=0\nHoldActiveIsAddLayer=0\n\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0.125\n\nHoldHeadNoteColorTextureCoordSpacingX=0\n\nHoldHeadNoteColorTextureCoordSpacingY=0.125\n\n[Center]\n\n\n[DownLeft]\n\n[DownRight]\n\n[UpLeft]\n\n[UpRight]\n\n"
+    },
+    {
+      "path": "pump/delta-note/reminder.txt",
+      "bytes": 54
+    },
+    {
+      "path": "pump/delta-routine-p1/Center Hold Body Active.png",
+      "bytes": 352
+    },
+    {
+      "path": "pump/delta-routine-p1/Center Hold BottomCap Active.png",
+      "bytes": 3161
+    },
+    {
+      "path": "pump/delta-routine-p1/Center Tap Note 6x1.png",
+      "bytes": 20877
+    },
+    {
+      "path": "pump/delta-routine-p1/DownLeft Hold Body Active.png",
+      "bytes": 278
+    },
+    {
+      "path": "pump/delta-routine-p1/DownLeft Hold BottomCap Active.png",
+      "bytes": 4359
+    },
+    {
+      "path": "pump/delta-routine-p1/DownLeft Tap Note 6x1.png",
+      "bytes": 5333
+    },
+    {
+      "path": "pump/delta-routine-p1/DownRight Hold Body Active.png",
+      "bytes": 280
+    },
+    {
+      "path": "pump/delta-routine-p1/DownRight Hold BottomCap Active.png",
+      "bytes": 4379
+    },
+    {
+      "path": "pump/delta-routine-p1/NoteSkin.lua",
+      "bytes": 930
+    },
+    {
+      "path": "pump/delta-routine-p1/UpLeft Hold Body Active.png",
+      "bytes": 274
+    },
+    {
+      "path": "pump/delta-routine-p1/UpLeft Hold BottomCap Active.png",
+      "bytes": 4636
+    },
+    {
+      "path": "pump/delta-routine-p1/UpLeft Tap Note 6x1.png",
+      "bytes": 5207
+    },
+    {
+      "path": "pump/delta-routine-p1/UpRight Hold Body Active.png",
+      "bytes": 276
+    },
+    {
+      "path": "pump/delta-routine-p1/UpRight Hold BottomCap Active.png",
+      "bytes": 4555
+    },
+    {
+      "path": "pump/delta-routine-p1/metrics.ini",
+      "bytes": 31,
+      "text": "[Global]\nFallbackNoteSkin=delta"
+    },
+    {
+      "path": "pump/delta-routine-p2/Center Hold Body Active.png",
+      "bytes": 352
+    },
+    {
+      "path": "pump/delta-routine-p2/Center Hold BottomCap Active.png",
+      "bytes": 3159
+    },
+    {
+      "path": "pump/delta-routine-p2/Center Tap Note 6x1.png",
+      "bytes": 21560
+    },
+    {
+      "path": "pump/delta-routine-p2/DownLeft Hold Body Active.png",
+      "bytes": 278
+    },
+    {
+      "path": "pump/delta-routine-p2/DownLeft Hold BottomCap Active.png",
+      "bytes": 4386
+    },
+    {
+      "path": "pump/delta-routine-p2/DownLeft Tap Note 6x1.png",
+      "bytes": 4942
+    },
+    {
+      "path": "pump/delta-routine-p2/DownRight Hold Body Active.png",
+      "bytes": 280
+    },
+    {
+      "path": "pump/delta-routine-p2/DownRight Hold BottomCap Active.png",
+      "bytes": 4402
+    },
+    {
+      "path": "pump/delta-routine-p2/NoteSkin.lua",
+      "bytes": 930
+    },
+    {
+      "path": "pump/delta-routine-p2/UpLeft Hold Body Active.png",
+      "bytes": 274
+    },
+    {
+      "path": "pump/delta-routine-p2/UpLeft Hold BottomCap Active.png",
+      "bytes": 4602
+    },
+    {
+      "path": "pump/delta-routine-p2/UpLeft Tap Note 6x1.png",
+      "bytes": 5135
+    },
+    {
+      "path": "pump/delta-routine-p2/UpRight Hold Body Active.png",
+      "bytes": 276
+    },
+    {
+      "path": "pump/delta-routine-p2/UpRight Hold BottomCap Active.png",
+      "bytes": 4531
+    },
+    {
+      "path": "pump/delta-routine-p2/metrics.ini",
+      "bytes": 31,
+      "text": "[Global]\nFallbackNoteSkin=delta"
+    },
+    {
+      "path": "pump/frame5p/Center Hold Body active (doubleres).png",
+      "bytes": 2950
+    },
+    {
+      "path": "pump/frame5p/Center Hold BottomCap active (doubleres).png",
+      "bytes": 3903
+    },
+    {
+      "path": "pump/frame5p/Center Outline Receptor.redir",
+      "bytes": 6,
+      "text": "_blank"
+    },
+    {
+      "path": "pump/frame5p/Center Ready Receptor 3x1 (doubleres).png",
+      "bytes": 7838
+    },
+    {
+      "path": "pump/frame5p/Center Tap Note 8x1 (doubleres).png",
+      "bytes": 12370
+    },
+    {
+      "path": "pump/frame5p/DownLeft Hold Body active (doubleres).png",
+      "bytes": 2895
+    },
+    {
+      "path": "pump/frame5p/DownLeft Hold BottomCap active (doubleres).png",
+      "bytes": 3686
+    },
+    {
+      "path": "pump/frame5p/DownLeft Hold TopCap Active (doubleres).png",
+      "bytes": 3159
+    },
+    {
+      "path": "pump/frame5p/DownLeft Ready Receptor 3x1 (doubleres).png",
+      "bytes": 10580
+    },
+    {
+      "path": "pump/frame5p/DownLeft Tap Note 8x1 (doubleres).png",
+      "bytes": 13363
+    },
+    {
+      "path": "pump/frame5p/DownRight Hold Body active (doubleres).png",
+      "bytes": 2894
+    },
+    {
+      "path": "pump/frame5p/DownRight Hold BottomCap active (doubleres).png",
+      "bytes": 3607
+    },
+    {
+      "path": "pump/frame5p/DownRight Hold TopCap Active(doubleres).png",
+      "bytes": 3165
+    },
+    {
+      "path": "pump/frame5p/UpLeft Hold Body active (doubleres).png",
+      "bytes": 2884
+    },
+    {
+      "path": "pump/frame5p/UpLeft Hold BottomCap active (doubleres).png",
+      "bytes": 3625
+    },
+    {
+      "path": "pump/frame5p/UpLeft Hold TopCap (doubleres).png",
+      "bytes": 3130
+    },
+    {
+      "path": "pump/frame5p/UpLeft Ready Receptor 3x1 (doubleres).png",
+      "bytes": 10703
+    },
+    {
+      "path": "pump/frame5p/UpLeft Tap Note 8x1 (doubleres).png",
+      "bytes": 14484
+    },
+    {
+      "path": "pump/frame5p/UpRight Hold Body active (doubleres).png",
+      "bytes": 2884
+    },
+    {
+      "path": "pump/frame5p/UpRight Hold BottomCap active (doubleres).png",
+      "bytes": 3608
+    },
+    {
+      "path": "pump/frame5p/UpRight Hold TopCap (doubleres).png",
+      "bytes": 3142
+    },
+    {
+      "path": "pump/frame5p/metrics.ini",
+      "bytes": 287,
+      "text": "[NoteDisplay]\nTapNoteAnimationLength=0.333\nTapMineAnimationLength=0.333\nTapLiftAnimationLength=0.333\nTapFakeAnimationLength=0.333\nHoldHeadAnimationLength=0.333\nHoldTopCapAnimationLength=0.333\nHoldBottomCapAnimationLength=0.333\nHoldBodyAnimationLength=0.333\nHoldTailAnimationLength=0.333\n"
+    },
+    {
+      "path": "pump/newextra/Center Hold Body Active 6x1.png",
+      "bytes": 1100
+    },
+    {
+      "path": "pump/newextra/Center Hold BottomCap Active 6x1.png",
+      "bytes": 18264
+    },
+    {
+      "path": "pump/newextra/Center Outline Receptor.png",
+      "bytes": 1231
+    },
+    {
+      "path": "pump/newextra/Center Ready Receptor 1x3.png",
+      "bytes": 9469
+    },
+    {
+      "path": "pump/newextra/Center Tap Note 3x2.png",
+      "bytes": 17245
+    },
+    {
+      "path": "pump/newextra/DownLeft Hold Body Active 6x1.png",
+      "bytes": 838
+    },
+    {
+      "path": "pump/newextra/DownLeft Hold BottomCap Active 6x1.png",
+      "bytes": 13504
+    },
+    {
+      "path": "pump/newextra/DownLeft Ready Receptor 1x3.png",
+      "bytes": 10506
+    },
+    {
+      "path": "pump/newextra/DownLeft Tap Note 3x2.png",
+      "bytes": 12496
+    },
+    {
+      "path": "pump/newextra/DownRight Hold Body Active 6x1.png",
+      "bytes": 855
+    },
+    {
+      "path": "pump/newextra/DownRight Hold BottomCap Active 6x1.png",
+      "bytes": 13743
+    },
+    {
+      "path": "pump/newextra/UpLeft Hold Body Active 6x1.png",
+      "bytes": 842
+    },
+    {
+      "path": "pump/newextra/UpLeft Hold BottomCap Active 6x1.png",
+      "bytes": 10787
+    },
+    {
+      "path": "pump/newextra/UpLeft Ready Receptor 1x3.png",
+      "bytes": 9817
+    },
+    {
+      "path": "pump/newextra/UpLeft Tap Note 3x2.png",
+      "bytes": 11828
+    },
+    {
+      "path": "pump/newextra/UpRight Hold Body Active 6x1.png",
+      "bytes": 849
+    },
+    {
+      "path": "pump/newextra/UpRight Hold BottomCap Active 6x1.png",
+      "bytes": 11821
+    },
+    {
+      "path": "pump/pad/Center Hold Body Active 6x1.png",
+      "bytes": 747
+    },
+    {
+      "path": "pump/pad/Center Hold BottomCap Active 6x1.png",
+      "bytes": 10118
+    },
+    {
+      "path": "pump/pad/Center Outline Receptor.png",
+      "bytes": 1692
+    },
+    {
+      "path": "pump/pad/Center Ready Receptor 1x3.png",
+      "bytes": 9504
+    },
+    {
+      "path": "pump/pad/Center Roll Head Active 3x2.png",
+      "bytes": 25825
+    },
+    {
+      "path": "pump/pad/Center Tap Note 3x2.png",
+      "bytes": 23481
+    },
+    {
+      "path": "pump/pad/DownLeft Hold Body Active 6x1.png",
+      "bytes": 477
+    },
+    {
+      "path": "pump/pad/DownLeft Hold BottomCap Active 6x1.png",
+      "bytes": 2541
+    },
+    {
+      "path": "pump/pad/DownLeft Ready Receptor 1x3.png",
+      "bytes": 5586
+    },
+    {
+      "path": "pump/pad/DownLeft Roll Head Active 3x2.png",
+      "bytes": 15051
+    },
+    {
+      "path": "pump/pad/DownLeft Tap Note 3x2.png",
+      "bytes": 3832
+    },
+    {
+      "path": "pump/pad/DownRight Hold Body Active 6x1.png",
+      "bytes": 509
+    },
+    {
+      "path": "pump/pad/DownRight Hold BottomCap Active 6x1.png",
+      "bytes": 2672
+    },
+    {
+      "path": "pump/pad/DownRight Roll Head Active 3x2.png",
+      "bytes": 15820
+    },
+    {
+      "path": "pump/pad/UpLeft Hold Body Active 6x1.png",
+      "bytes": 420
+    },
+    {
+      "path": "pump/pad/UpLeft Hold BottomCap Active 6x1.png",
+      "bytes": 2741
+    },
+    {
+      "path": "pump/pad/UpLeft Ready Receptor 1x3.png",
+      "bytes": 5464
+    },
+    {
+      "path": "pump/pad/UpLeft Roll Head Active 3x2.png",
+      "bytes": 14662
+    },
+    {
+      "path": "pump/pad/UpLeft Tap Note 3x2.png",
+      "bytes": 2902
+    },
+    {
+      "path": "pump/pad/UpRight Hold Body Active 6x1.png",
+      "bytes": 455
+    },
+    {
+      "path": "pump/pad/UpRight Hold BottomCap Active 6x1.png",
+      "bytes": 2313
+    },
+    {
+      "path": "pump/pad/UpRight Roll Head Active 3x2.png",
+      "bytes": 14659
+    },
+    {
+      "path": "pump/rhythm/Center Hold Body Active 6x1.png",
+      "bytes": 3847
+    },
+    {
+      "path": "pump/rhythm/Center Hold BottomCap Active 6x1.png",
+      "bytes": 21137
+    },
+    {
+      "path": "pump/rhythm/Center Ready Receptor 1x3.png",
+      "bytes": 11839
+    },
+    {
+      "path": "pump/rhythm/Center Tap Note.lua",
+      "bytes": 113
+    },
+    {
+      "path": "pump/rhythm/DownLeft Hold Body Active 6x1.png",
+      "bytes": 3222
+    },
+    {
+      "path": "pump/rhythm/DownLeft Hold BottomCap Active 6x1.png",
+      "bytes": 11866
+    },
+    {
+      "path": "pump/rhythm/DownLeft Ready Receptor 1x3.png",
+      "bytes": 8448
+    },
+    {
+      "path": "pump/rhythm/DownLeft Tap Note.lua",
+      "bytes": 115
+    },
+    {
+      "path": "pump/rhythm/DownRight Hold Body Active 6x1.png",
+      "bytes": 3227
+    },
+    {
+      "path": "pump/rhythm/DownRight Hold BottomCap Active 6x1.png",
+      "bytes": 11858
+    },
+    {
+      "path": "pump/rhythm/UpLeft Hold Body Active 6x1.png",
+      "bytes": 3226
+    },
+    {
+      "path": "pump/rhythm/UpLeft Hold BottomCap Active 6x1.png",
+      "bytes": 10143
+    },
+    {
+      "path": "pump/rhythm/UpLeft Ready Receptor 1x3.png",
+      "bytes": 8218
+    },
+    {
+      "path": "pump/rhythm/UpLeft Tap Note.lua",
+      "bytes": 113
+    },
+    {
+      "path": "pump/rhythm/UpRight Hold Body Active 6x1.png",
+      "bytes": 3232
+    },
+    {
+      "path": "pump/rhythm/UpRight Hold BottomCap Active 6x1.png",
+      "bytes": 10306
+    },
+    {
+      "path": "pump/rhythm/_Center Tap Note 6x8.png",
+      "bytes": 226813
+    },
+    {
+      "path": "pump/rhythm/_DownLeft Tap Note 6x8.png",
+      "bytes": 43090
+    },
+    {
+      "path": "pump/rhythm/_UpLeft Tap Note 6x8.png",
+      "bytes": 43681
+    },
+    {
+      "path": "pump/rhythm/metrics.ini",
+      "bytes": 179,
+      "text": "[NoteDisplay]\nTapNoteNoteColorTextureCoordSpacingX=0\nTapNoteNoteColorTextureCoordSpacingY=0.125\nHoldHeadNoteColorTextureCoordSpacingX=0\nHoldHeadNoteColorTextureCoordSpacingY=0.125"
+    },
+    {
+      "path": "pump/simple/Center Hold Body active.png",
+      "bytes": 242
+    },
+    {
+      "path": "pump/simple/Center Hold BottomCap active.png",
+      "bytes": 938
+    },
+    {
+      "path": "pump/simple/Center Outline Receptor.redir",
+      "bytes": 6,
+      "text": "_blank"
+    },
+    {
+      "path": "pump/simple/Center Ready Receptor 3x1.png",
+      "bytes": 2179
+    },
+    {
+      "path": "pump/simple/Center Tap Note 8x1.png",
+      "bytes": 3365
+    },
+    {
+      "path": "pump/simple/DownLeft Hold Body active.png",
+      "bytes": 255
+    },
+    {
+      "path": "pump/simple/DownLeft Hold BottomCap active.png",
+      "bytes": 1459
+    },
+    {
+      "path": "pump/simple/DownLeft Ready Receptor 3x1.png",
+      "bytes": 3383
+    },
+    {
+      "path": "pump/simple/DownLeft Tap Note 8x1.png",
+      "bytes": 6194
+    },
+    {
+      "path": "pump/simple/DownRight Hold Body active.png",
+      "bytes": 257
+    },
+    {
+      "path": "pump/simple/DownRight Hold BottomCap active.png",
+      "bytes": 1347
+    },
+    {
+      "path": "pump/simple/UpLeft Hold Body active.png",
+      "bytes": 261
+    },
+    {
+      "path": "pump/simple/UpLeft Hold BottomCap active.png",
+      "bytes": 1604
+    },
+    {
+      "path": "pump/simple/UpLeft Ready Receptor 3x1.png",
+      "bytes": 3363
+    },
+    {
+      "path": "pump/simple/UpLeft Tap Note 8x1.png",
+      "bytes": 5792
+    },
+    {
+      "path": "pump/simple/UpRight Hold Body active.png",
+      "bytes": 260
+    },
+    {
+      "path": "pump/simple/UpRight Hold BottomCap active.png",
+      "bytes": 1661
+    },
+    {
+      "path": "pump/simple/metrics.ini",
+      "bytes": 287,
+      "text": "[NoteDisplay]\nTapNoteAnimationLength=0.333\nTapMineAnimationLength=0.333\nTapLiftAnimationLength=0.333\nTapFakeAnimationLength=0.333\nHoldHeadAnimationLength=0.333\nHoldTopCapAnimationLength=0.333\nHoldBottomCapAnimationLength=0.333\nHoldBodyAnimationLength=0.333\nHoldTailAnimationLength=0.333\n"
+    },
+    {
+      "path": "techno/default/metrics.ini",
+      "bytes": 33,
+      "text": "[Global]\nFallbackNoteSkin=_Editor"
+    }
+  ]
+}
