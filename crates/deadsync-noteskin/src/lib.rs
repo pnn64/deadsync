@@ -37,6 +37,9 @@ pub use explosion::{
     itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
     parse_explosion_animation,
 };
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub use mine::mine_bench_support;
 pub use model::{ItgModelSlotPlan, itg_load_model_slots_from_path};
 pub use parts::{
     ITG_DANCE_COL_SPACING, NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType,

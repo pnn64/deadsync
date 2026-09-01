@@ -1,8 +1,9 @@
 use deadsync_noteskin::itg::{IniData, bench_support};
 use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
-    NotePartTextureTranslate, explosion_bench_support, model_draw_bench_support,
-    receptor_bench_support, sprite_math_bench_support, uv_color_bench_support,
+    NotePartTextureTranslate, explosion_bench_support, mine_bench_support,
+    model_draw_bench_support, receptor_bench_support, sprite_math_bench_support,
+    uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -279,6 +280,49 @@ fn run_allocation_case(title: &str, old_op: fn(usize) -> u64, new_op: fn(usize) 
     );
 }
 
+fn run_gradient_case(title: &str, old_op: fn(usize) -> u64, new_op: fn(usize) -> u64) {
+    const EVALUATIONS: usize = 1;
+    const OPERATIONS: usize = 8;
+    assert_eq!(
+        old_op(EVALUATIONS),
+        new_op(EVALUATIONS),
+        "{title} behavior diverged before measurement"
+    );
+    let old = measure(OPERATIONS, EVALUATIONS, || old_op(EVALUATIONS));
+    let new = measure(OPERATIONS, EVALUATIONS, || new_op(EVALUATIONS));
+    print_pair(title, &old, &new);
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title} median latency did not improve"
+    );
+    assert!(
+        new.p95_ns < old.p95_ns,
+        "{title} p95 latency did not improve"
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{title} median CPU cycles did not improve"
+        );
+    }
+    assert!(
+        new.alloc.allocs <= old.alloc.allocs,
+        "{title} allocations increased"
+    );
+    assert!(
+        new.alloc.reallocs <= old.alloc.reallocs,
+        "{title} reallocations increased"
+    );
+    assert!(
+        new.alloc.frees <= old.alloc.frees,
+        "{title} frees increased"
+    );
+    assert!(
+        new.alloc.churn() <= old.alloc.churn(),
+        "{title} memory churn increased"
+    );
+}
+
 fn fixture() -> String {
     let mut raw = String::with_capacity(16 * 1024);
     raw.push_str("GlobalOnly = before-section\n[NoteDisplay]\n");
@@ -524,6 +568,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_MINE_GRADIENT_ONLY").is_some() {
+        run_gradient_case(
+            "noteskin cached mine-gradient radial geometry",
+            mine_bench_support::repeated_radial_geometry_old,
+            mine_bench_support::cached_radial_geometry_new,
+        );
+        run_gradient_case(
+            "noteskin prequantized mine-gradient RGB",
+            mine_bench_support::per_pixel_rgb_quantization_old,
+            mine_bench_support::prequantized_rgb_new,
+        );
+        run_gradient_case(
+            "noteskin prequantized mine-gradient interior alpha",
+            mine_bench_support::per_pixel_alpha_quantization_old,
+            mine_bench_support::prequantized_interior_alpha_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_DIRECT_EXPLOSION_ONLY").is_some() {
         run_allocation_case(
             "noteskin stack-backed direct explosion names",

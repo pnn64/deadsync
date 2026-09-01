@@ -1,5 +1,6 @@
 use image::{Rgba, RgbaImage};
-use std::hash::Hasher;
+use smallvec::SmallVec;
+use std::{hash::Hasher, sync::LazyLock};
 use twox_hash::XxHash64;
 
 pub const MINE_GRADIENT_SAMPLES: usize = 64;
@@ -7,6 +8,24 @@ pub const MINE_GRADIENT_FRAME_SIZE: u32 = 64;
 
 const MINE_FILL_LAYERS: usize = 32;
 const MINE_GRADIENT_KEY_PREFIX: &str = "generated/noteskins/mine_fill";
+const MINE_GRADIENT_PIXEL_COUNT: usize =
+    MINE_GRADIENT_FRAME_SIZE as usize * MINE_GRADIENT_FRAME_SIZE as usize;
+const MINE_GRADIENT_OUTSIDE_LAYER: u8 = u8::MAX;
+
+struct MineGradientProfile {
+    layers: [u8; MINE_GRADIENT_PIXEL_COUNT],
+    edge_alpha: [f32; MINE_GRADIENT_PIXEL_COUNT],
+}
+
+#[derive(Clone, Copy)]
+struct MineGradientColor {
+    rgb: [u8; 3],
+    alpha: f32,
+    interior_alpha: u8,
+}
+
+static MINE_GRADIENT_PROFILE: LazyLock<MineGradientProfile> =
+    LazyLock::new(build_mine_gradient_profile);
 
 pub fn mine_fill_slots<T, U>(
     mines: &[Option<T>],
@@ -66,6 +85,76 @@ fn mine_grad_byte(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
+fn build_mine_gradient_profile() -> MineGradientProfile {
+    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
+    let center = (frame_size as f32 - 1.0) * 0.5;
+    let inv_radius = if center > f32::EPSILON {
+        1.0 / center
+    } else {
+        0.0
+    };
+    let mut layers = [MINE_GRADIENT_OUTSIDE_LAYER; MINE_GRADIENT_PIXEL_COUNT];
+    let mut edge_alpha = [0.0; MINE_GRADIENT_PIXEL_COUNT];
+    for y in 0..frame_size {
+        let dy = y as f32 - center;
+        for x in 0..frame_size {
+            let dx = x as f32 - center;
+            let radius = (dx.mul_add(dx, dy * dy)).sqrt() * inv_radius;
+            if radius >= 1.0 {
+                continue;
+            }
+            let index = y as usize * frame_size as usize + x as usize;
+            layers[index] = ((radius * MINE_FILL_LAYERS as f32).ceil() as usize)
+                .saturating_sub(1)
+                .min(MINE_FILL_LAYERS - 1) as u8;
+            edge_alpha[index] = ((1.0 - radius) * center).clamp(0.0, 1.0);
+        }
+    }
+    MineGradientProfile { layers, edge_alpha }
+}
+
+fn mine_gradient_colors(
+    colors: &[[f32; 4]],
+) -> SmallVec<[MineGradientColor; MINE_GRADIENT_SAMPLES]> {
+    colors
+        .iter()
+        .map(|color| MineGradientColor {
+            rgb: [
+                mine_grad_byte(color[0]),
+                mine_grad_byte(color[1]),
+                mine_grad_byte(color[2]),
+            ],
+            alpha: color[3],
+            interior_alpha: mine_grad_byte(color[3]),
+        })
+        .collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+#[inline(always)]
+fn mine_gradient_pixel_reference(color: MineGradientColor, edge_alpha: f32) -> [u8; 4] {
+    [
+        color.rgb[0],
+        color.rgb[1],
+        color.rgb[2],
+        mine_grad_byte(color.alpha * edge_alpha),
+    ]
+}
+
+#[inline(always)]
+fn mine_gradient_pixel(color: MineGradientColor, edge_alpha: f32) -> [u8; 4] {
+    [
+        color.rgb[0],
+        color.rgb[1],
+        color.rgb[2],
+        if edge_alpha == 1.0 {
+            color.interior_alpha
+        } else {
+            mine_grad_byte(color.alpha * edge_alpha)
+        },
+    ]
+}
+
 #[must_use]
 pub fn mine_gradient_texture_key(colors: &[[f32; 4]]) -> String {
     let mut hasher = XxHash64::default();
@@ -82,6 +171,43 @@ pub fn mine_gradient_texture_key(colors: &[[f32; 4]]) -> String {
 
 #[must_use]
 pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
+    assert!(
+        !colors.is_empty(),
+        "mine gradient requires at least one color"
+    );
+    let frame_count = colors.len();
+    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
+    let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
+    let colors = mine_gradient_colors(colors);
+    let profile = &*MINE_GRADIENT_PROFILE;
+    for frame in 0..frame_count {
+        let x_offset = frame as u32 * frame_size;
+        for y in 0..frame_size {
+            for x in 0..frame_size {
+                let profile_index = y as usize * frame_size as usize + x as usize;
+                let layer = profile.layers[profile_index];
+                if layer == MINE_GRADIENT_OUTSIDE_LAYER {
+                    continue;
+                }
+                let color_index =
+                    (frame + colors.len() - (usize::from(layer) % colors.len())) % colors.len();
+                image.put_pixel(
+                    x_offset + x,
+                    y,
+                    Rgba(mine_gradient_pixel(
+                        colors[color_index],
+                        profile.edge_alpha[profile_index],
+                    )),
+                );
+            }
+        }
+    }
+
+    image
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn mine_gradient_texture_reference(colors: &[[f32; 4]]) -> RgbaImage {
     let frame_count = colors.len().max(1);
     let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
     let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
@@ -123,6 +249,75 @@ pub fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
         }
     }
 
+    image
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn mine_gradient_texture_profiled_reference(colors: &[[f32; 4]]) -> RgbaImage {
+    let frame_count = colors.len().max(1);
+    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
+    let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
+    let profile = &*MINE_GRADIENT_PROFILE;
+    for frame in 0..frame_count {
+        let x_offset = frame as u32 * frame_size;
+        for y in 0..frame_size {
+            for x in 0..frame_size {
+                let profile_index = y as usize * frame_size as usize + x as usize;
+                let layer = profile.layers[profile_index];
+                if layer == MINE_GRADIENT_OUTSIDE_LAYER {
+                    image.put_pixel(x_offset + x, y, Rgba([0, 0, 0, 0]));
+                    continue;
+                }
+                let color_index =
+                    (frame + colors.len() - (usize::from(layer) % colors.len())) % colors.len();
+                let color = colors[color_index];
+                image.put_pixel(
+                    x_offset + x,
+                    y,
+                    Rgba([
+                        mine_grad_byte(color[0]),
+                        mine_grad_byte(color[1]),
+                        mine_grad_byte(color[2]),
+                        mine_grad_byte(color[3] * profile.edge_alpha[profile_index]),
+                    ]),
+                );
+            }
+        }
+    }
+    image
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn mine_gradient_texture_quantized_reference(colors: &[[f32; 4]]) -> RgbaImage {
+    let frame_count = colors.len().max(1);
+    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
+    let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
+    let quantized = mine_gradient_colors(colors);
+    let profile = &*MINE_GRADIENT_PROFILE;
+    for frame in 0..frame_count {
+        let x_offset = frame as u32 * frame_size;
+        for y in 0..frame_size {
+            for x in 0..frame_size {
+                let profile_index = y as usize * frame_size as usize + x as usize;
+                let layer = profile.layers[profile_index];
+                if layer == MINE_GRADIENT_OUTSIDE_LAYER {
+                    image.put_pixel(x_offset + x, y, Rgba([0, 0, 0, 0]));
+                    continue;
+                }
+                let color_index = (frame + quantized.len()
+                    - (usize::from(layer) % quantized.len()))
+                    % quantized.len();
+                image.put_pixel(
+                    x_offset + x,
+                    y,
+                    Rgba(mine_gradient_pixel_reference(
+                        quantized[color_index],
+                        profile.edge_alpha[profile_index],
+                    )),
+                );
+            }
+        }
+    }
     image
 }
 
@@ -288,6 +483,90 @@ pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Optio
     Some(samples)
 }
 
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+pub mod mine_bench_support {
+    use std::{hint::black_box, sync::OnceLock};
+
+    use image::RgbaImage;
+
+    use super::{
+        MINE_GRADIENT_SAMPLES, mine_gradient_texture, mine_gradient_texture_profiled_reference,
+        mine_gradient_texture_quantized_reference, mine_gradient_texture_reference,
+    };
+
+    type Renderer = fn(&[[f32; 4]]) -> RgbaImage;
+
+    fn colors() -> &'static [[f32; 4]; MINE_GRADIENT_SAMPLES] {
+        static COLORS: OnceLock<[[f32; 4]; MINE_GRADIENT_SAMPLES]> = OnceLock::new();
+        COLORS.get_or_init(|| {
+            let mut colors = [[0.0; 4]; MINE_GRADIENT_SAMPLES];
+            for (index, color) in colors.iter_mut().enumerate() {
+                let phase = index as f32 / (MINE_GRADIENT_SAMPLES - 1) as f32;
+                *color = [
+                    phase,
+                    (phase * 3.0).fract(),
+                    1.0 - phase,
+                    0.25 + (index % 4) as f32 * 0.25,
+                ];
+            }
+            colors
+        })
+    }
+
+    fn image_checksum(image: &RgbaImage, mut checksum: u64) -> u64 {
+        checksum = checksum
+            .wrapping_mul(131)
+            .wrapping_add(u64::from(image.width()))
+            .wrapping_mul(131)
+            .wrapping_add(u64::from(image.height()));
+        image
+            .as_raw()
+            .iter()
+            .step_by(251)
+            .fold(checksum, |checksum, byte| {
+                checksum.wrapping_mul(131).wrapping_add(u64::from(*byte))
+            })
+    }
+
+    fn render(evaluations: usize, renderer: Renderer) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let image = renderer(black_box(colors()));
+            image_checksum(black_box(&image), checksum)
+        })
+    }
+
+    #[must_use]
+    pub fn repeated_radial_geometry_old(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture_reference)
+    }
+
+    #[must_use]
+    pub fn cached_radial_geometry_new(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture_profiled_reference)
+    }
+
+    #[must_use]
+    pub fn per_pixel_rgb_quantization_old(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture_profiled_reference)
+    }
+
+    #[must_use]
+    pub fn prequantized_rgb_new(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture_quantized_reference)
+    }
+
+    #[must_use]
+    pub fn per_pixel_alpha_quantization_old(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture_quantized_reference)
+    }
+
+    #[must_use]
+    pub fn prequantized_interior_alpha_new(evaluations: usize) -> u64 {
+        render(evaluations, mine_gradient_texture)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -392,6 +671,65 @@ mod tests {
         );
         assert_eq!(image.height(), MINE_GRADIENT_FRAME_SIZE);
         assert_eq!(image.get_pixel(0, 0), &Rgba([0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn cached_mine_gradient_geometry_is_pixel_exact_for_varied_frame_counts() {
+        for frame_count in [1, 2, 17, MINE_GRADIENT_SAMPLES] {
+            let colors = (0..frame_count)
+                .map(|index| {
+                    let phase = index as f32 / frame_count as f32;
+                    [phase, 1.0 - phase, (phase * 5.0).fract(), 0.75]
+                })
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                mine_gradient_texture_profiled_reference(&colors),
+                mine_gradient_texture_reference(&colors),
+                "profiled pixels changed for {frame_count} frames"
+            );
+        }
+    }
+
+    #[test]
+    fn prequantized_mine_gradient_rgb_preserves_clamping_and_alpha() {
+        let colors = [
+            [-0.5, 0.5, 1.5, 1.25],
+            [f32::INFINITY, f32::NEG_INFINITY, 0.499, -0.25],
+            [0.125, 0.875, 0.333, 0.5],
+        ];
+
+        assert_eq!(
+            mine_gradient_texture_quantized_reference(&colors),
+            mine_gradient_texture_profiled_reference(&colors)
+        );
+    }
+
+    #[test]
+    fn prequantized_mine_gradient_alpha_preserves_horizontal_atlas_layout() {
+        let colors = (0..MINE_GRADIENT_SAMPLES)
+            .map(|index| {
+                let phase = index as f32 / (MINE_GRADIENT_SAMPLES - 1) as f32;
+                [phase, 0.25, 1.0 - phase, 1.0]
+            })
+            .collect::<Vec<_>>();
+        let current = mine_gradient_texture(&colors);
+        let reference = mine_gradient_texture_quantized_reference(&colors);
+
+        assert_eq!(current, reference);
+        for (frame, color) in colors.iter().enumerate() {
+            let x = frame as u32 * MINE_GRADIENT_FRAME_SIZE + MINE_GRADIENT_FRAME_SIZE / 2;
+            let y = MINE_GRADIENT_FRAME_SIZE / 2;
+            assert_eq!(
+                current.get_pixel(x, y),
+                &Rgba([
+                    mine_grad_byte(color[0]),
+                    mine_grad_byte(color[1]),
+                    mine_grad_byte(color[2]),
+                    255,
+                ])
+            );
+        }
     }
 
     #[test]
