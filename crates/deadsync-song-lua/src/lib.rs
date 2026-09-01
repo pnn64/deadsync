@@ -105,17 +105,17 @@ pub use lua_util::{
     capture_indexed_actor_function_blocks, capture_overlay_compile_actor_function_action_blocks,
     capture_overlay_compile_actor_function_eases, capture_overlay_function_eases,
     capture_scope_actor_pointers, capture_scope_actor_tables, capture_scope_snapshots,
-    capture_texture_rect, classify_function_ease_probe, collect_aft_capture_names,
-    collect_indexed_actor_capture_blocks, collect_tracked_capture_blocks_for_indices,
-    compile_note_column_pos_function_ease, compile_overlay_compile_actor_function_action,
-    copy_dummy_actor_tags, create_actor_child_group, create_actorframe_class_table,
-    create_bool_array, create_color_constants_table, create_debug_table, create_dummy_actor,
-    create_life_meter_table, create_loader_function, create_media_actor, create_music_wheel_table,
-    create_named_actor, create_named_child_actor, create_named_text_actor,
-    create_note_column_actor, create_note_column_spline_handler, create_note_field_actor,
-    create_option_row_table, create_owned_string_array, create_score_display_percent_actor,
-    create_score_percent_text_actor, create_screen_timer_actor, create_sprite_class_table,
-    create_string_array, create_texture_proxy, create_theme_path_actor,
+    capture_stable_cross_actor_message_commands, capture_texture_rect,
+    classify_function_ease_probe, collect_aft_capture_names, collect_indexed_actor_capture_blocks,
+    collect_tracked_capture_blocks_for_indices, compile_note_column_pos_function_ease,
+    compile_overlay_compile_actor_function_action, copy_dummy_actor_tags, create_actor_child_group,
+    create_actorframe_class_table, create_bool_array, create_color_constants_table,
+    create_debug_table, create_dummy_actor, create_life_meter_table, create_loader_function,
+    create_media_actor, create_music_wheel_table, create_named_actor, create_named_child_actor,
+    create_named_text_actor, create_note_column_actor, create_note_column_spline_handler,
+    create_note_field_actor, create_option_row_table, create_owned_string_array,
+    create_score_display_percent_actor, create_score_percent_text_actor, create_screen_timer_actor,
+    create_sprite_class_table, create_string_array, create_texture_proxy, create_theme_path_actor,
     create_top_screen_player_actor, create_top_screen_score_actor,
     create_top_screen_song_meter_display_actor, create_top_screen_table,
     create_top_screen_theme_actor, create_underlay_theme_actor, crop_actor_to,
@@ -326,6 +326,7 @@ pub const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
+pub const SONG_LUA_SUPPRESS_BROADCAST_KEY: &str = "__songlua_suppress_broadcast_dispatch";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 pub const SONG_LUA_SOUND_CALLS_KEY: &str = "__songlua_sound_calls";
 pub const SONG_LUA_PLAYER_OPTIONS_KEYS: [&str; LUA_PLAYERS] =
@@ -4081,6 +4082,7 @@ pub fn ensure_overlay_arrow_visual<NoteskinSlot, ModelVertex, TextAttr>(
     };
     overlays.push(SongLuaOverlayCompileActor {
         table: create_dummy_actor(lua, "Model").map_err(|err| err.to_string())?,
+        message_sounds: Vec::new(),
         actor: SongLuaOverlayActor {
             kind,
             name: None,
@@ -9328,6 +9330,152 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn compile_song_lua_schedules_message_sound_calls() {
+        let song_dir = test_dir("message-sound-singleton");
+        fs::write(song_dir.join("slap.ogg"), b"not decoded during compile").unwrap();
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions={{4, "GoatSlap", true}}
+return Def.ActorFrame{
+    Def.ActorFrame{
+        GoatSlapMessageCommand=function(self)
+            SOUND:PlayOnce("slap.ogg")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Message Sound Singleton"),
+        )
+        .unwrap();
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.beat == 4.0 && event.message == "GoatSlap")
+        );
+        let sound = compiled
+            .overlays
+            .iter()
+            .find(|overlay| matches!(overlay.kind, SongLuaOverlayKind::Sound { .. }))
+            .expect("message sound call should compile into a sound actor");
+        let SongLuaOverlayKind::Sound { sound_path } = &sound.kind else {
+            unreachable!();
+        };
+        assert_eq!(sound_path, &song_dir.join("slap.ogg"));
+        let command = sound
+            .message_commands
+            .iter()
+            .find(|command| command.message == "GoatSlap")
+            .expect("message sound actor should listen for its source message");
+        assert_eq!(command.blocks[0].delta.sound_play, Some(true));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_stable_cross_actor_messages() {
+        let song_dir = test_dir("stable-cross-actor-message");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target=self end,
+    },
+    Def.ActorFrame{
+        Name="Controller",
+        ZapMessageCommand=function(self)
+            target:sleep(0.5):linear(0.1):zoom(1.2)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Stable Cross Actor Message"),
+        )
+        .unwrap();
+        let target = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some("Target"))
+            .expect("target overlay should compile");
+        let command = target
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Zap")
+            .expect("stable cross-actor message should move to its target");
+        let block = command.blocks.last().expect("zoom tween should compile");
+        assert_eq!(block.start, 0.5);
+        assert_eq!(block.duration, 0.1);
+        assert_eq!(block.delta.zoom, Some(1.2));
+    }
+
+    #[test]
+    fn compile_song_lua_reports_stateful_cross_actor_messages() {
+        let song_dir = test_dir("stateful-cross-actor-message");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local targets={}
+local cursor=1
+return Def.ActorFrame{
+    Def.Quad{
+        Name="TargetA",
+        InitCommand=function(self) targets[1]=self end,
+    },
+    Def.Quad{
+        Name="TargetB",
+        InitCommand=function(self) targets[2]=self end,
+    },
+    Def.ActorFrame{
+        Name="Controller",
+        FireMessageCommand=function(self)
+            targets[cursor]:x(cursor*10)
+            cursor=cursor%2+1
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Stateful Cross Actor Message"),
+        )
+        .unwrap();
+        assert!(compiled.overlays.iter().all(|actor| {
+            actor.name.as_deref().is_none_or(|name| {
+                !name.starts_with("Target")
+                    || actor
+                        .message_commands
+                        .iter()
+                        .all(|command| command.message != "Fire")
+            })
+        }));
+        assert!(
+            compiled
+                .info
+                .skipped_message_command_captures
+                .iter()
+                .any(|detail| detail.contains("FireMessageCommand changes cross-actor"))
+        );
+    }
+
+    #[test]
     fn compile_song_lua_preserves_hidden_gameplay_layers() {
         let song_dir = test_dir("hidden-gameplay-layers");
         let entry = song_dir.join("default.lua");
@@ -14389,6 +14537,80 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_preserves_direct_effects_with_broadcasts() {
+        let song_dir = test_dir("broadcast-and-direct-function-action");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local direct
+mod_actions = {
+    {2, function()
+        MESSAGEMAN:Broadcast("Flash")
+        direct:x(99)
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        FlashMessageCommand=function(self)
+            self:diffusealpha(0.5)
+        end,
+    },
+    Def.Quad{
+        InitCommand=function(self)
+            direct = self
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Broadcast And Direct Function Action"),
+        )
+        .unwrap();
+        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.message == "Flash" && event.beat == 2.0)
+        );
+        let generated = compiled
+            .messages
+            .iter()
+            .find(|event| event.message.starts_with("__songlua_overlay_fn_action_"))
+            .expect("direct actor effect should have a generated message");
+        let flash_actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| {
+                actor
+                    .message_commands
+                    .iter()
+                    .any(|command| command.message == "Flash")
+            })
+            .expect("Flash listener should compile");
+        assert!(
+            flash_actor
+                .message_commands
+                .iter()
+                .all(|command| command.message != generated.message)
+        );
+        let direct_block = compiled
+            .overlays
+            .iter()
+            .flat_map(|actor| &actor.message_commands)
+            .find(|command| command.message == generated.message)
+            .and_then(|command| command.blocks.first())
+            .expect("direct actor effect should compile separately from the broadcast");
+        assert_eq!(direct_block.delta.x, Some(99.0));
+    }
+
+    #[test]
     fn compile_song_lua_accepts_side_effect_only_function_actions() {
         let song_dir = test_dir("function-action-side-effects");
         let entry = song_dir.join("default.lua");
@@ -17110,7 +17332,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn compile_song_lua_exposes_fallback_theme_utility_helpers() {
-        let song_dir = test_dir("theme-utility-helpers");
+        let song_dir = test_dir("fallback-theme-utility-helpers");
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
@@ -18732,6 +18954,7 @@ end
         let root = dummy_actor(&lua, "ActorFrame").unwrap();
         let mut overlays = vec![SongLuaOverlayCompileActor {
             table: root,
+            message_sounds: Vec::new(),
             actor: SongLuaOverlayActor {
                 kind: SongLuaOverlayKind::<(), (), ()>::ActorFrame,
                 name: None,

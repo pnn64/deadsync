@@ -1,11 +1,11 @@
 use deadsync_assets::song_lua::{
-    compile_song_lua_layers, CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod,
+    CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayCommandBlock,
+    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua_layers,
 };
-use deadsync_simfile::song::{parse_song_meta_file, ParseSongOptions};
+use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -31,6 +31,7 @@ struct NativeTrace {
     draw_orders: Vec<NativeDrawOrder>,
     end_position: NativePosition,
     display: NativeDisplay,
+    fixture_context: NativeFixtureContext,
 }
 
 #[derive(Deserialize)]
@@ -86,7 +87,10 @@ struct NativeTweenTrack {
 #[derive(Deserialize)]
 struct NativeTweenSegment {
     enqueue_seq: u64,
+    beat: f32,
     duration: f32,
+    #[serde(default)]
+    implicit: bool,
     #[serde(default)]
     operations: Vec<NativeTweenOperation>,
 }
@@ -111,13 +115,32 @@ struct NativeDisplay {
     logical_height: f32,
 }
 
+#[derive(Deserialize)]
+struct NativeFixtureContext {
+    beat_step: f32,
+}
+
 #[derive(Default)]
 struct ExpectedBlock {
+    start: f32,
     duration: f32,
     easing: Option<&'static str>,
     alpha: Option<f32>,
+    visible: Option<bool>,
+    x: Option<f32>,
+    y: Option<f32>,
+    z: Option<f32>,
     zoom: Option<f32>,
+    zoom_x: Option<f32>,
+    zoom_y: Option<f32>,
     rot_z: Option<f32>,
+    crop_left: Option<f32>,
+    crop_right: Option<f32>,
+    crop_top: Option<f32>,
+    crop_bottom: Option<f32>,
+    sprite_state: Option<u32>,
+    sleep: bool,
+    queued_command: bool,
 }
 
 struct ExpectedCommand {
@@ -126,9 +149,9 @@ struct ExpectedCommand {
     blocks: Vec<(u64, ExpectedBlock)>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum NativeTarget {
-    Layer(usize),
+    Actor { layer: usize, actor: String },
     Player(usize),
 }
 
@@ -223,7 +246,7 @@ fn parse_song(path: &Path) -> deadsync_chart::SongData {
     .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
 }
 
-fn compile_trace_song(trace: &NativeTrace) -> CompiledSongLua {
+fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize) {
     let simfile = locate_simfile(trace);
     let simfile = fs::canonicalize(&simfile)
         .unwrap_or_else(|error| panic!("failed to resolve {}: {error}", simfile.display()));
@@ -274,16 +297,12 @@ fn compile_trace_song(trace: &NativeTrace) -> CompiledSongLua {
         },
     ];
 
-    let mut compiled =
+    let compiled =
         compile_song_lua_layers(&paths, primary_index, &context).unwrap_or_else(|error| {
             panic!("DeadSync could not compile {}: {error}", simfile.display())
         });
-    assert_eq!(
-        compiled.len(),
-        1,
-        "semantic trace comparison currently requires one active Lua layer"
-    );
-    compiled.pop().expect("one compiled layer was required")
+    assert_eq!(compiled.len(), paths.len());
+    (compiled, primary_index)
 }
 
 fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
@@ -306,27 +325,62 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
     }
 }
 
-fn compare_layers(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Vec<String>) {
+fn compare_layers(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
     let definitions = trace
         .actor_definitions
         .iter()
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<HashMap<_, _>>();
-    let Some(root) = trace
-        .roots
-        .first()
-        .and_then(|root| definitions.get(root.as_str()).copied())
-    else {
-        gaps.push("native trace has no actor-definition root".into());
-        return;
-    };
+    if trace.roots.len() != compiled.len() {
+        gaps.push(format!(
+            "root layer count differs: ITGmania has {}, DeadSync has {}",
+            trace.roots.len(),
+            compiled.len()
+        ));
+    }
+    for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
+        let Some(root) = definitions.get(root_id.as_str()).copied() else {
+            gaps.push(format!("native layer {layer} has no actor-definition root"));
+            continue;
+        };
+        let mut native = Vec::new();
+        collect_native_drawables(trace, root, &definitions, &mut native);
+        let deadsync = compiled
+            .overlays
+            .iter()
+            .filter(|overlay| !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound"))
+            .map(|overlay| (kind_name(&overlay.kind), overlay.name.as_deref()))
+            .collect::<Vec<_>>();
+        if native != deadsync {
+            let first = native
+                .iter()
+                .zip(&deadsync)
+                .position(|(native, deadsync)| native != deadsync)
+                .unwrap_or_else(|| native.len().min(deadsync.len()));
+            gaps.push(format!(
+                "layer {layer} drawable order differs: ITGmania has {}, DeadSync has {}; first difference at {first}: {:?} vs {:?}",
+                native.len(),
+                deadsync.len(),
+                native.get(first),
+                deadsync.get(first)
+            ));
+        }
+    }
+}
+
+fn collect_native_drawables<'a>(
+    trace: &'a NativeTrace,
+    parent: &'a NativeDefinition,
+    definitions: &HashMap<&'a str, &'a NativeDefinition>,
+    out: &mut Vec<(&'a str, Option<&'a str>)>,
+) {
     let draw_order = trace
         .draw_orders
         .iter()
-        .find(|order| order.parent_definition_id == root.id && order.instance == 1);
-    let mut source_children = root.children.iter().collect::<Vec<_>>();
+        .find(|order| order.parent_definition_id == parent.id && order.instance == 1);
+    let mut source_children = parent.children.iter().collect::<Vec<_>>();
     source_children.sort_by_key(|child| child.layer_index);
-    let child_ids = draw_order
+    let children = draw_order
         .map(|order| {
             order
                 .final_children
@@ -340,20 +394,14 @@ fn compare_layers(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Ve
                 .map(|child| child.definition_id.as_str())
                 .collect()
         });
-    let native = child_ids
-        .iter()
-        .filter_map(|child| definitions.get(child).copied())
-        .map(|definition| (definition.class.as_str(), definition.name.as_deref()))
-        .collect::<Vec<_>>();
-    let deadsync = compiled
-        .overlays
-        .iter()
-        .map(|overlay| (kind_name(&overlay.kind), overlay.name.as_deref()))
-        .collect::<Vec<_>>();
-    if native != deadsync {
-        gaps.push(format!(
-            "layer order differs\n  ITGmania: {native:?}\n  DeadSync: {deadsync:?}"
-        ));
+    for child in children {
+        let Some(definition) = definitions.get(child).copied() else {
+            continue;
+        };
+        if !matches!(definition.class.as_str(), "Actor" | "ActorFrame" | "Sound") {
+            out.push((definition.class.as_str(), definition.name.as_deref()));
+        }
+        collect_native_drawables(trace, definition, definitions, out);
     }
 }
 
@@ -368,6 +416,7 @@ fn starred_mods(value: &str) -> String {
 }
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Vec<String>) {
+    let beat_epsilon = trace.fixture_context.beat_step + EPSILON;
     for track in &trace.timeline_tracks {
         for (_, beat, _, args, _) in &track.samples {
             let Some(beat) = beat else { continue };
@@ -375,11 +424,24 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
                 let Some(message) = args.first().and_then(Value::as_str) else {
                     continue;
                 };
-                if !compiled
-                    .messages
+                let has_listener = compiled
+                    .overlays
                     .iter()
-                    .any(|actual| actual.message == message && (actual.beat - beat).abs() <= 0.1)
-                {
+                    .flat_map(|actor| &actor.message_commands)
+                    .chain(
+                        compiled
+                            .player_actors
+                            .iter()
+                            .flat_map(|actor| &actor.message_commands),
+                    )
+                    .chain(&compiled.song_foreground.message_commands)
+                    .any(|command| command.message == message);
+                if !has_listener {
+                    continue;
+                }
+                if !compiled.messages.iter().any(|actual| {
+                    actual.message == message && (actual.beat - beat).abs() <= beat_epsilon
+                }) {
                     gaps.push(format!(
                         "missing message `{message}` near beat {beat:.3} (operation {})",
                         track.operation
@@ -394,7 +456,8 @@ fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
                     continue;
                 }
                 if !compiled.beat_mods.iter().any(|actual| {
-                    (actual.start - beat).abs() <= 0.1 && starred_mods(&actual.mods) == wanted
+                    (actual.start - beat).abs() <= beat_epsilon
+                        && starred_mods(&actual.mods) == wanted
                 }) {
                     gaps.push(format!(
                         "missing modifier `{wanted}` near beat {beat:.3} for {}",
@@ -410,17 +473,28 @@ fn value_f32(value: Option<&Value>) -> Option<f32> {
     value.and_then(Value::as_f64).map(|value| value as f32)
 }
 
+fn value_u32(value: Option<&Value>) -> Option<u32> {
+    value
+        .and_then(Value::as_u64)
+        .and_then(|value| u32::try_from(value).ok())
+}
+
 fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> ExpectedBlock {
     let easing = match track.easing.as_deref() {
         Some("linear") => Some("linear"),
         Some("accelerate") => Some("inQuad"),
         Some("decelerate") => Some("outQuad"),
         Some("smooth") => Some("inOutQuad"),
+        Some("spring") => Some("outElastic"),
+        Some("bouncebegin") => Some("inBounce"),
+        Some("bounceend") => Some("outBounce"),
         _ => None,
     };
     let mut block = ExpectedBlock {
         duration: segment.duration,
         easing,
+        sleep: track.kind == "sleep",
+        queued_command: track.kind == "command",
         ..ExpectedBlock::default()
     };
     for operation in &segment.operations {
@@ -431,10 +505,22 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
             .unwrap_or(&operation.operation);
         match method {
             "diffusealpha" => block.alpha = value_f32(operation.args.first()),
+            "diffuse" => block.alpha = value_f32(operation.args.get(3)),
+            "visible" => block.visible = operation.args.first().and_then(Value::as_bool),
+            "x" => block.x = value_f32(operation.args.first()),
+            "y" => block.y = value_f32(operation.args.first()),
+            "z" => block.z = value_f32(operation.args.first()),
             "zoom" => block.zoom = value_f32(operation.args.first()),
+            "zoomx" => block.zoom_x = value_f32(operation.args.first()),
+            "zoomy" => block.zoom_y = value_f32(operation.args.first()),
             "addrotationz" | "rotationz" => {
                 block.rot_z = value_f32(operation.args.first());
             }
+            "cropleft" => block.crop_left = value_f32(operation.args.first()),
+            "cropright" => block.crop_right = value_f32(operation.args.first()),
+            "croptop" => block.crop_top = value_f32(operation.args.first()),
+            "cropbottom" => block.crop_bottom = value_f32(operation.args.first()),
+            "setstate" => block.sprite_state = value_u32(operation.args.first()),
             _ => {}
         }
     }
@@ -447,24 +533,21 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
         .iter()
         .map(|actor| (actor.id.as_str(), actor.path.as_str()))
         .collect::<HashMap<_, _>>();
-    let layers = trace
+    let parents = trace
         .actor_definitions
         .iter()
-        .filter_map(|definition| {
-            definition
+        .flat_map(|parent| {
+            parent
                 .children
-                .is_empty()
-                .then_some((definition.id.as_str(), definition))
+                .iter()
+                .map(move |child| (child.definition_id.as_str(), parent.id.as_str()))
         })
-        .filter_map(|(id, _definition)| {
-            trace.actor_definitions.iter().find_map(|parent| {
-                parent
-                    .children
-                    .iter()
-                    .find(|child| child.definition_id == id)
-                    .map(|child| (id, child.layer_index))
-            })
-        })
+        .collect::<HashMap<_, _>>();
+    let root_layers = trace
+        .roots
+        .iter()
+        .enumerate()
+        .map(|(index, root)| (root.as_str(), index))
         .collect::<HashMap<_, _>>();
     let mut out = Vec::<ExpectedCommand>::new();
     for track in &trace.tween_tracks {
@@ -490,10 +573,20 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
         {
             Some(NativeTarget::Player(1))
         } else {
-            layers
-                .get(track.actor.as_str())
-                .copied()
-                .map(NativeTarget::Layer)
+            let mut ancestor = track.actor.as_str();
+            let layer = loop {
+                if let Some(layer) = root_layers.get(ancestor).copied() {
+                    break Some(layer);
+                }
+                let Some(parent) = parents.get(ancestor).copied() else {
+                    break None;
+                };
+                ancestor = parent;
+            };
+            layer.map(|layer| NativeTarget::Actor {
+                layer,
+                actor: track.actor.clone(),
+            })
         };
         let Some(target) = target else { continue };
         let index = out
@@ -507,83 +600,234 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
                 });
                 out.len() - 1
             });
-        if matches!(track.kind.as_str(), "tween" | "sleep" | "immediate") {
+        if let Some(first_beat) = track.segments.first().map(|segment| segment.beat) {
             out[index].blocks.extend(
                 track
                     .segments
                     .iter()
+                    .take_while(|segment| (segment.beat - first_beat).abs() <= EPSILON)
+                    .filter(|segment| !segment.implicit)
                     .map(|segment| (segment.enqueue_seq, expected_block(track, segment))),
             );
         }
     }
     for command in &mut out {
         command.blocks.sort_by_key(|(seq, _)| *seq);
+        let mut start = 0.0;
+        command.blocks.retain_mut(|(_, block)| {
+            if block.sleep {
+                start += block.duration;
+                return false;
+            }
+            if block.queued_command {
+                return false;
+            }
+            block.start = start;
+            start += block.duration;
+            expected_block_has_effect(block)
+        });
     }
+    out.retain(|command| !command.blocks.is_empty());
     out
 }
 
-fn block_matches(expected: &ExpectedBlock, actual: &SongLuaOverlayCommandBlock) -> bool {
-    (expected.duration - actual.duration).abs() <= EPSILON
-        && expected.easing == actual.easing.as_deref()
-        && expected.alpha.is_none_or(|value| {
-            actual
-                .delta
-                .diffuse
-                .is_some_and(|diffuse| (diffuse[3] - value).abs() <= EPSILON)
-        })
-        && expected.zoom.is_none_or(|value| {
-            actual
-                .delta
-                .zoom
-                .is_some_and(|zoom| (zoom - value).abs() <= EPSILON)
-        })
-        && expected.rot_z.is_none_or(|value| {
-            actual
-                .delta
-                .rot_z_deg
-                .is_some_and(|rotation| (rotation - value).abs() <= EPSILON)
-        })
+fn expected_block_has_effect(block: &ExpectedBlock) -> bool {
+    block.alpha.is_some()
+        || block.visible.is_some()
+        || block.x.is_some()
+        || block.y.is_some()
+        || block.z.is_some()
+        || block.zoom.is_some()
+        || block.zoom_x.is_some()
+        || block.zoom_y.is_some()
+        || block.rot_z.is_some()
+        || block.crop_left.is_some()
+        || block.crop_right.is_some()
+        || block.crop_top.is_some()
+        || block.crop_bottom.is_some()
+        || block.sprite_state.is_some()
 }
 
-fn compare_commands(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Vec<String>) {
+fn option_f32_matches(expected: Option<f32>, actual: Option<f32>) -> bool {
+    expected
+        .is_none_or(|expected| actual.is_some_and(|actual| (actual - expected).abs() <= EPSILON))
+}
+
+fn block_matches(expected: &ExpectedBlock, actual: &SongLuaOverlayCommandBlock) -> bool {
+    (expected.start - actual.start).abs() <= EPSILON
+        && (expected.duration - actual.duration).abs() <= EPSILON
+        && expected.easing == actual.easing.as_deref()
+        && option_f32_matches(
+            expected.alpha,
+            actual.delta.diffuse.map(|diffuse| diffuse[3]),
+        )
+        && expected
+            .visible
+            .is_none_or(|value| actual.delta.visible == Some(value))
+        && option_f32_matches(expected.x, actual.delta.x)
+        && option_f32_matches(expected.y, actual.delta.y)
+        && option_f32_matches(expected.z, actual.delta.z)
+        && option_f32_matches(expected.zoom, actual.delta.zoom)
+        && option_f32_matches(expected.zoom_x, actual.delta.zoom_x)
+        && option_f32_matches(expected.zoom_y, actual.delta.zoom_y)
+        && option_f32_matches(expected.rot_z, actual.delta.rot_z_deg)
+        && option_f32_matches(expected.crop_left, actual.delta.cropleft)
+        && option_f32_matches(expected.crop_right, actual.delta.cropright)
+        && option_f32_matches(expected.crop_top, actual.delta.croptop)
+        && option_f32_matches(expected.crop_bottom, actual.delta.cropbottom)
+        && expected
+            .sprite_state
+            .is_none_or(|value| actual.delta.sprite_state_index == Some(value))
+}
+
+fn command_matches(expected: &ExpectedCommand, actual: &[SongLuaOverlayCommandBlock]) -> bool {
+    let mut actual = actual.iter();
+    expected.blocks.iter().all(|(_, expected)| {
+        actual
+            .by_ref()
+            .any(|actual| block_matches(expected, actual))
+    })
+}
+
+fn expected_blocks_summary(expected: &ExpectedCommand) -> String {
+    expected
+        .blocks
+        .iter()
+        .map(|(_, block)| {
+            format!(
+                "({:.3}+{:.3},{:?},a={:?},v={:?},x={:?},y={:?},z={:?},zx={:?},zy={:?},r={:?},cl={:?},cr={:?},s={:?})",
+                block.start,
+                block.duration,
+                block.easing,
+                block.alpha,
+                block.visible,
+                block.x,
+                block.y,
+                block.zoom,
+                block.zoom_x,
+                block.zoom_y,
+                block.rot_z,
+                block.crop_left,
+                block.crop_right,
+                block.sprite_state
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn actual_blocks_summary(actual: &[SongLuaOverlayCommandBlock]) -> String {
+    actual
+        .iter()
+        .map(|block| {
+            format!(
+                "({:.3}+{:.3},{:?},a={:?},v={:?},x={:?},y={:?},z={:?},zx={:?},zy={:?},r={:?},cl={:?},cr={:?},s={:?})",
+                block.start,
+                block.duration,
+                block.easing,
+                block.delta.diffuse.map(|color| color[3]),
+                block.delta.visible,
+                block.delta.x,
+                block.delta.y,
+                block.delta.zoom,
+                block.delta.zoom_x,
+                block.delta.zoom_y,
+                block.delta.rot_z_deg
+                ,block.delta.cropleft,
+                block.delta.cropright,
+                block.delta.sprite_state_index
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn compare_commands(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    primary_index: usize,
+    gaps: &mut Vec<String>,
+) {
+    let mut used = HashSet::new();
+    let mut missing = HashMap::<String, Vec<String>>::new();
     for expected in trace_commands(trace) {
-        let (label, commands) = match expected.target {
-            NativeTarget::Layer(layer) => (
-                format!("layer {layer}"),
+        let (label, candidates) = match &expected.target {
+            NativeTarget::Actor { layer, actor } => (
+                format!("actor {actor} in layer {layer}"),
                 compiled
-                    .overlays
-                    .get(layer.saturating_sub(1))
-                    .map(|overlay| overlay.message_commands.as_slice())
-                    .unwrap_or_default(),
+                    .get(*layer)
+                    .into_iter()
+                    .flat_map(|compiled| compiled.overlays.iter().enumerate())
+                    .flat_map(|(overlay, actor)| {
+                        actor
+                            .message_commands
+                            .iter()
+                            .enumerate()
+                            .map(move |(command, value)| ((*layer, overlay, command), value))
+                    })
+                    .collect::<Vec<_>>(),
             ),
             NativeTarget::Player(player) => (
                 format!("PlayerP{}", player + 1),
-                compiled.player_actors[player].message_commands.as_slice(),
+                compiled
+                    .get(primary_index)
+                    .into_iter()
+                    .flat_map(|compiled| {
+                        compiled.player_actors[*player]
+                            .message_commands
+                            .iter()
+                            .enumerate()
+                    })
+                    .map(|(command, value)| ((usize::MAX, *player, command), value))
+                    .collect::<Vec<_>>(),
             ),
         };
-        let Some(actual) = commands
+        if let Some((key, _)) = candidates.iter().find(|(key, command)| {
+            !used.contains(key)
+                && command.message == expected.message
+                && command_matches(&expected, &command.blocks)
+        }) {
+            used.insert(*key);
+            continue;
+        }
+        let Some((_, actual)) = candidates
             .iter()
-            .find(|command| command.message == expected.message)
+            .find(|(_, command)| command.message == expected.message)
         else {
-            gaps.push(format!(
-                "missing {}MessageCommand effects on {label}",
-                expected.message
-            ));
+            missing.entry(expected.message).or_default().push(label);
             continue;
         };
-        if expected.blocks.len() != actual.blocks.len()
-            || !expected
-                .blocks
+        gaps.push(format!(
+            "{}MessageCommand differs on {label}: ITGmania [{}], DeadSync [{}]",
+            expected.message,
+            expected_blocks_summary(&expected),
+            actual_blocks_summary(&actual.blocks)
+        ));
+    }
+    for (message, targets) in missing {
+        let dynamic = compiled.iter().any(|compiled| {
+            compiled
+                .info
+                .skipped_message_command_captures
                 .iter()
-                .zip(&actual.blocks)
-                .all(|((_, expected), actual)| block_matches(expected, actual))
-        {
+                .any(|detail| {
+                    detail.contains(&format!(
+                        "{message}MessageCommand changes cross-actor targets or effects"
+                    ))
+                })
+        });
+        if dynamic {
             gaps.push(format!(
-                "{}MessageCommand differs on {label}: ITGmania has {} semantic blocks, DeadSync has {:#?}",
-                expected.message,
-                expected.blocks.len(),
-                actual.blocks
+                "stateful {message}MessageCommand cross-actor effects are not compiled: ITGmania affected {} actors ({})",
+                targets.len(),
+                targets.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
             ));
+        } else {
+            gaps.extend(
+                targets
+                    .into_iter()
+                    .map(|target| format!("missing {message}MessageCommand effects on {target}")),
+            );
         }
     }
 }
@@ -593,11 +837,11 @@ fn compare_commands(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
 fn native_song_lua_semantics_match_deadsync() {
     let trace = read_trace();
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
-    let compiled = compile_trace_song(&trace);
+    let (compiled, primary_index) = compile_trace_song(&trace);
     let mut gaps = Vec::new();
     compare_layers(&trace, &compiled, &mut gaps);
-    compare_timeline(&trace, &compiled, &mut gaps);
-    compare_commands(&trace, &compiled, &mut gaps);
+    compare_timeline(&trace, &compiled[primary_index], &mut gaps);
+    compare_commands(&trace, &compiled, primary_index, &mut gaps);
     assert!(
         gaps.is_empty(),
         "song Lua semantic parity gaps ({}):\n- {}",

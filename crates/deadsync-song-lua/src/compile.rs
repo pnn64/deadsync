@@ -10,8 +10,8 @@ use crate::{
     SongLuaOverlayStateDelta, SongLuaTimeUnit,
     SongLuaTrackedActorTarget as TrackedCompileActorTarget,
     add_actor_child_from_path as add_host_actor_child_from_path,
-    compile_multitap_update_overlays_for_actors, compile_perframes, compile_update_functions,
-    create_dummy_actor as create_host_dummy_actor,
+    capture_stable_cross_actor_message_commands, compile_multitap_update_overlays_for_actors,
+    compile_perframes, compile_update_functions, create_dummy_actor as create_host_dummy_actor,
     create_named_child_actor as create_host_named_child_actor, ensure_overlay_arrow_visual,
     entry_file_path, execute_script_file, install_actor_methods as install_host_actor_methods,
     install_compile_host, log_song_lua_compile_timing, merge_compile_info,
@@ -289,6 +289,55 @@ where
     );
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
     let mut overlays = overlays?;
+    capture_stable_cross_actor_message_commands(&lua, &mut overlays, |skipped| {
+        push_unique_compile_detail(&mut out.info.skipped_message_command_captures, skipped);
+    })?;
+    let mut message_sounds = Vec::new();
+    for overlay in &overlays {
+        let layer = overlay
+            .table
+            .get::<Option<usize>>(COMPILE_LAYER_KEY)
+            .map_err(|err| err.to_string())?
+            .unwrap_or(primary_index);
+        message_sounds.extend(
+            overlay
+                .message_sounds
+                .iter()
+                .cloned()
+                .map(|(message, path)| (layer, message, path)),
+        );
+    }
+    for (layer, message, sound_path) in message_sounds {
+        let table = create_dummy_actor(&lua, "Sound").map_err(|err| err.to_string())?;
+        table
+            .set(COMPILE_LAYER_KEY, layer)
+            .map_err(|err| err.to_string())?;
+        overlays.push(crate::SongLuaOverlayCompileActor {
+            table,
+            message_sounds: Vec::new(),
+            actor: SongLuaOverlayActor {
+                kind: SongLuaOverlayKind::Sound { sound_path },
+                name: None,
+                parent_index: None,
+                initial_state: SongLuaOverlayState::default(),
+                message_commands: vec![SongLuaOverlayMessageCommand {
+                    message,
+                    aux: None,
+                    blocks: vec![SongLuaOverlayCommandBlock {
+                        start: 0.0,
+                        duration: 0.0,
+                        easing: None,
+                        opt1: None,
+                        opt2: None,
+                        delta: SongLuaOverlayStateDelta {
+                            sound_play: Some(true),
+                            ..SongLuaOverlayStateDelta::default()
+                        },
+                    }],
+                }],
+            },
+        });
+    }
     compile_timer.push_stage("read_overlays");
     let mut tracked_actors = read_tracked_compile_actors(&lua, create_named_child_actor)?;
     let mut hidden_players = std::array::from_fn(|player| {

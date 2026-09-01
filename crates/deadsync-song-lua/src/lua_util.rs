@@ -14,11 +14,11 @@ use crate::{
     SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_PROBE_ACTOR_SET_KEY,
     SONG_LUA_PROBE_ACTORS_KEY, SONG_LUA_PROBE_METHODS_KEY, SONG_LUA_SOUND_CALLS_KEY,
     SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
-    SONG_LUA_THEME_PATH_PREFIX, SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaActorMultiVertexPoint,
-    SongLuaCapturedActor, SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample,
-    SongLuaColumnOffsetWindow, SongLuaColumnTransformSample, SongLuaColumnTransformTarget,
-    SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget,
-    SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
+    SONG_LUA_SUPPRESS_BROADCAST_KEY, SONG_LUA_THEME_PATH_PREFIX, SONG_LUA_TOP_SCREEN_OPTION_ROWS,
+    SongLuaActorMultiVertexPoint, SongLuaCapturedActor, SongLuaColumnOffsetBuildParams,
+    SongLuaColumnOffsetSample, SongLuaColumnOffsetWindow, SongLuaColumnTransformSample,
+    SongLuaColumnTransformTarget, SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty,
+    SongLuaEaseTarget, SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
     SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
     SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
@@ -77,6 +77,7 @@ pub struct TopScreenLuaTables {
 pub struct SongLuaOverlayCompileActor<Kind> {
     pub table: Table,
     pub actor: crate::SongLuaOverlayActor<Kind>,
+    pub message_sounds: Vec<(String, PathBuf)>,
 }
 
 struct SongLuaOverlayUpdateCapture {
@@ -2211,6 +2212,7 @@ pub fn capture_actor_command_preserving_state(
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongLuaCapturedMessageCommands {
     pub commands: Vec<SongLuaOverlayMessageCommand>,
+    pub sounds: Vec<(String, PathBuf)>,
     pub skipped: Vec<String>,
 }
 
@@ -2237,7 +2239,20 @@ pub fn capture_actor_message_commands(
     // Lua's next-key order is unspecified and can otherwise skip commands.
     for name in command_names {
         let message = name.trim_end_matches("MessageCommand").to_string();
-        let blocks = match capture_actor_command_preserving_state(lua, actor, name.as_str()) {
+        let globals = lua.globals();
+        let previous_sound_calls = globals
+            .get::<Value>(SONG_LUA_SOUND_CALLS_KEY)
+            .map_err(|err| err.to_string())?;
+        let sound_calls = lua.create_table().map_err(|err| err.to_string())?;
+        globals
+            .set(SONG_LUA_SOUND_CALLS_KEY, sound_calls.clone())
+            .map_err(|err| err.to_string())?;
+        let blocks = capture_actor_command_preserving_state(lua, actor, name.as_str());
+        let sounds = read_path_table(&sound_calls);
+        globals
+            .set(SONG_LUA_SOUND_CALLS_KEY, previous_sound_calls)
+            .map_err(|err| err.to_string())?;
+        let blocks = match blocks {
             Ok(blocks) => blocks,
             Err(err) => {
                 push_unique_compile_detail(
@@ -2247,6 +2262,8 @@ pub fn capture_actor_message_commands(
                 continue;
             }
         };
+        out.sounds
+            .extend(sounds?.into_iter().map(|path| (message.clone(), path)));
         if !blocks.is_empty() {
             out.commands.push(SongLuaOverlayMessageCommand {
                 message,
@@ -9755,8 +9772,21 @@ pub fn capture_function_action_blocks(
     function: &Function,
     beat: f32,
 ) -> Result<SongLuaFunctionActionCapture, String> {
-    let table_snapshots =
-        snapshot_function_action_tables(lua, function).map_err(|err| err.to_string())?;
+    capture_function_action_blocks_inner(lua, overlays, tracked_actors, function, beat, true)
+}
+
+fn capture_function_action_blocks_inner(
+    lua: &Lua,
+    overlays: &[(usize, Table)],
+    tracked_actors: &[SongLuaTrackedActor],
+    function: &Function,
+    beat: f32,
+    restore_function_tables: bool,
+) -> Result<SongLuaFunctionActionCapture, String> {
+    let table_snapshots = restore_function_tables
+        .then(|| snapshot_function_action_tables(lua, function))
+        .transpose()
+        .map_err(|err| err.to_string())?;
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     let globals = lua.globals();
@@ -9773,6 +9803,12 @@ pub fn capture_function_action_blocks(
     let sound_calls = lua.create_table().map_err(|err| err.to_string())?;
     globals
         .set(SONG_LUA_SOUND_CALLS_KEY, sound_calls.clone())
+        .map_err(|err| err.to_string())?;
+    let previous_suppress_broadcasts = globals
+        .get::<Value>(SONG_LUA_SUPPRESS_BROADCAST_KEY)
+        .map_err(|err| err.to_string())?;
+    globals
+        .set(SONG_LUA_SUPPRESS_BROADCAST_KEY, true)
         .map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
     let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
@@ -9819,8 +9855,16 @@ pub fn capture_function_action_blocks(
     globals
         .set(SONG_LUA_SOUND_CALLS_KEY, previous_sound_calls)
         .map_err(|err| err.to_string())?;
+    globals
+        .set(
+            SONG_LUA_SUPPRESS_BROADCAST_KEY,
+            previous_suppress_broadcasts,
+        )
+        .map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
-    restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+    if let Some(table_snapshots) = table_snapshots {
+        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+    }
     let overlay_blocks = overlay_blocks?;
     let tracked_blocks = tracked_blocks?;
     let broadcasts = broadcasts?;
@@ -9835,6 +9879,134 @@ pub fn capture_function_action_blocks(
         sound_paths,
         saw_side_effect,
     })
+}
+
+fn cross_actor_effects(
+    capture: &SongLuaFunctionActionCapture,
+    source_index: usize,
+) -> Vec<(usize, Vec<SongLuaOverlayCommandBlock>, Option<f32>)> {
+    let mut effects = capture
+        .overlay_aux
+        .iter()
+        .filter(|(index, _)| *index != source_index)
+        .map(|(index, aux)| (*index, (Vec::new(), Some(*aux))))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    for (index, blocks) in &capture.overlay_blocks {
+        if *index != source_index {
+            effects.entry(*index).or_default().0 = blocks.clone();
+        }
+    }
+    effects
+        .into_iter()
+        .map(|(index, (blocks, aux))| (index, blocks, aux))
+        .collect()
+}
+
+pub fn capture_stable_cross_actor_message_commands<Kind>(
+    lua: &Lua,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    mut on_dynamic: impl FnMut(String),
+) -> Result<(), String> {
+    let overlay_tables = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (index, overlay.table.clone()))
+        .collect::<Vec<_>>();
+    let drain_tables = overlay_tables
+        .iter()
+        .map(|(_, table)| table.clone())
+        .collect::<Vec<_>>();
+    let mut commands = Vec::new();
+    for (source_index, source) in overlays.iter().enumerate() {
+        for pair in source.table.clone().pairs::<Value, Value>() {
+            let (key, value) = pair.map_err(|err| err.to_string())?;
+            let (Some(name), Value::Function(function)) = (read_string(key), value) else {
+                continue;
+            };
+            let Some(message) = name.strip_suffix("MessageCommand") else {
+                continue;
+            };
+            let message = message.to_string();
+            commands.push((source_index, source.table.clone(), name, message, function));
+        }
+    }
+
+    let mut additions = Vec::new();
+    for (source_index, source, command_name, message, command) in commands {
+        let table_snapshots =
+            snapshot_function_action_tables(lua, &command).map_err(|err| err.to_string())?;
+        let params =
+            default_message_command_params(lua, &command_name).map_err(|err| err.to_string())?;
+        let source_for_call = source.clone();
+        let command_for_call = command.clone();
+        let command_name_for_call = command_name.clone();
+        let drain_for_call = drain_tables.clone();
+        let runner = lua
+            .create_function(move |lua, ()| {
+                run_guarded_actor_command(
+                    lua,
+                    &source_for_call,
+                    &command_name_for_call,
+                    &command_for_call,
+                    true,
+                    params.clone(),
+                )?;
+                for actor in &drain_for_call {
+                    drain_actor_command_queue(lua, actor)?;
+                }
+                Ok(())
+            })
+            .map_err(|err| err.to_string())?;
+        let first =
+            capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false);
+        let second = first.as_ref().ok().map(|_| {
+            capture_function_action_blocks_inner(lua, &overlay_tables, &[], &runner, 0.0, false)
+        });
+        restore_function_action_tables(table_snapshots).map_err(|err| err.to_string())?;
+        let Ok(first) = first else {
+            // The ordinary per-actor capture already records this command as
+            // skipped. Cross-actor probing must not turn that into a hard error.
+            continue;
+        };
+        let second = match second.expect("second capture exists after a successful first capture") {
+            Ok(second) => second,
+            Err(err) => {
+                on_dynamic(format!(
+                    "{}.{} cannot be replayed for stable cross-actor capture: {err}",
+                    actor_debug_label(&source),
+                    command_name
+                ));
+                continue;
+            }
+        };
+        let first = cross_actor_effects(&first, source_index);
+        let second = cross_actor_effects(&second, source_index);
+        if first.is_empty() {
+            continue;
+        }
+        if first != second {
+            on_dynamic(format!(
+                "{}.{} changes cross-actor targets or effects between runs",
+                actor_debug_label(&source),
+                command_name
+            ));
+            continue;
+        }
+        additions.extend(first.into_iter().map(|(target, blocks, aux)| {
+            (
+                target,
+                SongLuaOverlayMessageCommand {
+                    message: message.clone(),
+                    blocks,
+                    aux,
+                },
+            )
+        }));
+    }
+    for (target, command) in additions {
+        overlays[target].actor.message_commands.push(command);
+    }
+    Ok(())
 }
 
 fn read_path_table(table: &Table) -> Result<Vec<PathBuf>, String> {
@@ -9881,33 +10053,33 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
             .cloned()
             .map(|path| SongLuaSoundEvent { beat, path }),
     );
+    let mut handled_broadcast = false;
     if !capture.broadcasts.is_empty()
         && capture
             .broadcasts
             .iter()
             .all(|(_, has_params)| !*has_params)
     {
-        let mut handled = false;
-        for (message, _) in capture.broadcasts {
+        for (message, _) in &capture.broadcasts {
             if overlay_compile_actors_have_message_listener(overlays, tracked_actors, &message) {
                 messages.push(SongLuaMessageEvent {
                     beat,
-                    message,
+                    message: message.clone(),
                     persists,
                 });
-                handled = true;
+                handled_broadcast = true;
             }
-        }
-        if handled {
-            return Ok(true);
         }
     }
 
-    if capture.overlay_blocks.is_empty()
-        && capture.tracked_blocks.is_empty()
-        && capture.overlay_aux.is_empty()
-        && capture.tracked_aux.is_empty()
-    {
+    let has_direct_effects = !capture.overlay_blocks.is_empty()
+        || !capture.tracked_blocks.is_empty()
+        || !capture.overlay_aux.is_empty()
+        || !capture.tracked_aux.is_empty();
+    if handled_broadcast && !has_direct_effects {
+        return Ok(true);
+    }
+    if !has_direct_effects {
         return Ok(capture.saw_side_effect);
     }
 
@@ -11686,6 +11858,7 @@ where
         on_skipped_message_capture(skipped);
     }
     let message_commands = captured_commands.commands;
+    let message_sounds = captured_commands.sounds;
     let mut name = actor
         .get::<Option<String>>("Name")
         .map_err(|err| err.to_string())?;
@@ -11694,6 +11867,7 @@ where
         if name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
+            && message_sounds.is_empty()
         {
             return Ok(None);
         }
@@ -11707,6 +11881,7 @@ where
             && name.is_none()
             && initial_state == SongLuaOverlayState::default()
             && message_commands.is_empty()
+            && message_sounds.is_empty()
             && !has_draw_function
             && !referenced_actors.contains(&(actor.to_pointer() as usize))
         {
@@ -11857,6 +12032,7 @@ where
     };
     Ok(Some(SongLuaOverlayCompileActor {
         table: actor.clone(),
+        message_sounds,
         actor: crate::SongLuaOverlayActor {
             kind,
             name,

@@ -11,9 +11,10 @@ use crate::{
     SONG_LUA_PLAYER_OPTIONS_KEYS, SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID,
     SONG_LUA_PRODUCT_VERSION, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
     SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_CALLS_KEY,
-    SONG_LUA_SOUND_PATHS_KEY, SongLuaCompileContext, SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV,
-    THEME_RECEPTOR_Y_STD, broadcast_song_lua_message, create_branch_table, create_charman_table,
-    create_conf_option_row, create_course_table, create_custom_option_row, create_difficulty_table,
+    SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_SUPPRESS_BROADCAST_KEY, SongLuaCompileContext,
+    SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    broadcast_song_lua_message, create_branch_table, create_charman_table, create_conf_option_row,
+    create_course_table, create_custom_option_row, create_difficulty_table,
     create_display_bpms_table, create_display_table, create_enabled_players_table,
     create_game_table, create_gameman_table, create_gameplay_layout, create_hooks_table,
     create_memcardman_table, create_noteskin_table, create_operator_menu_option_rows_table,
@@ -798,7 +799,13 @@ pub fn install_message_manager_globals(
                 let params = method_arg(&args, 1).cloned();
                 note_song_lua_side_effect(lua)?;
                 record_song_lua_broadcast(lua, &message, params.is_some())?;
-                broadcast(lua, &message, params)?;
+                if !lua
+                    .globals()
+                    .raw_get::<Option<bool>>(SONG_LUA_SUPPRESS_BROADCAST_KEY)?
+                    .unwrap_or(false)
+                {
+                    broadcast(lua, &message, params)?;
+                }
             }
             Ok(messageman_for_broadcast.clone())
         })?,
