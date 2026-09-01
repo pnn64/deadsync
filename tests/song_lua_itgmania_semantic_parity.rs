@@ -1,8 +1,8 @@
 use deadsync_assets::song_lua::{
-    CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayCommandBlock,
-    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua_layers,
+    compile_song_lua_layers, CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty,
+    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod,
 };
-use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
+use deadsync_simfile::song::{parse_song_meta_file, ParseSongOptions};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -13,6 +13,7 @@ const TRACE_ENV: &str = "ITGMANIA_SONG_LUA_TRACE";
 const SIMFILE_ENV: &str = "ITGMANIA_SONG_LUA_SIMFILE";
 const DEFAULT_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Delightful Day/Delightful Day.ssc.semantic.json";
+const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
 
 #[derive(Deserialize)]
@@ -24,7 +25,8 @@ struct NativeTrace {
     roots: Vec<String>,
     actor_definitions: Vec<NativeDefinition>,
     runtime_actors: Vec<NativeActor>,
-    events: Vec<NativeEvent>,
+    timeline_tracks: Vec<NativeTimelineTrack>,
+    tween_tracks: Vec<NativeTweenTrack>,
     #[serde(default)]
     draw_orders: Vec<NativeDrawOrder>,
     end_position: NativePosition,
@@ -65,14 +67,35 @@ struct NativeDrawChild {
 }
 
 #[derive(Deserialize)]
-struct NativeEvent {
+struct NativeTimelineTrack {
     kind: String,
-    beat: Option<f32>,
     actor: Option<String>,
+    operation: String,
+    samples: Vec<(u64, Option<f32>, Option<f32>, Vec<Value>, Option<Value>)>,
+}
+
+#[derive(Deserialize)]
+struct NativeTweenTrack {
+    actor: String,
+    command: Option<String>,
+    kind: String,
+    easing: Option<String>,
+    segments: Vec<NativeTweenSegment>,
+}
+
+#[derive(Deserialize)]
+struct NativeTweenSegment {
+    enqueue_seq: u64,
+    duration: f32,
+    #[serde(default)]
+    operations: Vec<NativeTweenOperation>,
+}
+
+#[derive(Deserialize)]
+struct NativeTweenOperation {
     operation: String,
     #[serde(default)]
     args: Vec<Value>,
-    command: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -100,12 +123,35 @@ struct ExpectedBlock {
 struct ExpectedCommand {
     message: String,
     target: NativeTarget,
-    blocks: Vec<ExpectedBlock>,
+    blocks: Vec<(u64, ExpectedBlock)>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum NativeTarget {
     Layer(usize),
     Player(usize),
+}
+
+#[derive(Deserialize)]
+struct SemanticManifest {
+    itgmania: SemanticOracle,
+    simfiles: Vec<SemanticManifestEntry>,
+}
+
+#[derive(Deserialize)]
+struct SemanticOracle {
+    execution: String,
+    launches_executable: bool,
+}
+
+#[derive(Deserialize)]
+struct SemanticManifestEntry {
+    fixture: PathBuf,
+    status: String,
+    #[serde(default)]
+    runtime_errors: usize,
+    #[serde(default)]
+    dropped_events: usize,
 }
 
 fn workspace_root() -> PathBuf {
@@ -221,7 +267,7 @@ fn compile_trace_song(trace: &NativeTrace) -> CompiledSongLua {
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
-            enabled: false,
+            enabled: true,
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
             ..SongLuaPlayerContext::default()
@@ -322,37 +368,39 @@ fn starred_mods(value: &str) -> String {
 }
 
 fn compare_timeline(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut Vec<String>) {
-    for event in &trace.events {
-        let Some(beat) = event.beat else { continue };
-        if event.kind == "message" {
-            let Some(message) = event.args.first().and_then(Value::as_str) else {
-                continue;
-            };
-            if !compiled
-                .messages
-                .iter()
-                .any(|actual| actual.message == message && (actual.beat - beat).abs() <= 0.1)
-            {
-                gaps.push(format!(
-                    "missing message `{message}` near beat {beat:.3} (operation {})",
-                    event.operation
-                ));
-            }
-        } else if event.kind == "modifier" {
-            let Some(raw) = event.args.get(1).and_then(Value::as_str) else {
-                continue;
-            };
-            let wanted = starred_mods(raw);
-            if wanted.is_empty() {
-                continue;
-            }
-            if !compiled.beat_mods.iter().any(|actual| {
-                (actual.start - beat).abs() <= 0.1 && starred_mods(&actual.mods) == wanted
-            }) {
-                gaps.push(format!(
-                    "missing modifier `{wanted}` near beat {beat:.3} for {}",
-                    event.actor.as_deref().unwrap_or("unknown player")
-                ));
+    for track in &trace.timeline_tracks {
+        for (_, beat, _, args, _) in &track.samples {
+            let Some(beat) = beat else { continue };
+            if track.kind == "message" {
+                let Some(message) = args.first().and_then(Value::as_str) else {
+                    continue;
+                };
+                if !compiled
+                    .messages
+                    .iter()
+                    .any(|actual| actual.message == message && (actual.beat - beat).abs() <= 0.1)
+                {
+                    gaps.push(format!(
+                        "missing message `{message}` near beat {beat:.3} (operation {})",
+                        track.operation
+                    ));
+                }
+            } else if track.kind == "modifier" {
+                let Some(raw) = args.get(1).and_then(Value::as_str) else {
+                    continue;
+                };
+                let wanted = starred_mods(raw);
+                if wanted.is_empty() {
+                    continue;
+                }
+                if !compiled.beat_mods.iter().any(|actual| {
+                    (actual.start - beat).abs() <= 0.1 && starred_mods(&actual.mods) == wanted
+                }) {
+                    gaps.push(format!(
+                        "missing modifier `{wanted}` near beat {beat:.3} for {}",
+                        track.actor.as_deref().unwrap_or("unknown player")
+                    ));
+                }
             }
         }
     }
@@ -362,41 +410,35 @@ fn value_f32(value: Option<&Value>) -> Option<f32> {
     value.and_then(Value::as_f64).map(|value| value as f32)
 }
 
-fn expected_blocks(events: &[&NativeEvent]) -> Vec<ExpectedBlock> {
-    let mut blocks = Vec::new();
-    for event in events {
-        let method = event
+fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> ExpectedBlock {
+    let easing = match track.easing.as_deref() {
+        Some("linear") => Some("linear"),
+        Some("accelerate") => Some("inQuad"),
+        Some("decelerate") => Some("outQuad"),
+        Some("smooth") => Some("inOutQuad"),
+        _ => None,
+    };
+    let mut block = ExpectedBlock {
+        duration: segment.duration,
+        easing,
+        ..ExpectedBlock::default()
+    };
+    for operation in &segment.operations {
+        let method = operation
             .operation
             .rsplit('.')
             .next()
-            .unwrap_or(&event.operation);
-        let tween = match method {
-            "linear" => Some("linear"),
-            "accelerate" => Some("inQuad"),
-            "decelerate" => Some("outQuad"),
-            "smooth" => Some("inOutQuad"),
-            _ => None,
-        };
-        if let Some(easing) = tween {
-            blocks.push(ExpectedBlock {
-                duration: value_f32(event.args.first()).unwrap_or_default(),
-                easing: Some(easing),
-                ..ExpectedBlock::default()
-            });
-            continue;
-        }
-        if blocks.is_empty() {
-            blocks.push(ExpectedBlock::default());
-        }
-        let block = blocks.last_mut().expect("an expected block was created");
+            .unwrap_or(&operation.operation);
         match method {
-            "diffusealpha" => block.alpha = value_f32(event.args.first()),
-            "zoom" => block.zoom = value_f32(event.args.first()),
-            "addrotationz" | "rotationz" => block.rot_z = value_f32(event.args.first()),
+            "diffusealpha" => block.alpha = value_f32(operation.args.first()),
+            "zoom" => block.zoom = value_f32(operation.args.first()),
+            "addrotationz" | "rotationz" => {
+                block.rot_z = value_f32(operation.args.first());
+            }
             _ => {}
         }
     }
-    blocks
+    block
 }
 
 fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
@@ -424,63 +466,58 @@ fn trace_commands(trace: &NativeTrace) -> Vec<ExpectedCommand> {
             })
         })
         .collect::<HashMap<_, _>>();
-    let mut out = Vec::new();
-    let mut index = 0;
-    while index < trace.events.len() {
-        let begin = &trace.events[index];
-        let Some(command) = begin
+    let mut out = Vec::<ExpectedCommand>::new();
+    for track in &trace.tween_tracks {
+        let Some(command) = track
             .command
             .as_deref()
             .filter(|command| command.ends_with("MessageCommand"))
         else {
-            index += 1;
             continue;
         };
-        if begin.operation != "command.begin" {
-            index += 1;
-            continue;
-        }
         let message = command
             .strip_suffix("MessageCommand")
             .expect("message command suffix was checked")
             .to_string();
-        let mut calls: HashMap<&str, Vec<&NativeEvent>> = HashMap::new();
-        index += 1;
-        while index < trace.events.len() {
-            let event = &trace.events[index];
-            if event.operation == "command.end" && event.command.as_deref() == Some(command) {
-                break;
-            }
-            if event.kind == "call"
-                && let Some(actor) = event.actor.as_deref()
-            {
-                calls.entry(actor).or_default().push(event);
-            }
-            index += 1;
-        }
-        for (actor, events) in calls {
-            let target = if paths
-                .get(actor)
-                .is_some_and(|path| path.ends_with("/PlayerP1"))
-            {
-                Some(NativeTarget::Player(0))
-            } else if paths
-                .get(actor)
-                .is_some_and(|path| path.ends_with("/PlayerP2"))
-            {
-                Some(NativeTarget::Player(1))
-            } else {
-                layers.get(actor).copied().map(NativeTarget::Layer)
-            };
-            if let Some(target) = target {
+        let target = if paths
+            .get(track.actor.as_str())
+            .is_some_and(|path| path.ends_with("/PlayerP1"))
+        {
+            Some(NativeTarget::Player(0))
+        } else if paths
+            .get(track.actor.as_str())
+            .is_some_and(|path| path.ends_with("/PlayerP2"))
+        {
+            Some(NativeTarget::Player(1))
+        } else {
+            layers
+                .get(track.actor.as_str())
+                .copied()
+                .map(NativeTarget::Layer)
+        };
+        let Some(target) = target else { continue };
+        let index = out
+            .iter()
+            .position(|item| item.message == message && item.target == target)
+            .unwrap_or_else(|| {
                 out.push(ExpectedCommand {
                     message: message.clone(),
                     target,
-                    blocks: expected_blocks(&events),
+                    blocks: Vec::new(),
                 });
-            }
+                out.len() - 1
+            });
+        if matches!(track.kind.as_str(), "tween" | "sleep" | "immediate") {
+            out[index].blocks.extend(
+                track
+                    .segments
+                    .iter()
+                    .map(|segment| (segment.enqueue_seq, expected_block(track, segment))),
+            );
         }
-        index += 1;
+    }
+    for command in &mut out {
+        command.blocks.sort_by_key(|(seq, _)| *seq);
     }
     out
 }
@@ -539,7 +576,7 @@ fn compare_commands(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
                 .blocks
                 .iter()
                 .zip(&actual.blocks)
-                .all(|(expected, actual)| block_matches(expected, actual))
+                .all(|((_, expected), actual)| block_matches(expected, actual))
         {
             gaps.push(format!(
                 "{}MessageCommand differs on {label}: ITGmania has {} semantic blocks, DeadSync has {:#?}",
@@ -555,7 +592,7 @@ fn compare_commands(trace: &NativeTrace, compiled: &CompiledSongLua, gaps: &mut 
 #[ignore = "reports the current known song-Lua parity gaps"]
 fn native_song_lua_semantics_match_deadsync() {
     let trace = read_trace();
-    assert_eq!(trace.oracle, "itgmania_song_lua_semantic_trace");
+    assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let compiled = compile_trace_song(&trace);
     let mut gaps = Vec::new();
     compare_layers(&trace, &compiled, &mut gaps);
@@ -567,6 +604,43 @@ fn native_song_lua_semantics_match_deadsync() {
         gaps.len(),
         gaps.join("\n- ")
     );
+}
+
+#[test]
+fn semantic_fixture_manifest_is_complete_and_headless() {
+    let fixture_root =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua");
+    let manifest: SemanticManifest = serde_json::from_slice(
+        &fs::read(fixture_root.join(SEMANTIC_MANIFEST))
+            .expect("missing semantic song Lua fixture manifest"),
+    )
+    .expect("invalid semantic song Lua fixture manifest");
+
+    assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
+    assert!(!manifest.itgmania.launches_executable);
+    assert_eq!(manifest.simfiles.len(), 42);
+    for entry in manifest.simfiles {
+        assert_eq!(
+            entry.status, "ok",
+            "incomplete fixture: {:?}",
+            entry.fixture
+        );
+        assert_eq!(
+            entry.runtime_errors, 0,
+            "runtime errors: {:?}",
+            entry.fixture
+        );
+        assert_eq!(
+            entry.dropped_events, 0,
+            "dropped events: {:?}",
+            entry.fixture
+        );
+        assert!(
+            fixture_root.join(&entry.fixture).is_file(),
+            "missing semantic fixture {:?}",
+            entry.fixture
+        );
+    }
 }
 
 #[test]
