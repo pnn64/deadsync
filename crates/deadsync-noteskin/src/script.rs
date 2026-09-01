@@ -381,8 +381,10 @@ pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
     use super::{
-        ScriptCommand, parse_script_judgment_line_color, parse_script_number,
-        parse_script_rgba_list, script_color_value, script_rgba8, split_script_token,
+        ModelEffectClock, ScriptCommand, parse_script_effect_clock,
+        parse_script_judgment_line_color, parse_script_number, parse_script_rgba_list,
+        parse_script_vertalign, script_color_value, script_contains_ignore_ascii_case,
+        script_rgba8, split_script_token,
     };
 
     #[inline(always)]
@@ -405,6 +407,22 @@ pub mod bench_support {
         color.into_iter().fold(2, |checksum, value| {
             mix(checksum, u64::from(value.to_bits()))
         })
+    }
+
+    fn checksum_float(value: Option<f32>) -> u64 {
+        value.map_or(1, |value| mix(2, u64::from(value.to_bits())))
+    }
+
+    const fn checksum_bool(value: bool) -> u64 {
+        if value { 2 } else { 1 }
+    }
+
+    const fn checksum_clock(clock: Option<ModelEffectClock>) -> u64 {
+        match clock {
+            Some(ModelEffectClock::Beat) => 2,
+            Some(ModelEffectClock::Time) => 3,
+            None => 1,
+        }
     }
 
     fn split_borrowed_vec(raw: &str, skip_command: bool) -> Vec<&str> {
@@ -604,6 +622,64 @@ pub mod bench_support {
     pub fn fixed_rgba_components_new(raw: &str) -> u64 {
         checksum_color(parse_script_rgba_list(raw))
     }
+
+    #[must_use]
+    pub fn lowercase_vertalign_old(raw: &str) -> u64 {
+        let value = raw.trim().trim_matches('"').trim_matches('\'');
+        let parsed = if let Ok(value) = value.parse::<f32>() {
+            Some(value)
+        } else {
+            match value.to_ascii_lowercase().as_str() {
+                "top" => Some(0.0),
+                "middle" | "center" => Some(0.5),
+                "bottom" => Some(1.0),
+                _ => None,
+            }
+        };
+        checksum_float(parsed)
+    }
+
+    #[must_use]
+    pub fn classified_vertalign_new(raw: &str) -> u64 {
+        checksum_float(parse_script_vertalign(raw))
+    }
+
+    #[must_use]
+    pub fn lowercase_blend_scan_old(raw: &str) -> u64 {
+        let lower = raw.to_ascii_lowercase();
+        checksum_bool(lower.contains("blendmode_add") || lower.contains("blend.add"))
+    }
+
+    #[must_use]
+    pub fn borrowed_blend_scan_new(raw: &str) -> u64 {
+        checksum_bool(
+            script_contains_ignore_ascii_case(raw, "blendmode_add")
+                || script_contains_ignore_ascii_case(raw, "blend.add"),
+        )
+    }
+
+    #[must_use]
+    pub fn lowercase_effect_clock_old(raw: &str) -> u64 {
+        let lower = raw
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_ascii_lowercase();
+        let clock = match lower.as_str() {
+            "beat" | "beatnooffset" | "bgm" => Some(ModelEffectClock::Beat),
+            "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
+                Some(ModelEffectClock::Time)
+            }
+            _ if lower.contains("beat") => Some(ModelEffectClock::Beat),
+            _ => None,
+        };
+        checksum_clock(clock)
+    }
+
+    #[must_use]
+    pub fn classified_effect_clock_new(raw: &str) -> u64 {
+        checksum_clock(parse_script_effect_clock(raw))
+    }
 }
 
 #[inline(always)]
@@ -669,6 +745,13 @@ pub fn parse_script_int(raw: &str) -> i32 {
 pub fn parse_script_bool(raw: &str) -> bool {
     let t = raw.trim().trim_matches('"').trim_matches('\'');
     t.eq_ignore_ascii_case("true") || t == "1"
+}
+
+#[inline(always)]
+fn script_contains_ignore_ascii_case(raw: &str, needle: &str) -> bool {
+    raw.as_bytes()
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
 #[must_use]
@@ -981,11 +1064,14 @@ pub fn parse_script_vertalign(raw: &str) -> Option<f32> {
     if let Ok(v) = value.parse::<f32>() {
         return Some(v);
     }
-    match value.to_ascii_lowercase().as_str() {
-        "top" => Some(0.0),
-        "middle" | "center" => Some(0.5),
-        "bottom" => Some(1.0),
-        _ => None,
+    if value.eq_ignore_ascii_case("top") {
+        Some(0.0)
+    } else if value.eq_ignore_ascii_case("middle") || value.eq_ignore_ascii_case("center") {
+        Some(0.5)
+    } else if value.eq_ignore_ascii_case("bottom") {
+        Some(1.0)
+    } else {
+        None
     }
 }
 
@@ -1076,9 +1162,10 @@ pub fn parse_script_actor_mod<'a, A: AsRef<str>>(
             .and_then(|value| parse_script_vertalign(value.as_ref()))
             .map(ScriptActorMod::VertAlign),
         ScriptCommand::Blend => {
-            if args.iter().any(|a| {
-                let lower = a.as_ref().to_ascii_lowercase();
-                lower.contains("blendmode_add") || lower.contains("blend.add")
+            if args.iter().any(|arg| {
+                let raw = arg.as_ref();
+                script_contains_ignore_ascii_case(raw, "blendmode_add")
+                    || script_contains_ignore_ascii_case(raw, "blend.add")
             }) {
                 Some(ScriptActorMod::BlendAdd(true))
             } else if !args.is_empty() {
@@ -1095,18 +1182,24 @@ pub fn parse_script_actor_mod<'a, A: AsRef<str>>(
 #[inline(always)]
 #[must_use]
 pub fn parse_script_effect_clock(raw: &str) -> Option<ModelEffectClock> {
-    let lower = raw
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'')
-        .to_ascii_lowercase();
-    match lower.as_str() {
-        "beat" | "beatnooffset" | "bgm" => Some(ModelEffectClock::Beat),
-        "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
-            Some(ModelEffectClock::Time)
-        }
-        _ if lower.contains("beat") => Some(ModelEffectClock::Beat),
-        _ => None,
+    let value = raw.trim().trim_matches('"').trim_matches('\'');
+    if value.eq_ignore_ascii_case("beat")
+        || value.eq_ignore_ascii_case("beatnooffset")
+        || value.eq_ignore_ascii_case("bgm")
+    {
+        Some(ModelEffectClock::Beat)
+    } else if value.eq_ignore_ascii_case("timer")
+        || value.eq_ignore_ascii_case("timerglobal")
+        || value.eq_ignore_ascii_case("music")
+        || value.eq_ignore_ascii_case("musicnooffset")
+        || value.eq_ignore_ascii_case("time")
+        || value.eq_ignore_ascii_case("seconds")
+    {
+        Some(ModelEffectClock::Time)
+    } else if script_contains_ignore_ascii_case(value, "beat") {
+        Some(ModelEffectClock::Beat)
+    } else {
+        None
     }
 }
 
@@ -1776,6 +1869,58 @@ mod tests {
             Some([0.0, 0.25, 0.5, 1.0])
         );
         assert_eq!(parse_script_rgba_list("0.1,bad,0.2,0.3"), None);
+    }
+
+    #[test]
+    fn script_vertalign_preserves_numeric_quoted_and_mixed_case_values() {
+        assert_eq!(parse_script_vertalign("0.375"), Some(0.375));
+        assert_eq!(parse_script_vertalign(" 'ToP' "), Some(0.0));
+        assert_eq!(parse_script_vertalign("MIDDLE"), Some(0.5));
+        assert_eq!(parse_script_vertalign("Center"), Some(0.5));
+        assert_eq!(parse_script_vertalign("\"bOtToM\""), Some(1.0));
+        assert_eq!(parse_script_vertalign("Cënter"), None);
+    }
+
+    #[test]
+    fn script_blend_detection_preserves_case_insensitive_substring_behavior() {
+        assert_eq!(
+            parse_script_actor_mod("blend", &["'BLENDMODE_ADD'"]),
+            Some(ScriptActorMod::BlendAdd(true))
+        );
+        assert_eq!(
+            parse_script_actor_mod("blend", &["prefix.BlEnD.AdD.suffix"]),
+            Some(ScriptActorMod::BlendAdd(true))
+        );
+        assert_eq!(
+            parse_script_actor_mod("blend", &["normal", "second_BLENDMODE_ADD_value"]),
+            Some(ScriptActorMod::BlendAdd(true))
+        );
+        assert_eq!(
+            parse_script_actor_mod("blend", &["BlendMode_Normal"]),
+            Some(ScriptActorMod::BlendAdd(false))
+        );
+        assert_eq!(parse_script_actor_mod::<&str>("blend", &[]), None);
+    }
+
+    #[test]
+    fn script_effect_clock_preserves_aliases_quotes_and_beat_fallback() {
+        assert_eq!(
+            parse_script_effect_clock(" 'BeAtNoOffset' "),
+            Some(ModelEffectClock::Beat)
+        );
+        assert_eq!(
+            parse_script_effect_clock("\"BGM\""),
+            Some(ModelEffectClock::Beat)
+        );
+        assert_eq!(
+            parse_script_effect_clock("MusicNoOffset"),
+            Some(ModelEffectClock::Time)
+        );
+        assert_eq!(
+            parse_script_effect_clock("customBEATclock"),
+            Some(ModelEffectClock::Beat)
+        );
+        assert_eq!(parse_script_effect_clock("bëat"), None);
     }
 
     #[test]

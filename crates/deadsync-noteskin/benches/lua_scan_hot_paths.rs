@@ -10,10 +10,12 @@ use deadsync_noteskin::lua::{
 };
 use deadsync_noteskin::script::{
     bench_support::{
-        borrowed_argument_slices_new, borrowed_color_wrapper_new, classified_command_new,
-        classified_judgment_key_new, fixed_rgba_components_new, heap_argument_storage_old,
-        heap_rgba_components_old, inline_argument_storage_new, lowercase_color_wrapper_old,
-        lowercase_command_old, lowercase_judgment_key_old, owned_argument_slices_old,
+        borrowed_argument_slices_new, borrowed_blend_scan_new, borrowed_color_wrapper_new,
+        classified_command_new, classified_effect_clock_new, classified_judgment_key_new,
+        classified_vertalign_new, fixed_rgba_components_new, heap_argument_storage_old,
+        heap_rgba_components_old, inline_argument_storage_new, lowercase_blend_scan_old,
+        lowercase_color_wrapper_old, lowercase_command_old, lowercase_effect_clock_old,
+        lowercase_judgment_key_old, lowercase_vertalign_old, owned_argument_slices_old,
     },
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
@@ -552,6 +554,125 @@ fn main() {
         "fixed-size RGBA component parsing (6 representative lists)",
         &old_rgba,
         &new_rgba,
+    );
+
+    let vertalign_cases = [
+        "top",
+        "MIDDLE",
+        "'Center'",
+        "\"BOTTOM\"",
+        "0.375",
+        "unknown",
+        "Cënter",
+    ];
+    let vertalign_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in vertalign_cases {
+                checksum = mix(checksum, black_box(parse(black_box(value))));
+            }
+        }
+        checksum
+    };
+    let (old_vertalign, new_vertalign) = measure_pair(
+        1_024,
+        vertalign_cases.len() * REPEATS,
+        || vertalign_suite(lowercase_vertalign_old),
+        || vertalign_suite(classified_vertalign_new),
+    );
+    assert_improved(
+        "allocation-free vertical alignment parsing",
+        &old_vertalign,
+        &new_vertalign,
+    );
+    assert_eq!(new_vertalign.alloc.allocs, 0);
+    assert_eq!(new_vertalign.alloc.reallocs, 0);
+    assert_eq!(new_vertalign.alloc.frees, 0);
+    assert_eq!(new_vertalign.alloc.churn(), 0);
+    print_pair(
+        "allocation-free vertical alignment parsing (7 representative values)",
+        &old_vertalign,
+        &new_vertalign,
+    );
+
+    let blend_cases = [
+        "BlendMode_Add",
+        "prefixBLENDMODE_ADDsuffix",
+        "Blend.Add",
+        "prefix.bLeNd.AdD.suffix",
+        "BlendMode_Normal",
+        "add",
+        "BlëndMode_Add",
+    ];
+    let blend_suite = |scan: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in blend_cases {
+                checksum = mix(checksum, black_box(scan(black_box(value))));
+            }
+        }
+        checksum
+    };
+    let (old_blend, new_blend) = measure_pair(
+        1_024,
+        blend_cases.len() * REPEATS,
+        || blend_suite(lowercase_blend_scan_old),
+        || blend_suite(borrowed_blend_scan_new),
+    );
+    assert_improved(
+        "allocation-free additive blend scan",
+        &old_blend,
+        &new_blend,
+    );
+    assert_eq!(new_blend.alloc.allocs, 0);
+    assert_eq!(new_blend.alloc.reallocs, 0);
+    assert_eq!(new_blend.alloc.frees, 0);
+    assert_eq!(new_blend.alloc.churn(), 0);
+    print_pair(
+        "allocation-free additive blend scan (7 representative values)",
+        &old_blend,
+        &new_blend,
+    );
+
+    let effect_clock_cases = [
+        "beat",
+        "'BEATNOOFFSET'",
+        "\"Bgm\"",
+        "timer",
+        "Time",
+        "MUSICNOOFFSET",
+        "customBeatClock",
+        "seconds",
+        "unknown",
+    ];
+    let effect_clock_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for value in effect_clock_cases {
+                checksum = mix(checksum, black_box(parse(black_box(value))));
+            }
+        }
+        checksum
+    };
+    let (old_clock, new_clock) = measure_pair(
+        1_024,
+        effect_clock_cases.len() * REPEATS,
+        || effect_clock_suite(lowercase_effect_clock_old),
+        || effect_clock_suite(classified_effect_clock_new),
+    );
+    assert_improved(
+        "allocation-free effect clock parsing",
+        &old_clock,
+        &new_clock,
+    );
+    assert_eq!(new_clock.alloc.allocs, 0);
+    assert_eq!(new_clock.alloc.reallocs, 0);
+    assert_eq!(new_clock.alloc.frees, 0);
+    assert_eq!(new_clock.alloc.churn(), 0);
+    print_pair(
+        "allocation-free effect clock parsing (9 representative values)",
+        &old_clock,
+        &new_clock,
     );
 
     let linear_cases = [
