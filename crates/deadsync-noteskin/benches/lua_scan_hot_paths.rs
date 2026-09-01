@@ -9,6 +9,10 @@ use deadsync_noteskin::lua::{
     itg_parse_self_chain_commands_reference_for_bench, itg_quoted_strings,
 };
 use deadsync_noteskin::script::{
+    bench_support::{
+        borrowed_argument_slices_new, classified_command_new, heap_argument_storage_old,
+        inline_argument_storage_new, lowercase_command_old, owned_argument_slices_old,
+    },
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -348,6 +352,92 @@ fn cycle_counter() -> Option<u64> {
 
 fn main() {
     const REPEATS: usize = 32;
+
+    let token_cases = [
+        "Diffuse, 1, 0.5, 0.25, 1",
+        "EffectTiming, 0.2, 0.1, 0.3, 0.05, 0.4",
+        "SetStateProperties, Sprite.LinearFrames(8, 0.5)",
+        "PlayCommand, 'Ready, Set'",
+        "Blend, BlendMode_Add",
+        "UnknownCommand, nested(1, 2), { 3, 4 }, 'five,six'",
+    ];
+    let token_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for token in token_cases {
+                checksum = mix(checksum, black_box(parse(black_box(token))));
+            }
+        }
+        checksum
+    };
+
+    let (old_borrowing, new_borrowing) = measure_pair(
+        512,
+        token_cases.len() * REPEATS,
+        || token_suite(owned_argument_slices_old),
+        || token_suite(borrowed_argument_slices_new),
+    );
+    assert_improved(
+        "borrowed command argument slices",
+        &old_borrowing,
+        &new_borrowing,
+    );
+    print_pair(
+        "borrowed command argument slices (6 representative tokens)",
+        &old_borrowing,
+        &new_borrowing,
+    );
+
+    let (old_storage, new_storage) = measure_pair(
+        512,
+        token_cases.len() * REPEATS,
+        || token_suite(heap_argument_storage_old),
+        || token_suite(inline_argument_storage_new),
+    );
+    assert_improved(
+        "inline command argument storage",
+        &old_storage,
+        &new_storage,
+    );
+    print_pair(
+        "inline command argument storage (6 representative tokens)",
+        &old_storage,
+        &new_storage,
+    );
+
+    let command_cases = [
+        "Diffuse",
+        "EFFECTTIMING",
+        "setStateProperties",
+        "AddRotationZ",
+        "SetTextureFiltering",
+        "Visible",
+    ];
+    let command_suite = |parse: fn(&str) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for command in command_cases {
+                checksum = mix(checksum, black_box(parse(black_box(command))));
+            }
+        }
+        checksum
+    };
+    let (old_commands, new_commands) = measure_pair(
+        1_024,
+        command_cases.len() * REPEATS,
+        || command_suite(lowercase_command_old),
+        || command_suite(classified_command_new),
+    );
+    assert_improved(
+        "allocation-free command classification",
+        &old_commands,
+        &new_commands,
+    );
+    print_pair(
+        "allocation-free command classification (6 mixed-case commands)",
+        &old_commands,
+        &new_commands,
+    );
 
     let linear_cases = [
         "Sprite.LinearFrames(64,(64/60))",

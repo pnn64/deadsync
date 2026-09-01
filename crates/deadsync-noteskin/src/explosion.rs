@@ -1,6 +1,6 @@
 use crate::TweenType;
 use crate::script::{
-    ScriptActorMod, ScriptControl, ScriptEffectMod, normalized_script_command,
+    ScriptActorMod, ScriptCommand, ScriptControl, ScriptEffectMod, normalized_script_command,
     parse_script_actor_mod, parse_script_bool, parse_script_control, parse_script_effect_mod,
     parse_script_number, parse_script_sleep, parse_script_tween, split_script_token,
     tween_type_from_script_tween,
@@ -526,11 +526,13 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             continue;
         }
 
-        let Some((command, args)) = split_script_token(token) else {
+        let Some(token) = split_script_token(token) else {
             continue;
         };
+        let command = token.command();
+        let args = token.args();
 
-        if let Some((tween, duration)) = parse_script_tween(command.as_str(), &args) {
+        if let Some((tween, duration)) = parse_script_tween(command, args) {
             recognized_command = true;
             finish_pending(&mut pending, &mut animation, &mut current_state, true);
             pending = Some(PendingSegment {
@@ -548,7 +550,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if let Some(duration) = parse_script_sleep(command.as_str(), &args) {
+        if let Some(duration) = parse_script_sleep(command, args) {
             recognized_command = true;
             finish_pending(&mut pending, &mut animation, &mut current_state, true);
             pending = Some(PendingSegment {
@@ -566,7 +568,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if let Some(control) = parse_script_control(command.as_str()) {
+        if let Some(control) = parse_script_control(command) {
             recognized_command = true;
             match control {
                 ScriptControl::FinishTweening => {
@@ -580,7 +582,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if let Some(mod_cmd) = parse_script_actor_mod(command.as_str(), &args) {
+        if let Some(mod_cmd) = parse_script_actor_mod(command, args) {
             recognized_command = true;
             match mod_cmd {
                 ScriptActorMod::DiffuseAlpha(value) => {
@@ -643,12 +645,12 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if command == "diffuse" && args.len() >= 3 {
+        if command == ScriptCommand::Diffuse && args.len() >= 3 {
             recognized_command = true;
             let mut parsed = [0.0f32; 4];
             let mut ok = true;
             for i in 0..3 {
-                if let Some(v) = parse_script_number(&args[i]) {
+                if let Some(v) = parse_script_number(args[i]) {
                     parsed[i] = v;
                 } else {
                     warn!(
@@ -661,7 +663,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             if ok {
                 parsed[3] = if args.len() >= 4 {
-                    parse_script_number(&args[3]).unwrap_or(current_state.color[3])
+                    parse_script_number(args[3]).unwrap_or(current_state.color[3])
                 } else {
                     current_state.color[3]
                 };
@@ -677,7 +679,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if let Some(effect_mod) = parse_script_effect_mod(command.as_str(), &args) {
+        if let Some(effect_mod) = parse_script_effect_mod(command, args) {
             recognized_command = true;
             match effect_mod {
                 ScriptEffectMod::GlowShift => {
@@ -724,9 +726,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
             }
             continue;
         }
-        if !command.is_empty() {
-            warn!("Unhandled explosion command '{command}'.");
-        }
+        warn!("Unhandled explosion command '{command}'.");
     }
 
     finish_pending(&mut pending, &mut animation, &mut current_state, true);
@@ -1093,9 +1093,9 @@ pub fn itg_tap_explosion_mode_from_commands(
 fn itg_script_visible_command(script: &str) -> Option<bool> {
     let script = normalized_script_command(script);
     script.split(';').find_map(|token| {
-        let (command, args) = split_script_token(token)?;
-        (command == "visible")
-            .then(|| args.first().map(|arg| parse_script_bool(arg)))
+        let token = split_script_token(token)?;
+        (token.command() == ScriptCommand::Visible)
+            .then(|| token.args().first().map(|arg| parse_script_bool(arg)))
             .flatten()
     })
 }

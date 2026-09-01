@@ -2,7 +2,7 @@ use crate::{
     TweenType,
     itg::IniData,
     script::{
-        ScriptEffectMod, itg_parse_command_effect, normalized_script_command,
+        ScriptCommand, ScriptEffectMod, itg_parse_command_effect, normalized_script_command,
         parse_script_effect_mod, parse_script_number, parse_script_vertalign, split_script_token,
     },
 };
@@ -616,10 +616,10 @@ pub fn receptor_pulse_from_script(command: &str) -> ReceptorPulse {
         if token.is_empty() {
             continue;
         }
-        let Some((cmd, args)) = split_script_token(token) else {
+        let Some(token) = split_script_token(token) else {
             continue;
         };
-        if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
+        if let Some(effect_mod) = parse_script_effect_mod(token.command(), token.args()) {
             match effect_mod {
                 ScriptEffectMod::EffectColor1(color) => pulse.effect_color1 = color,
                 ScriptEffectMod::EffectColor2(color) => pulse.effect_color2 = color,
@@ -751,15 +751,21 @@ pub fn receptor_reverse_state(script: &str) -> ReceptorReverseState {
         if token.is_empty() {
             continue;
         }
-        let Some((cmd, args)) = split_script_token(token) else {
+        let Some(token) = split_script_token(token) else {
             continue;
         };
-        match cmd.as_str() {
-            "baserotationz" => {
-                out.base_rotation_z = args.first().and_then(|v| parse_script_number(v));
+        match token.command() {
+            ScriptCommand::BaseRotationZ => {
+                out.base_rotation_z = token
+                    .args()
+                    .first()
+                    .and_then(|value| parse_script_number(value));
             }
-            "vertalign" | "valign" => {
-                out.vert_align = args.first().and_then(|v| parse_script_vertalign(v));
+            ScriptCommand::VertAlign | ScriptCommand::VAlign => {
+                out.vert_align = token
+                    .args()
+                    .first()
+                    .and_then(|value| parse_script_vertalign(value));
             }
             _ => {}
         }

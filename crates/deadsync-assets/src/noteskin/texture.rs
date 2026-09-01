@@ -13,8 +13,8 @@ use deadsync_noteskin::model::ItgModelSlotPlan;
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::script::{
-    apply_sprite_animation_command_plans, normalized_script_command, parse_script_bool,
-    parse_script_number, split_script_token,
+    ScriptCommand, apply_sprite_animation_command_plans, normalized_script_command,
+    parse_script_bool, parse_script_number, split_script_token,
 };
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenCursor,
@@ -990,20 +990,21 @@ fn itg_apply_initial_sprite_state(
         };
         let script = normalized_script_command(script);
         for raw in script.split(';') {
-            let Some((command, args)) = split_script_token(raw.trim()) else {
+            let Some(token) = split_script_token(raw.trim()) else {
                 continue;
             };
-            match command.as_str() {
-                "setstate" => {
-                    frame = args
+            match token.command() {
+                ScriptCommand::SetState => {
+                    frame = token
+                        .args()
                         .first()
                         .and_then(|arg| parse_script_number(arg))
                         .map(|value| value.max(0.0) as usize);
                 }
-                "pause" => paused = true,
-                "play" => paused = false,
-                "animate" => {
-                    if let Some(enabled) = args.first().map(|arg| parse_script_bool(arg)) {
+                ScriptCommand::Pause => paused = true,
+                ScriptCommand::Play => paused = false,
+                ScriptCommand::Animate => {
+                    if let Some(enabled) = token.args().first().map(|arg| parse_script_bool(arg)) {
                         paused = !enabled;
                     }
                 }
