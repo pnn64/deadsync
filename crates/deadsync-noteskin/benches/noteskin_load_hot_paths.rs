@@ -236,6 +236,49 @@ fn run_uv_case(title: &str, old_op: fn(usize) -> u64, new_op: fn(usize) -> u64) 
     }
 }
 
+fn run_allocation_case(title: &str, old_op: fn(usize) -> u64, new_op: fn(usize) -> u64) {
+    const EVALUATIONS: usize = 256;
+    const OPERATIONS: usize = 256;
+    assert_eq!(
+        old_op(EVALUATIONS),
+        new_op(EVALUATIONS),
+        "{title} behavior diverged before measurement"
+    );
+    let old = measure(OPERATIONS, EVALUATIONS, || old_op(EVALUATIONS));
+    let new = measure(OPERATIONS, EVALUATIONS, || new_op(EVALUATIONS));
+    print_pair(title, &old, &new);
+    assert!(
+        new.median_ns < old.median_ns,
+        "{title} median latency did not improve"
+    );
+    assert!(
+        new.p95_ns < old.p95_ns,
+        "{title} p95 latency did not improve"
+    );
+    if let (Some(old_cycles), Some(new_cycles)) = (old.median_cycles, new.median_cycles) {
+        assert!(
+            new_cycles < old_cycles,
+            "{title} median CPU cycles did not improve"
+        );
+    }
+    assert!(
+        new.alloc.allocs < old.alloc.allocs,
+        "{title} allocations did not fall"
+    );
+    assert!(
+        new.alloc.reallocs <= old.alloc.reallocs,
+        "{title} reallocations increased"
+    );
+    assert!(
+        new.alloc.frees < old.alloc.frees,
+        "{title} frees did not fall"
+    );
+    assert!(
+        new.alloc.churn() < old.alloc.churn(),
+        "{title} memory churn did not fall"
+    );
+}
+
 fn fixture() -> String {
     let mut raw = String::with_capacity(16 * 1024);
     raw.push_str("GlobalOnly = before-section\n[NoteDisplay]\n");
@@ -481,6 +524,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_DIRECT_EXPLOSION_ONLY").is_some() {
+        run_allocation_case(
+            "noteskin stack-backed direct explosion names",
+            explosion_bench_support::formatted_direct_element_names_old,
+            explosion_bench_support::stack_direct_element_names_new,
+        );
+        run_allocation_case(
+            "noteskin fused direct explosion resolution",
+            explosion_bench_support::staged_direct_layer_resolution_old,
+            explosion_bench_support::fused_direct_layer_resolution_new,
+        );
+        run_allocation_case(
+            "noteskin reused direct explosion layer accumulator",
+            explosion_bench_support::fresh_direct_layer_accumulator_old,
+            explosion_bench_support::reused_direct_layer_accumulator_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_EXPLOSION_ONLY").is_some() {
         run_uv_case(
             "noteskin canonical explosion fade",

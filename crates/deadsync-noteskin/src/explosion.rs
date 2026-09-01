@@ -6,6 +6,7 @@ use crate::script::{
     tween_type_from_script_tween,
 };
 use log::warn;
+use smallvec::SmallVec;
 use std::collections::HashMap;
 
 pub const ITG_TAP_EXPLOSION_WINDOWS: [&str; 7] = ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
@@ -342,7 +343,12 @@ pub mod explosion_bench_support {
     use std::hint::black_box;
     use std::sync::OnceLock;
 
-    use super::{ExplosionAnimation, ExplosionVisualState, GlowEffect};
+    use super::{
+        ExplosionAnimation, ExplosionVisualState, GlowEffect, itg_direct_tap_explosion_elements,
+        itg_direct_tap_explosion_elements_reference, itg_direct_tap_explosion_layers,
+        itg_direct_tap_explosion_layers_fused_reference,
+        itg_direct_tap_explosion_layers_staged_reference,
+    };
 
     #[inline(always)]
     fn color_checksum(color: [f32; 4], checksum: u64) -> u64 {
@@ -448,6 +454,123 @@ pub mod explosion_bench_support {
     #[must_use]
     pub fn constant_binary_glow_new(evaluations: usize) -> u64 {
         glow_colors(evaluations, constant_binary_glow(), true)
+    }
+
+    const DIRECT_BASE_ELEMENT: &str = "Tap Explosion Bright";
+
+    #[inline]
+    fn direct_element_is_blank(element: &str) -> bool {
+        element.ends_with("W2") || element.ends_with("W4")
+    }
+
+    #[inline]
+    fn text_checksum(checksum: u64, value: &str) -> u64 {
+        value.bytes().fold(
+            checksum.wrapping_mul(131).wrapping_add(value.len() as u64),
+            |checksum, byte| checksum.wrapping_mul(131).wrapping_add(u64::from(byte)),
+        )
+    }
+
+    #[inline]
+    fn layer_values(element: &str) -> Vec<u64> {
+        vec![
+            element.len() as u64,
+            element.bytes().fold(0_u64, |checksum, byte| {
+                checksum.wrapping_add(u64::from(byte))
+            }),
+            u64::from(element.as_bytes()[0]),
+            u64::from(element.as_bytes()[element.len() - 1]),
+        ]
+    }
+
+    fn element_checksum(elements: Vec<String>, checksum: u64) -> u64 {
+        elements.iter().fold(checksum, |checksum, element| {
+            text_checksum(checksum, element)
+        })
+    }
+
+    fn layer_checksum(layers: Vec<u64>, checksum: u64) -> u64 {
+        layers.into_iter().fold(checksum, |checksum, layer| {
+            checksum.wrapping_mul(131).wrapping_add(layer)
+        })
+    }
+
+    #[must_use]
+    pub fn formatted_direct_element_names_old(evaluations: usize) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            element_checksum(
+                itg_direct_tap_explosion_elements_reference(
+                    black_box(DIRECT_BASE_ELEMENT),
+                    false,
+                    direct_element_is_blank,
+                ),
+                checksum,
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn stack_direct_element_names_new(evaluations: usize) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            element_checksum(
+                itg_direct_tap_explosion_elements(
+                    black_box(DIRECT_BASE_ELEMENT),
+                    false,
+                    direct_element_is_blank,
+                ),
+                checksum,
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn staged_direct_layer_resolution_old(evaluations: usize) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            layer_checksum(
+                itg_direct_tap_explosion_layers_staged_reference(
+                    black_box(DIRECT_BASE_ELEMENT),
+                    false,
+                    direct_element_is_blank,
+                    layer_values,
+                ),
+                checksum,
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn fused_direct_layer_resolution_new(evaluations: usize) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            layer_checksum(
+                itg_direct_tap_explosion_layers_fused_reference(
+                    black_box(DIRECT_BASE_ELEMENT),
+                    false,
+                    direct_element_is_blank,
+                    layer_values,
+                ),
+                checksum,
+            )
+        })
+    }
+
+    #[must_use]
+    pub fn fresh_direct_layer_accumulator_old(evaluations: usize) -> u64 {
+        fused_direct_layer_resolution_new(evaluations)
+    }
+
+    #[must_use]
+    pub fn reused_direct_layer_accumulator_new(evaluations: usize) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            layer_checksum(
+                itg_direct_tap_explosion_layers(
+                    black_box(DIRECT_BASE_ELEMENT),
+                    false,
+                    direct_element_is_blank,
+                    layer_values,
+                ),
+                checksum,
+            )
+        })
     }
 }
 
@@ -1120,8 +1243,73 @@ pub fn itg_direct_tap_explosion_elements(
     mut is_blank: impl FnMut(&str) -> bool,
 ) -> Vec<String> {
     let mut out = Vec::new();
+    for_each_direct_tap_explosion_element(
+        base_element,
+        base_blank,
+        &mut is_blank,
+        &mut |element| {
+            out.push(element.to_owned());
+        },
+    );
+    out
+}
+
+pub fn itg_direct_tap_explosion_layers<T>(
+    base_element: &str,
+    base_blank: bool,
+    is_blank: impl FnMut(&str) -> bool,
+    mut resolve_element: impl FnMut(&str) -> Vec<T>,
+) -> Vec<T> {
+    let mut is_blank = is_blank;
+    let mut out: Option<Vec<T>> = None;
+    for_each_direct_tap_explosion_element(
+        base_element,
+        base_blank,
+        &mut is_blank,
+        &mut |element| {
+            let mut layers = resolve_element(element);
+            if let Some(out) = &mut out {
+                out.append(&mut layers);
+            } else {
+                out = Some(layers);
+            }
+        },
+    );
+    out.unwrap_or_default()
+}
+
+fn for_each_direct_tap_explosion_element(
+    base_element: &str,
+    base_blank: bool,
+    is_blank: &mut impl FnMut(&str) -> bool,
+    visit: &mut impl FnMut(&str),
+) {
     if !base_blank {
-        out.push(base_element.to_string());
+        visit(base_element);
+    }
+
+    let mut element = SmallVec::<[u8; 64]>::from_slice(base_element.as_bytes());
+    element.extend_from_slice(b" W1");
+    let digit_index = element.len() - 1;
+    for digit in b'1'..=b'5' {
+        element[digit_index] = digit;
+        // SAFETY: `base_element` is valid UTF-8 and only an ASCII suffix is appended.
+        let element = unsafe { str::from_utf8_unchecked(&element) };
+        if !is_blank(element) {
+            visit(element);
+        }
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_direct_tap_explosion_elements_reference(
+    base_element: &str,
+    base_blank: bool,
+    mut is_blank: impl FnMut(&str) -> bool,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if !base_blank {
+        out.push(base_element.to_owned());
     }
     for window in ["W1", "W2", "W3", "W4", "W5"] {
         let element = format!("{base_element} {window}");
@@ -1132,7 +1320,8 @@ pub fn itg_direct_tap_explosion_elements(
     out
 }
 
-pub fn itg_direct_tap_explosion_layers<T>(
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_direct_tap_explosion_layers_staged_reference<T>(
     base_element: &str,
     base_blank: bool,
     is_blank: impl FnMut(&str) -> bool,
@@ -1142,6 +1331,23 @@ pub fn itg_direct_tap_explosion_layers<T>(
     for element in itg_direct_tap_explosion_elements(base_element, base_blank, is_blank) {
         out.extend(resolve_element(&element));
     }
+    out
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_direct_tap_explosion_layers_fused_reference<T>(
+    base_element: &str,
+    base_blank: bool,
+    mut is_blank: impl FnMut(&str) -> bool,
+    mut resolve_element: impl FnMut(&str) -> Vec<T>,
+) -> Vec<T> {
+    let mut out = Vec::new();
+    for_each_direct_tap_explosion_element(
+        base_element,
+        base_blank,
+        &mut is_blank,
+        &mut |element| out.extend(resolve_element(element)),
+    );
     out
 }
 
@@ -1775,6 +1981,20 @@ mod tests {
     }
 
     #[test]
+    fn direct_tap_explosion_element_names_match_formatted_reference_after_inline_spill() {
+        let base = format!("{} Café", "Long Tap Explosion ".repeat(6));
+        let current = itg_direct_tap_explosion_elements(&base, false, |element| {
+            element.ends_with("W2") || element.ends_with("W5")
+        });
+        let reference = itg_direct_tap_explosion_elements_reference(&base, false, |element| {
+            element.ends_with("W2") || element.ends_with("W5")
+        });
+
+        assert!(base.len() > 64);
+        assert_eq!(current, reference);
+    }
+
+    #[test]
     fn direct_tap_explosion_layers_resolve_selected_elements() {
         let layers = itg_direct_tap_explosion_layers(
             "Tap Explosion Bright",
@@ -1793,5 +2013,52 @@ mod tests {
                 "Tap Explosion Bright W5",
             ]
         );
+    }
+
+    #[test]
+    fn direct_tap_explosion_fused_resolution_matches_staged_order() {
+        let resolve = |element: &str| vec![element.to_owned(), element.len().to_string()];
+        let current = itg_direct_tap_explosion_layers_fused_reference(
+            "Tap Explosion Dim",
+            false,
+            |element| element.ends_with("W2") || element.ends_with("W4"),
+            resolve,
+        );
+        let reference = itg_direct_tap_explosion_layers_staged_reference(
+            "Tap Explosion Dim",
+            false,
+            |element| element.ends_with("W2") || element.ends_with("W4"),
+            resolve,
+        );
+
+        assert_eq!(current, reference);
+    }
+
+    #[test]
+    fn direct_tap_explosion_reused_accumulator_preserves_empty_first_batch() {
+        let resolve = |element: &str| {
+            if element == "Tap Explosion Bright" {
+                Vec::new()
+            } else {
+                vec![
+                    element.len(),
+                    element.as_bytes()[element.len() - 1] as usize,
+                ]
+            }
+        };
+        let current = itg_direct_tap_explosion_layers(
+            "Tap Explosion Bright",
+            false,
+            |element| element.ends_with("W3"),
+            resolve,
+        );
+        let reference = itg_direct_tap_explosion_layers_fused_reference(
+            "Tap Explosion Bright",
+            false,
+            |element| element.ends_with("W3"),
+            resolve,
+        );
+
+        assert_eq!(current, reference);
     }
 }
