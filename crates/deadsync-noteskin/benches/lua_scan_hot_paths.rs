@@ -35,11 +35,14 @@ use deadsync_noteskin::model::model_scan_bench_support::{
     material_nomove_reference, milkshape_signature_current, milkshape_signature_reference,
 };
 use deadsync_noteskin::runtime::{
-    itg_has_receptor_actor_effect_command_for_bench,
+    ItgResolvedSprite, itg_has_receptor_actor_effect_command_for_bench,
     itg_has_receptor_actor_effect_command_reference_for_bench,
     itg_is_common_fallback_hold_explosion_key,
     itg_is_common_fallback_hold_explosion_key_reference_for_bench, itg_is_common_noteskin_key,
-    itg_is_common_noteskin_key_reference_for_bench,
+    itg_is_common_noteskin_key_reference_for_bench, itg_receptor_command_refs_for_bench,
+    itg_receptor_command_refs_reference_for_bench, itg_receptor_layer_refs_for_bench,
+    itg_receptor_layer_refs_reference_for_bench, itg_receptor_visual_slots_for_bench,
+    itg_receptor_visual_slots_reference_for_bench,
 };
 use deadsync_noteskin::script::{
     bench_support::{
@@ -53,9 +56,13 @@ use deadsync_noteskin::script::{
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::collections::HashMap;
 use std::hint::black_box;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
 use std::time::Instant;
 
 #[global_allocator]
@@ -1958,5 +1965,129 @@ fn main() {
         "direct local-function parameter storage (8 representative lists)",
         &old_local_params,
         &new_local_params,
+    );
+
+    let receptor_layers = [
+        ItgResolvedSprite {
+            element: "Underlay".to_string(),
+            slot: Arc::new(11_u64),
+            commands: HashMap::new(),
+        },
+        ItgResolvedSprite {
+            element: "Base".to_string(),
+            slot: Arc::new(17_u64),
+            commands: HashMap::from([(
+                "initcommand".to_string(),
+                "zoom,1.1;diffusealpha,1".to_string(),
+            )]),
+        },
+        ItgResolvedSprite {
+            element: "Idle".to_string(),
+            slot: Arc::new(23_u64),
+            commands: HashMap::from([(
+                "oncommand".to_string(),
+                "effectclock,bgm;diffuseshift".to_string(),
+            )]),
+        },
+        ItgResolvedSprite {
+            element: "Glow".to_string(),
+            slot: Arc::new(29_u64),
+            commands: HashMap::from([(
+                "presscommand".to_string(),
+                "linear,0.1;diffusealpha,0.8".to_string(),
+            )]),
+        },
+    ];
+    let receptor_layer_cases = [
+        (&receptor_layers[..0], false),
+        (&receptor_layers[..1], false),
+        (&receptor_layers[..2], false),
+        (&receptor_layers[..3], false),
+        (&receptor_layers[..4], false),
+        (&receptor_layers[..4], true),
+    ];
+    let receptor_layer_suite = |select: fn(&[ItgResolvedSprite<Arc<u64>>], bool) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for &(layers, actor_effect) in &receptor_layer_cases {
+                checksum = mix(
+                    checksum,
+                    black_box(select(black_box(layers), black_box(actor_effect))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_receptor_layers, new_receptor_layers) = measure_pair(
+        2_048,
+        receptor_layer_cases.len() * REPEATS,
+        || receptor_layer_suite(itg_receptor_layer_refs_reference_for_bench),
+        || receptor_layer_suite(itg_receptor_layer_refs_for_bench),
+    );
+    assert_improved(
+        "inline receptor visual-layer references",
+        &old_receptor_layers,
+        &new_receptor_layers,
+    );
+    print_pair(
+        "inline receptor visual-layer references (6 representative layer sets)",
+        &old_receptor_layers,
+        &new_receptor_layers,
+    );
+
+    let receptor_slice_suite = |project: fn(&[ItgResolvedSprite<Arc<u64>>]) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for &(layers, _) in &receptor_layer_cases {
+                checksum = mix(checksum, black_box(project(black_box(layers))));
+            }
+        }
+        checksum
+    };
+    let (old_receptor_commands, new_receptor_commands) = measure_pair(
+        2_048,
+        receptor_layer_cases.len() * REPEATS,
+        || receptor_slice_suite(itg_receptor_command_refs_reference_for_bench),
+        || receptor_slice_suite(itg_receptor_command_refs_for_bench),
+    );
+    assert_improved(
+        "inline receptor command-map references",
+        &old_receptor_commands,
+        &new_receptor_commands,
+    );
+    print_pair(
+        "inline receptor command-map references (6 representative layer sets)",
+        &old_receptor_commands,
+        &new_receptor_commands,
+    );
+
+    let receptor_fallback = Arc::new(31_u64);
+    let receptor_slot_suite = |project: fn(&[ItgResolvedSprite<Arc<u64>>], &Arc<u64>) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            for &(layers, _) in &receptor_layer_cases {
+                checksum = mix(
+                    checksum,
+                    black_box(project(black_box(layers), black_box(&receptor_fallback))),
+                );
+            }
+        }
+        checksum
+    };
+    let (old_receptor_slots, new_receptor_slots) = measure_pair(
+        2_048,
+        receptor_layer_cases.len() * REPEATS,
+        || receptor_slot_suite(itg_receptor_visual_slots_reference_for_bench),
+        || receptor_slot_suite(itg_receptor_visual_slots_for_bench),
+    );
+    assert_improved(
+        "direct receptor visual-slot cloning",
+        &old_receptor_slots,
+        &new_receptor_slots,
+    );
+    print_pair(
+        "direct receptor visual-slot cloning (6 representative layer sets)",
+        &old_receptor_slots,
+        &new_receptor_slots,
     );
 }

@@ -13,6 +13,7 @@ use crate::{
     ReceptorStepBehaviors,
 };
 use crate::{actor, compiled, itg, model, receptor};
+use smallvec::SmallVec;
 use std::collections::{HashMap, HashSet};
 use std::ops::Index;
 use std::path::Path;
@@ -1828,21 +1829,10 @@ pub fn itg_receptor_column<T: Clone>(
     mut base_zoom: impl FnMut(&T) -> f32,
 ) -> Option<ItgReceptorColumn<T>> {
     let idle_glow_layer = itg_receptor_actor_effect_layers(layers);
-    let visual_layers = if let Some([off, _, glow]) = idle_glow_layer {
-        vec![off, glow]
-    } else {
-        itg_receptor_visual_layers(layers).iter().collect()
-    };
-    let layer_commands = visual_layers
-        .iter()
-        .map(|sprite| &sprite.commands)
-        .collect::<Vec<_>>();
-    let receptor_slots = visual_layers
-        .iter()
-        .map(|sprite| sprite.slot.clone())
-        .collect::<Vec<_>>();
-    let visuals = receptor::itg_receptor_visuals(
-        &receptor_slots,
+    let visual_layers = itg_receptor_layer_refs(layers, idle_glow_layer);
+    let layer_commands = itg_receptor_command_refs(&visual_layers);
+    let visuals = itg_receptor_visuals_from_resolved(
+        &visual_layers,
         receptor_fallback,
         rflash_fallback,
         glow_fallback,
@@ -1886,6 +1876,218 @@ pub fn itg_receptor_column<T: Clone>(
         pulse_command: receptor::itg_receptor_pulse_command(&layer_commands).map(str::to_string),
         idle_glow,
     })
+}
+
+type ItgReceptorLayerRefs<'a, T> = SmallVec<[&'a ItgResolvedSprite<T>; 2]>;
+type ItgReceptorCommandRefs<'a> = SmallVec<[&'a HashMap<String, String>; 2]>;
+
+fn itg_receptor_layer_refs<'a, T>(
+    layers: &'a [ItgResolvedSprite<T>],
+    actor_effect_layers: Option<[&'a ItgResolvedSprite<T>; 3]>,
+) -> ItgReceptorLayerRefs<'a, T> {
+    let mut visual_layers = SmallVec::new();
+    if let Some([off, _, glow]) = actor_effect_layers {
+        visual_layers.extend([off, glow]);
+    } else {
+        visual_layers.extend(itg_receptor_visual_layers(layers));
+    }
+    visual_layers
+}
+
+fn itg_receptor_command_refs<'a, T>(
+    layers: &[&'a ItgResolvedSprite<T>],
+) -> ItgReceptorCommandRefs<'a> {
+    layers.iter().map(|sprite| &sprite.commands).collect()
+}
+
+fn itg_receptor_visuals_from_resolved<T: Clone>(
+    layers: &[&ItgResolvedSprite<T>],
+    receptor_fallback: impl FnOnce() -> Option<T>,
+    rflash_fallback: impl FnOnce() -> Option<T>,
+    glow_fallback: impl FnOnce() -> Option<T>,
+) -> receptor::ItgReceptorVisuals<T> {
+    let off = layers
+        .first()
+        .map(|sprite| sprite.slot.clone())
+        .or_else(receptor_fallback);
+    let glow = layers.get(1).map(|sprite| sprite.slot.clone()).or_else(|| {
+        if layers.is_empty() {
+            rflash_fallback().or_else(glow_fallback)
+        } else {
+            None
+        }
+    });
+    receptor::ItgReceptorVisuals { off, glow }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_receptor_layer_refs_reference<'a, T>(
+    layers: &'a [ItgResolvedSprite<T>],
+    actor_effect_layers: Option<[&'a ItgResolvedSprite<T>; 3]>,
+) -> Vec<&'a ItgResolvedSprite<T>> {
+    if let Some([off, _, glow]) = actor_effect_layers {
+        vec![off, glow]
+    } else {
+        itg_receptor_visual_layers(layers).iter().collect()
+    }
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_receptor_command_refs_reference<'a, T>(
+    layers: &[&'a ItgResolvedSprite<T>],
+) -> Vec<&'a HashMap<String, String>> {
+    layers.iter().map(|sprite| &sprite.commands).collect()
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn itg_receptor_visuals_from_resolved_reference<T: Clone>(
+    layers: &[&ItgResolvedSprite<T>],
+    receptor_fallback: impl FnOnce() -> Option<T>,
+    rflash_fallback: impl FnOnce() -> Option<T>,
+    glow_fallback: impl FnOnce() -> Option<T>,
+) -> receptor::ItgReceptorVisuals<T> {
+    let receptor_slots = layers
+        .iter()
+        .map(|sprite| sprite.slot.clone())
+        .collect::<Vec<_>>();
+    receptor::itg_receptor_visuals(
+        &receptor_slots,
+        receptor_fallback,
+        rflash_fallback,
+        glow_fallback,
+    )
+}
+
+#[cfg(feature = "bench-support")]
+fn receptor_bench_actor_effect_layers<T>(
+    layers: &[ItgResolvedSprite<T>],
+    actor_effect: bool,
+) -> Option<[&ItgResolvedSprite<T>; 3]> {
+    if !actor_effect {
+        return None;
+    }
+    let [.., off, idle, glow] = layers else {
+        return None;
+    };
+    Some([off, idle, glow])
+}
+
+#[cfg(feature = "bench-support")]
+fn receptor_layer_refs_checksum(layers: &[&ItgResolvedSprite<Arc<u64>>]) -> u64 {
+    layers.iter().fold(layers.len() as u64, |checksum, sprite| {
+        checksum
+            .wrapping_mul(1_099_511_628_211)
+            .wrapping_add(*sprite.slot.as_ref())
+    })
+}
+
+#[cfg(feature = "bench-support")]
+fn receptor_command_refs_checksum(layers: &[&HashMap<String, String>]) -> u64 {
+    const KEYS: [&str; 4] = ["initcommand", "oncommand", "presscommand", "liftcommand"];
+    layers
+        .iter()
+        .fold(layers.len() as u64, |checksum, commands| {
+            KEYS.iter().fold(checksum, |checksum, key| {
+                commands.get(*key).map_or(checksum, |value| {
+                    value.bytes().fold(checksum, |checksum, byte| {
+                        checksum
+                            .wrapping_mul(1_099_511_628_211)
+                            .wrapping_add(u64::from(byte))
+                    })
+                })
+            })
+        })
+}
+
+#[cfg(feature = "bench-support")]
+fn receptor_visuals_checksum(visuals: receptor::ItgReceptorVisuals<Arc<u64>>) -> u64 {
+    visuals
+        .off
+        .as_deref()
+        .copied()
+        .unwrap_or_default()
+        .wrapping_mul(31)
+        + visuals.glow.as_deref().copied().unwrap_or_default()
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_layer_refs_for_bench(
+    layers: &[ItgResolvedSprite<Arc<u64>>],
+    actor_effect: bool,
+) -> u64 {
+    receptor_layer_refs_checksum(&itg_receptor_layer_refs(
+        layers,
+        receptor_bench_actor_effect_layers(layers, actor_effect),
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_layer_refs_reference_for_bench(
+    layers: &[ItgResolvedSprite<Arc<u64>>],
+    actor_effect: bool,
+) -> u64 {
+    receptor_layer_refs_checksum(&itg_receptor_layer_refs_reference(
+        layers,
+        receptor_bench_actor_effect_layers(layers, actor_effect),
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_command_refs_for_bench(layers: &[ItgResolvedSprite<Arc<u64>>]) -> u64 {
+    let visual_layers: ItgReceptorLayerRefs<'_, _> =
+        itg_receptor_visual_layers(layers).iter().collect();
+    receptor_command_refs_checksum(&itg_receptor_command_refs(&visual_layers))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_command_refs_reference_for_bench(
+    layers: &[ItgResolvedSprite<Arc<u64>>],
+) -> u64 {
+    let visual_layers: ItgReceptorLayerRefs<'_, _> =
+        itg_receptor_visual_layers(layers).iter().collect();
+    receptor_command_refs_checksum(&itg_receptor_command_refs_reference(&visual_layers))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_visual_slots_for_bench(
+    layers: &[ItgResolvedSprite<Arc<u64>>],
+    fallback: &Arc<u64>,
+) -> u64 {
+    let visual_layers: ItgReceptorLayerRefs<'_, _> =
+        itg_receptor_visual_layers(layers).iter().collect();
+    receptor_visuals_checksum(itg_receptor_visuals_from_resolved(
+        &visual_layers,
+        || Some(Arc::clone(fallback)),
+        || Some(Arc::clone(fallback)),
+        || Some(Arc::clone(fallback)),
+    ))
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
+#[must_use]
+pub fn itg_receptor_visual_slots_reference_for_bench(
+    layers: &[ItgResolvedSprite<Arc<u64>>],
+    fallback: &Arc<u64>,
+) -> u64 {
+    let visual_layers: ItgReceptorLayerRefs<'_, _> =
+        itg_receptor_visual_layers(layers).iter().collect();
+    receptor_visuals_checksum(itg_receptor_visuals_from_resolved_reference(
+        &visual_layers,
+        || Some(Arc::clone(fallback)),
+        || Some(Arc::clone(fallback)),
+        || Some(Arc::clone(fallback)),
+    ))
 }
 
 fn itg_receptor_actor_effect_layers<T>(
@@ -2981,8 +3183,11 @@ mod tests {
         itg_is_common_fallback_hold_explosion_key_reference, itg_is_common_noteskin_key,
         itg_is_common_noteskin_key_reference, itg_lift_layers_for_col, itg_load_sprite_decl_slot,
         itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
-        itg_noteskin_runtime_compiled, itg_receptor_column, itg_receptor_glow_behavior_from_layers,
-        itg_receptor_pulse_from_command, itg_resolve_actor_file_compiled,
+        itg_noteskin_runtime_compiled, itg_receptor_column, itg_receptor_command_refs,
+        itg_receptor_command_refs_reference, itg_receptor_glow_behavior_from_layers,
+        itg_receptor_layer_refs, itg_receptor_layer_refs_reference,
+        itg_receptor_pulse_from_command, itg_receptor_visuals_from_resolved,
+        itg_receptor_visuals_from_resolved_reference, itg_resolve_actor_file_compiled,
         itg_resolve_actor_sprites_compiled, itg_resolve_actor_sprites_with_ops_compiled,
         itg_resolve_model_decl, itg_resolve_path_ref_decl, itg_resolve_ref_decl,
         itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
@@ -5018,6 +5223,105 @@ mod tests {
         assert_eq!(column.idle_glow_layer, Some(Slot(2)));
         assert_eq!(column.glow, Some(Slot(3)));
         assert_eq!(column.idle_glow, ReceptorIdleGlow::ActorEffect);
+    }
+
+    #[test]
+    fn inline_receptor_scratch_paths_preserve_layer_command_and_fallback_behavior() {
+        let layers = [
+            ItgResolvedSprite {
+                element: "Base".to_string(),
+                slot: Slot(1),
+                commands: HashMap::from([("initcommand".to_string(), "base".to_string())]),
+            },
+            ItgResolvedSprite {
+                element: "Idle".to_string(),
+                slot: Slot(2),
+                commands: HashMap::from([("oncommand".to_string(), "idle".to_string())]),
+            },
+            ItgResolvedSprite {
+                element: "Glow".to_string(),
+                slot: Slot(3),
+                commands: HashMap::from([("presscommand".to_string(), "glow".to_string())]),
+            },
+        ];
+
+        let actor_effect = Some([&layers[0], &layers[1], &layers[2]]);
+        let selected = itg_receptor_layer_refs(&layers, actor_effect);
+        let selected_reference = itg_receptor_layer_refs_reference(&layers, actor_effect);
+        assert_eq!(
+            selected
+                .iter()
+                .map(|sprite| sprite.slot.clone())
+                .collect::<Vec<_>>(),
+            [Slot(1), Slot(3)]
+        );
+        assert_eq!(
+            selected
+                .iter()
+                .map(|sprite| sprite.slot.clone())
+                .collect::<Vec<_>>(),
+            selected_reference
+                .iter()
+                .map(|sprite| sprite.slot.clone())
+                .collect::<Vec<_>>()
+        );
+
+        let commands = itg_receptor_command_refs(&selected);
+        let commands_reference = itg_receptor_command_refs_reference(&selected);
+        assert_eq!(
+            commands[0].get("initcommand").map(String::as_str),
+            Some("base")
+        );
+        assert_eq!(
+            commands[1].get("presscommand").map(String::as_str),
+            Some("glow")
+        );
+        assert_eq!(commands.as_slice(), commands_reference.as_slice());
+
+        let visuals = itg_receptor_visuals_from_resolved(
+            &selected,
+            || Some(Slot(9)),
+            || Some(Slot(10)),
+            || Some(Slot(11)),
+        );
+        let visuals_reference = itg_receptor_visuals_from_resolved_reference(
+            &selected,
+            || Some(Slot(9)),
+            || Some(Slot(10)),
+            || Some(Slot(11)),
+        );
+        assert_eq!(visuals, visuals_reference);
+        assert_eq!(visuals.off, Some(Slot(1)));
+        assert_eq!(visuals.glow, Some(Slot(3)));
+
+        let no_layers = itg_receptor_layer_refs::<Slot>(&[], None);
+        let fallback = itg_receptor_visuals_from_resolved(
+            &no_layers,
+            || Some(Slot(9)),
+            || Some(Slot(10)),
+            || Some(Slot(11)),
+        );
+        assert_eq!(fallback.off, Some(Slot(9)));
+        assert_eq!(fallback.glow, Some(Slot(10)));
+
+        let one_layer = itg_receptor_layer_refs(&layers[..1], None);
+        let single = itg_receptor_visuals_from_resolved(
+            &one_layer,
+            || Some(Slot(9)),
+            || Some(Slot(10)),
+            || Some(Slot(11)),
+        );
+        assert_eq!(single.off, Some(Slot(1)));
+        assert_eq!(single.glow, None);
+
+        let static_layers = itg_receptor_layer_refs(&layers, None);
+        assert_eq!(
+            static_layers
+                .iter()
+                .map(|sprite| sprite.slot.clone())
+                .collect::<Vec<_>>(),
+            [Slot(2), Slot(3)]
+        );
     }
 
     #[test]
