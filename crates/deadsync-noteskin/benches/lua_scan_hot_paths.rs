@@ -48,10 +48,13 @@ use deadsync_noteskin::script::{
     bench_support::{
         borrowed_argument_slices_new, borrowed_blend_scan_new, borrowed_color_wrapper_new,
         classified_command_new, classified_effect_clock_new, classified_judgment_key_new,
-        classified_vertalign_new, fixed_rgba_components_new, heap_argument_storage_old,
-        heap_rgba_components_old, inline_argument_storage_new, lowercase_blend_scan_old,
+        classified_vertalign_new, direct_animation_plan_accumulation_new,
+        fixed_rgba_components_new, heap_animation_command_refs_old, heap_argument_storage_old,
+        heap_extra_effect_clocks_old, heap_rgba_components_old, inline_animation_command_refs_new,
+        inline_argument_storage_new, inline_extra_effect_clocks_new, lowercase_blend_scan_old,
         lowercase_color_wrapper_old, lowercase_command_old, lowercase_effect_clock_old,
         lowercase_judgment_key_old, lowercase_vertalign_old, owned_argument_slices_old,
+        temporary_animation_plan_vectors_old,
     },
     parse_linear_frames_expr, parse_linear_frames_expr_reference_for_bench,
 };
@@ -1965,6 +1968,116 @@ fn main() {
         "direct local-function parameter storage (8 representative lists)",
         &old_local_params,
         &new_local_params,
+    );
+
+    let animation_commands = HashMap::from([
+        (
+            "acommand".to_string(),
+            "effectclock,beat;SetAllStateDelays,0.01".to_string(),
+        ),
+        (
+            "bcommand".to_string(),
+            "effectclock,time;SetAllStateDelays,0.02".to_string(),
+        ),
+        (
+            "ccommand".to_string(),
+            "effectclock,beat;SetAllStateDelays,0.03".to_string(),
+        ),
+        (
+            "dcommand".to_string(),
+            "effectclock,time;SetAllStateDelays,0.04".to_string(),
+        ),
+        (
+            "ecommand".to_string(),
+            "effectclock,beat;SetAllStateDelays,0.05".to_string(),
+        ),
+        (
+            "fcommand".to_string(),
+            "effectclock,time;SetAllStateDelays,0.06".to_string(),
+        ),
+    ]);
+    let animation_command_ref_suite = |project: fn(&HashMap<String, String>) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(checksum, black_box(project(black_box(&animation_commands))));
+        }
+        checksum
+    };
+    let (old_animation_refs, new_animation_refs) = measure_pair(
+        2_048,
+        animation_commands.len() * REPEATS,
+        || animation_command_ref_suite(heap_animation_command_refs_old),
+        || animation_command_ref_suite(inline_animation_command_refs_new),
+    );
+    assert_improved(
+        "inline sorted animation-command references",
+        &old_animation_refs,
+        &new_animation_refs,
+    );
+    print_pair(
+        "inline sorted animation-command references (6-command maps)",
+        &old_animation_refs,
+        &new_animation_refs,
+    );
+
+    let animation_plan_suite = |project: fn(&HashMap<String, String>) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(checksum, black_box(project(black_box(&animation_commands))));
+        }
+        checksum
+    };
+    let (old_animation_plans, new_animation_plans) = measure_pair(
+        1_024,
+        animation_commands.len() * REPEATS,
+        || animation_plan_suite(temporary_animation_plan_vectors_old),
+        || animation_plan_suite(direct_animation_plan_accumulation_new),
+    );
+    assert_improved(
+        "direct animation-plan accumulation",
+        &old_animation_plans,
+        &new_animation_plans,
+    );
+    print_pair(
+        "direct animation-plan accumulation (6-command maps)",
+        &old_animation_plans,
+        &new_animation_plans,
+    );
+
+    let clock_commands = HashMap::from([
+        ("initcommand".to_string(), "effectclock,beat".to_string()),
+        ("extra00command".to_string(), "effectclock,time".to_string()),
+        ("extra01command".to_string(), "effectclock,beat".to_string()),
+        ("extra02command".to_string(), "effectclock,time".to_string()),
+        ("extra03command".to_string(), "effectclock,beat".to_string()),
+        ("extra04command".to_string(), "effectclock,time".to_string()),
+        ("extra05command".to_string(), "effectclock,beat".to_string()),
+    ]);
+    let effect_clock_suite = |project: fn(&HashMap<String, String>, bool) -> u64| {
+        let mut checksum = 0u64;
+        for _ in 0..REPEATS {
+            checksum = mix(
+                checksum,
+                black_box(project(black_box(&clock_commands), black_box(true))),
+            );
+        }
+        checksum
+    };
+    let (old_effect_clocks, new_effect_clocks) = measure_pair(
+        2_048,
+        clock_commands.len() * REPEATS,
+        || effect_clock_suite(heap_extra_effect_clocks_old),
+        || effect_clock_suite(inline_extra_effect_clocks_new),
+    );
+    assert_improved(
+        "inline sorted extra effect-clock commands",
+        &old_effect_clocks,
+        &new_effect_clocks,
+    );
+    print_pair(
+        "inline sorted extra effect-clock commands (7-command maps)",
+        &old_effect_clocks,
+        &new_effect_clocks,
     );
 
     let receptor_layers = [

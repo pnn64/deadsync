@@ -381,11 +381,14 @@ pub fn split_script_token(token: &str) -> Option<ScriptToken<'_>> {
 #[cfg(feature = "bench-support")]
 pub mod bench_support {
     use super::{
-        ModelEffectClock, ScriptCommand, parse_script_effect_clock,
+        ModelEffectClock, ScriptCommand, SpriteAnimationCommandPlan,
+        append_sprite_animation_command_plans, parse_script_effect_clock,
         parse_script_judgment_line_color, parse_script_number, parse_script_rgba_list,
         parse_script_vertalign, script_color_value, script_contains_ignore_ascii_case,
-        script_rgba8, split_script_token,
+        script_rgba8, sorted_sprite_animation_command_refs, split_script_token,
+        sprite_animation_is_beat_based, sprite_animation_is_beat_based_reference,
     };
+    use std::collections::HashMap;
 
     #[inline(always)]
     fn mix(checksum: u64, value: u64) -> u64 {
@@ -423,6 +426,81 @@ pub mod bench_support {
             Some(ModelEffectClock::Time) => 3,
             None => 1,
         }
+    }
+
+    fn checksum_animation_command_refs<'a>(
+        refs: impl IntoIterator<Item = (&'a String, &'a String)>,
+    ) -> u64 {
+        refs.into_iter().fold(0, |checksum, (key, script)| {
+            mix(
+                mix(checksum, checksum_parts([key.as_str()])),
+                checksum_parts([script.as_str()]),
+            )
+        })
+    }
+
+    fn checksum_animation_plans(plans: &[SpriteAnimationCommandPlan]) -> u64 {
+        plans.iter().fold(0, |checksum, plan| match plan {
+            SpriteAnimationCommandPlan::StateProperties(plan) => plan.frame_delays.iter().fold(
+                mix(mix(checksum, 2), plan.frame_count as u64),
+                |checksum, delay| mix(checksum, u64::from(delay.to_bits())),
+            ),
+            SpriteAnimationCommandPlan::AllStateDelays(delay) => {
+                mix(mix(checksum, 3), u64::from(delay.to_bits()))
+            }
+        })
+    }
+
+    #[must_use]
+    pub fn heap_animation_command_refs_old(commands: &HashMap<String, String>) -> u64 {
+        let mut sorted = commands.iter().collect::<Vec<_>>();
+        sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        checksum_animation_command_refs(sorted)
+    }
+
+    #[must_use]
+    pub fn inline_animation_command_refs_new(commands: &HashMap<String, String>) -> u64 {
+        checksum_animation_command_refs(sorted_sprite_animation_command_refs(commands))
+    }
+
+    #[must_use]
+    pub fn temporary_animation_plan_vectors_old(commands: &HashMap<String, String>) -> u64 {
+        let plans = sorted_sprite_animation_command_refs(commands)
+            .into_iter()
+            .flat_map(|(_, script)| super::sprite_animation_command_plans(script))
+            .collect::<Vec<_>>();
+        checksum_animation_plans(&plans)
+    }
+
+    #[must_use]
+    pub fn direct_animation_plan_accumulation_new(commands: &HashMap<String, String>) -> u64 {
+        let mut plans = Vec::new();
+        for (_, script) in sorted_sprite_animation_command_refs(commands) {
+            append_sprite_animation_command_plans(script, &mut plans);
+        }
+        checksum_animation_plans(&plans)
+    }
+
+    #[must_use]
+    pub fn heap_extra_effect_clocks_old(
+        commands: &HashMap<String, String>,
+        default_is_beat_based: bool,
+    ) -> u64 {
+        checksum_bool(sprite_animation_is_beat_based_reference(
+            commands,
+            default_is_beat_based,
+        ))
+    }
+
+    #[must_use]
+    pub fn inline_extra_effect_clocks_new(
+        commands: &HashMap<String, String>,
+        default_is_beat_based: bool,
+    ) -> u64 {
+        checksum_bool(sprite_animation_is_beat_based(
+            commands,
+            default_is_beat_based,
+        ))
     }
 
     fn split_borrowed_vec(raw: &str, skip_command: bool) -> Vec<&str> {
@@ -821,10 +899,11 @@ pub enum SpriteAnimationCommandPlan {
     AllStateDelays(f32),
 }
 
-#[must_use]
-pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationCommandPlan> {
+fn append_sprite_animation_command_plans(
+    script: &str,
+    plans: &mut Vec<SpriteAnimationCommandPlan>,
+) {
     let script = normalized_script_command(script);
-    let mut plans = Vec::new();
     for raw_token in script.split(';') {
         let token = raw_token.trim();
         if token.is_empty() {
@@ -854,6 +933,12 @@ pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationComman
             _ => {}
         }
     }
+}
+
+#[must_use]
+pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationCommandPlan> {
+    let mut plans = Vec::new();
+    append_sprite_animation_command_plans(script, &mut plans);
     plans
 }
 
@@ -870,6 +955,40 @@ pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesP
 
 #[must_use]
 pub fn sprite_animation_command_plans_from_commands(
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+) -> (bool, Vec<SpriteAnimationCommandPlan>) {
+    if commands.is_empty() {
+        return (default_is_beat_based, Vec::new());
+    }
+    let sorted = sorted_sprite_animation_command_refs(commands);
+
+    let mut beat_based = default_is_beat_based;
+    for (_, script) in sorted.iter().copied() {
+        if let Some(script_clock) = parse_script_effectclock_from_commands(script) {
+            beat_based = script_clock;
+        }
+    }
+
+    let mut plans = Vec::new();
+    for (_, script) in sorted {
+        append_sprite_animation_command_plans(script, &mut plans);
+    }
+    (beat_based, plans)
+}
+
+type SpriteAnimationCommandRefs<'a> = SmallVec<[(&'a String, &'a String); 8]>;
+
+fn sorted_sprite_animation_command_refs(
+    commands: &HashMap<String, String>,
+) -> SpriteAnimationCommandRefs<'_> {
+    let mut sorted = commands.iter().collect::<SpriteAnimationCommandRefs<'_>>();
+    sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    sorted
+}
+
+#[cfg(test)]
+fn sprite_animation_command_plans_from_commands_reference(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
 ) -> (bool, Vec<SpriteAnimationCommandPlan>) {
@@ -1313,6 +1432,34 @@ pub fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
 
 #[must_use]
 pub fn sprite_animation_is_beat_based(
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+) -> bool {
+    let mut clock = None;
+    let preferred = ["initcommand", "nonecommand", "oncommand", "offcommand"];
+    for key in preferred {
+        if let Some(script) = commands.get(key)
+            && let Some(is_beat) = parse_script_effectclock_from_commands(script)
+        {
+            clock = Some(is_beat);
+        }
+    }
+    let mut extras = commands
+        .iter()
+        .filter(|(key, _)| !preferred.contains(&key.as_str()))
+        .map(|(key, script)| (key.as_str(), script.as_str()))
+        .collect::<SmallVec<[(&str, &str); 8]>>();
+    extras.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    for (_, script) in extras {
+        if let Some(is_beat) = parse_script_effectclock_from_commands(script) {
+            clock = Some(is_beat);
+        }
+    }
+    clock.unwrap_or(default_is_beat_based)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn sprite_animation_is_beat_based_reference(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
 ) -> bool {
@@ -2115,6 +2262,93 @@ mod tests {
 
         assert!(!sprite_animation_is_beat_based(&commands, true));
         assert!(sprite_animation_is_beat_based(&HashMap::new(), true));
+    }
+
+    #[test]
+    fn sprite_animation_command_refs_preserve_sorted_order_when_inline_storage_spills() {
+        let commands = (0..10)
+            .rev()
+            .map(|index| (format!("command{index:02}"), format!("script{index:02}")))
+            .collect::<HashMap<_, _>>();
+
+        let sorted = sorted_sprite_animation_command_refs(&commands);
+        let keys = sorted
+            .iter()
+            .map(|(key, _)| key.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            keys,
+            [
+                "command00",
+                "command01",
+                "command02",
+                "command03",
+                "command04",
+                "command05",
+                "command06",
+                "command07",
+                "command08",
+                "command09",
+            ]
+        );
+    }
+
+    #[test]
+    fn direct_sprite_animation_plan_accumulation_matches_reference_and_order() {
+        let commands = HashMap::from([
+            (
+                "zcommand".to_string(),
+                "effectclock,time;SetStateProperties,Sprite.LinearFrames(3,0.3)".to_string(),
+            ),
+            (
+                "acommand".to_string(),
+                "effectclock,beat;SetAllStateDelays,0.05;SetStateProperties,Sprite.LinearFrames(2,0.2)"
+                    .to_string(),
+            ),
+            ("mcommand".to_string(), "diffusealpha,1".to_string()),
+        ]);
+
+        let current = sprite_animation_command_plans_from_commands(&commands, true);
+        let reference = sprite_animation_command_plans_from_commands_reference(&commands, true);
+
+        assert_eq!(current, reference);
+        assert!(!current.0);
+        assert_eq!(
+            current.1,
+            [
+                SpriteAnimationCommandPlan::AllStateDelays(0.05),
+                SpriteAnimationCommandPlan::StateProperties(SpriteStatePropertiesPlan {
+                    frame_count: 2,
+                    frame_delays: vec![0.1; 2],
+                }),
+                SpriteAnimationCommandPlan::StateProperties(SpriteStatePropertiesPlan {
+                    frame_count: 3,
+                    frame_delays: vec![0.1; 3],
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn inline_extra_effect_clocks_match_reference_when_storage_spills() {
+        let mut commands = (0..10)
+            .rev()
+            .map(|index| {
+                let clock = if index == 9 { "time" } else { "beat" };
+                (
+                    format!("extra{index:02}command"),
+                    format!("effectclock,{clock}"),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        commands.insert("initcommand".to_string(), "effectclock,beat".to_string());
+
+        let current = sprite_animation_is_beat_based(&commands, true);
+        let reference = sprite_animation_is_beat_based_reference(&commands, true);
+
+        assert_eq!(current, reference);
+        assert!(!current);
     }
 
     #[test]
