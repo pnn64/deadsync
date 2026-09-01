@@ -81,7 +81,7 @@ pub use runtime::{
 };
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
-pub use runtime::{tap_explosion_bench_support, uv_color_bench_support};
+pub use runtime::{tap_column_bench_support, tap_explosion_bench_support, uv_color_bench_support};
 pub use script::{ItgCommandEffect, model_draw_program};
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]

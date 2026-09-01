@@ -1249,11 +1249,7 @@ pub fn itg_tap_note_layers<T>(mut layers: Vec<T>, fallback: impl FnOnce() -> Opt
     layers
 }
 
-pub fn itg_tap_note_column<T: Clone>(
-    mut layers: Vec<T>,
-    quantizations: usize,
-    mut layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
-) -> Option<ItgTapNoteColumn<T>> {
+fn sort_tap_note_layers<T>(layers: &mut [T], mut layer_info: impl FnMut(&T) -> (bool, [f32; 2])) {
     if layers.len() > 1 {
         layers.sort_by_key(|layer| {
             let (has_model, uv_velocity) = layer_info(layer);
@@ -1266,12 +1262,29 @@ pub fn itg_tap_note_column<T: Clone>(
             }
         });
     }
+}
+
+fn shared_tap_note_layers<T: Clone>(layers: &[T]) -> Arc<[T]> {
+    Arc::from(layers)
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn shared_tap_note_layers_reference<T: Clone>(layers: &[T]) -> Arc<[T]> {
+    Arc::from(layers.to_vec())
+}
+
+pub fn itg_tap_note_column<T: Clone>(
+    mut layers: Vec<T>,
+    quantizations: usize,
+    layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+) -> Option<ItgTapNoteColumn<T>> {
+    sort_tap_note_layers(&mut layers, layer_info);
     let base = layers.first()?.clone();
     let notes = (0..quantizations).map(|_| layers[0].clone()).collect();
     let note_layers = if quantizations == 0 {
         Vec::new()
     } else {
-        let shared: Arc<[T]> = Arc::from(layers.clone());
+        let shared = shared_tap_note_layers(&layers);
         vec![shared; quantizations]
     };
     Some(ItgTapNoteColumn {
@@ -1280,6 +1293,44 @@ pub fn itg_tap_note_column<T: Clone>(
         layers,
         base,
     })
+}
+
+struct PreparedTapNoteColumn<T> {
+    shared_layers: Arc<[T]>,
+}
+
+fn emit_tap_note_column<T: Clone>(
+    mut layers: Vec<T>,
+    quantizations: usize,
+    layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+    notes: &mut Vec<T>,
+    note_layers: &mut Vec<Arc<[T]>>,
+) -> Option<PreparedTapNoteColumn<T>> {
+    sort_tap_note_layers(&mut layers, layer_info);
+    let first = layers.first()?;
+    let shared_layers = shared_tap_note_layers(&layers);
+    notes.extend((0..quantizations).map(|_| first.clone()));
+    note_layers.extend((0..quantizations).map(|_| Arc::clone(&shared_layers)));
+    Some(PreparedTapNoteColumn { shared_layers })
+}
+
+#[cfg(any(test, feature = "bench-support"))]
+fn emit_tap_note_column_reference<T: Clone>(
+    layers: Vec<T>,
+    quantizations: usize,
+    layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+    notes: &mut Vec<T>,
+    note_layers: &mut Vec<Arc<[T]>>,
+) -> Option<Arc<[T]>> {
+    let column = itg_tap_note_column(layers, quantizations, layer_info)?;
+    let shared_layers = column
+        .note_layers
+        .first()
+        .cloned()
+        .unwrap_or_else(|| shared_tap_note_layers(&column.layers));
+    notes.extend(column.notes);
+    note_layers.extend(column.note_layers);
+    Some(shared_layers)
 }
 
 pub fn itg_resolved_slots_with_model_draw<T>(
@@ -2377,6 +2428,14 @@ pub fn itg_lift_layers_for_col<T: Clone>(lift_layers: Vec<T>, note_layers: &[T])
     }
 }
 
+fn itg_lift_layers_for_col_shared<T>(lift_layers: Vec<T>, note_layers: &Arc<[T]>) -> Arc<[T]> {
+    if lift_layers.is_empty() {
+        Arc::clone(note_layers)
+    } else {
+        Arc::from(lift_layers)
+    }
+}
+
 pub fn itg_runtime_columns_compiled<T: Clone>(
     data: &itg::NoteskinData,
     style: crate::Style,
@@ -2411,14 +2470,17 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         let button = itg::button_for_col(style.num_cols, col);
         let note_sprites = resolve_slots(button, "Tap Note");
         let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
-        let note_column = itg_tap_note_column(note_sprites, quantizations, &mut tap_layer_info)
-            .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
-        let note_sprites = note_column.layers;
-        notes.extend(note_column.notes);
-        note_layers.extend(note_column.note_layers);
-
+        let note_column = emit_tap_note_column(
+            note_sprites,
+            quantizations,
+            &mut tap_layer_info,
+            &mut notes,
+            &mut note_layers,
+        )
+        .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
         let lift_sprites = resolve_slots(button, "Tap Lift");
-        let lift_layers_for_col = itg_lift_layers_for_col(lift_sprites, &note_sprites);
+        let lift_layers_for_col =
+            itg_lift_layers_for_col_shared(lift_sprites, &note_column.shared_layers);
         for _ in 0..quantizations {
             lift_note_layers.push(Arc::clone(&lift_layers_for_col));
         }
@@ -3242,6 +3304,122 @@ fn beat_to_note_type_index(beat: f32) -> i32 {
 
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
+pub mod tap_column_bench_support {
+    use super::{
+        emit_tap_note_column, emit_tap_note_column_reference, itg_lift_layers_for_col,
+        itg_lift_layers_for_col_shared, shared_tap_note_layers, shared_tap_note_layers_reference,
+    };
+    use std::hint::black_box;
+    use std::sync::Arc;
+
+    const LAYERS: [u64; 12] = [12, 3, 8, 1, 10, 5, 6, 11, 2, 9, 4, 7];
+    const QUANTIZATIONS: usize = 16;
+
+    fn layer_info(layer: &u64) -> (bool, [f32; 2]) {
+        match layer % 3 {
+            0 => (true, [0.5, 0.0]),
+            1 => (true, [0.0, 0.0]),
+            _ => (false, [0.0, 0.0]),
+        }
+    }
+
+    fn arc_checksum(checksum: u64, layers: &Arc<[u64]>) -> u64 {
+        layers.iter().fold(checksum, |checksum, layer| {
+            checksum.wrapping_mul(131).wrapping_add(*layer)
+        })
+    }
+
+    fn shared_layers(evaluations: usize, optimized: bool) -> u64 {
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let layers = if optimized {
+                shared_tap_note_layers(black_box(&LAYERS))
+            } else {
+                shared_tap_note_layers_reference(black_box(&LAYERS))
+            };
+            arc_checksum(checksum, black_box(&layers))
+        })
+    }
+
+    fn emitted_columns(evaluations: usize, optimized: bool) -> u64 {
+        let mut notes = Vec::with_capacity(QUANTIZATIONS);
+        let mut note_layers = Vec::with_capacity(QUANTIZATIONS);
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            notes.clear();
+            note_layers.clear();
+            let layers = LAYERS.to_vec();
+            let layers = if optimized {
+                emit_tap_note_column(
+                    layers,
+                    QUANTIZATIONS,
+                    layer_info,
+                    &mut notes,
+                    &mut note_layers,
+                )
+                .expect("benchmark tap layers")
+                .shared_layers
+            } else {
+                emit_tap_note_column_reference(
+                    layers,
+                    QUANTIZATIONS,
+                    layer_info,
+                    &mut notes,
+                    &mut note_layers,
+                )
+                .expect("benchmark tap layers")
+            };
+            let checksum = arc_checksum(checksum, &layers);
+            let checksum = notes.iter().fold(checksum, |checksum, note| {
+                checksum.wrapping_mul(131).wrapping_add(*note)
+            });
+            note_layers.iter().fold(checksum, arc_checksum)
+        })
+    }
+
+    fn lift_fallbacks(evaluations: usize, optimized: bool) -> u64 {
+        let shared = shared_tap_note_layers(&LAYERS);
+        (0..evaluations).fold(0_u64, |checksum, _| {
+            let layers = if optimized {
+                itg_lift_layers_for_col_shared(Vec::new(), black_box(&shared))
+            } else {
+                itg_lift_layers_for_col(Vec::new(), black_box(&LAYERS))
+            };
+            arc_checksum(checksum, black_box(&layers))
+        })
+    }
+
+    #[must_use]
+    pub fn cloned_vec_shared_layers_old(evaluations: usize) -> u64 {
+        shared_layers(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn direct_shared_layers_new(evaluations: usize) -> u64 {
+        shared_layers(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn staged_column_outputs_old(evaluations: usize) -> u64 {
+        emitted_columns(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn direct_column_outputs_new(evaluations: usize) -> u64 {
+        emitted_columns(evaluations, true)
+    }
+
+    #[must_use]
+    pub fn copied_lift_fallbacks_old(evaluations: usize) -> u64 {
+        lift_fallbacks(evaluations, false)
+    }
+
+    #[must_use]
+    pub fn shared_lift_fallbacks_new(evaluations: usize) -> u64 {
+        lift_fallbacks(evaluations, true)
+    }
+}
+
+#[cfg(feature = "bench-support")]
+#[doc(hidden)]
 pub mod uv_color_bench_support {
     use std::hint::black_box;
 
@@ -3389,7 +3567,8 @@ mod tests {
         HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgResolvedSprite,
         ItgRuntimeColumns, NoteskinRuntime, TapExplosion, TapExplosionLayer, TapExplosionMap,
         bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
-        itg_apply_child_actor_commands, itg_apply_hold_explosions_by_col, itg_apply_loader_command,
+        emit_tap_note_column, emit_tap_note_column_reference, itg_apply_child_actor_commands,
+        itg_apply_hold_explosions_by_col, itg_apply_loader_command,
         itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
         itg_first_resolved_slot_or_fallback, itg_has_receptor_actor_effect_command,
         itg_has_receptor_actor_effect_command_reference, itg_hit_mine_explosion_from_layers,
@@ -3397,7 +3576,8 @@ mod tests {
         itg_hold_head_layers, itg_hold_visual_parts, itg_hold_visuals_from_parts,
         itg_is_common_fallback_hold_explosion_key,
         itg_is_common_fallback_hold_explosion_key_reference, itg_is_common_noteskin_key,
-        itg_is_common_noteskin_key_reference, itg_lift_layers_for_col, itg_load_sprite_decl_slot,
+        itg_is_common_noteskin_key_reference, itg_lift_layers_for_col,
+        itg_lift_layers_for_col_shared, itg_load_sprite_decl_slot,
         itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
         itg_noteskin_runtime_compiled, itg_partition_tap_explosion_layers,
         itg_partition_tap_explosion_layers_reference, itg_receptor_column,
@@ -3414,7 +3594,8 @@ mod tests {
         itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
         itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
-        itg_tap_note_column, itg_tap_note_layers,
+        itg_tap_note_column, itg_tap_note_layers, shared_tap_note_layers,
+        shared_tap_note_layers_reference,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -4212,6 +4393,51 @@ mod tests {
         assert_eq!(&*column.note_layers[0], column.layers.as_slice());
         assert_eq!(&*column.note_layers[1], column.layers.as_slice());
         assert!(Arc::ptr_eq(&column.note_layers[0], &column.note_layers[1]));
+    }
+
+    #[test]
+    fn shared_tap_note_layers_match_cloned_vec_reference() {
+        let layers = [Slot(1), Slot(2), Slot(3), Slot(4)];
+        let current = shared_tap_note_layers(&layers);
+        let reference = shared_tap_note_layers_reference(&layers);
+
+        assert_eq!(current.as_ref(), reference.as_ref());
+        assert_eq!(current.as_ref(), layers.as_slice());
+    }
+
+    #[test]
+    fn direct_tap_note_emission_matches_staged_column_outputs() {
+        let layers = vec![Slot(2), Slot(3), Slot(1)];
+        let layer_info = |layer: &Slot| match layer.0 {
+            1 => (true, [0.5, 0.0]),
+            2 => (true, [0.0, 0.0]),
+            _ => (false, [0.0, 0.0]),
+        };
+        let mut current_notes = vec![Slot(9)];
+        let mut current_note_layers = vec![Arc::from([Slot(9)])];
+        let current = emit_tap_note_column(
+            layers.clone(),
+            3,
+            layer_info,
+            &mut current_notes,
+            &mut current_note_layers,
+        )
+        .expect("direct tap note column");
+        let mut reference_notes = vec![Slot(9)];
+        let mut reference_note_layers = vec![Arc::from([Slot(9)])];
+        let reference_layers = emit_tap_note_column_reference(
+            layers,
+            3,
+            layer_info,
+            &mut reference_notes,
+            &mut reference_note_layers,
+        )
+        .expect("staged tap note column");
+
+        assert_eq!(current.shared_layers, reference_layers);
+        assert_eq!(current_notes, reference_notes);
+        assert_eq!(current_note_layers, reference_note_layers);
+        assert!(Arc::ptr_eq(&current.shared_layers, &current_note_layers[1]));
     }
 
     #[test]
@@ -5631,9 +5857,16 @@ mod tests {
         let note_layers = [Slot(1), Slot(2)];
         let fallback = itg_lift_layers_for_col(Vec::new(), &note_layers);
         let explicit = itg_lift_layers_for_col(vec![Slot(3)], &note_layers);
+        let shared: Arc<[Slot]> = Arc::from(note_layers.clone());
+        let shared_fallback = itg_lift_layers_for_col_shared(Vec::new(), &shared);
+        let shared_explicit = itg_lift_layers_for_col_shared(vec![Slot(3)], &shared);
 
         assert_eq!(&*fallback, &note_layers);
         assert_eq!(&*explicit, &[Slot(3)]);
+        assert_eq!(shared_fallback.as_ref(), fallback.as_ref());
+        assert_eq!(shared_explicit.as_ref(), explicit.as_ref());
+        assert!(Arc::ptr_eq(&shared_fallback, &shared));
+        assert!(!Arc::ptr_eq(&shared_explicit, &shared));
     }
 
     #[test]

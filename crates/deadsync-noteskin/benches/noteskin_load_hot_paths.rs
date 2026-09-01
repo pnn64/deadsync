@@ -3,7 +3,7 @@ use deadsync_noteskin::{
     NOTE_ANIM_PART_COUNT, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
     NotePartTextureTranslate, explosion_bench_support, mine_bench_support,
     model_draw_bench_support, receptor_bench_support, sprite_math_bench_support,
-    tap_explosion_bench_support, uv_color_bench_support,
+    tap_column_bench_support, tap_explosion_bench_support, uv_color_bench_support,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
@@ -568,6 +568,24 @@ fn cycle_counter() -> Option<u64> {
 }
 
 fn main() {
+    if std::env::var_os("DEADSYNC_TAP_COLUMN_ONLY").is_some() {
+        run_allocation_case(
+            "noteskin direct shared tap layers",
+            tap_column_bench_support::cloned_vec_shared_layers_old,
+            tap_column_bench_support::direct_shared_layers_new,
+        );
+        run_allocation_case(
+            "noteskin direct tap column output emission",
+            tap_column_bench_support::staged_column_outputs_old,
+            tap_column_bench_support::direct_column_outputs_new,
+        );
+        run_allocation_case(
+            "noteskin shared lift fallback layers",
+            tap_column_bench_support::copied_lift_fallbacks_old,
+            tap_column_bench_support::shared_lift_fallbacks_new,
+        );
+        return;
+    }
     if std::env::var_os("DEADSYNC_EXPLOSION_SOURCE_ONLY").is_some() {
         run_allocation_case(
             "noteskin partitioned actor explosion sources",
