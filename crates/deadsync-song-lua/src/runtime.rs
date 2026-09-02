@@ -1,10 +1,10 @@
-use mlua::{Lua, MultiValue, Table, Value};
+use mlua::{Lua, Table, Value};
 
 use crate::{
     SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_BPS_KEY,
     SONG_LUA_RUNTIME_DELTA_BEAT_KEY, SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, SONG_LUA_RUNTIME_KEY,
     SONG_LUA_RUNTIME_RATE_KEY, SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY,
-    SongLuaCompileContext, song_display_bps, song_elapsed_seconds_for_beat, song_music_rate,
+    SongLuaCompileContext, song_display_bps, song_elapsed_seconds_at, song_music_rate,
 };
 
 pub fn create_song_runtime_table(
@@ -18,6 +18,18 @@ pub fn create_song_runtime_table(
     table.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0_i64)?;
     table.set(SONG_LUA_RUNTIME_BPS_KEY, song_display_bps(context))?;
     table.set(SONG_LUA_RUNTIME_RATE_KEY, song_music_rate(context))?;
+    let bpms = lua.create_table()?;
+    for (index, &(beat, bpm)) in context.song_timing_bpms.iter().enumerate() {
+        let segment = lua.create_table()?;
+        segment.raw_set(1, beat)?;
+        segment.raw_set(2, bpm)?;
+        segment.raw_set(
+            3,
+            song_elapsed_seconds_at(beat, context) * song_music_rate(context),
+        )?;
+        bpms.raw_set(index + 1, segment)?;
+    }
+    table.set("__songlua_timing_bpms", bpms)?;
     Ok(table)
 }
 
@@ -28,7 +40,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _args: MultiValue| {
+                move |_, _self: Option<Value>| {
                     song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
                 }
             })?,
@@ -39,7 +51,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _args: MultiValue| {
+                move |_, _self: Option<Value>| {
                     song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
                 }
             })?,
@@ -49,7 +61,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
         "GetCurBPS",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BPS_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BPS_KEY)
         })?,
     )?;
     Ok(table)
@@ -143,15 +155,31 @@ pub fn set_compile_song_runtime_delta_values(
 
 pub fn set_compile_song_runtime_beat(lua: &Lua, beat: f32) -> mlua::Result<()> {
     let runtime = compile_song_runtime_table(lua)?;
-    let song_bps = runtime
+    let mut song_bps = runtime
         .get::<Option<f32>>(SONG_LUA_RUNTIME_BPS_KEY)?
         .unwrap_or(1.0);
     let music_rate = runtime
         .get::<Option<f32>>(SONG_LUA_RUNTIME_RATE_KEY)?
         .unwrap_or(1.0);
-    set_compile_song_runtime_values(
-        lua,
-        beat,
-        song_elapsed_seconds_for_beat(beat, song_bps, music_rate),
-    )
+    let mut segment_beat = 0.0;
+    let mut segment_seconds = 0.0;
+    if let Some(bpms) = runtime.get::<Option<Table>>("__songlua_timing_bpms")? {
+        for segment in bpms.sequence_values::<Table>() {
+            let segment = segment?;
+            let next_beat = segment.raw_get::<f32>(1)?;
+            if next_beat > beat {
+                break;
+            }
+            segment_beat = next_beat;
+            song_bps = segment.raw_get::<f32>(2)? / 60.0;
+            segment_seconds = segment.raw_get::<f32>(3)?;
+        }
+    }
+    runtime.set(SONG_LUA_RUNTIME_BEAT_KEY, beat)?;
+    runtime.set(
+        SONG_LUA_RUNTIME_SECONDS_KEY,
+        (segment_seconds + (beat - segment_beat) / song_bps.max(f32::EPSILON))
+            / music_rate.max(f32::EPSILON),
+    )?;
+    runtime.set(SONG_LUA_RUNTIME_BPS_KEY, song_bps)
 }

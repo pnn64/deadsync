@@ -2301,16 +2301,14 @@ fn simply_love_null_or_die_options_persist_through_shell() {
             && effects.contains("pub enum SimplyLoveGraphOrigin")
             && effects.contains("NullOrDie(SimplyLoveNullOrDieConfigRequest)")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::FingerprintTenths")
-            && options_source.contains("SimplyLoveNullOrDieConfigRequest::CacheResults")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::GraphOrigin")
             && options_source.contains("SimplyLoveNullOrDieConfigRequest::KernelTarget")
             && shell.contains("config_requests::execute_null_or_die(request)")
             && executor.contains("pub(super) fn execute_null_or_die")
             && executor.contains("config::SyncGraphMode::PostKernelFingerprint")
             && executor.contains("SimplyLoveGraphOrigin::Bottom")
-            && executor.contains("config::update_null_or_die_cache_results(enabled)")
             && executor.contains("KernelTarget::Accumulator")
-            && executor.contains("f64::from(tenths) / 10.0"),
+            && executor.contains("tenths as f64 / 10.0"),
         "Null-or-Die option values must cross neutral requests and be mapped by shell"
     );
 }

@@ -1392,6 +1392,7 @@ pub struct SongLuaCompileContext {
     pub song_dir: PathBuf,
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
+    pub song_timing_bpms: Vec<(f32, f32)>,
     pub song_music_rate: f32,
     pub music_length_seconds: f32,
     pub style_name: String,
@@ -1415,6 +1416,7 @@ impl SongLuaCompileContext {
             song_dir: song_dir.into(),
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
+            song_timing_bpms: Vec::new(),
             song_music_rate: 1.0,
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
@@ -1458,6 +1460,75 @@ pub fn song_display_bps(context: &SongLuaCompileContext) -> f32 {
 #[must_use]
 pub fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
     song_music_rate_value(context.song_music_rate)
+}
+
+#[must_use]
+pub fn parse_song_timing_bpms(source: &str) -> Vec<(f32, f32)> {
+    let mut bpms = source
+        .split(',')
+        .filter_map(|entry| {
+            let (beat, bpm) = entry.split_once('=')?;
+            let beat = beat.trim().parse::<f32>().ok()?;
+            let bpm = bpm.trim().parse::<f32>().ok()?;
+            (beat.is_finite() && bpm.is_finite() && bpm > 0.0).then_some((beat, bpm))
+        })
+        .collect::<Vec<_>>();
+    bpms.sort_by(|left, right| left.0.total_cmp(&right.0));
+    bpms
+}
+
+#[must_use]
+pub fn song_elapsed_seconds_at(beat: f32, context: &SongLuaCompileContext) -> f32 {
+    let rate = song_music_rate(context);
+    let mut cursor_beat = 0.0;
+    let mut seconds = 0.0;
+    let mut bpm = context
+        .song_timing_bpms
+        .first()
+        .filter(|(segment_beat, segment_bpm)| *segment_beat <= 0.0 && *segment_bpm > 0.0)
+        .map_or_else(|| song_display_bps(context) * 60.0, |segment| segment.1);
+    for &(segment_beat, segment_bpm) in &context.song_timing_bpms {
+        if segment_beat > beat {
+            break;
+        }
+        seconds += (segment_beat - cursor_beat) * 60.0 / bpm;
+        cursor_beat = segment_beat;
+        bpm = segment_bpm.max(f32::EPSILON);
+    }
+    (seconds + (beat - cursor_beat) * 60.0 / bpm) / rate
+}
+
+#[must_use]
+pub fn song_beat_at_elapsed_seconds(seconds: f32, context: &SongLuaCompileContext) -> f32 {
+    let target = seconds * song_music_rate(context);
+    let mut cursor_beat = 0.0;
+    let mut cursor_seconds = 0.0;
+    let mut bpm = context
+        .song_timing_bpms
+        .first()
+        .filter(|(segment_beat, segment_bpm)| *segment_beat <= 0.0 && *segment_bpm > 0.0)
+        .map_or_else(|| song_display_bps(context) * 60.0, |segment| segment.1);
+    for &(segment_beat, segment_bpm) in &context.song_timing_bpms {
+        let next_seconds = cursor_seconds + (segment_beat - cursor_beat) * 60.0 / bpm;
+        if next_seconds > target {
+            break;
+        }
+        cursor_beat = segment_beat;
+        cursor_seconds = next_seconds;
+        bpm = segment_bpm.max(f32::EPSILON);
+    }
+    cursor_beat + (target - cursor_seconds) * bpm / 60.0
+}
+
+#[must_use]
+pub fn song_bps_at_beat(beat: f32, context: &SongLuaCompileContext) -> f32 {
+    context
+        .song_timing_bpms
+        .iter()
+        .take_while(|(segment_beat, _)| *segment_beat <= beat)
+        .last()
+        .map_or_else(|| song_display_bps(context), |segment| segment.1 / 60.0)
+        .max(f32::EPSILON)
 }
 
 #[inline(always)]
@@ -2866,6 +2937,7 @@ fn overlay_command_ease_factor(easing: Option<&str>, t: f32, opt1: Option<f32>) 
                 (2.0 * (1.0 - t)).mul_add(-(1.0 - t), 1.0)
             }
         }
+        "spring" => 1.0 - (t * std::f32::consts::PI * 2.5).cos() / (1.0 + t * 3.0),
         "outElastic" => {
             if t <= 0.0 || t >= 1.0 {
                 t
@@ -7045,7 +7117,7 @@ return Def.ActorFrame{
             sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
         }));
         assert!(visible.samples.iter().any(|sample| {
-            (sample.beat - 1.5).abs() <= 1.0e-4
+            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Bool(false)
         }));
         let diffuse = compiled
@@ -7054,11 +7126,11 @@ return Def.ActorFrame{
             .find(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
             .expect("the flash should have a sampled diffuse track");
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - 1.25).abs() <= 1.0e-4
+            (sample.beat - (1.25 + 1.0 / 60.0)).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
         }));
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - 1.5).abs() <= 1.0e-4
+            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0])
         }));
     }
@@ -7320,6 +7392,139 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_updates_read_current_action_tween_state() {
+        let song_dir = test_dir("update-action-current-tween-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local helper
+local result
+local action = 1
+local mod_actions = {
+    {1, function() helper:linear(1):x(100) end},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Helper",
+        InitCommand=function(self) helper = self self:x(0) end,
+    },
+    Def.Quad{
+        Name="Result",
+        InitCommand=function(self) result = self end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                while action <= #mod_actions and beat >= mod_actions[action][1] do
+                    mod_actions[action][2]()
+                    action = action + 1
+                end
+                result:x(helper:GetX())
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Current Action Tween State");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let result_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Result"))
+            .unwrap();
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == result_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .unwrap();
+        let midpoint = x
+            .samples
+            .iter()
+            .min_by(|left, right| (left.beat - 1.5).abs().total_cmp(&(right.beat - 1.5).abs()))
+            .unwrap();
+        assert!((midpoint.beat - 1.5).abs() <= 0.051);
+        assert!(
+            matches!(midpoint.value, SongLuaOverlayUpdateValue::F32(value) if (value - 50.0).abs() <= 5.1),
+            "unexpected midpoint sample: {midpoint:?}"
+        );
+    }
+
+    #[test]
+    fn song_lua_clock_uses_native_bpm_segments() {
+        assert_eq!(
+            crate::parse_song_timing_bpms("0.000=120.000,4.000=60.000"),
+            vec![(0.0, 120.0), (4.0, 60.0)]
+        );
+        let mut context = SongLuaCompileContext::new(".", "Variable BPM");
+        context.song_timing_bpms = vec![(0.0, 120.0), (4.0, 60.0)];
+        assert!((crate::song_elapsed_seconds_at(4.0, &context) - 2.0).abs() < 1e-6);
+        assert!((crate::song_elapsed_seconds_at(6.0, &context) - 4.0).abs() < 1e-6);
+        assert!((crate::song_beat_at_elapsed_seconds(4.0, &context) - 6.0).abs() < 1e-6);
+        assert!((crate::song_bps_at_beat(5.0, &context) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn compile_song_lua_first_update_write_is_a_step() {
+        let song_dir = test_dir("first-update-write-step");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if GAMESTATE:GetSongBeat() >= 0.2 then target:x(100) end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "First Update Write Step");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let target_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Target"))
+            .unwrap();
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .unwrap();
+        assert!(x.samples.first().is_some_and(|sample| {
+            sample.beat >= 0.2 && sample.value == SongLuaOverlayUpdateValue::F32(100.0)
+        }));
+        assert!(
+            x.samples
+                .iter()
+                .all(|sample| sample.value == SongLuaOverlayUpdateValue::F32(100.0))
+        );
+    }
+
+    #[test]
     fn compile_song_lua_holds_sparse_action_updates_until_the_next_action() {
         let song_dir = test_dir("sparse-action-overlay-updates");
         let entry = song_dir.join("default.lua");
@@ -7484,13 +7689,14 @@ return root
         let mut context = SongLuaCompileContext::new(&song_dir, "Dense Update Overlays");
         context.music_length_seconds = 4.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let max_samples = (context.music_length_seconds * 60.0).ceil() as usize + 2;
         assert_eq!(compiled.overlays.len(), 32);
         assert_eq!(compiled.overlay_updates.len(), 32);
         assert!(
             compiled
                 .overlay_updates
                 .iter()
-                .all(|track| track.samples.len() <= 64)
+                .all(|track| track.samples.len() <= max_samples)
         );
     }
 
@@ -8329,7 +8535,7 @@ return Def.ActorFrame{
         );
         assert_eq!(
             overlay.message_commands[0].blocks[2].easing.as_deref(),
-            Some("outElastic")
+            Some("spring")
         );
         assert_eq!(overlay.message_commands[0].blocks[2].start, 0.45);
         assert_eq!(overlay.message_commands[0].blocks[2].duration, 0.5);

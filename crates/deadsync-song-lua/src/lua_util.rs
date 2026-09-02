@@ -82,11 +82,16 @@ pub struct SongLuaOverlayCompileActor<Kind> {
 
 struct SongLuaOverlayUpdateCapture {
     actor_indices: HashMap<usize, usize>,
+    active_broadcast: Option<String>,
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
+    final_values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     scheduled: Vec<Vec<SongLuaScheduledOverlayUpdate>>,
 }
+
+struct SongLuaProbeCaptureActive;
+struct SongLuaActionCaptureActive;
 
 #[derive(Clone)]
 pub struct SongLuaScheduledOverlayUpdate {
@@ -101,9 +106,11 @@ impl SongLuaOverlayUpdateCapture {
         let actor_count = actor_indices.len();
         Self {
             actor_indices,
+            active_broadcast: None,
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
             values: (0..actor_count).map(|_| Vec::new()).collect(),
+            final_values: (0..actor_count).map(|_| Vec::new()).collect(),
             scheduled: (0..actor_count).map(|_| Vec::new()).collect(),
         }
     }
@@ -126,15 +133,21 @@ impl SongLuaOverlayUpdateCapture {
         let Some(index) = self.touch(actor) else {
             return false;
         };
-        if let Some((_, current)) = self.values[index]
-            .iter_mut()
-            .find(|(current, _)| *current == target)
-        {
+        Self::replace_value(&mut self.final_values[index], target, value.clone());
+        Self::replace_value(&mut self.values[index], target, value);
+        true
+    }
+
+    fn replace_value(
+        values: &mut Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>,
+        target: SongLuaOverlayUpdateTarget,
+        value: SongLuaOverlayUpdateValue,
+    ) {
+        if let Some((_, current)) = values.iter_mut().find(|(current, _)| *current == target) {
             *current = value;
         } else {
-            self.values[index].push((target, value));
+            values.push((target, value));
         }
-        true
     }
 
     fn record_scheduled(
@@ -148,6 +161,7 @@ impl SongLuaOverlayUpdateCapture {
         let Some(index) = self.touch(actor) else {
             return false;
         };
+        Self::replace_value(&mut self.final_values[index], target, value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             delay_seconds,
             duration_seconds,
@@ -168,6 +182,7 @@ pub fn drain_overlay_update_capture(
         usize,
         &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
         &[SongLuaScheduledOverlayUpdate],
+        &[(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)],
     ) -> Result<(), String>,
 ) -> Result<(), String> {
     let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() else {
@@ -175,11 +190,17 @@ pub fn drain_overlay_update_capture(
     };
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
-        visit(index, &capture.values[index], &capture.scheduled[index])?;
+        visit(
+            index,
+            &capture.values[index],
+            &capture.scheduled[index],
+            &capture.final_values[index],
+        )?;
     }
     for position in 0..capture.touched.len() {
         let index = capture.touched[position];
         capture.values[index].clear();
+        capture.final_values[index].clear();
         capture.scheduled[index].clear();
         capture.touched_flags[index] = false;
     }
@@ -284,11 +305,18 @@ fn record_overlay_update_capture(
     let Some(target) = capture_target_for_key(key) else {
         return false;
     };
-    let active_broadcast = lua
-        .globals()
-        .raw_get::<Option<String>>(ACTIVE_BROADCAST_KEY)
-        .ok()
-        .flatten();
+    let active_broadcast = {
+        let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
+            return false;
+        };
+        if !capture
+            .actor_indices
+            .contains_key(&(actor.to_pointer() as usize))
+        {
+            return false;
+        }
+        capture.active_broadcast.clone()
+    };
     let direct_message_actor = active_broadcast.as_deref().is_some_and(|message| {
         actor
             .get::<Option<Function>>(format!("{message}MessageCommand"))
@@ -1540,6 +1568,9 @@ pub fn broadcast_song_lua_message(
     let globals = lua.globals();
     let previous_broadcast = globals.raw_get::<Value>(ACTIVE_BROADCAST_KEY)?;
     globals.raw_set(ACTIVE_BROADCAST_KEY, message)?;
+    let capture_broadcast = lua
+        .app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .map(|mut capture| capture.active_broadcast.replace(message.to_string()));
     let result = || {
         let registry = song_lua_actor_registry(lua)?;
         let mut actors = Vec::with_capacity(registry.raw_len());
@@ -1561,6 +1592,11 @@ pub fn broadcast_song_lua_message(
         })
     };
     let result = result();
+    if let Some(previous) = capture_broadcast
+        && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+    {
+        capture.active_broadcast = previous;
+    }
     let restore = globals.raw_set(ACTIVE_BROADCAST_KEY, previous_broadcast);
     restore?;
     result
@@ -2343,7 +2379,7 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -2358,8 +2394,70 @@ pub fn capture_block_set_bool(
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
+}
+
+fn set_actor_capture_state(
+    actor: &Table,
+    key: &str,
+    value: impl mlua::IntoLua,
+) -> mlua::Result<()> {
+    let state_key = match key {
+        "x" => "__songlua_state_x",
+        "y" => "__songlua_state_y",
+        "z" => "__songlua_state_z",
+        "z_bias" => "__songlua_state_z_bias",
+        "draw_order" => "__songlua_state_draw_order",
+        "draw_by_z_position" => "__songlua_state_draw_by_z_position",
+        "halign" => "__songlua_state_halign",
+        "valign" => "__songlua_state_valign",
+        "uppercase" => "__songlua_state_uppercase",
+        "visible" => "__songlua_state_visible",
+        "cropleft" => "__songlua_state_cropleft",
+        "cropright" => "__songlua_state_cropright",
+        "croptop" => "__songlua_state_croptop",
+        "cropbottom" => "__songlua_state_cropbottom",
+        "fadeleft" => "__songlua_state_fadeleft",
+        "faderight" => "__songlua_state_faderight",
+        "fadetop" => "__songlua_state_fadetop",
+        "fadebottom" => "__songlua_state_fadebottom",
+        "mask_source" => "__songlua_state_mask_source",
+        "mask_dest" => "__songlua_state_mask_dest",
+        "depth_test" => "__songlua_state_depth_test",
+        "zoom" => "__songlua_state_zoom",
+        "zoom_x" => "__songlua_state_zoom_x",
+        "zoom_y" => "__songlua_state_zoom_y",
+        "zoom_z" => "__songlua_state_zoom_z",
+        "basezoom" => "__songlua_state_basezoom",
+        "basezoom_x" => "__songlua_state_basezoom_x",
+        "basezoom_y" => "__songlua_state_basezoom_y",
+        "basezoom_z" => "__songlua_state_basezoom_z",
+        "rot_x_deg" => "__songlua_state_rot_x_deg",
+        "rot_y_deg" => "__songlua_state_rot_y_deg",
+        "rot_z_deg" => "__songlua_state_rot_z_deg",
+        "skew_x" => "__songlua_state_skew_x",
+        "skew_y" => "__songlua_state_skew_y",
+        "vibrate" => "__songlua_state_vibrate",
+        "effect_period" => "__songlua_state_effect_period",
+        "effect_offset" => "__songlua_state_effect_offset",
+        "rainbow" => "__songlua_state_rainbow",
+        "rainbow_scroll" => "__songlua_state_rainbow_scroll",
+        "text_jitter" => "__songlua_state_text_jitter",
+        "text_distortion" => "__songlua_state_text_distortion",
+        "mult_attrs_with_diffuse" => "__songlua_state_mult_attrs_with_diffuse",
+        "sprite_animate" => "__songlua_state_sprite_animate",
+        "sprite_loop" => "__songlua_state_sprite_loop",
+        "sprite_playback_rate" => "__songlua_state_sprite_playback_rate",
+        "sprite_state_delay" => "__songlua_state_sprite_state_delay",
+        "max_w_pre_zoom" => "__songlua_state_max_w_pre_zoom",
+        "max_h_pre_zoom" => "__songlua_state_max_h_pre_zoom",
+        "max_dimension_uses_zoom" => "__songlua_state_max_dimension_uses_zoom",
+        "texture_filtering" => "__songlua_state_texture_filtering",
+        "texture_wrapping" => "__songlua_state_texture_wrapping",
+        _ => return actor.set(format!("__songlua_state_{key}"), value),
+    };
+    actor.set(state_key, value)
 }
 
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
@@ -3499,11 +3597,11 @@ pub fn make_actor_capture_f32_method(
     probe_name: Option<&'static str>,
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, args: MultiValue| {
+    lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
         if let Some(probe_name) = probe_name {
             record_probe_method_call(lua, &actor, probe_name)?;
         }
-        if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+        if let Some(value) = value.and_then(read_f32) {
             capture_block_set_f32(lua, &actor, key, value)?;
         }
         Ok(actor.clone())
@@ -3516,8 +3614,8 @@ pub fn make_actor_add_f32_method(
     key: &'static str,
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, args: MultiValue| {
-        let Some(delta) = args.get(1).cloned().and_then(read_f32) else {
+    lua.create_function(move |lua, (_self, delta): (Option<Value>, Option<Value>)| {
+        let Some(delta) = delta.and_then(read_f32) else {
             return Ok(actor.clone());
         };
         let block = actor_current_capture_block(lua, &actor)?;
@@ -3574,8 +3672,8 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "visible",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                if let Some(value) = args.get(1).map(truthy) {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                if let Some(value) = value.as_ref().map(truthy) {
                     prepare_capture_scope_actor(lua, &actor)?;
                     actor.set("__songlua_visible", value)?;
                     capture_block_set_bool(lua, &actor, "visible", value)?;
@@ -3629,15 +3727,10 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "sleep",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, duration): (Option<Value>, Option<Value>)| {
                 prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
-                let duration = args
-                    .get(1)
-                    .cloned()
-                    .and_then(read_f32)
-                    .unwrap_or(0.0)
-                    .max(0.0);
+                let duration = duration.and_then(read_f32).unwrap_or(0.0).max(0.0);
                 let cursor = actor
                     .get::<Option<f32>>("__songlua_capture_cursor")?
                     .unwrap_or(0.0);
@@ -3696,7 +3789,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     )?;
     actor.set(
         "spring",
-        make_actor_tween_method(lua, actor, Some("outElastic"))?,
+        make_actor_tween_method(lua, actor, Some("spring"))?,
     )?;
     actor.set(
         "bouncebegin",
@@ -3710,17 +3803,21 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "queuecommand",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                let Some(name) = args.get(1).cloned().and_then(read_string) else {
+            move |lua, (_self, name): (Option<Value>, Option<Value>)| {
+                let Some(name) = name.and_then(read_string) else {
                     return Ok(actor.clone());
                 };
                 let active = actor_active_commands(lua, &actor)?;
-                if active
-                    .get::<Option<bool>>(format!("{name}Command"))?
-                    .unwrap_or(false)
-                {
-                    if name.eq_ignore_ascii_case("Update") {
+                let update = name.eq_ignore_ascii_case("Update");
+                let command_active = if update {
+                    active.get::<Option<bool>>("UpdateCommand")?
+                } else {
+                    active.get::<Option<bool>>(format!("{name}Command"))?
+                };
+                if command_active.unwrap_or(false) {
+                    if update {
                         actor.set("__songlua_recurring_update_command", true)?;
+                        invalidate_compile_update_plan(lua);
                         let cursor = actor
                             .get::<Option<f32>>("__songlua_capture_cursor")?
                             .unwrap_or(0.0);
@@ -3856,6 +3953,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 remove_actor_child(lua, &actor, &name)?;
+                invalidate_compile_update_plan(lua);
                 Ok(actor.clone())
             }
         })?,
@@ -3866,6 +3964,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 remove_all_actor_children(lua, &actor)?;
+                invalidate_compile_update_plan(lua);
                 Ok(actor.clone())
             }
         })?,
@@ -4120,9 +4219,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "x",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "x")?;
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "x", value)?;
                 }
                 Ok(actor.clone())
@@ -4133,9 +4232,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "y",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "y")?;
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "y", value)?;
                 }
                 Ok(actor.clone())
@@ -4170,12 +4269,13 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "SetUpdateRate",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32)
                     && value.is_finite()
                     && value > 0.0
                 {
                     actor.set("__songlua_update_rate", value)?;
+                    invalidate_compile_update_plan(lua);
                 }
                 Ok(actor.clone())
             }
@@ -4386,13 +4486,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "diffusealpha",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                if let Some(alpha) = args.get(1).cloned().and_then(read_f32) {
-                    let block = actor_current_capture_block(lua, &actor)?;
-                    let mut diffuse = block
-                        .get::<Option<Table>>("diffuse")?
-                        .and_then(|value| table_vec4(&value))
-                        .unwrap_or(actor_diffuse(&actor)?);
+            move |lua, (_self, alpha): (Option<Value>, Option<Value>)| {
+                if let Some(alpha) = alpha.and_then(read_f32) {
+                    let mut diffuse = actor_diffuse(&actor)?;
                     diffuse[3] = alpha;
                     capture_block_set_color(lua, &actor, diffuse)?;
                 }
@@ -4460,9 +4556,9 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "zoom",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoom")?;
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom", value)?;
                     capture_block_set_zoom_axes(lua, &actor, value, "zoom_x", "zoom_y", "zoom_z")?;
                     actor_update_text_pre_zoom_flags(lua, &actor, true, true)?;
@@ -4475,7 +4571,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "SetUpdateFunction",
         lua.create_function({
             let actor = actor.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 match args.get(1).cloned() {
                     Some(Value::Function(function)) => {
                         actor.set("__songlua_update_function", function)?;
@@ -4484,6 +4580,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
                         actor.set("__songlua_update_function", Value::Nil)?;
                     }
                 }
+                invalidate_compile_update_plan(lua);
                 Ok(actor.clone())
             }
         })?,
@@ -4492,8 +4589,8 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "aux",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                if let Some(value) = value.and_then(read_f32) {
                     prepare_capture_scope_actor(lua, &actor)?;
                     actor.set("__songlua_aux", value)?;
                 }
@@ -4505,7 +4602,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "getaux",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor.get::<Option<f32>>("__songlua_aux")?.unwrap_or(0.0))
             }
         })?,
@@ -5148,9 +5245,9 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "zoomx",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoomx")?;
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom_x", value)?;
                     actor_update_text_pre_zoom_flags(lua, &actor, true, false)?;
                 }
@@ -5162,9 +5259,9 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "zoomy",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 record_probe_method_call(lua, &actor, "zoomy")?;
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "zoom_y", value)?;
                     actor_update_text_pre_zoom_flags(lua, &actor, false, true)?;
                 }
@@ -5232,9 +5329,9 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
                 let actor = actor.clone();
                 let method_name = name.to_string();
                 let state_key = state_key.to_string();
-                move |lua, args: MultiValue| {
+                move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                     record_probe_method_call(lua, &actor, &method_name)?;
-                    if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+                    if let Some(value) = value.and_then(read_f32) {
                         actor.set(state_key.as_str(), value)?;
                         let block_key = if method_name == "skewx" {
                             "skew_x"
@@ -5858,8 +5955,8 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "effectperiod",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                if let Some(value) = args.get(1).cloned().and_then(read_f32) {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "effect_period", value)?;
                 }
                 Ok(actor.clone())
@@ -5870,8 +5967,8 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "effectoffset",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                if let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) {
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                if let Some(value) = value.and_then(read_f32) {
                     capture_block_set_f32(lua, &actor, "effect_offset", value)?;
                 }
                 Ok(actor.clone())
@@ -5929,7 +6026,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "vibrate",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _self: Option<Value>| {
                 capture_block_set_bool(lua, &actor, "vibrate", true)?;
                 capture_block_set_vec3(lua, &actor, "effect_magnitude", [10.0, 10.0, 10.0])?;
                 Ok(actor.clone())
@@ -6590,6 +6687,7 @@ pub fn install_actor_path_child_methods(
                     return Ok(actor.clone());
                 };
                 add_actor_child_from_path(lua, &actor, &path)?;
+                invalidate_compile_update_plan(lua);
                 Ok(actor.clone())
             }
         })?,
@@ -6801,7 +6899,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_x")?
                     .unwrap_or(0.0_f32))
@@ -6823,7 +6921,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_y")?
                     .unwrap_or(0.0_f32))
@@ -6834,7 +6932,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetDestX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_x")?
                     .unwrap_or(0.0_f32))
@@ -6845,7 +6943,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetDestY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_y")?
                     .unwrap_or(0.0_f32))
@@ -6856,7 +6954,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetDestZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_z")?
                     .unwrap_or(0.0_f32))
@@ -6867,7 +6965,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetVisible",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<bool>>("__songlua_visible")?
                     .unwrap_or(true))
@@ -6878,7 +6976,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetZoom",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_zoom")?
                     .unwrap_or(1.0_f32))
@@ -6893,7 +6991,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_z")?
                     .unwrap_or(0.0_f32))
@@ -6904,7 +7002,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetRotationX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_rot_x_deg")?
                     .unwrap_or(0.0_f32))
@@ -6915,7 +7013,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetRotationY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_rot_y_deg")?
                     .unwrap_or(0.0_f32))
@@ -6926,7 +7024,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetRotationZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_rot_z_deg")?
                     .unwrap_or(0.0_f32))
@@ -6937,7 +7035,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "getrotation",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 let x = actor
                     .get::<Option<f32>>("__songlua_state_rot_x_deg")?
                     .unwrap_or(0.0_f32);
@@ -6955,7 +7053,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZoomX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_zoom_x")?
                     .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
@@ -6967,7 +7065,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZoomY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_zoom_y")?
                     .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
@@ -6979,7 +7077,7 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZoomZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _self: Option<Value>| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_zoom_z")?
                     .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
@@ -7231,6 +7329,70 @@ pub fn run_actor_update_functions_with_delta(
     run_actor_update_functions_for_table(lua, root, delta_seconds)
 }
 
+#[derive(Clone)]
+enum SongLuaCompileUpdateJob {
+    Recurring { actor: Table, rate: f64 },
+    Callback { actor: Table, rate: f64 },
+}
+
+struct SongLuaCompileUpdatePlan {
+    jobs: Vec<SongLuaCompileUpdateJob>,
+}
+
+fn invalidate_compile_update_plan(lua: &Lua) {
+    lua.remove_app_data::<SongLuaCompileUpdatePlan>();
+}
+
+fn collect_compile_update_jobs(
+    lua: &Lua,
+    actor: &Table,
+    parent_rate: f64,
+    jobs: &mut Vec<SongLuaCompileUpdateJob>,
+) -> mlua::Result<()> {
+    let rate = parent_rate * actor_update_rate(actor)?;
+    if actor
+        .get::<Option<bool>>("__songlua_recurring_update_command")?
+        .unwrap_or(false)
+    {
+        jobs.push(SongLuaCompileUpdateJob::Recurring {
+            actor: actor.clone(),
+            rate,
+        });
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        child.set("__songlua_parent", actor.clone())?;
+        collect_compile_update_jobs(lua, &child, rate, jobs)?;
+    }
+    if let Some(stream) = song_meter_stream_child(lua, actor)? {
+        collect_compile_update_jobs(lua, &stream, rate, jobs)?;
+    }
+    if actor
+        .get::<Option<Function>>("__songlua_update_function")?
+        .is_some()
+    {
+        jobs.push(SongLuaCompileUpdateJob::Callback {
+            actor: actor.clone(),
+            rate,
+        });
+    }
+    Ok(())
+}
+
+fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Vec<SongLuaCompileUpdateJob>> {
+    if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
+        let mut jobs = Vec::new();
+        collect_compile_update_jobs(lua, root, 1.0, &mut jobs)?;
+        lua.set_app_data(SongLuaCompileUpdatePlan { jobs });
+    }
+    Ok(lua
+        .app_data_ref::<SongLuaCompileUpdatePlan>()
+        .map(|plan| plan.jobs.clone())
+        .unwrap_or_default())
+}
+
 pub fn run_actor_compile_update_functions_with_delta(
     lua: &Lua,
     root: &Value,
@@ -7239,7 +7401,17 @@ pub fn run_actor_compile_update_functions_with_delta(
     let Value::Table(root) = root else {
         return Ok(());
     };
-    run_actor_update_functions_for_table_inner(lua, root, delta_seconds, true)
+    for job in compile_update_jobs(lua, root)? {
+        match job {
+            SongLuaCompileUpdateJob::Recurring { actor, rate } => {
+                run_recurring_update(lua, &actor, delta_seconds * rate, true)?;
+            }
+            SongLuaCompileUpdateJob::Callback { actor, rate } => {
+                run_update_callback(lua, &actor, delta_seconds * rate)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<bool> {
@@ -9237,6 +9409,9 @@ pub fn probe_target_kind(actor: &Table) -> mlua::Result<&'static str> {
 }
 
 pub fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> mlua::Result<()> {
+    if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_none() {
+        return Ok(());
+    }
     record_probe_actor_call(lua, actor)?;
     let globals = lua.globals();
     let Some(calls) = globals.get::<Option<Table>>(SONG_LUA_PROBE_METHODS_KEY)? else {
@@ -9250,6 +9425,9 @@ pub fn record_probe_method_call(lua: &Lua, actor: &Table, method_name: &str) -> 
 }
 
 fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_none() {
+        return Ok(());
+    }
     let globals = lua.globals();
     let Some(actors) = globals.get::<Option<Table>>(SONG_LUA_PROBE_ACTORS_KEY)? else {
         return Ok(());
@@ -9269,6 +9447,9 @@ fn record_probe_actor_call(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 }
 
 pub fn prepare_capture_scope_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if lua.app_data_ref::<SongLuaActionCaptureActive>().is_none() {
+        return Ok(());
+    }
     let globals = lua.globals();
     let Some(actors) = globals.get::<Option<Table>>(SONG_LUA_CAPTURE_ACTORS_KEY)? else {
         return Ok(());
@@ -9404,7 +9585,9 @@ pub fn probe_function_ease_target(
     globals.set(SONG_LUA_PROBE_METHODS_KEY, calls.clone())?;
     globals.set(SONG_LUA_PROBE_ACTORS_KEY, actors.clone())?;
     globals.set(SONG_LUA_PROBE_ACTOR_SET_KEY, lua.create_table()?)?;
+    lua.set_app_data(SongLuaProbeCaptureActive);
     let result = function.call::<Value>(1.0_f32);
+    lua.remove_app_data::<SongLuaProbeCaptureActive>();
     let methods = probe_call_names(&calls)?;
     let actor_ptrs = probe_actor_pointers(&actors)?;
     let classify = classify_function_ease_probe(&calls);
@@ -9468,6 +9651,7 @@ pub fn begin_action_capture_scope(lua: &Lua) -> mlua::Result<SongLuaActionCaptur
     globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, actors.clone())?;
     globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, lua.create_table()?)?;
     globals.set(SONG_LUA_CAPTURE_SNAPSHOTS_KEY, snapshots.clone())?;
+    lua.set_app_data(SongLuaActionCaptureActive);
     Ok(SongLuaActionCaptureScope {
         actors,
         snapshots,
@@ -9481,6 +9665,7 @@ pub fn restore_action_capture_scope(
     lua: &Lua,
     scope: SongLuaActionCaptureScope,
 ) -> mlua::Result<()> {
+    lua.remove_app_data::<SongLuaActionCaptureActive>();
     let globals = lua.globals();
     globals.set(SONG_LUA_CAPTURE_ACTORS_KEY, scope.previous_actors)?;
     globals.set(SONG_LUA_CAPTURE_ACTOR_SET_KEY, scope.previous_actor_set)?;

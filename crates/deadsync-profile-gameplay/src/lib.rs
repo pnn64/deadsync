@@ -1283,6 +1283,10 @@ pub fn song_lua_compile_context(
         charts.first().map(std::convert::AsRef::as_ref),
         [60.0, 60.0],
     );
+    let timing_bpms = deadsync_song_lua::parse_song_timing_bpms(&song.normalized_bpms);
+    if !timing_bpms.is_empty() {
+        context.song_timing_bpms = timing_bpms;
+    }
     context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {

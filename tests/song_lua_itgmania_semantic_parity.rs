@@ -2,7 +2,7 @@ use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayCommandBlock,
     SongLuaOverlayKind, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
     SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod,
-    SongLuaTimeUnit, compile_song_lua_layers, overlay_state_after_blocks,
+    SongLuaTimeUnit, compile_song_lua_layers, overlay_state_after_blocks, parse_song_timing_bpms,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use serde::Deserialize;
@@ -326,6 +326,10 @@ fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize) {
         song.title.clone(),
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
+    let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
+    if !timing_bpms.is_empty() {
+        context.song_timing_bpms = timing_bpms;
+    }
     context.music_length_seconds = trace.end_position.seconds;
     context.screen_width = trace.display.logical_width;
     context.screen_height = trace.display.logical_height;

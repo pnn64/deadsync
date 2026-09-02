@@ -109,11 +109,11 @@ fn create_player_state_table(
     let options_for_set = options.clone();
     table.set(
         "GetPlayerOptions",
-        lua.create_function(move |_, _args: MultiValue| Ok(options_for_get.clone()))?,
+        lua.create_function(move |_, _self: Option<Value>| Ok(options_for_get.clone()))?,
     )?;
     table.set(
         "GetCurrentPlayerOptions",
-        lua.create_function(move |_, _args: MultiValue| Ok(options_for_current.clone()))?,
+        lua.create_function(move |_, _self: Option<Value>| Ok(options_for_current.clone()))?,
     )?;
     table.set(
         "GetSongPosition",
@@ -358,18 +358,16 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     let fallback_owner = table.clone();
     mt.set(
         "__index",
-        lua.create_function(move |lua, args: MultiValue| {
-            let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
+        lua.create_function(move |lua, (_owner, name): (Option<Value>, Option<Value>)| {
+            let Some(name) = name.and_then(read_string) else {
                 return Ok(Value::Nil);
             };
             if !is_player_option_method_name(&name) {
                 return Ok(Value::Nil);
             }
-            Ok(Value::Function(create_player_option_method(
-                lua,
-                &fallback_owner,
-                &name,
-            )?))
+            let method = create_player_option_method(lua, &fallback_owner, &name)?;
+            fallback_owner.raw_set(name.as_str(), method.clone())?;
+            Ok(Value::Function(method))
         })?,
     )?;
     let _ = table.set_metatable(Some(mt));
@@ -394,9 +392,9 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
-    lua.create_function(move |lua, args: MultiValue| {
+    lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
         let state = player_option_state(lua, &owner)?;
-        if let Some(value) = method_arg(&args, 0).cloned() {
+        if let Some(value) = value {
             state.set(
                 name.as_str(),
                 normalize_player_option_value(lua, &name, value)?,
@@ -1219,4 +1217,28 @@ fn create_steps_by_steps_type_table(
         )?;
     }
     Ok(table)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dynamic_player_option_methods_are_cached_after_first_lookup() {
+        let lua = Lua::new();
+        let options = create_player_options_table(&lua, SongLuaPlayerContext::default()).unwrap();
+        assert!(
+            options
+                .raw_get::<Option<Function>>("Drunk")
+                .unwrap()
+                .is_none()
+        );
+
+        let first = options.get::<Function>("Drunk").unwrap();
+        let cached = options.raw_get::<Function>("Drunk").unwrap();
+        assert_eq!(first.to_pointer(), cached.to_pointer());
+
+        first.call::<Value>((options.clone(), 0.5_f32)).unwrap();
+        assert_eq!(player_option_number(&lua, &options, "drunk").unwrap(), 0.5);
+    }
 }

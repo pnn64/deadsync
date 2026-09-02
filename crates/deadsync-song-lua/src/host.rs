@@ -1256,8 +1256,8 @@ pub fn install_game_state_globals(
     let player_states = players.player_states.clone();
     gamestate.set(
         "GetPlayerState",
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(player) = method_arg(&args, 0).and_then(player_index_from_value) else {
+        lua.create_function(move |_, (_self, player): (Option<Value>, Option<Value>)| {
+            let Some(player) = player.as_ref().and_then(player_index_from_value) else {
                 return Ok(Value::Nil);
             };
             Ok(Value::Table(player_states[player].clone()))
@@ -1364,19 +1364,19 @@ pub fn install_game_state_globals(
         "GetSongBeat",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
     let song_bps = song_display_bps(context);
     gamestate.set(
         "GetSongBPS",
-        lua.create_function(move |_, _args: MultiValue| Ok(song_bps))?,
+        lua.create_function(move |_, _self: Option<Value>| Ok(song_bps))?,
     )?;
     gamestate.set(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;

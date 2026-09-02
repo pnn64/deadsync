@@ -1,5 +1,6 @@
 use mlua::{Function, Lua, Table, Value};
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 use crate::{
     LUA_PLAYERS, SONG_LUA_PLAYER_OPTIONS_KEYS, SongLuaColumnOffsetBuildParams,
@@ -15,15 +16,12 @@ use crate::{
     reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
     runtime_player_option_ease_target, set_actor_overlay_getter_state,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
+    set_compile_song_runtime_values, song_beat_at_elapsed_seconds, song_bps_at_beat,
+    song_display_bps, song_elapsed_seconds_at, song_elapsed_seconds_for_beat,
     song_lua_side_effect_count, song_lua_span_end, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
-// Update functions are replayed offline and their numeric properties are
-// interpolated at render rate. Ten source samples per second preserve the
-// chart's continuous screen motion while keeping gameplay transitions bounded.
-const SONG_LUA_UPDATE_TARGET_FPS: f32 = 10.0;
 const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
@@ -388,6 +386,17 @@ pub fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32)
 }
 
 #[inline(always)]
+fn beat_span_seconds(context: &SongLuaCompileContext, start: f32, end: f32) -> f32 {
+    (song_elapsed_seconds_at(end, context) - song_elapsed_seconds_at(start, context)).max(0.0)
+}
+
+fn update_frame_beat(context: &SongLuaCompileContext, beat: f32) -> f32 {
+    let seconds = song_elapsed_seconds_at(beat, context);
+    let frame = (seconds.mul_add(SONG_LUA_UPDATE_REFERENCE_FPS, -1.0e-5)).ceil();
+    song_beat_at_elapsed_seconds(frame / SONG_LUA_UPDATE_REFERENCE_FPS, context)
+}
+
+#[inline(always)]
 #[must_use]
 pub fn relative_player_target(value: Option<f32>, baseline: Option<f32>) -> Option<f32> {
     value.map(|value| value - baseline.unwrap_or(0.0))
@@ -422,9 +431,7 @@ pub fn call_perframe_entry(
 
 #[must_use]
 pub fn update_function_end_beat(context: &SongLuaCompileContext) -> f32 {
-    let seconds = context.music_length_seconds.max(0.0);
-    let beats = seconds * song_display_bps(context) * song_music_rate(context);
-    beats.max(0.0)
+    song_beat_at_elapsed_seconds(context.music_length_seconds.max(0.0), context).max(0.0)
 }
 
 #[must_use]
@@ -433,11 +440,6 @@ pub fn update_function_sample_step(len: f32) -> f32 {
         return 0.0;
     }
     (len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32).max(1.0 / 192.0)
-}
-
-fn update_function_frame_step(context: &SongLuaCompileContext, len: f32) -> f32 {
-    let frame_step = song_display_bps(context) / SONG_LUA_UPDATE_TARGET_FPS;
-    frame_step.max(len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32)
 }
 
 fn update_function_named_tables(lua: &Lua, root: &Value, name: &str) -> Result<Vec<Table>, String> {
@@ -516,12 +518,15 @@ fn update_function_replay_beats(
     start: f32,
     end: f32,
 ) -> Result<Vec<f32>, String> {
-    let step = update_function_frame_step(context, end - start);
+    let start_seconds = song_elapsed_seconds_at(start, context);
+    let end_seconds = song_elapsed_seconds_at(end, context);
+    let step = ((end_seconds - start_seconds) / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32)
+        .max(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS);
     let mut out = vec![start];
-    let mut beat = start;
-    while beat < end - f32::EPSILON {
-        beat = (beat + step).min(end);
-        out.push(beat);
+    let mut seconds = start_seconds;
+    while seconds < end_seconds - f32::EPSILON {
+        seconds = (seconds + step).min(end_seconds);
+        out.push(song_beat_at_elapsed_seconds(seconds, context));
     }
     let boundaries = update_function_boundary_beats(lua, root)?;
     out.extend(
@@ -530,15 +535,17 @@ fn update_function_replay_beats(
             .into_iter()
             .filter(|beat| beat.is_finite() && *beat > start && *beat < end),
     );
-    let reference_step =
-        song_display_bps(context) * song_music_rate(context) / SONG_LUA_UPDATE_REFERENCE_FPS;
     // ITGmania reaches the frames immediately around a zero-ending callback.
     // Capture both without inventing a property write after the callback stops.
     out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
+        let reference_step = song_bps_at_beat(*end_beat, context) * song_music_rate(context)
+            / SONG_LUA_UPDATE_REFERENCE_FPS;
         let beat = *end_beat - reference_step;
         (beat.is_finite() && beat > start && beat < end).then_some(beat)
     }));
     out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
+        let reference_step = song_bps_at_beat(*end_beat, context) * song_music_rate(context)
+            / SONG_LUA_UPDATE_REFERENCE_FPS;
         let beat = *end_beat + reference_step;
         (beat.is_finite() && beat > start && beat < end).then_some(beat)
     }));
@@ -970,20 +977,26 @@ fn push_update_overlay_value(
     next_beat: f32,
     next: crate::SongLuaOverlayUpdateValue,
 ) {
-    let track_index = *track_indices
-        .entry((overlay_index, target))
-        .or_insert_with(|| {
+    let key = (overlay_index, target);
+    let track_index = match track_indices.get(&key).copied() {
+        Some(index) => index,
+        None => {
             let index = tracks.len();
+            track_indices.insert(key, index);
             tracks.push(SongLuaOverlayUpdateTrack {
                 overlay_index,
                 target,
+                // A target enters capture only when UpdateCommand writes it.
+                // Do not invent a ramp from the actor default before that first
+                // write; the runtime applies the first sampled value as a step.
                 samples: vec![SongLuaOverlayUpdateSample {
-                    beat: if current == next { next_beat } else { beat },
-                    value: current.clone(),
+                    beat: next_beat,
+                    value: next,
                 }],
             });
-            index
-        });
+            return;
+        }
+    };
     if current == next {
         return;
     }
@@ -1103,14 +1116,129 @@ fn overlay_state_update_value(
     }
 }
 
+fn set_overlay_state_update_value(
+    state: &mut SongLuaOverlayState,
+    target: crate::SongLuaOverlayUpdateTarget,
+    value: &crate::SongLuaOverlayUpdateValue,
+) {
+    use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value};
+    macro_rules! set_value {
+        ($target:ident, $variant:ident, $field:ident) => {
+            if target == Target::$target {
+                if let Value::$variant(value) = value {
+                    state.$field = *value;
+                }
+                return;
+            }
+        };
+    }
+    macro_rules! set_option {
+        ($target:ident, $variant:ident, $field:ident) => {
+            if target == Target::$target {
+                state.$field = match value {
+                    Value::$variant(value) => Some(*value),
+                    Value::None => None,
+                    _ => state.$field,
+                };
+                return;
+            }
+        };
+    }
+    set_value!(X, F32, x);
+    set_value!(Y, F32, y);
+    set_value!(Z, F32, z);
+    set_value!(ZBias, F32, z_bias);
+    set_value!(DrawOrder, I32, draw_order);
+    set_value!(DrawByZPosition, Bool, draw_by_z_position);
+    set_value!(HAlign, F32, halign);
+    set_value!(VAlign, F32, valign);
+    set_value!(TextAlign, TextAlign, text_align);
+    set_value!(Uppercase, Bool, uppercase);
+    set_value!(ShadowLen, Vec2, shadow_len);
+    set_value!(ShadowColor, Vec4, shadow_color);
+    set_value!(Glow, Vec4, glow);
+    set_option!(Fov, F32, fov);
+    set_option!(Vanishpoint, Vec2, vanishpoint);
+    set_value!(Diffuse, Vec4, diffuse);
+    if target == Target::VertexColors {
+        state.vertex_colors = match value {
+            Value::VertexColors(value) => Some(**value),
+            Value::None => None,
+            _ => state.vertex_colors,
+        };
+        return;
+    }
+    set_value!(Visible, Bool, visible);
+    set_value!(CropLeft, F32, cropleft);
+    set_value!(CropRight, F32, cropright);
+    set_value!(CropTop, F32, croptop);
+    set_value!(CropBottom, F32, cropbottom);
+    set_value!(FadeLeft, F32, fadeleft);
+    set_value!(FadeRight, F32, faderight);
+    set_value!(FadeTop, F32, fadetop);
+    set_value!(FadeBottom, F32, fadebottom);
+    set_value!(MaskSource, Bool, mask_source);
+    set_value!(MaskDest, Bool, mask_dest);
+    set_value!(DepthTest, Bool, depth_test);
+    set_value!(Zoom, F32, zoom);
+    set_value!(ZoomX, F32, zoom_x);
+    set_value!(ZoomY, F32, zoom_y);
+    set_value!(ZoomZ, F32, zoom_z);
+    set_value!(BaseZoom, F32, basezoom);
+    set_value!(BaseZoomX, F32, basezoom_x);
+    set_value!(BaseZoomY, F32, basezoom_y);
+    set_value!(BaseZoomZ, F32, basezoom_z);
+    set_value!(RotationX, F32, rot_x_deg);
+    set_value!(RotationY, F32, rot_y_deg);
+    set_value!(RotationZ, F32, rot_z_deg);
+    set_value!(SkewX, F32, skew_x);
+    set_value!(SkewY, F32, skew_y);
+    set_value!(Blend, Blend, blend);
+    set_value!(Vibrate, Bool, vibrate);
+    set_value!(EffectMagnitude, Vec3, effect_magnitude);
+    set_value!(EffectClock, EffectClock, effect_clock);
+    set_value!(EffectMode, EffectMode, effect_mode);
+    set_value!(EffectColor1, Vec4, effect_color1);
+    set_value!(EffectColor2, Vec4, effect_color2);
+    set_value!(EffectPeriod, F32, effect_period);
+    set_value!(EffectOffset, F32, effect_offset);
+    set_option!(EffectTiming, Vec5, effect_timing);
+    set_value!(Rainbow, Bool, rainbow);
+    set_value!(RainbowScroll, Bool, rainbow_scroll);
+    set_value!(TextJitter, Bool, text_jitter);
+    set_value!(TextDistortion, F32, text_distortion);
+    set_value!(TextGlowMode, TextGlowMode, text_glow_mode);
+    set_value!(MultAttrsWithDiffuse, Bool, mult_attrs_with_diffuse);
+    set_value!(SpriteAnimate, Bool, sprite_animate);
+    set_value!(SpriteLoop, Bool, sprite_loop);
+    set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
+    set_value!(SpriteStateDelay, F32, sprite_state_delay);
+    set_option!(SpriteStateIndex, U32, sprite_state_index);
+    set_option!(VertSpacing, I32, vert_spacing);
+    set_option!(WrapWidthPixels, I32, wrap_width_pixels);
+    set_option!(MaxWidth, F32, max_width);
+    set_option!(MaxHeight, F32, max_height);
+    set_value!(MaxWPreZoom, Bool, max_w_pre_zoom);
+    set_value!(MaxHPreZoom, Bool, max_h_pre_zoom);
+    set_value!(MaxDimensionUsesZoom, Bool, max_dimension_uses_zoom);
+    set_value!(TextureFiltering, Bool, texture_filtering);
+    set_value!(TextureWrapping, Bool, texture_wrapping);
+    set_option!(TexcoordOffset, Vec2, texcoord_offset);
+    set_option!(CustomTextureRect, Vec4, custom_texture_rect);
+    set_option!(TexcoordVelocity, Vec2, texcoord_velocity);
+    set_option!(Size, Vec2, size);
+    set_option!(StretchRect, Vec4, stretch_rect);
+}
+
 fn capture_update_overlay_samples<Kind>(
     lua: &Lua,
     context: &SongLuaCompileContext,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     baseline: &[SongLuaOverlayState],
     from_states: &[SongLuaOverlayState],
-    update_states: &[SongLuaOverlayState],
-    to_states: &[SongLuaOverlayState],
+    update_states: &mut [SongLuaOverlayState],
+    to_states: &mut [SongLuaOverlayState],
+    restored_indices: &[usize],
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<
         (usize, crate::SongLuaOverlayUpdateTarget),
@@ -1129,52 +1257,70 @@ fn capture_update_overlay_samples<Kind>(
     );
     let mut reset_indices = Vec::new();
     let mut captured_targets = Vec::new();
-    crate::lua_util::drain_overlay_update_capture(lua, |overlay_index, values, scheduled| {
-        let Some(baseline) = baseline.get(overlay_index) else {
-            return Ok(());
-        };
-        debug_assert!(overlay_index < overlays.len());
-        reset_indices.push(overlay_index);
-        for (target, next) in values {
-            captured_targets.push((overlay_index, *target));
-            let current = from_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, *target))
-                .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
-            let update = update_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, *target));
-            let message = to_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, *target));
-            let next = match (update, message) {
-                (Some(update), Some(message)) if update != message => message,
-                _ => next.clone(),
+    crate::lua_util::drain_overlay_update_capture(
+        lua,
+        |overlay_index, values, scheduled, final_values| {
+            let Some(baseline) = baseline.get(overlay_index) else {
+                return Ok(());
             };
-            push_update_overlay_value(
-                tracks,
-                track_indices,
-                overlay_index,
-                *target,
-                beat,
-                current,
-                next_beat,
-                next,
-            );
-        }
-        let beats_per_second = song_display_bps(context) * song_music_rate(context);
-        scheduled_samples.extend(scheduled.iter().map(|update| {
-            SongLuaScheduledOverlaySample {
-                overlay_index,
-                target: update.target,
-                start_beat: update.delay_seconds.mul_add(beats_per_second, next_beat),
-                end_beat: (update.delay_seconds + update.duration_seconds)
-                    .mul_add(beats_per_second, next_beat),
-                value: update.value.clone(),
+            debug_assert!(overlay_index < overlays.len());
+            reset_indices.push(overlay_index);
+            for (target, value) in final_values {
+                if let Some(state) = update_states.get_mut(overlay_index) {
+                    set_overlay_state_update_value(state, *target, value);
+                }
+                if restored_indices.binary_search(&overlay_index).is_err()
+                    && let Some(state) = to_states.get_mut(overlay_index)
+                {
+                    set_overlay_state_update_value(state, *target, value);
+                }
             }
-        }));
-        Ok(())
-    })?;
+            for (target, next) in values {
+                captured_targets.push((overlay_index, *target));
+                let current = from_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, *target))
+                    .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
+                let update = update_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, *target));
+                let message = to_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, *target));
+                let next = match (update, message) {
+                    (Some(update), Some(message)) if update != message => message,
+                    _ => next.clone(),
+                };
+                push_update_overlay_value(
+                    tracks,
+                    track_indices,
+                    overlay_index,
+                    *target,
+                    beat,
+                    current,
+                    next_beat,
+                    next,
+                );
+            }
+            let message_seconds = song_elapsed_seconds_at(next_beat, context);
+            scheduled_samples.extend(scheduled.iter().map(|update| {
+                SongLuaScheduledOverlaySample {
+                    overlay_index,
+                    target: update.target,
+                    start_beat: song_beat_at_elapsed_seconds(
+                        message_seconds + update.delay_seconds,
+                        context,
+                    ),
+                    end_beat: song_beat_at_elapsed_seconds(
+                        message_seconds + update.delay_seconds + update.duration_seconds,
+                        context,
+                    ),
+                    value: update.value.clone(),
+                }
+            }));
+            Ok(())
+        },
+    )?;
     let message_targets = track_indices
         .keys()
         .copied()
@@ -1351,6 +1497,14 @@ pub fn compile_update_functions<Kind>(
     ),
     String,
 > {
+    let profile = std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some();
+    let mut reset_ms = 0.0;
+    let mut message_ms = 0.0;
+    let mut update_ms = 0.0;
+    let mut player_ms = 0.0;
+    let mut mod_ms = 0.0;
+    let mut column_ms = 0.0;
+    let mut overlay_ms = 0.0;
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
         return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
@@ -1372,9 +1526,11 @@ pub fn compile_update_functions<Kind>(
         .collect::<std::collections::HashMap<_, _>>();
     crate::lua_util::begin_overlay_update_capture(lua, overlay_indices_by_pointer);
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
+    let mut replay_overlays = baseline_overlays.clone();
+    let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
     call_update_functions_at(lua, root, start, 0.0, 0.0)?;
-    let update_overlays = current_overlay_compile_actor_states(overlays)?;
-    message_replay.advance(lua, context, overlays, start)?;
+    restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
+    let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
     let baseline_columns = read_note_column_transform_samples(lua)?;
@@ -1385,15 +1541,16 @@ pub fn compile_update_functions<Kind>(
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
     let mut scheduled_overlay_samples = Vec::new();
-    let mut current_overlays = current_overlay_compile_actor_states(overlays)?;
+    let mut current_overlays = replay_overlays;
     capture_update_overlay_samples(
         lua,
         context,
         overlays,
         &baseline_overlays,
         &baseline_overlays,
-        &update_overlays,
-        &current_overlays,
+        &mut update_overlays,
+        &mut current_overlays,
+        &started,
         &mut overlay_tracks,
         &mut overlay_track_indices,
         start,
@@ -1403,19 +1560,32 @@ pub fn compile_update_functions<Kind>(
 
     let mut replay = update_function_replay_beats(lua, root, context, start, end)?;
     replay.extend(messages.iter().filter_map(|event| {
-        (event.beat.is_finite() && event.beat > start && event.beat <= end).then_some(event.beat)
+        let beat = update_frame_beat(context, event.beat);
+        (beat.is_finite() && beat > start && beat <= end).then_some(beat)
     }));
     replay.sort_by(f32::total_cmp);
     replay.dedup_by(|left, right| left.to_bits() == right.to_bits());
     let mut beat = start;
     let mut transform_masks = player_transform_masks(&player_tables)?;
+    let mut frame_count = 0;
     for next_beat in replay.into_iter().skip(1) {
+        frame_count += 1;
         let delta_beats = next_beat - beat;
-        let delta_seconds = perframe_delta_seconds(context, delta_beats);
+        let delta_seconds = beat_span_seconds(context, beat, next_beat);
+        let stage = profile.then(Instant::now);
         reset_tracked_capture_tables(lua, tracked_actors)?;
+        reset_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
+        let mut replay_overlays = current_overlays.clone();
+        let started =
+            message_replay.advance(lua, context, overlays, &mut replay_overlays, next_beat)?;
+        message_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
         call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
-        let update_overlays = current_overlay_compile_actor_states(overlays)?;
-        message_replay.advance(lua, context, overlays, next_beat)?;
+        update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
+        restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
+        let mut update_overlays = replay_overlays.clone();
         let next_masks = player_transform_masks(&player_tables)?;
         let prior_active = if player_samples.len() >= 2 {
             player_samples[player_samples.len() - 2]
@@ -1440,28 +1610,41 @@ pub fn compile_update_functions<Kind>(
         transform_masks = next_masks;
         sample_beats.push(next_beat);
         player_samples.push(next_players);
+        player_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
         mod_samples.push(current_update_mod_states_with_note_columns(
             lua,
             &option_tables,
         )?);
+        mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
         column_samples.push(read_note_column_transform_samples(lua)?);
-        let next_overlays = current_overlay_compile_actor_states(overlays)?;
+        column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
+        let stage = profile.then(Instant::now);
+        let mut next_overlays = replay_overlays;
         capture_update_overlay_samples(
             lua,
             context,
             overlays,
             &baseline_overlays,
             &current_overlays,
-            &update_overlays,
-            &next_overlays,
+            &mut update_overlays,
+            &mut next_overlays,
+            &started,
             &mut overlay_tracks,
             &mut overlay_track_indices,
             beat,
             next_beat,
             &mut scheduled_overlay_samples,
         )?;
+        overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         current_overlays = next_overlays;
         beat = next_beat;
+    }
+    if profile {
+        eprintln!(
+            "Song lua update timing: frames={frame_count} reset_ms={reset_ms:.3} message_ms={message_ms:.3} update_ms={update_ms:.3} player_ms={player_ms:.3} mod_ms={mod_ms:.3} column_ms={column_ms:.3} overlay_ms={overlay_ms:.3}"
+        );
     }
 
     let mut eases = Vec::new();
@@ -1553,21 +1736,28 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
         lua: &Lua,
         context: &SongLuaCompileContext,
         overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+        states: &mut [SongLuaOverlayState],
         beat: f32,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<usize>, String> {
+        let mut started = Vec::new();
         while let Some(&event_index) = self.order.get(self.next) {
             let event = &self.messages[event_index];
-            if event.beat > beat + f32::EPSILON {
+            let event_beat = update_frame_beat(context, event.beat);
+            if event_beat > beat + f32::EPSILON {
                 break;
             }
             for (overlay_index, overlay) in overlays.iter_mut().enumerate() {
+                let was_active = self.active[overlay_index].is_some();
                 apply_perframe_active_message(
                     lua,
                     context,
                     overlay,
                     &mut self.active[overlay_index],
-                    event.beat,
+                    event_beat,
                 )?;
+                if was_active && let Some(state) = states.get_mut(overlay_index) {
+                    *state = actor_overlay_initial_state(&overlay.table)?;
+                }
                 let Some(command_index) = overlay
                     .actor
                     .message_commands
@@ -1582,22 +1772,31 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                         .set("__songlua_aux", aux)
                         .map_err(|err| err.to_string())?;
                 }
+                let base = match states.get(overlay_index) {
+                    Some(state) => *state,
+                    None => actor_overlay_initial_state(&overlay.table)?,
+                };
                 self.active[overlay_index] = Some(SongLuaPerframeActiveMessage {
                     command_index,
-                    start_beat: event.beat,
-                    base: actor_overlay_initial_state(&overlay.table)?,
+                    start_beat: event_beat,
+                    base,
                 });
+                started.push(overlay_index);
                 apply_perframe_active_message(
                     lua,
                     context,
                     overlay,
                     &mut self.active[overlay_index],
-                    event.beat,
+                    event_beat,
                 )?;
+                if let Some(state) = states.get_mut(overlay_index) {
+                    *state = actor_overlay_initial_state(&overlay.table)?;
+                }
             }
             self.next += 1;
         }
         for (overlay_index, overlay) in overlays.iter_mut().enumerate() {
+            let was_active = self.active[overlay_index].is_some();
             apply_perframe_active_message(
                 lua,
                 context,
@@ -1605,9 +1804,29 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                 &mut self.active[overlay_index],
                 beat,
             )?;
+            if was_active && let Some(state) = states.get_mut(overlay_index) {
+                *state = actor_overlay_initial_state(&overlay.table)?;
+            }
         }
-        Ok(())
+        started.sort_unstable();
+        started.dedup();
+        Ok(started)
     }
+}
+
+fn restore_started_message_states<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    states: &[SongLuaOverlayState],
+    started: &[usize],
+) -> Result<(), String> {
+    for &index in started {
+        let (Some(overlay), Some(state)) = (overlays.get(index), states.get(index)) else {
+            continue;
+        };
+        set_actor_overlay_getter_state(lua, &overlay.table, *state)?;
+    }
+    Ok(())
 }
 
 fn apply_perframe_active_message<Kind>(
@@ -1624,7 +1843,7 @@ fn apply_perframe_active_message<Kind>(
         *active = None;
         return Ok(());
     };
-    let elapsed = perframe_delta_seconds(context, (beat - message.start_beat).max(0.0));
+    let elapsed = beat_span_seconds(context, message.start_beat, beat);
     let state = overlay_state_after_blocks(message.base, &command.blocks, elapsed);
     set_actor_overlay_getter_state(lua, &overlay.table, state)?;
     let duration = command
@@ -1672,6 +1891,7 @@ pub fn compile_perframes<Kind>(
     let mut out_overlay_eases = Vec::new();
     let mut saw_recognized_side_effect = false;
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
+    let mut message_states = baseline_overlays.clone();
 
     for window in boundaries.windows(2) {
         let [start, end] = [window[0], window[1]];
@@ -1682,6 +1902,7 @@ pub fn compile_perframes<Kind>(
         if active.is_empty() {
             let current_players = current_perframe_player_states(&player_tables)?;
             let current_overlays = current_overlay_compile_actor_states(overlays)?;
+            message_states.clone_from(&current_overlays);
             push_perframe_static_targets(
                 &mut out_eases,
                 &mut out_overlay_eases,
@@ -1699,8 +1920,18 @@ pub fn compile_perframes<Kind>(
         let mut player_samples = Vec::new();
         let mut overlay_samples = Vec::new();
         for sample in perframe_samples(start, end) {
-            let delta_seconds = perframe_delta_seconds(context, sample.delta_beats);
-            message_replay.advance(lua, context, overlays, sample.eval_beat)?;
+            let delta_seconds = beat_span_seconds(
+                context,
+                sample.eval_beat - sample.delta_beats,
+                sample.eval_beat,
+            );
+            let _ = message_replay.advance(
+                lua,
+                context,
+                overlays,
+                &mut message_states,
+                sample.eval_beat,
+            )?;
             reset_overlay_compile_actor_capture_tables(lua, overlays)?;
             reset_tracked_capture_tables(lua, tracked_actors)?;
             for entry in &active {
@@ -1714,7 +1945,9 @@ pub fn compile_perframes<Kind>(
             }
             sample_beats.push(sample.beat);
             player_samples.push(current_perframe_player_states(&player_tables)?);
-            overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
+            let current_overlays = current_overlay_compile_actor_states(overlays)?;
+            message_states.clone_from(&current_overlays);
+            overlay_samples.push(current_overlays);
         }
 
         push_sampled_perframe_targets(
