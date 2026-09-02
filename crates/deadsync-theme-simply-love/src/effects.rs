@@ -404,6 +404,7 @@ pub enum SimplyLoveSyncRequest {
         delta_seconds: f32,
     },
     ApplySongOffsetBatch {
+        owner: SimplyLoveSyncOwner,
         changes: Vec<SongOffsetSyncChange>,
     },
 }
@@ -520,10 +521,15 @@ pub enum SimplyLoveSyncEvent {
     },
     RowCached {
         index: usize,
+        result: SimplyLoveSyncResult,
+        applied: bool,
     },
     RowFinished {
         index: usize,
         result: Result<SimplyLoveSyncResult, String>,
+    },
+    BatchSaveFinished {
+        summary: deadsync_simfile::sync_offset::SongOffsetSaveSummary,
     },
     Finished,
     Disconnected,

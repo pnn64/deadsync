@@ -200,7 +200,8 @@ use deadsync_theme_simply_love::{
     SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
     SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
     SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
-    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
+    SimplyLoveSyncRequest,
 };
 
 /// The main Options rows that launch standalone child screens should regain
@@ -1718,6 +1719,35 @@ fn apply_music_preferences(state: &mut select_music::State, p1: usize, p2: usize
     state.p2_preferred_difficulty_index = p2;
     select_music::select_preferred_steps(state);
     select_music::trigger_immediate_refresh(state);
+}
+
+fn written_song_offset_changes(
+    summary: &sync_offset::SongOffsetSaveSummary,
+) -> Vec<sync_offset::SongOffsetSyncChange> {
+    summary
+        .outcomes
+        .iter()
+        .filter(|outcome| outcome.was_written())
+        .map(|outcome| sync_offset::SongOffsetSyncChange {
+            simfile_path: outcome.simfile_path.clone(),
+            delta_seconds: outcome.delta_seconds,
+        })
+        .collect()
+}
+
+const fn save_summary_needs_attention(summary: &sync_offset::SongOffsetSaveSummary) -> bool {
+    summary.skipped_read_only > 0 || summary.failed_files > 0 || summary.cache_refresh_failures > 0
+}
+
+fn save_summary_text(summary: &sync_offset::SongOffsetSaveSummary) -> String {
+    format!(
+        "saved {} of {} change(s); {} read-only, {} write failure(s), {} cache refresh failure(s)",
+        summary.saved_files,
+        summary.outcomes.len(),
+        summary.skipped_read_only,
+        summary.failed_files,
+        summary.cache_refresh_failures
+    )
 }
 
 impl App {
@@ -4550,22 +4580,20 @@ impl App {
                     simfile_path,
                     delta_seconds,
                 }) => {
-                    match self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds) {
-                        Ok(()) => {
-                            self.sync_analysis.refresh_applied(&[
-                                sync_offset::SongOffsetSyncChange {
-                                    simfile_path,
-                                    delta_seconds,
-                                },
-                            ]);
-                        }
-                        Err(e) => {
-                            warn!("Failed to save song offset sync changes: {e}");
-                            self.state.shell.interaction.show_message(
-                                format!("Song sync save incomplete: {e}"),
-                                Instant::now(),
-                            );
-                        }
+                    let changes = [sync_offset::SongOffsetSyncChange {
+                        simfile_path,
+                        delta_seconds,
+                    }];
+                    let summary = self.save_song_offset_changes(&changes);
+                    let written = written_song_offset_changes(&summary);
+                    if !written.is_empty() {
+                        self.sync_analysis.refresh_applied(&written);
+                    }
+                    if save_summary_needs_attention(&summary) {
+                        self.state.shell.interaction.show_message(
+                            format!("Song sync save incomplete: {}", save_summary_text(&summary)),
+                            Instant::now(),
+                        );
                     }
                     Vec::new()
                 }
@@ -4582,21 +4610,35 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {
+                    owner,
                     changes,
                 }) => {
-                    match self.save_song_offset_changes(&changes) {
-                        Ok(summary) => {
-                            self.sync_analysis.refresh_applied(&changes);
-                            self.state.shell.interaction.show_message(
-                                format!("Saved {} pack sync change(s).", summary.saved_files),
-                                Instant::now(),
+                    let summary = self.save_song_offset_changes(&changes);
+                    let written = written_song_offset_changes(&summary);
+                    if !written.is_empty() {
+                        self.sync_analysis.refresh_applied(&written);
+                    }
+                    if save_summary_needs_attention(&summary) {
+                        self.state.shell.interaction.show_message(
+                            format!("Pack sync save incomplete: {}", save_summary_text(&summary)),
+                            Instant::now(),
+                        );
+                    }
+
+                    let mut events = vec![SimplyLoveSyncEvent::BatchSaveFinished { summary }];
+                    match owner {
+                        SimplyLoveSyncOwner::SelectMusicSong
+                        | SimplyLoveSyncOwner::SelectMusicPack => {
+                            select_music::apply_sync_analysis_events(
+                                &mut self.state.screens.select_music_state,
+                                owner,
+                                &mut events,
                             );
                         }
-                        Err(e) => {
-                            warn!("Failed to save all pack sync changes: {e}");
-                            self.state.shell.interaction.show_message(
-                                format!("Pack sync save incomplete: {e}"),
-                                Instant::now(),
+                        SimplyLoveSyncOwner::OptionsPack => {
+                            options::apply_sync_analysis_events(
+                                &mut self.state.screens.options_state,
+                                &mut events,
                             );
                         }
                     }
@@ -5139,7 +5181,7 @@ impl App {
     fn save_song_offset_changes(
         &mut self,
         changes: &[sync_offset::SongOffsetSyncChange],
-    ) -> Result<sync_offset::SongOffsetSaveSummary, String> {
+    ) -> sync_offset::SongOffsetSaveSummary {
         let summary = sync_offset::save_song_offset_changes(
             changes,
             config::song_path_is_writable,
@@ -5161,29 +5203,22 @@ impl App {
                 deadsync_simfile::runtime_cache::get_song_cache().clone(),
             );
         }
-        if summary.skipped_read_only > 0
-            && let Some(path) = summary.first_skipped_path.as_deref()
-        {
-            warn!(
-                "Skipped {} song offset sync change(s) under read-only AdditionalSongFoldersReadOnly roots; first skipped '{}'.",
-                summary.skipped_read_only,
-                path.display()
-            );
-        }
-        if summary.failed_files > 0 || summary.cache_refresh_failures > 0 {
-            warn!(
-                "Failed {} song offset write(s) and {} post-save cache refresh(es); first failure for '{}': {}",
-                summary.failed_files,
-                summary.cache_refresh_failures,
-                summary
-                    .first_failure_path
-                    .as_deref()
-                    .map_or_else(|| "unknown".into(), |path| path.display().to_string()),
-                summary
-                    .first_failure_error
-                    .as_deref()
-                    .unwrap_or("unknown error")
-            );
+        for outcome in &summary.outcomes {
+            match &outcome.status {
+                sync_offset::SongOffsetSaveStatus::Saved => {}
+                sync_offset::SongOffsetSaveStatus::SkippedReadOnly => warn!(
+                    "Skipped read-only song offset sync change for '{}'.",
+                    outcome.simfile_path.display()
+                ),
+                sync_offset::SongOffsetSaveStatus::WriteFailed(error) => warn!(
+                    "Failed song offset write for '{}': {error}",
+                    outcome.simfile_path.display()
+                ),
+                sync_offset::SongOffsetSaveStatus::CacheRefreshFailed(error) => warn!(
+                    "Saved song offset change to '{}', but failed to refresh its song cache: {error}",
+                    outcome.simfile_path.display()
+                ),
+            }
         }
         if summary.saved_files == 1 && summary.cache_refresh_failures == 0 {
             if let Some(path) = summary.first_saved_path.as_deref() {
@@ -5199,36 +5234,7 @@ impl App {
                 summary.saved_files, summary.changed_tags_total
             );
         }
-        if summary.skipped_read_only > 0
-            || summary.failed_files > 0
-            || summary.cache_refresh_failures > 0
-        {
-            let mut message = format!(
-                "saved {} of {} change(s); {} read-only, {} write failure(s), {} cache refresh failure(s)",
-                summary.saved_files,
-                changes.len(),
-                summary.skipped_read_only,
-                summary.failed_files,
-                summary.cache_refresh_failures
-            );
-            if let Some(error) = summary.first_failure_error.as_deref() {
-                message.push_str("; first error: ");
-                message.push_str(error);
-            } else if let Some(path) = summary.first_skipped_path.as_deref() {
-                message.push_str("; first read-only path: ");
-                message.push_str(path.to_string_lossy().as_ref());
-            }
-            return Err(message);
-        }
-        Ok(summary)
-    }
-
-    fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
-        self.save_song_offset_changes(&[sync_offset::SongOffsetSyncChange {
-            simfile_path: simfile_path.to_path_buf(),
-            delta_seconds: delta,
-        }])
-        .map(|_| ())
+        summary
     }
 
     fn maybe_begin_gameplay_offset_prompt(
@@ -5274,10 +5280,22 @@ impl App {
                     song_offset_change = Some((gs.song().simfile_path.clone(), delta));
                 }
             }
-            if let Some((simfile_path, delta)) = song_offset_change
-                && let Err(e) = self.save_gameplay_song_offset(simfile_path.as_path(), delta)
-            {
-                warn!("Failed to save song offset sync changes: {e}");
+            if let Some((simfile_path, delta_seconds)) = song_offset_change {
+                let changes = [sync_offset::SongOffsetSyncChange {
+                    simfile_path,
+                    delta_seconds,
+                }];
+                let summary = self.save_song_offset_changes(&changes);
+                let written = written_song_offset_changes(&summary);
+                if !written.is_empty() {
+                    self.sync_analysis.refresh_applied(&written);
+                }
+                if save_summary_needs_attention(&summary) {
+                    warn!(
+                        "Failed to save all song offset sync changes: {}",
+                        save_summary_text(&summary)
+                    );
+                }
             }
         }
         if prompt.navigate_no_fade {
@@ -9670,6 +9688,43 @@ pub fn run(
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn pack_save_marks_only_written_outcomes_applied() {
+        let outcome = |name: &str, status| sync_offset::SongOffsetSaveOutcome {
+            simfile_path: PathBuf::from(name),
+            delta_seconds: 0.001,
+            changed_tags: usize::from(matches!(
+                &status,
+                sync_offset::SongOffsetSaveStatus::Saved
+                    | sync_offset::SongOffsetSaveStatus::CacheRefreshFailed(_)
+            )),
+            status,
+        };
+        let summary = sync_offset::SongOffsetSaveSummary {
+            outcomes: vec![
+                outcome("saved.ssc", sync_offset::SongOffsetSaveStatus::Saved),
+                outcome(
+                    "readonly.ssc",
+                    sync_offset::SongOffsetSaveStatus::SkippedReadOnly,
+                ),
+                outcome(
+                    "failed.ssc",
+                    sync_offset::SongOffsetSaveStatus::WriteFailed("test".to_string()),
+                ),
+                outcome(
+                    "reload-failed.ssc",
+                    sync_offset::SongOffsetSaveStatus::CacheRefreshFailed("test".to_string()),
+                ),
+            ],
+            ..sync_offset::SongOffsetSaveSummary::default()
+        };
+
+        let written = written_song_offset_changes(&summary);
+        assert_eq!(written.len(), 2);
+        assert_eq!(written[0].simfile_path, Path::new("saved.ssc"));
+        assert_eq!(written[1].simfile_path, Path::new("reload-failed.ssc"));
+    }
 
     #[test]
     fn options_restores_main_row_only_from_standalone_main_list_children() {

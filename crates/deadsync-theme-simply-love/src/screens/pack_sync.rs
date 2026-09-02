@@ -44,20 +44,28 @@ impl NavigationPolicy {
 enum RowPhase {
     Pending,
     Running,
-    Cached,
     Ready,
     Failed,
+    AlreadyApplied,
+    Saved,
+    ReadOnly,
+    SaveFailed,
+    CacheRefreshFailed,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RowDisposition {
     Pending,
     Running,
-    Cached,
     Eligible,
     BelowThreshold,
     NoChange,
     Failed,
+    AlreadyApplied,
+    Saved,
+    ReadOnly,
+    SaveFailed,
+    CacheRefreshFailed,
 }
 
 struct RowState {
@@ -67,6 +75,7 @@ struct RowState {
     beats_processed: usize,
     final_bias_ms: Option<f64>,
     final_confidence: Option<f64>,
+    cached: bool,
     phase: RowPhase,
     error_text: Option<String>,
 }
@@ -82,6 +91,8 @@ struct RowText {
 enum OverlayPhase {
     Running,
     Review,
+    Saving,
+    Result,
 }
 
 pub struct OverlayStateData {
@@ -149,6 +160,11 @@ struct Summary {
     below_threshold: usize,
     no_change: usize,
     failed: usize,
+    already_applied: usize,
+    saved: usize,
+    read_only: usize,
+    save_failed: usize,
+    cache_refresh_failed: usize,
 }
 
 pub fn chart_label(chart: &ChartData) -> String {
@@ -187,23 +203,35 @@ fn localized(key: &str) -> TextContent {
     retained_arc(tr("PackSync", key))
 }
 
-fn overlay_title(phase: OverlayPhase, can_save: bool) -> TextContent {
-    localized(match (phase, can_save) {
-        (OverlayPhase::Running, _) => "SyncingPackTitle",
-        (OverlayPhase::Review, true) => "ReviewTitle",
-        (OverlayPhase::Review, false) => "CompleteTitle",
+fn overlay_title(phase: OverlayPhase, summary: Summary) -> TextContent {
+    localized(match phase {
+        OverlayPhase::Running => "SyncingPackTitle",
+        OverlayPhase::Review if summary.eligible > 0 => "ReviewTitle",
+        OverlayPhase::Review => "CompleteTitle",
+        OverlayPhase::Saving => "SavingTitle",
+        OverlayPhase::Result if save_needs_attention(summary) => "SaveIncompleteTitle",
+        OverlayPhase::Result => "SaveCompleteTitle",
     })
 }
 
-fn counts_text(summary: Summary, min_confidence: f64) -> TextContent {
+fn counts_text(summary: Summary, min_confidence: f64, phase: OverlayPhase) -> TextContent {
+    if phase == OverlayPhase::Result {
+        return retained_arc(tr_fmt(
+            "PackSync",
+            "SaveCountsFormat",
+            &[
+                ("saved", &written_save_count(summary).to_string()),
+                ("readonly", &summary.read_only.to_string()),
+                ("failed", &summary.save_failed.to_string()),
+                ("refresh", &summary.cache_refresh_failed.to_string()),
+            ],
+        ));
+    }
     retained_arc(tr_fmt(
         "PackSync",
         "CountsFormat",
         &[
-            (
-                "processed",
-                &(summary.analyzed + summary.cached).to_string(),
-            ),
+            ("processed", &summary.analyzed.to_string()),
             ("total", &summary.total.to_string()),
             ("cached", &summary.cached.to_string()),
             ("ready", &summary.eligible.to_string()),
@@ -214,8 +242,24 @@ fn counts_text(summary: Summary, min_confidence: f64) -> TextContent {
             ),
             ("nochange", &summary.no_change.to_string()),
             ("failed", &summary.failed.to_string()),
+            ("applied", &summary.already_applied.to_string()),
         ],
     ))
+}
+
+#[inline(always)]
+const fn retryable_save_count(summary: Summary) -> usize {
+    summary.read_only.saturating_add(summary.save_failed)
+}
+
+#[inline(always)]
+const fn written_save_count(summary: Summary) -> usize {
+    summary.saved.saturating_add(summary.cache_refresh_failed)
+}
+
+#[inline(always)]
+const fn save_needs_attention(summary: Summary) -> bool {
+    retryable_save_count(summary) > 0 || summary.cache_refresh_failed > 0
 }
 
 fn pagination_text(total: usize, start: usize, view_rows: usize) -> Option<TextContent> {
@@ -243,6 +287,7 @@ fn prompt_text(summary: Summary, min_confidence: f64) -> TextContent {
                 ("threshold", &min_conf_pct.to_string()),
                 ("nochange", &summary.no_change.to_string()),
                 ("failed", &summary.failed.to_string()),
+                ("applied", &summary.already_applied.to_string()),
             ],
         )
     } else {
@@ -255,6 +300,7 @@ fn prompt_text(summary: Summary, min_confidence: f64) -> TextContent {
                 ("threshold", &min_conf_pct.to_string()),
                 ("nochange", &summary.no_change.to_string()),
                 ("failed", &summary.failed.to_string()),
+                ("applied", &summary.already_applied.to_string()),
             ],
         )
     };
@@ -266,7 +312,29 @@ fn overlay_help(phase: OverlayPhase, can_save: bool) -> TextContent {
         (OverlayPhase::Running, _) => "HelpTextRunning",
         (OverlayPhase::Review, true) => "HelpTextReview",
         (OverlayPhase::Review, false) => "HelpTextComplete",
+        (OverlayPhase::Saving, _) => "HelpTextSaving",
+        (OverlayPhase::Result, true) => "HelpTextResultRetry",
+        (OverlayPhase::Result, false) => "HelpTextResultClose",
     })
+}
+
+fn result_prompt_text(summary: Summary) -> TextContent {
+    retained_arc(tr_fmt(
+        "PackSync",
+        if retryable_save_count(summary) > 0 {
+            "SaveResultRetryMessage"
+        } else if summary.cache_refresh_failed > 0 {
+            "SaveResultRefreshMessage"
+        } else {
+            "SaveResultCompleteMessage"
+        },
+        &[
+            ("saved", &written_save_count(summary).to_string()),
+            ("readonly", &summary.read_only.to_string()),
+            ("failed", &summary.save_failed.to_string()),
+            ("refresh", &summary.cache_refresh_failed.to_string()),
+        ],
+    ))
 }
 
 fn build_overlay_text(
@@ -279,36 +347,53 @@ fn build_overlay_text(
     let can_save = summary.eligible > 0;
     OverlayText {
         pack_name: retained_str(pack_name),
-        title: overlay_title(phase, can_save),
-        counts: counts_text(summary, min_confidence),
+        title: overlay_title(phase, summary),
+        counts: counts_text(summary, min_confidence, phase),
         pagination: pagination_text(summary.total, scroll_index, view_rows_for_phase(phase)),
         song_column: localized("SongColumnHeader"),
         progress_column: localized("ProgressColumnHeader"),
         result_column: localized("ResultColumnHeader"),
-        prompt: if phase == OverlayPhase::Review {
-            prompt_text(summary, min_confidence)
-        } else {
-            TextContent::Static("")
+        prompt: match phase {
+            OverlayPhase::Review => prompt_text(summary, min_confidence),
+            OverlayPhase::Saving => localized("SavingMessage"),
+            OverlayPhase::Result => result_prompt_text(summary),
+            OverlayPhase::Running => TextContent::Static(""),
         },
         yes_option: localized("YesOption"),
         no_option: localized("NoOption"),
-        help: overlay_help(phase, can_save),
+        help: overlay_help(
+            phase,
+            if phase == OverlayPhase::Result {
+                retryable_save_count(summary) > 0
+            } else {
+                can_save
+            },
+        ),
     }
 }
 
 fn refresh_counts_text(overlay: &mut OverlayStateData) {
-    overlay.text.counts = counts_text(overlay.summary, overlay.min_confidence);
+    overlay.text.counts = counts_text(overlay.summary, overlay.min_confidence, overlay.phase);
 }
 
 fn refresh_phase_text(overlay: &mut OverlayStateData) {
     let can_save = can_save(overlay);
-    overlay.text.title = overlay_title(overlay.phase, can_save);
-    overlay.text.help = overlay_help(overlay.phase, can_save);
-    overlay.text.prompt = if overlay.phase == OverlayPhase::Review {
-        prompt_text(overlay.summary, overlay.min_confidence)
-    } else {
-        TextContent::Static("")
+    overlay.text.title = overlay_title(overlay.phase, overlay.summary);
+    overlay.text.help = overlay_help(
+        overlay.phase,
+        if overlay.phase == OverlayPhase::Result {
+            retryable_save_count(overlay.summary) > 0
+        } else {
+            can_save
+        },
+    );
+    overlay.text.prompt = match overlay.phase {
+        OverlayPhase::Review => prompt_text(overlay.summary, overlay.min_confidence),
+        OverlayPhase::Saving => localized("SavingMessage"),
+        OverlayPhase::Result => result_prompt_text(overlay.summary),
+        OverlayPhase::Running => TextContent::Static(""),
     };
+    refresh_counts_text(overlay);
 }
 
 fn refresh_pagination_text(overlay: &mut OverlayStateData) {
@@ -495,10 +580,13 @@ fn push_overlay_unreserved(
         }
 
         let result_rgba = match disposition {
-            RowDisposition::Cached => [0.62, 0.82, 0.62, 1.0],
+            RowDisposition::AlreadyApplied | RowDisposition::Saved => [0.62, 0.82, 0.62, 1.0],
             RowDisposition::BelowThreshold => [1.0, 0.82, 0.32, 1.0],
             RowDisposition::NoChange => [0.72, 0.72, 0.72, 1.0],
-            RowDisposition::Failed => [1.0, 0.35, 0.35, 1.0],
+            RowDisposition::ReadOnly => [1.0, 0.82, 0.32, 1.0],
+            RowDisposition::Failed
+            | RowDisposition::SaveFailed
+            | RowDisposition::CacheRefreshFailed => [1.0, 0.35, 0.35, 1.0],
             _ => [1.0, 1.0, 1.0, 1.0],
         };
 
@@ -654,6 +742,29 @@ fn push_overlay_unreserved(
                 ));
             }
         }
+        OverlayPhase::Saving | OverlayPhase::Result => {
+            actors.push(act!(text:
+                font("miso"):
+                settext(overlay.text.prompt.clone()):
+                align(0.5, 0.5):
+                xy(pane_cx, pane_top + pane_h - 56.0):
+                zoom(0.84):
+                maxwidth(pane_w - 90.0):
+                diffuse(1.0, 1.0, 1.0, 1.0):
+                z(OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+            actors.push(act!(text:
+                font("miso"):
+                settext(overlay.text.help.clone()):
+                align(0.5, 0.5):
+                xy(pane_cx, pane_top + pane_h - 18.0):
+                zoom(0.74):
+                diffuse(0.85, 0.85, 0.85, 1.0):
+                z(OVERLAY_Z + 4):
+                horizalign(center)
+            ));
+        }
     }
 }
 
@@ -704,6 +815,7 @@ impl PackSyncOverlayBenchmark {
                 beats_processed: 64,
                 final_bias_ms: None,
                 final_confidence: None,
+                cached: false,
                 phase: RowPhase::Running,
                 error_text: None,
             })
@@ -853,7 +965,7 @@ pub fn handle_input(
     }
 
     let mut close_overlay = false;
-    let mut apply_changes: Option<Vec<SongOffsetSyncChange>> = None;
+    let mut apply_changes: Option<(crate::SimplyLoveSyncOwner, Vec<SongOffsetSyncChange>)> = None;
     let mut play_change = false;
     let mut play_start = false;
 
@@ -896,9 +1008,32 @@ pub fn handle_input(
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => {
                         if can_save(overlay) && overlay.yes_selected {
-                            apply_changes = Some(collect_changes(overlay));
+                            apply_changes = prepare_save(overlay, false);
+                        } else {
+                            close_overlay = true;
                         }
+                        play_start = true;
+                    }
+                    screen_input::ThreeKeyMenuAction::Cancel => {
                         close_overlay = true;
+                        play_start = true;
+                    }
+                },
+                OverlayPhase::Saving => {}
+                OverlayPhase::Result => match nav {
+                    screen_input::ThreeKeyMenuAction::Prev => {
+                        if shift(overlay, -1) {
+                            play_change = true;
+                        }
+                    }
+                    screen_input::ThreeKeyMenuAction::Next => {
+                        if shift(overlay, 1) {
+                            play_change = true;
+                        }
+                    }
+                    screen_input::ThreeKeyMenuAction::Confirm => {
+                        apply_changes = prepare_save(overlay, true);
+                        close_overlay = apply_changes.is_none();
                         play_start = true;
                     }
                     screen_input::ThreeKeyMenuAction::Cancel => {
@@ -990,9 +1125,10 @@ pub fn handle_input(
                             }
                             VirtualAction::p1_start | VirtualAction::p2_start => {
                                 if can_save(overlay) && overlay.yes_selected {
-                                    apply_changes = Some(collect_changes(overlay));
+                                    apply_changes = prepare_save(overlay, false);
+                                } else {
+                                    close_overlay = true;
                                 }
-                                close_overlay = true;
                                 play_start = true;
                             }
                             VirtualAction::p1_back
@@ -1006,6 +1142,54 @@ pub fn handle_input(
                         }
                     }
                 }
+                OverlayPhase::Saving => {}
+                OverlayPhase::Result => match ev.action {
+                    VirtualAction::p1_up
+                    | VirtualAction::p1_menu_up
+                    | VirtualAction::p2_up
+                    | VirtualAction::p2_menu_up => {
+                        if shift(overlay, -1) {
+                            play_change = true;
+                        }
+                    }
+                    VirtualAction::p1_down
+                    | VirtualAction::p1_menu_down
+                    | VirtualAction::p2_down
+                    | VirtualAction::p2_menu_down => {
+                        if shift(overlay, 1) {
+                            play_change = true;
+                        }
+                    }
+                    VirtualAction::p1_left
+                    | VirtualAction::p1_menu_left
+                    | VirtualAction::p2_left
+                    | VirtualAction::p2_menu_left => {
+                        if shift(overlay, -page_delta) {
+                            play_change = true;
+                        }
+                    }
+                    VirtualAction::p1_right
+                    | VirtualAction::p1_menu_right
+                    | VirtualAction::p2_right
+                    | VirtualAction::p2_menu_right => {
+                        if shift(overlay, page_delta) {
+                            play_change = true;
+                        }
+                    }
+                    VirtualAction::p1_start | VirtualAction::p2_start => {
+                        apply_changes = prepare_save(overlay, true);
+                        close_overlay = apply_changes.is_none();
+                        play_start = true;
+                    }
+                    VirtualAction::p1_back
+                    | VirtualAction::p2_back
+                    | VirtualAction::p1_select
+                    | VirtualAction::p2_select => {
+                        close_overlay = true;
+                        play_start = true;
+                    }
+                    _ => {}
+                },
             }
         }
     }
@@ -1024,12 +1208,12 @@ pub fn handle_input(
             crate::SimplyLoveRuntimeRequest::Sync(request),
         ));
     }
-    if let Some(changes) = apply_changes
+    if let Some((owner, changes)) = apply_changes
         && !changes.is_empty()
     {
         effects.push(crate::screens::ThemeEffect::Runtime(
             crate::SimplyLoveRuntimeRequest::Sync(
-                crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+                crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { owner, changes },
             ),
         ));
     }
@@ -1054,6 +1238,7 @@ fn build_rows(
             beats_processed: 0,
             final_bias_ms: None,
             final_confidence: None,
+            cached: false,
             phase: RowPhase::Pending,
             error_text: None,
         };
@@ -1079,8 +1264,12 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
     match row.phase {
         RowPhase::Pending => RowDisposition::Pending,
         RowPhase::Running => RowDisposition::Running,
-        RowPhase::Cached => RowDisposition::Cached,
         RowPhase::Failed => RowDisposition::Failed,
+        RowPhase::AlreadyApplied => RowDisposition::AlreadyApplied,
+        RowPhase::Saved => RowDisposition::Saved,
+        RowPhase::ReadOnly => RowDisposition::ReadOnly,
+        RowPhase::SaveFailed => RowDisposition::SaveFailed,
+        RowPhase::CacheRefreshFailed => RowDisposition::CacheRefreshFailed,
         RowPhase::Ready => {
             let Some(delta_seconds) = row_delta_seconds(row) else {
                 return RowDisposition::Failed;
@@ -1100,14 +1289,15 @@ fn row_disposition(row: &RowState, min_confidence: f64) -> RowDisposition {
 const fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
-        RowDisposition::Cached => {
-            summary.cached += 1;
-            return;
-        }
         RowDisposition::Eligible => &mut summary.eligible,
         RowDisposition::BelowThreshold => &mut summary.below_threshold,
         RowDisposition::NoChange => &mut summary.no_change,
         RowDisposition::Failed => &mut summary.failed,
+        RowDisposition::AlreadyApplied => &mut summary.already_applied,
+        RowDisposition::Saved => &mut summary.saved,
+        RowDisposition::ReadOnly => &mut summary.read_only,
+        RowDisposition::SaveFailed => &mut summary.save_failed,
+        RowDisposition::CacheRefreshFailed => &mut summary.cache_refresh_failed,
     };
     summary.analyzed += 1;
     *counter += 1;
@@ -1116,14 +1306,15 @@ const fn add_disposition(summary: &mut Summary, disposition: RowDisposition) {
 const fn remove_disposition(summary: &mut Summary, disposition: RowDisposition) {
     let counter = match disposition {
         RowDisposition::Pending | RowDisposition::Running => return,
-        RowDisposition::Cached => {
-            summary.cached = summary.cached.saturating_sub(1);
-            return;
-        }
         RowDisposition::Eligible => &mut summary.eligible,
         RowDisposition::BelowThreshold => &mut summary.below_threshold,
         RowDisposition::NoChange => &mut summary.no_change,
         RowDisposition::Failed => &mut summary.failed,
+        RowDisposition::AlreadyApplied => &mut summary.already_applied,
+        RowDisposition::Saved => &mut summary.saved,
+        RowDisposition::ReadOnly => &mut summary.read_only,
+        RowDisposition::SaveFailed => &mut summary.save_failed,
+        RowDisposition::CacheRefreshFailed => &mut summary.cache_refresh_failed,
     };
     summary.analyzed = summary.analyzed.saturating_sub(1);
     *counter = counter.saturating_sub(1);
@@ -1159,6 +1350,49 @@ fn collect_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
             })
         })
         .collect()
+}
+
+fn collect_retry_changes(overlay: &OverlayStateData) -> Vec<SongOffsetSyncChange> {
+    overlay
+        .rows
+        .iter()
+        .filter(|row| {
+            matches!(
+                row_disposition(row, overlay.min_confidence),
+                RowDisposition::ReadOnly | RowDisposition::SaveFailed
+            )
+        })
+        .filter_map(|row| {
+            Some(SongOffsetSyncChange {
+                simfile_path: row.simfile_path.clone(),
+                delta_seconds: row_delta_seconds(row)?,
+            })
+        })
+        .collect()
+}
+
+fn prepare_save(
+    overlay: &mut OverlayStateData,
+    retry_only: bool,
+) -> Option<(crate::SimplyLoveSyncOwner, Vec<SongOffsetSyncChange>)> {
+    let changes = if retry_only {
+        collect_retry_changes(overlay)
+    } else {
+        collect_changes(overlay)
+    };
+    if changes.is_empty() {
+        return None;
+    }
+    overlay.phase = OverlayPhase::Saving;
+    overlay.current_row = None;
+    overlay.auto_follow = false;
+    overlay.scroll_index = overlay
+        .scroll_index
+        .min(scroll_limit(overlay.rows.len(), view_rows(overlay)));
+    refresh_phase_text(overlay);
+    refresh_pagination_text(overlay);
+    overlay.invalidate_presentation();
+    Some((overlay.owner, changes))
 }
 
 #[inline(always)]
@@ -1208,7 +1442,7 @@ const fn view_rows(overlay: &OverlayStateData) -> usize {
 const fn view_rows_for_phase(phase: OverlayPhase) -> usize {
     match phase {
         OverlayPhase::Running => VIEW_ROWS_RUNNING,
-        OverlayPhase::Review => VIEW_ROWS_REVIEW,
+        OverlayPhase::Review | OverlayPhase::Saving | OverlayPhase::Result => VIEW_ROWS_REVIEW,
     }
 }
 
@@ -1223,7 +1457,13 @@ fn progress(row: &RowState) -> f32 {
                 (row.beats_processed as f32 / row.total_beats as f32).clamp(0.0, 1.0)
             }
         }
-        RowPhase::Cached | RowPhase::Ready | RowPhase::Failed => 1.0,
+        RowPhase::Ready
+        | RowPhase::Failed
+        | RowPhase::AlreadyApplied
+        | RowPhase::Saved
+        | RowPhase::ReadOnly
+        | RowPhase::SaveFailed
+        | RowPhase::CacheRefreshFailed => 1.0,
     }
 }
 
@@ -1241,7 +1481,7 @@ fn bar_text(row: &RowState, min_confidence: f64) -> TextContent {
                 ],
             ),
         },
-        RowDisposition::Cached => tr("PackSync", "StatusCached"),
+        RowDisposition::Eligible if row.cached => tr("PackSync", "StatusReadyCached"),
         RowDisposition::Eligible => tr("PackSync", "StatusReady"),
         RowDisposition::BelowThreshold => tr_fmt(
             "PackSync",
@@ -1253,6 +1493,11 @@ fn bar_text(row: &RowState, min_confidence: f64) -> TextContent {
         ),
         RowDisposition::NoChange => tr("PackSync", "StatusNoChange"),
         RowDisposition::Failed => tr("PackSync", "StatusError"),
+        RowDisposition::AlreadyApplied => tr("PackSync", "StatusAlreadyApplied"),
+        RowDisposition::Saved => tr("PackSync", "StatusSaved"),
+        RowDisposition::ReadOnly => tr("PackSync", "StatusReadOnly"),
+        RowDisposition::SaveFailed => tr("PackSync", "StatusSaveFailed"),
+        RowDisposition::CacheRefreshFailed => tr("PackSync", "StatusCacheRefreshFailed"),
     };
     retained_arc(text)
 }
@@ -1268,7 +1513,6 @@ fn result_text(row: &RowState, min_confidence: f64) -> TextContent {
                 retained_arc(tr("PackSync", "StatusWorking"))
             }
         }
-        RowDisposition::Cached => retained_arc(tr("PackSync", "StatusCached")),
         RowDisposition::Eligible | RowDisposition::BelowThreshold => retained_arc(tr_fmt(
             "PackSync",
             "ResultConfidenceFormat",
@@ -1290,6 +1534,14 @@ fn result_text(row: &RowState, min_confidence: f64) -> TextContent {
             .as_deref()
             .map(retained_str)
             .unwrap_or_else(|| retained_arc(tr("PackSync", "AnalysisFailed"))),
+        RowDisposition::AlreadyApplied => retained_arc(tr("PackSync", "ResultAlreadyApplied")),
+        RowDisposition::Saved => retained_arc(tr("PackSync", "ResultSaved")),
+        RowDisposition::ReadOnly => retained_arc(tr("PackSync", "ResultReadOnly")),
+        RowDisposition::SaveFailed | RowDisposition::CacheRefreshFailed => row
+            .error_text
+            .as_deref()
+            .map(retained_str)
+            .unwrap_or_else(|| retained_arc(tr("PackSync", "StatusError"))),
     }
 }
 
@@ -1335,6 +1587,7 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
         crate::SimplyLoveSyncEvent::RowStarted { index } => {
             if let Some(row) = overlay.rows.get_mut(index) {
                 let previous = row_disposition(row, overlay.min_confidence);
+                row.cached = false;
                 row.total_beats = 0;
                 row.beats_processed = 0;
                 row.final_bias_ms = None;
@@ -1366,6 +1619,7 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
         } => {
             if let Some(row) = overlay.rows.get_mut(index) {
                 let previous = row_disposition(row, overlay.min_confidence);
+                row.cached = false;
                 row.phase = RowPhase::Running;
                 row.total_beats = row.total_beats.max(total_beats);
                 row.beats_processed = row.beats_processed.max(beats_processed);
@@ -1377,14 +1631,26 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
                 }
             }
         }
-        crate::SimplyLoveSyncEvent::RowCached { index } => {
+        crate::SimplyLoveSyncEvent::RowCached {
+            index,
+            result,
+            applied,
+        } => {
             if let Some(row) = overlay.rows.get_mut(index) {
                 let previous = row_disposition(row, overlay.min_confidence);
-                row.phase = RowPhase::Cached;
+                if !row.cached {
+                    overlay.summary.cached = overlay.summary.cached.saturating_add(1);
+                }
+                row.cached = true;
+                row.phase = if applied {
+                    RowPhase::AlreadyApplied
+                } else {
+                    RowPhase::Ready
+                };
                 row.total_beats = 0;
                 row.beats_processed = 0;
-                row.final_bias_ms = None;
-                row.final_confidence = None;
+                row.final_bias_ms = Some(result.bias_ms);
+                row.final_confidence = Some(result.confidence);
                 row.error_text = None;
                 refresh_row_text(row, overlay.min_confidence);
                 let current = row_disposition(row, overlay.min_confidence);
@@ -1399,12 +1665,14 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
                 }
                 match result {
                     Ok(result) => {
+                        row.cached = false;
                         row.phase = RowPhase::Ready;
                         row.final_bias_ms = Some(result.bias_ms);
                         row.final_confidence = Some(result.confidence);
                         row.beats_processed = row.beats_processed.max(row.total_beats);
                     }
                     Err(err) => {
+                        row.cached = false;
                         row.phase = RowPhase::Failed;
                         row.error_text = Some(err);
                     }
@@ -1420,6 +1688,40 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
         }
         crate::SimplyLoveSyncEvent::Disconnected => {
             overlay.phase = OverlayPhase::Review;
+            overlay.current_row = None;
+        }
+        crate::SimplyLoveSyncEvent::BatchSaveFinished { summary } => {
+            for outcome in summary.outcomes {
+                let Some(row) = overlay
+                    .rows
+                    .iter_mut()
+                    .find(|row| row.simfile_path == outcome.simfile_path)
+                else {
+                    continue;
+                };
+                let previous = row_disposition(row, overlay.min_confidence);
+                row.error_text = None;
+                row.phase = match outcome.status {
+                    deadsync_simfile::sync_offset::SongOffsetSaveStatus::Saved => RowPhase::Saved,
+                    deadsync_simfile::sync_offset::SongOffsetSaveStatus::SkippedReadOnly => {
+                        RowPhase::ReadOnly
+                    }
+                    deadsync_simfile::sync_offset::SongOffsetSaveStatus::WriteFailed(error) => {
+                        row.error_text = Some(error);
+                        RowPhase::SaveFailed
+                    }
+                    deadsync_simfile::sync_offset::SongOffsetSaveStatus::CacheRefreshFailed(
+                        error,
+                    ) => {
+                        row.error_text = Some(error);
+                        RowPhase::CacheRefreshFailed
+                    }
+                };
+                refresh_row_text(row, overlay.min_confidence);
+                let current = row_disposition(row, overlay.min_confidence);
+                summary_changed |= replace_disposition(&mut overlay.summary, previous, current);
+            }
+            overlay.phase = OverlayPhase::Result;
             overlay.current_row = None;
         }
         crate::SimplyLoveSyncEvent::SongStream(_) | crate::SimplyLoveSyncEvent::SongFinished(_) => {
@@ -1478,6 +1780,7 @@ mod tests {
             beats_processed: 100,
             final_bias_ms: Some(bias_ms),
             final_confidence: Some(confidence),
+            cached: false,
             phase: RowPhase::Ready,
             error_text: None,
         };
@@ -1673,23 +1976,58 @@ mod tests {
     }
 
     #[test]
-    fn pack_sync_cached_row_is_processed_but_not_saveable() {
+    fn pack_sync_cached_unapplied_row_remains_saveable() {
         let mut state = overlay(OverlayPhase::Running);
 
         super::apply_event(
             &mut state,
-            crate::SimplyLoveSyncEvent::RowCached { index: 0 },
+            crate::SimplyLoveSyncEvent::RowCached {
+                index: 0,
+                result: crate::SimplyLoveSyncResult {
+                    bias_ms: 12.5,
+                    confidence: 0.87,
+                },
+                applied: false,
+            },
         );
         super::apply_event(&mut state, crate::SimplyLoveSyncEvent::Finished);
 
         let OverlayState::Visible(overlay) = &state else {
             panic!("pack sync overlay should remain visible");
         };
-        assert_eq!(overlay.summary.analyzed, 0);
+        assert_eq!(overlay.summary.analyzed, 1);
+        assert_eq!(overlay.summary.cached, 1);
+        assert_eq!(overlay.summary.eligible, 1);
+        assert_eq!(overlay.rows[0].text.bar.as_str(), "Ready (cached)");
+        assert!(overlay.text.counts.as_str().starts_with("1/1"));
+        assert!(can_save(overlay));
+    }
+
+    #[test]
+    fn pack_sync_cached_applied_row_is_not_offered_again() {
+        let mut state = overlay(OverlayPhase::Running);
+
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::RowCached {
+                index: 0,
+                result: crate::SimplyLoveSyncResult {
+                    bias_ms: 12.5,
+                    confidence: 0.87,
+                },
+                applied: true,
+            },
+        );
+        super::apply_event(&mut state, crate::SimplyLoveSyncEvent::Finished);
+
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("pack sync overlay should remain visible");
+        };
+        assert_eq!(overlay.summary.analyzed, 1);
         assert_eq!(overlay.summary.cached, 1);
         assert_eq!(overlay.summary.eligible, 0);
-        assert_eq!(overlay.rows[0].text.result.as_str(), "Cached");
-        assert!(overlay.text.counts.as_str().starts_with("1/1"));
+        assert_eq!(overlay.summary.already_applied, 1);
+        assert_eq!(overlay.rows[0].text.bar.as_str(), "Already applied");
         assert!(!can_save(overlay));
     }
 
@@ -1821,7 +2159,10 @@ mod tests {
             &mut effects,
         );
 
-        assert!(matches!(state, OverlayState::Hidden));
+        assert!(matches!(
+            state,
+            OverlayState::Visible(ref overlay) if overlay.phase == OverlayPhase::Saving
+        ));
         assert!(matches!(
             effects.as_slice(),
             [
@@ -1829,13 +2170,72 @@ mod tests {
                     deadsync_theme::AudioRequest::PlaySfx(path)
                 )),
                 ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
-                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes }
+                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { owner, changes }
                 )),
             ] if *path == "assets/sounds/start.ogg"
+                && *owner == crate::SimplyLoveSyncOwner::SelectMusicPack
                 && matches!(changes.as_slice(), [change]
                     if change.simfile_path == Path::new("Songs/Test/song.ssc")
                         && (change.delta_seconds + 0.013).abs() <= f32::EPSILON)
         ));
         assert_eq!(effects.capacity(), 8);
+    }
+
+    #[test]
+    fn failed_pack_save_requires_acknowledgement_and_can_retry() {
+        let mut state = overlay(OverlayPhase::Saving);
+        super::apply_event(
+            &mut state,
+            crate::SimplyLoveSyncEvent::BatchSaveFinished {
+                summary: deadsync_simfile::sync_offset::SongOffsetSaveSummary {
+                    skipped_read_only: 1,
+                    first_skipped_path: Some(PathBuf::from("Songs/Test/song.ssc")),
+                    outcomes: vec![deadsync_simfile::sync_offset::SongOffsetSaveOutcome {
+                        simfile_path: PathBuf::from("Songs/Test/song.ssc"),
+                        delta_seconds: -0.013,
+                        changed_tags: 0,
+                        status:
+                            deadsync_simfile::sync_offset::SongOffsetSaveStatus::SkippedReadOnly,
+                    }],
+                    ..deadsync_simfile::sync_offset::SongOffsetSaveSummary::default()
+                },
+            },
+        );
+
+        let OverlayState::Visible(overlay) = &state else {
+            panic!("save result should remain visible");
+        };
+        assert_eq!(overlay.phase, OverlayPhase::Result);
+        assert_eq!(overlay.summary.read_only, 1);
+        assert_eq!(overlay.rows[0].text.bar.as_str(), "Read-only");
+        assert!(overlay.text.help.as_str().contains("RETRY FAILED"));
+
+        let mut effects = Vec::with_capacity(8);
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p1_start),
+            NavigationPolicy::default(),
+            &mut effects,
+        );
+
+        assert!(matches!(
+            state,
+            OverlayState::Visible(ref overlay) if overlay.phase == OverlayPhase::Saving
+        ));
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { owner, changes }
+                )),
+            ] if *path == "assets/sounds/start.ogg"
+                && *owner == crate::SimplyLoveSyncOwner::SelectMusicPack
+                && matches!(changes.as_slice(), [change]
+                    if change.simfile_path == Path::new("Songs/Test/song.ssc")
+                        && (change.delta_seconds + 0.013).abs() <= f32::EPSILON)
+        ));
     }
 }

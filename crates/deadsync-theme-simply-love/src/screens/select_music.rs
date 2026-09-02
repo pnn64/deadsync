@@ -9586,6 +9586,7 @@ fn apply_song_sync_events(
             | crate::SimplyLoveSyncEvent::RowBeat { .. }
             | crate::SimplyLoveSyncEvent::RowCached { .. }
             | crate::SimplyLoveSyncEvent::RowFinished { .. }
+            | crate::SimplyLoveSyncEvent::BatchSaveFinished { .. }
             | crate::SimplyLoveSyncEvent::Finished => {}
             crate::SimplyLoveSyncEvent::Disconnected => {
                 if overlay.phase == NullOrDieOverlayPhase::Running {
@@ -9743,7 +9744,10 @@ fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ThemeEff
                 .collect::<Vec<_>>();
             (!changes.is_empty()).then_some(ThemeEffect::Runtime(
                 crate::SimplyLoveRuntimeRequest::Sync(
-                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch {
+                        owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
+                        changes,
+                    },
                 ),
             ))
         }

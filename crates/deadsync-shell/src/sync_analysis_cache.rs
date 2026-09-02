@@ -191,6 +191,7 @@ pub(crate) struct TargetPreparation {
 }
 
 impl TargetPreparation {
+    #[cfg(test)]
     pub(crate) const fn is_cached(&self) -> bool {
         self.cached.is_some()
     }

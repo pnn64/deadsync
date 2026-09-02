@@ -540,11 +540,18 @@ fn run_pack(
                             false,
                         )
                     });
-                if prepared
+                if let Some(cached) = prepared
                     .as_ref()
-                    .is_some_and(super::sync_analysis_cache::TargetPreparation::is_cached)
+                    .and_then(super::sync_analysis_cache::TargetPreparation::cached_analysis)
                 {
-                    let _ = tx.send(SimplyLoveSyncEvent::RowCached { index });
+                    let _ = tx.send(SimplyLoveSyncEvent::RowCached {
+                        index,
+                        result: SimplyLoveSyncResult {
+                            bias_ms: cached.bias_ms,
+                            confidence: cached.confidence,
+                        },
+                        applied: cached.applied,
+                    });
                     continue;
                 }
                 let prepared =
@@ -767,12 +774,23 @@ mod tests {
         assert_eq!(service.jobs[0].owner, SimplyLoveSyncOwner::SelectMusicPack);
 
         pack_tx
-            .send(SimplyLoveSyncEvent::RowCached { index: 5 })
+            .send(SimplyLoveSyncEvent::RowCached {
+                index: 5,
+                result: SimplyLoveSyncResult {
+                    bias_ms: 12.0,
+                    confidence: 0.9,
+                },
+                applied: false,
+            })
             .expect("the service owns the matching receiver");
         let events = service.poll().expect("the pack job remains active");
         assert!(matches!(
             events.select_pack.as_slice(),
-            [SimplyLoveSyncEvent::RowCached { index: 5 }]
+            [SimplyLoveSyncEvent::RowCached {
+                index: 5,
+                applied: false,
+                ..
+            }]
         ));
     }
 

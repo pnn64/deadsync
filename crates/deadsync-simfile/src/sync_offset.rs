@@ -7,7 +7,41 @@ pub struct SongOffsetSyncChange {
     pub delta_seconds: f32,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SongOffsetSaveStatus {
+    Saved,
+    SkippedReadOnly,
+    WriteFailed(String),
+    CacheRefreshFailed(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongOffsetSaveOutcome {
+    pub simfile_path: PathBuf,
+    pub delta_seconds: f32,
+    pub changed_tags: usize,
+    pub status: SongOffsetSaveStatus,
+}
+
+impl SongOffsetSaveOutcome {
+    #[must_use]
+    pub const fn was_written(&self) -> bool {
+        matches!(
+            self.status,
+            SongOffsetSaveStatus::Saved | SongOffsetSaveStatus::CacheRefreshFailed(_)
+        )
+    }
+
+    #[must_use]
+    pub const fn is_retryable(&self) -> bool {
+        matches!(
+            self.status,
+            SongOffsetSaveStatus::SkippedReadOnly | SongOffsetSaveStatus::WriteFailed(_)
+        )
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongOffsetSaveSummary {
     pub saved_files: usize,
     pub skipped_read_only: usize,
@@ -18,6 +52,7 @@ pub struct SongOffsetSaveSummary {
     pub first_skipped_path: Option<PathBuf>,
     pub first_failure_path: Option<PathBuf>,
     pub first_failure_error: Option<String>,
+    pub outcomes: Vec<SongOffsetSaveOutcome>,
 }
 
 #[inline(always)]
@@ -252,6 +287,12 @@ where
             if summary.first_skipped_path.is_none() {
                 summary.first_skipped_path = Some(path.to_path_buf());
             }
+            summary.outcomes.push(SongOffsetSaveOutcome {
+                simfile_path: path.to_path_buf(),
+                delta_seconds: change.delta_seconds,
+                changed_tags: 0,
+                status: SongOffsetSaveStatus::SkippedReadOnly,
+            });
             continue;
         }
 
@@ -259,7 +300,13 @@ where
             Ok(changed_tags) => changed_tags,
             Err(error) => {
                 summary.failed_files = summary.failed_files.saturating_add(1);
-                record_first_failure(&mut summary, path, error);
+                record_first_failure(&mut summary, path, error.clone());
+                summary.outcomes.push(SongOffsetSaveOutcome {
+                    simfile_path: path.to_path_buf(),
+                    delta_seconds: change.delta_seconds,
+                    changed_tags: 0,
+                    status: SongOffsetSaveStatus::WriteFailed(error),
+                });
                 continue;
             }
         };
@@ -268,10 +315,19 @@ where
         if summary.first_saved_path.is_none() {
             summary.first_saved_path = Some(path.to_path_buf());
         }
-        if let Err(error) = after_save(path) {
+        let status = if let Err(error) = after_save(path) {
             summary.cache_refresh_failures = summary.cache_refresh_failures.saturating_add(1);
-            record_first_failure(&mut summary, path, error);
-        }
+            record_first_failure(&mut summary, path, error.clone());
+            SongOffsetSaveStatus::CacheRefreshFailed(error)
+        } else {
+            SongOffsetSaveStatus::Saved
+        };
+        summary.outcomes.push(SongOffsetSaveOutcome {
+            simfile_path: path.to_path_buf(),
+            delta_seconds: change.delta_seconds,
+            changed_tags,
+            status,
+        });
     }
 
     summary
@@ -441,6 +497,31 @@ mod tests {
                 .as_deref()
                 .is_some_and(|error| error.contains("No #OFFSET tags"))
         );
+        assert_eq!(summary.outcomes.len(), 4);
+        assert!(matches!(
+            summary.outcomes.as_slice(),
+            [
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::Saved,
+                    ..
+                },
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::SkippedReadOnly,
+                    ..
+                },
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::WriteFailed(_),
+                    ..
+                },
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::Saved,
+                    ..
+                },
+            ]
+        ));
+        assert!(summary.outcomes[0].was_written());
+        assert!(summary.outcomes[1].is_retryable());
+        assert!(summary.outcomes[2].is_retryable());
         assert_eq!(reloaded, vec![writable.clone(), after_failure.clone()]);
         let rewritten = std::fs::read_to_string(&writable).expect("read rewritten");
         assert!(rewritten.contains("#OFFSET:0.101;"));
@@ -498,6 +579,21 @@ mod tests {
         assert_eq!(summary.failed_files, 0);
         assert_eq!(summary.cache_refresh_failures, 1);
         assert_eq!(summary.first_failure_path.as_deref(), Some(first.as_path()));
+        assert!(matches!(
+            summary.outcomes.as_slice(),
+            [
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::CacheRefreshFailed(_),
+                    ..
+                },
+                SongOffsetSaveOutcome {
+                    status: SongOffsetSaveStatus::Saved,
+                    ..
+                },
+            ]
+        ));
+        assert!(summary.outcomes[0].was_written());
+        assert!(!summary.outcomes[0].is_retryable());
         assert_eq!(reload_attempts, vec![first.clone(), second.clone()]);
         assert!(
             std::fs::read_to_string(&second)
