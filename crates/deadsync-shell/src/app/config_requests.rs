@@ -238,6 +238,7 @@ pub(super) fn execute_null_or_die(request: SimplyLoveNullOrDieConfigRequest) {
         Request::ConfidencePercent(percent) => {
             config::update_null_or_die_confidence_percent(percent);
         }
+        Request::CacheResults(enabled) => config::update_null_or_die_cache_results(enabled),
         Request::PackSyncThreads(threads) => config::update_null_or_die_pack_sync_threads(threads),
         Request::FingerprintTenths(tenths) => {
             config::update_null_or_die_fingerprint_ms(f64::from(tenths) / 10.0);

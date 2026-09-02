@@ -339,6 +339,18 @@ impl Cache {
         analyze_target(prepared)
     }
 
+    pub(crate) fn prepare_if_enabled(
+        &self,
+        enabled: bool,
+        simfile_path: &Path,
+        music_path: &Path,
+        chart_ix: usize,
+        options: AnalysisOptions,
+        require_plot: bool,
+    ) -> Option<TargetPreparation> {
+        enabled.then(|| self.prepare(simfile_path, music_path, chart_ix, options, require_plot))
+    }
+
     pub(crate) fn record_completed(&self, completed: Vec<CompletedTarget>) {
         let Ok(mut state) = self.state.lock() else {
             return;
@@ -764,6 +776,53 @@ mod tests {
         let visual = loaded.prepare(&simfile, &music, 2, options(), true);
         assert!(!visual.is_cached());
         assert!(visual.into_prepared().is_some());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn disabled_policy_bypasses_existing_results_and_does_not_prepare_new_entries() {
+        let root = temp_dir("disabled");
+        fs::create_dir_all(&root).expect("create temp dir");
+        let simfile = root.join("song.ssc");
+        let music = root.join("song.ogg");
+        fs::write(&simfile, b"#OFFSET:0.000;").expect("write simfile");
+        fs::write(&music, b"audio").expect("write music");
+        let cache = Cache::load(root.join("cache.json"));
+        complete(&cache, &simfile, &music);
+
+        assert!(
+            cache
+                .prepare_if_enabled(false, &simfile, &music, 2, options(), false)
+                .is_none()
+        );
+        assert!(
+            cache
+                .prepare(&simfile, &music, 2, options(), false)
+                .is_cached()
+        );
+
+        let uncached_simfile = root.join("uncached.ssc");
+        let uncached_music = root.join("uncached.ogg");
+        fs::write(&uncached_simfile, b"#OFFSET:0.000;").expect("write uncached simfile");
+        fs::write(&uncached_music, b"audio").expect("write uncached music");
+        assert!(
+            cache
+                .prepare_if_enabled(
+                    false,
+                    &uncached_simfile,
+                    &uncached_music,
+                    2,
+                    options(),
+                    false,
+                )
+                .is_none()
+        );
+        assert!(
+            cache
+                .prepare(&uncached_simfile, &uncached_music, 2, options(), false,)
+                .into_prepared()
+                .is_some()
+        );
         let _ = fs::remove_dir_all(root);
     }
 

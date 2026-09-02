@@ -215,6 +215,7 @@ pub enum SubRowId {
     GraphOrientation,
     GraphOrigin,
     SyncConfidence,
+    CacheResults,
     PackSyncThreads,
     Fingerprint,
     Window,

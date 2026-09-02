@@ -233,19 +233,29 @@ impl Service {
         emit_freq_delta: bool,
     ) {
         self.cancel(owner);
+        let cache_results = config::get().null_or_die_cache_results;
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let rx = if owner == SimplyLoveSyncOwner::SelectMusicSong {
             let (tx, rx) = mpsc::sync_channel(SONG_PENDING_EVENTS);
             let cache = Arc::clone(&self.cache);
             std::thread::spawn(move || {
-                run_song(targets, emit_freq_delta, thread_cancel, tx, cache);
+                run_song(
+                    targets,
+                    emit_freq_delta,
+                    thread_cancel,
+                    tx,
+                    cache,
+                    cache_results,
+                );
             });
             rx
         } else {
             let (tx, rx) = mpsc::channel();
             let cache = Arc::clone(&self.cache);
-            std::thread::spawn(move || run_pack(targets, thread_cancel, tx, cache));
+            std::thread::spawn(move || {
+                run_pack(targets, thread_cancel, tx, cache, cache_results);
+            });
             rx
         };
         self.jobs.push(Job { owner, cancel, rx });
@@ -255,6 +265,9 @@ impl Service {
         &self,
         changes: &[deadsync_simfile::sync_offset::SongOffsetSyncChange],
     ) {
+        if !config::get().null_or_die_cache_results {
+            return;
+        }
         self.cache.refresh_applied(
             changes
                 .iter()
@@ -324,6 +337,7 @@ fn run_song(
     cancel: Arc<AtomicBool>,
     tx: mpsc::SyncSender<SimplyLoveSyncEvent>,
     cache: Arc<AnalysisCache>,
+    cache_results: bool,
 ) {
     let Some(target) = targets.pop() else {
         let _ = tx.send(SimplyLoveSyncEvent::SongFinished(Err(
@@ -335,8 +349,9 @@ fn run_song(
     let options = AnalysisOptions::new(&cfg, config::get().null_or_die_confidence_percent);
     let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
         .ok()
-        .map(|music_path| {
-            cache.prepare(
+        .and_then(|music_path| {
+            cache.prepare_if_enabled(
+                cache_results,
                 &target.song.simfile_path,
                 &music_path,
                 target.chart_ix,
@@ -495,6 +510,7 @@ fn run_pack(
     cancel: Arc<AtomicBool>,
     tx: mpsc::Sender<SimplyLoveSyncEvent>,
     cache: Arc<AnalysisCache>,
+    cache_results: bool,
 ) {
     let worker_count = pack_worker_count(targets.len());
     let cfg = Arc::new(config::null_or_die_bias_cfg());
@@ -531,8 +547,9 @@ fn run_pack(
 
                 let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
                     .ok()
-                    .map(|music_path| {
-                        cache.prepare(
+                    .and_then(|music_path| {
+                        cache.prepare_if_enabled(
+                            cache_results,
                             &target.song.simfile_path,
                             &music_path,
                             target.chart_ix,
@@ -615,12 +632,13 @@ fn run_pack(
     for worker in workers {
         let _ = worker.join();
     }
-    if !cancel.load(Ordering::Relaxed)
+    if cache_results
+        && !cancel.load(Ordering::Relaxed)
         && let Ok(mut completed) = completed.lock()
     {
         cache.record_completed(std::mem::take(&mut *completed));
+        cache.flush();
     }
-    cache.flush();
     let _ = tx.send(SimplyLoveSyncEvent::Finished);
 }
 

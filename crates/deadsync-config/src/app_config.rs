@@ -271,6 +271,8 @@ pub struct Config {
     pub null_or_die_graph_origin: GraphOrigin,
     /// Minimum confidence percent required for pack sync saves.
     pub null_or_die_confidence_percent: u8,
+    /// Reuse and persist completed null-or-die analysis results.
+    pub null_or_die_cache_results: bool,
     /// Worker threads for null-or-die pack/all sync analysis.
     pub null_or_die_pack_sync_threads: u8,
     pub null_or_die_fingerprint_ms: f64,
@@ -506,6 +508,7 @@ impl Default for Config {
             null_or_die_graph_orientation: null_or_die.graph_orientation,
             null_or_die_graph_origin: null_or_die.graph_origin,
             null_or_die_confidence_percent: null_or_die.confidence_percent,
+            null_or_die_cache_results: null_or_die.cache_results,
             null_or_die_pack_sync_threads: null_or_die.pack_sync_threads,
             null_or_die_fingerprint_ms: null_or_die.fingerprint_ms,
             null_or_die_window_ms: null_or_die.window_ms,

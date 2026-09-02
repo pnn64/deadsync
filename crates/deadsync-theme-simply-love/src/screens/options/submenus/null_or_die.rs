@@ -73,6 +73,15 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        id: SubRowId::CacheResults,
+        label: lookup_key("OptionsNullOrDie", "CacheResults"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: false,
+    },
+    SubRow {
         id: SubRowId::PackSyncThreads,
         label: lookup_key("OptionsNullOrDie", "PackSyncThreads"),
         choices: &[localized_choice("Common", "Auto")],
@@ -189,6 +198,14 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsNullOrDieHelp",
             "SyncConfidenceHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::NodCacheResults,
+        name: lookup_key("OptionsNullOrDie", "CacheResults"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsNullOrDieHelp",
+            "CacheResultsHelp",
         ))],
     },
     Item {

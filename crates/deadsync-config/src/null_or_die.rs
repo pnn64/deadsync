@@ -1,10 +1,10 @@
 use crate::app_config::Config;
 use crate::bools::parse_u8_bool_or_default;
 use crate::defaults::{
-    DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT, DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
-    DEFAULT_NULL_OR_DIE_FULL_SPECTROGRAM, DEFAULT_NULL_OR_DIE_MAGIC_OFFSET_MS,
-    DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS, DEFAULT_NULL_OR_DIE_STEP_MS,
-    DEFAULT_NULL_OR_DIE_WINDOW_MS,
+    DEFAULT_NULL_OR_DIE_CACHE_RESULTS, DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT,
+    DEFAULT_NULL_OR_DIE_FINGERPRINT_MS, DEFAULT_NULL_OR_DIE_FULL_SPECTROGRAM,
+    DEFAULT_NULL_OR_DIE_MAGIC_OFFSET_MS, DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS,
+    DEFAULT_NULL_OR_DIE_STEP_MS, DEFAULT_NULL_OR_DIE_WINDOW_MS,
 };
 use crate::ini::SimpleIni;
 use crate::numbers::parse_auto_threads_u8;
@@ -31,6 +31,7 @@ pub struct NullOrDieOptions {
     pub graph_orientation: GraphOrientation,
     pub graph_origin: GraphOrigin,
     pub confidence_percent: u8,
+    pub cache_results: bool,
     pub pack_sync_threads: u8,
     pub fingerprint_ms: f64,
     pub window_ms: f64,
@@ -48,6 +49,7 @@ impl Default for NullOrDieOptions {
             graph_orientation: GraphOrientation::Vertical,
             graph_origin: GraphOrigin::Bottom,
             confidence_percent: DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT,
+            cache_results: DEFAULT_NULL_OR_DIE_CACHE_RESULTS,
             pack_sync_threads: DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS,
             fingerprint_ms: DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
             window_ms: DEFAULT_NULL_OR_DIE_WINDOW_MS,
@@ -79,6 +81,10 @@ pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> 
             .and_then(|value| value.parse::<u8>().ok())
             .map(clamp_null_or_die_confidence_percent)
             .unwrap_or(default.confidence_percent),
+        cache_results: parse_u8_bool_or_default(
+            conf.get("Options", "NullOrDieCacheResults"),
+            default.cache_results,
+        ),
         pack_sync_threads: conf
             .get("Options", "PackSyncThreads")
             .and_then(parse_auto_threads_u8)
@@ -330,6 +336,7 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
         "NullOrDieConfidencePercent",
         clamp_null_or_die_confidence_percent(options.confidence_percent),
     );
+    push_bool(content, "NullOrDieCacheResults", options.cache_results);
     push_line(content, "PackSyncThreads", options.pack_sync_threads);
     push_line(
         content,
@@ -391,6 +398,7 @@ pub const fn null_or_die_options_from_config(cfg: Config) -> NullOrDieOptions {
         graph_orientation: cfg.null_or_die_graph_orientation,
         graph_origin: cfg.null_or_die_graph_origin,
         confidence_percent: cfg.null_or_die_confidence_percent,
+        cache_results: cfg.null_or_die_cache_results,
         pack_sync_threads: cfg.null_or_die_pack_sync_threads,
         fingerprint_ms: cfg.null_or_die_fingerprint_ms,
         window_ms: cfg.null_or_die_window_ms,
@@ -412,6 +420,7 @@ mod tests {
             graph_orientation: GraphOrientation::Vertical,
             graph_origin: GraphOrigin::Bottom,
             confidence_percent: 80,
+            cache_results: true,
             pack_sync_threads: 0,
             fingerprint_ms: 12.0,
             window_ms: 8.0,
@@ -437,6 +446,7 @@ mod tests {
             NullOrDieOptions::default().graph_origin,
             GraphOrigin::Bottom
         );
+        assert!(NullOrDieOptions::default().cache_results);
     }
 
     #[test]
@@ -524,6 +534,7 @@ mod tests {
             NullOrDieGraphOrientation=Horizontal
             NullOrDieGraphOrigin=Top
             NullOrDieConfidencePercent=200
+            NullOrDieCacheResults=0
             PackSyncThreads=4
             NullOrDieFingerprintMs=10.05
             NullOrDieWindowMs=0
@@ -541,6 +552,7 @@ mod tests {
         assert_eq!(loaded.graph_orientation, GraphOrientation::Horizontal);
         assert_eq!(loaded.graph_origin, GraphOrigin::Top);
         assert_eq!(loaded.confidence_percent, 100);
+        assert!(!loaded.cache_results);
         assert_eq!(loaded.pack_sync_threads, 4);
         assert_tenths_eq(loaded.fingerprint_ms, 101);
         assert_tenths_eq(loaded.window_ms, 1);
@@ -562,6 +574,7 @@ mod tests {
             NullOrDieGraphOrientation=bad
             NullOrDieGraphOrigin=bad
             NullOrDieConfidencePercent=bad
+            NullOrDieCacheResults=bad
             PackSyncThreads=bad
             NullOrDieFingerprintMs=bad
             NullOrDieWindowMs=bad
@@ -600,6 +613,7 @@ mod tests {
                 graph_orientation: GraphOrientation::Horizontal,
                 graph_origin: GraphOrigin::Top,
                 confidence_percent: 250,
+                cache_results: false,
                 pack_sync_threads: 4,
                 fingerprint_ms: 10.05,
                 window_ms: 0.0,
@@ -617,6 +631,7 @@ mod tests {
 NullOrDieGraphOrientation=Horizontal\n\
 NullOrDieGraphOrigin=Top\n\
 NullOrDieConfidencePercent=100\n\
+NullOrDieCacheResults=0\n\
 PackSyncThreads=4\n\
 NullOrDieFingerprintMs=10.1\n\
 NullOrDieWindowMs=0.1\n\
@@ -635,6 +650,7 @@ NullOrDieFullSpectrogram=1\n"
             graph_orientation: GraphOrientation::Horizontal,
             graph_origin: GraphOrigin::Top,
             confidence_percent: 80,
+            cache_results: true,
             pack_sync_threads: 0,
             fingerprint_ms: 0.0,
             window_ms: 250.0,

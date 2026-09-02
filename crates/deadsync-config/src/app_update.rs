@@ -787,6 +787,10 @@ pub fn set_null_or_die_confidence_percent(cfg: &mut Config, value: u8) -> bool {
     )
 }
 
+pub fn set_null_or_die_cache_results(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.null_or_die_cache_results, enabled)
+}
+
 pub fn set_null_or_die_pack_sync_threads(cfg: &mut Config, threads: u8) -> bool {
     set_if_changed(&mut cfg.null_or_die_pack_sync_threads, threads)
 }

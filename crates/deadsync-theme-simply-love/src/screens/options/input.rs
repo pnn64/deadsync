@@ -785,6 +785,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::SyncConfidence => crate::SimplyLoveNullOrDieConfigRequest::ConfidencePercent(
                 sync_confidence_from_choice(new_index),
             ),
+            SubRowId::CacheResults => {
+                crate::SimplyLoveNullOrDieConfigRequest::CacheResults(yes_no_from_choice(new_index))
+            }
             SubRowId::PackSyncThreads => crate::SimplyLoveNullOrDieConfigRequest::PackSyncThreads(
                 thread_count_from_choice(&state.software_thread_choices, new_index),
             ),

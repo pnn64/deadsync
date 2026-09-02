@@ -261,6 +261,7 @@ pub enum ItemId {
     NodGraphOrientation,
     NodGraphOrigin,
     NodSyncConfidence,
+    NodCacheResults,
     NodPackSyncThreads,
     NodFingerprint,
     NodWindow,

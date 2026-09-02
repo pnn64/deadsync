@@ -1348,6 +1348,34 @@ fn null_or_die_orientation_emits_shell_config_request() {
 }
 
 #[test]
+fn null_or_die_cache_results_defaults_on_and_emits_shell_config_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::NullOrDieOptions);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::NullOrDieOptions,
+        SubRowId::CacheResults,
+    );
+    assert_eq!(
+        state.sub[SubmenuKind::NullOrDieOptions].cursor_indices[row],
+        1
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Null-or-Die cache choice should emit shell config work");
+
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::NullOrDie(
+                crate::SimplyLoveNullOrDieConfigRequest::CacheResults(false)
+            )
+        ))
+    ));
+}
+
+#[test]
 fn machine_scroll_speed_choice_emits_shell_profile_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

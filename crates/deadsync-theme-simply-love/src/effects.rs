@@ -744,6 +744,7 @@ pub enum SimplyLoveNullOrDieConfigRequest {
     GraphOrientation(SimplyLoveGraphOrientation),
     GraphOrigin(SimplyLoveGraphOrigin),
     ConfidencePercent(u8),
+    CacheResults(bool),
     PackSyncThreads(u8),
     FingerprintTenths(i32),
     WindowTenths(i32),

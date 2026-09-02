@@ -1128,6 +1128,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
         NULL_OR_DIE_OPTIONS_ROWS,
+        SubRowId::CacheResults,
+        yes_no_choice_index(cfg.null_or_die_cache_results),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::NullOrDieOptions].choice_indices,
+        NULL_OR_DIE_OPTIONS_ROWS,
         SubRowId::PackSyncThreads,
         thread_choice_index(
             &state.software_thread_choices,

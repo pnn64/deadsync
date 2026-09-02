@@ -309,6 +309,7 @@ const fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
     cfg.null_or_die_graph_orientation = loaded.graph_orientation;
     cfg.null_or_die_graph_origin = loaded.graph_origin;
     cfg.null_or_die_confidence_percent = loaded.confidence_percent;
+    cfg.null_or_die_cache_results = loaded.cache_results;
     cfg.null_or_die_pack_sync_threads = loaded.pack_sync_threads;
     cfg.null_or_die_fingerprint_ms = loaded.fingerprint_ms;
     cfg.null_or_die_window_ms = loaded.window_ms;
