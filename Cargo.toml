@@ -71,7 +71,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1058"
+version = "0.5.1059"
 
 [[bin]]
 name = "generate_pseudo"
@@ -105,6 +105,10 @@ deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", featu
 image = "0.25.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha2 = "0.10"
+tar = "0.4"
+tempfile = "3.22"
+zstd = "0.13"
 
 [patch.crates-io]
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is

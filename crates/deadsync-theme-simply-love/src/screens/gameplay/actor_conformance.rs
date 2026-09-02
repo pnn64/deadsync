@@ -195,3 +195,98 @@ pub fn stable_draw_order(input: &[(String, i32)]) -> Vec<String> {
         .map(|index| overlays[index].name.clone().expect("test actor name"))
         .collect()
 }
+
+/// Compose a complete layer through the same parent-inheritance path used by
+/// gameplay. Whole-song archive tests feed sampled local states into this
+/// adapter; no test-only transform implementation is involved.
+#[must_use]
+pub fn compose_overlay_states(
+    overlays: &[SongLuaOverlayActor],
+    local_states: &[SongLuaOverlayState],
+    screen: [f32; 2],
+) -> Vec<SongLuaOverlayState> {
+    let mut out = Vec::with_capacity(overlays.len());
+    song_lua_overlay_states_from_local_all_into(
+        overlays,
+        local_states,
+        screen[0],
+        screen[1],
+        &mut out,
+    );
+    out
+}
+
+/// Headless production overlay builder used by whole-song archives. Texture
+/// dimensions come from the normal registry populated during Lua compilation;
+/// one transparent pixel buffer per compiled key is enough because actor
+/// composition consumes metadata and handles, not sampled pixels.
+pub struct WholeSongComposer {
+    assets: AssetManager,
+}
+
+impl WholeSongComposer {
+    #[must_use]
+    pub fn new(overlays: &[SongLuaOverlayActor]) -> Self {
+        let mut assets = AssetManager::new();
+        for overlay in overlays {
+            match &overlay.kind {
+                SongLuaOverlayKind::Sprite { texture_key, .. } => {
+                    queue_texture(&mut assets, texture_key);
+                }
+                SongLuaOverlayKind::ActorMultiVertex {
+                    texture_key: Some(texture_key),
+                    ..
+                } => queue_texture(&mut assets, texture_key),
+                SongLuaOverlayKind::Model { layers } => {
+                    for layer in layers.iter() {
+                        queue_texture(&mut assets, &layer.texture_key);
+                    }
+                }
+                _ => {}
+            }
+        }
+        Self { assets }
+    }
+
+    #[must_use]
+    pub fn actor_count(
+        &self,
+        overlays: &[SongLuaOverlayActor],
+        states: &[SongLuaOverlayState],
+        screen: [f32; 2],
+        seconds: f32,
+        beat: f32,
+    ) -> usize {
+        overlays
+            .iter()
+            .enumerate()
+            .map(|(index, overlay)| {
+                let state = states.get(index).copied().unwrap_or_default();
+                let camera = song_lua_overlay_camera_state(overlays, states, overlay.parent_index);
+                build_song_lua_overlay_actor(
+                    overlay,
+                    state,
+                    camera,
+                    &self.assets,
+                    i16::try_from(index).unwrap_or(i16::MAX),
+                    screen[0],
+                    screen[1],
+                    seconds,
+                    beat,
+                    seconds,
+                )
+                .map_or(0, |actors| actors.len())
+            })
+            .sum()
+    }
+}
+
+fn queue_texture(assets: &mut AssetManager, key: &str) {
+    if assets.has_texture_key(key) {
+        return;
+    }
+    let dims = crate::assets::texture_dims(key);
+    let width = dims.map_or(1, |dims| dims.w.max(1));
+    let height = dims.map_or(1, |dims| dims.h.max(1));
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
+}

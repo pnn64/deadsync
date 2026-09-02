@@ -13858,7 +13858,7 @@ fn song_lua_text_attributes_for_diffuse_mode(
     (attributes, [1.0, 1.0, 1.0, 1.0])
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn song_lua_overlay_camera_state(
     overlays: &[SongLuaOverlayActor],
     overlay_states: &[SongLuaOverlayState],
@@ -16700,7 +16700,7 @@ fn build_song_lua_overlay_actor_with_scratch(
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 fn build_song_lua_overlay_actor(
     overlay: &SongLuaOverlayActor,
     state: SongLuaOverlayState,

@@ -7,6 +7,7 @@ use deadsync_assets::song_lua::{
     parse_song_timing_bpms, song_elapsed_seconds_at,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
+use deadsync_song_lua::song_beat_at_elapsed_seconds;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -22,6 +23,9 @@ const CUPHEAD_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Cuphead [TaroNuke]/botanic.sm.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
+
+#[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
+mod whole_song_archives;
 
 #[derive(Deserialize)]
 struct NativeTrace {
@@ -310,6 +314,13 @@ fn parse_song(path: &Path) -> deadsync_chart::SongData {
 
 fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize, SongLuaCompileContext) {
     let simfile = locate_simfile(trace);
+    compile_trace_song_at(trace, &simfile)
+}
+
+fn compile_trace_song_at(
+    trace: &NativeTrace,
+    simfile: &Path,
+) -> (Vec<CompiledSongLua>, usize, SongLuaCompileContext) {
     let simfile = fs::canonicalize(&simfile)
         .unwrap_or_else(|error| panic!("failed to resolve {}: {error}", simfile.display()));
     let song = parse_song(&simfile);
