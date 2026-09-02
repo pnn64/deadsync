@@ -16,9 +16,9 @@ use crate::{
     reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
     runtime_player_option_ease_target, set_actor_overlay_getter_state,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, song_beat_at_elapsed_seconds, song_bps_at_beat,
-    song_display_bps, song_elapsed_seconds_at, song_elapsed_seconds_for_beat,
-    song_lua_side_effect_count, song_lua_span_end, song_music_rate,
+    set_compile_song_runtime_values, song_beat_at_elapsed_seconds, song_display_bps,
+    song_elapsed_seconds_at, song_elapsed_seconds_for_beat, song_lua_side_effect_count,
+    song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
@@ -390,12 +390,6 @@ fn beat_span_seconds(context: &SongLuaCompileContext, start: f32, end: f32) -> f
     (song_elapsed_seconds_at(end, context) - song_elapsed_seconds_at(start, context)).max(0.0)
 }
 
-fn update_frame_beat(context: &SongLuaCompileContext, beat: f32) -> f32 {
-    let seconds = song_elapsed_seconds_at(beat, context);
-    let frame = (seconds.mul_add(SONG_LUA_UPDATE_REFERENCE_FPS, -1.0e-5)).ceil();
-    song_beat_at_elapsed_seconds(frame / SONG_LUA_UPDATE_REFERENCE_FPS, context)
-}
-
 #[inline(always)]
 #[must_use]
 pub fn relative_player_target(value: Option<f32>, baseline: Option<f32>) -> Option<f32> {
@@ -442,116 +436,19 @@ pub fn update_function_sample_step(len: f32) -> f32 {
     (len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32).max(1.0 / 192.0)
 }
 
-fn update_function_named_tables(lua: &Lua, root: &Value, name: &str) -> Result<Vec<Table>, String> {
-    let mut tables = Vec::new();
-    if let Some(table) = lua
-        .globals()
-        .get::<Option<Table>>(name)
-        .map_err(|err| err.to_string())?
-    {
-        tables.push(table);
-    }
-    tables.extend(crate::read_update_function_tables(lua, root, &[name])?);
-    let mut seen = BTreeSet::new();
-    tables.retain(|table| seen.insert(table.to_pointer() as usize));
-    Ok(tables)
-}
-
-#[derive(Default)]
-struct SongLuaUpdateBoundaries {
-    beats: Vec<f32>,
-    zero_ends: Vec<f32>,
-}
-
-fn update_function_boundary_beats(
-    lua: &Lua,
-    root: &Value,
-) -> Result<SongLuaUpdateBoundaries, String> {
-    let mut out = SongLuaUpdateBoundaries::default();
-    for table in update_function_named_tables(lua, root, "mods_ease")? {
-        for entry in table.sequence_values::<Table>() {
-            let entry = entry.map_err(|err| err.to_string())?;
-            if !matches!(
-                entry.raw_get::<Value>(5).map_err(|err| err.to_string())?,
-                Value::Function(_)
-            ) {
-                continue;
-            }
-            let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
-            else {
-                continue;
-            };
-            let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
-            else {
-                continue;
-            };
-            let span_mode = entry
-                .raw_get::<Option<String>>(6)
-                .map_err(|err| err.to_string())?
-                .filter(|mode| mode.eq_ignore_ascii_case("end"))
-                .map_or(SongLuaSpanMode::Len, |_| SongLuaSpanMode::End);
-            let end = song_lua_span_end(start, limit, span_mode);
-            out.beats.extend([start, end]);
-            if read_f32(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?)
-                .is_some_and(|value| value.abs() <= f32::EPSILON)
-            {
-                out.zero_ends.push(end);
-            }
-        }
-    }
-    for table in update_function_named_tables(lua, root, "mod_actions")? {
-        for entry in table.sequence_values::<Table>() {
-            let entry = entry.map_err(|err| err.to_string())?;
-            if let Some(beat) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
-            {
-                out.beats.push(beat);
-            }
-        }
-    }
-    Ok(out)
-}
-
-fn update_function_replay_beats(
-    lua: &Lua,
-    root: &Value,
-    context: &SongLuaCompileContext,
-    start: f32,
-    end: f32,
-) -> Result<Vec<f32>, String> {
+fn update_function_replay_beats(context: &SongLuaCompileContext, start: f32, end: f32) -> Vec<f32> {
     let start_seconds = song_elapsed_seconds_at(start, context);
     let end_seconds = song_elapsed_seconds_at(end, context);
-    let step = ((end_seconds - start_seconds) / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32)
-        .max(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS);
     let mut out = vec![start];
-    let mut seconds = start_seconds;
-    while seconds < end_seconds - f32::EPSILON {
-        seconds = (seconds + step).min(end_seconds);
+    let frame_count = ((end_seconds - start_seconds) * SONG_LUA_UPDATE_REFERENCE_FPS)
+        .ceil()
+        .max(0.0) as usize;
+    for frame in 1..=frame_count {
+        let seconds =
+            (start_seconds + frame as f32 / SONG_LUA_UPDATE_REFERENCE_FPS).min(end_seconds);
         out.push(song_beat_at_elapsed_seconds(seconds, context));
     }
-    let boundaries = update_function_boundary_beats(lua, root)?;
-    out.extend(
-        boundaries
-            .beats
-            .into_iter()
-            .filter(|beat| beat.is_finite() && *beat > start && *beat < end),
-    );
-    // ITGmania reaches the frames immediately around a zero-ending callback.
-    // Capture both without inventing a property write after the callback stops.
-    out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
-        let reference_step = song_bps_at_beat(*end_beat, context) * song_music_rate(context)
-            / SONG_LUA_UPDATE_REFERENCE_FPS;
-        let beat = *end_beat - reference_step;
-        (beat.is_finite() && beat > start && beat < end).then_some(beat)
-    }));
-    out.extend(boundaries.zero_ends.iter().filter_map(|end_beat| {
-        let reference_step = song_bps_at_beat(*end_beat, context) * song_music_rate(context)
-            / SONG_LUA_UPDATE_REFERENCE_FPS;
-        let beat = *end_beat + reference_step;
-        (beat.is_finite() && beat > start && beat < end).then_some(beat)
-    }));
-    out.sort_by(f32::total_cmp);
-    out.dedup_by(|left, right| left.to_bits() == right.to_bits());
-    Ok(out)
+    out
 }
 
 #[must_use]
@@ -1266,6 +1163,9 @@ fn capture_update_overlay_samples<Kind>(
             debug_assert!(overlay_index < overlays.len());
             reset_indices.push(overlay_index);
             for (target, value) in final_values {
+                if scheduled.iter().any(|update| update.target == *target) {
+                    continue;
+                }
                 if let Some(state) = update_states.get_mut(overlay_index) {
                     set_overlay_state_update_value(state, *target, value);
                 }
@@ -1281,16 +1181,6 @@ fn capture_update_overlay_samples<Kind>(
                     .get(overlay_index)
                     .map(|state| overlay_state_update_value(state, *target))
                     .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
-                let update = update_states
-                    .get(overlay_index)
-                    .map(|state| overlay_state_update_value(state, *target));
-                let message = to_states
-                    .get(overlay_index)
-                    .map(|state| overlay_state_update_value(state, *target));
-                let next = match (update, message) {
-                    (Some(update), Some(message)) if update != message => message,
-                    _ => next.clone(),
-                };
                 push_update_overlay_value(
                     tracks,
                     track_indices,
@@ -1299,12 +1189,22 @@ fn capture_update_overlay_samples<Kind>(
                     beat,
                     current,
                     next_beat,
-                    next,
+                    next.clone(),
                 );
             }
             let message_seconds = song_elapsed_seconds_at(next_beat, context);
-            scheduled_samples.extend(scheduled.iter().map(|update| {
-                SongLuaScheduledOverlaySample {
+            let mut scheduled_values = std::collections::HashMap::new();
+            for update in scheduled {
+                let from = scheduled_values
+                    .get(&update.target)
+                    .cloned()
+                    .or_else(|| {
+                        update_states
+                            .get(overlay_index)
+                            .map(|state| overlay_state_update_value(state, update.target))
+                    })
+                    .unwrap_or(SongLuaOverlayUpdateValue::None);
+                scheduled_samples.push(SongLuaScheduledOverlaySample {
                     overlay_index,
                     target: update.target,
                     start_beat: song_beat_at_elapsed_seconds(
@@ -1315,27 +1215,31 @@ fn capture_update_overlay_samples<Kind>(
                         message_seconds + update.delay_seconds + update.duration_seconds,
                         context,
                     ),
+                    easing: update.easing.clone(),
+                    opt1: update.opt1,
+                    from,
                     value: update.value.clone(),
-                }
-            }));
+                });
+                scheduled_values.insert(update.target, update.value.clone());
+            }
             Ok(())
         },
     )?;
     let message_targets = track_indices
-        .keys()
-        .copied()
-        .filter(|target| !captured_targets.contains(target))
-        .filter_map(|(overlay_index, target)| {
+        .iter()
+        .filter(|(target, _)| !captured_targets.contains(target))
+        .filter_map(|(&(overlay_index, target), &track_index)| {
             let current = from_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, target))?;
-            let update = update_states
                 .get(overlay_index)
                 .map(|state| overlay_state_update_value(state, target))?;
             let message = to_states
                 .get(overlay_index)
                 .map(|state| overlay_state_update_value(state, target))?;
-            (update != message).then_some((overlay_index, target, current, message))
+            let tracked = tracks
+                .get(track_index)
+                .and_then(|track| track.samples.last())
+                .map(|sample| &sample.value)?;
+            (*tracked != message).then_some((overlay_index, target, current, message))
         })
         .collect::<Vec<_>>();
     // Runtime update tracks are applied after message commands. Keep an existing
@@ -1365,7 +1269,81 @@ struct SongLuaScheduledOverlaySample {
     target: SongLuaOverlayUpdateTarget,
     start_beat: f32,
     end_beat: f32,
+    easing: Option<String>,
+    opt1: Option<f32>,
+    from: SongLuaOverlayUpdateValue,
     value: SongLuaOverlayUpdateValue,
+}
+
+fn lerp_scheduled_value(
+    from: &SongLuaOverlayUpdateValue,
+    to: &SongLuaOverlayUpdateValue,
+    factor: f32,
+) -> SongLuaOverlayUpdateValue {
+    use SongLuaOverlayUpdateValue as Value;
+    let lerp = |from: f32, to: f32| (to - from).mul_add(factor, from);
+    match (from, to) {
+        (Value::F32(from), Value::F32(to)) => Value::F32(lerp(*from, *to)),
+        (Value::Vec2(from), Value::Vec2(to)) => {
+            Value::Vec2([lerp(from[0], to[0]), lerp(from[1], to[1])])
+        }
+        (Value::Vec3(from), Value::Vec3(to)) => Value::Vec3([
+            lerp(from[0], to[0]),
+            lerp(from[1], to[1]),
+            lerp(from[2], to[2]),
+        ]),
+        (Value::Vec4(from), Value::Vec4(to)) => Value::Vec4([
+            lerp(from[0], to[0]),
+            lerp(from[1], to[1]),
+            lerp(from[2], to[2]),
+            lerp(from[3], to[3]),
+        ]),
+        _ => {
+            if factor >= 1.0 {
+                to.clone()
+            } else {
+                from.clone()
+            }
+        }
+    }
+}
+
+fn apply_scheduled_overlay_states<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    states: &mut [SongLuaOverlayState],
+    scheduled: &[SongLuaScheduledOverlaySample],
+    beat: f32,
+) -> Result<(), String> {
+    for sample in scheduled {
+        if beat + f32::EPSILON < sample.start_beat {
+            continue;
+        }
+        let linear_factor = if sample.end_beat <= sample.start_beat + f32::EPSILON {
+            1.0
+        } else {
+            ((beat - sample.start_beat) / (sample.end_beat - sample.start_beat)).clamp(0.0, 1.0)
+        };
+        let factor = crate::overlay_command_ease_factor(
+            sample.easing.as_deref(),
+            linear_factor,
+            sample.opt1,
+        );
+        let Some(state) = states.get_mut(sample.overlay_index) else {
+            continue;
+        };
+        let value = lerp_scheduled_value(&sample.from, &sample.value, factor);
+        set_overlay_state_update_value(state, sample.target, &value);
+        if let Some(overlay) = overlays.get(sample.overlay_index) {
+            crate::lua_util::set_actor_overlay_update_getter_value(
+                lua,
+                &overlay.table,
+                sample.target,
+                &value,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 fn merge_completed_scheduled_overlay_samples(
@@ -1528,7 +1506,6 @@ pub fn compile_update_functions<Kind>(
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
-    call_update_functions_at(lua, root, start, 0.0, 0.0)?;
     restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
@@ -1558,14 +1535,14 @@ pub fn compile_update_functions<Kind>(
         &mut scheduled_overlay_samples,
     )?;
 
-    let mut replay = update_function_replay_beats(lua, root, context, start, end)?;
+    let mut replay = update_function_replay_beats(context, start, end);
     replay.extend(messages.iter().filter_map(|event| {
-        let beat = update_frame_beat(context, event.beat);
-        (beat.is_finite() && beat > start && beat <= end).then_some(beat)
+        (event.beat.is_finite() && event.beat > start && event.beat <= end).then_some(event.beat)
     }));
     replay.sort_by(f32::total_cmp);
     replay.dedup_by(|left, right| left.to_bits() == right.to_bits());
     let mut beat = start;
+    let mut scheduled_states = baseline_overlays.clone();
     let mut transform_masks = player_transform_masks(&player_tables)?;
     let mut frame_count = 0;
     for next_beat in replay.into_iter().skip(1) {
@@ -1581,6 +1558,13 @@ pub fn compile_update_functions<Kind>(
             message_replay.advance(lua, context, overlays, &mut replay_overlays, next_beat)?;
         message_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
+        apply_scheduled_overlay_states(
+            lua,
+            overlays,
+            &mut scheduled_states,
+            &scheduled_overlay_samples,
+            next_beat,
+        )?;
         call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
@@ -1742,7 +1726,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
         let mut started = Vec::new();
         while let Some(&event_index) = self.order.get(self.next) {
             let event = &self.messages[event_index];
-            let event_beat = update_frame_beat(context, event.beat);
+            let event_beat = event.beat;
             if event_beat > beat + f32::EPSILON {
                 break;
             }

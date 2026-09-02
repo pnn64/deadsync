@@ -2533,6 +2533,8 @@ pub struct SongLuaOverlayState {
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
+    /// Vibration contributed by composed ancestor ActorFrames.
+    pub inherited_vibrate: [f32; 3],
     pub effect_clock: EffectClock,
     pub effect_mode: EffectMode,
     pub effect_color1: [f32; 4],
@@ -2617,6 +2619,7 @@ impl Default for SongLuaOverlayState {
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
+            inherited_vibrate: [0.0, 0.0, 0.0],
             effect_clock: EffectClock::Time,
             effect_mode: EffectMode::None,
             effect_color1: [1.0, 1.0, 1.0, 1.0],
@@ -6922,9 +6925,9 @@ return Def.ActorFrame{
         )
         .unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "3:3");
+        assert_eq!(compiled.messages[0].message, "0:3");
         assert_eq!(compiled.overlays.len(), 1);
-        assert_eq!(compiled.overlays[0].initial_state.x, 3.0);
+        assert_eq!(compiled.overlays[0].initial_state.x, 0.0);
         assert_eq!(compiled.overlays[0].initial_state.y, 3.0);
     }
 
@@ -7117,7 +7120,7 @@ return Def.ActorFrame{
             sample.beat >= 1.0 && sample.value == SongLuaOverlayUpdateValue::Bool(true)
         }));
         assert!(visible.samples.iter().any(|sample| {
-            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
+            (sample.beat - 1.5).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Bool(false)
         }));
         let diffuse = compiled
@@ -7126,11 +7129,11 @@ return Def.ActorFrame{
             .find(|track| track.target == SongLuaOverlayUpdateTarget::Diffuse)
             .expect("the flash should have a sampled diffuse track");
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - (1.25 + 1.0 / 60.0)).abs() <= 1.0e-4
+            (sample.beat - 1.25).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 1.0])
         }));
         assert!(diffuse.samples.iter().any(|sample| {
-            (sample.beat - (1.5 + 1.0 / 60.0)).abs() <= 1.0e-4
+            (sample.beat - 1.5).abs() <= 1.0e-4
                 && sample.value == SongLuaOverlayUpdateValue::Vec4([1.0, 1.0, 1.0, 0.0])
         }));
     }
@@ -7457,6 +7460,210 @@ return Def.ActorFrame{
             matches!(midpoint.value, SongLuaOverlayUpdateValue::F32(value) if (value - 50.0).abs() <= 5.1),
             "unexpected midpoint sample: {midpoint:?}"
         );
+    }
+
+    #[test]
+    fn compile_song_lua_updates_replay_tweens_queued_during_update() {
+        let song_dir = test_dir("update-queued-tween-state");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local helper
+local fired = false
+
+return Def.ActorFrame{
+    Def.Quad{
+        InitCommand=function(self) helper = self self:x(0) end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if not fired and GAMESTATE:GetSongBeat() >= 1 then
+                    helper:linear(0.2):x(90):sleep(1.4):linear(0.2):x(0)
+                    fired = true
+                end
+                SCREENMAN:GetTopScreen():GetChild("PlayerP1"):rotationx(helper:GetX())
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Queued Tween State");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let max_rotation = compiled
+            .eases
+            .iter()
+            .filter(|ease| {
+                ease.player == Some(1) && ease.target == SongLuaEaseTarget::PlayerRotationX
+            })
+            .flat_map(|ease| [ease.from, ease.to])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            max_rotation >= 89.0,
+            "queued tween plateau was not replayed: {max_rotation}"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_update_tween_keeps_plateau_until_delayed_return() {
+        let song_dir = test_dir("update-tween-plateau");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local helper
+local fired = false
+
+return Def.ActorFrame{
+    Def.Quad{InitCommand=function(self) helper = self self:x(0) end},
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                if not fired and beat >= 79.95 then
+                    helper:linear(60/160):x(40):sleep(45/160):decelerate(120/160):x(0)
+                    fired = true
+                end
+                SCREENMAN:GetTopScreen():GetChild("PlayerP1"):rotationz(
+                    helper:GetX() * math.sin(beat * math.pi)
+                )
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Tween Plateau");
+        context.song_display_bpms = [160.0, 160.0];
+        context.music_length_seconds = 32.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let max_rotation = compiled
+            .eases
+            .iter()
+            .filter(|ease| {
+                ease.player == Some(1) && ease.target == SongLuaEaseTarget::PlayerRotationZ
+            })
+            .flat_map(|ease| [ease.from.abs(), ease.to.abs()])
+            .fold(0.0_f32, f32::max);
+        assert!(
+            max_rotation >= 39.5,
+            "delayed return lost its full-amplitude plateau: {max_rotation}"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_update_tween_replays_spring_curve() {
+        let song_dir = test_dir("update-tween-spring");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local helper
+local fired = false
+
+return Def.ActorFrame{
+    Def.Quad{InitCommand=function(self) helper = self self:x(0) end},
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                if not fired and GAMESTATE:GetSongBeat() >= 1 then
+                    helper:spring(0.5):x(1)
+                    fired = true
+                end
+                SCREENMAN:GetTopScreen():GetChild("PlayerP1"):zoomy(helper:GetX())
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Tween Spring");
+        context.song_display_bpms = [120.0, 120.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let max_zoom = compiled
+            .eases
+            .iter()
+            .filter(|ease| ease.player == Some(1) && ease.target == SongLuaEaseTarget::PlayerZoomY)
+            .flat_map(|ease| [ease.from, ease.to])
+            .fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            max_zoom > 1.05,
+            "queued spring tween lost its overshoot: {max_zoom}"
+        );
+    }
+
+    #[test]
+    fn compile_song_lua_action_boundaries_do_not_add_update_ticks() {
+        let song_dir = test_dir("update-action-frame-clock");
+        let script = |actions: &str| {
+            r#"
+mod_actions = { __ACTIONS__ }
+local target
+local updates = 0
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self end,
+    },
+    Def.ActorFrame{
+        InitCommand=function(self)
+            self:SetUpdateFunction(function()
+                updates = updates + 1
+                target:x(updates)
+            end)
+        end,
+    },
+}
+"#
+            .replace("__ACTIONS__", actions)
+        };
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Update Action Frame Clock");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 1.0;
+        let compile_final_x = |name: &str, actions: &str| {
+            let entry = song_dir.join(name);
+            fs::write(&entry, script(actions)).unwrap();
+            let compiled = test_compile_song_lua(&entry, &context).unwrap();
+            let target = compiled
+                .overlays
+                .iter()
+                .position(|overlay| overlay.name.as_deref() == Some("Target"))
+                .unwrap();
+            let track = compiled
+                .overlay_updates
+                .iter()
+                .find(|track| {
+                    track.overlay_index == target && track.target == SongLuaOverlayUpdateTarget::X
+                })
+                .unwrap();
+            track
+                .samples
+                .last()
+                .and_then(|sample| match sample.value {
+                    SongLuaOverlayUpdateValue::F32(value) => Some(value),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let baseline = compile_final_x("baseline.lua", "");
+        let with_actions = compile_final_x(
+            "actions.lua",
+            "{0.25, function() end}, {0.50, function() end}, {0.75, function() end}",
+        );
+        assert_eq!(with_actions, baseline);
+        assert_eq!(baseline, 61.0);
     }
 
     #[test]
@@ -8256,11 +8463,8 @@ return Def.ActorFrame{
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Recursive Update Song"),
-        )
-        .unwrap();
+        let context = SongLuaCompileContext::new(&song_dir, "Recursive Update Song");
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(compiled.messages[0].beat, 1.0);
         assert_eq!(compiled.messages[0].message, "LoopSafe");
@@ -8319,6 +8523,28 @@ return Def.ActorFrame{
                 _ => None,
             })
             .fold(f32::NEG_INFINITY, f32::max);
+        let x_at_tenth = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == ball_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .and_then(|track| {
+                track
+                    .samples
+                    .iter()
+                    .rev()
+                    .find(|sample| sample.beat <= 0.100_01)
+            })
+            .and_then(|sample| match sample.value {
+                SongLuaOverlayUpdateValue::F32(value) => Some(value),
+                _ => None,
+            })
+            .expect("the recurring update should emit an x sample by 100 ms");
+        assert_eq!(
+            x_at_tenth, 6.0,
+            "the immediate update plus five 20 ms updates must run by 100 ms"
+        );
         assert!(
             max_x >= 40.0,
             "expected the 20 ms loop to run at least 40 times, got {max_x}"
@@ -17047,6 +17273,223 @@ return Def.ActorFrame{
         let vibrate = compiled.overlays[6].initial_state;
         assert!(vibrate.vibrate);
         assert_eq!(vibrate.effect_magnitude, [10.0, 10.0, 10.0]);
+    }
+
+    #[test]
+    fn compile_song_lua_effect_controls_are_immediate_not_tweened() {
+        let song_dir = test_dir("overlay-immediate-effects");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        TriggerMessageCommand=function(self)
+            self:linear(3):x(100)
+            self:vibrate():effectmagnitude(2, 3, 4)
+        end,
+        StopMessageCommand=function(self)
+            self:stopeffect()
+        end,
+        DelayedMessageCommand=function(self)
+            self:sleep(0.5):queuecommand("Shake")
+        end,
+        ShakeCommand=function(self)
+            self:vibrate():effectmagnitude(10, 10, 0)
+            self:sleep(0.3):queuecommand("Still")
+        end,
+        StillCommand=function(self)
+            self:stopeffect()
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Immediate Overlay Effects"),
+        )
+        .unwrap();
+        let actor = &compiled.overlays[0];
+        let trigger = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Trigger")
+            .unwrap();
+        assert_eq!(trigger.blocks.len(), 2);
+        assert_eq!(trigger.blocks[0].start, 0.0);
+        assert_eq!(trigger.blocks[0].duration, 0.0);
+        assert_eq!(trigger.blocks[0].delta.vibrate, Some(true));
+        assert_eq!(
+            trigger.blocks[0].delta.effect_magnitude,
+            Some([2.0, 3.0, 4.0])
+        );
+        assert_eq!(trigger.blocks[1].start, 0.0);
+        assert_eq!(trigger.blocks[1].duration, 3.0);
+        assert_eq!(trigger.blocks[1].delta.x, Some(100.0));
+        assert_eq!(trigger.blocks[1].delta.vibrate, None);
+
+        let stop = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Stop")
+            .unwrap();
+        assert_eq!(stop.blocks[0].delta.vibrate, Some(false));
+        assert_eq!(stop.blocks[0].delta.effect_mode, Some(EffectMode::None));
+        assert_eq!(stop.blocks[0].delta.effect_magnitude, None);
+
+        let delayed = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == "Delayed")
+            .unwrap();
+        assert_eq!(delayed.blocks.len(), 2);
+        assert_eq!(
+            (delayed.blocks[0].start, delayed.blocks[0].duration),
+            (0.5, 0.0)
+        );
+        assert_eq!(delayed.blocks[0].delta.vibrate, Some(true));
+        assert_eq!(
+            delayed.blocks[0].delta.effect_magnitude,
+            Some([10.0, 10.0, 0.0])
+        );
+        assert_eq!(
+            (delayed.blocks[1].start, delayed.blocks[1].duration),
+            (0.8, 0.0)
+        );
+        assert_eq!(delayed.blocks[1].delta.vibrate, Some(false));
+    }
+
+    #[test]
+    fn compile_song_lua_captures_queued_parent_vibration() {
+        let song_dir = test_dir("queued-parent-vibration");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mod_actions={{1, "CalaFire", true}}
+local fired = false
+return Def.ActorFrame{
+    OnCommand=function(self)
+        self:SetUpdateFunction(function()
+            if not fired and GAMESTATE:GetSongBeat() >= 1 then
+                fired = true
+                MESSAGEMAN:Broadcast("CalaFire")
+            end
+        end)
+    end,
+    Def.ActorFrame{
+        Name="Cala",
+        CalaFireMessageCommand=cmd(playcommand,"Fire";sleep,0.5;queuecommand,"Main"),
+        MainCommand=cmd(vibrate;effectmagnitude,10,10,0;sleep,0.3;queuecommand,"Done"),
+        DoneCommand=cmd(stopeffect;queuecommand,"FinishFire"),
+        Def.Sprite{
+            Name="Body",
+            FireCommand=cmd(visible,false),
+            FinishFireCommand=cmd(visible,true),
+        },
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Queued Parent Vibration");
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Cala"))
+            .unwrap();
+        let fire = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == "CalaFire")
+            .unwrap();
+        assert!(fire.blocks.iter().any(|block| {
+            (block.start - 0.5).abs() <= f32::EPSILON
+                && block.delta.vibrate == Some(true)
+                && block.delta.effect_magnitude == Some([10.0, 10.0, 0.0])
+        }));
+        assert!(fire.blocks.iter().any(|block| {
+            (block.start - 0.8).abs() <= f32::EPSILON
+                && block.delta.vibrate == Some(false)
+                && block.delta.effect_mode == Some(EffectMode::None)
+        }));
+        assert!(!compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == 0
+                && matches!(
+                    track.target,
+                    SongLuaOverlayUpdateTarget::Vibrate
+                        | SongLuaOverlayUpdateTarget::EffectMagnitude
+                )
+        }));
+    }
+
+    #[test]
+    fn compile_song_lua_keeps_stateful_cross_actor_broadcast_updates() {
+        let song_dir = test_dir("stateful-broadcast-update");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+shots = 0
+next_fire = 1
+local target
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self self:x(0) end,
+    },
+    Def.ActorFrame{
+        FireMessageCommand=function(self)
+            shots = shots + 1
+            target:x(shots * 10)
+        end,
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                while next_fire <= 2 and beat >= next_fire do
+                    MESSAGEMAN:Broadcast("Fire")
+                    next_fire = next_fire + 1
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Stateful Broadcast Update");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 3.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let target = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Target"))
+            .unwrap();
+        let x = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == target && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .expect("stateful cross-actor broadcasts must produce an update track");
+        let values = x
+            .samples
+            .iter()
+            .filter_map(|sample| match sample.value {
+                SongLuaOverlayUpdateValue::F32(value) => Some(value),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert!(values.contains(&10.0));
+        assert!(values.contains(&20.0));
     }
 
     #[test]

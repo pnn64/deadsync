@@ -7975,6 +7975,14 @@ fn song_lua_overlay_compose_state(
     child.visible = parent.visible && child.visible;
     child.mask_source |= parent.mask_source;
     child.mask_dest |= parent.mask_dest;
+    for (axis, inherited) in child.inherited_vibrate.iter_mut().enumerate() {
+        *inherited += parent.inherited_vibrate[axis]
+            + if parent.vibrate {
+                parent.effect_magnitude[axis]
+            } else {
+                0.0
+            };
+    }
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
     if let Some([left, top, right, bottom]) = child.stretch_rect
@@ -13483,7 +13491,7 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
 fn song_lua_apply_overlay_effect(
     effect: EffectState,
     rainbow: bool,
-    vibrate: bool,
+    vibrate_magnitude: [f32; 3],
     effect_time: f32,
     effect_beat: f32,
     tint: &mut [f32; 4],
@@ -13492,7 +13500,10 @@ fn song_lua_apply_overlay_effect(
     scale: &mut [f32; 3],
     rot_deg: &mut [f32; 3],
 ) {
-    if vibrate {
+    if vibrate_magnitude
+        .iter()
+        .any(|value| value.abs() > f32::EPSILON)
+    {
         // ITGmania chooses a fresh random offset once per rendered frame. Use
         // a stable 60 Hz frame clock so high-refresh rendering keeps the same
         // rapid shake cadence instead of becoming a several-hundred-Hz blur.
@@ -13505,7 +13516,7 @@ fn song_lua_apply_overlay_effect(
             hash = hash.wrapping_mul(0x846c_a68b);
             hash ^= hash >> 16;
             let jitter = (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0);
-            *out = effect.magnitude[axis].mul_add(jitter, *out);
+            *out = vibrate_magnitude[axis].mul_add(jitter, *out);
         }
     }
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
@@ -13595,6 +13606,20 @@ fn song_lua_apply_overlay_effect(
     scale[0] = scale[0].max(0.0);
     scale[1] = scale[1].max(0.0);
     scale[2] = scale[2].max(0.0);
+}
+
+#[inline(always)]
+fn song_lua_overlay_vibrate_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
+    let own = if state.vibrate {
+        state.effect_magnitude
+    } else {
+        [0.0; 3]
+    };
+    [
+        own[0] + state.inherited_vibrate[0],
+        own[1] + state.inherited_vibrate[1],
+        own[2] + state.inherited_vibrate[2],
+    ]
 }
 
 fn song_lua_rainbow_color(time: f32, period: f32, offset: f32) -> [f32; 3] {
@@ -15482,7 +15507,7 @@ fn build_song_lua_aft_sprite_actor(
     song_lua_apply_overlay_effect(
         song_lua_overlay_effect_state(state),
         state.rainbow,
-        state.vibrate,
+        song_lua_overlay_vibrate_magnitude(state),
         effect_time,
         effect_beat,
         &mut tint,
@@ -15596,7 +15621,7 @@ fn append_song_lua_multi_actor_overlay(
     song_lua_apply_overlay_effect(
         effect,
         state.rainbow,
-        state.vibrate,
+        song_lua_overlay_vibrate_magnitude(state),
         effect_time,
         effect_beat,
         &mut tint,
@@ -15754,7 +15779,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -15818,7 +15843,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -15917,7 +15942,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -15996,7 +16021,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
-                state.vibrate,
+                song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
                 &mut color,
@@ -16083,7 +16108,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
-                state.vibrate,
+                song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -16238,7 +16263,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
-                state.vibrate,
+                song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -16287,7 +16312,7 @@ fn build_song_lua_overlay_actor_with_scratch(
             song_lua_apply_overlay_effect(
                 effect,
                 state.rainbow,
-                state.vibrate,
+                song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
                 &mut tint,
@@ -16392,7 +16417,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -16456,7 +16481,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut tint,
@@ -16556,7 +16581,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_apply_overlay_effect(
                     effect,
                     state.rainbow,
-                    state.vibrate,
+                    song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
                     &mut effect_tint,
@@ -24493,6 +24518,34 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_overlay_inherits_actorframe_vibration() {
+        let parent = SongLuaOverlayState {
+            vibrate: true,
+            effect_magnitude: [20.0, 12.0, 4.0],
+            inherited_vibrate: [3.0, 2.0, 1.0],
+            ..SongLuaOverlayState::default()
+        };
+        let child = SongLuaOverlayState {
+            vibrate: true,
+            effect_magnitude: [5.0, 6.0, 7.0],
+            ..SongLuaOverlayState::default()
+        };
+        let composed = song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::ActorFrame,
+            parent,
+            child,
+            854.0,
+            480.0,
+        );
+
+        assert_eq!(composed.inherited_vibrate, [23.0, 14.0, 5.0]);
+        assert_eq!(
+            song_lua_overlay_vibrate_magnitude(composed),
+            [28.0, 20.0, 12.0]
+        );
+    }
+
+    #[test]
     fn song_lua_overlay_nested_center_survives_parent_zoom_and_rotation() {
         let outer = SongLuaOverlayState {
             x: 427.0,
@@ -28079,7 +28132,7 @@ mod tests {
         song_lua_apply_overlay_effect(
             effect,
             false,
-            false,
+            [0.0; 3],
             0.5,
             0.0,
             &mut tint,
@@ -28094,7 +28147,7 @@ mod tests {
         song_lua_apply_overlay_effect(
             effect,
             false,
-            true,
+            effect.magnitude,
             0.5,
             0.0,
             &mut tint,
@@ -28112,7 +28165,7 @@ mod tests {
         song_lua_apply_overlay_effect(
             effect,
             false,
-            true,
+            effect.magnitude,
             0.51,
             0.0,
             &mut tint,
@@ -28127,7 +28180,7 @@ mod tests {
         song_lua_apply_overlay_effect(
             effect,
             false,
-            true,
+            effect.magnitude,
             0.52,
             0.0,
             &mut tint,

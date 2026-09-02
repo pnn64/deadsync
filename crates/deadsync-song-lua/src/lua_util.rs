@@ -97,6 +97,8 @@ struct SongLuaActionCaptureActive;
 pub struct SongLuaScheduledOverlayUpdate {
     pub delay_seconds: f32,
     pub duration_seconds: f32,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
     pub target: SongLuaOverlayUpdateTarget,
     pub value: SongLuaOverlayUpdateValue,
 }
@@ -155,6 +157,8 @@ impl SongLuaOverlayUpdateCapture {
         actor: &Table,
         delay_seconds: f32,
         duration_seconds: f32,
+        easing: Option<String>,
+        opt1: Option<f32>,
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
@@ -165,6 +169,8 @@ impl SongLuaOverlayUpdateCapture {
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             delay_seconds,
             duration_seconds,
+            easing,
+            opt1,
             target,
             value,
         });
@@ -305,7 +311,7 @@ fn record_overlay_update_capture(
     let Some(target) = capture_target_for_key(key) else {
         return false;
     };
-    let active_broadcast = {
+    let direct_message_actor = {
         let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
             return false;
         };
@@ -315,15 +321,22 @@ fn record_overlay_update_capture(
         {
             return false;
         }
-        capture.active_broadcast.clone()
+        capture.active_broadcast.as_deref().is_some_and(|message| {
+            actor
+                .get::<Option<Function>>(format!("{message}MessageCommand"))
+                .ok()
+                .flatten()
+                .is_some()
+        })
     };
-    let direct_message_actor = active_broadcast.as_deref().is_some_and(|message| {
-        actor
-            .get::<Option<Function>>(format!("{message}MessageCommand"))
-            .ok()
-            .flatten()
-            .is_some()
-    });
+    // The receiving actor's own command is compiled as a timed message block.
+    // Mutations to other actors must remain in the sequential capture because
+    // stateful commands can select a different target on every broadcast.
+    if direct_message_actor {
+        return lua
+            .app_data_mut::<SongLuaOverlayUpdateCapture>()
+            .is_some_and(|mut capture| capture.touch(actor).is_some());
+    }
     let cursor = actor
         .get::<Option<f32>>("__songlua_capture_cursor")
         .ok()
@@ -336,16 +349,56 @@ fn record_overlay_update_capture(
         .flatten()
         .unwrap_or(0.0)
         .max(0.0);
+    let easing = actor
+        .get::<Option<String>>("__songlua_capture_easing")
+        .ok()
+        .flatten();
+    let opt1 = actor
+        .get::<Option<f32>>("__songlua_capture_opt1")
+        .ok()
+        .flatten();
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
-            if direct_message_actor {
-                capture.touch(actor).is_some()
-            } else if cursor > f32::EPSILON || duration > f32::EPSILON {
-                capture.record_scheduled(actor, cursor, duration, target, value)
+            if cursor > f32::EPSILON || duration > f32::EPSILON {
+                capture.record_scheduled(actor, cursor, duration, easing, opt1, target, value)
             } else {
                 capture.record(actor, target, value)
             }
         })
+}
+
+fn record_overlay_update_capture_immediate(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value: SongLuaOverlayUpdateValue,
+) -> bool {
+    let Some(target) = capture_target_for_key(key) else {
+        return false;
+    };
+    let direct_message_actor = {
+        let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
+            return false;
+        };
+        if !capture
+            .actor_indices
+            .contains_key(&(actor.to_pointer() as usize))
+        {
+            return false;
+        }
+        capture.active_broadcast.as_deref().is_some_and(|message| {
+            actor
+                .get::<Option<Function>>(format!("{message}MessageCommand"))
+                .ok()
+                .flatten()
+                .is_some()
+        })
+    };
+    if direct_message_actor {
+        return true;
+    }
+    lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        .is_some_and(|mut capture| capture.record(actor, target, value))
 }
 
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
@@ -2042,7 +2095,19 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             queue.raw_set(index, value)?;
         }
         queue.raw_set(len, Value::Nil)?;
-        run_actor_message_with_params(lua, actor, &format!("{name}Command"), None)?;
+        // Effect setters bypass the tween queue, but a queued command itself
+        // begins at the current queue cursor. Preserve that command-local now.
+        let immediate_start_key = "__songlua_capture_immediate_start";
+        let previous_immediate_start = actor.get::<Value>(immediate_start_key)?;
+        actor.set(
+            immediate_start_key,
+            actor
+                .get::<Option<f32>>("__songlua_capture_cursor")?
+                .unwrap_or(0.0),
+        )?;
+        let result = run_actor_message_with_params(lua, actor, &format!("{name}Command"), None);
+        actor.set(immediate_start_key, previous_immediate_start)?;
+        result?;
     }
     Ok(())
 }
@@ -2371,6 +2436,160 @@ pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Tab
     block.set("__songlua_has_changes", false)?;
     actor.set("__songlua_capture_block", block.clone())?;
     Ok(block)
+}
+
+fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    record_probe_actor_call(lua, actor)?;
+    prepare_capture_scope_actor(lua, actor)?;
+    let start = actor
+        .get::<Option<f32>>("__songlua_capture_immediate_start")?
+        .unwrap_or(0.0);
+    if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_immediate_block")?
+        && (block.get::<f32>("start")? - start).abs() <= f32::EPSILON
+    {
+        return Ok(block);
+    }
+    let block = lua.create_table()?;
+    block.set("start", start)?;
+    block.set("duration", 0.0_f32)?;
+    block.set("easing", Value::Nil)?;
+    block.set("opt1", Value::Nil)?;
+    block.set("opt2", Value::Nil)?;
+    block.set("__songlua_has_changes", false)?;
+    let blocks: Table = actor.get("__songlua_capture_blocks")?;
+    // A direct effect setter must be evaluated before an in-flight tween that
+    // starts at the same time or overlay_state_after_blocks would return first.
+    let insert_at = (1..=blocks.raw_len())
+        .find(|&index| {
+            blocks
+                .raw_get::<Table>(index)
+                .and_then(|existing| existing.get::<f32>("start"))
+                .is_ok_and(|existing_start| existing_start >= start)
+        })
+        .unwrap_or_else(|| blocks.raw_len() + 1);
+    for index in (insert_at..=blocks.raw_len()).rev() {
+        let value = blocks.raw_get::<Value>(index)?;
+        blocks.raw_set(index + 1, value)?;
+    }
+    blocks.raw_set(insert_at, block.clone())?;
+    actor.set("__songlua_capture_immediate_block", block.clone())?;
+    Ok(block)
+}
+
+fn capture_immediate_bool(lua: &Lua, actor: &Table, key: &str, value: bool) -> mlua::Result<()> {
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::Bool(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    set_actor_capture_state(actor, key, value)
+}
+
+fn capture_immediate_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::F32(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    set_actor_capture_state(actor, key, value)
+}
+
+fn capture_immediate_vec3(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value: [f32; 3],
+) -> mlua::Result<()> {
+    let table = lua.create_table()?;
+    for (index, component) in value.into_iter().enumerate() {
+        table.raw_set(index + 1, component)?;
+    }
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::Vec3(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, table.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    actor.set(format!("__songlua_state_{key}"), table)
+}
+
+fn capture_immediate_vec4(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value: [f32; 4],
+) -> mlua::Result<()> {
+    let table = lua.create_table()?;
+    for (index, component) in value.into_iter().enumerate() {
+        table.raw_set(index + 1, component)?;
+    }
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::Vec4(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, table.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    actor.set(format!("__songlua_state_{key}"), table)
+}
+
+fn capture_immediate_vec5(
+    lua: &Lua,
+    actor: &Table,
+    key: &str,
+    value: [f32; 5],
+) -> mlua::Result<()> {
+    let table = lua.create_table()?;
+    for (index, component) in value.into_iter().enumerate() {
+        table.raw_set(index + 1, component)?;
+    }
+    if !record_overlay_update_capture_immediate(
+        lua,
+        actor,
+        key,
+        SongLuaOverlayUpdateValue::Vec5(value),
+    ) {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, table.clone())?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    actor.set(format!("__songlua_state_{key}"), table)
+}
+
+fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) -> mlua::Result<()> {
+    let update = capture_target_for_key(key).and_then(|target| match target {
+        SongLuaOverlayUpdateTarget::EffectClock => {
+            parse_overlay_effect_clock(value).map(SongLuaOverlayUpdateValue::EffectClock)
+        }
+        SongLuaOverlayUpdateTarget::EffectMode => {
+            parse_overlay_effect_mode(value).map(SongLuaOverlayUpdateValue::EffectMode)
+        }
+        _ => None,
+    });
+    if !update.is_some_and(|value| record_overlay_update_capture_immediate(lua, actor, key, value))
+    {
+        let block = actor_immediate_capture_block(lua, actor)?;
+        block.set(key, value)?;
+        block.set("__songlua_has_changes", true)?;
+    }
+    actor.set(format!("__songlua_state_{key}"), value)
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
@@ -2799,7 +3018,7 @@ pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlu
 }
 
 pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Result<()> {
-    capture_block_set_string(lua, actor, "effect_mode", mode)
+    capture_immediate_string(lua, actor, "effect_mode", mode)
 }
 
 pub fn set_actor_effect_defaults(
@@ -2813,16 +3032,16 @@ pub fn set_actor_effect_defaults(
 ) -> mlua::Result<()> {
     set_actor_effect_mode(lua, actor, mode)?;
     if let Some(value) = period {
-        capture_block_set_f32(lua, actor, "effect_period", value)?;
+        capture_immediate_f32(lua, actor, "effect_period", value)?;
     }
     if let Some(value) = magnitude {
-        capture_block_set_vec3(lua, actor, "effect_magnitude", value)?;
+        capture_immediate_vec3(lua, actor, "effect_magnitude", value)?;
     }
     if let Some(value) = color1 {
-        capture_block_set_vec4(lua, actor, "effect_color1", value)?;
+        capture_immediate_vec4(lua, actor, "effect_color1", value)?;
     }
     if let Some(value) = color2 {
-        capture_block_set_vec4(lua, actor, "effect_color2", value)?;
+        capture_immediate_vec4(lua, actor, "effect_color2", value)?;
     }
     Ok(())
 }
@@ -3651,6 +3870,10 @@ pub fn make_actor_tween_method(
         actor.set("__songlua_capture_easing", easing)?;
         actor.set("__songlua_capture_opt1", Value::Nil)?;
         actor.set("__songlua_capture_opt2", Value::Nil)?;
+        // BeginTweening queues a state immediately.  Materialize even an empty
+        // capture block so the following tween/sleep advances past this state
+        // when update-function writes are diverted into the runtime sampler.
+        actor_current_capture_block(lua, &actor)?;
         Ok(actor.clone())
     })
 }
@@ -5387,7 +5610,7 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                capture_block_set_vec3(
+                capture_immediate_vec3(
                     lua,
                     &actor,
                     "effect_magnitude",
@@ -5935,7 +6158,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 let color = read_color_args(&args).unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                capture_block_set_vec4(lua, &actor, "effect_color1", color)?;
+                capture_immediate_vec4(lua, &actor, "effect_color1", color)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5946,7 +6169,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 let color = read_color_args(&args).unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                capture_block_set_vec4(lua, &actor, "effect_color2", color)?;
+                capture_immediate_vec4(lua, &actor, "effect_color2", color)?;
                 Ok(actor.clone())
             }
         })?,
@@ -5957,7 +6180,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 if let Some(value) = value.and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "effect_period", value)?;
+                    capture_immediate_f32(lua, &actor, "effect_period", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -5969,7 +6192,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                 if let Some(value) = value.and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "effect_offset", value)?;
+                    capture_immediate_f32(lua, &actor, "effect_offset", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -5999,8 +6222,8 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 };
                 let total = timing.iter().sum::<f32>();
                 if total > 0.0 {
-                    capture_block_set_vec5(lua, &actor, "effect_timing", timing)?;
-                    capture_block_set_f32(lua, &actor, "effect_period", total)?;
+                    capture_immediate_vec5(lua, &actor, "effect_timing", timing)?;
+                    capture_immediate_f32(lua, &actor, "effect_period", total)?;
                 }
                 Ok(actor.clone())
             }
@@ -6017,7 +6240,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 let Some(clock) = parse_overlay_effect_clock(raw.as_str()) else {
                     return Ok(actor.clone());
                 };
-                capture_block_set_string(lua, &actor, "effect_clock", effect_clock_label(clock))?;
+                capture_immediate_string(lua, &actor, "effect_clock", effect_clock_label(clock))?;
                 Ok(actor.clone())
             }
         })?,
@@ -6027,8 +6250,8 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         lua.create_function({
             let actor = actor.clone();
             move |lua, _self: Option<Value>| {
-                capture_block_set_bool(lua, &actor, "vibrate", true)?;
-                capture_block_set_vec3(lua, &actor, "effect_magnitude", [10.0, 10.0, 10.0])?;
+                capture_immediate_bool(lua, &actor, "vibrate", true)?;
+                capture_immediate_vec3(lua, &actor, "effect_magnitude", [10.0, 10.0, 10.0])?;
                 Ok(actor.clone())
             }
         })?,
@@ -6038,10 +6261,9 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         lua.create_function({
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
-                capture_block_set_bool(lua, &actor, "vibrate", false)?;
-                capture_block_set_bool(lua, &actor, "rainbow", false)?;
+                capture_immediate_bool(lua, &actor, "vibrate", false)?;
+                capture_immediate_bool(lua, &actor, "rainbow", false)?;
                 set_actor_effect_mode(lua, &actor, "none")?;
-                capture_block_set_vec3(lua, &actor, "effect_magnitude", [0.0, 0.0, 0.0])?;
                 Ok(actor.clone())
             }
         })?,
@@ -7480,11 +7702,10 @@ fn run_recurring_update(
     delta_seconds: f64,
     enabled: bool,
 ) -> mlua::Result<()> {
-    if !enabled
-        || !actor
-            .get::<Option<bool>>("__songlua_recurring_update_command")?
-            .unwrap_or(false)
-    {
+    let recurring = actor
+        .get::<Option<bool>>("__songlua_recurring_update_command")?
+        .unwrap_or(false);
+    if !enabled || !recurring {
         return Ok(());
     }
     let interval = actor
@@ -7495,7 +7716,13 @@ fn run_recurring_update(
             .get::<Option<f64>>("__songlua_recurring_update_elapsed")?
             .unwrap_or(0.0)
             + delta_seconds.max(0.0);
-        let runs = ((elapsed + f64::EPSILON) / interval).floor().min(64.0) as usize;
+        // Replay deltas are derived from f32 song beats. At long song times a
+        // mathematically exact 20 ms boundary can arrive a few microseconds
+        // short, which otherwise skips this run until the following frame.
+        const TIMER_EPSILON_SECONDS: f64 = 1.0e-5;
+        let runs = ((elapsed + TIMER_EPSILON_SECONDS) / interval)
+            .floor()
+            .min(64.0) as usize;
         actor.set(
             "__songlua_recurring_update_elapsed",
             (elapsed - interval * runs as f64).max(0.0),
@@ -10571,6 +10798,7 @@ pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set("__songlua_capture_opt2", Value::Nil)?;
     actor.set("__songlua_capture_blocks", lua.create_table()?)?;
     actor.set("__songlua_capture_block", Value::Nil)?;
+    actor.set("__songlua_capture_immediate_block", Value::Nil)?;
     Ok(())
 }
 
@@ -11537,6 +11765,66 @@ pub fn set_actor_overlay_getter_state(
         );
     }
     Ok(())
+}
+
+pub fn set_actor_overlay_update_getter_value(
+    lua: &Lua,
+    actor: &Table,
+    target: SongLuaOverlayUpdateTarget,
+    value: &SongLuaOverlayUpdateValue,
+) -> Result<(), String> {
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as UpdateValue;
+
+    let key = match target {
+        Target::X => "x",
+        Target::Y => "y",
+        Target::Z => "z",
+        Target::Zoom => "zoom",
+        Target::ZoomX => "zoom_x",
+        Target::ZoomY => "zoom_y",
+        Target::ZoomZ => "zoom_z",
+        Target::BaseZoom => "basezoom",
+        Target::BaseZoomX => "basezoom_x",
+        Target::BaseZoomY => "basezoom_y",
+        Target::BaseZoomZ => "basezoom_z",
+        Target::RotationX => "rot_x_deg",
+        Target::RotationY => "rot_y_deg",
+        Target::RotationZ => "rot_z_deg",
+        Target::SkewX => "skew_x",
+        Target::SkewY => "skew_y",
+        Target::CropLeft => "cropleft",
+        Target::CropRight => "cropright",
+        Target::CropTop => "croptop",
+        Target::CropBottom => "cropbottom",
+        Target::FadeLeft => "fadeleft",
+        Target::FadeRight => "faderight",
+        Target::FadeTop => "fadetop",
+        Target::FadeBottom => "fadebottom",
+        Target::EffectPeriod => "effect_period",
+        Target::EffectOffset => "effect_offset",
+        _ => "",
+    };
+    match value {
+        UpdateValue::F32(value) if !key.is_empty() => {
+            set_actor_capture_state(actor, key, *value).map_err(|err| err.to_string())
+        }
+        UpdateValue::Bool(value) if target == Target::Visible => {
+            actor
+                .set("__songlua_visible", *value)
+                .map_err(|err| err.to_string())?;
+            set_actor_capture_state(actor, "visible", *value).map_err(|err| err.to_string())
+        }
+        UpdateValue::Vec3(value) if target == Target::EffectMagnitude => {
+            let value = lua
+                .create_sequence_from(*value)
+                .map_err(|err| err.to_string())?;
+            actor
+                .set("__songlua_state_effect_magnitude", value)
+                .map_err(|err| err.to_string())
+        }
+        _ => Ok(()),
+    }
 }
 
 pub fn read_graph_display_line_state(

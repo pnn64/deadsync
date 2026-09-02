@@ -24,7 +24,7 @@ use crate::{
     read_update_function_overlay_compile_actor_actions, read_update_function_tables,
     read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
     restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
-    run_actor_startup_commands, run_actor_update_functions,
+    run_actor_startup_commands, run_actor_update_functions_with_delta,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
 };
 
@@ -255,7 +255,7 @@ where
         )
     })?;
     compile_timer.push_stage("startup_commands");
-    run_actor_update_functions(&lua, &root).map_err(|err| {
+    run_actor_update_functions_with_delta(&lua, &root, 0.0).map_err(|err| {
         format!(
             "failed to run actor update functions for song lua session '{}': {err}",
             trace_entry_path.display()

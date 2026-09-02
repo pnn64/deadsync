@@ -1,8 +1,10 @@
+use deadlib_present::anim::EffectMode;
 use deadsync_assets::song_lua::{
-    CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayCommandBlock,
-    SongLuaOverlayKind, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget,
-    SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod,
-    SongLuaTimeUnit, compile_song_lua_layers, overlay_state_after_blocks, parse_song_timing_bpms,
+    CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayState, SongLuaOverlayStateDelta,
+    SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaSpanMode,
+    SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua_layers, overlay_state_after_blocks,
+    parse_song_timing_bpms, song_elapsed_seconds_at,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use serde::Deserialize;
@@ -16,6 +18,8 @@ const SIMFILE_ENV: &str = "ITGMANIA_SONG_LUA_SIMFILE";
 const DEFAULT_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Delightful Day/Delightful Day.ssc.semantic.json";
 const STEP_YOUR_GAME_UP_TRACE: &str = "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json";
+const CUPHEAD_TRACE: &str =
+    "tests/fixtures/itgmania-song-lua/Cuphead [TaroNuke]/botanic.sm.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
 
@@ -30,6 +34,8 @@ struct NativeTrace {
     runtime_actors: Vec<NativeActor>,
     timeline_tracks: Vec<NativeTimelineTrack>,
     tween_tracks: Vec<NativeTweenTrack>,
+    #[serde(default)]
+    operation_tracks: Vec<NativeOperationTrack>,
     #[serde(default)]
     draw_orders: Vec<NativeDrawOrder>,
     #[serde(default)]
@@ -138,6 +144,13 @@ struct NativeTweenOperation {
     operation: String,
     #[serde(default)]
     args: Vec<Value>,
+}
+
+#[derive(Deserialize)]
+struct NativeOperationTrack {
+    actor: String,
+    operation: String,
+    samples: Vec<(u64, f32, f32, Vec<Value>)>,
 }
 
 #[derive(Deserialize)]
@@ -295,7 +308,7 @@ fn parse_song(path: &Path) -> deadsync_chart::SongData {
     .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
 }
 
-fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize) {
+fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize, SongLuaCompileContext) {
     let simfile = locate_simfile(trace);
     let simfile = fs::canonicalize(&simfile)
         .unwrap_or_else(|error| panic!("failed to resolve {}: {error}", simfile.display()));
@@ -355,7 +368,7 @@ fn compile_trace_song(trace: &NativeTrace) -> (Vec<CompiledSongLua>, usize) {
             panic!("DeadSync could not compile {}: {error}", simfile.display())
         });
     assert_eq!(compiled.len(), paths.len());
-    (compiled, primary_index)
+    (compiled, primary_index, context)
 }
 
 fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
@@ -927,6 +940,46 @@ fn native_render_values(
         "fadebottom" => scalar(Target::FadeBottom, 0),
         "effectperiod" => scalar(Target::EffectPeriod, 0),
         "effectoffset" => scalar(Target::EffectOffset, 0),
+        "effectmagnitude" => match (number(0), number(1), number(2)) {
+            (Some(x), Some(y), Some(z)) => {
+                vec![(Target::EffectMagnitude, UpdateValue::Vec3([x, y, z]))]
+            }
+            _ => Vec::new(),
+        },
+        "vibrate" => vec![(Target::Vibrate, UpdateValue::Bool(true))],
+        "stopeffect" => vec![
+            (Target::Vibrate, UpdateValue::Bool(false)),
+            (
+                Target::EffectMode,
+                UpdateValue::EffectMode(EffectMode::None),
+            ),
+        ],
+        "spin" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::Spin),
+        )],
+        "bob" => vec![(Target::EffectMode, UpdateValue::EffectMode(EffectMode::Bob))],
+        "bounce" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::Bounce),
+        )],
+        "wag" => vec![(Target::EffectMode, UpdateValue::EffectMode(EffectMode::Wag))],
+        "pulse" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::Pulse),
+        )],
+        "diffuseramp" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::DiffuseRamp),
+        )],
+        "diffuseshift" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::DiffuseShift),
+        )],
+        "glowshift" => vec![(
+            Target::EffectMode,
+            UpdateValue::EffectMode(EffectMode::GlowShift),
+        )],
         "zoomto" | "scaletoclipped" => match (number(0), number(1)) {
             (Some(width), Some(height)) => {
                 vec![(Target::Size, UpdateValue::Vec2([width, height]))]
@@ -1002,6 +1055,11 @@ fn update_value_lerp(
             (to[0] - from[0]).mul_add(t, from[0]),
             (to[1] - from[1]).mul_add(t, from[1]),
         ]),
+        (UpdateValue::Vec3(from), UpdateValue::Vec3(to)) => UpdateValue::Vec3([
+            (to[0] - from[0]).mul_add(t, from[0]),
+            (to[1] - from[1]).mul_add(t, from[1]),
+            (to[2] - from[2]).mul_add(t, from[2]),
+        ]),
         _ => from.clone(),
     }
 }
@@ -1018,11 +1076,31 @@ fn compiled_update_value_at(
         .find(|track| track.overlay_index == overlay_index && track.target == target)?
         .samples;
     let next_index = samples.partition_point(|sample| sample.beat <= beat);
-    let current = samples.get(next_index.saturating_sub(1))?;
+    if next_index == 0 {
+        return None;
+    }
+    let current = &samples[next_index - 1];
     let Some(next) = samples.get(next_index) else {
         return Some(current.value.clone());
     };
     let span = next.beat - current.beat;
+    // The native oracle serializes its 60 Hz clock as f64 while runtime tracks
+    // store beat positions as f32.  Compare the same frame directly when the
+    // two representations straddle it. Dense tracks contain one sample per
+    // update frame; sparse tween tracks must retain interpolation semantics.
+    let nearest = [current, next].into_iter().min_by(|left, right| {
+        (left.beat - beat)
+            .abs()
+            .total_cmp(&(right.beat - beat).abs())
+    })?;
+    let frame_epsilon = if span <= 0.125 {
+        (span * 0.51).max(EPSILON)
+    } else {
+        EPSILON
+    };
+    if (nearest.beat - beat).abs() <= frame_epsilon {
+        return Some(nearest.value.clone());
+    }
     if span <= f32::EPSILON {
         return Some(next.value.clone());
     }
@@ -1033,6 +1111,54 @@ fn compiled_update_value_at(
     ))
 }
 
+fn overlay_state_render_value(
+    state: &SongLuaOverlayState,
+    target: SongLuaOverlayUpdateTarget,
+) -> Option<SongLuaOverlayUpdateValue> {
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as UpdateValue;
+    Some(match target {
+        Target::X => UpdateValue::F32(state.x),
+        Target::Y => UpdateValue::F32(state.y),
+        Target::Z => UpdateValue::F32(state.z),
+        Target::Zoom => UpdateValue::F32(state.zoom),
+        Target::ZoomX => UpdateValue::F32(state.zoom_x),
+        Target::ZoomY => UpdateValue::F32(state.zoom_y),
+        Target::ZoomZ => UpdateValue::F32(state.zoom_z),
+        Target::BaseZoom => UpdateValue::F32(state.basezoom),
+        Target::BaseZoomX => UpdateValue::F32(state.basezoom_x),
+        Target::BaseZoomY => UpdateValue::F32(state.basezoom_y),
+        Target::BaseZoomZ => UpdateValue::F32(state.basezoom_z),
+        Target::RotationX => UpdateValue::F32(state.rot_x_deg),
+        Target::RotationY => UpdateValue::F32(state.rot_y_deg),
+        Target::RotationZ => UpdateValue::F32(state.rot_z_deg),
+        Target::SkewX => UpdateValue::F32(state.skew_x),
+        Target::SkewY => UpdateValue::F32(state.skew_y),
+        Target::Fov => state.fov.map_or(UpdateValue::None, UpdateValue::F32),
+        Target::Vanishpoint => state
+            .vanishpoint
+            .map_or(UpdateValue::None, UpdateValue::Vec2),
+        Target::HAlign => UpdateValue::F32(state.halign),
+        Target::VAlign => UpdateValue::F32(state.valign),
+        Target::Visible => UpdateValue::Bool(state.visible),
+        Target::CropLeft => UpdateValue::F32(state.cropleft),
+        Target::CropRight => UpdateValue::F32(state.cropright),
+        Target::CropTop => UpdateValue::F32(state.croptop),
+        Target::CropBottom => UpdateValue::F32(state.cropbottom),
+        Target::FadeLeft => UpdateValue::F32(state.fadeleft),
+        Target::FadeRight => UpdateValue::F32(state.faderight),
+        Target::FadeTop => UpdateValue::F32(state.fadetop),
+        Target::FadeBottom => UpdateValue::F32(state.fadebottom),
+        Target::Vibrate => UpdateValue::Bool(state.vibrate),
+        Target::EffectMagnitude => UpdateValue::Vec3(state.effect_magnitude),
+        Target::EffectMode => UpdateValue::EffectMode(state.effect_mode),
+        Target::EffectPeriod => UpdateValue::F32(state.effect_period),
+        Target::EffectOffset => UpdateValue::F32(state.effect_offset),
+        Target::Size => state.size.map_or(UpdateValue::None, UpdateValue::Vec2),
+        _ => return None,
+    })
+}
+
 fn render_value_matches(
     expected: &SongLuaOverlayUpdateValue,
     actual: &SongLuaOverlayUpdateValue,
@@ -1041,6 +1167,10 @@ fn render_value_matches(
     match (expected, actual) {
         (UpdateValue::F32(expected), UpdateValue::F32(actual)) => (expected - actual).abs() <= 0.03,
         (UpdateValue::Vec2(expected), UpdateValue::Vec2(actual)) => expected
+            .iter()
+            .zip(actual)
+            .all(|(expected, actual)| (expected - actual).abs() <= 0.03),
+        (UpdateValue::Vec3(expected), UpdateValue::Vec3(actual)) => expected
             .iter()
             .zip(actual)
             .all(|(expected, actual)| (expected - actual).abs() <= 0.03),
@@ -1069,6 +1199,7 @@ fn collect_native_overlay_definitions<'a>(
 fn compare_update_render_values(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
     gaps: &mut Vec<String>,
 ) {
     let definitions = trace
@@ -1082,15 +1213,43 @@ fn compare_update_render_values(
         };
         let mut native = Vec::new();
         collect_native_overlay_definitions(root, &definitions, &mut native);
-        if native.len() != compiled.overlays.len() {
+        let native_len = native.len();
+        let pairs = if native_len == compiled.overlays.len() {
+            native
+                .into_iter()
+                .enumerate()
+                .map(|(index, definition)| (index, definition))
+                .collect::<Vec<_>>()
+        } else {
+            let mut native_drawables = Vec::new();
+            collect_native_drawable_definitions(trace, root, &definitions, &mut native_drawables);
+            let compiled_drawables = compiled
+                .overlays
+                .iter()
+                .enumerate()
+                .filter(|(_, overlay)| {
+                    !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound")
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if native_drawables.len() == compiled_drawables.len() {
+                compiled_drawables
+                    .into_iter()
+                    .zip(native_drawables)
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            }
+        };
+        if pairs.is_empty() && native_len != 0 {
             gaps.push(format!(
-                "layer {layer} render topology differs: ITGmania has {} non-root actors, DeadSync has {} overlays",
-                native.len(),
+                "layer {layer} update comparison topology differs: ITGmania has {} non-root actors, DeadSync has {} overlays",
+                native_len,
                 compiled.overlays.len()
             ));
             continue;
         }
-        for (overlay_index, definition) in native.into_iter().enumerate() {
+        for (overlay_index, definition) in pairs {
             for write in native_update_render_writes_all(trace, definition) {
                 let exact_ease_is_authoritative = compiled.overlay_eases.iter().any(|ease| {
                     if ease.overlay_index != overlay_index
@@ -1110,11 +1269,22 @@ fn compare_update_render_values(
                 if exact_ease_is_authoritative {
                     continue;
                 }
-                let Some(actual) =
+                let actual =
                     compiled_update_value_at(compiled, overlay_index, write.target, write.beat)
-                else {
+                        .or_else(|| {
+                            let seconds = song_elapsed_seconds_at(write.beat, context);
+                            let state = compiled_message_state_at(
+                                context,
+                                compiled,
+                                overlay_index,
+                                write.beat,
+                                seconds,
+                            );
+                            overlay_state_render_value(&state, write.target)
+                        });
+                let Some(actual) = actual else {
                     gaps.push(format!(
-                        "layer {layer} missing {:?} track for {}/{} at beat {:.3}",
+                        "layer {layer} missing {:?} state for {}/{} at beat {:.3}",
                         write.target, definition.id, definition.class, write.beat
                     ));
                     continue;
@@ -1252,7 +1422,7 @@ fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> Exp
         Some("accelerate") => Some("inQuad"),
         Some("decelerate") => Some("outQuad"),
         Some("smooth") => Some("inOutQuad"),
-        Some("spring") => Some("outElastic"),
+        Some("spring") => Some("spring"),
         Some("bouncebegin") => Some("inBounce"),
         Some("bounceend") => Some("outBounce"),
         _ => None,
@@ -1634,6 +1804,238 @@ fn compare_commands(
     }
 }
 
+fn native_player_operation_target(operation: &str) -> Option<(SongLuaEaseTarget, f32)> {
+    let method = operation.rsplit('.').next()?.to_ascii_lowercase();
+    Some(match method.as_str() {
+        "x" => (SongLuaEaseTarget::PlayerX, 0.0),
+        "y" => (SongLuaEaseTarget::PlayerY, 0.0),
+        "z" => (SongLuaEaseTarget::PlayerZ, 0.0),
+        "rotationx" => (SongLuaEaseTarget::PlayerRotationX, 0.0),
+        "rotationy" => (SongLuaEaseTarget::PlayerRotationY, 0.0),
+        "rotationz" => (SongLuaEaseTarget::PlayerRotationZ, 0.0),
+        "skewx" => (SongLuaEaseTarget::PlayerSkewX, 0.0),
+        "skewy" => (SongLuaEaseTarget::PlayerSkewY, 0.0),
+        "zoom" => (SongLuaEaseTarget::PlayerZoom, 1.0),
+        "zoomx" => (SongLuaEaseTarget::PlayerZoomX, 1.0),
+        "zoomy" => (SongLuaEaseTarget::PlayerZoomY, 1.0),
+        "zoomz" => (SongLuaEaseTarget::PlayerZoomZ, 1.0),
+        _ => return None,
+    })
+}
+
+fn compare_player_operation_ranges(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    gaps: &mut Vec<String>,
+) {
+    for track in &trace.operation_tracks {
+        let Some(actor) = trace
+            .external_actors
+            .iter()
+            .find(|actor| actor.id == track.actor)
+        else {
+            continue;
+        };
+        let player = if actor.path.ends_with("PlayerP1") {
+            1
+        } else if actor.path.ends_with("PlayerP2") {
+            2
+        } else {
+            continue;
+        };
+        let Some((target, default)) = native_player_operation_target(&track.operation) else {
+            continue;
+        };
+        let values = track
+            .samples
+            .iter()
+            .filter_map(|sample| sample.3.first().and_then(|value| value_f32(Some(value))))
+            .collect::<Vec<_>>();
+        let Some(native_min) = values.iter().copied().reduce(f32::min) else {
+            continue;
+        };
+        let native_max = values
+            .iter()
+            .copied()
+            .reduce(f32::max)
+            .unwrap_or(native_min);
+        if (native_min - default).abs() <= EPSILON && (native_max - default).abs() <= EPSILON {
+            continue;
+        }
+        let compiled_values = compiled
+            .iter()
+            .flat_map(|layer| &layer.eases)
+            .filter(|ease| {
+                ease.target == target && (ease.player.is_none() || ease.player == Some(player))
+            })
+            .flat_map(|ease| [ease.from, ease.to])
+            .chain(std::iter::once(default))
+            .collect::<Vec<_>>();
+        let compiled_min = compiled_values
+            .iter()
+            .copied()
+            .reduce(f32::min)
+            .unwrap_or(default);
+        let compiled_max = compiled_values
+            .iter()
+            .copied()
+            .reduce(f32::max)
+            .unwrap_or(default);
+        if compiled_min > native_min + 0.03 || compiled_max < native_max - 0.03 {
+            gaps.push(format!(
+                "P{player} {} range differs: ITGmania [{native_min:.3}, {native_max:.3}], DeadSync [{compiled_min:.3}, {compiled_max:.3}]",
+                track.operation
+            ));
+        }
+    }
+}
+
+fn compiled_message_state_at(
+    context: &SongLuaCompileContext,
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+    seconds: f32,
+) -> SongLuaOverlayState {
+    let overlay = &compiled.overlays[overlay_index];
+    let mut current = overlay.initial_state;
+    let mut active = None::<(&[SongLuaOverlayCommandBlock], SongLuaOverlayState, f32)>;
+    for event in compiled.messages.iter().filter(|event| event.beat <= beat) {
+        let Some(command) = overlay
+            .message_commands
+            .iter()
+            .find(|command| command.message == event.message)
+        else {
+            continue;
+        };
+        let event_seconds = song_elapsed_seconds_at(event.beat, context);
+        if let Some((blocks, base, start_seconds)) = active.take() {
+            current = overlay_state_after_blocks(base, blocks, event_seconds - start_seconds);
+        }
+        let base = current;
+        current = overlay_state_after_blocks(base, &command.blocks, 0.0);
+        active = Some((&command.blocks, base, event_seconds));
+    }
+    if let Some((blocks, base, start_seconds)) = active {
+        current = overlay_state_after_blocks(base, blocks, seconds - start_seconds);
+    }
+    current
+}
+
+fn compare_projected_vibration_coverage(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    gaps: &mut Vec<String>,
+) {
+    let definitions = trace
+        .actor_definitions
+        .iter()
+        .map(|definition| (definition.id.as_str(), definition))
+        .collect::<HashMap<_, _>>();
+    let mut drawable_map = HashMap::<&str, (usize, usize)>::new();
+    for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
+        let Some(root) = definitions.get(root_id.as_str()).copied() else {
+            continue;
+        };
+        let mut native = Vec::new();
+        collect_native_drawable_definitions(trace, root, &definitions, &mut native);
+        let deadsync = compiled
+            .overlays
+            .iter()
+            .enumerate()
+            .filter(|(_, overlay)| {
+                !matches!(kind_name(&overlay.kind), "Actor" | "ActorFrame" | "Sound")
+            })
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        if native.len() == deadsync.len() {
+            drawable_map.extend(
+                native
+                    .into_iter()
+                    .zip(deadsync)
+                    .map(|(definition, index)| (definition.id.as_str(), (layer, index))),
+            );
+        }
+    }
+    for track in &trace.projected_vertex_tracks {
+        let Some(definition_id) = track.definition_id.as_deref() else {
+            continue;
+        };
+        let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+            continue;
+        };
+        for sample in &track.samples {
+            let Some(sample) = sample.as_array() else {
+                continue;
+            };
+            let Some(beat) = sample.first().and_then(|value| value_f32(Some(value))) else {
+                continue;
+            };
+            let Some(seconds) = sample.get(1).and_then(|value| value_f32(Some(value))) else {
+                continue;
+            };
+            let native = sample
+                .get(8)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|effect| effect.get("mode").and_then(Value::as_str) == Some("vibrate"))
+                .filter_map(|effect| effect.get("magnitude").and_then(Value::as_array))
+                .fold([0.0_f32; 3], |mut sum, magnitude| {
+                    for (axis, value) in magnitude.iter().take(3).enumerate() {
+                        sum[axis] += value_f32(Some(value)).unwrap_or_default();
+                    }
+                    sum
+                });
+            let mut actual = [0.0_f32; 3];
+            let mut current = Some(overlay_index);
+            while let Some(index) = current {
+                let overlay = &compiled[layer].overlays[index];
+                let message_state =
+                    compiled_message_state_at(context, &compiled[layer], index, beat, seconds);
+                let vibrate = compiled_update_value_at(
+                    &compiled[layer],
+                    index,
+                    SongLuaOverlayUpdateTarget::Vibrate,
+                    beat,
+                )
+                .and_then(|value| match value {
+                    SongLuaOverlayUpdateValue::Bool(value) => Some(value),
+                    _ => None,
+                })
+                .unwrap_or(message_state.vibrate);
+                if vibrate {
+                    let magnitude = compiled_update_value_at(
+                        &compiled[layer],
+                        index,
+                        SongLuaOverlayUpdateTarget::EffectMagnitude,
+                        beat,
+                    )
+                    .and_then(|value| match value {
+                        SongLuaOverlayUpdateValue::Vec3(value) => Some(value),
+                        _ => None,
+                    })
+                    .unwrap_or(message_state.effect_magnitude);
+                    for axis in 0..3 {
+                        actual[axis] += magnitude[axis];
+                    }
+                }
+                current = overlay.parent_index;
+            }
+            if native
+                .iter()
+                .zip(actual)
+                .any(|(expected, actual)| (expected - actual).abs() > 0.03)
+            {
+                gaps.push(format!(
+                    "projected vibration differs for {definition_id} at beat {beat:.3}: ITGmania {native:?}, DeadSync {actual:?}"
+                ));
+            }
+        }
+    }
+}
+
 fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
     for (layer, compiled) in compiled.iter().enumerate() {
         gaps.extend(
@@ -1672,7 +2074,7 @@ fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
 fn native_song_lua_semantics_match_deadsync() {
     let trace = read_trace();
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
-    let (compiled, primary_index) = compile_trace_song(&trace);
+    let (compiled, primary_index, context) = compile_trace_song(&trace);
     eprintln!(
         "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
         compiled.len(),
@@ -1718,7 +2120,9 @@ fn native_song_lua_semantics_match_deadsync() {
     compare_layers(&trace, &compiled, &mut gaps);
     compare_final_render_states(&trace, &compiled, &mut gaps);
     compare_update_render_persistence(&trace, &compiled, &mut gaps);
-    compare_update_render_values(&trace, &compiled, &mut gaps);
+    compare_update_render_values(&trace, &compiled, &context, &mut gaps);
+    compare_player_operation_ranges(&trace, &compiled, &mut gaps);
+    compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);
     compare_commands(&trace, &compiled, primary_index, &mut gaps);
     assert!(
@@ -1780,12 +2184,79 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 }
 
 #[test]
+fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
+    let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
+    let trace = read_trace_file(&trace_path);
+
+    let player_rotations = trace
+        .operation_tracks
+        .iter()
+        .filter(|track| {
+            track.operation.eq_ignore_ascii_case("ActorFrame.rotationx")
+                && trace.external_actors.iter().any(|actor| {
+                    actor.id == track.actor
+                        && matches!(
+                            actor.path.as_str(),
+                            "ScreenGameplay/PlayerP1" | "ScreenGameplay/PlayerP2"
+                        )
+                })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(player_rotations.len(), 2);
+    for track in player_rotations {
+        assert!(
+            track.samples.iter().any(|sample| {
+                value_f32(sample.3.first()).is_some_and(|value| (value - 90.0).abs() <= EPSILON)
+            }),
+            "{} never reaches the authored 90-degree impact rotation",
+            track.actor
+        );
+        assert!(
+            track.samples.iter().any(|sample| {
+                value_f32(sample.3.first()).is_some_and(|value| value.abs() <= EPSILON)
+            }),
+            "{} never restores its impact rotation",
+            track.actor
+        );
+    }
+
+    let cannon_girl = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with("ayaze/idle 2x2.png"))
+        .expect("Cuphead fixture has no cannongirl geometry");
+    assert_eq!(
+        cannon_girl.sample_layout.last().map(String::as_str),
+        Some("effect_chain")
+    );
+    assert!(
+        cannon_girl
+            .samples
+            .iter()
+            .filter_map(Value::as_array)
+            .any(|sample| {
+                sample
+                    .get(8)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter(|effect| effect.get("mode").and_then(Value::as_str) == Some("vibrate"))
+                    .filter_map(|effect| effect.get("magnitude").and_then(Value::as_array))
+                    .flatten()
+                    .filter_map(|value| value.as_f64())
+                    .any(|value| value.abs() > f64::from(EPSILON))
+            }),
+        "Cuphead fixture never records the cannongirl's inherited vibration"
+    );
+}
+
+#[test]
 fn step_your_game_up_critical_render_states_match_itgmania() {
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(STEP_YOUR_GAME_UP_TRACE);
     let trace = read_trace_file(&trace_path);
-    let (compiled, _) = compile_trace_song(&trace);
+    let (compiled, _, context) = compile_trace_song(&trace);
     let mut gaps = Vec::new();
-    compare_update_render_values(&trace, &compiled, &mut gaps);
+    compare_update_render_values(&trace, &compiled, &context, &mut gaps);
     let critical = gaps
         .into_iter()
         .filter(|gap| {
@@ -1825,12 +2296,12 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
         let hidden = track
             .samples
             .iter()
-            .find(|sample| (sample.0 - 68.0).abs() <= EPSILON)
+            .find(|sample| sample.0 >= 68.0 && sample.0 <= 68.1)
             .expect("missing Player proxy-off boundary at beat 68");
         let restored = track
             .samples
             .iter()
-            .find(|sample| (sample.0 - 70.0).abs() <= EPSILON)
+            .find(|sample| sample.0 >= 70.0 && sample.0 <= 70.1)
             .expect("missing Player proxy-on boundary at beat 70");
         assert_eq!((hidden.2, hidden.3, hidden.4), (false, false, false));
         assert_eq!((restored.2, restored.3, restored.4), (false, true, true));
@@ -1873,7 +2344,7 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
                 layer,
                 overlay_index,
                 SongLuaOverlayUpdateTarget::Visible,
-                68.0,
+                hidden.0 as f32,
             ),
             Some(SongLuaOverlayUpdateValue::Bool(false))
         );
@@ -1882,7 +2353,7 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
                 layer,
                 overlay_index,
                 SongLuaOverlayUpdateTarget::Visible,
-                70.0,
+                restored.0 as f32,
             ),
             Some(SongLuaOverlayUpdateValue::Bool(true))
         );
@@ -1907,6 +2378,7 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
             "clip_vertices",
             "screen_vertices",
             "camera",
+            "effect_chain",
         ]
     );
     let sample = circle
@@ -1914,7 +2386,7 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
         .iter()
         .filter_map(Value::as_array)
         .find(|sample| {
-            value_f32(sample.first()).is_some_and(|beat| (beat - 200.0).abs() <= EPSILON)
+            value_f32(sample.first()).is_some_and(|beat| (200.0..=200.1).contains(&beat))
         })
         .expect("missing projected circle sample at beat 200");
     let clip_vertices = sample
