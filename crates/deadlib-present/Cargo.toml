@@ -6,6 +6,7 @@ license = "GPL-3.0"
 
 [features]
 bench-support = []
+conformance = []
 
 [dependencies]
 deadlib-render-core = { path = "../deadlib-render-core" }

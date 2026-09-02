@@ -5980,7 +5980,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "glowshift",
+                    "glowblink",
                     Some(1.0),
                     None,
                     Some([1.0, 1.0, 1.0, 0.2]),
@@ -6016,7 +6016,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "diffuseshift",
+                    "diffuseblink",
                     Some(1.0),
                     None,
                     Some([0.0, 0.0, 0.0, 1.0]),
@@ -6057,6 +6057,24 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                     None,
                     Some([0.0, 0.0, 0.0, 1.0]),
                     Some([1.0, 1.0, 1.0, 1.0]),
+                )?;
+                Ok(actor.clone())
+            }
+        })?,
+    )?;
+    actor.set(
+        "glowramp",
+        lua.create_function({
+            let actor = actor.clone();
+            move |lua, _args: MultiValue| {
+                set_actor_effect_defaults(
+                    lua,
+                    &actor,
+                    "glowramp",
+                    Some(1.0),
+                    None,
+                    Some([1.0, 1.0, 1.0, 0.2]),
+                    Some([1.0, 1.0, 1.0, 0.8]),
                 )?;
                 Ok(actor.clone())
             }

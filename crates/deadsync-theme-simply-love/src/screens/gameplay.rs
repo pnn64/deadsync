@@ -101,6 +101,9 @@ use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
+#[cfg(feature = "test-support")]
+pub mod actor_conformance;
+
 pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
     deadsync_profile_gameplay::GameplayProfile,
     deadsync_assets::song_lua::SongLuaOverlayActor,
@@ -1004,12 +1007,15 @@ impl SongLuaProjectedMeshScratch {
         grid: &[TexturedMeshVertex],
         width: usize,
         height: usize,
+        edge_fade: [f32; 4],
     ) -> Arc<Vec<TexturedMeshVertex>> {
         update_song_lua_shared_vec(
             &mut self.textured_vertices,
             self.capacity,
             &mut self.replacements,
-            |vertices| append_projected_mesh_vertices(grid, width, height, vertices),
+            |vertices| {
+                append_projected_mesh_vertices(grid, width, height, edge_fade, vertices);
+            },
         )
     }
 
@@ -13484,7 +13490,9 @@ fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     }
     matches!(
         state.effect_mode,
-        deadlib_present::anim::EffectMode::GlowShift
+        deadlib_present::anim::EffectMode::GlowBlink
+            | deadlib_present::anim::EffectMode::GlowRamp
+            | deadlib_present::anim::EffectMode::GlowShift
     ) && (state.effect_color1[3] > f32::EPSILON || state.effect_color2[3] > f32::EPSILON)
 }
 
@@ -13508,16 +13516,16 @@ fn song_lua_apply_overlay_effect(
         // a stable 60 Hz frame clock so high-refresh rendering keeps the same
         // rapid shake cadence instead of becoming a several-hundred-Hz blur.
         let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
-        for (axis, out) in offset.iter_mut().enumerate() {
+        let jitter = std::array::from_fn(|axis| {
             let mut hash = frame ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
             hash ^= hash >> 16;
             hash = hash.wrapping_mul(0x7feb_352d);
             hash ^= hash >> 15;
             hash = hash.wrapping_mul(0x846c_a68b);
             hash ^= hash >> 16;
-            let jitter = (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0);
-            *out = vibrate_magnitude[axis].mul_add(jitter, *out);
-        }
+            (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+        });
+        song_lua_apply_vibration(offset, vibrate_magnitude, jitter);
     }
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
         let units = deadlib_present::anim::effect_clock_units(effect, effect_time, effect_beat);
@@ -13533,6 +13541,16 @@ fn song_lua_apply_overlay_effect(
     }
     if let Some(percent) = deadlib_present::anim::effect_mix(effect, effect_time, effect_beat) {
         match effect.mode {
+            deadlib_present::anim::EffectMode::DiffuseBlink => {
+                let color = if percent > 0.5 {
+                    effect.color1
+                } else {
+                    effect.color2
+                };
+                let alpha = tint[3];
+                *tint = color;
+                tint[3] *= alpha;
+            }
             deadlib_present::anim::EffectMode::DiffuseRamp => {
                 for (idx, out) in tint.iter_mut().enumerate() {
                     let color =
@@ -13556,6 +13574,23 @@ fn song_lua_apply_overlay_effect(
                     *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
                         .clamp(0.0, 1.0);
                 }
+            }
+            deadlib_present::anim::EffectMode::GlowBlink => {
+                let alpha = tint[3];
+                *glow = if percent > 0.5 {
+                    effect.color1
+                } else {
+                    effect.color2
+                };
+                glow[3] *= alpha;
+            }
+            deadlib_present::anim::EffectMode::GlowRamp => {
+                let alpha = tint[3];
+                for (idx, out) in glow.iter_mut().enumerate() {
+                    *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], percent)
+                        .clamp(0.0, 1.0);
+                }
+                glow[3] *= alpha;
             }
             deadlib_present::anim::EffectMode::Pulse => {
                 let pulse = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
@@ -13606,6 +13641,13 @@ fn song_lua_apply_overlay_effect(
     scale[0] = scale[0].max(0.0);
     scale[1] = scale[1].max(0.0);
     scale[2] = scale[2].max(0.0);
+}
+
+#[inline(always)]
+fn song_lua_apply_vibration(position: &mut [f32; 3], magnitude: [f32; 3], jitter: [f32; 3]) {
+    for axis in 0..3 {
+        position[axis] = magnitude[axis].mul_add(jitter[axis], position[axis]);
+    }
 }
 
 #[inline(always)]
@@ -14898,7 +14940,7 @@ fn song_lua_overlay_rect(
     Some((
         [
             ((cl - cr) * base_size[0]).mul_add(0.5, base_center[0]),
-            ((cb - ct) * base_size[1]).mul_add(0.5, base_center[1]),
+            ((ct - cb) * base_size[1]).mul_add(0.5, base_center[1]),
         ],
         [base_size[0] * sx_crop, base_size[1] * sy_crop],
     ))
@@ -15053,6 +15095,17 @@ fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f3
     ]
 }
 
+#[inline(always)]
+fn song_lua_projected_color_coord(t: f32, start_fade: f32, end_fade: f32) -> f32 {
+    if t <= start_fade {
+        0.0
+    } else if t >= 1.0 - end_fade {
+        1.0
+    } else {
+        ((t - start_fade) / (1.0 - start_fade - end_fade).max(f32::EPSILON)).clamp(0.0, 1.0)
+    }
+}
+
 #[cfg(feature = "bench-support")]
 #[doc(hidden)]
 pub struct SongLuaAftCaptureBenchmark {
@@ -15164,7 +15217,7 @@ fn song_lua_overlay_vertex_color(
     let mut out = [0.0; 4];
     for channel in 0..4 {
         let top = song_lua_effect_lerp(colors[0][channel], colors[1][channel], x);
-        let bottom = song_lua_effect_lerp(colors[3][channel], colors[2][channel], x);
+        let bottom = song_lua_effect_lerp(colors[2][channel], colors[3][channel], x);
         out[channel] = song_lua_effect_lerp(top, bottom, y);
     }
     out[3] *= alpha;
@@ -15222,11 +15275,21 @@ fn append_projected_mesh_vertices(
     grid: &[TexturedMeshVertex],
     width: usize,
     height: usize,
+    edge_fade: [f32; 4],
     vertices: &mut Vec<TexturedMeshVertex>,
 ) {
     vertices.reserve(width.saturating_sub(1) * height.saturating_sub(1) * 6);
     for y in 0..height.saturating_sub(1) {
         for x in 0..width.saturating_sub(1) {
+            let x_fade_band = (x == 0 && edge_fade[0] > f32::EPSILON)
+                || (x + 2 == width && edge_fade[1] > f32::EPSILON);
+            let y_fade_band = (y == 0 && edge_fade[2] > f32::EPSILON)
+                || (y + 2 == height && edge_fade[3] > f32::EPSILON);
+            // RageSprite emits the center plus four edge-fade quads. It does
+            // not draw diagonal corner cells where both axes are fading.
+            if x_fade_band && y_fade_band {
+                continue;
+            }
             let tl = y * width + x;
             let tr = tl + 1;
             let bl = (y + 1) * width + x;
@@ -15254,6 +15317,7 @@ fn song_lua_projected_mesh_actor_from_grid(
     grid: &[TexturedMeshVertex],
     width: usize,
     height: usize,
+    edge_fade: [f32; 4],
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Actor {
     if let Some(scratch) = scratch {
@@ -15266,7 +15330,7 @@ fn song_lua_projected_mesh_actor_from_grid(
             texture: params.texture,
             tint: params.tint,
             glow: params.glow,
-            vertices: scratch.update_projected(grid, width, height),
+            vertices: scratch.update_projected(grid, width, height, edge_fade),
             geom_cache_key: INVALID_TMESH_CACHE_KEY,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
@@ -15283,7 +15347,7 @@ fn song_lua_projected_mesh_actor_from_grid(
             .saturating_mul(height.saturating_sub(1))
             .saturating_mul(6),
     );
-    append_projected_mesh_vertices(grid, width, height, &mut vertices);
+    append_projected_mesh_vertices(grid, width, height, edge_fade, &mut vertices);
     Actor::TexturedMesh {
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
@@ -15340,14 +15404,16 @@ fn song_lua_flat_skewed_overlay_actor(
             let point = transform * Vector4::new(local_x, local_y, 0.0, 1.0);
             let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
             let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
+            let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
+            let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
                 pos: [point.x, point.y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
                 color: song_lua_overlay_vertex_color(
                     state,
-                    x,
-                    y,
+                    color_x,
+                    color_y,
                     flip_x,
                     flip_y,
                     fade_x.min(fade_y),
@@ -15370,6 +15436,7 @@ fn song_lua_flat_skewed_overlay_actor(
         &grid,
         xs.len(),
         ys.len(),
+        edge_fade,
         scratch,
     ))
 }
@@ -15412,14 +15479,16 @@ fn song_lua_projected_overlay_actor(
             let local_y = song_lua_effect_lerp(-half_h, half_h, y);
             let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
             let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
+            let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
+            let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
                 pos: [local_x, local_y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
                 color: song_lua_overlay_vertex_color(
                     state,
-                    x,
-                    y,
+                    color_x,
+                    color_y,
                     flip_x,
                     flip_y,
                     fade_x.min(fade_y),
@@ -15442,6 +15511,7 @@ fn song_lua_projected_overlay_actor(
         &grid,
         xs.len(),
         ys.len(),
+        edge_fade,
         scratch,
     ))
 }
@@ -29115,8 +29185,8 @@ mod tests {
                 assert_eq!(vertices.len(), 6);
                 assert_eq!(vertices[0].color, [1.0, 0.0, 0.0, 1.0]);
                 assert_eq!(vertices[1].color, [0.0, 1.0, 0.0, 1.0]);
-                assert_eq!(vertices[2].color, [1.0, 1.0, 0.0, 1.0]);
-                assert_eq!(vertices[5].color, [0.0, 0.0, 1.0, 1.0]);
+                assert_eq!(vertices[2].color, [0.0, 0.0, 1.0, 1.0]);
+                assert_eq!(vertices[5].color, [1.0, 1.0, 0.0, 1.0]);
             }
             other => panic!("expected textured mesh-backed vertex diffuse, got {other:?}"),
         }

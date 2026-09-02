@@ -5653,6 +5653,15 @@ fn apply_effect_to_sprite(
 
     if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
         match effect.mode {
+            anim::EffectMode::DiffuseBlink => {
+                let alpha = tint[3];
+                *tint = if percent > 0.5 {
+                    effect.color1
+                } else {
+                    effect.color2
+                };
+                tint[3] *= alpha;
+            }
             anim::EffectMode::DiffuseRamp => {
                 for (i, out) in tint.iter_mut().enumerate() {
                     let c = lerp_f32(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
@@ -5677,7 +5686,9 @@ fn apply_effect_to_sprite(
                 scale[0] *= zoom * sx;
                 scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift
+            anim::EffectMode::GlowBlink
+            | anim::EffectMode::GlowRamp
+            | anim::EffectMode::GlowShift
             | anim::EffectMode::Bob
             | anim::EffectMode::Bounce
             | anim::EffectMode::Wag
@@ -5705,6 +5716,15 @@ fn apply_effect_to_text(
     let beat = elapsed;
     if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
         match effect.mode {
+            anim::EffectMode::DiffuseBlink => {
+                let alpha = color[3];
+                *color = if percent > 0.5 {
+                    effect.color1
+                } else {
+                    effect.color2
+                };
+                color[3] *= alpha;
+            }
             anim::EffectMode::DiffuseRamp => {
                 for (i, out) in color.iter_mut().enumerate() {
                     let c = lerp_f32(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
@@ -5729,7 +5749,9 @@ fn apply_effect_to_text(
                 scale[0] *= zoom * sx;
                 scale[1] *= zoom * sy;
             }
-            anim::EffectMode::GlowShift
+            anim::EffectMode::GlowBlink
+            | anim::EffectMode::GlowRamp
+            | anim::EffectMode::GlowShift
             | anim::EffectMode::Bob
             | anim::EffectMode::Bounce
             | anim::EffectMode::Wag

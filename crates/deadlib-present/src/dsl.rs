@@ -1952,7 +1952,14 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn source_steps_keep_tween_builders_compact() {
-        assert!(size_of::<anim::Step>() <= 464);
+        let step_size = size_of::<anim::Step>();
+        // Native cubic-Bezier eases carry four f32 controls. The enum's larger
+        // payload adds eight bytes to a source step without changing inline op
+        // capacity or introducing a per-frame allocation.
+        assert!(
+            step_size <= 472,
+            "source tween step grew to {step_size} bytes"
+        );
         assert!(size_of::<SpriteBuilder>() <= 328);
         assert!(size_of::<TextBuilder>() <= 280);
     }

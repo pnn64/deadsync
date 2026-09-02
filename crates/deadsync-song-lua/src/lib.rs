@@ -2024,8 +2024,11 @@ pub fn parse_overlay_effect_mode(raw: &str) -> Option<EffectMode> {
 fn parse_overlay_effect_mode_normalized(key: &str) -> Option<EffectMode> {
     match key {
         "none" => Some(EffectMode::None),
+        "diffuseblink" => Some(EffectMode::DiffuseBlink),
         "diffuseramp" => Some(EffectMode::DiffuseRamp),
         "diffuseshift" => Some(EffectMode::DiffuseShift),
+        "glowblink" => Some(EffectMode::GlowBlink),
+        "glowramp" => Some(EffectMode::GlowRamp),
         "glowshift" => Some(EffectMode::GlowShift),
         "pulse" => Some(EffectMode::Pulse),
         "bob" => Some(EffectMode::Bob),

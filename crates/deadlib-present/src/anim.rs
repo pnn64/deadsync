@@ -38,6 +38,10 @@ pub enum Ease {
     Smooth,
     /// `StepMania`: `ease(time, fEase)` — 1D Bezier curve, fEase in [-100,100].
     EaseInOut { bias: f32 },
+    /// `StepMania`: `spring(t)`.
+    Spring,
+    /// Native `ITween` cubic Bezier with scalar control values.
+    CubicBezier { control: [f32; 4] },
 }
 
 #[inline(always)]
@@ -94,6 +98,14 @@ fn ease_apply(e: Ease, t: f32) -> f32 {
         Ease::Decelerate => ease_out_quad(t),
         Ease::Smooth => ease_weighted_inout(t, 0.0),
         Ease::EaseInOut { bias } => eval_ease_p_for_f_ease(t, bias),
+        Ease::Spring => 1.0 - (t * std::f32::consts::PI * 2.5).cos() / (1.0 + t * 3.0),
+        Ease::CubicBezier { control } => {
+            let u = 1.0 - t;
+            u * u * u * control[0]
+                + 3.0 * u * u * t * control[1]
+                + 3.0 * u * t * t * control[2]
+                + t * t * t * control[3]
+        }
     }
 }
 
@@ -224,8 +236,11 @@ pub enum EffectClock {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EffectMode {
     None,
+    DiffuseBlink,
     DiffuseRamp,
     DiffuseShift,
+    GlowBlink,
+    GlowRamp,
     GlowShift,
     Pulse,
     Bob,
@@ -277,8 +292,11 @@ pub const fn effect_clock_units(effect: EffectState, time: f32, beat: f32) -> f3
 pub fn effect_mix(effect: EffectState, time: f32, beat: f32) -> Option<f32> {
     if !matches!(
         effect.mode,
-        EffectMode::DiffuseRamp
+        EffectMode::DiffuseBlink
+            | EffectMode::DiffuseRamp
             | EffectMode::DiffuseShift
+            | EffectMode::GlowBlink
+            | EffectMode::GlowRamp
             | EffectMode::GlowShift
             | EffectMode::Pulse
             | EffectMode::Bob
@@ -331,6 +349,7 @@ pub fn glowshift_mix(through: f32) -> f32 {
 pub struct TweenState {
     pub x: f32,
     pub y: f32,
+    pub z: f32,
     pub w: f32,
     pub h: f32,
     pub hx: f32,
@@ -343,6 +362,8 @@ pub struct TweenState {
     pub rot_x: f32, // degrees
     pub rot_y: f32, // degrees
     pub rot_z: f32, // degrees
+    pub skew_x: f32,
+    pub skew_y: f32,
     pub crop_l: f32,
     pub crop_r: f32,
     pub crop_t: f32,
@@ -359,6 +380,7 @@ impl Default for TweenState {
         Self {
             x: 0.0,
             y: 0.0,
+            z: 0.0,
             w: 0.0,
             h: 0.0,
             hx: 0.5,
@@ -371,6 +393,8 @@ impl Default for TweenState {
             rot_x: 0.0,
             rot_y: 0.0,
             rot_z: 0.0,
+            skew_x: 0.0,
+            skew_y: 0.0,
             fade_l: 0.0,
             fade_r: 0.0,
             fade_t: 0.0,
@@ -394,6 +418,7 @@ enum Target {
 enum BuildOp {
     X(Target),
     Y(Target),
+    Z(Target),
     XY(Target, Target),
     Size(Target, Target),
     ZoomBoth(Target),
@@ -412,6 +437,8 @@ enum BuildOp {
     RotX(Target),
     RotY(Target),
     RotZ(Target),
+    SkewX(Target),
+    SkewY(Target),
     CropL(Target),
     CropR(Target),
     CropT(Target),
@@ -431,6 +458,7 @@ struct OpPrepared {
 enum PreparedKind {
     X { from: f32, to: f32 },
     Y { from: f32, to: f32 },
+    Z { from: f32, to: f32 },
     XY { from: [f32; 2], to: [f32; 2] },
     WH { from: [f32; 2], to: [f32; 2] },
     ScaleX { from: f32, to: f32 },
@@ -448,6 +476,8 @@ enum PreparedKind {
     RotX { from: f32, to: f32 },
     RotY { from: f32, to: f32 },
     RotZ { from: f32, to: f32 },
+    SkewX { from: f32, to: f32 },
+    SkewY { from: f32, to: f32 },
     CropL { from: f32, to: f32 },
     CropR { from: f32, to: f32 },
     CropT { from: f32, to: f32 },
@@ -472,6 +502,7 @@ impl OpPrepared {
         match self.kind {
             PreparedKind::X { from, to } => s.x = (to - from).mul_add(a, from),
             PreparedKind::Y { from, to } => s.y = (to - from).mul_add(a, from),
+            PreparedKind::Z { from, to } => s.z = (to - from).mul_add(a, from),
             PreparedKind::XY { from, to } => {
                 s.x = (to[0] - from[0]).mul_add(a, from[0]);
                 s.y = (to[1] - from[1]).mul_add(a, from[1]);
@@ -538,6 +569,8 @@ impl OpPrepared {
             PreparedKind::RotX { from, to } => s.rot_x = (to - from).mul_add(a, from),
             PreparedKind::RotY { from, to } => s.rot_y = (to - from).mul_add(a, from),
             PreparedKind::RotZ { from, to } => s.rot_z = (to - from).mul_add(a, from),
+            PreparedKind::SkewX { from, to } => s.skew_x = (to - from).mul_add(a, from),
+            PreparedKind::SkewY { from, to } => s.skew_y = (to - from).mul_add(a, from),
             PreparedKind::CropL { from, to } => s.crop_l = (to - from).mul_add(a, from),
             PreparedKind::CropR { from, to } => s.crop_r = (to - from).mul_add(a, from),
             PreparedKind::CropT { from, to } => s.crop_t = (to - from).mul_add(a, from),
@@ -625,6 +658,15 @@ impl RuntimeSegment {
                     };
                     self.prepared.push(OpPrepared {
                         kind: PreparedKind::Y { from: s.y, to },
+                    });
+                }
+                BuildOp::Z(t) => {
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.z + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::Z { from: s.z, to },
                     });
                 }
                 BuildOp::XY(tx, ty) => {
@@ -854,6 +896,24 @@ impl RuntimeSegment {
                         kind: PreparedKind::RotZ { from: s.rot_z, to },
                     });
                 }
+                BuildOp::SkewX(t) => {
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.skew_x + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::SkewX { from: s.skew_x, to },
+                    });
+                }
+                BuildOp::SkewY(t) => {
+                    let to = match t {
+                        Target::Abs(v) => v,
+                        Target::Rel(dv) => s.skew_y + dv,
+                    };
+                    self.prepared.push(OpPrepared {
+                        kind: PreparedKind::SkewY { from: s.skew_y, to },
+                    });
+                }
                 BuildOp::CropL(t) => {
                     let to = match t {
                         Target::Abs(v) => v,
@@ -988,6 +1048,11 @@ impl SegmentBuilder {
         self
     }
     #[must_use]
+    pub fn z(mut self, v: f32) -> Self {
+        self.ops.push(BuildOp::Z(Target::Abs(v)));
+        self
+    }
+    #[must_use]
     pub fn xy(mut self, x: f32, y: f32) -> Self {
         self.ops.push(BuildOp::XY(Target::Abs(x), Target::Abs(y)));
         self
@@ -1000,6 +1065,11 @@ impl SegmentBuilder {
     #[must_use]
     pub fn addy(mut self, dy: f32) -> Self {
         self.ops.push(BuildOp::Y(Target::Rel(dy)));
+        self
+    }
+    #[must_use]
+    pub fn addz(mut self, dz: f32) -> Self {
+        self.ops.push(BuildOp::Z(Target::Rel(dz)));
         self
     }
 
@@ -1150,6 +1220,17 @@ impl SegmentBuilder {
     }
 
     #[must_use]
+    pub fn skewx(mut self, value: f32) -> Self {
+        self.ops.push(BuildOp::SkewX(Target::Abs(value)));
+        self
+    }
+    #[must_use]
+    pub fn skewy(mut self, value: f32) -> Self {
+        self.ops.push(BuildOp::SkewY(Target::Abs(value)));
+        self
+    }
+
+    #[must_use]
     pub fn cropleft(mut self, v: f32) -> Self {
         self.ops.push(BuildOp::CropL(Target::Abs(v)));
         self
@@ -1233,6 +1314,18 @@ pub fn accelerate(dur: f32) -> SegmentBuilder {
 #[must_use]
 pub fn decelerate(dur: f32) -> SegmentBuilder {
     SegmentBuilder::new(Ease::Decelerate, dur)
+}
+
+/// Construct a native `spring(t)` segment.
+#[must_use]
+pub fn spring(dur: f32) -> SegmentBuilder {
+    SegmentBuilder::new(Ease::Spring, dur)
+}
+
+/// Construct a scalar cubic-Bezier segment as accepted by native `ITween`.
+#[must_use]
+pub fn cubic_bezier(dur: f32, control: [f32; 4]) -> SegmentBuilder {
+    SegmentBuilder::new(Ease::CubicBezier { control }, dur)
 }
 
 /// Delay with no property changes (`StepMania`: `sleep(t)`).
@@ -1333,6 +1426,73 @@ impl TweenSeq {
                 // Current step still running; exit this update.
                 break;
             }
+        }
+    }
+}
+
+/// Read-only tween diagnostics used by the native Actor conformance suite.
+#[cfg(feature = "conformance")]
+#[derive(Clone, Copy, Debug)]
+pub struct TweenQueueEntry {
+    pub ease: Ease,
+    pub duration: f32,
+    pub time_left: f32,
+    pub curve_probe: [f32; 5],
+    pub target: TweenState,
+}
+
+/// Semantic snapshot of one DeadSync tween queue.
+#[cfg(feature = "conformance")]
+#[derive(Clone, Debug)]
+pub struct TweenSnapshot {
+    pub state: TweenState,
+    pub time_left: f32,
+    pub queue: Vec<TweenQueueEntry>,
+}
+
+#[cfg(feature = "conformance")]
+impl TweenSeq {
+    /// Captures the active segment followed by queued segments. Unlike native
+    /// `Actor::Sleep`, DeadSync does not retain its implementation-only
+    /// zero-duration separator, so callers compare semantic queue entries.
+    #[must_use]
+    pub fn conformance_snapshot(&self) -> TweenSnapshot {
+        const PROBES: [f32; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
+
+        let mut state = self.state;
+        let mut queue = Vec::with_capacity(self.queue.len() + usize::from(self.current.is_some()));
+        if let Some(current) = &self.current {
+            let mut segment = current.clone();
+            segment.prepare_if_needed(&state);
+            for op in &segment.prepared {
+                op.apply_final(&mut state);
+            }
+            queue.push(TweenQueueEntry {
+                ease: segment.ease,
+                duration: segment.dur,
+                time_left: (segment.dur - segment.elapsed).max(0.0),
+                curve_probe: PROBES.map(|at| ease_apply(segment.ease, at)),
+                target: state,
+            });
+        }
+        for step in &self.queue {
+            let mut segment = RuntimeSegment::new(step.0.clone());
+            segment.prepare_if_needed(&state);
+            for op in &segment.prepared {
+                op.apply_final(&mut state);
+            }
+            queue.push(TweenQueueEntry {
+                ease: segment.ease,
+                duration: segment.dur,
+                time_left: segment.dur,
+                curve_probe: PROBES.map(|at| ease_apply(segment.ease, at)),
+                target: state,
+            });
+        }
+        TweenSnapshot {
+            state: self.state,
+            time_left: queue.iter().map(|entry| entry.time_left).sum(),
+            queue,
         }
     }
 }

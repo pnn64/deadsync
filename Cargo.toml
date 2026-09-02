@@ -71,7 +71,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1057"
+version = "0.5.1058"
 
 [[bin]]
 name = "generate_pseudo"
@@ -93,13 +93,15 @@ log = "0.4.33"
 
 [dev-dependencies]
 deadlib-assets = { path = "crates/deadlib-assets" }
-deadlib-present = { path = "crates/deadlib-present" }
+deadlib-present = { path = "crates/deadlib-present", features = ["conformance"] }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-noteskin = { path = "crates/deadsync-noteskin" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
+deadsync-song-lua = { path = "crates/deadsync-song-lua" }
+deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
