@@ -389,7 +389,9 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::UpdateTracks { .. } => "UpdateTracks",
         SongLuaOverlayKind::ActorFrameTexture { .. } => "ActorFrameTexture",
         SongLuaOverlayKind::ActorProxy { .. } => "ActorProxy",
-        SongLuaOverlayKind::AftSprite { .. } => "AftSprite",
+        // An AFT-backed sprite is still a native Sprite. AftSprite is only
+        // DeadSync's internal texture-source specialization.
+        SongLuaOverlayKind::AftSprite { .. } => "Sprite",
         SongLuaOverlayKind::Sprite { .. } => "Sprite",
         SongLuaOverlayKind::Sound { .. } => "Sound",
         SongLuaOverlayKind::BitmapText { .. } => "BitmapText",
@@ -1971,6 +1973,28 @@ fn native_player_operation_target(operation: &str) -> Option<(SongLuaEaseTarget,
     })
 }
 
+fn compiled_player_range(
+    compiled: &[CompiledSongLua],
+    player: u8,
+    target: &SongLuaEaseTarget,
+    default: f32,
+) -> (f32, f32) {
+    compiled
+        .iter()
+        .flat_map(|layer| &layer.eases)
+        .filter(|ease| {
+            ease.target == *target && (ease.player.is_none() || ease.player == Some(player))
+        })
+        .flat_map(|ease| [ease.from, ease.to])
+        .fold((default, default), |(min, max), value| {
+            (min.min(value), max.max(value))
+        })
+}
+
+fn range_covers(actual: (f32, f32), expected: (f32, f32)) -> bool {
+    actual.0 <= expected.0 + 0.03 && actual.1 >= expected.1 - 0.03
+}
+
 fn compare_player_operation_ranges(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
@@ -2010,29 +2034,28 @@ fn compare_player_operation_ranges(
         if (native_min - default).abs() <= EPSILON && (native_max - default).abs() <= EPSILON {
             continue;
         }
-        let compiled_values = compiled
-            .iter()
-            .flat_map(|layer| &layer.eases)
-            .filter(|ease| {
-                ease.target == target && (ease.player.is_none() || ease.player == Some(player))
-            })
-            .flat_map(|ease| [ease.from, ease.to])
-            .chain(std::iter::once(default))
-            .collect::<Vec<_>>();
-        let compiled_min = compiled_values
-            .iter()
-            .copied()
-            .reduce(f32::min)
-            .unwrap_or(default);
-        let compiled_max = compiled_values
-            .iter()
-            .copied()
-            .reduce(f32::max)
-            .unwrap_or(default);
-        if compiled_min > native_min + 0.03 || compiled_max < native_max - 0.03 {
+        let expected = (native_min, native_max);
+        let compiled_range = compiled_player_range(compiled, player, &target, default);
+        let axis_ranges = (target == SongLuaEaseTarget::PlayerZoom).then(|| {
+            [
+                SongLuaEaseTarget::PlayerZoomX,
+                SongLuaEaseTarget::PlayerZoomY,
+                SongLuaEaseTarget::PlayerZoomZ,
+            ]
+            .map(|axis| compiled_player_range(compiled, player, &axis, default))
+        });
+        let covered = range_covers(compiled_range, expected)
+            || axis_ranges.is_some_and(|ranges| {
+                ranges
+                    .into_iter()
+                    .all(|range| range_covers(range, expected))
+            });
+        if !covered {
             gaps.push(format!(
-                "P{player} {} range differs: ITGmania [{native_min:.3}, {native_max:.3}], DeadSync [{compiled_min:.3}, {compiled_max:.3}]",
-                track.operation
+                "P{player} {} range differs: ITGmania [{native_min:.3}, {native_max:.3}], DeadSync [{:.3}, {:.3}]",
+                track.operation,
+                compiled_range.0,
+                compiled_range.1
             ));
         }
     }
