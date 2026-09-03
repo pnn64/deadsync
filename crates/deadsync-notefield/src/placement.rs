@@ -529,25 +529,21 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
         playfield_center_x
     };
 
-    let receptor_y_override = request
-        .receptor_y_override
-        .map(|y| y + request.notefield_offset_y);
-    let receptor_y_centered =
-        receptor_y_override.unwrap_or(request.screen_center_y + request.notefield_offset_y);
-    let receptor_y_normal = receptor_y_override.unwrap_or({
-        if request.center_receptors_y {
-            receptor_y_centered
+    let receptor_y_base = request.screen_center_y + request.notefield_offset_y;
+    let (receptor_y_normal, receptor_y_reverse, receptor_y_centered) =
+        if let Some(y) = request.receptor_y_override {
+            let y = y + request.notefield_offset_y;
+            (y, y, y)
+        } else if request.center_receptors_y {
+            (receptor_y_base, receptor_y_base, receptor_y_base)
         } else {
-            request.screen_center_y + style.receptor_normal_y + request.notefield_offset_y
-        }
-    });
-    let receptor_y_reverse = receptor_y_override.unwrap_or({
-        if request.center_receptors_y {
-            receptor_y_centered
-        } else {
-            request.screen_center_y + style.receptor_reverse_y + request.notefield_offset_y
-        }
-    });
+            let normal = receptor_y_base + style.receptor_normal_y;
+            let reverse = receptor_y_base + style.receptor_reverse_y;
+            // ITGmania places NoteField at the midpoint of the theme's normal
+            // and reverse receptor metrics. Centered interpolates toward that
+            // actor origin, which need not be the literal screen center.
+            (normal, reverse, f32::midpoint(normal, reverse))
+        };
     let centered_percent = if request.receptor_y_override.is_some() || request.center_receptors_y {
         1.0
     } else {
@@ -1084,14 +1080,14 @@ mod tests {
         let layout = field_layout(request);
         assert_near(layout.receptor_y_normal, 125.0);
         assert_near(layout.receptor_y_reverse, 395.0);
-        assert_near(layout.receptor_y_centered, 250.0);
+        assert_near(layout.receptor_y_centered, 260.0);
         assert_near(layout.column_receptor_ys[0], 125.0);
         assert_near(layout.column_receptor_ys[1], 260.0);
         assert_near(layout.column_receptor_ys[2], 395.0);
 
         request.centered_scroll = 2.0;
         let overshot = field_layout(request);
-        assert_near(overshot.column_receptor_ys[0], 375.0);
+        assert_near(overshot.column_receptor_ys[0], 395.0);
         assert_near(overshot.hud_layout.judgment_y, 220.0);
 
         request.centered_scroll = 0.0;
@@ -1113,6 +1109,21 @@ mod tests {
                 .iter()
                 .all(|y| (*y - 110.0).abs() <= 0.001)
         );
+    }
+
+    #[test]
+    fn gemini_ending_centered_reverse_keeps_receptors_on_normal_row() {
+        let mut request = request();
+        request.centered_scroll = 2.0;
+        request.column_reverse_percent[..4].fill(0.999);
+
+        let layout = field_layout(request);
+
+        assert_near(layout.receptor_y_normal, 115.0);
+        assert_near(layout.receptor_y_centered, 250.0);
+        for receptor_y in &layout.column_receptor_ys[..4] {
+            assert_near(*receptor_y, 115.27);
+        }
     }
 
     #[test]
