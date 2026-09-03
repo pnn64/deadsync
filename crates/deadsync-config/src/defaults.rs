@@ -121,7 +121,7 @@ pub const DEFAULT_INPUT_DEBOUNCE_SECONDS: f32 = 0.02;
 pub const DEFAULT_ARCADE_OPTIONS_NAVIGATION: bool = false;
 pub const DEFAULT_THREE_KEY_NAVIGATION: bool = false;
 pub const DEFAULT_USE_FSRS: bool = false;
-pub const DEFAULT_LIGHTS_SIMPLIFY_BASS: bool = false;
+pub const DEFAULT_LIGHTS_SIMPLIFY_BASS: bool = true;
 pub const DEFAULT_ONLY_DEDICATED_MENU_BUTTONS: bool = false;
 
 #[cfg(test)]
@@ -139,5 +139,6 @@ mod tests {
         assert!(!DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS);
         assert!(!DEFAULT_ALLOW_SONG_DELETION);
         assert!(!DEFAULT_SHOW_LOCAL_IP);
+        assert!(DEFAULT_LIGHTS_SIMPLIFY_BASS);
     }
 }
