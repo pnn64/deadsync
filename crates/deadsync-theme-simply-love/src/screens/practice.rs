@@ -4,11 +4,13 @@ use crate::assets::{AssetManager, FontRole, machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
-use deadlib_present::actors::{Actor, InlineText};
+use deadlib_present::actors::{Actor, InlineText, SizeSpec};
 use deadlib_present::color;
+use deadlib_present::density;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
@@ -70,6 +72,9 @@ const MUSIC_RATE_REPEAT_DELAY_SECONDS: f32 = 0.375;
 const MUSIC_RATE_REPEAT_INTERVAL_SECONDS: f32 = 0.05;
 const MAX_MUSIC_RATE_REPEATS_PER_FRAME: usize = 64;
 const FLASH_DURATION_SECS: f32 = 0.75;
+const PRACTICE_DENSITY_Z: i16 = 2990;
+const PRACTICE_DENSITY_LINE_Z: i16 = PRACTICE_DENSITY_Z + 1;
+const PRACTICE_DENSITY_LINE_WIDTH: f32 = 2.0;
 
 pub type MusicStartSnap = fn(&Path, f64) -> f64;
 
@@ -149,6 +154,27 @@ struct PracticeTimingLabel {
     text: Arc<str>,
     beat: f32,
     style: TimingLabelStyle,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PracticeDensityGeom {
+    x: f32,
+    y: f32,
+    length: f32,
+    thickness: f32,
+}
+
+/// Immutable Practice density graph owned by the game thread for the screen
+/// lifetime. It is built once during Practice entry with an exact-size shared
+/// vertex slice, then read without synchronization or mutation. Empty chart
+/// density produces no mesh; there is no insertion, eviction, pruning, or
+/// background work after warmup. The slice is freed on screen teardown, mesh
+/// presence exposes the only useful hit/miss state, and each editing frame is
+/// bounded to one shared-reference clone plus one position-line quad.
+struct PracticeDensityGraph {
+    mesh: Option<Arc<[MeshVertex]>>,
+    geom: PracticeDensityGeom,
+    duration: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -318,6 +344,7 @@ enum PracticeNavMode {
 pub struct State {
     pub gameplay: gameplay_screen::State,
     runtime: PracticeRuntimeView,
+    density_graph: PracticeDensityGraph,
     /// Actor-ready immutable timing labels, compiled once per player at
     /// Practice entry. The boxed slices have exact song-lifetime capacity and
     /// require no invalidation, eviction, synchronization, or frame-time
@@ -509,6 +536,7 @@ const SNAP_BEATS: [f32; 9] = [
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
     gameplay.disable_score_for_practice();
     let active_players = gameplay.num_players();
+    let density_graph = build_practice_density_graph(&gameplay);
     let timing_labels = std::array::from_fn(|player| {
         if player < active_players {
             gameplay.gameplay_chart(player).map_or_else(
@@ -522,6 +550,7 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
     let mut state = State {
         gameplay,
         runtime,
+        density_graph,
         timing_labels,
         edit_text: PracticeEditText::new(),
         menu_text: PracticeMenuText::new(),
@@ -1067,6 +1096,7 @@ pub fn push_actors(
     );
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);
+        append_density_graph(state, actors);
         append_edit_overlay(state, actors);
     }
     if state.menu.is_some() {
@@ -2501,6 +2531,118 @@ fn append_snap_cursor_heart(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, 
     ));
 }
 
+fn build_practice_density_graph(gameplay: &gameplay_screen::State) -> PracticeDensityGraph {
+    let chart = gameplay.chart(0);
+    let chart_type = chart.map_or("", |chart| chart.chart_type.as_str());
+    let notefield_width = practice_style_notefield_width(chart_type, gameplay.cols_per_player());
+    let geom = practice_density_geom(
+        screen_width(),
+        screen_height(),
+        notefield_width,
+        gameplay.num_players() == 1 && gameplay.cols_per_player() >= 8,
+    );
+    let first_second = gameplay.music_time_for_beat(0.0).min(0.0);
+    let last_second = gameplay.song().precise_last_second();
+    let duration = (last_second - first_second).max(0.001);
+    let mesh = chart.and_then(|chart| {
+        let mut vertices = density::build_density_histogram_mesh(
+            &chart.measure_nps_vec,
+            chart.max_nps,
+            &chart.measure_seconds_vec,
+            first_second,
+            last_second,
+            geom.length,
+            geom.thickness,
+            0.0,
+            geom.length,
+            None,
+            1.0,
+        );
+        rotate_practice_density_mesh(&mut vertices, geom.thickness);
+        (!vertices.is_empty()).then(|| Arc::from(vertices.into_boxed_slice()))
+    });
+    PracticeDensityGraph {
+        mesh,
+        geom,
+        duration,
+    }
+}
+
+fn practice_style_notefield_width(chart_type: &str, cols_per_player: usize) -> f32 {
+    let column_width = if chart_type.starts_with("pump-") {
+        50.0
+    } else {
+        64.0
+    };
+    cols_per_player as f32 * column_width
+}
+
+fn practice_density_geom(
+    screen_w: f32,
+    screen_h: f32,
+    notefield_w: f32,
+    double: bool,
+) -> PracticeDensityGeom {
+    // PARITY[Simply Love ScreenPractice overlay.lua]: the horizontal graph is
+    // rotated into this strip after applying its 4:3 and double-play offsets.
+    let is_4_3 = screen_w / screen_h.max(1.0) <= 1.4;
+    let mut length = (screen_h - 100.0).max(1.0);
+    let mut thickness = 50.0;
+    let mut y = 80.0;
+    let mut x_offset = notefield_w / if double { 2.2 } else { 1.3 };
+    if is_4_3 {
+        thickness = 25.0;
+        x_offset = notefield_w / 1.5 - 1.0;
+        if double {
+            length = (screen_h - 200.0).max(1.0);
+            x_offset = notefield_w / 2.7;
+            y = 180.0;
+        }
+    }
+    PracticeDensityGeom {
+        x: screen_w.mul_add(0.5, x_offset - thickness),
+        y,
+        length,
+        thickness,
+    }
+}
+
+fn rotate_practice_density_mesh(vertices: &mut [MeshVertex], thickness: f32) {
+    for vertex in vertices {
+        let [along, height] = vertex.pos;
+        vertex.pos = [thickness - height, along];
+    }
+}
+
+fn append_density_graph(state: &State, actors: &mut Vec<Actor>) {
+    let graph = &state.density_graph;
+    if let Some(mesh) = &graph.mesh {
+        actors.push(Actor::Mesh {
+            align: [0.0, 0.0],
+            offset: [graph.geom.x, graph.geom.y],
+            size: [
+                SizeSpec::Px(graph.geom.thickness),
+                SizeSpec::Px(graph.geom.length),
+            ],
+            tint: [1.0; 4],
+            vertices: Arc::clone(mesh),
+            visible: true,
+            blend: BlendMode::Alpha,
+            z: PRACTICE_DENSITY_Z,
+        });
+    }
+
+    // SL's position line scales the current second across LastSecond-FirstSecond.
+    let progress = (state.gameplay.current_music_time_display() / graph.duration).clamp(0.0, 1.0);
+    actors.push(act!(quad:
+        align(0.0, 0.5):
+        xy(graph.geom.x, graph.geom.length.mul_add(progress, graph.geom.y)):
+        zoomto(graph.geom.thickness, PRACTICE_DENSITY_LINE_WIDTH):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(PRACTICE_DENSITY_LINE_Z)
+    ));
+}
+
 fn append_edit_overlay(state: &mut State, actors: &mut Vec<Actor>) {
     let source = EditInfoSource {
         cursor_beat: state.cursor_beat,
@@ -2941,13 +3083,15 @@ mod tests {
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate, gameplay_hotkey_input,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
         music_rate_hold_dir_for_event, next_display_beat, normalize_flash_text,
-        page_hold_dir_for_key, practice_edit_beat_travel, practice_nav_mode_from_config,
-        push_selection_info, quantized_music_rate, timing_label_glow_alpha, timing_label_x,
-        timing_speed_label,
+        page_hold_dir_for_key, practice_density_geom, practice_edit_beat_travel,
+        practice_nav_mode_from_config, practice_style_notefield_width, push_selection_info,
+        quantized_music_rate, rotate_practice_density_mesh, timing_label_glow_alpha,
+        timing_label_x, timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
     use crate::screens::{Screen, ThemeEffect};
+    use deadlib_render_core::MeshVertex;
     use deadsync_gameplay::{GameplayOffsetAdjustKey, GameplayRawKeyInput};
     use deadsync_input::KeyCode;
     use deadsync_input::VirtualAction;
@@ -3480,6 +3624,52 @@ mod tests {
             practice_edit_beat_travel(44.0, 40.0, 0.5, ScrollSpeedSetting::XMod(1.5), 180.0, 1.0);
 
         assert!((4.0_f32 * 64.0 * 0.5).mul_add(-1.5, travel).abs() <= 0.001);
+    }
+
+    #[test]
+    fn practice_density_graph_matches_wide_single_layout() {
+        let geom = practice_density_geom(854.0, 480.0, 256.0, false);
+
+        assert!((geom.x - 573.923_1).abs() < 0.001);
+        assert_eq!(geom.y, 80.0);
+        assert_eq!(geom.length, 380.0);
+        assert_eq!(geom.thickness, 50.0);
+    }
+
+    #[test]
+    fn practice_density_graph_matches_four_three_double_layout() {
+        let geom = practice_density_geom(640.0, 480.0, 512.0, true);
+
+        assert!((geom.x - 484.629_64).abs() < 0.001);
+        assert_eq!(geom.y, 180.0);
+        assert_eq!(geom.length, 280.0);
+        assert_eq!(geom.thickness, 25.0);
+    }
+
+    #[test]
+    fn practice_density_graph_uses_game_specific_column_widths() {
+        assert_eq!(practice_style_notefield_width("dance-single", 4), 256.0);
+        assert_eq!(practice_style_notefield_width("pump-single", 5), 250.0);
+        assert_eq!(practice_style_notefield_width("pump-double", 10), 500.0);
+    }
+
+    #[test]
+    fn practice_density_mesh_rotates_into_right_facing_strip() {
+        let mut vertices = [
+            MeshVertex {
+                pos: [10.0, 50.0],
+                color: [1.0; 4],
+            },
+            MeshVertex {
+                pos: [10.0, 20.0],
+                color: [1.0; 4],
+            },
+        ];
+
+        rotate_practice_density_mesh(&mut vertices, 50.0);
+
+        assert_eq!(vertices[0].pos, [0.0, 10.0]);
+        assert_eq!(vertices[1].pos, [30.0, 10.0]);
     }
 
     #[test]
