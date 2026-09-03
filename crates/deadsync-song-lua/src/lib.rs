@@ -8673,6 +8673,58 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_retimes_runtime_messages_to_update_wake() {
+        let song_dir = test_dir("runtime-message-update-wake");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local action = 1
+
+mod_actions = {
+    {1.01, "BossOn", true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Boss",
+        InitCommand=function(self) self:visible(false) end,
+        BossOnMessageCommand=function(self) self:visible(true) end,
+    },
+    Def.Actor{
+        OnCommand=function(self) self:queuecommand("Update") end,
+        UpdateCommand=function(self)
+            local beat = GAMESTATE:GetSongBeat()
+            while action <= #mod_actions and beat >= mod_actions[action][1] do
+                MESSAGEMAN:Broadcast(mod_actions[action][2])
+                action = action + 1
+            end
+            self:sleep(0.02):queuecommand("Update")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Message Update Wake");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let message = compiled
+            .messages
+            .iter()
+            .find(|event| event.message == "BossOn")
+            .expect("runtime action should retain its named broadcast");
+
+        assert!(
+            message.beat > 1.01 && message.beat <= 1.06,
+            "runtime message must use the first recurring update wake after beat 1.01, got {}",
+            message.beat
+        );
+    }
+
+    #[test]
     fn compile_song_lua_classifies_player_transform_function_eases() {
         let song_dir = test_dir("function-ease");
         let entry = song_dir.join("default.lua");

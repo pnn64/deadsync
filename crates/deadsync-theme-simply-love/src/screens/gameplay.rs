@@ -21363,6 +21363,173 @@ mod tests {
     use deadlib_present::dsl::TextBuilder;
     use deadlib_render_core::frame_compare::compare_render_frames_semantic;
 
+    #[test]
+    #[ignore = "requires the sibling lua-songs corpus"]
+    fn cuphead_cagney_stays_offscreen_during_cala_phase() {
+        let corpus = std::fs::canonicalize(workspace_root())
+            .expect("deadsync workspace should resolve")
+            .parent()
+            .expect("deadsync should have a workspace parent")
+            .join("lua-songs/Cuphead [TaroNuke]");
+        let entries = [
+            corpus.join("bg/default.lua"),
+            corpus.join("lua/default.lua"),
+        ];
+        let entry_paths = entries
+            .iter()
+            .map(std::path::PathBuf::as_path)
+            .collect::<Vec<_>>();
+        let simfile = std::fs::read_to_string(corpus.join("botanic.sm"))
+            .expect("Cuphead simfile should be readable");
+        let bpms = simfile
+            .split_once("#BPMS:")
+            .and_then(|(_, tail)| tail.split_once(';'))
+            .map(|(bpms, _)| bpms)
+            .expect("Cuphead simfile should contain BPMS");
+        let mut context = deadsync_assets::song_lua::SongLuaCompileContext::new(
+            &corpus,
+            "Botanic Panic".to_owned(),
+        );
+        context.song_timing_bpms = deadsync_assets::song_lua::parse_song_timing_bpms(bpms);
+        context.music_length_seconds = 140.0;
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        context.players =
+            std::array::from_fn(|_| deadsync_assets::song_lua::SongLuaPlayerContext {
+                enabled: true,
+                ..Default::default()
+            });
+        let compiled_layers = compile_song_lua_layers(&entry_paths, 1, &context)
+            .expect("Cuphead background and foreground lua should compile together");
+        let compiled = &compiled_layers[1];
+        let idle = compiled
+            .overlays
+            .iter()
+            .position(|actor| {
+                matches!(
+                    &actor.kind,
+                    SongLuaOverlayKind::Sprite { texture_path, .. }
+                        if texture_path.to_string_lossy().replace('\\', "/").contains("/cagney/idle")
+                )
+            })
+            .expect("Cuphead should contain Cagney's idle sprite");
+        let SongLuaOverlayKind::Sprite {
+            texture_key: idle_texture_key,
+            ..
+        } = &compiled.overlays[idle].kind
+        else {
+            unreachable!("Cagney idle was selected from sprite overlays");
+        };
+        let idle_texture_key = Arc::clone(idle_texture_key);
+        let seconds = compiled
+            .messages
+            .iter()
+            .map(|message| Some(message.beat))
+            .collect::<Vec<_>>();
+        let events = deadsync_profile_gameplay::build_song_lua_overlay_message_events_with_seconds(
+            &compiled, &seconds,
+        );
+        let mut overlays = compiled.overlays.clone();
+        let mut tracks = compiled
+            .overlay_updates
+            .iter()
+            .map(
+                |track| deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack {
+                    overlay_index: track.overlay_index,
+                    target: track.target,
+                    samples: track
+                        .samples
+                        .iter()
+                        .map(
+                            |sample| deadsync_song_lua::SongLuaOverlayRuntimeUpdateSample {
+                                second: sample.beat,
+                                value: sample.value.clone(),
+                            },
+                        )
+                        .collect(),
+                },
+            )
+            .collect::<Vec<_>>();
+        tracks.sort_by_key(|track| track.overlay_index);
+        overlays.push(SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::UpdateTracks { tracks },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        });
+        let ranges = vec![0..0; overlays.len()];
+        let mut order_cache = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut caches = Vec::new();
+        let mut local = Vec::new();
+        let mut composed = Vec::new();
+        const CALA_PHASE_BEAT: u32 = 180;
+        for beat in 0..=CALA_PHASE_BEAT {
+            song_lua_overlay_state_sets_from_into(
+                beat as f32,
+                &overlays,
+                &events,
+                &[],
+                &ranges,
+                854.0,
+                480.0,
+                &mut order_cache,
+                &mut caches,
+                &mut local,
+                &mut composed,
+            );
+        }
+
+        assert!(
+            local[idle].visible,
+            "ITG keeps the idle sprite locally visible"
+        );
+        let idle_parent = overlays[idle]
+            .parent_index
+            .expect("Cagney idle should retain its ActorFrame parent");
+        assert!(
+            (local[idle].x - 587.0).abs() <= 0.01,
+            "Cagney's sprite-local position changed during Cala's phase"
+        );
+        assert!(
+            (local[idle_parent].x - 427.0).abs() <= 0.01,
+            "Cagney's parent must hold its completed beat-111 exit tween"
+        );
+        assert!(
+            (composed[idle].x - 1_014.0).abs() <= 0.01,
+            "Cagney's beat-111 parent move must persist through Cala's phase"
+        );
+        let mut asset_manager = AssetManager::new();
+        asset_manager.queue_texture_upload(
+            idle_texture_key.to_string(),
+            image::RgbaImage::new(1_152, 1_056),
+        );
+        assert_eq!(
+            song_lua_overlay_sprite_size(composed[idle], idle_texture_key.as_ref()),
+            Some([288.0, 352.0]),
+            "Cagney culling must use one 4x3 sheet cell, not the whole texture"
+        );
+        let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+        let camera_state = topology.camera_state(&composed, idle);
+        assert!(camera_state.is_none(), "Cagney must remain in screen space");
+        assert!(
+            build_song_lua_overlay_actor(
+                &overlays[idle],
+                composed[idle],
+                camera_state,
+                &asset_manager,
+                0,
+                854.0,
+                480.0,
+                CALA_PHASE_BEAT as f32,
+                CALA_PHASE_BEAT as f32,
+                CALA_PHASE_BEAT as f32,
+            )
+            .is_none(),
+            "Cagney leaked into Cala's phase despite being fully offscreen"
+        );
+    }
+
     fn workspace_root() -> std::path::PathBuf {
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         if manifest.join("assets").is_dir() {

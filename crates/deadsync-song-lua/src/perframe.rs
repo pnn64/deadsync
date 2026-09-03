@@ -1159,6 +1159,8 @@ fn capture_update_overlay_samples<Kind>(
         tracks,
         track_indices,
         baseline,
+        update_states,
+        to_states,
         scheduled_samples,
         next_beat,
     );
@@ -1369,17 +1371,28 @@ fn merge_completed_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
     baseline: &[SongLuaOverlayState],
+    update_states: &mut [SongLuaOverlayState],
+    to_states: &mut [SongLuaOverlayState],
     scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
     beat: f32,
 ) {
     if scheduled.is_empty() {
         return;
     }
-    let (completed, pending) = std::mem::take(scheduled)
+    let (mut completed, pending) = std::mem::take(scheduled)
         .into_iter()
         .partition(|sample| sample.end_beat <= beat + f32::EPSILON);
     *scheduled = pending;
     if !completed.is_empty() {
+        completed.sort_by(|left, right| left.end_beat.total_cmp(&right.end_beat));
+        for sample in &completed {
+            if let Some(state) = update_states.get_mut(sample.overlay_index) {
+                set_overlay_state_update_value(state, sample.target, &sample.value);
+            }
+            if let Some(state) = to_states.get_mut(sample.overlay_index) {
+                set_overlay_state_update_value(state, sample.target, &sample.value);
+            }
+        }
         merge_scheduled_overlay_samples(tracks, track_indices, baseline, completed);
     }
 }
@@ -1489,6 +1502,7 @@ pub fn compile_update_functions<Kind>(
         Vec<SongLuaOverlayUpdateTrack>,
         Vec<SongLuaColumnOffsetWindow>,
         Vec<SongLuaStatefulMessageCapture>,
+        Vec<(f32, String, bool)>,
     ),
     String,
 > {
@@ -1501,12 +1515,26 @@ pub fn compile_update_functions<Kind>(
     let mut column_ms = 0.0;
     let mut overlay_ms = 0.0;
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
-        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()));
+        return Ok((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ));
     }
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
-        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()));
+        return Ok((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ));
     }
 
     let player_tables = tracked_player_tables(tracked_actors);
@@ -1701,6 +1729,7 @@ pub fn compile_update_functions<Kind>(
         scheduled_overlay_samples,
     );
     let stateful_messages = crate::lua_util::stateful_message_captures(lua);
+    let runtime_broadcasts = crate::lua_util::runtime_broadcast_captures(lua);
     crate::lua_util::end_overlay_update_capture(lua);
     Ok((
         eases,
@@ -1708,6 +1737,7 @@ pub fn compile_update_functions<Kind>(
         overlay_tracks,
         column_transforms,
         stateful_messages,
+        runtime_broadcasts,
     ))
 }
 
@@ -1973,4 +2003,47 @@ pub fn compile_perframes<Kind>(
         info = unsupported_perframe_info(&entries);
     }
     Ok((out_eases, out_overlay_eases, info))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn completed_update_tweens_persist_into_following_state() {
+        let baseline = vec![SongLuaOverlayState::default()];
+        let mut update_states = baseline.clone();
+        let mut next_states = baseline.clone();
+        let mut tracks = Vec::new();
+        let mut track_indices = std::collections::HashMap::new();
+        let mut scheduled = vec![SongLuaScheduledOverlaySample {
+            overlay_index: 0,
+            target: SongLuaOverlayUpdateTarget::X,
+            start_seconds: 1.0,
+            end_seconds: 2.0,
+            start_beat: 1.0,
+            end_beat: 2.0,
+            easing: Some("accelerate".to_owned()),
+            opt1: None,
+            from: SongLuaOverlayUpdateValue::F32(0.0),
+            value: SongLuaOverlayUpdateValue::F32(427.0),
+        }];
+
+        merge_completed_scheduled_overlay_samples(
+            &mut tracks,
+            &mut track_indices,
+            &baseline,
+            &mut update_states,
+            &mut next_states,
+            &mut scheduled,
+            2.0,
+        );
+
+        assert!(scheduled.is_empty());
+        assert_eq!(update_states[0].x, 427.0);
+        assert_eq!(next_states[0].x, 427.0);
+        assert!(tracks[0].samples.last().is_some_and(|sample| {
+            sample.beat == 2.0 && sample.value == SongLuaOverlayUpdateValue::F32(427.0)
+        }));
+    }
 }

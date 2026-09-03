@@ -2314,6 +2314,143 @@ fn cuphead_stateful_fire_message_matches_itgmania() {
         gaps.len(),
         gaps.join("\n- ")
     );
+
+    let native_beat = cuphead_flower_spawn_beat(&trace);
+    let (layer, overlay_index) = trace
+        .roots
+        .iter()
+        .zip(&compiled)
+        .enumerate()
+        .find_map(|(layer, (_, compiled))| {
+            compiled
+                .overlays
+                .iter()
+                .find_map(|overlay| {
+                    let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlay.kind else {
+                        return None;
+                    };
+                    let texture = texture_path.to_string_lossy().replace('\\', "/");
+                    if !texture.contains("/cagney/sprout") {
+                        return None;
+                    }
+                    let parent_index = overlay.parent_index?;
+                    let parent = &compiled.overlays[parent_index];
+                    (matches!(&parent.kind, SongLuaOverlayKind::ActorFrame)
+                        && !parent.initial_state.visible)
+                        .then_some(parent_index)
+                })
+                .map(|overlay_index| (layer, overlay_index))
+        })
+        .expect("DeadSync does not contain the Cuphead flower actor");
+    let actual_beat = compiled[layer]
+        .overlay_updates
+        .iter()
+        .find(|track| {
+            track.overlay_index == overlay_index
+                && track.target == SongLuaOverlayUpdateTarget::Visible
+        })
+        .and_then(|track| {
+            track.samples.iter().find_map(|sample| {
+                (matches!(&sample.value, SongLuaOverlayUpdateValue::Bool(true))
+                    && (299.0..=301.0).contains(&sample.beat))
+                .then_some(sample.beat)
+            })
+        })
+        .expect("DeadSync never makes the Cuphead flower actor visible");
+    assert!(
+        (actual_beat - native_beat).abs() <= EPSILON,
+        "Cuphead flower spawn differs: ITGmania beat {native_beat}, DeadSync beat {actual_beat}"
+    );
+
+    let native_beat = cuphead_cagney_spawn_beat(&trace);
+    let (layer, _cagney_index) = compiled
+        .iter()
+        .enumerate()
+        .find_map(|(layer_index, layer)| {
+            layer
+                .overlays
+                .iter()
+                .position(|actor| {
+                    let SongLuaOverlayKind::Sprite { texture_path, .. } = &actor.kind else {
+                        return false;
+                    };
+                    texture_path
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                        .contains("/cagney/idle")
+                        && !actor.initial_state.visible
+                        && actor.message_commands.iter().any(|command| {
+                            command.message == "CagneyInit"
+                                && command
+                                    .blocks
+                                    .iter()
+                                    .any(|block| block.delta.visible == Some(true))
+                        })
+                })
+                .map(|actor_index| (layer_index, actor_index))
+        })
+        .expect("DeadSync does not contain the Cuphead Cagney boss actor");
+    let actual_beat = compiled[layer]
+        .messages
+        .iter()
+        .find(|event| event.message == "CagneyInit" && (247.0..=249.0).contains(&event.beat))
+        .map(|event| event.beat)
+        .expect("DeadSync never starts the Cuphead Cagney phase");
+    assert!(
+        (actual_beat - native_beat).abs() <= EPSILON,
+        "Cuphead Cagney spawn differs: ITGmania beat {native_beat}, DeadSync beat {actual_beat}"
+    );
+}
+
+fn cuphead_flower_spawn_beat(trace: &NativeTrace) -> f32 {
+    trace
+        .tween_tracks
+        .iter()
+        .filter(|track| {
+            track.actor == "def-0137" && track.command.as_deref() == Some("UpdateCommand")
+        })
+        .flat_map(|track| &track.segments)
+        .find(|segment| {
+            (299.0..=301.0).contains(&segment.beat)
+                && segment.operations.iter().any(|operation| {
+                    operation.operation == "ActorFrame.visible"
+                        && operation.args.first().and_then(Value::as_bool) == Some(true)
+                })
+        })
+        .map(|segment| segment.beat)
+        .expect("Cuphead fixture does not capture the flower spawn")
+}
+
+fn cuphead_cagney_spawn_beat(trace: &NativeTrace) -> f32 {
+    trace
+        .tween_tracks
+        .iter()
+        .filter(|track| {
+            track.actor == "def-0030"
+                && track.command.as_deref() == Some("CagneyInitMessageCommand")
+        })
+        .flat_map(|track| &track.segments)
+        .find(|segment| {
+            (247.0..=249.0).contains(&segment.beat)
+                && segment.operations.iter().any(|operation| {
+                    operation.operation == "Sprite.visible"
+                        && operation.args.first().and_then(Value::as_bool) == Some(true)
+                })
+        })
+        .map(|segment| segment.beat)
+        .expect("Cuphead fixture does not capture the Cagney boss spawn")
+}
+
+fn cuphead_cagney_parent_segments(
+    trace: &NativeTrace,
+) -> impl Iterator<Item = (&NativeTweenTrack, &NativeTweenSegment)> {
+    trace
+        .tween_tracks
+        .iter()
+        .filter(|track| {
+            track.actor == "def-0029" && track.command.as_deref() == Some("UpdateCommand")
+        })
+        .flat_map(|track| track.segments.iter().map(move |segment| (track, segment)))
 }
 
 #[test]
@@ -2364,6 +2501,52 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
             "SCREEN_WIDTH"
         );
     }
+}
+
+#[test]
+fn cuphead_fixture_captures_queued_boss_spawns() {
+    let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
+    let trace = read_trace_file(&trace_path);
+
+    let flower_beat = cuphead_flower_spawn_beat(&trace);
+    assert!(
+        flower_beat > 300.0 && flower_beat < 300.1,
+        "queued Cuphead flower spawn ran at unexpected beat {flower_beat}"
+    );
+    let cagney_beat = cuphead_cagney_spawn_beat(&trace);
+    assert!(
+        cagney_beat > 248.0 && cagney_beat < 248.1,
+        "queued Cuphead Cagney spawn ran at unexpected beat {cagney_beat}"
+    );
+
+    let exit = cuphead_cagney_parent_segments(&trace)
+        .find(|(track, segment)| {
+            track.kind == "tween"
+                && track.easing.as_deref() == Some("accelerate")
+                && (111.0..111.1).contains(&segment.beat)
+        })
+        .expect("Cuphead fixture lost Cagney's beat-111 exit tween");
+    assert!(exit.1.operations.iter().any(|operation| {
+        operation.operation == "ActorFrame.addx" && value_f32(operation.args.first()) == Some(427.0)
+    }));
+    assert!(
+        exit.1
+            .operations
+            .iter()
+            .all(|operation| operation.operation != "ActorFrame.zoom"),
+        "the beat-248 return was folded into Cagney's completed exit tween"
+    );
+    let reentry = cuphead_cagney_parent_segments(&trace)
+        .find(|(track, segment)| {
+            track.kind == "immediate"
+                && (248.0..248.1).contains(&segment.beat)
+                && segment.operations.iter().any(|operation| {
+                    operation.operation == "ActorFrame.x"
+                        && value_f32(operation.args.first()) == Some(427.0)
+                })
+        })
+        .expect("Cuphead fixture did not separate Cagney's beat-248 return");
+    assert!(reentry.1.beat - exit.1.beat > 136.0);
 }
 
 #[test]

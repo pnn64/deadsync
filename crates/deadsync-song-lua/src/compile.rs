@@ -5,9 +5,9 @@ use std::sync::Arc;
 
 use crate::{
     CompiledSongLua, SongLuaCapturedChildActor, SongLuaCompileContext, SongLuaCompileTimer,
-    SongLuaHostState, SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock,
-    SongLuaOverlayKind, SongLuaOverlayMessageCommand, SongLuaOverlayModelLayer,
-    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaTimeUnit,
+    SongLuaHostState, SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor,
+    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayMessageCommand,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaTimeUnit,
     SongLuaTrackedActorTarget as TrackedCompileActorTarget,
     add_actor_child_from_path as add_host_actor_child_from_path,
     capture_stable_cross_actor_message_commands, compile_multitap_update_overlays_for_actors,
@@ -527,6 +527,11 @@ where
             actor.actor.message_commands.extend(retained_commands);
         }
     }
+    let runtime_action_message_start = if global_actions_are_runtime {
+        runtime_message_count
+    } else {
+        out.messages.len()
+    };
     read_update_function_overlay_compile_actor_actions(
         &lua,
         &root,
@@ -559,6 +564,7 @@ where
         update_overlay_tracks,
         update_column_transforms,
         stateful_message_captures,
+        runtime_broadcasts,
     ) = match compile_multitap_update_overlays_for_actors(
         &lua,
         context,
@@ -576,7 +582,14 @@ where
             )
         },
     )? {
-        Some(eases) => (Vec::new(), eases, Vec::new(), Vec::new(), Vec::new()),
+        Some(eases) => (
+            Vec::new(),
+            eases,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ),
         None => compile_update_functions(
             &lua,
             &root,
@@ -589,6 +602,10 @@ where
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     out.overlay_updates.extend(update_overlay_tracks);
+    retime_runtime_action_messages(
+        &mut out.messages[runtime_action_message_start..],
+        &runtime_broadcasts,
+    );
     for capture in stateful_message_captures {
         out.info.skipped_message_command_captures.retain(|detail| {
             !detail.contains(&format!(
@@ -676,6 +693,34 @@ where
     compile_timer.push_stage("finalize");
     log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
+}
+
+fn retime_runtime_action_messages(
+    messages: &mut [SongLuaMessageEvent],
+    runtime_broadcasts: &[(f32, String, bool)],
+) {
+    let mut matched = vec![false; messages.len()];
+    for (runtime_beat, runtime_message, has_params) in runtime_broadcasts {
+        if *has_params {
+            continue;
+        }
+        let Some(index) = messages
+            .iter()
+            .enumerate()
+            .filter(|(index, event)| {
+                !matched[*index]
+                    && !event.message.starts_with("__songlua_overlay_fn_action_")
+                    && event.message == *runtime_message
+                    && event.beat <= *runtime_beat + f32::EPSILON
+            })
+            .max_by(|(_, left), (_, right)| left.beat.total_cmp(&right.beat))
+            .map(|(index, _)| index)
+        else {
+            continue;
+        };
+        messages[index].beat = *runtime_beat;
+        matched[index] = true;
+    }
 }
 
 fn resolve_late_proxy_targets<NoteskinSlot, ModelVertex>(

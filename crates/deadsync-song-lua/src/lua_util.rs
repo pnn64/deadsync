@@ -83,6 +83,7 @@ pub struct SongLuaOverlayCompileActor<Kind> {
 struct SongLuaOverlayUpdateCapture {
     actor_indices: HashMap<usize, usize>,
     active_broadcast: Option<String>,
+    runtime_broadcasts: Vec<(f32, String, bool)>,
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
@@ -111,6 +112,7 @@ impl SongLuaOverlayUpdateCapture {
         Self {
             actor_indices,
             active_broadcast: None,
+            runtime_broadcasts: Vec::new(),
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
             values: (0..actor_count).map(|_| Vec::new()).collect(),
@@ -293,6 +295,12 @@ pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture
                 .unwrap_or_default(),
         })
         .collect()
+}
+
+pub fn runtime_broadcast_captures(lua: &Lua) -> Vec<(f32, String, bool)> {
+    lua.app_data_ref::<SongLuaOverlayUpdateCapture>()
+        .map(|capture| capture.runtime_broadcasts.clone())
+        .unwrap_or_default()
 }
 
 fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
@@ -1698,6 +1706,12 @@ pub fn broadcast_song_lua_message(
     }
     let command = format!("{message}MessageCommand");
     let globals = lua.globals();
+    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
+        capture
+            .runtime_broadcasts
+            .push((beat, message.to_string(), params.is_some()));
+    }
     let previous_broadcast = globals.raw_get::<Value>(ACTIVE_BROADCAST_KEY)?;
     globals.raw_set(ACTIVE_BROADCAST_KEY, message)?;
     let capture_broadcast = lua
