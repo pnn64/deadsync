@@ -59,6 +59,13 @@
       "compressed_bytes": 110634
     },
     {
+      "title": "BroGamer",
+      "source_simfile": "BroGamer/BroGamer.ssc",
+      "archive": "16cac90d676560f6ef5349edca906d98b230d85e1f5c3206a71a1b098d1cd350.tar.zst",
+      "sha256": "16cac90d676560f6ef5349edca906d98b230d85e1f5c3206a71a1b098d1cd350",
+      "compressed_bytes": 275567
+    },
+    {
       "title": "Botanic Panic",
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
       "archive": "9a2ac4234c212cd772c324bfa0f744571d5f64de8a36cfc0075916c9565e7fbb.tar.zst",
