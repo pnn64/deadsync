@@ -80,6 +80,13 @@
       "status": "ok"
     },
     {
+      "simfile": "BroGamer/BroGamer.ssc",
+      "fixture": "BroGamer/BroGamer.ssc.semantic.json",
+      "title": "BroGamer",
+      "lua_entries": 1,
+      "status": "ok"
+    },
+    {
       "simfile": "Cuphead [TaroNuke]/botanic.sm",
       "fixture": "Cuphead [TaroNuke]/botanic.sm.semantic.json",
       "title": "Botanic Panic",

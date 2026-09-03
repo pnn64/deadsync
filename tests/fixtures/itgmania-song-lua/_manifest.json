@@ -56,6 +56,12 @@
       "lua_entries": 3
     },
     {
+      "simfile": "BroGamer/BroGamer.ssc",
+      "fixture": "BroGamer/BroGamer.ssc.json",
+      "title": "BroGamer",
+      "lua_entries": 1
+    },
+    {
       "simfile": "Cuphead [TaroNuke]/botanic.sm",
       "fixture": "Cuphead [TaroNuke]/botanic.sm.json",
       "title": "Botanic Panic",

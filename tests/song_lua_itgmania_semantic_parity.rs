@@ -3,8 +3,8 @@ use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
     SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayState, SongLuaOverlayStateDelta,
     SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua_layers, overlay_state_after_blocks,
-    parse_song_timing_bpms, song_elapsed_seconds_at,
+    SongLuaSpeedMod, SongLuaStatefulMessageWrite, SongLuaTimeUnit, compile_song_lua_layers,
+    overlay_state_after_blocks, parse_song_timing_bpms, song_elapsed_seconds_at,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
 use deadsync_song_lua::song_beat_at_elapsed_seconds;
@@ -1672,6 +1672,88 @@ fn command_matches(expected: &ExpectedCommand, actual: &[SongLuaOverlayCommandBl
     })
 }
 
+fn stateful_write_has_value(
+    writes: &[SongLuaStatefulMessageWrite],
+    overlay_index: usize,
+    target: SongLuaOverlayUpdateTarget,
+    expected: &SongLuaOverlayUpdateValue,
+    block: &ExpectedBlock,
+) -> bool {
+    writes.iter().any(|write| {
+        write.overlay_index == overlay_index
+            && write.target == target
+            && (write.delay_seconds - block.start).abs() <= EPSILON
+            && (write.duration_seconds - block.duration).abs() <= EPSILON
+            && write.easing.as_deref() == block.easing
+            && render_value_matches(expected, &write.value)
+    })
+}
+
+fn stateful_block_matches(
+    writes: &[SongLuaStatefulMessageWrite],
+    overlay_index: usize,
+    targets: &[SongLuaOverlayUpdateTarget],
+    block: &ExpectedBlock,
+) -> bool {
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as UpdateValue;
+    let has = |target, value| {
+        targets.contains(&target)
+            && stateful_write_has_value(writes, overlay_index, target, &value, block)
+    };
+    let f32_matches = |target, expected: Option<f32>| {
+        expected.is_none_or(|value| has(target, UpdateValue::F32(value)))
+    };
+    block.alpha.is_none_or(|alpha| {
+        targets.contains(&Target::Diffuse)
+            && writes.iter().any(|write| {
+                write.overlay_index == overlay_index
+                    && write.target == Target::Diffuse
+                    && (write.delay_seconds - block.start).abs() <= EPSILON
+                    && (write.duration_seconds - block.duration).abs() <= EPSILON
+                    && write.easing.as_deref() == block.easing
+                    && matches!(&write.value, UpdateValue::Vec4(color) if (color[3] - alpha).abs() <= 0.03)
+            })
+    }) && block
+        .visible
+        .is_none_or(|value| has(Target::Visible, UpdateValue::Bool(value)))
+        && f32_matches(Target::X, block.x)
+        && f32_matches(Target::Y, block.y)
+        && f32_matches(Target::Z, block.z)
+        && f32_matches(Target::Zoom, block.zoom)
+        && f32_matches(Target::ZoomX, block.zoom_x)
+        && f32_matches(Target::ZoomY, block.zoom_y)
+        && f32_matches(Target::ZoomZ, block.zoom_z)
+        && f32_matches(Target::RotationX, block.rot_x)
+        && f32_matches(Target::RotationY, block.rot_y)
+        && f32_matches(Target::RotationZ, block.rot_z)
+        && f32_matches(Target::SkewX, block.skew_x)
+        && f32_matches(Target::SkewY, block.skew_y)
+        && f32_matches(Target::Fov, block.fov)
+        && block.vanishpoint.is_none_or(|value| {
+            has(Target::Vanishpoint, UpdateValue::Vec2(value))
+        })
+        && f32_matches(Target::CropLeft, block.crop_left)
+        && f32_matches(Target::CropRight, block.crop_right)
+        && f32_matches(Target::CropTop, block.crop_top)
+        && f32_matches(Target::CropBottom, block.crop_bottom)
+        && block.sprite_state.is_none_or(|value| {
+            has(Target::SpriteStateIndex, UpdateValue::U32(value))
+        })
+}
+
+fn stateful_command_matches(
+    writes: &[SongLuaStatefulMessageWrite],
+    overlay_index: usize,
+    targets: &[SongLuaOverlayUpdateTarget],
+    expected: &ExpectedCommand,
+) -> bool {
+    expected
+        .blocks
+        .iter()
+        .all(|(_, block)| stateful_block_matches(writes, overlay_index, targets, block))
+}
+
 fn expected_blocks_summary(expected: &ExpectedCommand) -> String {
     expected
         .blocks
@@ -1732,7 +1814,7 @@ fn compare_commands(
     gaps: &mut Vec<String>,
 ) {
     let mut used = HashSet::new();
-    let mut missing = HashMap::<String, Vec<String>>::new();
+    let mut missing = HashMap::<String, Vec<(String, NativeTarget, ExpectedCommand)>>::new();
     for expected in trace_commands(trace) {
         let (label, candidates) = match &expected.target {
             NativeTarget::Actor { layer, actor } => (
@@ -1777,7 +1859,11 @@ fn compare_commands(
             .iter()
             .find(|(_, command)| command.message == expected.message)
         else {
-            missing.entry(expected.message).or_default().push(label);
+            missing.entry(expected.message.clone()).or_default().push((
+                label,
+                expected.target.clone(),
+                expected,
+            ));
             continue;
         };
         gaps.push(format!(
@@ -1788,26 +1874,77 @@ fn compare_commands(
         ));
     }
     for (message, targets) in missing {
+        let mut used_dynamic = HashSet::new();
+        let mut unmatched = Vec::new();
+        for (label, target, expected) in targets {
+            let NativeTarget::Actor { layer, .. } = target else {
+                unmatched.push(label);
+                continue;
+            };
+            let Some(layer_compiled) = compiled.get(layer) else {
+                unmatched.push(label);
+                continue;
+            };
+            let candidate = layer_compiled
+                .stateful_message_captures
+                .iter()
+                .enumerate()
+                .filter(|(_, capture)| capture.message == message)
+                .flat_map(|(capture_index, capture)| {
+                    capture.overlay_targets.iter().enumerate().map(
+                        move |(target_index, (overlay_index, properties))| {
+                            (capture_index, target_index, *overlay_index, properties)
+                        },
+                    )
+                })
+                .find(|(capture_index, target_index, overlay_index, properties)| {
+                    !used_dynamic.contains(&(layer, *capture_index, *target_index))
+                        && stateful_command_matches(
+                            &layer_compiled.stateful_message_captures[*capture_index].writes,
+                            *overlay_index,
+                            properties,
+                            &expected,
+                        )
+                });
+            if let Some((capture_index, target_index, _, _)) = candidate {
+                used_dynamic.insert((layer, capture_index, target_index));
+            } else {
+                unmatched.push(label);
+            }
+        }
+        if unmatched.is_empty() {
+            continue;
+        }
         let dynamic = compiled.iter().any(|compiled| {
             compiled
-                .info
-                .skipped_message_command_captures
+                .stateful_message_captures
                 .iter()
-                .any(|detail| {
-                    detail.contains(&format!(
-                        "{message}MessageCommand changes cross-actor targets or effects"
-                    ))
-                })
+                .any(|capture| capture.message == message)
+                || compiled
+                    .info
+                    .skipped_message_command_captures
+                    .iter()
+                    .any(|detail| {
+                        detail.contains(&format!(
+                            "{message}MessageCommand changes cross-actor targets or effects"
+                        ))
+                    })
         });
         if dynamic {
+            let captured = compiled
+                .iter()
+                .flat_map(|compiled| &compiled.stateful_message_captures)
+                .filter(|capture| capture.message == message)
+                .map(|capture| capture.overlay_targets.len())
+                .sum::<usize>();
             gaps.push(format!(
-                "stateful {message}MessageCommand cross-actor effects are not compiled: ITGmania affected {} actors ({})",
-                targets.len(),
-                targets.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
+                "stateful {message}MessageCommand differs: DeadSync captured {captured} actors, but {} ITGmania targets/properties did not match ({})",
+                unmatched.len(),
+                unmatched.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
             ));
         } else {
             gaps.extend(
-                targets
+                unmatched
                     .into_iter()
                     .map(|target| format!("missing {message}MessageCommand effects on {target}")),
             );
@@ -2145,6 +2282,41 @@ fn native_song_lua_semantics_match_deadsync() {
 }
 
 #[test]
+#[ignore = "compiles the complete Cuphead song-Lua runtime at 60 Hz"]
+fn cuphead_stateful_fire_message_matches_itgmania() {
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE));
+    let (compiled, primary_index, _) = compile_trace_song(&trace);
+    for message in ["CagneyInit", "TargetsOn", "GoatSlap"] {
+        assert!(
+            compiled
+                .iter()
+                .flat_map(|layer| &layer.messages)
+                .any(|event| event.message == message),
+            "Cuphead runtime action table lost the {message} broadcast"
+        );
+    }
+    let fire = compiled
+        .iter()
+        .flat_map(|layer| &layer.stateful_message_captures)
+        .filter(|capture| capture.message == "Fire")
+        .collect::<Vec<_>>();
+    let affected = fire
+        .iter()
+        .map(|capture| capture.overlay_targets.len())
+        .sum::<usize>();
+    assert_eq!(affected, 28, "Cuphead Fire must retain all pooled targets");
+
+    let mut gaps = Vec::new();
+    compare_commands(&trace, &compiled, primary_index, &mut gaps);
+    assert!(
+        gaps.is_empty(),
+        "Cuphead message-command parity gaps ({}):\n- {}",
+        gaps.len(),
+        gaps.join("\n- ")
+    );
+}
+
+#[test]
 fn semantic_fixture_manifest_is_complete_and_headless() {
     let fixture_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua");
@@ -2156,7 +2328,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 
     assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
     assert!(!manifest.itgmania.launches_executable);
-    assert_eq!(manifest.simfiles.len(), 42);
+    assert_eq!(manifest.simfiles.len(), 43);
     for entry in manifest.simfiles {
         assert_eq!(
             entry.status, "ok",
