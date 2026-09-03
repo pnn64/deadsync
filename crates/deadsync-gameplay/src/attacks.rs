@@ -4448,6 +4448,14 @@ impl ActiveWindowIndex {
         }
     }
 
+    fn reset_time(&mut self) {
+        self.active.clear();
+        self.next_start = 0;
+        self.next_start_second = f32::INFINITY;
+        self.next_expiry_second = f32::INFINITY;
+        self.last_now = None;
+    }
+
     fn rebuild_time<T>(
         &mut self,
         windows: &[T],
@@ -4841,6 +4849,28 @@ impl GameplayAttackRuntimeState {
             ease_window_expiry,
             ease_window_active,
         );
+    }
+
+    fn reset_for_practice(&mut self, base_appearance: [AppearanceEffects; MAX_PLAYERS]) {
+        for indices in &mut self.window_indices {
+            indices.masks.reset_time();
+            indices.eases.reset_time();
+        }
+        self.cleared_for_outro = false;
+        self.clear_all = [false; MAX_PLAYERS];
+        self.chart = [ChartAttackEffects::default(); MAX_PLAYERS];
+        self.accel = [AccelOverrides::default(); MAX_PLAYERS];
+        self.visual = [VisualOverrides::default(); MAX_PLAYERS];
+        self.outro_visual = [VisualOverrides::default(); MAX_PLAYERS];
+        self.current_appearance = base_appearance;
+        self.target_appearance = base_appearance;
+        self.speed_appearance = [AppearanceEffects::approach_speeds(); MAX_PLAYERS];
+        self.appearance = base_appearance;
+        self.visibility = [VisibilityOverrides::default(); MAX_PLAYERS];
+        self.scroll = [ScrollOverrides::default(); MAX_PLAYERS];
+        self.perspective = [PerspectiveOverrides::default(); MAX_PLAYERS];
+        self.scroll_speed = [None; MAX_PLAYERS];
+        self.mini_percent = [None; MAX_PLAYERS];
     }
 
     #[inline(always)]

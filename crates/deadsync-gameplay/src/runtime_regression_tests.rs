@@ -4237,6 +4237,37 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn practice_restart_reactivates_chart_attacks_after_outro_clear() {
+        let mut state = regression_state();
+        state.mods.attacks.mask_windows[0] = build_attack_mask_windows_for_player(
+            Some("TIME=1.000:LEN=2.000:MODS=50% drunk"),
+            GameplayAttackMode::On,
+            0,
+            0x1234,
+            10.0,
+        );
+
+        state.seek_practice_display(1.5);
+        assert!((effective_visual_effects_for_player(&state, 0).drunk - 0.5).abs() <= 0.000_1);
+
+        state.begin_outro_attack_clear();
+        refresh_active_attack_masks(&mut state, 20.0);
+        assert!(state.mods.attacks.cleared_for_outro);
+        assert!(effective_visual_effects_for_player(&state, 0).drunk.abs() <= 0.000_1);
+        state.mods.song_lua_player_transforms[0].rotation_z = 45.0;
+
+        state.start_practice_music_at(0.0, 1.0);
+        assert!(!state.mods.attacks.cleared_for_outro);
+        assert_eq!(
+            state.mods.song_lua_player_transforms[0],
+            SongLuaPlayerTransform::default()
+        );
+
+        state.seek_practice_display(1.5);
+        assert!((effective_visual_effects_for_player(&state, 0).drunk - 0.5).abs() <= 0.000_1);
+    }
+
+    #[test]
     fn outro_attack_clear_keeps_player_rotationz_eases_alive() {
         let mut state = regression_state();
         let timing = song_lua_test_timing();

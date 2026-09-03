@@ -1938,6 +1938,18 @@ where
         self.progress.replay.disable_replay_mode();
     }
 
+    fn reset_practice_attacks(&mut self) {
+        let base_appearance = std::array::from_fn(|player| {
+            if player < self.setup.num_players {
+                base_appearance_effects(&self.profiles_runtime.profiles[player])
+            } else {
+                AppearanceEffects::default()
+            }
+        });
+        self.mods.attacks.reset_for_practice(base_appearance);
+        self.mods.song_lua_player_transforms = song_lua_player_transforms_default();
+    }
+
     pub fn reset_practice_playback(&mut self, judge_start_music_time: f32) {
         let judge_start_ns = song_time_ns_from_seconds(judge_start_music_time);
         reset_practice_notes_and_rows(
@@ -1947,6 +1959,7 @@ where
         );
         self.chart_runtime.column_judgment_eligible.fill(false);
         self.disable_score_for_practice();
+        self.reset_practice_attacks();
 
         self.progress.stage.reset_for_practice();
         self.display.hold_feedback.clear();
