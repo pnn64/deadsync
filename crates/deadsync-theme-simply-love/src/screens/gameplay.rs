@@ -2356,6 +2356,7 @@ const STATIC_FOOTER: usize = 7;
 const STATIC_NPS_P1: usize = 8;
 const STATIC_NPS_P2: usize = 9;
 const STATIC_FRAGMENT_COUNT: usize = 10;
+const TOP_SCREEN_HUD_Z: i16 = 2101;
 
 /// Fixed song-static gameplay presentation fragments.
 ///
@@ -4475,7 +4476,7 @@ fn push_system_stage_label(actors: &mut Vec<Actor>, state: &State, asset_manager
         zoom(0.4):
         shadowlength(1.0):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        z(110)
+        z(TOP_SCREEN_HUD_Z)
     ));
 }
 
@@ -4533,7 +4534,7 @@ fn push_system_profile_footer(
         }
     };
     presentation_skeleton.push(STATIC_FOOTER, actors, |actors| {
-        actors.push(screen_bar::build_no_background_cached(ScreenBarParams {
+        let mut footer = screen_bar::build_no_background_cached(ScreenBarParams {
             visual_policy,
             title: "",
             title_placement: screen_bar::ScreenBarTitlePlacement::Center,
@@ -4545,7 +4546,16 @@ fn push_system_profile_footer(
             right_text,
             left_avatar,
             right_avatar,
-        }));
+        });
+        // ScreenBar's text is at local z=2. Keep the composed text on the
+        // protected TopScreen layer, above song-local foreground/AFT sprites.
+        match &mut footer {
+            Actor::Frame { z, .. } | Actor::SharedFrame { z, .. } => {
+                *z = TOP_SCREEN_HUD_Z - 2;
+            }
+            _ => unreachable!("screen bar builders always return frames"),
+        }
+        actors.push(footer);
     });
 }
 
@@ -6252,7 +6262,7 @@ fn push_sync_overlay(actors: &mut Vec<Actor>, state: &State) {
             shadowlength(2.0):
             strokecolor(0.0, 0.0, 0.0, 1.0):
             diffuse(1.0, 1.0, 1.0, 1.0):
-            z(2101)
+            z(TOP_SCREEN_HUD_Z)
         ));
         line_count
     } else {
@@ -6273,7 +6283,7 @@ fn push_sync_overlay(actors: &mut Vec<Actor>, state: &State) {
             shadowlength(2.0):
             strokecolor(0.0, 0.0, 0.0, alpha):
             diffuse(1.0, 1.0, 1.0, alpha):
-            z(2101)
+            z(TOP_SCREEN_HUD_Z)
         ));
     }
 
@@ -6299,7 +6309,7 @@ fn push_sync_overlay(actors: &mut Vec<Actor>, state: &State) {
         xy(screen_center_x() + 160.0, screen_center_y()):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 1.0):
-        z(2101)
+        z(TOP_SCREEN_HUD_Z)
     ));
 }
 

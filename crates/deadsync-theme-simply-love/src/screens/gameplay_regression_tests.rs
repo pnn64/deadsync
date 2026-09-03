@@ -25,7 +25,7 @@ mod tests {
     use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
     use crate::screens::gameplay as screen_gameplay;
     use deadlib_present::{
-        actors::Actor,
+        actors::{Actor, SpriteSource},
         compose::{self, TextureContext, TextureMeta},
         space,
     };
@@ -554,6 +554,107 @@ mod tests {
             | Actor::CameraPush { .. }
             | Actor::CameraPop => false,
         })
+    }
+
+    fn top_screen_text_draw(
+        actors: &[Actor],
+        expected: &str,
+        base_z: i16,
+        alpha: f32,
+    ) -> Option<(i16, f32)> {
+        actors.iter().find_map(|actor| match actor {
+            Actor::Text {
+                content, color, z, ..
+            } if content.as_str() == expected => {
+                Some((base_z.saturating_add(*z), alpha * color[3]))
+            }
+            Actor::Frame { children, z, .. } => {
+                top_screen_text_draw(children, expected, base_z.saturating_add(*z), alpha)
+            }
+            Actor::SharedFrame {
+                children, z, tint, ..
+            }
+            | Actor::SharedTransform {
+                children, z, tint, ..
+            } => top_screen_text_draw(
+                children,
+                expected,
+                base_z.saturating_add(*z),
+                alpha * tint[3],
+            ),
+            Actor::RetainedFrame {
+                frame,
+                z,
+                tint,
+                visible,
+                ..
+            } if *visible => top_screen_text_draw(
+                frame.children(),
+                expected,
+                base_z.saturating_add(*z),
+                alpha * tint[3],
+            ),
+            Actor::Camera { children, .. } => {
+                top_screen_text_draw(children, expected, base_z, alpha)
+            }
+            Actor::Shadow { child, .. } => top_screen_text_draw(
+                std::slice::from_ref(child.as_ref()),
+                expected,
+                base_z,
+                alpha,
+            ),
+            Actor::Sprite { .. }
+            | Actor::Text { .. }
+            | Actor::Mesh { .. }
+            | Actor::ReusableMesh { .. }
+            | Actor::TexturedMesh { .. }
+            | Actor::ReusableTexturedMesh { .. }
+            | Actor::RetainedFrame { .. }
+            | Actor::RenderTarget { .. }
+            | Actor::CameraPush { .. }
+            | Actor::CameraPop => None,
+        })
+    }
+
+    fn max_render_target_sprite_z(actors: &[Actor], base_z: i16) -> Option<i16> {
+        actors
+            .iter()
+            .filter_map(|actor| match actor {
+                Actor::Sprite {
+                    source: SpriteSource::RenderTarget { .. },
+                    z,
+                    visible: true,
+                    ..
+                } => Some(base_z.saturating_add(*z)),
+                Actor::Frame { children, z, .. } => {
+                    max_render_target_sprite_z(children, base_z.saturating_add(*z))
+                }
+                Actor::SharedFrame { children, z, .. }
+                | Actor::SharedTransform { children, z, .. } => {
+                    max_render_target_sprite_z(children, base_z.saturating_add(*z))
+                }
+                Actor::RetainedFrame {
+                    frame,
+                    z,
+                    visible: true,
+                    ..
+                } => max_render_target_sprite_z(frame.children(), base_z.saturating_add(*z)),
+                Actor::Camera { children, .. } => max_render_target_sprite_z(children, base_z),
+                Actor::Shadow { child, .. } => {
+                    max_render_target_sprite_z(std::slice::from_ref(child.as_ref()), base_z)
+                }
+                Actor::Sprite { .. }
+                | Actor::Text { .. }
+                | Actor::Mesh { .. }
+                | Actor::ReusableMesh { .. }
+                | Actor::TexturedMesh { .. }
+                | Actor::ReusableTexturedMesh { .. }
+                | Actor::RetainedFrame { .. }
+                | Actor::RenderTarget { .. }
+                | Actor::CameraPush { .. }
+                | Actor::CameraPop => None,
+            })
+            .max()
     }
 
     fn fixture_assets() -> crate::assets::AssetManager {
@@ -2776,6 +2877,18 @@ return Def.ActorFrame{
                 assert!(!render_target_has_text(&actors, "EVENT"));
                 assert!(!render_target_has_text(&actors, "PixelSafePlayer"));
                 assert!(!render_target_has_text(&actors, "AutoPlay"));
+
+                let aft_z = max_render_target_sprite_z(&actors, 0)
+                    .expect("fixture should draw an AFT output sprite");
+                for text in ["EVENT", "PixelSafePlayer", "AutoPlay"] {
+                    let (text_z, alpha) = top_screen_text_draw(&actors, text, 0, 1.0)
+                        .unwrap_or_else(|| panic!("missing top-screen text {text}"));
+                    assert_eq!(alpha, 1.0, "{text} should stay fully opaque");
+                    assert!(
+                        text_z > aft_z,
+                        "{text} at z={text_z} should draw above the AFT sprite at z={aft_z}"
+                    );
+                }
             },
         );
     }
