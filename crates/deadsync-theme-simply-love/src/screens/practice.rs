@@ -15,7 +15,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, handle_core_input,
-    spacing_multiplier_for_percent, update_core,
+    scroll_effects_from_flags, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
@@ -143,7 +143,6 @@ enum MarkerPlacement {
 #[derive(Clone, Copy)]
 struct PracticeFieldGeom {
     player_idx: usize,
-    col_start: usize,
     center_x: f32,
     offset_y: f32,
     width: f32,
@@ -1109,17 +1108,24 @@ pub fn push_actors(
 }
 
 fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let mut notefield = if matches!(state.mode, Mode::Editing) {
-        practice_notefield_view(state)
-    } else {
+    let playback_visuals = practice_playback_visuals(state.mode);
+    let mut notefield = if playback_visuals {
         gameplay_screen::NotefieldViewOverride::default()
+    } else {
+        practice_notefield_view(state)
     };
     notefield.hide_display_mods = true;
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,
+        apply_attacks: playback_visuals,
+        show_song_visuals: playback_visuals,
         ..Default::default()
     }
+}
+
+const fn practice_playback_visuals(mode: Mode) -> bool {
+    matches!(mode, Mode::Playing { .. })
 }
 
 fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverride {
@@ -2251,7 +2257,6 @@ fn append_player_markers(
         .max(ScrollSpeedSetting::ARROW_SPACING);
     let geom = PracticeFieldGeom {
         player_idx,
-        col_start,
         center_x,
         offset_y,
         width,
@@ -2259,7 +2264,7 @@ fn append_player_markers(
     };
     let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
     let marker_shade = marker_phase.mul_add(0.25, 0.75);
-    let cursor_y = marker_y_for_beat(state, player_idx, col_start, offset_y, state.cursor_beat);
+    let cursor_y = marker_y_for_beat(state, player_idx, offset_y, state.cursor_beat);
     append_timing_segment_labels(state, actors, geom);
     append_field_cursor(
         actors,
@@ -2272,16 +2277,16 @@ fn append_player_markers(
 
     match (state.selection_anchor, state.selection_end) {
         (Some(begin), Some(end)) if end > begin => {
-            let y1 = marker_y_for_beat(state, player_idx, col_start, offset_y, begin);
-            let y2 = marker_y_for_beat(state, player_idx, col_start, offset_y, end);
+            let y1 = marker_y_for_beat(state, player_idx, offset_y, begin);
+            let y2 = marker_y_for_beat(state, player_idx, offset_y, end);
             append_marker_area(actors, center_x, y1, y2, width);
         }
         (Some(begin), _) => {
-            let y = marker_y_for_beat(state, player_idx, col_start, offset_y, begin);
+            let y = marker_y_for_beat(state, player_idx, offset_y, begin);
             append_marker_bar(actors, center_x, y, width, marker_shade);
         }
         (None, Some(end)) => {
-            let y = marker_y_for_beat(state, player_idx, col_start, offset_y, end);
+            let y = marker_y_for_beat(state, player_idx, offset_y, end);
             append_marker_bar(actors, center_x, y, width, marker_shade);
         }
         (None, None) => {}
@@ -2365,7 +2370,7 @@ fn append_timing_segment_label(
     beat: f32,
     glow_alpha: f32,
 ) {
-    let y = marker_y_for_beat(state, geom.player_idx, geom.col_start, geom.offset_y, beat);
+    let y = marker_y_for_beat(state, geom.player_idx, geom.offset_y, beat);
     if !timing_label_y_is_visible(y) {
         return;
     }
@@ -2418,16 +2423,27 @@ fn fmt_itg_float(value: f32) -> String {
     format!("{value:.6}")
 }
 
-fn marker_y_for_beat(
-    state: &State,
-    player_idx: usize,
-    col_start: usize,
-    offset_y: f32,
-    beat: f32,
-) -> f32 {
-    let dir = state
-        .gameplay
-        .notefield_column_scroll_dir(col_start)
+fn marker_y_for_beat(state: &State, player_idx: usize, offset_y: f32, beat: f32) -> f32 {
+    let profile = &state.gameplay.profiles()[player_idx];
+    let scroll = scroll_effects_from_flags(
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Reverse),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Split),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Alternate),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Cross),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Centered),
+    );
+    let dir = scroll
+        .reverse_scale_for_column(0, state.gameplay.cols_per_player())
         .signum();
     let dir = if dir.abs() <= f32::EPSILON { 1.0 } else { dir };
     let receptor_y = practice_edit_cursor_y() + offset_y;
@@ -3084,9 +3100,9 @@ mod tests {
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
         music_rate_hold_dir_for_event, next_display_beat, normalize_flash_text,
         page_hold_dir_for_key, practice_density_geom, practice_edit_beat_travel,
-        practice_nav_mode_from_config, practice_style_notefield_width, push_selection_info,
-        quantized_music_rate, rotate_practice_density_mesh, timing_label_glow_alpha,
-        timing_label_x, timing_speed_label,
+        practice_nav_mode_from_config, practice_playback_visuals, practice_style_notefield_width,
+        push_selection_info, quantized_music_rate, rotate_practice_density_mesh,
+        timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
@@ -3156,6 +3172,15 @@ mod tests {
         "InfoNumLifts",
         "InfoNumFakes",
     ];
+
+    #[test]
+    fn practice_only_applies_song_visuals_and_attacks_during_playback() {
+        assert!(!practice_playback_visuals(super::Mode::Editing));
+        assert!(practice_playback_visuals(super::Mode::Playing {
+            start_beat: 4.0,
+            stop_beat: 8.0,
+        }));
+    }
 
     #[test]
     fn edit_info_key_tracks_every_dynamic_text_source() {

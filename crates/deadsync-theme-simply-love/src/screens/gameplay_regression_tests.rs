@@ -796,12 +796,38 @@ mod tests {
         scratch: &mut compose::ComposeScratch,
         texture_ctx: &T,
     ) -> deadlib_render_core::RenderFrame {
+        compose_fixture_frame_with_view(
+            state,
+            assets,
+            metrics,
+            actors,
+            text_cache,
+            scratch,
+            screen_gameplay::ActorViewOverride::default(),
+            texture_ctx,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the render-frame fixture keeps actor composition inputs explicit"
+    )]
+    fn compose_fixture_frame_with_view<T: TextureContext + ?Sized>(
+        state: &mut screen_gameplay::State,
+        assets: &crate::assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+        view: screen_gameplay::ActorViewOverride,
+        texture_ctx: &T,
+    ) -> deadlib_render_core::RenderFrame {
         actors.clear();
         let segments = screen_gameplay::push_actors(
             actors,
             state,
             assets,
-            screen_gameplay::ActorViewOverride::default(),
+            view,
             123.0,
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
@@ -2634,6 +2660,122 @@ M000
         );
     }
 
+    #[test]
+    fn actor_view_can_suppress_active_attack_visuals() {
+        let simfile = write_fixture("f0-practice-attack", generated_model_effects_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::metrics_for_window(1280, 720);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                space::set_overscan(0, 0, 0, 0);
+
+                let mut profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                profiles[0].noteskin = profile_data::NoteSkin::new("vivid");
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                set_fixture_time(&mut state, 2.625);
+                state.refresh_live_notefield_options(120.0);
+
+                let assets = fixture_assets();
+                let mut actors = Vec::with_capacity(512);
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut compose_scratch = compose::ComposeScratch::default();
+                let view = screen_gameplay::ActorViewOverride {
+                    notefield: screen_gameplay::NotefieldViewOverride {
+                        hide_display_mods: true,
+                        ..Default::default()
+                    },
+                    hide_gameplay_hud: true,
+                    show_song_visuals: false,
+                    ..Default::default()
+                };
+                let baseline_frame =
+                    assert_repeatable_composition(&mut compose_scratch, |scratch| {
+                        compose_fixture_frame_with_view(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            scratch,
+                            view,
+                            &FIXTURE_TEXTURES,
+                        )
+                    });
+                let attack = deadsync_gameplay::ChartAttackWindow {
+                    start_second: 0.0,
+                    len_seconds: 10.0,
+                    mods: "100% drunk,100% cover,80% mini,reverse".to_string(),
+                };
+                state.gameplay.mods.attacks.mask_windows[0] =
+                    deadsync_gameplay::build_attack_mask_windows(std::slice::from_ref(&attack));
+                refresh_active_attack_masks(&mut state.gameplay, 0.0);
+                state.refresh_live_notefield_options(120.0);
+                assert_eq!(
+                    deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, 0)
+                        .drunk,
+                    1.0
+                );
+                assert_eq!(
+                    state
+                        .gameplay
+                        .effective_visibility_effects_for_player(0)
+                        .cover,
+                    1.0
+                );
+                let suppressed_frame =
+                    assert_repeatable_composition(&mut compose_scratch, |scratch| {
+                        compose_fixture_frame_with_view(
+                            &mut state,
+                            &assets,
+                            &metrics,
+                            &mut actors,
+                            &mut text_cache,
+                            scratch,
+                            screen_gameplay::ActorViewOverride {
+                                apply_attacks: false,
+                                ..view
+                            },
+                            &FIXTURE_TEXTURES,
+                        )
+                    });
+                let active_frame = assert_repeatable_composition(&mut compose_scratch, |scratch| {
+                    compose_fixture_frame_with_view(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        scratch,
+                        view,
+                        &FIXTURE_TEXTURES,
+                    )
+                });
+
+                assert_ne!(
+                    compare_render_frames(&baseline_frame, &active_frame),
+                    Ok(())
+                );
+                assert_eq!(
+                    compare_render_frames(&baseline_frame, &suppressed_frame),
+                    Ok(())
+                );
+            },
+        );
+    }
+
     fn generated_pipeline_song_lua() -> &'static str {
         r#"
 local player = nil
@@ -3197,6 +3339,30 @@ return Def.ActorFrame{
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
                 assert!(edit_segments.has_direct_field_proxy(&state));
+
+                let mut plain_edit_actors = Vec::with_capacity(512);
+                let plain_edit_segments = screen_gameplay::push_actors(
+                    &mut plain_edit_actors,
+                    &mut state,
+                    &assets,
+                    screen_gameplay::ActorViewOverride {
+                        notefield: screen_gameplay::NotefieldViewOverride {
+                            edit_beat_bars: true,
+                            ..Default::default()
+                        },
+                        apply_attacks: false,
+                        show_song_visuals: false,
+                        ..Default::default()
+                    },
+                    123.0,
+                    crate::views::SimplyLoveVisualPolicyView::default(),
+                );
+                assert!(!plain_edit_segments.has_direct_field_proxy(&state));
+                assert!(
+                    !plain_edit_actors
+                        .iter()
+                        .any(|actor| matches!(actor, Actor::RenderTarget { .. }))
+                );
             },
         );
     }

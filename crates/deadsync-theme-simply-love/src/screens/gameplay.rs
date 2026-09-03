@@ -275,6 +275,14 @@ pub(crate) fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; M
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
+    /// Whether chart-attack modifiers may affect the rendered player and
+    /// notefield. Practice editing disables this while loop playback keeps the
+    /// normal gameplay attack path.
+    pub apply_attacks: bool,
+    /// Whether song-owned backgrounds, foregrounds, and Lua may participate in
+    /// composition. ITGmania unloads them while ScreenPractice is editing and
+    /// reloads them for playback.
+    pub show_song_visuals: bool,
     /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
     /// input display). Used to fade them in with the screen transition.
     pub smx_overlay_alpha: f32,
@@ -285,6 +293,8 @@ impl Default for ActorViewOverride {
         Self {
             notefield: NotefieldViewOverride::default(),
             hide_gameplay_hud: false,
+            apply_attacks: true,
+            show_song_visuals: true,
             smx_overlay_alpha: 1.0,
         }
     }
@@ -18766,6 +18776,8 @@ pub fn push_actors(
 
     let notefield_view = view.notefield;
     let hide_gameplay_hud = view.hide_gameplay_hud;
+    let apply_attacks = view.apply_attacks;
+    let show_song_visuals = view.show_song_visuals;
     actors.reserve(96);
     let play_style = state.hud_snapshot.play_style;
     let player_side = state.hud_snapshot.player_side;
@@ -18777,8 +18789,13 @@ pub fn push_actors(
     let centered_single_notefield =
         play_style.is_single() && state.num_players() == 1 && center_1player_notefield;
     let song_lua_visuals = state.song_lua_visuals();
+    let hidden_song_layers = if show_song_visuals {
+        song_lua_visuals.hidden_screen_layers
+    } else {
+        [false; 2]
+    };
     let [hide_underlay_hud, hide_overlay_hud] =
-        hidden_gameplay_hud_layers(hide_gameplay_hud, song_lua_visuals.hidden_screen_layers);
+        hidden_gameplay_hud_layers(hide_gameplay_hud, hidden_song_layers);
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index());
@@ -18796,8 +18813,16 @@ pub fn push_actors(
         song_lua_local_state_scratch,
         song_lua_overlay_state_scratch,
     );
-    let song_lua_background_active_layers = song_lua_background_layer_activity.sync(song_lua_now);
-    let song_lua_foreground_active_layers = song_lua_foreground_layer_activity.sync(song_lua_now);
+    let song_lua_background_active_layers: &[usize] = if show_song_visuals {
+        song_lua_background_layer_activity.sync(song_lua_now)
+    } else {
+        &[]
+    };
+    let song_lua_foreground_active_layers: &[usize] = if show_song_visuals {
+        song_lua_foreground_layer_activity.sync(song_lua_now)
+    } else {
+        &[]
+    };
     for &layer_idx in song_lua_background_active_layers {
         let layer = &song_lua_visuals.background_visual_layers[layer_idx];
         let local_states = &mut song_lua_background_layer_local_state_scratch[layer_idx];
@@ -18836,12 +18861,16 @@ pub fn push_actors(
             layer_states,
         );
     }
-    let mut proxy_analysis = song_lua_proxy_request_analysis_indexed(
-        &song_lua_visuals.overlays,
-        song_lua_overlay_state_scratch,
-        song_lua_proxy_request_index,
-        song_lua_capture_visit_scratch,
-    );
+    let mut proxy_analysis = if show_song_visuals {
+        song_lua_proxy_request_analysis_indexed(
+            &song_lua_visuals.overlays,
+            song_lua_overlay_state_scratch,
+            song_lua_proxy_request_index,
+            song_lua_capture_visit_scratch,
+        )
+    } else {
+        SongLuaProxyRequestAnalysis::default()
+    };
     for &layer_idx in song_lua_foreground_active_layers {
         let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
         let layer_states = &song_lua_foreground_layer_state_scratch[layer_idx];
@@ -18857,15 +18886,19 @@ pub fn push_actors(
         );
     }
     let proxy_requests = proxy_analysis.all;
-    let mut covering_proxy_requests = song_lua_covering_capture_requests(
-        &song_lua_visuals.overlays,
-        song_lua_local_state_scratch,
-        song_lua_overlay_state_scratch,
-        song_lua_proxy_request_index,
-        song_lua_space_width,
-        song_lua_space_height,
-        song_lua_capture_visit_scratch,
-    );
+    let mut covering_proxy_requests = if show_song_visuals {
+        song_lua_covering_capture_requests(
+            &song_lua_visuals.overlays,
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_lua_proxy_request_index,
+            song_lua_space_width,
+            song_lua_space_height,
+            song_lua_capture_visit_scratch,
+        )
+    } else {
+        SongLuaScreenProxyRequests::default()
+    };
     for &layer_idx in song_lua_foreground_active_layers {
         let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
         let layer_states = &song_lua_foreground_layer_state_scratch[layer_idx];
@@ -18918,12 +18951,14 @@ pub fn push_actors(
         .then_some(SongLuaActorSegments::new());
     // --- Background and Filter ---
     let underlay_start = actors.len();
-    push_background(
-        actors,
-        state,
-        policy.background_brightness,
-        policy.background_color,
-    );
+    if show_song_visuals {
+        push_background(
+            actors,
+            state,
+            policy.background_brightness,
+            policy.background_color,
+        );
+    }
     for &layer_idx in song_lua_background_active_layers {
         let layer = &song_lua_visuals.background_visual_layers[layer_idx];
         let local_states = &song_lua_background_layer_local_state_scratch[layer_idx];
@@ -18987,13 +19022,14 @@ pub fn push_actors(
             return 0.0;
         }
         let profile_cover = f32::from(state.profiles()[player_idx].hide_song_bg);
-        profile_cover
-            .max(
-                state
-                    .effective_visibility_effects_for_player(player_idx)
-                    .cover,
-            )
-            .clamp(0.0, 1.0)
+        let attack_cover = if apply_attacks {
+            state
+                .effective_visibility_effects_for_player(player_idx)
+                .cover
+        } else {
+            0.0
+        };
+        profile_cover.max(attack_cover).clamp(0.0, 1.0)
     };
     let left_cover = cover_alpha(0);
     let right_cover = if state.num_players() > 1 {
@@ -19164,18 +19200,23 @@ pub fn push_actors(
             let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let song_lua_now = state.current_music_time_display();
-            let judgment_state = song_lua_captured_child_state_from(
-                song_lua_now,
-                &player_actor.judgment,
-                &song_lua_visuals.player_judgment_events[player_idx],
-                &mut song_lua_player_judgment_message_state_cache[player_idx],
-            );
-            let combo_state = song_lua_captured_child_state_from(
-                song_lua_now,
-                &player_actor.combo,
-                &song_lua_visuals.player_combo_events[player_idx],
-                &mut song_lua_player_combo_message_state_cache[player_idx],
-            );
+            let (judgment_visible, combo_visible) = if show_song_visuals {
+                let judgment_state = song_lua_captured_child_state_from(
+                    song_lua_now,
+                    &player_actor.judgment,
+                    &song_lua_visuals.player_judgment_events[player_idx],
+                    &mut song_lua_player_judgment_message_state_cache[player_idx],
+                );
+                let combo_state = song_lua_captured_child_state_from(
+                    song_lua_now,
+                    &player_actor.combo,
+                    &song_lua_visuals.player_combo_events[player_idx],
+                    &mut song_lua_player_combo_message_state_cache[player_idx],
+                );
+                (judgment_state.visible, combo_state.visible)
+            } else {
+                (true, true)
+            };
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -19206,8 +19247,10 @@ pub fn push_actors(
                 placement,
                 play_style,
                 center_1player_notefield,
-                judgment_state.visible,
-                combo_state.visible,
+                judgment_visible,
+                combo_visible,
+                show_song_visuals,
+                apply_attacks,
                 ProxyCaptureRequests {
                     player: requests.player && !direct_player_candidates[player_idx],
                     // Whole-player captures consume the same field source, so
@@ -19229,13 +19272,26 @@ pub fn push_actors(
                 hud_scratch,
                 hud_flat_draw_scratch,
             );
-            let player_state = song_lua_player_render_state(
-                state,
-                player_idx,
-                &mut song_lua_player_message_state_cache[player_idx],
-            );
-            let player_transform = state.song_lua_player_transform(player_idx);
-            let song_lua_active = !state.song().foreground_lua_changes.is_empty();
+            let player_state = if show_song_visuals {
+                song_lua_player_render_state(
+                    state,
+                    player_idx,
+                    &mut song_lua_player_message_state_cache[player_idx],
+                )
+            } else {
+                SongLuaOverlayState {
+                    x: layout_center_x,
+                    y: screen_center_y(),
+                    ..SongLuaOverlayState::default()
+                }
+            };
+            let player_transform = if apply_attacks {
+                state.song_lua_player_transform(player_idx)
+            } else {
+                deadsync_gameplay::SongLuaPlayerTransform::default()
+            };
+            let song_lua_active =
+                show_song_visuals && !state.song().foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
             let rotation_z = player_state.rot_z_deg + player_transform.rotation_z;
             let rotation_y = player_state.rot_y_deg + player_transform.rotation_y;
@@ -19683,13 +19739,17 @@ pub fn push_actors(
             direct_combo: p2_direct_combo.is_some(),
         },
     ];
-    let mut replacement_active_players = song_lua_replacement_active_players_indexed(
-        &song_lua_visuals.overlays,
-        song_lua_overlay_state_scratch,
-        &replacement_proxy_sources,
-        song_lua_proxy_request_index,
-        song_lua_capture_visit_scratch,
-    );
+    let mut replacement_active_players = if show_song_visuals {
+        song_lua_replacement_active_players_indexed(
+            &song_lua_visuals.overlays,
+            song_lua_overlay_state_scratch,
+            &replacement_proxy_sources,
+            song_lua_proxy_request_index,
+            song_lua_capture_visit_scratch,
+        )
+    } else {
+        [false; MAX_PLAYERS]
+    };
     for &layer_idx in song_lua_foreground_active_layers {
         let layer_active = song_lua_replacement_active_players_indexed(
             &song_lua_visuals.foreground_visual_layers[layer_idx].overlays,
@@ -19821,7 +19881,8 @@ pub fn push_actors(
                 player: 1,
                 assembly: p2_actor_assembly,
                 field_camera: p2_field_camera,
-                manual_hud_draw: song_lua_visuals.player_actors[1].manual_hud_draw,
+                manual_hud_draw: show_song_visuals
+                    && song_lua_visuals.player_actors[1].manual_hud_draw,
             });
         } else if p2_direct_player.is_none() && p2_direct_note_field.is_none() {
             clear_player_actor_bundle(
@@ -19837,7 +19898,7 @@ pub fn push_actors(
             player: 0,
             assembly: p1_actor_assembly,
             field_camera: p1_field_camera,
-            manual_hud_draw: song_lua_visuals.player_actors[0].manual_hud_draw,
+            manual_hud_draw: show_song_visuals && song_lua_visuals.player_actors[0].manual_hud_draw,
         });
     } else if p1_direct_player.is_none() && p1_direct_note_field.is_none() {
         clear_player_actor_bundle(
@@ -20700,37 +20761,39 @@ pub fn push_actors(
         underlay: underlay_proxy_slice,
         overlay: overlay_proxy_slice,
     };
-    push_song_lua_layer_actors(
-        actors,
-        &song_lua_visuals.overlays,
-        song_lua_overlay_order,
-        &mut song_lua_proxy_request_index.topology,
-        song_lua_local_state_scratch,
-        song_lua_overlay_state_scratch,
-        song_foreground_state,
-        &proxy_sources,
-        Some(&mut *song_lua_direct_proxies),
-        song_lua_proxy_actor_scratch.as_mut(),
-        asset_manager,
-        song_lua_space_width,
-        song_lua_space_height,
-        state.current_music_time_display(),
-        state.current_beat(),
-        state.total_elapsed_in_screen(),
-        song_lua_order_scratch,
-        song_lua_capture_state_scratch,
-        song_lua_capture_order_scratch,
-        song_lua_aft_capture_scratch,
-        song_lua_projected_mesh_scratch,
-        SONG_LUA_FOREGROUND_DEPTH,
-    );
-    if let Some(actor) = build_foreground_media(
-        state,
-        song_lua_overlay_state_scratch,
-        song_lua_background_layer_state_scratch,
-        song_lua_foreground_layer_state_scratch,
-    ) {
-        actors.push(actor);
+    if show_song_visuals {
+        push_song_lua_layer_actors(
+            actors,
+            &song_lua_visuals.overlays,
+            song_lua_overlay_order,
+            &mut song_lua_proxy_request_index.topology,
+            song_lua_local_state_scratch,
+            song_lua_overlay_state_scratch,
+            song_foreground_state,
+            &proxy_sources,
+            Some(&mut *song_lua_direct_proxies),
+            song_lua_proxy_actor_scratch.as_mut(),
+            asset_manager,
+            song_lua_space_width,
+            song_lua_space_height,
+            state.current_music_time_display(),
+            state.current_beat(),
+            state.total_elapsed_in_screen(),
+            song_lua_order_scratch,
+            song_lua_capture_state_scratch,
+            song_lua_capture_order_scratch,
+            song_lua_aft_capture_scratch,
+            song_lua_projected_mesh_scratch,
+            SONG_LUA_FOREGROUND_DEPTH,
+        );
+        if let Some(actor) = build_foreground_media(
+            state,
+            song_lua_overlay_state_scratch,
+            song_lua_background_layer_state_scratch,
+            song_lua_foreground_layer_state_scratch,
+        ) {
+            actors.push(actor);
+        }
     }
     for &layer_idx in song_lua_foreground_active_layers {
         let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];

@@ -6,8 +6,12 @@ use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions, blue_fantastic_window_ms,
-    gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
+    AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
+    TapExplosionOptions, VisibilityEffects, VisualEffects, blue_fantastic_window_ms,
+    draw_distance_after_targets, draw_distance_before_targets,
+    effective_mini_value_with_visual_mask, gameplay_error_bar_trim_max_window_ix,
+    hold_explosion_enabled_for_options, perspective_effects_from_profile,
+    player_draw_scale_for_tilt_with_visual_mask, scroll_effects_from_flags,
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
@@ -612,6 +616,8 @@ pub(crate) fn compose_frame(
     center_1player_notefield: bool,
     song_lua_judgment_visible: bool,
     song_lua_combo_visible: bool,
+    show_song_visuals: bool,
+    apply_attacks: bool,
     capture_requests: ProxyCaptureRequests,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
@@ -639,13 +645,91 @@ pub(crate) fn compose_frame(
     let style = notefield_plan.style;
     let judgment_texture = judgment_assets.judgment();
     let elapsed_screen = state.total_elapsed_in_screen();
-    let accel = effective_accel_effects_for_player(state, player_idx);
-    let scroll = effective_scroll_effects_for_player(state, player_idx);
-    let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = state.effective_appearance_effects_for_player(player_idx);
-    let visibility = state.effective_visibility_effects_for_player(player_idx);
-    let mini_percent = effective_mini_percent_for_player(state, player_idx);
+    let base_accel = AccelEffects::from_mask_bits(profile.accel_effects_active_mask.bits());
+    let base_scroll = scroll_effects_from_flags(
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Reverse),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Split),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Alternate),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Cross),
+        profile
+            .scroll_option
+            .contains(profile_data::ScrollOption::Centered),
+    );
+    let base_perspective = perspective_effects_from_profile(&state.profiles()[player_idx]);
+    let base_visual = VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits());
+    let base_appearance =
+        AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits());
+    let accel = if apply_attacks {
+        effective_accel_effects_for_player(state, player_idx)
+    } else {
+        base_accel
+    };
+    let scroll = if apply_attacks {
+        effective_scroll_effects_for_player(state, player_idx)
+    } else {
+        base_scroll
+    };
+    let perspective = if apply_attacks {
+        effective_perspective_effects_for_player(state, player_idx)
+    } else {
+        base_perspective
+    };
+    let visual = if apply_attacks {
+        effective_visual_effects_for_player(state, player_idx)
+    } else {
+        base_visual
+    };
+    let appearance = if apply_attacks {
+        state.effective_appearance_effects_for_player(player_idx)
+    } else {
+        base_appearance
+    };
+    let visibility = if apply_attacks {
+        state.effective_visibility_effects_for_player(player_idx)
+    } else {
+        VisibilityEffects::default()
+    };
+    let mini_percent = if apply_attacks {
+        effective_mini_percent_for_player(state, player_idx)
+    } else {
+        profile.mini_percent as f32
+    };
+    let (field_zoom, draw_distance_before, draw_distance_after) = if apply_attacks {
+        (
+            state.field_zoom_for_player(player_idx),
+            state.notefield_draw_distance_before_targets(player_idx),
+            state.notefield_draw_distance_after_targets(player_idx),
+        )
+    } else {
+        let visual_mask = profile.visual_effects_active_mask.bits();
+        let runtime_profile = &state.profiles()[player_idx];
+        let mini =
+            effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
+        let mut field_zoom = mini.mul_add(-0.5, 1.0);
+        if field_zoom.abs() < 0.01 {
+            field_zoom = 0.01;
+        }
+        let draw_scale = player_draw_scale_for_tilt_with_visual_mask(
+            perspective.tilt,
+            runtime_profile,
+            visual_mask,
+            mini_percent,
+        );
+        let viewport_height = state.setup.viewport.height();
+        (
+            field_zoom,
+            draw_distance_before_targets(viewport_height, draw_scale),
+            draw_distance_after_targets(viewport_height, draw_scale, scroll.centered),
+        )
+    };
     let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
     let player_col_start = player_idx.saturating_mul(state.cols_per_player());
     let column_dirs = from_fn(|local_col| {
@@ -653,7 +737,11 @@ pub(crate) fn compose_frame(
         if local_col >= state.cols_per_player() || col >= state.num_cols() {
             1.0
         } else {
-            state.notefield_column_scroll_dir(col)
+            if apply_attacks {
+                state.notefield_column_scroll_dir(col)
+            } else {
+                scroll.reverse_scale_for_column(local_col, state.cols_per_player())
+            }
         }
     });
     let (time_signatures, bpms, stops, delays, scrolls) = state
@@ -678,6 +766,7 @@ pub(crate) fn compose_frame(
     } else {
         None
     };
+    let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
     let request = NotefieldComposeRequest {
         style,
         placement,
@@ -696,12 +785,20 @@ pub(crate) fn compose_frame(
             screen_center_x: screen_center_x(),
             screen_center_y: screen_center_y(),
             target_arrow_pixel_size: TARGET_ARROW_PIXEL_SIZE,
-            field_zoom: state.field_zoom_for_player(player_idx),
-            scroll_speed: state.effective_scroll_speed_for_player(player_idx),
-            draw_distance_before_targets: state.notefield_draw_distance_before_targets(player_idx),
-            draw_distance_after_targets: state.notefield_draw_distance_after_targets(player_idx),
+            field_zoom,
+            scroll_speed: if apply_attacks {
+                state.effective_scroll_speed_for_player(player_idx)
+            } else {
+                state.scroll_speed_for_player(player_idx)
+            },
+            draw_distance_before_targets: draw_distance_before,
+            draw_distance_after_targets: draw_distance_after,
             column_dirs,
-            reverse_scroll: state.notefield_reverse_scroll(player_idx),
+            reverse_scroll: if apply_attacks {
+                state.notefield_reverse_scroll(player_idx)
+            } else {
+                scroll.reverse_percent_for_column(0, state.cols_per_player()) > 0.5
+            },
         },
         visual: NotefieldVisualState {
             elapsed_screen_s: elapsed_screen,
@@ -751,8 +848,16 @@ pub(crate) fn compose_frame(
             tap_explosion: tap_explosion_noteskin,
         },
         song_lua: NotefieldSongLuaView {
-            note_hides: &state.song_lua_visuals().note_hides[player_idx],
-            column_offsets: &state.song_lua_visuals().column_offsets[player_idx],
+            note_hides: if show_song_visuals {
+                &state.song_lua_visuals().note_hides[player_idx]
+            } else {
+                &no_song_note_hides
+            },
+            column_offsets: if show_song_visuals {
+                &state.song_lua_visuals().column_offsets[player_idx]
+            } else {
+                &[]
+            },
         },
         options: notefield_plan.options,
         capture_requests,
