@@ -237,7 +237,8 @@ pub(crate) use transforms::{
     note_appearance_cache, note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached,
     smoothstep01, tiny_spacing_scale, tipsy_y_extra, visual_arrow_effect_zoom,
     visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
-    visual_hold_body_needs_z_buffer, visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
+    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
@@ -292,28 +293,29 @@ mod tests {
         hold_parts_for_note_type, hold_segment_pose, hold_strip_draw, hold_strip_glow_draw,
         hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
-        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
-        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
-        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
-        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
-        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
-        sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
-        stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
-        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
-        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
-        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
-        visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
-        visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
-        zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
-        zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
-        zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
-        zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
-        zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
-        zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
-        zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color, zmod_stream_prog_color,
-        zmod_stream_prog_completion_for_beat, zmod_subtractive_counter_state,
-        zmod_subtractive_points, zmod_target_score_missed,
+        judgment_tilt_rotation_deg, lane_note_transform_cache,
+        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
+        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
+        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
+        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
+        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
+        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
+        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
+        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
+        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
+        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
+        visual_confusion_rotation_deg, visual_effect_params_for_col,
+        visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
+        visual_note_rotation_z, visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
+        visual_use_legacy_hold_sprites, zmod_broken_run_counter_text, zmod_broken_run_end,
+        zmod_broken_run_segment, zmod_combo_glow_color, zmod_combo_glow_pair,
+        zmod_combo_quint_active, zmod_combo_rainbow_color, zmod_combo_solid_color,
+        zmod_indicator_default_color, zmod_indicator_detailed_color, zmod_layout_ys,
+        zmod_measure_counter_text, zmod_mini_indicator_output, zmod_mini_indicator_zoom,
+        zmod_pacemaker_color, zmod_percent_from_points, zmod_resolved_combo_color,
+        zmod_resolved_mini_indicator_mode, zmod_rival_color, zmod_run_timer_index,
+        zmod_static_combo_color, zmod_stream_prog_color, zmod_stream_prog_completion_for_beat,
+        zmod_subtractive_counter_state, zmod_subtractive_points, zmod_target_score_missed,
     };
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
@@ -1634,6 +1636,23 @@ mod tests {
         let itg_expected =
             ((6.75 - 3.5) * params.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
         assert!((rotation + itg_expected).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn visual_hold_heads_ignore_dizzy_like_itgmania() {
+        let params = VisualEffectParams {
+            confusion: 0.25,
+            dizzy: 2.0,
+            ..VisualEffectParams::default()
+        };
+        let hold_rotation = visual_note_rotation_z(6.75, 3.5, true, params);
+        let tap_rotation = visual_note_rotation_z(6.75, 3.5, false, params);
+        let expected = -visual_confusion_rotation_deg(3.5, params);
+        let cached = visual_hold_head_rotation_z_cached(lane_note_transform_cache(3.5, params));
+
+        assert!((hold_rotation - expected).abs() <= 1e-6);
+        assert_eq!(cached.to_bits(), hold_rotation.to_bits());
+        assert!((tap_rotation - hold_rotation).abs() > 1.0);
     }
 
     #[test]

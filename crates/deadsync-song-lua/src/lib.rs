@@ -8264,6 +8264,59 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_does_not_resample_exact_runtime_mod_tables() {
+        let song_dir = test_dir("exact-runtime-mod-tables");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mods = {
+    {2, 2, "*100 50 flip", "len"},
+}
+mods_ease = {
+    {4, 2, 0, 100, "mini", "len", ease.linear},
+}
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            for _, mod in pairs(mods) do
+                if beat >= mod[1] and beat <= mod[1] + mod[2] then
+                    options:FromString(mod[3])
+                end
+            end
+            for _, mod in pairs(mods_ease) do
+                if beat >= mod[1] and beat <= mod[1] + mod[2] then
+                    options:Mini((beat - mod[1]) / mod[2], 9999)
+                end
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Exact Runtime Mod Tables");
+        context.music_length_seconds = 4.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let mini_eases = compiled
+            .eases
+            .iter()
+            .filter(|ease| matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "mini"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(compiled.beat_mods.len(), 1);
+        assert_eq!(mini_eases.len(), 1);
+        assert_eq!(mini_eases[0].start, 4.0);
+        assert!(!compiled.eases.iter().any(|ease| {
+            matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "flip")
+        }));
+    }
+
+    #[test]
     fn compile_song_lua_refines_active_player_transform_sampling() {
         let song_dir = test_dir("set-update-function-player-transform-tail");
         let entry = song_dir.join("default.lua");
@@ -18818,6 +18871,56 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn runtime_perframes_are_not_also_compiled_as_standalone_eases() {
+        let song_dir = test_dir("runtime-perframe-single-authority");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+mod_perframes = {
+    {1, 2, function(beat) target:x(beat * 10) end},
+}
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self) target = self end,
+    },
+    Def.Actor{
+        OnCommand=function(self)
+            self:SetUpdateFunction(function()
+                local beat = GAMESTATE:GetSongBeat()
+                for _, perframe in pairs(mod_perframes) do
+                    if beat > perframe[1] and beat < perframe[2] then
+                        perframe[3](beat)
+                    end
+                end
+            end)
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Runtime Perframe");
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let target_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Target"))
+            .unwrap();
+
+        assert!(compiled.overlay_updates.iter().any(|track| {
+            track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::X
+        }));
+        assert!(!compiled.overlay_eases.iter().any(|ease| {
+            ease.overlay_index == target_index && (ease.from.x.is_some() || ease.to.x.is_some())
+        }));
+    }
+
+    #[test]
     fn overlay_perframes_read_in_flight_action_tweens() {
         let song_dir = test_dir("perframe-action-getter");
         let entry = song_dir.join("default.lua");
@@ -19812,6 +19915,41 @@ return Def.ActorFrame{
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn position_getters_distinguish_live_tween_state_from_destination() {
+        let lua = Lua::new();
+        let actor = test_create_dummy_actor(&lua, "Quad").unwrap();
+        lua.globals().set("actor", actor.clone()).unwrap();
+
+        let (before_x, before_dest, tween_x, tween_dest) = lua
+            .load(
+                r#"
+actor:x(10)
+local before_x, before_dest = actor:GetX(), actor:GetDestX()
+actor:decelerate(1):x(5)
+return before_x, before_dest, actor:GetX(), actor:GetDestX()
+"#,
+            )
+            .eval::<(f32, f32, f32, f32)>()
+            .unwrap();
+
+        assert_eq!((before_x, before_dest), (10.0, 10.0));
+        assert_eq!((tween_x, tween_dest), (10.0, 5.0));
+
+        crate::lua_util::set_actor_overlay_update_getter_value(
+            &lua,
+            &actor,
+            SongLuaOverlayUpdateTarget::X,
+            &SongLuaOverlayUpdateValue::F32(7.5),
+        )
+        .unwrap();
+        let (live_x, dest_x) = lua
+            .load("return actor:GetX(), actor:GetDestX()")
+            .eval::<(f32, f32)>()
+            .unwrap();
+        assert_eq!((live_x, dest_x), (7.5, 5.0));
     }
 
     #[test]

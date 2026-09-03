@@ -15,7 +15,8 @@ use crate::{
     offset_center, scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
     tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
     visual_arrow_effect_zoom_cached, visual_hold_body_needs_z_buffer,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 use deadlib_present::actors::{
     Actor, FlatDraw, FlatMeshVertices, SizeSpec, SpriteSource, TextAlign, TextAttributes,
@@ -631,7 +632,7 @@ fn compose_field_contents<S, F>(
             return;
         }
         let hold_head_rot =
-            column_rotations_deg[local_col] + calc_note_rotation_z(note.beat, transform_cache);
+            column_rotations_deg[local_col] + visual_hold_head_rotation_z_cached(transform_cache);
         let note_idx = local_col * NUM_QUANTIZATIONS + note.quantization_idx as usize;
         let head_center_x = if (head_draw_y - receptor_draw_y).abs() <= 0.5 {
             receptor_center_x

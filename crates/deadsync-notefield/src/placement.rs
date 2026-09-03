@@ -584,13 +584,14 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     });
 
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
-    let judgment_y = hud_y(
-        request.screen_center_y + style.judgment_normal_y + request.notefield_offset_y,
-        request.screen_center_y + style.judgment_reverse_y + request.notefield_offset_y,
-        receptor_y_centered + style.judgment_centered_y,
-        hud_reverse,
-        centered_percent,
-    );
+    // Simply Love's JudgmentTransformCommand ignores bCentered. ITGmania
+    // therefore keeps judgment text at the normal/reverse anchor even when a
+    // chart deliberately drives Centered beyond 100%, as Gemini does.
+    let judgment_y = if hud_reverse {
+        request.screen_center_y + style.judgment_reverse_y + request.notefield_offset_y
+    } else {
+        request.screen_center_y + style.judgment_normal_y + request.notefield_offset_y
+    };
     let combo_y = hud_y(
         request.screen_center_y + style.combo_normal_y + request.notefield_offset_y,
         request.screen_center_y + style.combo_reverse_y + request.notefield_offset_y,
@@ -768,7 +769,6 @@ mod tests {
             },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
-            judgment_centered_y: 95.0,
             combo_normal_y: 30.0,
             combo_reverse_y: -30.0,
             combo_centered_y: 155.0,
@@ -1092,7 +1092,7 @@ mod tests {
         request.centered_scroll = 2.0;
         let overshot = field_layout(request);
         assert_near(overshot.column_receptor_ys[0], 375.0);
-        assert_near(overshot.hud_layout.judgment_y, 470.0);
+        assert_near(overshot.hud_layout.judgment_y, 220.0);
 
         request.centered_scroll = 0.0;
         request.center_receptors_y = true;

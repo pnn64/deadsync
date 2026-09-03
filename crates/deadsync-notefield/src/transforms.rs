@@ -797,7 +797,7 @@ fn wrap_dizzy_radians(radians: f32) -> f32 {
 pub(crate) fn visual_note_rotation_z(
     note_beat: f32,
     song_beat: f32,
-    _is_hold_head: bool,
+    is_hold_head: bool,
     params: VisualEffectParams,
 ) -> f32 {
     if params.rotate_z == 0.0
@@ -807,7 +807,11 @@ pub(crate) fn visual_note_rotation_z(
     {
         return 0.0;
     }
-    visual_note_rotation_z_full(note_beat, song_beat, params)
+    if is_hold_head {
+        itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params)
+    } else {
+        visual_note_rotation_z_full(note_beat, song_beat, params)
+    }
 }
 
 pub(crate) fn visual_note_rotation_z_cached(note_beat: f32, cache: LaneNoteTransformCache) -> f32 {
@@ -822,6 +826,14 @@ pub(crate) fn visual_note_rotation_z_cached(note_beat: f32, cache: LaneNoteTrans
     let radians = (note_beat - cache.song_beat) * cache.dizzy;
     let wrapped = wrap_dizzy_radians(radians);
     cache.rotation_base_z + wrapped * (-180.0 / std::f32::consts::PI)
+}
+
+pub(crate) fn visual_hold_head_rotation_z_cached(cache: LaneNoteTransformCache) -> f32 {
+    if cache.identity_rotation {
+        0.0
+    } else {
+        cache.rotation_base_z
+    }
 }
 
 #[cfg(feature = "bench-support")]

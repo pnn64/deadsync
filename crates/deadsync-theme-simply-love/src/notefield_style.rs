@@ -34,7 +34,6 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     },
     judgment_normal_y: -30.0,
     judgment_reverse_y: 30.0,
-    judgment_centered_y: 95.0,
     combo_normal_y: 30.0,
     combo_reverse_y: -30.0,
     combo_centered_y: 155.0,
@@ -281,7 +280,6 @@ mod tests {
         assert_eq!(style.receptor.target_z, 100);
         assert_eq!(style.receptor.press_glow_z, 105);
         assert_eq!(style.receptor.hold_explosion_z, 145);
-        assert_eq!(style.judgment_centered_y, 95.0);
         assert_eq!(style.combo_centered_y, 155.0);
         assert_eq!(style.measure_line_z, 80);
         assert_eq!(style.edit_measure_number_font, "miso");

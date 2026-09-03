@@ -694,7 +694,6 @@ mod tests {
             },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
-            judgment_centered_y: 95.0,
             combo_normal_y: 30.0,
             combo_reverse_y: -30.0,
             combo_centered_y: 155.0,

@@ -2690,12 +2690,42 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    let current_pos_key = match key {
+        "x" => Some("__songlua_current_x"),
+        "y" => Some("__songlua_current_y"),
+        "z" => Some("__songlua_current_z"),
+        _ => None,
+    };
+    let prior_pos = current_pos_key
+        .map(|_| actor.get::<Option<f32>>(format!("__songlua_state_{key}")))
+        .transpose()?
+        .flatten()
+        .unwrap_or(0.0);
+    let scheduled = actor
+        .get::<Option<f32>>("__songlua_capture_cursor")?
+        .unwrap_or(0.0)
+        .max(0.0)
+        > f32::EPSILON
+        || actor
+            .get::<Option<f32>>("__songlua_capture_duration")?
+            .unwrap_or(0.0)
+            .max(0.0)
+            > f32::EPSILON;
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value)) {
         let block = actor_current_capture_block(lua, actor)?;
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
     set_actor_capture_state(actor, key, value)?;
+    if let Some(current_key) = current_pos_key {
+        if scheduled {
+            if actor.get::<Option<f32>>(current_key)?.is_none() {
+                actor.set(current_key, prior_pos)?;
+            }
+        } else {
+            actor.set(current_key, value)?;
+        }
+    }
     Ok(())
 }
 
@@ -7259,7 +7289,8 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
             let actor = actor.clone();
             move |_, _self: Option<Value>| {
                 Ok(actor
-                    .get::<Option<f32>>("__songlua_state_x")?
+                    .get::<Option<f32>>("__songlua_current_x")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_x")?)
                     .unwrap_or(0.0_f32))
             }
         })?,
@@ -7281,7 +7312,8 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
             let actor = actor.clone();
             move |_, _self: Option<Value>| {
                 Ok(actor
-                    .get::<Option<f32>>("__songlua_state_y")?
+                    .get::<Option<f32>>("__songlua_current_y")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_y")?)
                     .unwrap_or(0.0_f32))
             }
         })?,
@@ -7351,7 +7383,8 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
             let actor = actor.clone();
             move |_, _self: Option<Value>| {
                 Ok(actor
-                    .get::<Option<f32>>("__songlua_state_z")?
+                    .get::<Option<f32>>("__songlua_current_z")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_z")?)
                     .unwrap_or(0.0_f32))
             }
         })?,
@@ -11915,6 +11948,9 @@ pub fn set_actor_overlay_getter_state(
     set!("__songlua_state_x", state.x);
     set!("__songlua_state_y", state.y);
     set!("__songlua_state_z", state.z);
+    set!("__songlua_current_x", state.x);
+    set!("__songlua_current_y", state.y);
+    set!("__songlua_current_z", state.z);
     set!("__songlua_state_zoom", state.zoom);
     set!("__songlua_state_zoom_x", state.zoom_x);
     set!("__songlua_state_zoom_y", state.zoom_y);
@@ -11998,7 +12034,19 @@ pub fn set_actor_overlay_update_getter_value(
     };
     match value {
         UpdateValue::F32(value) if !key.is_empty() => {
-            set_actor_capture_state(actor, key, *value).map_err(|err| err.to_string())
+            let current_key = match target {
+                Target::X => Some("__songlua_current_x"),
+                Target::Y => Some("__songlua_current_y"),
+                Target::Z => Some("__songlua_current_z"),
+                _ => None,
+            };
+            if let Some(current_key) = current_key {
+                actor
+                    .set(current_key, *value)
+                    .map_err(|err| err.to_string())
+            } else {
+                set_actor_capture_state(actor, key, *value).map_err(|err| err.to_string())
+            }
         }
         UpdateValue::Bool(value) if target == Target::Visible => {
             actor

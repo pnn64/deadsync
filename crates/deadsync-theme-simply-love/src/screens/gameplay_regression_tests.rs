@@ -605,8 +605,19 @@ mod tests {
             player_profiles[0].scroll_speed,
             player_profiles[1].scroll_speed,
         ];
+        let mut hud = profile::gameplay_hud_snapshot();
+        hud.p1
+            .display_name
+            .clone_from(&player_profiles[0].display_name);
+        hud.p1.guest = false;
+        hud.p1.hide_username = false;
+        hud.p2
+            .display_name
+            .clone_from(&player_profiles[1].display_name);
+        hud.p2.guest = false;
+        hud.p2.hide_username = false;
         let init_view = crate::views::GameplayInitView {
-            hud: profile::gameplay_hud_snapshot(),
+            hud,
             ..Default::default()
         };
         screen_gameplay::init(
@@ -2736,6 +2747,7 @@ return Def.ActorFrame{
                     profile_data::Profile::default(),
                     profile_data::Profile::default(),
                 ];
+                profiles[0].display_name = "PixelSafePlayer".to_string();
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
                 let mut state = build_test_state(
@@ -2759,8 +2771,10 @@ return Def.ActorFrame{
                 );
 
                 assert!(actor_tree_has_text(&actors, "EVENT"));
+                assert!(actor_tree_has_text(&actors, "PixelSafePlayer"));
                 assert!(actor_tree_has_text(&actors, "AutoPlay"));
                 assert!(!render_target_has_text(&actors, "EVENT"));
+                assert!(!render_target_has_text(&actors, "PixelSafePlayer"));
                 assert!(!render_target_has_text(&actors, "AutoPlay"));
             },
         );
