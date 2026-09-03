@@ -2273,6 +2273,16 @@ pub fn select_preferred_steps(state: &mut State) {
     apply_initial_steps_for_song(state, song.as_ref(), chart_type, None);
 }
 
+/// The meter the wheel is sorted by, when level sort is active and the open
+/// section names a level. Shared by difficulty selection and wheel score
+/// lookup so both stay pinned to the sorted level.
+fn meter_sort_section_meter(sort_mode: WheelSortMode, section: Option<&str>) -> Option<u32> {
+    if sort_mode != WheelSortMode::Meter {
+        return None;
+    }
+    section.and_then(|value| value.parse().ok())
+}
+
 fn meter_steps_index(song: &SongData, chart_type: &str, meter: u32) -> Option<usize> {
     (0..song.steps_len(chart_type)).rev().find(|&index| {
         song.chart_for_steps_index(chart_type, index)
@@ -2287,8 +2297,7 @@ fn wheel_steps_index(
     section: Option<&str>,
     preferred: usize,
 ) -> Option<usize> {
-    if sort_mode == WheelSortMode::Meter
-        && let Some(meter) = section.and_then(|value| value.parse().ok())
+    if let Some(meter) = meter_sort_section_meter(sort_mode, section)
         && let Some(index) = meter_steps_index(song, chart_type, meter)
     {
         return Some(index);
@@ -13636,6 +13645,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
         ],
         play_style,
         Some(&state.wheel_song_meta),
+        meter_sort_section_meter(state.sort_mode, state.expanded_pack_name.as_deref()),
     );
     let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
         MusicWheelSlotRuntimeRequest::Song {

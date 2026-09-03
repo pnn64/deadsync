@@ -579,6 +579,35 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     best_chart
 }
 
+/// Chart index chosen by meter (level) sort, mirroring
+/// `select_music::meter_steps_index`: steps indices are walked in reverse
+/// (sorted edits first, then standard difficulties from Challenge down), so
+/// the last steps index with the meter wins.
+fn chart_index_for_meter(song: &SongData, chart_type: &str, meter: u32) -> Option<usize> {
+    let edits = song.edit_chart_indices_sorted(chart_type);
+    for &chart_index in edits.iter().rev() {
+        if song.charts[chart_index].meter == meter {
+            return Some(chart_index);
+        }
+    }
+    for difficulty_index in (0..STANDARD_DIFFICULTY_COUNT).rev() {
+        let difficulty = STANDARD_DIFFICULTY_NAMES[difficulty_index];
+        if let Some((chart_index, _)) = song
+            .charts
+            .iter()
+            .enumerate()
+            .find(|(_, chart)| {
+                chart.chart_type.eq_ignore_ascii_case(chart_type)
+                    && chart.difficulty.eq_ignore_ascii_case(difficulty)
+            })
+            .filter(|(_, chart)| chart.meter == meter)
+        {
+            return Some(chart_index);
+        }
+    }
+    None
+}
+
 const NO_CHART_INDEX: usize = usize::MAX;
 
 pub(crate) type WheelPreferredChartIndices = [usize; STANDARD_DIFFICULTY_COUNT];
@@ -656,6 +685,11 @@ pub(crate) fn preferred_chart_indices(
 /// Build the fixed borrowed slot request shared by Select Music and Select
 /// Course. Slot-to-entry and side-to-chart mapping intentionally mirrors the
 /// composer so shell-prepared data stays aligned while the wheel animates.
+///
+/// `sort_meter` is the meter of the open section while the wheel is sorted by
+/// level; wheel rows then resolve their chart (and therefore the score shown
+/// for the song) at that level instead of the preferred difficulty, matching
+/// the difficulty selector that follows the sorted level.
 pub(crate) fn runtime_slot_requests<'a>(
     entries: &'a [MusicWheelEntry],
     selected_index: usize,
@@ -663,6 +697,7 @@ pub(crate) fn runtime_slot_requests<'a>(
     preferred_difficulty_index: [usize; profile_data::PLAYER_SLOTS],
     play_style: profile_data::PlayStyle,
     cached_meta: Option<&FxHashMap<usize, WheelSongMeta>>,
+    sort_meter: Option<u32>,
 ) -> [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT] {
     if entries.is_empty() {
         return [MusicWheelSlotRuntimeRequest::Empty; MUSIC_WHEEL_SLOT_COUNT];
@@ -689,28 +724,27 @@ pub(crate) fn runtime_slot_requests<'a>(
                     selected_charts
                 } else {
                     let cached_song_indices = song_meta.map(|meta| &meta.preferred_chart_indices);
+                    let meter_chart = sort_meter.and_then(|meter| {
+                        chart_index_for_meter(song, target_chart_type, meter)
+                            .and_then(|chart_index| song.charts.get(chart_index))
+                    });
+                    let resolve_chart = |preferred: usize| {
+                        meter_chart.or_else(|| {
+                            chart_for_preferred_or_nearest_standard(
+                                song,
+                                target_chart_type,
+                                preferred,
+                                cached_song_indices,
+                            )
+                        })
+                    };
                     if preferred_difficulty_index[0] == preferred_difficulty_index[1] {
-                        let chart = chart_for_preferred_or_nearest_standard(
-                            song,
-                            target_chart_type,
-                            preferred_difficulty_index[0],
-                            cached_song_indices,
-                        );
+                        let chart = resolve_chart(preferred_difficulty_index[0]);
                         [chart, chart]
                     } else {
                         [
-                            chart_for_preferred_or_nearest_standard(
-                                song,
-                                target_chart_type,
-                                preferred_difficulty_index[0],
-                                cached_song_indices,
-                            ),
-                            chart_for_preferred_or_nearest_standard(
-                                song,
-                                target_chart_type,
-                                preferred_difficulty_index[1],
-                                cached_song_indices,
-                            ),
+                            resolve_chart(preferred_difficulty_index[0]),
+                            resolve_chart(preferred_difficulty_index[1]),
                         ]
                     }
                 };
@@ -1972,6 +2006,7 @@ mod tests {
             [0, 0],
             profile_data::PlayStyle::Single,
             None,
+            None,
         );
 
         assert_eq!(slots.len(), MUSIC_WHEEL_SLOT_COUNT);
@@ -2014,11 +2049,116 @@ mod tests {
             [0, 0],
             profile_data::PlayStyle::Single,
             None,
+            None,
         );
 
         assert!(matches!(
             slots[MUSIC_WHEEL_SLOT_COUNT / 2],
             MusicWheelSlotRuntimeRequest::Series { key: "ITG Series" }
+        ));
+    }
+
+    #[test]
+    fn runtime_slot_requests_resolve_scores_at_the_sorted_level() {
+        let mut song = (*song_with_art(None, None)).clone();
+        let mut easy = chart_with_difficulty("dance-single", "Easy", "easy-12", true);
+        easy.meter = 12;
+        let mut medium = chart_with_difficulty("dance-single", "Medium", "medium-10", true);
+        medium.meter = 10;
+        song.charts = vec![easy, medium];
+        let song = Arc::new(song);
+        let entries = vec![MusicWheelEntry::Song(Arc::clone(&song))];
+
+        // Preferred difficulty is Medium, but level sort pins the row chart
+        // (and its score) to the level being browsed.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [2, 2],
+            profile_data::PlayStyle::Single,
+            None,
+            Some(12),
+        );
+
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+        assert!(matches!(
+            slots[center - 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("easy-12"), Some("easy-12")],
+                ..
+            }
+        ));
+        assert!(matches!(
+            slots[center + 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("easy-12"), Some("easy-12")],
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn runtime_slot_requests_fall_back_to_preferred_without_a_level_chart() {
+        let mut song = (*song_with_art(None, None)).clone();
+        let mut easy = chart_with_difficulty("dance-single", "Easy", "easy-12", true);
+        easy.meter = 12;
+        let mut medium = chart_with_difficulty("dance-single", "Medium", "medium-10", true);
+        medium.meter = 10;
+        song.charts = vec![easy, medium];
+        let song = Arc::new(song);
+        let entries = vec![MusicWheelEntry::Song(Arc::clone(&song))];
+
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [2, 2],
+            profile_data::PlayStyle::Single,
+            None,
+            Some(11),
+        );
+
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+        assert!(matches!(
+            slots[center - 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("medium-10"), Some("medium-10")],
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn runtime_slot_requests_prefer_edits_sharing_the_sorted_level() {
+        let mut song = (*song_with_art(None, None)).clone();
+        let mut easy = chart_with_difficulty("dance-single", "Easy", "easy-12", true);
+        easy.meter = 12;
+        let mut edit = chart_with_difficulty("dance-single", "Edit", "edit-12", true);
+        edit.meter = 12;
+        song.charts = vec![easy, edit];
+        let song = Arc::new(song);
+        let entries = vec![MusicWheelEntry::Song(Arc::clone(&song))];
+
+        // Mirrors meter_steps_index: the edit sorts after the standard
+        // difficulties, so it owns the level's steps index.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+            None,
+            Some(12),
+        );
+
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+        assert!(matches!(
+            slots[center - 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("edit-12"), Some("edit-12")],
+                ..
+            }
         ));
     }
 
