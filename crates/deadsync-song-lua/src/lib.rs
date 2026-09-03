@@ -184,10 +184,11 @@ pub use lua_util::{
     set_proxy_target_fields, set_rolling_numbers_metric, snapshot_actor_mutable_state,
     snapshot_actor_semantic_state_table, snapshot_actors_semantic_state,
     snapshot_note_column_handlers, snapshot_note_field_columns, song_lua_actor_registry,
-    song_lua_screen_center, song_lua_screen_size, table_bool_field, table_f32_field,
-    table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4, table_vec5,
-    table_vertex_colors, text_attribute_matches, text_attribute_value, texture_source_size,
-    top_screen_steps_text, tracked_indices_for_actor_pointers, tracked_song_lua_actor,
+    song_lua_screen_center, song_lua_screen_size, stateful_message_captures, table_bool_field,
+    table_f32_field, table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4,
+    table_vec5, table_vertex_colors, text_attribute_matches, text_attribute_value,
+    texture_source_size, top_screen_steps_text, tracked_indices_for_actor_pointers,
+    tracked_song_lua_actor, update_tree_reads_global,
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
@@ -302,8 +303,8 @@ pub use top_screen::{
 };
 pub use values::{
     SONG_LUA_EASING_NAME_KEY, lua_binary_to_hex, lua_values_equal, player_index_from_value,
-    player_number_name, read_boolish, read_easing_name, read_f32, read_i32_value, read_player,
-    read_span_mode, read_string, read_u32_value, truthy,
+    player_number_name, read_boolish, read_easing_name, read_f32, read_f64, read_i32_value,
+    read_player, read_span_mode, read_string, read_u32_value, truthy,
 };
 #[cfg(any(test, feature = "bench-support"))]
 pub use values::{read_boolish_reference_for_bench, read_span_mode_reference_for_bench};
@@ -1721,6 +1722,7 @@ pub struct CompiledSongLua<OverlayActor> {
     pub overlays: Vec<OverlayActor>,
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
+    pub stateful_message_captures: Vec<SongLuaStatefulMessageCapture>,
     pub player_actors: [SongLuaCapturedActor; LUA_PLAYERS],
     pub song_foreground: SongLuaCapturedActor,
     pub hidden_players: [bool; LUA_PLAYERS],
@@ -1744,6 +1746,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             overlays: Vec::new(),
             overlay_eases: Vec::new(),
             overlay_updates: Vec::new(),
+            stateful_message_captures: Vec::new(),
             player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
             song_foreground: SongLuaCapturedActor::default(),
             hidden_players: [false; LUA_PLAYERS],
@@ -4284,7 +4287,7 @@ pub struct SongLuaOverlayEase {
     pub opt2: Option<f32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SongLuaOverlayUpdateTarget {
     X,
     Y,
@@ -4395,6 +4398,25 @@ pub struct SongLuaOverlayUpdateTrack {
     pub overlay_index: usize,
     pub target: SongLuaOverlayUpdateTarget,
     pub samples: Vec<SongLuaOverlayUpdateSample>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaStatefulMessageWrite {
+    pub overlay_index: usize,
+    pub beat: f32,
+    pub target: SongLuaOverlayUpdateTarget,
+    pub value: SongLuaOverlayUpdateValue,
+    pub delay_seconds: f32,
+    pub duration_seconds: f32,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SongLuaStatefulMessageCapture {
+    pub message: String,
+    pub overlay_targets: Vec<(usize, Vec<SongLuaOverlayUpdateTarget>)>,
+    pub writes: Vec<SongLuaStatefulMessageWrite>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -8555,6 +8577,102 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_does_not_replay_global_actions_before_update_loop() {
+        let song_dir = test_dir("global-actions-update-authority");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+local target
+local action = 1
+
+mod_actions = {
+    {0, "BossOn", true},
+    {1, function()
+        target:linear(1)
+        target:x(100)
+    end, true},
+}
+
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Target",
+        InitCommand=function(self)
+            target = self
+            self:x(0)
+            self:visible(false)
+        end,
+        BossOnMessageCommand=function(self)
+            self:visible(true)
+        end,
+    },
+    Def.Actor{
+        OnCommand=function(self)
+            self:queuecommand("Update")
+        end,
+        UpdateCommand=function(self)
+            local beat = GAMESTATE:GetSongBeat()
+            while action <= #mod_actions and beat >= mod_actions[action][1] do
+                if type(mod_actions[action][2]) == "string" then
+                    MESSAGEMAN:Broadcast(mod_actions[action][2])
+                else
+                    mod_actions[action][2]()
+                end
+                action = action + 1
+            end
+            self:sleep(0.02)
+            self:queuecommand("Update")
+        end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Global Actions Update Authority");
+        context.song_display_bpms = [60.0, 60.0];
+        context.music_length_seconds = 2.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .all(|event| !event.message.starts_with("__songlua_overlay_fn_action_")),
+            "the sampled UpdateCommand must be the sole action timing authority"
+        );
+        assert!(
+            compiled
+                .messages
+                .iter()
+                .any(|event| event.message == "BossOn" && event.beat == 0.0),
+            "named broadcasts must remain available to the renderer"
+        );
+        let target_index = compiled
+            .overlays
+            .iter()
+            .position(|overlay| overlay.name.as_deref() == Some("Target"))
+            .unwrap();
+        let track = compiled
+            .overlay_updates
+            .iter()
+            .find(|track| {
+                track.overlay_index == target_index && track.target == SongLuaOverlayUpdateTarget::X
+            })
+            .expect("the runtime action tween should produce an x track");
+        let first_changed = track
+            .samples
+            .iter()
+            .position(|sample| sample.value != SongLuaOverlayUpdateValue::F32(0.0))
+            .expect("the runtime tween should eventually move the actor");
+        let before = &track.samples[first_changed - 1];
+        let first = &track.samples[first_changed];
+        assert!(
+            before.value == SongLuaOverlayUpdateValue::F32(0.0) && first.beat > 1.0,
+            "the runtime tween must start from the untouched initial state: {before:?}, {first:?}"
+        );
+    }
+
+    #[test]
     fn compile_song_lua_classifies_player_transform_function_eases() {
         let song_dir = test_dir("function-ease");
         let entry = song_dir.join("default.lua");
@@ -12213,13 +12331,13 @@ return Def.ActorFrame{
         assert_eq!(compiled.overlays.len(), 2);
 
         let diffuse = compiled.overlays[0].initial_state;
-        assert_eq!(diffuse.effect_mode, EffectMode::DiffuseShift);
+        assert_eq!(diffuse.effect_mode, EffectMode::DiffuseBlink);
         assert_eq!(diffuse.effect_period, 0.25);
         assert_eq!(diffuse.effect_color1, [0.0, 0.0, 0.0, 1.0]);
         assert_eq!(diffuse.effect_color2, [1.0, 1.0, 1.0, 1.0]);
 
         let glow = compiled.overlays[1].initial_state;
-        assert_eq!(glow.effect_mode, EffectMode::GlowShift);
+        assert_eq!(glow.effect_mode, EffectMode::GlowBlink);
         assert_eq!(glow.effect_clock, EffectClock::Beat);
         assert_eq!(glow.effect_color1, [1.0, 1.0, 1.0, 0.2]);
         assert_eq!(glow.effect_color2, [1.0, 1.0, 1.0, 0.8]);
@@ -17440,7 +17558,8 @@ return Def.ActorFrame{
             &entry,
             r#"
 shots = 0
-next_fire = 1
+next_fire = 1.01
+mod_actions = {{1.01, "Fire", true}}
 local target
 return Def.ActorFrame{
     Def.Quad{
@@ -17455,7 +17574,7 @@ return Def.ActorFrame{
         OnCommand=function(self)
             self:SetUpdateFunction(function()
                 local beat = GAMESTATE:GetSongBeat()
-                while next_fire <= 2 and beat >= next_fire do
+                while next_fire <= 2.01 and beat >= next_fire do
                     MESSAGEMAN:Broadcast("Fire")
                     next_fire = next_fire + 1
                 end
@@ -17493,6 +17612,29 @@ return Def.ActorFrame{
             .collect::<Vec<_>>();
         assert!(values.contains(&10.0));
         assert!(values.contains(&20.0));
+        let fire = compiled
+            .stateful_message_captures
+            .iter()
+            .find(|capture| capture.message == "Fire")
+            .expect("stateful Fire provenance must be retained");
+        assert_eq!(fire.overlay_targets.len(), 1);
+        assert_eq!(fire.overlay_targets[0].0, target);
+        assert!(
+            fire.overlay_targets[0]
+                .1
+                .contains(&SongLuaOverlayUpdateTarget::X)
+        );
+        assert!(
+            fire.writes.first().is_some_and(|write| write.beat > 1.01),
+            "scheduled messages must wait for the next 60 Hz UpdateCommand frame"
+        );
+        assert!(
+            compiled
+                .info
+                .skipped_message_command_captures
+                .iter()
+                .all(|detail| !detail.contains("FireMessageCommand"))
+        );
     }
 
     #[test]

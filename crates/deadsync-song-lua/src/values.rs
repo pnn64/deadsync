@@ -20,6 +20,16 @@ pub fn read_f32(value: Value) -> Option<f32> {
 }
 
 #[inline(always)]
+pub fn read_f64(value: Value) -> Option<f64> {
+    match value {
+        Value::Integer(value) => Some(value as f64),
+        Value::Number(value) => value.is_finite().then_some(value),
+        Value::String(text) => text.to_str().ok()?.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 pub fn read_boolish(value: Value) -> Option<bool> {
     match value {
         Value::Boolean(value) => Some(value),

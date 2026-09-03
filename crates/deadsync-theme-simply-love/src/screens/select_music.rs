@@ -12384,6 +12384,11 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         OutPromptState::PressStartForOptions { elapsed } => {
             let elapsed = elapsed + dt.max(0.0);
             if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
+                // Preserve the v0.5.855 transition semantics: the prompt is
+                // finished before Gameplay entry begins. The shell can retain
+                // the previously presented frame while asynchronous loading
+                // completes, but this state must not survive a later return.
+                clear_preview(state);
                 state.out_prompt = OutPromptState::None;
                 return ThemeEffect::NavigateNoFade(Screen::Gameplay);
             }
@@ -12907,6 +12912,19 @@ pub fn allows_late_join(state: &State) -> bool {
         && state.profile_switch_overlay.is_none()
         && !state.test_input_overlay_visible
         && !state.pad_config_overlay_visible
+}
+
+#[must_use]
+pub const fn gameplay_preload_due(state: &State) -> bool {
+    matches!(
+        state.out_prompt,
+        OutPromptState::PressStartForOptions { .. }
+    )
+}
+
+#[must_use]
+pub const fn gameplay_preload_cancelled(state: &State) -> bool {
+    matches!(state.out_prompt, OutPromptState::EnteringOptions { .. })
 }
 
 // Fast non-allocating formatters where possible
@@ -17026,6 +17044,67 @@ mod tests {
             panic!("preview should retain the selected wheel song");
         };
         assert!(Arc::ptr_eq(current_song, &song));
+    }
+
+    #[test]
+    fn gameplay_prompt_finishes_at_original_deadline_and_stops_preview() {
+        let mut state = init_placeholder();
+        let mut song = (*test_song("Slow Lua Song")).clone();
+        song.music_path = Some(PathBuf::from("Slow Lua Song/music.ogg"));
+        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        state.policy.media.show_previews = true;
+        state.policy.media.preview_starts_immediately = true;
+        let _ = handle_confirm(&mut state);
+        assert!(super::gameplay_preload_due(&state));
+
+        let smx = deadsync_theme::views::SmxAssignmentView::default();
+        let mut effects = Vec::new();
+        super::update(
+            &mut state,
+            super::SHOW_OPTIONS_MESSAGE_SECONDS,
+            &smx,
+            &mut effects,
+        );
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::StopMusic
+                )),
+                ThemeEffect::NavigateNoFade(super::Screen::Gameplay)
+            ]
+        ));
+        assert!(!super::gameplay_preload_due(&state));
+        assert!(!super::gameplay_preload_cancelled(&state));
+        assert!(state.currently_playing_preview_song.is_none());
+
+        let repeated = super::update_impl(&mut state, 1.0, &smx);
+        assert!(matches!(repeated, ThemeEffect::None));
+    }
+
+    #[test]
+    fn start_during_gameplay_prompt_still_enters_player_options() {
+        let mut state = init_placeholder();
+        state.entries = vec![super::MusicWheelEntry::Song(test_song("Options Song"))];
+        let _ = handle_confirm(&mut state);
+
+        handle_input(
+            &mut state,
+            &input_event(
+                VirtualAction::p1_start,
+                deadsync_core::input::InputSource::Gamepad,
+                true,
+            ),
+            false,
+        );
+        assert!(super::gameplay_preload_cancelled(&state));
+
+        let smx = deadsync_theme::views::SmxAssignmentView::default();
+        let effect = super::update_impl(&mut state, super::ENTERING_OPTIONS_TOTAL_SECONDS, &smx);
+        assert!(matches!(
+            effect,
+            ThemeEffect::NavigateNoFade(super::Screen::PlayerOptions)
+        ));
     }
 
     #[test]

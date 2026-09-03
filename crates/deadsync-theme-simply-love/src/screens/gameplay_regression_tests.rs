@@ -634,6 +634,7 @@ mod tests {
             None,
             None,
             [0; MAX_PLAYERS],
+            None,
             init_view,
         )
     }

@@ -144,7 +144,7 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 #[cfg(all(
@@ -158,7 +158,7 @@ compile_error!(
 );
 
 use deadlib_present::actors::Actor;
-use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
+use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 #[cfg(test)]
 use deadsync_gameplay::CourseDisplayTotals;
@@ -228,6 +228,7 @@ const fn resumes_music_wheel(from: CurrentScreen) -> bool {
 const MENU_ACTORS_FADE_DURATION: f32 = 0.65;
 const COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG: f32 = 4.0;
 const COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG: f32 = 0.0;
+const GAMEPLAY_PRELOAD_POLL_INTERVAL: Duration = Duration::from_millis(16);
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
@@ -659,6 +660,30 @@ pub struct AppState {
 struct PendingGameplayInit {
     receiver: std::sync::mpsc::Receiver<gameplay::State>,
     finish: GameplayInitFinish,
+}
+
+struct GameplayPreload {
+    song_path: PathBuf,
+    requested_chart_ixs: Vec<usize>,
+    gameplay_song: Vec<GameplayChartData>,
+    song_lua: gameplay::PreparedGameplaySongLua,
+    payload_ms: f64,
+    elapsed_ms: f64,
+}
+
+struct PendingGameplayPreload {
+    receiver: std::sync::mpsc::Receiver<Result<GameplayPreload, String>>,
+    ready: Option<Result<GameplayPreload, String>>,
+    enter_requested: bool,
+}
+
+#[inline(always)]
+const fn holds_select_music_frame(
+    screen: CurrentScreen,
+    enter_requested: bool,
+    preload_ready: bool,
+) -> bool {
+    matches!(screen, CurrentScreen::SelectMusic) && enter_requested && !preload_ready
 }
 
 struct GameplayInitFinish {
@@ -1549,6 +1574,12 @@ pub struct App {
     /// eviction, and hands ownership back through a one-entry channel. GPU and
     /// audio resources remain application-thread work after completion.
     pending_gameplay_init: Option<PendingGameplayInit>,
+    /// One speculative, CPU-only load owned by the Select Music confirmation
+    /// transition. It preloads the selected gameplay chart payload and compiled
+    /// song-Lua session. Choosing Player Options drops the handoff; automatic
+    /// Gameplay entry consumes it. The bounded worker channel is the only
+    /// synchronization and no GPU/audio resource crosses it.
+    gameplay_preload: Option<PendingGameplayPreload>,
     /// Sole application-thread reader for played music-position segments.
     /// The callback publishes through a bounded lock-free ring; this retained
     /// reader and its derived map live with `App` and require no global lock.
@@ -2010,10 +2041,215 @@ impl App {
     #[inline(always)]
     fn accepts_live_input(&self) -> bool {
         self.pending_gameplay_init.is_none()
+            && !self.gameplay_preload_holds_frame()
             && config::foreground_input_active(
                 self.state.shell.frame_loop.window_focused(),
                 self.state.shell.frame_loop.surface_active(),
             )
+    }
+
+    #[inline(always)]
+    fn gameplay_preload_holds_frame(&self) -> bool {
+        self.gameplay_preload.as_ref().is_some_and(|pending| {
+            holds_select_music_frame(
+                self.state.screens.current_screen,
+                pending.enter_requested,
+                pending.ready.is_some(),
+            )
+        })
+    }
+
+    fn selected_music_gameplay_choice(
+        &self,
+    ) -> Option<(Arc<SongData>, [usize; MAX_PLAYERS], [usize; MAX_PLAYERS])> {
+        let state = &self.state.screens.select_music_state;
+        let select_music::MusicWheelEntry::Song(song) = state.entries.get(state.selected_index)?
+        else {
+            return None;
+        };
+        let (steps, preferred) = match profile::get_session_play_style() {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => (
+                [state.selected_steps_index, state.p2_selected_steps_index],
+                [
+                    state.preferred_difficulty_index,
+                    state.p2_preferred_difficulty_index,
+                ],
+            ),
+            _ => (
+                [state.selected_steps_index; MAX_PLAYERS],
+                [state.preferred_difficulty_index; MAX_PLAYERS],
+            ),
+        };
+        Some((Arc::clone(song), steps, preferred))
+    }
+
+    fn preload_gameplay(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::SelectMusic
+            || self.gameplay_preload.is_some()
+            || !select_music::gameplay_preload_due(&self.state.screens.select_music_state)
+        {
+            return;
+        }
+        let Some((song, steps, preferred)) = self.selected_music_gameplay_choice() else {
+            return;
+        };
+        let session = profile::get_session_snapshot();
+        let play_style = session.play_style;
+        let player_side = session.player_side;
+        let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
+        let cfg = config::get();
+        let mut options = player_options::init_for_gameplay(
+            Arc::clone(&song),
+            steps,
+            preferred,
+            self.state.screens.select_music_state.active_color_index,
+            CurrentScreen::SelectMusic,
+            None,
+            noteskin_catalog_view(),
+            crate::smx_config::smx_gif_catalog_view(),
+            crate::heart_rate::devices_view(),
+            crate::player_options::init_view(),
+        );
+        let scroll_speeds = player_options::apply_no_cmod_alternative(
+            &mut options,
+            cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
+        );
+        let player_profiles = crate::player_options::gameplay_profiles(
+            &options.player_options,
+            &options.judgment_palette_ids,
+            &options.heart_rate_device_ids,
+            cfg.tournament,
+            play_style,
+        );
+        let mut requested_chart_ixs = plan.chart_indices.to_vec();
+        if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
+            requested_chart_ixs.extend(light_plan.request_chart_ixs());
+        }
+        let song_path = song.simfile_path.clone();
+        let charts = plan.charts;
+        let gameplay_session = gameplay_session();
+        let viewport = gameplay_viewport(self.state.shell.metrics);
+        let gameplay_config = gameplay_config_from_config(&cfg);
+        let music_rate = options.music_rate;
+        let video_renderer = cfg.video_renderer;
+        let global_offset_seconds = cfg.global_offset_seconds;
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        let spawn = std::thread::Builder::new()
+            .name("select-music-gameplay-preload".to_string())
+            .spawn(move || {
+                let started = Instant::now();
+                let payload_started = Instant::now();
+                let result = song_loading::load_gameplay_charts(
+                    song.as_ref(),
+                    &requested_chart_ixs,
+                    global_offset_seconds,
+                )
+                .map(|gameplay_song| {
+                    let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
+                    let song_lua = gameplay::prepare_song_lua(
+                        song.as_ref(),
+                        &charts,
+                        &player_profiles,
+                        &scroll_speeds,
+                        music_rate,
+                        viewport,
+                        &gameplay_session,
+                        &gameplay_config,
+                        video_renderer,
+                    );
+                    GameplayPreload {
+                        song_path,
+                        requested_chart_ixs,
+                        gameplay_song,
+                        song_lua,
+                        payload_ms,
+                        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+                    }
+                });
+                let _ = sender.send(result);
+            });
+        match spawn {
+            Ok(_) => {
+                self.gameplay_preload = Some(PendingGameplayPreload {
+                    receiver,
+                    ready: None,
+                    enter_requested: false,
+                });
+            }
+            Err(error) => warn!("Failed to start Select Music gameplay preload: {error}"),
+        }
+    }
+
+    fn defer_gameplay_entry(&mut self, event_loop: &ActiveEventLoop) -> bool {
+        let Some(pending) = self.gameplay_preload.as_mut() else {
+            return false;
+        };
+        pending.enter_requested = true;
+        if pending.ready.is_some() {
+            self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
+        }
+        true
+    }
+
+    fn poll_gameplay_preload(&mut self, event_loop: &ActiveEventLoop) {
+        let Some(pending) = self.gameplay_preload.as_mut() else {
+            return;
+        };
+        if self.state.screens.current_screen == CurrentScreen::SelectMusic
+            && select_music::gameplay_preload_cancelled(&self.state.screens.select_music_state)
+        {
+            // A Start press selected Player Options before the normal prompt
+            // deadline. Do not let a completed speculative preload redirect it.
+            pending.enter_requested = false;
+        }
+        if pending.ready.is_none() {
+            match pending.receiver.try_recv() {
+                Ok(result) => pending.ready = Some(result),
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    let enter_requested = pending.enter_requested;
+                    self.gameplay_preload = None;
+                    warn!("Select Music gameplay preload stopped without returning a result");
+                    if enter_requested {
+                        self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
+                    }
+                    return;
+                }
+            }
+        }
+        if self
+            .gameplay_preload
+            .as_ref()
+            .is_some_and(|pending| pending.enter_requested)
+        {
+            self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
+        }
+    }
+
+    fn take_gameplay_preload(
+        &mut self,
+        song: &SongData,
+        requested_chart_ixs: &[usize],
+    ) -> Option<GameplayPreload> {
+        let pending = self.gameplay_preload.take()?;
+        let preload = match pending.ready? {
+            Ok(preload) => preload,
+            Err(error) => {
+                warn!("Select Music gameplay preload failed: {error}");
+                return None;
+            }
+        };
+        if preload.song_path != song.simfile_path
+            || preload.requested_chart_ixs != requested_chart_ixs
+        {
+            warn!("Discarding stale Select Music gameplay preload");
+            return None;
+        }
+        info!(
+            "Select Music gameplay preload: song='{}' payload_ms={:.3} elapsed_ms={:.3}",
+            song.title, preload.payload_ms, preload.elapsed_ms,
+        );
+        Some(preload)
     }
 
     fn finish_gameplay_init(
@@ -3417,7 +3653,17 @@ impl App {
         }
         let input_us: u32 = elapsed_us_since(input_started);
 
+        self.preload_gameplay();
+        self.poll_gameplay_preload(event_loop);
         self.poll_pending_gameplay_init(event_loop);
+
+        // Match the old synchronous handoff visually without blocking the OS
+        // event loop: once the normal options window expires, retain the last
+        // presented Select Music frame until the background preload is ready.
+        if self.gameplay_preload_holds_frame() {
+            self.state.shell.last_frame_end_time = Instant::now();
+            return;
+        }
 
         let work_caps = frame_work::screen_caps(self.state.screens.current_screen);
         let maintenance_started = Instant::now();
@@ -3620,6 +3866,13 @@ impl App {
             if auto_screenshot_plan.request_capture {
                 self.state.shell.screenshot.request(None);
             }
+        }
+        if self.gameplay_preload_holds_frame() {
+            // Navigation was requested while stepping this frame. Do not draw
+            // the now-cleared Select Music prompt state; retain the framebuffer
+            // that was presented immediately before the original deadline.
+            self.state.shell.last_frame_end_time = Instant::now();
+            return;
         }
         self.sync_select_music_runtime_after_step(self.select_music_policy);
         self.sync_select_course_runtime_after_step(self.select_course_policy);
@@ -4245,6 +4498,7 @@ impl App {
             audio,
             gameplay_sfx: GameplaySfx::default(),
             pending_gameplay_init: None,
+            gameplay_preload: None,
             music_clock,
             live_case: live_case.map(live_case::LiveCaseRuntime::new),
             gameplay_banner_sync_key: None,
@@ -4392,6 +4646,12 @@ impl App {
                 Vec::new()
             }
             ThemeEffect::NavigateNoFade(screen) => {
+                if screen == CurrentScreen::Gameplay
+                    && self.state.screens.current_screen == CurrentScreen::SelectMusic
+                    && self.defer_gameplay_entry(event_loop)
+                {
+                    return Ok(());
+                }
                 if self.maybe_begin_gameplay_offset_prompt(
                     self.state.screens.current_screen,
                     screen,
@@ -8485,6 +8745,7 @@ impl App {
                     None,
                     None,
                     [0; MAX_PLAYERS],
+                    None,
                     gameplay_init_view,
                 );
                 crate::gameplay_runtime::sync_initial_scores(&mut gs);
@@ -8721,6 +8982,8 @@ impl App {
                     };
                 let reusing_gameplay_payload = reused_gameplay_charts.is_some();
                 let payload_started = Instant::now();
+                let mut preloaded_payload_ms = None;
+                let mut prepared_song_lua = None;
                 let gameplay_charts = if let Some(gameplay_charts) = reused_gameplay_charts {
                     debug!(
                         "Reusing gameplay payload for quick restart '{}'",
@@ -8756,21 +9019,30 @@ impl App {
                     if let Some(plan) = cabinet_light_plan.as_ref() {
                         requested_chart_ixs.extend(plan.request_chart_ixs());
                     }
-                    let gameplay_song = match song_loading::load_gameplay_charts(
-                        song_arc.as_ref(),
-                        &requested_chart_ixs,
-                        global_offset_seconds,
-                    ) {
-                        Ok(gameplay_song) => gameplay_song,
-                        Err(e) => {
-                            error!(
-                                "Failed to load gameplay payload for '{}': {}",
-                                song_arc.title, e
-                            );
-                            player_options::prewarm_noteskin_previews(&mut po_state);
-                            self.commit_screen_change(CurrentScreen::PlayerOptions);
-                            self.state.screens.player_options_state = Some(po_state);
-                            return commands;
+                    let preload = (prev == CurrentScreen::SelectMusic).then(|| {
+                        self.take_gameplay_preload(song_arc.as_ref(), &requested_chart_ixs)
+                    });
+                    let gameplay_song = if let Some(preload) = preload.flatten() {
+                        preloaded_payload_ms = Some(preload.payload_ms);
+                        prepared_song_lua = Some(preload.song_lua);
+                        preload.gameplay_song
+                    } else {
+                        match song_loading::load_gameplay_charts(
+                            song_arc.as_ref(),
+                            &requested_chart_ixs,
+                            global_offset_seconds,
+                        ) {
+                            Ok(gameplay_song) => gameplay_song,
+                            Err(e) => {
+                                error!(
+                                    "Failed to load gameplay payload for '{}': {}",
+                                    song_arc.title, e
+                                );
+                                player_options::prewarm_noteskin_previews(&mut po_state);
+                                self.commit_screen_change(CurrentScreen::PlayerOptions);
+                                self.state.screens.player_options_state = Some(po_state);
+                                return commands;
+                            }
                         }
                     };
                     let gameplay_charts = [
@@ -8791,7 +9063,8 @@ impl App {
                     }
                     gameplay_charts
                 };
-                let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
+                let payload_ms = preloaded_payload_ms
+                    .unwrap_or_else(|| payload_started.elapsed().as_secs_f64() * 1000.0);
 
                 // Keep SelectMusic's current stepchart in sync with what we're about to play.
                 if play_style.is_versus() {
@@ -8912,6 +9185,7 @@ impl App {
                 let viewport = gameplay_viewport(self.state.shell.metrics);
                 let gameplay_config = gameplay_config_from_config(&cfg);
                 let music_rate = po_state.music_rate;
+                let song_lua_prepared = prepared_song_lua.is_some();
                 let finish = GameplayInitFinish {
                     started: init_started,
                     entry_started: gameplay_entry_started,
@@ -8946,10 +9220,11 @@ impl App {
                         course_display_info,
                         course_banner_path,
                         combo_carry,
+                        prepared_song_lua,
                         gameplay_init_view,
                     )
                 };
-                if has_song_lua {
+                if has_song_lua && !song_lua_prepared {
                     self.state.screens.gameplay_state = None;
                     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
                     std::thread::Builder::new()
@@ -9458,6 +9733,11 @@ impl ApplicationHandler<UserEvent> for App {
             .shell
             .gameplay_input_trace
             .note_new_events_if_enabled();
+        if self.gameplay_preload_holds_frame()
+            && let Some(window) = self.window.clone()
+        {
+            self.request_redraw_if_needed(&window, "gameplay_preload_poll");
+        }
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
@@ -9695,6 +9975,12 @@ impl ApplicationHandler<UserEvent> for App {
                 return;
             }
         }
+        if self.gameplay_preload_holds_frame() {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                Instant::now() + GAMEPLAY_PRELOAD_POLL_INTERVAL,
+            ));
+            return;
+        }
         let interval_state = self.redraw_interval_state(&window);
         let plan = self
             .state
@@ -9775,6 +10061,30 @@ pub fn run(
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn select_music_frame_holds_only_after_entry_request_until_preload_ready() {
+        assert!(holds_select_music_frame(
+            CurrentScreen::SelectMusic,
+            true,
+            false
+        ));
+        assert!(!holds_select_music_frame(
+            CurrentScreen::SelectMusic,
+            false,
+            false
+        ));
+        assert!(!holds_select_music_frame(
+            CurrentScreen::SelectMusic,
+            true,
+            true
+        ));
+        assert!(!holds_select_music_frame(
+            CurrentScreen::Gameplay,
+            true,
+            false
+        ));
+    }
 
     #[test]
     fn pack_save_marks_only_written_outcomes_applied() {

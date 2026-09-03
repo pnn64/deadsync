@@ -7,12 +7,12 @@ use crate::{
     SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget,
     SongLuaEaseWindow, SongLuaMessageEvent, SongLuaOverlayCompileActor, SongLuaOverlayEase,
     SongLuaOverlayState, SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTarget,
-    SongLuaOverlayUpdateTrack, SongLuaOverlayUpdateValue, SongLuaSpanMode, SongLuaTimeUnit,
-    SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
-    actor_tree_has_update_functions, column_transform_windows_from_samples,
-    compile_song_runtime_delta_values, compile_song_runtime_values, overlay_delta_pair_from_states,
-    overlay_state_after_blocks, push_unique_compile_detail, read_f32,
-    read_note_column_transform_samples, reset_actor_capture,
+    SongLuaOverlayUpdateTrack, SongLuaOverlayUpdateValue, SongLuaSpanMode,
+    SongLuaStatefulMessageCapture, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
+    actor_overlay_initial_state, actor_tree_has_update_functions,
+    column_transform_windows_from_samples, compile_song_runtime_delta_values,
+    compile_song_runtime_values, overlay_delta_pair_from_states, overlay_state_after_blocks,
+    push_unique_compile_detail, read_f32, read_note_column_transform_samples, reset_actor_capture,
     reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
     runtime_player_option_ease_target, set_actor_overlay_getter_state,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
@@ -436,17 +436,26 @@ pub fn update_function_sample_step(len: f32) -> f32 {
     (len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32).max(1.0 / 192.0)
 }
 
-fn update_function_replay_beats(context: &SongLuaCompileContext, start: f32, end: f32) -> Vec<f32> {
-    let start_seconds = song_elapsed_seconds_at(start, context);
-    let end_seconds = song_elapsed_seconds_at(end, context);
-    let mut out = vec![start];
-    let frame_count = ((end_seconds - start_seconds) * SONG_LUA_UPDATE_REFERENCE_FPS)
+fn update_function_replay_beats(
+    context: &SongLuaCompileContext,
+    start: f32,
+    end: f32,
+) -> Vec<(f32, f64)> {
+    let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
+    let end_seconds = f64::from(song_elapsed_seconds_at(end, context));
+    let mut out = vec![(start, 0.0)];
+    let frame_count = ((end_seconds - start_seconds) * f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
         .ceil()
         .max(0.0) as usize;
+    let mut previous_seconds = start_seconds;
     for frame in 1..=frame_count {
-        let seconds =
-            (start_seconds + frame as f32 / SONG_LUA_UPDATE_REFERENCE_FPS).min(end_seconds);
-        out.push(song_beat_at_elapsed_seconds(seconds, context));
+        let seconds = (start_seconds + frame as f64 / f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
+            .min(end_seconds);
+        out.push((
+            song_beat_at_elapsed_seconds(seconds as f32, context),
+            seconds - previous_seconds,
+        ));
+        previous_seconds = seconds;
     }
     out
 }
@@ -1143,6 +1152,7 @@ fn capture_update_overlay_samples<Kind>(
     >,
     beat: f32,
     next_beat: f32,
+    next_seconds: f64,
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
 ) -> Result<(), String> {
     merge_completed_scheduled_overlay_samples(
@@ -1192,7 +1202,7 @@ fn capture_update_overlay_samples<Kind>(
                     next.clone(),
                 );
             }
-            let message_seconds = song_elapsed_seconds_at(next_beat, context);
+            let message_seconds = next_seconds;
             let mut scheduled_values = std::collections::HashMap::new();
             for update in scheduled {
                 let from = scheduled_values
@@ -1207,12 +1217,18 @@ fn capture_update_overlay_samples<Kind>(
                 scheduled_samples.push(SongLuaScheduledOverlaySample {
                     overlay_index,
                     target: update.target,
+                    start_seconds: message_seconds + f64::from(update.delay_seconds),
+                    end_seconds: message_seconds
+                        + f64::from(update.delay_seconds)
+                        + f64::from(update.duration_seconds),
                     start_beat: song_beat_at_elapsed_seconds(
-                        message_seconds + update.delay_seconds,
+                        (message_seconds + f64::from(update.delay_seconds)) as f32,
                         context,
                     ),
                     end_beat: song_beat_at_elapsed_seconds(
-                        message_seconds + update.delay_seconds + update.duration_seconds,
+                        (message_seconds
+                            + f64::from(update.delay_seconds)
+                            + f64::from(update.duration_seconds)) as f32,
                         context,
                     ),
                     easing: update.easing.clone(),
@@ -1267,6 +1283,8 @@ fn capture_update_overlay_samples<Kind>(
 struct SongLuaScheduledOverlaySample {
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
+    start_seconds: f64,
+    end_seconds: f64,
     start_beat: f32,
     end_beat: f32,
     easing: Option<String>,
@@ -1313,16 +1331,17 @@ fn apply_scheduled_overlay_states<Kind>(
     overlays: &[SongLuaOverlayCompileActor<Kind>],
     states: &mut [SongLuaOverlayState],
     scheduled: &[SongLuaScheduledOverlaySample],
-    beat: f32,
+    seconds: f64,
 ) -> Result<(), String> {
     for sample in scheduled {
-        if beat + f32::EPSILON < sample.start_beat {
+        if seconds + f64::EPSILON < sample.start_seconds {
             continue;
         }
-        let linear_factor = if sample.end_beat <= sample.start_beat + f32::EPSILON {
+        let linear_factor = if sample.end_seconds <= sample.start_seconds + f64::EPSILON {
             1.0
         } else {
-            ((beat - sample.start_beat) / (sample.end_beat - sample.start_beat)).clamp(0.0, 1.0)
+            ((seconds - sample.start_seconds) / (sample.end_seconds - sample.start_seconds))
+                .clamp(0.0, 1.0) as f32
         };
         let factor = crate::overlay_command_ease_factor(
             sample.easing.as_deref(),
@@ -1440,19 +1459,16 @@ pub fn call_update_functions_at(
     root: &Value,
     beat: f32,
     delta_beats: f32,
-    delta_seconds: f32,
+    delta_seconds: f64,
 ) -> Result<(), String> {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let previous_delta = compile_song_runtime_delta_values(lua).map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
-    set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds)
+    set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds as f32)
         .map_err(|err| err.to_string())?;
-    let result = crate::lua_util::run_actor_compile_update_functions_with_delta(
-        lua,
-        root,
-        f64::from(delta_seconds),
-    )
-    .map_err(|err| err.to_string());
+    let result =
+        crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
+            .map_err(|err| err.to_string());
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)
         .map_err(|err| err.to_string())?;
@@ -1472,6 +1488,7 @@ pub fn compile_update_functions<Kind>(
         Vec<SongLuaOverlayEase>,
         Vec<SongLuaOverlayUpdateTrack>,
         Vec<SongLuaColumnOffsetWindow>,
+        Vec<SongLuaStatefulMessageCapture>,
     ),
     String,
 > {
@@ -1484,12 +1501,12 @@ pub fn compile_update_functions<Kind>(
     let mut column_ms = 0.0;
     let mut overlay_ms = 0.0;
     if !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())? {
-        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
     let start = 0.0;
     let end = update_function_end_beat(context);
     if end <= start {
-        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new()));
+        return Ok((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()));
     }
 
     let player_tables = tracked_player_tables(tracked_actors);
@@ -1532,23 +1549,20 @@ pub fn compile_update_functions<Kind>(
         &mut overlay_track_indices,
         start,
         start,
+        f64::from(song_elapsed_seconds_at(start, context)),
         &mut scheduled_overlay_samples,
     )?;
 
-    let mut replay = update_function_replay_beats(context, start, end);
-    replay.extend(messages.iter().filter_map(|event| {
-        (event.beat.is_finite() && event.beat > start && event.beat <= end).then_some(event.beat)
-    }));
-    replay.sort_by(f32::total_cmp);
-    replay.dedup_by(|left, right| left.to_bits() == right.to_bits());
+    let replay = update_function_replay_beats(context, start, end);
     let mut beat = start;
+    let mut seconds = f64::from(song_elapsed_seconds_at(start, context));
     let mut scheduled_states = baseline_overlays.clone();
     let mut transform_masks = player_transform_masks(&player_tables)?;
     let mut frame_count = 0;
-    for next_beat in replay.into_iter().skip(1) {
+    for (next_beat, delta_seconds) in replay.into_iter().skip(1) {
         frame_count += 1;
         let delta_beats = next_beat - beat;
-        let delta_seconds = beat_span_seconds(context, beat, next_beat);
+        seconds += delta_seconds;
         let stage = profile.then(Instant::now);
         reset_tracked_capture_tables(lua, tracked_actors)?;
         reset_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
@@ -1563,7 +1577,7 @@ pub fn compile_update_functions<Kind>(
             overlays,
             &mut scheduled_states,
             &scheduled_overlay_samples,
-            next_beat,
+            seconds,
         )?;
         call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
@@ -1619,6 +1633,7 @@ pub fn compile_update_functions<Kind>(
             &mut overlay_track_indices,
             beat,
             next_beat,
+            seconds,
             &mut scheduled_overlay_samples,
         )?;
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
@@ -1685,8 +1700,15 @@ pub fn compile_update_functions<Kind>(
         &baseline_overlays,
         scheduled_overlay_samples,
     );
+    let stateful_messages = crate::lua_util::stateful_message_captures(lua);
     crate::lua_util::end_overlay_update_capture(lua);
-    Ok((eases, Vec::new(), overlay_tracks, column_transforms))
+    Ok((
+        eases,
+        Vec::new(),
+        overlay_tracks,
+        column_transforms,
+        stateful_messages,
+    ))
 }
 
 #[derive(Clone, Copy)]

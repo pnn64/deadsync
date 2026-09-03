@@ -2,7 +2,7 @@ use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use image::image_dimensions;
 use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::c_int;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,11 +23,11 @@ use crate::{
     SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
     SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta,
     SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue, SongLuaPlayerContext,
-    SongLuaProxyTarget, SongLuaSoundEvent, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
-    SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-    TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env,
-    call_with_script_dir, call_with_script_path, clone_lua_value,
-    column_transform_windows_from_samples, compile_song_runtime_delta_values,
+    SongLuaProxyTarget, SongLuaSoundEvent, SongLuaSpanMode, SongLuaStatefulMessageCapture,
+    SongLuaStatefulMessageWrite, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
+    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
+    UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env, call_with_script_dir, call_with_script_path,
+    clone_lua_value, column_transform_windows_from_samples, compile_song_runtime_delta_values,
     compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
     crop_texture_rect, display_bpms_text, effect_clock_label, file_path_string,
     format_rolling_number, graph_display_body_size, initial_chunk_environment,
@@ -40,7 +40,7 @@ use crate::{
     parse_overlay_text_glow_mode, parse_sprite_sheet_dims, player_child_proxy_name,
     player_index_from_value, player_number_name, preprocess_lua_cmd_syntax,
     push_unique_compile_detail, read_actions_with_function_capture, read_boolish, read_f32,
-    read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
+    read_f64, read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
     record_unsupported_function_action_capture, register_loader_env, resolve_load_actor_path,
     resolve_script_path, rolling_numbers_format, scale_to_rect_plan, set_compile_song_runtime_beat,
     set_compile_song_runtime_values, set_string_method, song_lua_halign_value,
@@ -88,6 +88,8 @@ struct SongLuaOverlayUpdateCapture {
     values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     final_values: Vec<Vec<(SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue)>>,
     scheduled: Vec<Vec<SongLuaScheduledOverlayUpdate>>,
+    stateful_messages: BTreeMap<String, BTreeMap<usize, BTreeSet<SongLuaOverlayUpdateTarget>>>,
+    stateful_writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
 }
 
 struct SongLuaProbeCaptureActive;
@@ -114,7 +116,47 @@ impl SongLuaOverlayUpdateCapture {
             values: (0..actor_count).map(|_| Vec::new()).collect(),
             final_values: (0..actor_count).map(|_| Vec::new()).collect(),
             scheduled: (0..actor_count).map(|_| Vec::new()).collect(),
+            stateful_messages: BTreeMap::new(),
+            stateful_writes: BTreeMap::new(),
         }
+    }
+
+    fn record_stateful_message(
+        &mut self,
+        actor: &Table,
+        beat: f32,
+        target: SongLuaOverlayUpdateTarget,
+        value: SongLuaOverlayUpdateValue,
+        delay_seconds: f32,
+        duration_seconds: f32,
+        easing: Option<String>,
+        opt1: Option<f32>,
+    ) {
+        let Some(message) = self.active_broadcast.clone() else {
+            return;
+        };
+        let Some(index) = self.touch(actor) else {
+            return;
+        };
+        self.stateful_messages
+            .entry(message.clone())
+            .or_default()
+            .entry(index)
+            .or_default()
+            .insert(target);
+        self.stateful_writes
+            .entry(message)
+            .or_default()
+            .push(SongLuaStatefulMessageWrite {
+                overlay_index: index,
+                beat,
+                target,
+                value,
+                delay_seconds,
+                duration_seconds,
+                easing,
+                opt1,
+            });
     }
 
     fn touch(&mut self, actor: &Table) -> Option<usize> {
@@ -129,9 +171,11 @@ impl SongLuaOverlayUpdateCapture {
     fn record(
         &mut self,
         actor: &Table,
+        beat: f32,
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
+        self.record_stateful_message(actor, beat, target, value.clone(), 0.0, 0.0, None, None);
         let Some(index) = self.touch(actor) else {
             return false;
         };
@@ -155,6 +199,7 @@ impl SongLuaOverlayUpdateCapture {
     fn record_scheduled(
         &mut self,
         actor: &Table,
+        beat: f32,
         delay_seconds: f32,
         duration_seconds: f32,
         easing: Option<String>,
@@ -162,6 +207,16 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
+        self.record_stateful_message(
+            actor,
+            beat,
+            target,
+            value.clone(),
+            delay_seconds,
+            duration_seconds,
+            easing.clone(),
+            opt1,
+        );
         let Some(index) = self.touch(actor) else {
             return false;
         };
@@ -216,6 +271,28 @@ pub fn drain_overlay_update_capture(
 
 pub fn end_overlay_update_capture(lua: &Lua) {
     lua.remove_app_data::<SongLuaOverlayUpdateCapture>();
+}
+
+pub fn stateful_message_captures(lua: &Lua) -> Vec<SongLuaStatefulMessageCapture> {
+    let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
+        return Vec::new();
+    };
+    capture
+        .stateful_messages
+        .iter()
+        .map(|(message, targets)| SongLuaStatefulMessageCapture {
+            message: message.clone(),
+            overlay_targets: targets
+                .iter()
+                .map(|(&index, properties)| (index, properties.iter().copied().collect()))
+                .collect(),
+            writes: capture
+                .stateful_writes
+                .get(message)
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect()
 }
 
 fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
@@ -357,12 +434,13 @@ fn record_overlay_update_capture(
         .get::<Option<f32>>("__songlua_capture_opt1")
         .ok()
         .flatten();
+    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|mut capture| {
             if cursor > f32::EPSILON || duration > f32::EPSILON {
-                capture.record_scheduled(actor, cursor, duration, easing, opt1, target, value)
+                capture.record_scheduled(actor, beat, cursor, duration, easing, opt1, target, value)
             } else {
-                capture.record(actor, target, value)
+                capture.record(actor, beat, target, value)
             }
         })
 }
@@ -397,8 +475,9 @@ fn record_overlay_update_capture_immediate(
     if direct_message_actor {
         return true;
     }
+    let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
-        .is_some_and(|mut capture| capture.record(actor, target, value))
+        .is_some_and(|mut capture| capture.record(actor, beat, target, value))
 }
 
 pub fn overlay_compile_actor_tables_for_indices<Kind>(
@@ -2022,15 +2101,18 @@ fn run_guarded_actor_command(
     }
     active.set(name, true)?;
     let recurring_cursor_key = "__songlua_recurring_update_start_cursor";
-    let previous_recurring_cursor = if name.eq_ignore_ascii_case("UpdateCommand") {
-        let previous = actor.get::<Value>(recurring_cursor_key)?;
+    let recurring_exact_key = "__songlua_recurring_update_exact_interval";
+    let previous_recurring_state = if name.eq_ignore_ascii_case("UpdateCommand") {
+        let previous_cursor = actor.get::<Value>(recurring_cursor_key)?;
+        let previous_exact = actor.get::<Value>(recurring_exact_key)?;
         actor.set(
             recurring_cursor_key,
             actor
                 .get::<Option<f32>>("__songlua_capture_cursor")?
                 .unwrap_or(0.0),
         )?;
-        Some(previous)
+        actor.set(recurring_exact_key, 0.0_f64)?;
+        Some((previous_cursor, previous_exact))
     } else {
         None
     };
@@ -2048,8 +2130,9 @@ fn run_guarded_actor_command(
             }
             Ok(())
         });
-    if let Some(previous) = previous_recurring_cursor {
-        actor.set(recurring_cursor_key, previous)?;
+    if let Some((previous_cursor, previous_exact)) = previous_recurring_state {
+        actor.set(recurring_cursor_key, previous_cursor)?;
+        actor.set(recurring_exact_key, previous_exact)?;
     }
     active.set(name, Value::Nil)?;
     result
@@ -3953,12 +4036,30 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
             move |lua, (_self, duration): (Option<Value>, Option<Value>)| {
                 prepare_capture_scope_actor(lua, &actor)?;
                 flush_actor_capture(&actor)?;
+                let exact_duration = duration
+                    .as_ref()
+                    .cloned()
+                    .and_then(read_f64)
+                    .unwrap_or(0.0)
+                    .max(0.0);
                 let duration = duration.and_then(read_f32).unwrap_or(0.0).max(0.0);
                 let cursor = actor
                     .get::<Option<f32>>("__songlua_capture_cursor")?
                     .unwrap_or(0.0);
                 actor.set("__songlua_capture_cursor", cursor + duration)?;
                 actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
+                if actor_active_commands(lua, &actor)?
+                    .get::<Option<bool>>("UpdateCommand")?
+                    .unwrap_or(false)
+                {
+                    let interval = actor
+                        .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
+                        .unwrap_or(0.0);
+                    actor.set(
+                        "__songlua_recurring_update_exact_interval",
+                        interval + exact_duration,
+                    )?;
+                }
                 Ok(actor.clone())
             }
         })?,
@@ -4047,8 +4148,11 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                         let start = actor
                             .get::<Option<f32>>("__songlua_recurring_update_start_cursor")?
                             .unwrap_or(cursor);
-                        let interval = (cursor - start).max(0.0);
-                        if interval > f32::EPSILON {
+                        let interval = actor
+                            .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
+                            .filter(|interval| *interval > f64::EPSILON)
+                            .unwrap_or_else(|| f64::from((cursor - start).max(0.0)));
+                        if interval > f64::EPSILON {
                             actor.set("__songlua_recurring_update_interval", interval)?;
                         }
                     }
@@ -5980,7 +6084,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "glowblink",
+                    "glowshift",
                     Some(1.0),
                     None,
                     Some([1.0, 1.0, 1.0, 0.2]),
@@ -5998,7 +6102,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "glowshift",
+                    "glowblink",
                     Some(1.0),
                     None,
                     Some([1.0, 1.0, 1.0, 0.2]),
@@ -6016,7 +6120,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "diffuseblink",
+                    "diffuseshift",
                     Some(1.0),
                     None,
                     Some([0.0, 0.0, 0.0, 1.0]),
@@ -6034,7 +6138,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                 set_actor_effect_defaults(
                     lua,
                     &actor,
-                    "diffuseshift",
+                    "diffuseblink",
                     Some(1.0),
                     None,
                     Some([0.5, 0.5, 0.5, 0.5]),
@@ -7661,6 +7765,44 @@ pub fn actor_tree_has_update_functions(lua: &Lua, root: &Value) -> mlua::Result<
     actor_table_has_update_functions(lua, root)
 }
 
+pub fn update_tree_reads_global(lua: &Lua, root: &Value, name: &str) -> mlua::Result<bool> {
+    let Value::Table(root) = root else {
+        return Ok(false);
+    };
+    update_actor_reads_global(lua, root, name.as_bytes())
+}
+
+fn update_actor_reads_global(lua: &Lua, actor: &Table, name: &[u8]) -> mlua::Result<bool> {
+    let chunk_has_name = |function: Function| {
+        let chunk = function.dump(true);
+        chunk.windows(name.len()).any(|window| window == name)
+    };
+    if actor
+        .get::<Option<Function>>("__songlua_update_function")?
+        .is_some_and(&chunk_has_name)
+        || (actor
+            .get::<Option<bool>>("__songlua_recurring_update_command")?
+            .unwrap_or(false)
+            && actor
+                .get::<Option<Function>>("UpdateCommand")?
+                .is_some_and(&chunk_has_name))
+    {
+        return Ok(true);
+    }
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child? else {
+            continue;
+        };
+        if update_actor_reads_global(lua, &child, name)? {
+            return Ok(true);
+        }
+    }
+    if let Some(stream) = song_meter_stream_child(lua, actor)? {
+        return update_actor_reads_global(lua, &stream, name);
+    }
+    Ok(false)
+}
+
 fn song_meter_stream_child(lua: &Lua, actor: &Table) -> mlua::Result<Option<Table>> {
     if !actor_type_is(actor, "SongMeterDisplay")? {
         return Ok(None);
@@ -7726,34 +7868,51 @@ fn run_recurring_update(
     if !enabled || !recurring {
         return Ok(());
     }
-    let interval = actor
+    let mut interval = actor
         .get::<Option<f64>>("__songlua_recurring_update_interval")?
         .unwrap_or(0.0);
-    let runs = if interval > f64::EPSILON {
-        let elapsed = actor
-            .get::<Option<f64>>("__songlua_recurring_update_elapsed")?
-            .unwrap_or(0.0)
-            + delta_seconds.max(0.0);
-        // Replay deltas are derived from f32 song beats. At long song times a
-        // mathematically exact 20 ms boundary can arrive a few microseconds
-        // short, which otherwise skips this run until the following frame.
-        const TIMER_EPSILON_SECONDS: f64 = 1.0e-5;
-        let runs = ((elapsed + TIMER_EPSILON_SECONDS) / interval)
-            .floor()
-            .min(64.0) as usize;
-        actor.set(
-            "__songlua_recurring_update_elapsed",
-            (elapsed - interval * runs as f64).max(0.0),
-        )?;
-        runs
-    } else {
-        1
-    };
-    for _ in 0..runs {
+    if interval <= f64::EPSILON {
         if let Err(err) = run_actor_named_command(lua, actor, "UpdateCommand") {
             report_update_error(actor, UPDATE_CMD_ERROR_KEY, "UpdateCommand", &err)?;
         }
+        return Ok(());
     }
+
+    // The headless ITGmania oracle advances its source-derived tween queue with
+    // double-precision frame times. A command behind a sleep only runs when
+    // that frame has positive delta left after completing the sleep; exact
+    // equality leaves the zero-time command queued until the next frame.
+    let mut time_left = actor
+        .get::<Option<f64>>("__songlua_recurring_update_time_left")?
+        .unwrap_or(interval);
+    let mut delta = delta_seconds.max(0.0);
+    let mut runs = 0usize;
+    while delta > 0.0 && runs < 64 {
+        if time_left > 0.0 {
+            let elapsed = time_left.min(delta);
+            time_left -= elapsed;
+            delta -= elapsed;
+            if time_left <= 1.0e-7 {
+                time_left = 0.0;
+            }
+            if delta == 0.0 {
+                break;
+            }
+        }
+
+        if let Err(err) = run_actor_named_command(lua, actor, "UpdateCommand") {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, "UpdateCommand", &err)?;
+        }
+        runs += 1;
+        interval = actor
+            .get::<Option<f64>>("__songlua_recurring_update_interval")?
+            .unwrap_or(0.0);
+        if interval <= f64::EPSILON {
+            break;
+        }
+        time_left = interval;
+    }
+    actor.set("__songlua_recurring_update_time_left", time_left)?;
     Ok(())
 }
 

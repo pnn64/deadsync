@@ -135,6 +135,13 @@ pub(crate) struct GameplaySongLuaData {
     pub(crate) foreground_layers: Vec<GameplaySongLuaLayer>,
 }
 
+/// CPU-only song-Lua compilation prepared before Gameplay owns the screen.
+///
+/// The shell may build this on a worker during Select Music's options prompt,
+/// then move it into [`init`]. Its fields stay private so only this module can
+/// couple the compiled session to the gameplay runtime representation.
+pub struct PreparedGameplaySongLua(GameplaySongLuaData);
+
 #[derive(Clone, Debug, PartialEq)]
 struct SongLuaSoundEvent {
     second: f32,
@@ -3506,6 +3513,31 @@ fn gameplay_song_lua_data(
     })
 }
 
+#[must_use]
+pub fn prepare_song_lua(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    viewport: GameplayViewport,
+    session: &GameplaySession,
+    config: &GameplayConfig,
+    video_renderer: BackendType,
+) -> PreparedGameplaySongLua {
+    PreparedGameplaySongLua(gameplay_song_lua_data(
+        song,
+        charts,
+        player_profiles,
+        scroll_speed,
+        music_rate,
+        viewport,
+        session,
+        config,
+        video_renderer,
+    ))
+}
+
 fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {
     deadsync_song_lua::compiled_song_lua_sound_paths(
         data.primary
@@ -4185,6 +4217,7 @@ pub fn init(
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
+    prepared_song_lua: Option<PreparedGameplaySongLua>,
     init_view: GameplayInitView,
 ) -> State {
     let GameplayInitView {
@@ -4202,16 +4235,21 @@ pub fn init(
         gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profile_data);
     let noteskin_data =
         noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profile_data);
-    let song_lua_data = gameplay_song_lua_data(
-        &song,
-        &charts,
-        &player_profiles,
-        &scroll_speed,
-        music_rate,
-        viewport,
-        &session,
-        &config,
-        video_renderer,
+    let song_lua_data = prepared_song_lua.map_or_else(
+        || {
+            gameplay_song_lua_data(
+                &song,
+                &charts,
+                &player_profiles,
+                &scroll_speed,
+                music_rate,
+                viewport,
+                &session,
+                &config,
+                video_renderer,
+            )
+        },
+        |prepared| prepared.0,
     );
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);

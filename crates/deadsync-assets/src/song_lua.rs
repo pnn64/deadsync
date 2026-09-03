@@ -17,10 +17,11 @@ pub use deadsync_song_lua::{
     SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayState,
     SongLuaOverlayStateDelta, SongLuaOverlayUpdateTarget, SongLuaOverlayUpdateValue,
     SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod,
-    SongLuaTextGlowMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, file_path_string,
-    overlay_state_after_blocks, parse_overlay_blend_mode, parse_overlay_effect_clock,
-    parse_overlay_effect_mode, parse_overlay_text_align, parse_overlay_text_glow_mode,
-    parse_song_timing_bpms, song_elapsed_seconds_at,
+    SongLuaStatefulMessageCapture, SongLuaStatefulMessageWrite, SongLuaTextGlowMode,
+    SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, file_path_string, overlay_state_after_blocks,
+    parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
+    parse_overlay_text_align, parse_overlay_text_glow_mode, parse_song_timing_bpms,
+    song_elapsed_seconds_at,
 };
 
 pub type SongLuaOverlayModelLayer = deadsync_song_lua::SongLuaOverlayModelLayer<TexturedMeshVertex>;

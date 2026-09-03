@@ -26,6 +26,7 @@ use crate::{
     restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
     run_actor_startup_commands, run_actor_update_functions_with_delta,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
+    update_tree_reads_global,
 };
 
 const COMPILE_LAYER_KEY: &str = "__songlua_compile_layer";
@@ -246,6 +247,10 @@ where
             .raw_set(index + 1, root)
             .map_err(|err| err.to_string())?;
     }
+    let initialized_global_actions = lua
+        .globals()
+        .get::<Option<Table>>("mod_actions")
+        .map_err(|err| err.to_string())?;
     compile_timer.push_stage("execute_init");
     let root = Value::Table(roots);
     run_actor_startup_commands(&lua, &root).map_err(|err| {
@@ -456,11 +461,31 @@ where
     out.overlay_eases.extend(xero_overlay_eases);
     merge_compile_info(&mut out.info, xero_info);
     compile_timer.push_stage("xero_eases");
+    let global_actions = globals
+        .get::<Option<Table>>("mod_actions")
+        .map_err(|err| err.to_string())?;
+    let runtime_action_tables =
+        read_update_function_tables(&lua, &root, &["mod_actions", "actions"])?;
+    let update_reads_global_actions =
+        update_tree_reads_global(&lua, &root, "mod_actions").map_err(|err| err.to_string())?;
+    let global_actions_are_runtime = global_actions.as_ref().is_some_and(|global| {
+        runtime_action_tables
+            .iter()
+            .any(|runtime| runtime.to_pointer() == global.to_pointer())
+            || (update_reads_global_actions && initialized_global_actions.is_some())
+    });
+    let runtime_message_count = out.messages.len();
+    let runtime_overlay_command_counts = overlays
+        .iter()
+        .map(|overlay| overlay.actor.message_commands.len())
+        .collect::<Vec<_>>();
+    let runtime_tracked_command_counts = tracked_actors
+        .iter()
+        .map(|actor| actor.actor.message_commands.len())
+        .collect::<Vec<_>>();
     read_overlay_compile_actor_actions(
         &lua,
-        globals
-            .get::<Option<Table>>("mod_actions")
-            .map_err(|err| err.to_string())?,
+        global_actions,
         &mut overlays,
         &mut tracked_actors,
         &mut out.messages,
@@ -469,6 +494,39 @@ where
         &mut out.info,
     )?;
     compile_timer.push_stage("global_actions");
+    if global_actions_are_runtime {
+        // The sampled update loop is the timing authority for function actions.
+        // Keep named broadcasts: the renderer still needs their message events
+        // to drive actors which are not otherwise touched by the update capture.
+        // Only generated function-action commands would queue tweens twice.
+        let retained_messages = out
+            .messages
+            .drain(runtime_message_count..)
+            .filter(|event| !event.message.starts_with("__songlua_overlay_fn_action_"))
+            .collect::<Vec<_>>();
+        out.messages.extend(retained_messages);
+        for (overlay, count) in overlays.iter_mut().zip(runtime_overlay_command_counts) {
+            let retained_commands = overlay
+                .actor
+                .message_commands
+                .drain(count..)
+                .filter(|command| !command.message.starts_with("__songlua_overlay_fn_action_"))
+                .collect::<Vec<_>>();
+            overlay.actor.message_commands.extend(retained_commands);
+        }
+        for (actor, count) in tracked_actors
+            .iter_mut()
+            .zip(runtime_tracked_command_counts)
+        {
+            let retained_commands = actor
+                .actor
+                .message_commands
+                .drain(count..)
+                .filter(|command| !command.message.starts_with("__songlua_overlay_fn_action_"))
+                .collect::<Vec<_>>();
+            actor.actor.message_commands.extend(retained_commands);
+        }
+    }
     read_update_function_overlay_compile_actor_actions(
         &lua,
         &root,
@@ -495,37 +553,51 @@ where
     compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
     compile_timer.push_stage("note_hides");
-    let (update_eases, update_overlay_eases, update_overlay_tracks, update_column_transforms) =
-        match compile_multitap_update_overlays_for_actors(
+    let (
+        update_eases,
+        update_overlay_eases,
+        update_overlay_tracks,
+        update_column_transforms,
+        stateful_message_captures,
+    ) = match compile_multitap_update_overlays_for_actors(
+        &lua,
+        context,
+        &mut overlays,
+        &mut out.messages,
+        noteskin_resolver,
+        |overlays, arrow_index, noteskin| {
+            ensure_overlay_arrow_visual(
+                &lua,
+                overlays,
+                arrow_index,
+                noteskin,
+                create_dummy_actor,
+                |noteskin| multitap_arrow_visual_spec(context, noteskin),
+            )
+        },
+    )? {
+        Some(eases) => (Vec::new(), eases, Vec::new(), Vec::new(), Vec::new()),
+        None => compile_update_functions(
             &lua,
+            &root,
             context,
             &mut overlays,
-            &mut out.messages,
-            noteskin_resolver,
-            |overlays, arrow_index, noteskin| {
-                ensure_overlay_arrow_visual(
-                    &lua,
-                    overlays,
-                    arrow_index,
-                    noteskin,
-                    create_dummy_actor,
-                    |noteskin| multitap_arrow_visual_spec(context, noteskin),
-                )
-            },
-        )? {
-            Some(eases) => (Vec::new(), eases, Vec::new(), Vec::new()),
-            None => compile_update_functions(
-                &lua,
-                &root,
-                context,
-                &mut overlays,
-                &tracked_actors,
-                &out.messages,
-            )?,
-        };
+            &tracked_actors,
+            &out.messages,
+        )?,
+    };
     out.eases.extend(update_eases);
     out.overlay_eases.extend(update_overlay_eases);
     out.overlay_updates.extend(update_overlay_tracks);
+    for capture in stateful_message_captures {
+        out.info.skipped_message_command_captures.retain(|detail| {
+            !detail.contains(&format!(
+                ".{}MessageCommand changes cross-actor targets or effects",
+                capture.message
+            ))
+        });
+        out.stateful_message_captures.push(capture);
+    }
     out.column_offsets.extend(update_column_transforms);
     compile_timer.push_stage("update_overlays");
     resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
@@ -740,6 +812,35 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         };
         update.overlay_index = local;
         outputs[layer].overlay_updates.push(update);
+    }
+    for capture in compiled.stateful_message_captures.drain(..) {
+        let mut targets_by_layer = vec![Vec::new(); outputs.len()];
+        for (global, targets) in capture.overlay_targets {
+            let Some(&(layer, local)) = overlay_map.get(global) else {
+                continue;
+            };
+            targets_by_layer[layer].push((local, targets));
+        }
+        let mut writes_by_layer = vec![Vec::new(); outputs.len()];
+        for mut write in capture.writes {
+            let Some(&(layer, local)) = overlay_map.get(write.overlay_index) else {
+                continue;
+            };
+            write.overlay_index = local;
+            writes_by_layer[layer].push(write);
+        }
+        for (layer, overlay_targets) in targets_by_layer.into_iter().enumerate() {
+            if overlay_targets.is_empty() {
+                continue;
+            }
+            outputs[layer]
+                .stateful_message_captures
+                .push(crate::SongLuaStatefulMessageCapture {
+                    message: capture.message.clone(),
+                    overlay_targets,
+                    writes: std::mem::take(&mut writes_by_layer[layer]),
+                });
+        }
     }
 
     let primary = &mut outputs[primary_index];

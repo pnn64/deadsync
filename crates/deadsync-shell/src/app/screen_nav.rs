@@ -351,6 +351,9 @@ impl App {
         if self.reject_missing_course_plan(prev, target) {
             return;
         }
+        if prev == CurrentScreen::SelectMusic && target != CurrentScreen::Gameplay {
+            self.gameplay_preload = None;
+        }
         self.commit_screen_change(target);
         if target != CurrentScreen::Gameplay {
             self.state.gameplay_offset_save_prompt = None;
