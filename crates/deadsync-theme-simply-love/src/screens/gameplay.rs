@@ -30637,6 +30637,10 @@ mod tests {
             highest_notefield_layer <= foreground_layer,
             "foreground Lua should draw over the isolated player/notefield subtree"
         );
+        assert!(
+            foreground_layer < TOP_SCREEN_HUD_Z,
+            "foreground Lua must stay below player names and the event-mode label"
+        );
     }
 
     #[test]

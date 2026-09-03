@@ -61,9 +61,9 @@
     {
       "title": "BroGamer",
       "source_simfile": "BroGamer/BroGamer.ssc",
-      "archive": "16cac90d676560f6ef5349edca906d98b230d85e1f5c3206a71a1b098d1cd350.tar.zst",
-      "sha256": "16cac90d676560f6ef5349edca906d98b230d85e1f5c3206a71a1b098d1cd350",
-      "compressed_bytes": 275567
+      "archive": "440d1cf060906520b3158d53f4e612d705bb788498d6e40d9914a25030a84fca.tar.zst",
+      "sha256": "440d1cf060906520b3158d53f4e612d705bb788498d6e40d9914a25030a84fca",
+      "compressed_bytes": 277277
     },
     {
       "title": "Botanic Panic",

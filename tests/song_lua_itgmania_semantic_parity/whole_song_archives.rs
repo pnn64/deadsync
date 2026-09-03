@@ -270,64 +270,6 @@ fn compile_archive(
     (trace, compiled, primary_index, context)
 }
 
-fn apply_runtime_updates(
-    compiled: &CompiledSongLua,
-    overlay_index: usize,
-    beat: f32,
-    state: &mut SongLuaOverlayState,
-) {
-    use SongLuaOverlayUpdateTarget as Target;
-    use SongLuaOverlayUpdateValue as Value;
-    for track in compiled
-        .overlay_updates
-        .iter()
-        .filter(|track| track.overlay_index == overlay_index)
-    {
-        let Some(value) = compiled_update_value_at(compiled, overlay_index, track.target, beat)
-        else {
-            continue;
-        };
-        match (track.target, value) {
-            (Target::X, Value::F32(value)) => state.x = value,
-            (Target::Y, Value::F32(value)) => state.y = value,
-            (Target::Z, Value::F32(value)) => state.z = value,
-            (Target::ZBias, Value::F32(value)) => state.z_bias = value,
-            (Target::Zoom, Value::F32(value)) => state.zoom = value,
-            (Target::ZoomX, Value::F32(value)) => state.zoom_x = value,
-            (Target::ZoomY, Value::F32(value)) => state.zoom_y = value,
-            (Target::ZoomZ, Value::F32(value)) => state.zoom_z = value,
-            (Target::BaseZoom, Value::F32(value)) => state.basezoom = value,
-            (Target::BaseZoomX, Value::F32(value)) => state.basezoom_x = value,
-            (Target::BaseZoomY, Value::F32(value)) => state.basezoom_y = value,
-            (Target::BaseZoomZ, Value::F32(value)) => state.basezoom_z = value,
-            (Target::RotationX, Value::F32(value)) => state.rot_x_deg = value,
-            (Target::RotationY, Value::F32(value)) => state.rot_y_deg = value,
-            (Target::RotationZ, Value::F32(value)) => state.rot_z_deg = value,
-            (Target::SkewX, Value::F32(value)) => state.skew_x = value,
-            (Target::SkewY, Value::F32(value)) => state.skew_y = value,
-            (Target::Visible, Value::Bool(value)) => state.visible = value,
-            (Target::Diffuse, Value::Vec4(value)) => state.diffuse = value,
-            (Target::Glow, Value::Vec4(value)) => state.glow = value,
-            (Target::CropLeft, Value::F32(value)) => state.cropleft = value,
-            (Target::CropRight, Value::F32(value)) => state.cropright = value,
-            (Target::CropTop, Value::F32(value)) => state.croptop = value,
-            (Target::CropBottom, Value::F32(value)) => state.cropbottom = value,
-            (Target::FadeLeft, Value::F32(value)) => state.fadeleft = value,
-            (Target::FadeRight, Value::F32(value)) => state.faderight = value,
-            (Target::FadeTop, Value::F32(value)) => state.fadetop = value,
-            (Target::FadeBottom, Value::F32(value)) => state.fadebottom = value,
-            (Target::Vibrate, Value::Bool(value)) => state.vibrate = value,
-            (Target::EffectMagnitude, Value::Vec3(value)) => state.effect_magnitude = value,
-            (Target::EffectMode, Value::EffectMode(value)) => state.effect_mode = value,
-            (Target::EffectPeriod, Value::F32(value)) => state.effect_period = value,
-            (Target::EffectOffset, Value::F32(value)) => state.effect_offset = value,
-            (Target::Fov, Value::F32(value)) => state.fov = Some(value),
-            (Target::Vanishpoint, Value::Vec2(value)) => state.vanishpoint = Some(value),
-            _ => {}
-        }
-    }
-}
-
 fn compose_entire_song(
     trace: &NativeTrace,
     compiled_layers: &[CompiledSongLua],
@@ -413,6 +355,7 @@ fn assert_complete_parity(
     compare_update_render_persistence(trace, compiled, &mut gaps);
     compare_update_render_values(trace, compiled, context, &mut gaps);
     compare_player_operation_ranges(trace, compiled, &mut gaps);
+    compare_projected_geometry(trace, compiled, context, &mut gaps);
     compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
     compare_timeline(trace, &compiled[primary_index], &mut gaps);
     compare_commands(trace, compiled, primary_index, &mut gaps);

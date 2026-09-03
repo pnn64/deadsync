@@ -7,7 +7,8 @@ use deadsync_assets::song_lua::{
     overlay_state_after_blocks, parse_song_timing_bpms, song_elapsed_seconds_at,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
-use deadsync_song_lua::song_beat_at_elapsed_seconds;
+use deadsync_song_lua::{overlay_state_axis_scale, song_beat_at_elapsed_seconds};
+use deadsync_theme_simply_love::screens::gameplay::actor_conformance::compose_overlay_states;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -21,8 +22,10 @@ const DEFAULT_TRACE: &str =
 const STEP_YOUR_GAME_UP_TRACE: &str = "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json";
 const CUPHEAD_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Cuphead [TaroNuke]/botanic.sm.semantic.json";
+const BROGAMER_TRACE: &str = "tests/fixtures/itgmania-song-lua/BroGamer/BroGamer.ssc.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
+const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
 mod whole_song_archives;
@@ -359,17 +362,25 @@ fn compile_trace_song_at(
     context.screen_height = trace.display.logical_height;
     context.display_width = trace.display.width;
     context.display_height = trace.display.height;
+    let player_x = [
+        ((0.85 / 3.0) * context.screen_width).floor(),
+        ((2.15 / 3.0) * context.screen_width).floor(),
+    ];
     context.players = [
         SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
+            screen_x: player_x[0],
+            screen_y: context.screen_height * 0.5,
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
             enabled: true,
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
+            screen_x: player_x[1],
+            screen_y: context.screen_height * 0.5,
             ..SongLuaPlayerContext::default()
         },
     ];
@@ -1073,6 +1084,19 @@ fn update_value_lerp(
             (to[1] - from[1]).mul_add(t, from[1]),
             (to[2] - from[2]).mul_add(t, from[2]),
         ]),
+        (UpdateValue::Vec4(from), UpdateValue::Vec4(to)) => UpdateValue::Vec4([
+            (to[0] - from[0]).mul_add(t, from[0]),
+            (to[1] - from[1]).mul_add(t, from[1]),
+            (to[2] - from[2]).mul_add(t, from[2]),
+            (to[3] - from[3]).mul_add(t, from[3]),
+        ]),
+        (UpdateValue::Vec5(from), UpdateValue::Vec5(to)) => UpdateValue::Vec5([
+            (to[0] - from[0]).mul_add(t, from[0]),
+            (to[1] - from[1]).mul_add(t, from[1]),
+            (to[2] - from[2]).mul_add(t, from[2]),
+            (to[3] - from[3]).mul_add(t, from[3]),
+            (to[4] - from[4]).mul_add(t, from[4]),
+        ]),
         _ => from.clone(),
     }
 }
@@ -1086,7 +1110,15 @@ fn compiled_update_value_at(
     let samples = &compiled
         .overlay_updates
         .iter()
-        .find(|track| track.overlay_index == overlay_index && track.target == target)?
+        .rev()
+        .find(|track| {
+            track.overlay_index == overlay_index
+                && track.target == target
+                && track
+                    .samples
+                    .first()
+                    .is_some_and(|sample| sample.beat <= beat)
+        })?
         .samples;
     let next_index = samples.partition_point(|sample| sample.beat <= beat);
     if next_index == 0 {
@@ -1427,6 +1459,27 @@ fn value_u32(value: Option<&Value>) -> Option<u32> {
     value
         .and_then(Value::as_u64)
         .and_then(|value| u32::try_from(value).ok())
+}
+
+fn native_player_option_value_at(
+    trace: &NativeTrace,
+    player: usize,
+    operation: &str,
+    beat: f32,
+) -> Option<f32> {
+    let player_path = format!("player-state:PLAYER_{player}/options:ModsLevel_Song");
+    trace
+        .timeline_tracks
+        .iter()
+        .filter(|track| {
+            track.kind == "modifier"
+                && track.actor.as_deref() == Some(player_path.as_str())
+                && track.operation == operation
+        })
+        .flat_map(|track| &track.samples)
+        .filter(|(_, sample_beat, _, _, _)| sample_beat.is_some_and(|value| value <= beat))
+        .max_by_key(|(sequence, _, _, _, _)| *sequence)
+        .and_then(|(_, _, _, args, _)| value_f32(args.first()))
 }
 
 fn expected_block(track: &NativeTweenTrack, segment: &NativeTweenSegment) -> ExpectedBlock {
@@ -1979,16 +2032,26 @@ fn compiled_player_range(
     target: &SongLuaEaseTarget,
     default: f32,
 ) -> (f32, f32) {
-    compiled
+    let mut range = (default, default);
+    for ease in compiled
         .iter()
         .flat_map(|layer| &layer.eases)
         .filter(|ease| {
             ease.target == *target && (ease.player.is_none() || ease.player == Some(player))
         })
-        .flat_map(|ease| [ease.from, ease.to])
-        .fold((default, default), |(min, max), value| {
-            (min.min(value), max.max(value))
-        })
+    {
+        for step in 0..=256 {
+            let factor = deadsync_gameplay::song_lua_ease_factor(
+                ease.easing.as_deref(),
+                step as f32 / 256.0,
+                ease.opt1,
+                ease.opt2,
+            );
+            let value = (ease.to - ease.from).mul_add(factor, ease.from);
+            range = (range.0.min(value), range.1.max(value));
+        }
+    }
+    range
 }
 
 fn range_covers(actual: (f32, f32), expected: (f32, f32)) -> bool {
@@ -2093,18 +2156,76 @@ fn compiled_message_state_at(
     current
 }
 
-fn compare_projected_vibration_coverage(
+fn apply_runtime_updates(
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+    state: &mut SongLuaOverlayState,
+) {
+    use SongLuaOverlayUpdateTarget as Target;
+    use SongLuaOverlayUpdateValue as UpdateValue;
+    for track in compiled
+        .overlay_updates
+        .iter()
+        .filter(|track| track.overlay_index == overlay_index)
+    {
+        let Some(value) = compiled_update_value_at(compiled, overlay_index, track.target, beat)
+        else {
+            continue;
+        };
+        match (track.target, value) {
+            (Target::X, UpdateValue::F32(value)) => state.x = value,
+            (Target::Y, UpdateValue::F32(value)) => state.y = value,
+            (Target::Z, UpdateValue::F32(value)) => state.z = value,
+            (Target::ZBias, UpdateValue::F32(value)) => state.z_bias = value,
+            (Target::Zoom, UpdateValue::F32(value)) => state.zoom = value,
+            (Target::ZoomX, UpdateValue::F32(value)) => state.zoom_x = value,
+            (Target::ZoomY, UpdateValue::F32(value)) => state.zoom_y = value,
+            (Target::ZoomZ, UpdateValue::F32(value)) => state.zoom_z = value,
+            (Target::BaseZoom, UpdateValue::F32(value)) => state.basezoom = value,
+            (Target::BaseZoomX, UpdateValue::F32(value)) => state.basezoom_x = value,
+            (Target::BaseZoomY, UpdateValue::F32(value)) => state.basezoom_y = value,
+            (Target::BaseZoomZ, UpdateValue::F32(value)) => state.basezoom_z = value,
+            (Target::RotationX, UpdateValue::F32(value)) => state.rot_x_deg = value,
+            (Target::RotationY, UpdateValue::F32(value)) => state.rot_y_deg = value,
+            (Target::RotationZ, UpdateValue::F32(value)) => state.rot_z_deg = value,
+            (Target::SkewX, UpdateValue::F32(value)) => state.skew_x = value,
+            (Target::SkewY, UpdateValue::F32(value)) => state.skew_y = value,
+            (Target::Visible, UpdateValue::Bool(value)) => state.visible = value,
+            (Target::Diffuse, UpdateValue::Vec4(value)) => state.diffuse = value,
+            (Target::Glow, UpdateValue::Vec4(value)) => state.glow = value,
+            (Target::CropLeft, UpdateValue::F32(value)) => state.cropleft = value,
+            (Target::CropRight, UpdateValue::F32(value)) => state.cropright = value,
+            (Target::CropTop, UpdateValue::F32(value)) => state.croptop = value,
+            (Target::CropBottom, UpdateValue::F32(value)) => state.cropbottom = value,
+            (Target::FadeLeft, UpdateValue::F32(value)) => state.fadeleft = value,
+            (Target::FadeRight, UpdateValue::F32(value)) => state.faderight = value,
+            (Target::FadeTop, UpdateValue::F32(value)) => state.fadetop = value,
+            (Target::FadeBottom, UpdateValue::F32(value)) => state.fadebottom = value,
+            (Target::Vibrate, UpdateValue::Bool(value)) => state.vibrate = value,
+            (Target::EffectMagnitude, UpdateValue::Vec3(value)) => {
+                state.effect_magnitude = value;
+            }
+            (Target::EffectMode, UpdateValue::EffectMode(value)) => state.effect_mode = value,
+            (Target::EffectPeriod, UpdateValue::F32(value)) => state.effect_period = value,
+            (Target::EffectOffset, UpdateValue::F32(value)) => state.effect_offset = value,
+            (Target::Fov, UpdateValue::F32(value)) => state.fov = Some(value),
+            (Target::Vanishpoint, UpdateValue::Vec2(value)) => state.vanishpoint = Some(value),
+            _ => {}
+        }
+    }
+}
+
+fn projected_drawable_map(
     trace: &NativeTrace,
     compiled: &[CompiledSongLua],
-    context: &SongLuaCompileContext,
-    gaps: &mut Vec<String>,
-) {
+) -> HashMap<String, (usize, usize)> {
     let definitions = trace
         .actor_definitions
         .iter()
         .map(|definition| (definition.id.as_str(), definition))
         .collect::<HashMap<_, _>>();
-    let mut drawable_map = HashMap::<&str, (usize, usize)>::new();
+    let mut drawable_map = HashMap::new();
     for (layer, (root_id, compiled)) in trace.roots.iter().zip(compiled).enumerate() {
         let Some(root) = definitions.get(root_id.as_str()).copied() else {
             continue;
@@ -2125,10 +2246,235 @@ fn compare_projected_vibration_coverage(
                 native
                     .into_iter()
                     .zip(deadsync)
-                    .map(|(definition, index)| (definition.id.as_str(), (layer, index))),
+                    .map(|(definition, index)| (definition.id.clone(), (layer, index))),
             );
         }
     }
+    drawable_map
+}
+
+fn compiled_overlay_states_at(
+    compiled: &CompiledSongLua,
+    context: &SongLuaCompileContext,
+    beat: f32,
+    seconds: f32,
+) -> Vec<SongLuaOverlayState> {
+    let local = compiled
+        .overlays
+        .iter()
+        .enumerate()
+        .map(|(overlay_index, _)| {
+            let mut state =
+                compiled_message_state_at(context, compiled, overlay_index, beat, seconds);
+            apply_runtime_updates(compiled, overlay_index, beat, &mut state);
+            state
+        })
+        .collect::<Vec<_>>();
+    compose_overlay_states(
+        &compiled.overlays,
+        &local,
+        [compiled.screen_width, compiled.screen_height],
+    )
+}
+
+fn native_screen_vertices(sample: &[Value]) -> Option<Vec<[f32; 2]>> {
+    sample
+        .get(6)?
+        .as_array()?
+        .iter()
+        .map(|vertex| {
+            let vertex = vertex.as_array()?;
+            Some([value_f32(vertex.first())?, value_f32(vertex.get(1))?])
+        })
+        .collect()
+}
+
+fn compiled_screen_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) -> [[f32; 2]; 4] {
+    let [width, height] = state.size.unwrap_or(texture_size);
+    let align_x = (0.5 - state.halign) * width;
+    let align_y = (0.5 - state.valign) * height;
+    let [scale_x, scale_y] = overlay_state_axis_scale(state);
+    let (sin, cos) = state.rot_z_deg.to_radians().sin_cos();
+    [
+        [-width * 0.5, -height * 0.5],
+        [width * 0.5, -height * 0.5],
+        [width * 0.5, height * 0.5],
+        [-width * 0.5, height * 0.5],
+    ]
+    .map(|[x, y]| {
+        let scaled_x = (x + align_x) * scale_x;
+        let scaled_y = (y + align_y) * scale_y;
+        let skewed_y = state.skew_y.mul_add(scaled_x, scaled_y);
+        let skewed_x = state.skew_x.mul_add(skewed_y, scaled_x);
+        [
+            skewed_x.mul_add(cos, -skewed_y * sin) + state.x,
+            skewed_x.mul_add(sin, skewed_y * cos) + state.y,
+        ]
+    })
+}
+
+fn vertex_bounds(vertices: &[[f32; 2]]) -> [f32; 4] {
+    vertices.iter().fold(
+        [
+            f32::INFINITY,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NEG_INFINITY,
+        ],
+        |[min_x, min_y, max_x, max_y], [x, y]| {
+            [min_x.min(*x), min_y.min(*y), max_x.max(*x), max_y.max(*y)]
+        },
+    )
+}
+
+fn vertex_center(vertices: &[[f32; 2]]) -> [f32; 2] {
+    let sum = vertices
+        .iter()
+        .fold([0.0, 0.0], |[x, y], vertex| [x + vertex[0], y + vertex[1]]);
+    let count = vertices.len().max(1) as f32;
+    [sum[0] / count, sum[1] / count]
+}
+
+fn compare_projected_geometry(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    gaps: &mut Vec<String>,
+) {
+    let drawable_map = projected_drawable_map(trace, compiled);
+    let mut state_cache = HashMap::<(usize, u32, u32), Vec<SongLuaOverlayState>>::new();
+    for track in &trace.projected_vertex_tracks {
+        let Some(definition_id) = track.definition_id.as_deref() else {
+            continue;
+        };
+        let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+            continue;
+        };
+        let mut reported_visibility = false;
+        let mut reported_alpha = false;
+        let mut reported_bounds = false;
+        let mut reported_center = false;
+        for sample in &track.samples {
+            let Some(sample) = sample.as_array() else {
+                continue;
+            };
+            let Some(beat) = sample.first().and_then(|value| value_f32(Some(value))) else {
+                continue;
+            };
+            let Some(seconds) = sample.get(1).and_then(|value| value_f32(Some(value))) else {
+                continue;
+            };
+            let Some(native_visible) = sample.get(2).and_then(Value::as_bool) else {
+                continue;
+            };
+            let native_alpha = sample
+                .get(3)
+                .and_then(|value| value_f32(Some(value)))
+                .unwrap_or(1.0);
+            let states = state_cache
+                .entry((layer, beat.to_bits(), seconds.to_bits()))
+                .or_insert_with(|| {
+                    compiled_overlay_states_at(&compiled[layer], context, beat, seconds)
+                });
+            let Some(state) = states.get(overlay_index).copied() else {
+                continue;
+            };
+            let actual_visible = state.visible && state.diffuse[3] > 0.000_001;
+            let visibility_matches = native_visible == actual_visible || {
+                let probe_beat = (beat
+                    + if native_visible {
+                        PROJECTED_BEAT_EPSILON
+                    } else {
+                        -PROJECTED_BEAT_EPSILON
+                    })
+                .max(0.0);
+                let probe_seconds = song_elapsed_seconds_at(probe_beat, context);
+                state_cache
+                    .entry((layer, probe_beat.to_bits(), probe_seconds.to_bits()))
+                    .or_insert_with(|| {
+                        compiled_overlay_states_at(
+                            &compiled[layer],
+                            context,
+                            probe_beat,
+                            probe_seconds,
+                        )
+                    })
+                    .get(overlay_index)
+                    .is_some_and(|state| {
+                        native_visible == (state.visible && state.diffuse[3] > 0.000_001)
+                    })
+            };
+            if !visibility_matches && !reported_visibility {
+                gaps.push(format!(
+                    "projected visibility differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_visible}, DeadSync {actual_visible} (visible={}, alpha={:.3})",
+                    track.actor, state.visible, state.diffuse[3]
+                ));
+                reported_visibility = true;
+            }
+            if native_visible
+                && actual_visible
+                && (native_alpha - state.diffuse[3]).abs() > 0.03
+                && !reported_alpha
+            {
+                gaps.push(format!(
+                    "projected alpha differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {native_alpha:.3}, DeadSync {:.3}",
+                    track.actor, state.diffuse[3]
+                ));
+                reported_alpha = true;
+            }
+            if !native_visible
+                || !actual_visible
+                || track.camera_actor != "orthographic-screen"
+                || state.stretch_rect.is_some()
+            {
+                continue;
+            }
+            let Some(native_vertices) = native_screen_vertices(sample) else {
+                continue;
+            };
+            if native_vertices.len() != 4 {
+                continue;
+            }
+            let actual_vertices = compiled_screen_vertices(state, track.texture_size);
+            let expected_bounds = vertex_bounds(&native_vertices);
+            let actual_bounds = vertex_bounds(&actual_vertices);
+            if expected_bounds
+                .iter()
+                .zip(actual_bounds)
+                .any(|(expected, actual)| (expected - actual).abs() > 0.75)
+                && !reported_bounds
+            {
+                gaps.push(format!(
+                    "projected bounds differ for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_bounds:?}, DeadSync {actual_bounds:?}",
+                    track.texture
+                ));
+                reported_bounds = true;
+            }
+            let expected_center = vertex_center(&native_vertices);
+            let actual_center = vertex_center(&actual_vertices);
+            if expected_center
+                .iter()
+                .zip(actual_center)
+                .any(|(expected, actual)| (expected - actual).abs() > 0.75)
+                && !reported_center
+            {
+                gaps.push(format!(
+                    "projected center differs for {} ({definition_id}) at beat {beat:.3}: ITGmania {expected_center:?}, DeadSync {actual_center:?}",
+                    track.texture
+                ));
+                reported_center = true;
+            }
+        }
+    }
+}
+
+fn compare_projected_vibration_coverage(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    gaps: &mut Vec<String>,
+) {
+    let drawable_map = projected_drawable_map(trace, compiled);
     for track in &trace.projected_vertex_tracks {
         let Some(definition_id) = track.definition_id.as_deref() else {
             continue;
@@ -2293,6 +2639,7 @@ fn native_song_lua_semantics_match_deadsync() {
     compare_update_render_persistence(&trace, &compiled, &mut gaps);
     compare_update_render_values(&trace, &compiled, &context, &mut gaps);
     compare_player_operation_ranges(&trace, &compiled, &mut gaps);
+    compare_projected_geometry(&trace, &compiled, &context, &mut gaps);
     compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);
     compare_commands(&trace, &compiled, primary_index, &mut gaps);
@@ -2522,6 +2869,157 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
         assert_eq!(
             fixture["semantic_derivation"]["render_model"]["projection_width_basis"],
             "SCREEN_WIDTH"
+        );
+    }
+}
+
+#[test]
+fn brogamer_fixture_hides_and_scales_target_until_its_effect() {
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE));
+    let target = trace
+        .actor_definitions
+        .iter()
+        .find(|definition| definition.name.as_deref() == Some("TargetP1"))
+        .expect("BroGamer fixture has no TargetP1 definition");
+    let track = trace
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.definition_id.as_deref() == Some(target.id.as_str()))
+        .expect("BroGamer fixture has no projected TargetP1 geometry");
+    let first = track
+        .samples
+        .first()
+        .and_then(Value::as_array)
+        .expect("BroGamer target has no initial geometry sample");
+    assert_eq!(value_f32(first.first()), Some(0.0));
+    assert_eq!(first.get(2).and_then(Value::as_bool), Some(false));
+    assert!(
+        native_screen_vertices(first)
+            .expect("BroGamer initial target sample has invalid vertices")
+            .is_empty()
+    );
+
+    let visible = track
+        .samples
+        .iter()
+        .filter_map(Value::as_array)
+        .find(|sample| sample.get(2).and_then(Value::as_bool) == Some(true))
+        .expect("BroGamer target never becomes visible");
+    let beat = value_f32(visible.first()).expect("BroGamer target sample has no numeric beat");
+    assert!(
+        (304.0..305.0).contains(&beat),
+        "target appears at beat {beat}"
+    );
+    let vertices =
+        native_screen_vertices(visible).expect("BroGamer target sample has invalid vertices");
+    let center = vertex_center(&vertices);
+    assert!((center[0] - 273.0).abs() < 0.01, "target x: {center:?}");
+    assert!((center[1] - 125.0).abs() < 0.01, "target y: {center:?}");
+    let edge = (vertices[1][0] - vertices[0][0]).hypot(vertices[1][1] - vertices[0][1]);
+    assert!(
+        (70.0..135.0).contains(&edge),
+        "target rendered at raw or otherwise incorrect size: {edge:.3}px"
+    );
+}
+
+#[test]
+fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
+    let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE);
+    let trace = read_trace_file(&trace_path);
+    let (compiled, primary_index, context) = compile_trace_song(&trace);
+    let compiled = &compiled[primary_index];
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            ..deadsync_rules::timing::TimingSegments::default()
+        },
+        &[],
+    );
+    let constants = deadsync_profile_gameplay::build_song_lua_constant_windows_for_player(
+        compiled, &timing, 0, 0.0,
+    );
+    let (eases, unsupported) = deadsync_profile_gameplay::build_song_lua_ease_windows_for_player(
+        compiled, &timing, 0, 0.0, &constants,
+    );
+    assert_eq!(unsupported, 0);
+    assert!(
+        constants
+            .iter()
+            .any(|window| window.visual.dizzy == Some(0.0)),
+        "BroGamer's baseline `no dizzy` mod was not compiled: {constants:#?}",
+    );
+    let first_gap_second = timing.get_time_for_beat(37.0);
+    assert!(
+        eases.iter().all(|window| {
+            window.target != deadsync_gameplay::SongLuaEaseMaskTarget::VisualDizzy
+                || window.start_second >= first_gap_second
+                || window.sustain_end_second <= first_gap_second
+        }),
+        "BroGamer's first dizzy ease leaked past beat 37",
+    );
+    let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
+        [constants, Vec::new()],
+        [eases, Vec::new()],
+    );
+    let mut transform = deadsync_gameplay::SongLuaPlayerTransform::default();
+    let mut previous_second = timing.get_time_for_beat(0.0);
+    let mut samples = HashMap::new();
+    for quarter in 0..=(440 * 4) {
+        let beat = quarter as f32 * 0.25;
+        let now = timing.get_time_for_beat(beat);
+        if let Some(next) = runtime.refresh_player(
+            0,
+            now,
+            (now - previous_second).max(0.0),
+            deadsync_gameplay::AttackBaseEffects::default(),
+            transform,
+        ) {
+            transform = next;
+        }
+        if matches!(
+            quarter,
+            48 | 80 | 140 | 148 | 400 | 1180 | 1200 | 1236 | 1620
+        ) {
+            samples.insert(
+                quarter,
+                (
+                    runtime.visual[0].dizzy.unwrap_or(0.0),
+                    runtime.visual[0].confusion.unwrap_or(0.0),
+                    runtime.visual[0].confusion_offset.unwrap_or(0.0),
+                ),
+            );
+        }
+        previous_second = now;
+    }
+
+    for quarter in [48, 80, 148, 400, 1180, 1236, 1620] {
+        let beat = quarter as f32 * 0.25;
+        let native_dizzy = native_player_option_value_at(&trace, 1, "PlayerOptions.Dizzy", beat)
+            .expect("BroGamer fixture has no P1 Dizzy state at a quiet checkpoint");
+        assert!(
+            native_dizzy.abs() <= EPSILON,
+            "BroGamer fixture expected Dizzy to be idle at beat {beat:.2}, got {native_dizzy:.4}",
+        );
+        let (dizzy, confusion, confusion_offset) = samples[&quarter];
+        assert!(
+            dizzy.abs() <= EPSILON
+                && confusion.abs() <= EPSILON
+                && confusion_offset.abs() <= EPSILON,
+            "BroGamer rotation leaked at beat {:.2}: dizzy={dizzy:.4}, confusion={confusion:.4}, confusionoffset={confusion_offset:.4}",
+            beat,
+        );
+    }
+    for (quarter, minimum) in [(140, 4.8), (1200, 0.8)] {
+        let beat = quarter as f32 * 0.25;
+        let native_dizzy = native_player_option_value_at(&trace, 1, "PlayerOptions.Dizzy", beat)
+            .expect("BroGamer fixture has no P1 Dizzy state in an active window");
+        let actual_dizzy = samples[&quarter].0;
+        assert!(native_dizzy >= minimum && actual_dizzy >= minimum);
+        assert!(
+            (actual_dizzy - native_dizzy).abs() <= 0.1,
+            "BroGamer Dizzy differs at beat {beat:.2}: ITGmania={native_dizzy:.4}, DeadSync={actual_dizzy:.4}",
         );
     }
 }

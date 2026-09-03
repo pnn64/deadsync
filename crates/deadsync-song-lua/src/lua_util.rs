@@ -4023,7 +4023,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                if let Some(value) = value.as_ref().map(truthy) {
+                if let Some(value) = value.and_then(read_boolish) {
                     prepare_capture_scope_actor(lua, &actor)?;
                     actor.set("__songlua_visible", value)?;
                     capture_block_set_bool(lua, &actor, "visible", value)?;

@@ -71,6 +71,26 @@ fn table_entries_are_strings_at(table: &Table, field: usize) -> Result<bool, Str
     Ok(true)
 }
 
+fn table_entries_are_strings_or_functions_at(table: &Table, field: usize) -> Result<bool, String> {
+    for index in 1..=table.raw_len() {
+        let Value::Table(entry) = table
+            .raw_get::<Value>(index)
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(false);
+        };
+        if !matches!(
+            entry
+                .raw_get::<Value>(field)
+                .map_err(|err| err.to_string())?,
+            Value::String(_) | Value::Function(_)
+        ) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 type DefaultCompiledSongLua<NoteskinSlot, ModelVertex> = CompiledSongLua<
     SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
 >;
@@ -540,8 +560,15 @@ where
             &mut overlays,
         )?;
     out.eases.extend(global_eases);
+    let global_function_eases_need_sampling = !global_overlay_eases.is_empty();
     out.overlay_eases.extend(global_overlay_eases);
     out.column_offsets.extend(global_column_offsets);
+    let global_mod_eases_are_exact = global_info.unsupported_function_eases == 0
+        && !global_function_eases_need_sampling
+        && match global_mod_eases.as_ref() {
+            Some(table) => table_entries_are_strings_or_functions_at(table, 5)?,
+            None => false,
+        };
     merge_compile_info(&mut out.info, global_info);
     let runtime_mod_ease_tables = read_update_function_tables(&lua, &root, &["mods_ease"])?;
     let update_reads_global_mod_eases =
@@ -554,7 +581,7 @@ where
     });
     if global_mod_eases_are_runtime
         && let Some(global) = global_mod_eases.as_ref()
-        && table_entries_are_strings_at(global, 5)?
+        && global_mod_eases_are_exact
     {
         push_unique_table(&mut runtime_exact_tables, global.clone());
     }
@@ -573,10 +600,14 @@ where
             &mut overlays,
         )?;
         out.eases.extend(eases);
+        let function_eases_need_sampling = !overlay_eases.is_empty();
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
+        let table_is_exact = info.unsupported_function_eases == 0
+            && !function_eases_need_sampling
+            && table_entries_are_strings_or_functions_at(table, 5)?;
         merge_compile_info(&mut out.info, info);
-        if table_entries_are_strings_at(table, 5)? {
+        if table_is_exact {
             push_unique_table(&mut runtime_exact_tables, table.clone());
         }
     }

@@ -5700,6 +5700,46 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_coerces_numeric_actor_visibility() {
+        let song_dir = test_dir("numeric-actor-visibility");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+return Def.ActorFrame{
+    Def.Quad{
+        Name="Hidden",
+        OnCommand=function(self) self:visible(0) end,
+    },
+    Def.Quad{
+        Name="Shown",
+        OnCommand=function(self) self:visible(1) end,
+    },
+}
+"#,
+        )
+        .unwrap();
+
+        let compiled = test_compile_song_lua(
+            &entry,
+            &SongLuaCompileContext::new(&song_dir, "Numeric Actor Visibility"),
+        )
+        .unwrap();
+        let hidden = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Hidden"))
+            .unwrap();
+        let shown = compiled
+            .overlays
+            .iter()
+            .find(|overlay| overlay.name.as_deref() == Some("Shown"))
+            .unwrap();
+        assert!(!hidden.initial_state.visible);
+        assert!(shown.initial_state.visible);
+    }
+
+    #[test]
     fn compile_song_lua_supports_bitmap_text_get_text() {
         let song_dir = test_dir("bitmap-text-get-text");
         let entry = song_dir.join("default.lua");
@@ -8314,6 +8354,71 @@ return Def.ActorFrame{
         assert!(!compiled.eases.iter().any(|ease| {
             matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "flip")
         }));
+    }
+
+    #[test]
+    fn compile_song_lua_does_not_resample_mixed_exact_mod_eases() {
+        let song_dir = test_dir("mixed-exact-runtime-mod-eases");
+        let entry = song_dir.join("default.lua");
+        fs::write(
+            &entry,
+            r#"
+mods = {
+    {0, 9999, "*1000 no dizzy", "end"},
+}
+mods_ease = {
+    {2, 2, 0, 500, "dizzy", "len", ease.linear},
+    {6, 2, 0, 90, function(value)
+        SCREENMAN:GetTopScreen():GetChild("PlayerP1"):rotationx(value)
+    end, "len", ease.linear},
+}
+
+return Def.ActorFrame{
+    OnCommand=function(self)
+        local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Song")
+        self:SetUpdateFunction(function()
+            local beat = GAMESTATE:GetSongBeat()
+            for _, mod in pairs(mods) do
+                if beat >= mod[1] and beat <= mod[2] then
+                    options:FromString(mod[3])
+                end
+            end
+            for _, mod in pairs(mods_ease) do
+                if beat >= mod[1] and beat <= mod[1] + mod[2] then
+                    local value = mod[3] + (mod[4] - mod[3]) * (beat - mod[1]) / mod[2]
+                    if type(mod[5]) == "function" then
+                        mod[5](value)
+                    else
+                        options:Dizzy(value / 100, 10000)
+                    end
+                end
+            end
+        end)
+    end,
+}
+"#,
+        )
+        .unwrap();
+
+        let mut context = SongLuaCompileContext::new(&song_dir, "Mixed Exact Mod Eases");
+        context.music_length_seconds = 10.0;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let dizzy = compiled
+            .eases
+            .iter()
+            .filter(|ease| matches!(&ease.target, SongLuaEaseTarget::Mod(name) if name == "dizzy"))
+            .collect::<Vec<_>>();
+        let rotation = compiled
+            .eases
+            .iter()
+            .filter(|ease| ease.target == SongLuaEaseTarget::PlayerRotationX)
+            .collect::<Vec<_>>();
+
+        assert_eq!(compiled.beat_mods.len(), 1);
+        assert_eq!(dizzy.len(), 1);
+        assert_eq!((dizzy[0].start, dizzy[0].limit), (2.0, 2.0));
+        assert_eq!(rotation.len(), 1);
+        assert_eq!((rotation[0].start, rotation[0].limit), (6.0, 2.0));
     }
 
     #[test]
