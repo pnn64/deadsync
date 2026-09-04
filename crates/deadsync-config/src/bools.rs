@@ -40,20 +40,14 @@ pub fn parse_u8_bool_or_default(raw: Option<&str>, default: bool) -> bool {
 mod tests {
     use super::*;
 
-    fn legacy_parse_bool_str(raw: &str) -> Option<bool> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        }
-    }
-
     #[test]
     fn parses_named_bool_values() {
-        for raw in ["1", "true", "TRUE", " yes ", "on"] {
+        for raw in ["1", "true", "TRUE", " true ", " yes ", "YeS", "on", "oN"] {
             assert_eq!(parse_bool_str(raw), Some(true));
         }
-        for raw in ["0", "false", "FALSE", " no ", "off"] {
+        for raw in [
+            "0", "false", "FALSE", " False ", " no ", "\tno\r\n", "off", "OFF",
+        ] {
             assert_eq!(parse_bool_str(raw), Some(false));
         }
     }
@@ -63,20 +57,9 @@ mod tests {
         assert_eq!(parse_bool_str(""), None);
         assert_eq!(parse_bool_str("2"), None);
         assert_eq!(parse_bool_str("maybe"), None);
-    }
-
-    #[test]
-    fn borrowed_bool_parser_matches_legacy_behavior() {
-        for raw in [
-            "1", "0", "TRUE", "False", "YeS", "oN", " OFF ", "\tno\r\n", "", "2", "truth", "trüe",
-            " true! ",
-        ] {
-            assert_eq!(
-                parse_bool_str(raw),
-                legacy_parse_bool_str(raw),
-                "input {raw:?}"
-            );
-        }
+        assert_eq!(parse_bool_str("truth"), None);
+        assert_eq!(parse_bool_str("trüe"), None);
+        assert_eq!(parse_bool_str(" true! "), None);
     }
 
     #[test]
@@ -96,17 +79,5 @@ mod tests {
         assert_eq!(parse_u8_bool_str("true"), None);
         assert!(parse_u8_bool_or_default(Some("bad"), true));
         assert!(!parse_u8_bool_or_default(None, false));
-    }
-}
-
-#[cfg(feature = "bench-support")]
-pub mod parse_reference {
-    #[must_use]
-    pub fn bool_str(raw: &str) -> Option<bool> {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        }
     }
 }

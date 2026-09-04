@@ -358,13 +358,6 @@ impl ReleaseEntry for ReleaseInfo {
     }
 }
 
-#[cfg(feature = "bench-support")]
-impl ReleaseEntry for &ReleaseInfo {
-    fn info(&self) -> &ReleaseInfo {
-        self
-    }
-}
-
 fn bounded_rollback_candidates<T>(
     releases: impl IntoIterator<Item = T>,
     current: &Version,
@@ -642,94 +635,6 @@ pub fn fetch_releases(agent: &ureq::Agent) -> Result<Vec<ReleaseInfo>, UpdaterEr
         .read_to_vec()
         .map_err(|err| UpdaterError::Network(err.to_string()))?;
     parse_releases_json(&bytes)
-}
-
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::*;
-    use std::fmt::Write as _;
-
-    #[inline(never)]
-    #[must_use]
-    pub fn sha256_hex_old(digest: &[u8; 32]) -> String {
-        let mut out = String::with_capacity(64);
-        for byte in digest {
-            let _ = write!(out, "{byte:02x}");
-        }
-        out
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn sha256_hex_new(digest: &[u8; 32]) -> String {
-        download::sha256_hex(digest)
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn pick_asset_old(
-        assets: &[ReleaseAsset],
-        version_tag: &str,
-        target: HostTarget,
-    ) -> Option<usize> {
-        let expected = expected_asset_name(version_tag, target);
-        assets.iter().position(|asset| asset.name == expected)
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn pick_asset_new(
-        assets: &[ReleaseAsset],
-        version_tag: &str,
-        target: HostTarget,
-    ) -> Option<usize> {
-        assets
-            .iter()
-            .position(|asset| asset_name_matches(&asset.name, version_tag, target))
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn rollback_old_checksum(
-        releases: &[ReleaseInfo],
-        current: &Version,
-        target: HostTarget,
-    ) -> u64 {
-        let mut out: Vec<(&ReleaseInfo, ReleaseAsset)> = releases
-            .iter()
-            .filter(|info| info.version < *current)
-            .filter_map(|info| {
-                pick_asset_for_host(&info.assets, &info.tag, target)
-                    .cloned()
-                    .map(|asset| (info, asset))
-            })
-            .collect();
-        out.sort_by(|a, b| b.0.version.cmp(&a.0.version));
-        out.truncate(ROLLBACK_VERSION_LIMIT);
-        rollback_checksum(out.iter().map(|(info, asset)| (*info, asset)))
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn rollback_new_checksum(
-        releases: &[ReleaseInfo],
-        current: &Version,
-        target: HostTarget,
-    ) -> u64 {
-        let out = bounded_rollback_candidates(releases, current, target);
-        rollback_checksum(out.iter().map(|(info, asset)| (*info, asset)))
-    }
-
-    fn rollback_checksum<'a>(
-        candidates: impl Iterator<Item = (&'a ReleaseInfo, &'a ReleaseAsset)>,
-    ) -> u64 {
-        candidates.fold(0xcbf2_9ce4_8422_2325, |mut hash, (info, asset)| {
-            for byte in info.tag.bytes().chain(asset.name.bytes()) {
-                hash = hash.wrapping_mul(0x100_0000_01b3) ^ u64::from(byte);
-            }
-            hash
-        })
-    }
 }
 
 #[cfg(test)]

@@ -24,110 +24,6 @@ struct NormalizedAsciiKey {
     len: u8,
 }
 
-#[cfg(feature = "bench-support")]
-pub mod parse_reference {
-    use super::{
-        AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
-        AUTO_SS_QUADS, AUTO_SS_QUINTS, LanguageFlag, SelectMusicSort, SyncGraphMode,
-        auto_screenshot_bit,
-    };
-
-    fn normalized_key(raw: &str) -> String {
-        let mut key = String::with_capacity(raw.len());
-        for ch in raw.trim().chars() {
-            if ch.is_ascii_alphanumeric() {
-                key.push(ch.to_ascii_lowercase());
-            }
-        }
-        key
-    }
-
-    #[must_use]
-    pub fn select_music_sort(raw: &str) -> Option<SelectMusicSort> {
-        match normalized_key(raw).as_str() {
-            "series" => Some(SelectMusicSort::Series),
-            "group" => Some(SelectMusicSort::Group),
-            "title" => Some(SelectMusicSort::Title),
-            "artist" => Some(SelectMusicSort::Artist),
-            "genre" => Some(SelectMusicSort::Genre),
-            "bpm" => Some(SelectMusicSort::Bpm),
-            "length" => Some(SelectMusicSort::Length),
-            "meter" => Some(SelectMusicSort::Meter),
-            "popularity" | "popular" | "mostpopular" => Some(SelectMusicSort::Popularity),
-            "recent" | "recentlyplayed" => Some(SelectMusicSort::Recent),
-            "topgrades" | "grades" | "machinetopscores" => Some(SelectMusicSort::TopGrades),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub fn sync_graph_mode(raw: &str) -> Option<SyncGraphMode> {
-        match normalized_key(raw).as_str() {
-            "frequency" => Some(SyncGraphMode::Frequency),
-            "beatindex" | "beatdigest" | "digest" => Some(SyncGraphMode::BeatIndex),
-            "postkernelfingerprint" | "postkernel" | "fingerprint" => {
-                Some(SyncGraphMode::PostKernelFingerprint)
-            }
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub fn language(raw: &str) -> Option<LanguageFlag> {
-        match normalized_key(raw).as_str() {
-            "auto" => Some(LanguageFlag::Auto),
-            "english" | "en" => Some(LanguageFlag::English),
-            "german" | "de" => Some(LanguageFlag::German),
-            "spanish" | "es" => Some(LanguageFlag::Spanish),
-            "french" | "fr" => Some(LanguageFlag::French),
-            "italian" | "it" => Some(LanguageFlag::Italian),
-            "japanese" | "ja" => Some(LanguageFlag::Japanese),
-            "polish" | "pl" => Some(LanguageFlag::Polish),
-            "portuguesebrazil" | "brazilianportuguese" | "ptbr" => {
-                Some(LanguageFlag::PortugueseBrazil)
-            }
-            "russian" | "ru" => Some(LanguageFlag::Russian),
-            "swedish" | "sv" => Some(LanguageFlag::Swedish),
-            "pseudo" => Some(LanguageFlag::Pseudo),
-            _ => None,
-        }
-    }
-
-    #[must_use]
-    pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
-        if mask == 0 {
-            return "Off".to_string();
-        }
-        let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
-        for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-            if (mask & auto_screenshot_bit(idx)) != 0 {
-                parts.push(*name);
-            }
-        }
-        parts.join("|")
-    }
-
-    #[must_use]
-    pub fn auto_screenshot_mask_from_str(raw: &str) -> u8 {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
-            return 0;
-        }
-        let mut mask = 0u8;
-        for part in trimmed.split('|') {
-            match part.trim().to_ascii_lowercase().as_str() {
-                "pbs" => mask |= AUTO_SS_PBS,
-                "fails" => mask |= AUTO_SS_FAILS,
-                "clears" => mask |= AUTO_SS_CLEARS,
-                "quads" => mask |= AUTO_SS_QUADS,
-                "quints" => mask |= AUTO_SS_QUINTS,
-                _ => {}
-            }
-        }
-        mask
-    }
-}
-
 impl NormalizedAsciiKey {
     fn parse(raw: &str) -> Option<Self> {
         let mut key = Self {
@@ -2221,63 +2117,55 @@ impl FromStr for LogLevel {
 mod tests {
     use super::*;
 
-    fn legacy_normalized_key(raw: &str) -> String {
-        raw.trim()
-            .chars()
-            .filter(char::is_ascii_alphanumeric)
-            .map(|ch| ch.to_ascii_lowercase())
-            .collect()
-    }
-
-    fn legacy_auto_screenshot_mask_to_str(mask: u8) -> String {
-        if mask == 0 {
-            return "Off".to_string();
-        }
-        let mut parts = Vec::with_capacity(AUTO_SS_NUM_FLAGS);
-        for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-            if (mask & auto_screenshot_bit(idx)) != 0 {
-                parts.push(*name);
-            }
-        }
-        parts.join("|")
-    }
-
-    fn legacy_auto_screenshot_mask_from_str(raw: &str) -> u8 {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("off") {
-            return 0;
-        }
-        let mut mask = 0u8;
-        for part in trimmed.split('|') {
-            match part.trim().to_ascii_lowercase().as_str() {
-                "pbs" => mask |= AUTO_SS_PBS,
-                "fails" => mask |= AUTO_SS_FAILS,
-                "clears" => mask |= AUTO_SS_CLEARS,
-                "quads" => mask |= AUTO_SS_QUADS,
-                "quints" => mask |= AUTO_SS_QUINTS,
-                _ => {}
-            }
-        }
-        mask
-    }
-
     #[test]
-    fn stack_normalized_keys_match_legacy_behavior() {
-        for raw in [
-            "Simply Love",
-            "  POST-kernel_fingerprint ",
-            "1-player",
-            "sïmply_love",
-            "___",
-            "S----------------------------RPG10",
+    fn stack_normalized_keys_strip_punctuation_and_non_ascii() {
+        for (raw, expected) in [
+            ("Simply Love", "simplylove"),
+            ("  POST-kernel_fingerprint ", "postkernelfingerprint"),
+            ("1-player", "1player"),
+            ("sïmply_love", "smplylove"),
+            ("___", ""),
+            ("S----------------------------RPG10", "srpg10"),
         ] {
             let key = NormalizedAsciiKey::parse(raw).expect("valid-size normalized key");
-            assert_eq!(key.as_str(), legacy_normalized_key(raw), "input {raw:?}");
+            assert_eq!(key.as_str(), expected, "input {raw:?}");
         }
 
         let too_long = "a".repeat(NORMALIZED_KEY_CAPACITY + 1);
         assert!(NormalizedAsciiKey::parse(&too_long).is_none());
-        assert!(legacy_normalized_key(&too_long).len() > NORMALIZED_KEY_CAPACITY);
+    }
+
+    #[test]
+    fn normalized_preference_parsers_accept_supported_aliases() {
+        assert_eq!(
+            SelectMusicSort::from_str(" MOST-popular "),
+            Ok(SelectMusicSort::Popularity)
+        );
+        assert_eq!(
+            SelectMusicSort::from_str("recently_played"),
+            Ok(SelectMusicSort::Recent)
+        );
+        assert_eq!(
+            SelectMusicSort::from_str("Machine Top Scores"),
+            Ok(SelectMusicSort::TopGrades)
+        );
+        assert_eq!(
+            SyncGraphMode::from_str("Beat-Digest"),
+            Ok(SyncGraphMode::BeatIndex)
+        );
+        assert_eq!(
+            SyncGraphMode::from_str(" POST kernel fingerprint "),
+            Ok(SyncGraphMode::PostKernelFingerprint)
+        );
+        assert_eq!(
+            LanguageFlag::from_str("pt-BR"),
+            Ok(LanguageFlag::PortugueseBrazil)
+        );
+        assert_eq!(
+            LanguageFlag::from_str("Brazilian Portuguese"),
+            Ok(LanguageFlag::PortugueseBrazil)
+        );
+        assert_eq!(LanguageFlag::from_str("JA"), Ok(LanguageFlag::Japanese));
     }
 
     #[test]
@@ -2465,24 +2353,19 @@ MachineEvaluationStyle=Default\n\
     }
 
     #[test]
-    fn streamed_auto_screenshot_codec_matches_legacy_for_every_mask() {
+    fn streamed_auto_screenshot_codec_roundtrips_every_mask() {
         for mask in 0u8..(1u8 << AUTO_SS_NUM_FLAGS) {
             let encoded = auto_screenshot_mask_to_str(mask);
-            assert_eq!(encoded, legacy_auto_screenshot_mask_to_str(mask));
             assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
         }
-        for raw in [
-            " pBs | FAILS | clears | QUADS | Quints ",
-            "unknown|PBs||fails",
-            "Off",
-            "  ",
-        ] {
-            assert_eq!(
-                auto_screenshot_mask_from_str(raw),
-                legacy_auto_screenshot_mask_from_str(raw),
-                "input {raw:?}"
-            );
-        }
+        assert_eq!(
+            auto_screenshot_mask_from_str(" pBs | FAILS | clears | QUADS | Quints "),
+            AUTO_SS_PBS | AUTO_SS_FAILS | AUTO_SS_CLEARS | AUTO_SS_QUADS | AUTO_SS_QUINTS
+        );
+        assert_eq!(
+            auto_screenshot_mask_from_str("unknown|PBs||fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
     }
 
     #[test]

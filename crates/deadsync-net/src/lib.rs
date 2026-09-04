@@ -288,58 +288,6 @@ where
     thread::spawn(task)
 }
 
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{MAX_LOG_CHARS, is_timeout_message, log_body_snippet, read_utf8_body_bounded};
-    use std::io::Cursor;
-
-    #[inline(never)]
-    #[must_use]
-    pub fn timeout_old(text: &str) -> bool {
-        let lower = text.to_ascii_lowercase();
-        lower.contains("timeout") || lower.contains("timed out")
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn timeout_new(text: &str) -> bool {
-        is_timeout_message(text)
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn known_length_body_old(bytes: &[u8], max_bytes: usize) -> String {
-        read_utf8_body_bounded(Cursor::new(bytes), max_bytes, max_bytes.min(64 * 1024))
-            .expect("benchmark body should be valid UTF-8 within the limit")
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn known_length_body_new(bytes: &[u8], max_bytes: usize) -> String {
-        read_utf8_body_bounded(Cursor::new(bytes), max_bytes, bytes.len())
-            .expect("benchmark body should be valid UTF-8 within the limit")
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn snippet_old(text: &str) -> String {
-        if text.is_empty() {
-            return String::new();
-        }
-        let mut out = String::with_capacity(text.len().min(MAX_LOG_CHARS));
-        for ch in text.chars().take(MAX_LOG_CHARS) {
-            out.push(ch);
-        }
-        out
-    }
-
-    #[inline(never)]
-    #[must_use]
-    pub fn snippet_new(text: String) -> String {
-        log_body_snippet(text)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -365,26 +313,12 @@ mod tests {
         assert!(is_timeout_message("Timeout reading body"));
         assert!(is_timeout_message("HTTP TIMEOUT"));
         assert!(is_timeout_message("prefix TiMeD OuT suffix"));
+        assert!(is_timeout_message("prefixTIMEOUTsuffix"));
+        assert!(is_timeout_message("request timed outside the limit"));
         assert!(!is_timeout_message("connection refused"));
         assert!(!is_timeout_message("time out"));
-    }
-
-    #[test]
-    fn timeout_classifier_matches_allocating_reference() {
-        for text in [
-            "",
-            "timeout",
-            "prefixTIMEOUTsuffix",
-            "request timed outside the limit",
-            "request time out",
-            "t-i-m-e-o-u-t",
-            "tİmeout",
-            "no matching marker",
-        ] {
-            let lower = text.to_ascii_lowercase();
-            let expected = lower.contains("timeout") || lower.contains("timed out");
-            assert_eq!(is_timeout_message(text), expected, "input: {text:?}");
-        }
+        assert!(!is_timeout_message("t-i-m-e-o-u-t"));
+        assert!(!is_timeout_message("tİmeout"));
     }
 
     #[test]

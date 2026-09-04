@@ -4,14 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "response_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadsync-version = { path = "../deadsync-version" }
 memchr = "2.8.3"
