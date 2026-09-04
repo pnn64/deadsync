@@ -223,37 +223,6 @@ impl<T> TextureStore<T> {
             .is_some_and(|dims| dims == (width, height))
     }
 
-    #[cfg(feature = "bench-support")]
-    pub fn queue_texture_upload_shared_reference(
-        &mut self,
-        key: String,
-        image: Arc<RgbaImage>,
-        sampler: SamplerDesc,
-    ) {
-        let handle = self.reserve_texture_handle(key.clone());
-        register_texture_dims(&key, image.width(), image.height());
-        self.pending_texture_uploads.push(handle, image, sampler);
-    }
-
-    #[cfg(feature = "bench-support")]
-    pub fn queue_texture_upload_shared_metadata_reference(
-        &mut self,
-        key: String,
-        image: Arc<RgbaImage>,
-        sampler: SamplerDesc,
-    ) {
-        let (width, height) = (image.width(), image.height());
-        let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
-            register_texture_dims(&key, width, height);
-            handle
-        } else {
-            let key: Arc<str> = Arc::from(key);
-            register_texture_dims_shared(Arc::clone(&key), width, height);
-            self.reserve_new_texture_handle(key)
-        };
-        self.pending_texture_uploads.push(handle, image, sampler);
-    }
-
     pub fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
         self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
     }

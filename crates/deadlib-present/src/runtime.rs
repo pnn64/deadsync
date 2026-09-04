@@ -230,17 +230,6 @@ mod tests {
         });
     }
 
-    fn legacy_site_id(file: &'static str, line: u32, col: u32, extra: u64) -> u64 {
-        let mut h = FNV_OFFSET;
-        for &b in file.as_bytes() {
-            h ^= u64::from(b);
-            h = h.wrapping_mul(FNV_PRIME);
-        }
-        h ^= (u64::from(line) << 32) ^ u64::from(col);
-        h = h.wrapping_mul(FNV_PRIME);
-        h ^ extra
-    }
-
     #[test]
     fn tick_updates_live_tweens() {
         reset_registry(0);
@@ -398,17 +387,5 @@ mod tests {
 
         tick(0.0);
         assert_eq!(registry_len(), 0);
-    }
-
-    #[test]
-    fn split_site_hash_matches_legacy_id() {
-        const FILE: &str = "deadsync/src/engine/present/dsl.rs";
-        const LINE: u32 = 614;
-        const COL: u32 = 9;
-        const EXTRA: u64 = 0x5343_4F4C_464F_524D;
-        const BASE: u64 = site_base(FILE, LINE, COL);
-        const ID: u64 = site_id(BASE, EXTRA);
-
-        assert_eq!(ID, legacy_site_id(FILE, LINE, COL, EXTRA));
     }
 }

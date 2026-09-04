@@ -4,33 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "texture_identity_hot_paths"
-harness = false
-
-[[bench]]
-name = "asset_cache_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "initial_texture_pipeline_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "dynamic_prewarm_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "font_pipeline_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }

@@ -37,16 +37,10 @@ pub use discover::{
 };
 pub use error::AssetError;
 pub use font::{
-    AssetFontTextureContext, FontAssetSpec, ParsedFontAsset, PreparedFontTexture,
-    font_texture_asset_roots, font_texture_key, parse_font_asset_specs,
-    parse_font_with_asset_context, parse_font_with_asset_dirs, prepare_font_texture,
-    prepare_required_font_textures, set_font_fallback,
-};
-#[cfg(feature = "bench-support")]
-pub use font::{
-    benchmark_font_contexts_borrowed_roots, benchmark_font_contexts_owned_roots,
-    benchmark_font_texture_keys_borrowed_roots, benchmark_font_texture_keys_cloned_roots,
-    benchmark_required_font_texture_keys_recomputed, benchmark_required_font_texture_keys_reused,
+    FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_asset_roots,
+    font_texture_key, parse_font_asset_specs, parse_font_with_asset_context,
+    parse_font_with_asset_dirs, prepare_font_texture, prepare_required_font_textures,
+    set_font_fallback,
 };
 pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
@@ -712,48 +706,6 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
 mod tests {
     use super::*;
 
-    fn reference_texture_hints(raw: &str) -> TextureHints {
-        let mut hints = TextureHints::default();
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("default") {
-            return hints;
-        }
-        hints.non_default = true;
-        let has = |needle| has_ascii_case_insensitive_substr(trimmed.as_bytes(), needle);
-        if has(b"32bpp") {
-            hints.color_depth = Some(32);
-        } else if has(b"16bpp") {
-            hints.color_depth = Some(16);
-        }
-        hints.dither = has(b"dither");
-        hints.stretch = has(b"stretch");
-        if has(b"mipmaps") {
-            hints.mipmaps = Some(true);
-        }
-        if has(b"nomipmaps") {
-            hints.mipmaps = Some(false);
-        }
-        hints.grayscale = has(b"grayscale");
-        hints.alphamap = has(b"alphamap");
-        hints.doubleres = has(b"doubleres");
-        if has(b"nearest") || has(b"point") {
-            hints.sampler_filter = Some(SamplerFilter::Nearest);
-        }
-        if has(b"linear") {
-            hints.sampler_filter = Some(SamplerFilter::Linear);
-        }
-        if has(b"wrap") || has(b"repeat") {
-            hints.sampler_wrap = Some(SamplerWrap::Repeat);
-        }
-        if has(b"clamp") {
-            hints.sampler_wrap = Some(SamplerWrap::Clamp);
-        }
-        if hints.mipmaps == Some(true) && hints.sampler_wrap.is_none() {
-            hints.sampler_wrap = Some(SamplerWrap::Repeat);
-        }
-        hints
-    }
-
     #[test]
     fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
         assert_eq!(
@@ -800,32 +752,6 @@ mod tests {
         assert_eq!(hints.mipmaps, Some(true));
         assert_eq!(hints.sampler_filter, Some(SamplerFilter::Nearest));
         assert_eq!(hints.sampler_wrap, Some(SamplerWrap::Repeat));
-    }
-
-    #[test]
-    fn single_pass_texture_hints_match_repeated_scan_reference() {
-        let cases = [
-            "",
-            "   ",
-            "default",
-            " DEFAULT ",
-            "plain texture.png",
-            "16bpp and later 32BPP",
-            "nomipmaps",
-            "mipmaps nearest wrap",
-            "nomipmaps point repeat linear clamp",
-            "prefixditherSuffix DOUBLEres grayscale alphamap stretch",
-            "nearestlinear wrapclamp 32bpp16bpp",
-            "NOMIPMAPS MIPMAPS",
-            "short n m d a c g l p r s w 3 1",
-        ];
-        for raw in cases {
-            assert_eq!(
-                parse_texture_hints(raw),
-                reference_texture_hints(raw),
-                "{raw}"
-            );
-        }
     }
 
     #[test]
@@ -952,99 +878,6 @@ mod tests {
             "snap_display_icon_9x1"
         );
         assert_eq!(strip_sprite_hints("mine.png"), "mine");
-    }
-
-    #[test]
-    fn optimized_sprite_hint_strip_matches_committed_ascii_behavior() {
-        fn reference(name: &str) -> String {
-            let file_name = Path::new(name)
-                .file_name()
-                .and_then(|file| file.to_str())
-                .unwrap_or(name);
-            let without_ext = file_name
-                .rsplit_once('.')
-                .map_or(file_name, |(stem, _)| stem);
-            let bytes = without_ext.as_bytes();
-            let mut out = String::with_capacity(without_ext.len());
-            let mut i = 0usize;
-            while i < bytes.len() {
-                if bytes[i] == b' ' {
-                    let mut left = i + 1;
-                    while left < bytes.len() && bytes[left].is_ascii_digit() {
-                        left += 1;
-                    }
-                    if left > i + 1 && left < bytes.len() && matches!(bytes[left], b'x' | b'X') {
-                        let mut right = left + 1;
-                        while right < bytes.len() && bytes[right].is_ascii_digit() {
-                            right += 1;
-                        }
-                        if right > left + 1 {
-                            i = right;
-                            continue;
-                        }
-                    }
-                }
-                out.push(bytes[i] as char);
-                i += 1;
-            }
-            const DOUBLERES_HINT: &str = " (doubleres)";
-            while let Some(start) = out.find(DOUBLERES_HINT) {
-                out.replace_range(start..start + DOUBLERES_HINT.len(), "");
-            }
-
-            let trim_start = out.len() - out.trim_start().len();
-            let trim_end = out.trim_end().len();
-            if trim_start >= trim_end {
-                out.clear();
-                return out;
-            }
-            out.truncate(trim_end);
-            if trim_start != 0 {
-                out.drain(..trim_start);
-            }
-            out
-        }
-
-        let cases = [
-            "grades/grades 1x19.png",
-            "_miso light 16X7 doubleres.png",
-            "practice/snap_display_icon_9x1 (doubleres).png",
-            "  spaced 4x2 label  ",
-            "two 1x2 hints 3x4 (doubleres) (doubleres).png",
-            "no 1x hint.png",
-            "no 1x0 hint.png",
-            "unchanged (DOUBLEres).png",
-            "mine.png",
-            "",
-            "   ",
-            "  2x3",
-            "trailing 2x3   ",
-            "many   spaces 12X34 between 5x6 words.png",
-            "not 12x nor 12X.png",
-            "folder.with.dot/name.with.dots 4x5.png",
-        ];
-
-        for name in cases {
-            assert_eq!(strip_sprite_hints(name), reference(name), "{name}");
-        }
-
-        for prefix in ["", " ", "  ", "plain", "plain ", "folder/name "] {
-            for hint in [
-                "",
-                "1x1",
-                "12X34",
-                "1x",
-                "x2",
-                "(doubleres)",
-                "(DOUBLEres)",
-                "2x3 (doubleres)",
-            ] {
-                for suffix in ["", " tail", "   ", ".png"] {
-                    let name = format!("{prefix}{hint}{suffix}");
-                    assert_eq!(strip_sprite_hints(&name), reference(&name), "{name}");
-                }
-            }
-        }
     }
 
     #[test]

@@ -5,7 +5,6 @@ edition = "2024"
 license = "GPL-3.0"
 
 [features]
-bench-support = []
 conformance = []
 
 [dependencies]
@@ -21,36 +20,3 @@ perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
 
-[[bench]]
-name = "internal_hashing"
-harness = false
-
-[[bench]]
-name = "frame_lookup_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "marker_replacement_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "animation_tween_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "font_startup_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "font_import_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "font_parse_hot_paths"
-harness = false
-required-features = ["bench-support"]

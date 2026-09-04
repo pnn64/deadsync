@@ -215,34 +215,6 @@ impl TextureUploadQueue {
         None
     }
 
-    #[cfg(feature = "bench-support")]
-    #[inline]
-    pub fn pop_next_reference(
-        &mut self,
-        budget: TextureUploadBudget,
-        drained_uploads: usize,
-        drained_bytes: usize,
-    ) -> Option<(TextureHandle, PendingTextureUpload)> {
-        while let Some(handle) = self.order.pop_front() {
-            let Some(upload) = self.entries.remove(&handle) else {
-                continue;
-            };
-            let next_bytes = drained_bytes.saturating_add(upload.bytes);
-            let fits_budget =
-                drained_uploads < budget.max_uploads && next_bytes <= budget.max_bytes;
-            let allow_first =
-                drained_uploads == 0 && budget.max_uploads > 0 && budget.max_bytes > 0;
-            if fits_budget || allow_first {
-                self.queued_bytes = self.queued_bytes.saturating_sub(upload.bytes);
-                return Some((handle, upload));
-            }
-            self.entries.insert(handle, upload);
-            self.order.push_front(handle);
-            return None;
-        }
-        None
-    }
-
     #[cfg(test)]
     fn len(&self) -> usize {
         self.entries.len()

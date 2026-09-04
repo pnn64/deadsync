@@ -1304,7 +1304,6 @@ dependencies = [
  "log",
  "metal",
  "objc",
- "rustc-hash 2.1.3",
  "winit",
 ]
 
@@ -1377,7 +1376,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1072"
+version = "0.5.1073"
 dependencies = [
  "deadlib-assets",
  "deadlib-platform",
@@ -1841,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1072"
+version = "0.5.1073"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1903,7 +1902,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1072"
+version = "0.5.1073"
 dependencies = [
  "log",
  "semver",

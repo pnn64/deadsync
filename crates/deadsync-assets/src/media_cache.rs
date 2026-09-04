@@ -159,24 +159,6 @@ where
     );
 }
 
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_artwork_cache_plan(
-    banner_paths: &[PathBuf],
-    cdtitle_paths: &[PathBuf],
-) -> (usize, usize) {
-    let opts = dynamic::BannerCacheOptions { enabled: true };
-    let plan = build_artwork_cache_plan(
-        banner_paths,
-        cdtitle_paths,
-        opts,
-        opts,
-        Path::new("benchmark-banner-cache"),
-        Path::new("benchmark-cdtitle-cache"),
-    );
-    (plan.job_count(), plan.job_count())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

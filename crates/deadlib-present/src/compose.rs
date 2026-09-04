@@ -1768,25 +1768,6 @@ struct SpriteGatherStats {
     runs_after: u32,
 }
 
-#[cfg(test)]
-fn analyze_final_sprite_gather(ops: &[renderer::DrawOp]) -> SpriteGatherStats {
-    let mut stats = SpriteGatherStats::default();
-    let mut previous = None;
-    for op in ops {
-        let renderer::DrawOp::Sprite(run) = *op else {
-            previous = None;
-            continue;
-        };
-        stats.sprites = stats.sprites.saturating_add(run.instance_count);
-        stats.runs_before = stats.runs_before.saturating_add(1);
-        stats.runs_after = stats.runs_after.saturating_add(u32::from(
-            previous.is_none_or(|previous| !sprite_runs_are_compatible(previous, run)),
-        ));
-        previous = Some(run);
-    }
-    stats
-}
-
 fn gather_finalized_sprites(
     ops: &mut Vec<renderer::DrawOp>,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
@@ -2111,10 +2092,6 @@ fn append_mesh_vertices(
     }
 }
 
-fn sort_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
-    sort_draw_items_impl(objects, scratch, true);
-}
-
 // Actor composition preserves draw order within each z layer. Discover, count,
 // and validate the usual small layer set in one pass.
 fn sort_composed_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
@@ -2128,11 +2105,7 @@ fn sort_composed_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScrat
     }
 }
 
-fn sort_draw_items_impl(
-    objects: &mut [DrawItem],
-    scratch: &mut ComposeScratch,
-    optimized_sparse_sort: bool,
-) {
+fn sort_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
     if objects.len() < 2 {
         return;
     }
@@ -2161,11 +2134,7 @@ fn sort_draw_items_impl(
     let range = (i32::from(max_z) - i32::from(min_z) + 1) as usize;
     let dense_range_limit = objects.len().saturating_mul(8).max(256);
     if range > dense_range_limit {
-        if optimized_sparse_sort {
-            sort_draw_items_sparse_buckets(objects, scratch);
-        } else {
-            objects.sort_unstable_by_key(|object| (object.z, object.order));
-        }
+        sort_draw_items_sparse_buckets(objects, scratch);
         return;
     }
 
@@ -2832,41 +2801,6 @@ impl ByteIndex {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct FrameInlineByteIndexBench {
-    index: ByteIndex,
-    values: Vec<u8>,
-}
-
-#[cfg(feature = "bench-support")]
-impl FrameInlineByteIndexBench {
-    #[must_use]
-    pub fn new(domain: &[u8]) -> Self {
-        let mut index = ByteIndex::new();
-        let mut values = Vec::with_capacity(domain.len());
-        for &byte in domain {
-            if index.get(byte).is_some() {
-                continue;
-            }
-            index.insert(byte, values.len());
-            values.push(byte);
-        }
-        Self { index, values }
-    }
-
-    #[must_use]
-    pub fn checksum(&self, text: &[u8]) -> Option<u64> {
-        text.iter().try_fold(0u64, |sum, &byte| {
-            let index = self.index.get(byte)?;
-            Some(
-                sum.wrapping_mul(131)
-                    .wrapping_add(u64::from(self.values[index])),
-            )
-        })
-    }
-}
-
 struct TextLayoutPlacement {
     sx: f32,
     sy: f32,
@@ -3035,67 +2969,6 @@ impl TextureLookupCache {
         let handle = texture_ctx.texture_handle(key);
         entry.handle = Some(handle);
         handle
-    }
-}
-
-#[cfg(feature = "bench-support")]
-struct TextureLookupBenchContext;
-
-#[cfg(feature = "bench-support")]
-impl TextureContext for TextureLookupBenchContext {
-    fn texture_registry_generation(&self) -> u64 {
-        1
-    }
-
-    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
-        Some(TextureMeta {
-            w: key.len() as u32,
-            h: u32::from(key.as_bytes().first().copied().unwrap_or_default()) + 1,
-        })
-    }
-
-    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-        ((key.len() as u32 % 8) + 1, 2)
-    }
-
-    fn texture_handle(&self, key: &str) -> renderer::TextureHandle {
-        key.len() as renderer::TextureHandle + 1
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct TextureLookupBenchState {
-    cache: TextureLookupCache,
-}
-
-#[cfg(feature = "bench-support")]
-impl TextureLookupBenchState {
-    #[must_use]
-    pub fn new(capacity: usize) -> Self {
-        let mut cache = TextureLookupCache::default();
-        cache.entries.reserve(capacity);
-        Self { cache }
-    }
-
-    pub fn lookup_frame(&mut self, keys: &[Arc<str>]) -> u64 {
-        let texture_ctx = TextureLookupBenchContext;
-        self.cache.begin_frame(&texture_ctx);
-        keys.iter().fold(0u64, |sum, key| {
-            let key_ptr = str_ptr(key);
-            let meta = self
-                .cache
-                .texture_dims(&texture_ctx, key_ptr, key)
-                .expect("benchmark context always supplies dimensions");
-            let sheet = self.cache.sprite_sheet_dims(&texture_ctx, key_ptr, key);
-            let handle = self.cache.texture_handle(&texture_ctx, key_ptr, key);
-            sum.wrapping_mul(131)
-                .wrapping_add(u64::from(meta.w))
-                .wrapping_add(u64::from(meta.h) << 8)
-                .wrapping_add(u64::from(sheet.0) << 16)
-                .wrapping_add(u64::from(sheet.1) << 24)
-                .wrapping_add(handle << 32)
-        })
     }
 }
 
@@ -4044,223 +3917,6 @@ impl TextLayoutCache {
                 .saturating_add(saturating_u32(built_glyphs));
         }
         self.uncached_layout_ref()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn storage_bench_layout(seed: u64) -> CachedTextLayout {
-    let mut layout = CachedTextLayout::empty();
-    layout.layout_seed = seed;
-    layout
-}
-
-#[cfg(feature = "bench-support")]
-fn storage_bench_layout_checksum<'a>(
-    layouts: impl IntoIterator<Item = &'a CachedTextLayout>,
-) -> u64 {
-    layouts.into_iter().fold(0u64, |checksum, layout| {
-        checksum
-            .wrapping_mul(131)
-            .wrapping_add(layout.layout_seed)
-            .wrapping_add(layout.glyph_count as u64)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn render_target_scratch_storage_legacy(target_count: usize) -> u64 {
-    let mut scratches = Vec::<Box<ComposeScratch>>::new();
-    while scratches.len() < target_count {
-        scratches.push(Box::<ComposeScratch>::default());
-    }
-    scratches
-        .iter()
-        .fold(scratches.len() as u64, |checksum, scratch| {
-            checksum
-                .wrapping_mul(131)
-                .wrapping_add(scratch.frame_builder.len() as u64)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn render_target_scratch_storage_current(target_count: usize) -> u64 {
-    let mut scratches = Vec::<ComposeScratch>::new();
-    ensure_render_target_scratch_count(&mut scratches, target_count);
-    scratches
-        .iter()
-        .fold(scratches.len() as u64, |checksum, scratch| {
-            checksum
-                .wrapping_mul(131)
-                .wrapping_add(scratch.frame_builder.len() as u64)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn prewarmed_u16_storage_legacy(layout_count: usize) -> u64 {
-    let mut layouts = Vec::<Box<CachedTextLayout>>::with_capacity(layout_count);
-    for index in 0..layout_count {
-        layouts.push(Box::new(storage_bench_layout(index as u64)));
-    }
-    storage_bench_layout_checksum(layouts.iter().map(Box::as_ref))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn prewarmed_u16_storage_current(layout_count: usize) -> u64 {
-    let mut layouts = Vec::<CachedTextLayout>::new();
-    layouts.reserve_exact(layout_count);
-    for index in 0..layout_count {
-        layouts.push(storage_bench_layout(index as u64));
-    }
-    storage_bench_layout_checksum(&layouts)
-}
-
-#[cfg(feature = "bench-support")]
-fn saturated_layout_bench_font() -> font::Font {
-    let texture_key = Arc::<str>::from("bench_page");
-    let glyph = font::Glyph {
-        texture_key,
-        stroke_texture_key: None,
-        tex_rect: [0.0, 0.0, 8.0, 10.0],
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        size: [8.0, 10.0],
-        offset: [0.0, -10.0],
-        advance: 8.0,
-        advance_i32: 8,
-    };
-    let mut glyph_map = font::GlyphMap::default();
-    glyph_map.insert('A', glyph.clone());
-    glyph_map.insert('B', glyph.clone());
-    let ascii_glyphs = Box::new(std::array::from_fn(|index| match index as u8 as char {
-        'A' | 'B' => Some(glyph.clone()),
-        _ => None,
-    }));
-    font::Font {
-        glyph_map,
-        ascii_glyphs,
-        default_glyph: Some(glyph),
-        line_spacing: 10,
-        height: 10,
-        fallback_font_name: None,
-        cache_tag: 1,
-        chain_key: 1,
-        default_stroke_color: [0.0; 4],
-        stroke_texture_map: HashMap::new(),
-        texture_hints_map: HashMap::new(),
-    }
-}
-
-#[cfg(feature = "bench-support")]
-struct SaturatedLayoutBenchCore {
-    cache: TextLayoutCache,
-    fonts: font::FontMap,
-    key: TextLayoutKey,
-}
-
-#[cfg(feature = "bench-support")]
-impl SaturatedLayoutBenchCore {
-    fn new() -> Self {
-        let fonts = font::FontMap::from_iter([("bench", saturated_layout_bench_font())]);
-        let font = fonts.get("bench").expect("benchmark font");
-        let key = TextLayoutKey {
-            font_key: font_chain_key(font, &fonts),
-            line_spacing: font.line_spacing,
-            wrap_width_pixels: -1,
-        };
-        let mut cache = TextLayoutCache::new(1);
-        let _ = cache.get_or_build_owned(key, font, &fonts, "A");
-        cache.lock_growth();
-        Self { cache, fonts, key }
-    }
-
-    fn checksum(layout: &CachedTextLayout) -> u64 {
-        layout
-            .layout_seed
-            .wrapping_mul(131)
-            .wrapping_add(layout.glyph_count as u64)
-            .wrapping_add(layout.max_logical_width_i as u64)
-            .wrapping_add(layout.lines.len() as u64)
-    }
-
-    fn rebuild_legacy(&mut self, text: &str) -> u64 {
-        let font = self.fonts.get("bench").expect("benchmark font");
-        let layout = Box::new(build_cached_text_layout(
-            font,
-            &self.fonts,
-            text,
-            self.key.line_spacing,
-            self.key.wrap_width_pixels,
-            text_layout_mesh_seed(self.key, text),
-        ));
-        self.cache.record_layout_build(layout.as_ref());
-        let layout =
-            if let Some(layout_index) = self.cache.insert_owned_layout(self.key, text, layout) {
-                self.cache.layouts[layout_index].as_ref()
-            } else {
-                self.cache.uncached_layout_ref()
-            };
-        Self::checksum(layout)
-    }
-
-    fn rebuild_current(&mut self, text: &str) -> u64 {
-        let font = self.fonts.get("bench").expect("benchmark font");
-        let layout = self
-            .cache
-            .get_or_build_owned(self.key, font, &self.fonts, text);
-        Self::checksum(layout)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SaturatedLayoutLegacyBench(SaturatedLayoutBenchCore);
-
-#[cfg(feature = "bench-support")]
-impl SaturatedLayoutLegacyBench {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(SaturatedLayoutBenchCore::new())
-    }
-
-    pub fn rebuild(&mut self, text: &str) -> u64 {
-        self.0.rebuild_legacy(text)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for SaturatedLayoutLegacyBench {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SaturatedLayoutCurrentBench(SaturatedLayoutBenchCore);
-
-#[cfg(feature = "bench-support")]
-impl SaturatedLayoutCurrentBench {
-    #[must_use]
-    pub fn new() -> Self {
-        Self(SaturatedLayoutBenchCore::new())
-    }
-
-    pub fn rebuild(&mut self, text: &str) -> u64 {
-        self.0.rebuild_current(text)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for SaturatedLayoutCurrentBench {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -9775,8 +9431,8 @@ mod tests {
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
         EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
         TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
-        TextureLookupCache, TextureMeta, WorldRect, analyze_final_sprite_gather,
-        build_cached_text_layout, build_screen_cached_with_scratch_and_texture_context,
+        TextureLookupCache, TextureMeta, WorldRect, build_cached_text_layout,
+        build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
@@ -10016,12 +9672,10 @@ mod tests {
             builder
         };
 
-        let legacy = finish_test_builder(make_builder(), sprites.clone());
+        let ungathered = finish_test_builder(make_builder(), sprites.clone());
         let (mut gathered, inline_gather) =
             finish_test_builder_with_stats::<true>(make_builder(), sprites);
         let mut gather_scratch = Vec::new();
-        let scanned_gather = analyze_final_sprite_gather(&gathered.ops);
-        assert_eq!(scanned_gather, inline_gather);
         gather_finalized_sprites(
             &mut gathered.ops,
             &mut gathered.sprite_instances,
@@ -10029,20 +9683,20 @@ mod tests {
             inline_gather,
         );
 
-        assert_eq!(legacy.ops.len(), 4);
+        assert_eq!(ungathered.ops.len(), 4);
         assert_eq!(gathered.ops.len(), 1);
         assert_eq!(inline_gather.sprites, 4);
         assert_eq!(inline_gather.runs_before, 4);
         assert_eq!(inline_gather.runs_after, 1);
-        assert_ne!(legacy.sprite_instances, gathered.sprite_instances);
+        assert_ne!(ungathered.sprite_instances, gathered.sprite_instances);
         assert_eq!(
-            sprite_painter_stream(&legacy),
+            sprite_painter_stream(&ungathered),
             sprite_painter_stream(&gathered)
         );
     }
 
     #[test]
-    fn inline_sprite_analysis_matches_second_pass_across_mixed_draws() {
+    fn inline_sprite_analysis_tracks_mixed_draws() {
         let mut builder = FrameBuilder::default();
         builder.push_sprite(7, 0, 0, BlendMode::Alpha, 0, 0);
         builder.push_sprite(INVALID_TEXTURE_HANDLE, 1, 0, BlendMode::Alpha, 0, 1);
@@ -10061,13 +9715,12 @@ mod tests {
         );
         builder.push_sprite(7, 4, 0, BlendMode::Alpha, 0, 3);
 
-        let (frame, inline) = finish_test_builder_with_stats::<true>(
+        let (_, inline) = finish_test_builder_with_stats::<true>(
             builder,
             (0..4)
                 .map(|index| test_sprite_instance(index as f32))
                 .collect(),
         );
-        assert_eq!(inline, analyze_final_sprite_gather(&frame.ops));
         assert_eq!(inline.sprites, 3);
         assert_eq!(inline.runs_before, 3);
         assert_eq!(inline.runs_after, 2);

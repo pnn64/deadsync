@@ -36,14 +36,6 @@ wgpu = { version = "30.0.1", default-features = false, features = ["std", "parki
 [dev-dependencies]
 naga = { version = "30.0.1", features = ["wgsl-in"] }
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "command_recording_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

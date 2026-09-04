@@ -17,15 +17,3 @@ winit = "0.30.13"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
-
-[[bench]]
-name = "graphics_pipeline_eighth_pass"
-harness = false
-
-[[bench]]
-name = "graphics_pipeline_ninth_pass"
-harness = false
-
-[[bench]]
-name = "graphics_pipeline_tenth_pass"
-harness = false

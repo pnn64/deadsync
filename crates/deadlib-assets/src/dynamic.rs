@@ -144,16 +144,6 @@ fn write_raw_cached_banner(mut writer: impl Write, rgba: &RgbaImage) -> std::io:
     writer.write_all(rgba.as_raw())
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_write_raw_cached_banner(
-    writer: impl Write,
-    rgba: &RgbaImage,
-) -> std::io::Result<usize> {
-    write_raw_cached_banner(writer, rgba)?;
-    Ok(BANNER_CACHE_HEADER_SIZE.saturating_add(rgba.as_raw().len()))
-}
-
 fn load_cached_banner_image(cache_path: &Path, source_path: &Path) -> Option<RgbaImage> {
     if cache_path.is_file() && !source_newer_than_cache(source_path, cache_path) {
         if let Some(rgba) = load_raw_cached_banner_image(cache_path) {
@@ -499,151 +489,6 @@ fn parallel_map_dynamic_image_prewarm_batches<T, R>(
             let _ = worker.join();
         }
     });
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn benchmark_dynamic_image_prewarm_work(value: u64) -> u64 {
-    let rounds = 4 + ((value.wrapping_mul(0x9e37_79b1) >> 27) & 31);
-    let mut output = value ^ 0xa24b_aed4_963e_e407;
-    for round in 0..rounds {
-        output ^= output.rotate_left(((value + round) & 31) as u32);
-        output = output.wrapping_mul(0x9e37_79b9_7f4a_7c15);
-    }
-    output
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_prewarm_cache_paths_reference(paths: &[PathBuf], cache_dir: &Path) -> u64 {
-    let jobs = paths
-        .iter()
-        .map(|path| (path.clone(), cache_dir.to_path_buf()))
-        .collect::<Vec<_>>();
-    std::hint::black_box(&jobs);
-    jobs.iter()
-        .fold(jobs.len() as u64, |checksum, (path, cache)| {
-            checksum
-                .wrapping_mul(131)
-                .wrapping_add(path.as_os_str().len() as u64)
-                .wrapping_add(cache.as_os_str().len() as u64)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_prewarm_cache_paths_shared(paths: &[PathBuf], cache_dir: &Path) -> u64 {
-    let cache_dir = Arc::<Path>::from(cache_dir);
-    let jobs = paths
-        .iter()
-        .map(|path| (path.clone(), Arc::clone(&cache_dir)))
-        .collect::<Vec<_>>();
-    std::hint::black_box(&jobs);
-    jobs.iter()
-        .fold(jobs.len() as u64, |checksum, (path, cache)| {
-            checksum
-                .wrapping_mul(131)
-                .wrapping_add(path.as_os_str().len() as u64)
-                .wrapping_add(cache.as_os_str().len() as u64)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_prewarm_cache_location_reference(paths: &[PathBuf], cache_dir: &Path) -> u64 {
-    let opts = BannerCacheOptions { enabled: true };
-    paths.iter().fold(paths.len() as u64, |checksum, path| {
-        let planned = dynamic_image_cache_path_for(path, opts, cache_dir);
-        std::hint::black_box(planned);
-        let executed = dynamic_image_cache_path_for(path, opts, cache_dir);
-        let len = executed.as_ref().map_or(0, |(path, path_hex)| {
-            path.as_os_str().len().saturating_add(path_hex.len())
-        });
-        checksum.wrapping_mul(131).wrapping_add(len as u64)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_prewarm_cache_location_prepared(paths: &[PathBuf], cache_dir: &Path) -> u64 {
-    let opts = BannerCacheOptions { enabled: true };
-    paths.iter().fold(paths.len() as u64, |checksum, path| {
-        let prepared = dynamic_image_cache_path_for(path, opts, cache_dir);
-        let len = prepared.as_ref().map_or(0, |(path, path_hex)| {
-            path.as_os_str().len().saturating_add(path_hex.len())
-        });
-        checksum.wrapping_mul(131).wrapping_add(len as u64)
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_dynamic_prewarm_scheduler_reference(
-    values: Vec<u64>,
-    worker_count: usize,
-) -> Vec<u64> {
-    if values.is_empty() || worker_count == 0 {
-        return Vec::new();
-    }
-    let worker_count = worker_count.min(values.len());
-    let (job_tx, job_rx) = mpsc::channel::<u64>();
-    let job_rx = Arc::new(Mutex::new(job_rx));
-    let (result_tx, result_rx) = mpsc::channel::<u64>();
-    let mut workers = Vec::with_capacity(worker_count);
-    for _ in 0..worker_count {
-        let job_rx = Arc::clone(&job_rx);
-        let result_tx = result_tx.clone();
-        workers.push(std::thread::spawn(move || {
-            loop {
-                let job = {
-                    let Ok(receiver) = job_rx.lock() else {
-                        return;
-                    };
-                    receiver.recv()
-                };
-                let Ok(job) = job else {
-                    return;
-                };
-                if result_tx
-                    .send(benchmark_dynamic_image_prewarm_work(job))
-                    .is_err()
-                {
-                    return;
-                }
-            }
-        }));
-    }
-    drop(result_tx);
-    for value in values {
-        let _ = job_tx.send(value);
-    }
-    drop(job_tx);
-    let mut results = result_rx.into_iter().collect::<Vec<_>>();
-    for worker in workers {
-        let _ = worker.join();
-    }
-    results.sort_unstable();
-    results
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_dynamic_prewarm_scheduler_batched_results(
-    values: Vec<u64>,
-    worker_count: usize,
-) -> Vec<u64> {
-    if values.is_empty() || worker_count == 0 {
-        return Vec::new();
-    }
-    let worker_count = worker_count.min(values.len());
-    let mut results = Vec::with_capacity(values.len());
-    parallel_map_dynamic_image_prewarm_batches(
-        values,
-        worker_count,
-        benchmark_dynamic_image_prewarm_work,
-        |batch| results.extend(batch.items.into_iter().flatten()),
-    );
-    results.sort_unstable();
-    results
 }
 
 pub fn prewarm_dynamic_image_jobs_with_progress<F>(
@@ -1006,15 +851,6 @@ mod tests {
     }
 
     #[test]
-    fn batched_dynamic_image_prewarm_scheduler_matches_channel_reference() {
-        let values = (0..257).map(|value| value * 17 + 3).collect::<Vec<_>>();
-        let reference = benchmark_dynamic_prewarm_scheduler_reference(values.clone(), 4);
-        let batched = benchmark_dynamic_prewarm_scheduler_batched_results(values, 4);
-
-        assert_eq!(batched, reference);
-    }
-
-    #[test]
     fn batched_dynamic_image_prewarm_reports_every_job() {
         let opts = BannerCacheOptions { enabled: true };
         let cache_dir = Path::new("cache/artwork");
@@ -1101,7 +937,7 @@ mod tests {
     }
 
     #[test]
-    fn streamed_raw_cache_bytes_match_legacy_staging_layout() {
+    fn streamed_raw_cache_bytes_match_cache_layout() {
         let rgba = RgbaImage::from_raw(2, 2, (0..16).collect()).unwrap();
         let mut expected = Vec::with_capacity(BANNER_CACHE_HEADER_SIZE + rgba.as_raw().len());
         expected.extend_from_slice(&BANNER_CACHE_MAGIC);

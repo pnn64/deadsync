@@ -339,27 +339,6 @@ fn resolve_all_textured_meshes<EnsureCached, Observe>(
     }
 }
 
-/// Exact pre-memoization resolver retained for differential tests and benches.
-#[cfg(any(test, feature = "bench-support"))]
-pub fn resolve_textured_meshes_legacy<EnsureCached>(
-    frame: &RenderFrame,
-    uploads: &mut TexturedMeshUploads,
-    mut ensure_cached: EnsureCached,
-) where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
-{
-    uploads.cache_keys.clear();
-    uploads.all_cached = false;
-    uploads.uncached = None;
-    resolve_all_textured_meshes(
-        &frame.tmesh_geometries,
-        &mut uploads.vertices,
-        &mut uploads.sources,
-        &mut ensure_cached,
-        |_, _, _| {},
-    );
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CameraUploadCache {
     last_camera: Option<u8>,
@@ -548,56 +527,5 @@ mod tests {
             Some(11)
         );
         assert!(uploads.vertices.is_empty());
-    }
-
-    #[test]
-    fn memoized_resolution_matches_legacy_across_changes_and_misses() {
-        fn assert_parity(
-            frame: &RenderFrame,
-            old: &mut TexturedMeshUploads,
-            new: &mut TexturedMeshUploads,
-        ) {
-            resolve_textured_meshes_legacy(frame, old, |key, _| (key == 7).then_some(3));
-            resolve_textured_meshes(frame, new, |key, _| (key == 7).then_some(3));
-            assert_eq!(old.vertices, new.vertices);
-            assert_eq!(old.sources, new.sources);
-        }
-
-        let mut old = TexturedMeshUploads::default();
-        let mut new = TexturedMeshUploads::default();
-        let shared = Arc::from([vertex(1.0), vertex(2.0)]);
-        assert_parity(
-            &frame(vec![
-                TexturedMeshGeometry {
-                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
-                    cache_key: 7,
-                },
-                TexturedMeshGeometry {
-                    vertices: TexturedMeshVertices::Transient(vec![vertex(3.0)]),
-                    cache_key: INVALID_TMESH_CACHE_KEY,
-                },
-                TexturedMeshGeometry {
-                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
-                    cache_key: 9,
-                },
-            ]),
-            &mut old,
-            &mut new,
-        );
-        assert_parity(
-            &frame(vec![
-                TexturedMeshGeometry {
-                    vertices: TexturedMeshVertices::Shared(Arc::clone(&shared)),
-                    cache_key: 9,
-                },
-                TexturedMeshGeometry {
-                    vertices: TexturedMeshVertices::Shared(shared),
-                    cache_key: 7,
-                },
-            ]),
-            &mut old,
-            &mut new,
-        );
-        assert_parity(&frame(Vec::new()), &mut old, &mut new);
     }
 }
