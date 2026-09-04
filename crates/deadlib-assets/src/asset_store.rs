@@ -1,12 +1,17 @@
 use crate::{
-    FontStore, TextureDecodeJob, TextureKeyLoad, TextureStore, prepare_initial_texture_images,
-    prepare_texture_key_load, register_texture_dims,
+    FontStore, TextureDecodeJob, TextureDecodeResult, TextureKeyLoad, TextureStore,
+    black_texture_image,
+    decode::decode_texture_jobs_with,
+    fallback_texture_image, initial_texture_sampler, prepare_texture_key_load,
+    register_texture_dims,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadImage},
+    white_texture_image,
 };
 use deadlib_present::font::{Font, FontMap};
 use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_video::Yuv420Image;
 use image::RgbaImage;
+use log::warn;
 use std::{path::PathBuf, sync::mpsc::SyncSender};
 
 pub enum TextureUploadAction<'a, T> {
@@ -272,38 +277,46 @@ impl<T> AssetStore<T> {
         &mut self,
         jobs: Vec<TextureDecodeJob>,
         needs_repeat_sampler: impl Fn(&str) -> bool,
-        create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
-    ) -> Result<Vec<InitialTextureLoad<T>>, E> {
-        let prepared = prepare_initial_texture_images(jobs, needs_repeat_sampler);
-        self.load_prepared_textures_with(prepared, create)
-    }
-
-    fn load_prepared_textures_with<E>(
-        &mut self,
-        prepared: Vec<crate::PreparedTextureImage>,
         mut create: impl FnMut(&RgbaImage, SamplerDesc) -> Result<T, E>,
     ) -> Result<Vec<InitialTextureLoad<T>>, E> {
-        self.texture_store.reserve_initial_textures(prepared.len());
-        let mut loaded = Vec::with_capacity(prepared.len());
-        for prepared in prepared {
-            let texture = create(prepared.image.as_ref(), prepared.sampler)?;
-            register_texture_dims(
-                &prepared.key,
-                prepared.image.width(),
-                prepared.image.height(),
-            );
-            let old = self.insert_texture(
-                prepared.key.clone(),
-                texture,
-                prepared.image.width(),
-                prepared.image.height(),
-            );
+        let load_count = jobs.len().saturating_add(2);
+        self.texture_store.reserve_initial_textures(load_count);
+        let mut loaded = Vec::with_capacity(load_count);
+        let mut load = |key: String, image: &RgbaImage, sampler: SamplerDesc, built_in: bool| {
+            let texture = create(image, sampler)?;
+            register_texture_dims(&key, image.width(), image.height());
+            let old = self.insert_texture(key.clone(), texture, image.width(), image.height());
             loaded.push(InitialTextureLoad {
-                key: prepared.key,
-                built_in: prepared.built_in,
+                key,
+                built_in,
                 retired: old,
             });
+            Ok(())
+        };
+
+        for built_in in [white_texture_image(), black_texture_image()] {
+            load(
+                built_in.key.to_string(),
+                &built_in.image,
+                SamplerDesc::default(),
+                true,
+            )?;
         }
+
+        let fallback = fallback_texture_image();
+        decode_texture_jobs_with(jobs, |result| {
+            let (key, image) = match result {
+                TextureDecodeResult::Decoded { key, image } => (key, image),
+                TextureDecodeResult::Failed { key, message } => {
+                    warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
+                    let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
+                    return load(key, &fallback, sampler, false);
+                }
+            };
+            let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
+            load(key, &image, sampler, false)
+        })?;
+
         Ok(loaded)
     }
 
@@ -533,5 +546,59 @@ mod tests {
         assert!(loaded.iter().all(|load| load.retired.is_none()));
         assert!(store.has_uploaded_texture_key(crate::WHITE_TEXTURE_KEY));
         assert!(store.has_uploaded_texture_key(crate::BLACK_TEXTURE_KEY));
+    }
+
+    #[test]
+    fn load_initial_textures_with_preserves_failed_decode_fallback() {
+        let mut store = AssetStore::<u32>::new();
+        let mut uploads = Vec::new();
+
+        let loaded = store
+            .load_initial_textures_with(
+                vec![TextureDecodeJob {
+                    key: "grades/goldstar (stretch).png".to_string(),
+                    path: PathBuf::from("__missing_initial_texture__.png"),
+                }],
+                |_| true,
+                |image, sampler| {
+                    uploads.push((image.width(), image.height(), sampler.wrap));
+                    Ok::<u32, ()>(image.width() * image.height())
+                },
+            )
+            .unwrap();
+
+        assert_eq!(loaded.len(), 3);
+        assert!(loaded[..2].iter().all(|load| load.built_in));
+        assert!(!loaded[2].built_in);
+        assert_eq!(loaded[2].key, "grades/goldstar (stretch).png");
+        assert_eq!(uploads[2].0, 2);
+        assert_eq!(uploads[2].1, 2);
+        assert_eq!(uploads[2].2, deadlib_render_core::SamplerWrap::Repeat);
+    }
+
+    #[test]
+    fn load_initial_textures_with_stops_workers_after_create_error() {
+        let mut store = AssetStore::<u32>::new();
+        let jobs = (0..32)
+            .map(|index| TextureDecodeJob {
+                key: format!("missing-{index}.png"),
+                path: PathBuf::from(format!("__missing_initial_texture_{index}__.png")),
+            })
+            .collect();
+        let mut creates = 0;
+
+        let result = store.load_initial_textures_with(
+            jobs,
+            |_| false,
+            |image, _| {
+                creates += 1;
+                (creates < 3)
+                    .then_some(image.width())
+                    .ok_or("create failed")
+            },
+        );
+
+        assert!(matches!(result, Err("create failed")));
+        assert_eq!(creates, 3);
     }
 }

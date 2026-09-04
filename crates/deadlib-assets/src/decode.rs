@@ -1,15 +1,14 @@
+use crate::generated_texture;
 use crate::{
     TextureHints, apply_texture_hints, discover_graphic_textures_in_roots, fix_hidden_alpha,
-    initial_texture_sampler, initial_texture_source_path, noteskin_png_texture_entries,
-    open_image_fallback, parse_texture_hints, texture_key_sampler, texture_key_source_path,
+    initial_texture_source_path, noteskin_png_texture_entries, open_image_fallback,
+    parse_texture_hints, texture_key_sampler, texture_key_source_path,
 };
-use crate::{black_texture_image, fallback_texture_image, generated_texture, white_texture_image};
 use deadlib_render_core::SamplerDesc;
 use image::RgbaImage;
-use log::warn;
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Condvar, Mutex},
 };
 
 /// Number of decode jobs claimed under one queue lock.
@@ -28,11 +27,83 @@ pub enum TextureDecodeResult {
     Failed { key: String, message: String },
 }
 
-pub struct PreparedTextureImage {
-    pub key: String,
-    pub image: Arc<RgbaImage>,
-    pub sampler: SamplerDesc,
-    pub built_in: bool,
+struct DecodeSlot {
+    state: Mutex<DecodeSlotState>,
+    ready: Condvar,
+    empty: Condvar,
+}
+
+struct DecodeSlotState {
+    result: Option<TextureDecodeResult>,
+    active_workers: usize,
+    cancelled: bool,
+}
+
+impl DecodeSlot {
+    fn new(active_workers: usize) -> Self {
+        Self {
+            state: Mutex::new(DecodeSlotState {
+                result: None,
+                active_workers,
+                cancelled: false,
+            }),
+            ready: Condvar::new(),
+            empty: Condvar::new(),
+        }
+    }
+
+    fn send(&self, result: TextureDecodeResult) -> bool {
+        let mut state = self.state.lock().expect("texture decode slot poisoned");
+        while state.result.is_some() && !state.cancelled {
+            state = self
+                .empty
+                .wait(state)
+                .expect("texture decode slot poisoned");
+        }
+        if state.cancelled {
+            return false;
+        }
+        state.result = Some(result);
+        self.ready.notify_one();
+        true
+    }
+
+    fn receive(&self) -> Option<TextureDecodeResult> {
+        let mut state = self.state.lock().expect("texture decode slot poisoned");
+        loop {
+            if let Some(result) = state.result.take() {
+                self.empty.notify_one();
+                return Some(result);
+            }
+            if state.active_workers == 0 {
+                return None;
+            }
+            state = self
+                .ready
+                .wait(state)
+                .expect("texture decode slot poisoned");
+        }
+    }
+
+    fn finish_worker(&self) {
+        let mut state = self.state.lock().expect("texture decode slot poisoned");
+        state.active_workers -= 1;
+        self.ready.notify_one();
+    }
+
+    fn cancel(&self) {
+        let mut state = self.state.lock().expect("texture decode slot poisoned");
+        state.cancelled = true;
+        self.empty.notify_all();
+    }
+}
+
+struct DecodeWorker<'a>(&'a DecodeSlot);
+
+impl Drop for DecodeWorker<'_> {
+    fn drop(&mut self) {
+        self.0.finish_worker();
+    }
 }
 
 pub enum TextureKeyLoad {
@@ -84,7 +155,7 @@ fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
 }
 
 pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
-    let mut image = open_image_fallback(path)?.to_rgba8();
+    let mut image = open_image_fallback(path)?.into_rgba8();
     if !hints.is_default() {
         apply_texture_hints(&mut image, hints);
     }
@@ -124,55 +195,6 @@ pub fn initial_texture_decode_jobs(
             path: initial_texture_source_path(&relative_path, &resolve_asset_path),
         })
         .collect()
-}
-
-pub fn prepare_initial_texture_images(
-    jobs: Vec<TextureDecodeJob>,
-    needs_repeat_sampler: impl Fn(&str) -> bool,
-) -> Vec<PreparedTextureImage> {
-    let results = decode_texture_jobs_parallel(jobs);
-    prepare_texture_results(results, needs_repeat_sampler)
-}
-
-fn prepare_texture_results(
-    results: Vec<TextureDecodeResult>,
-    needs_repeat_sampler: impl Fn(&str) -> bool,
-) -> Vec<PreparedTextureImage> {
-    let mut prepared = Vec::with_capacity(results.len().saturating_add(2));
-    for built_in in [white_texture_image(), black_texture_image()] {
-        prepared.push(PreparedTextureImage {
-            key: built_in.key.to_string(),
-            image: Arc::new(built_in.image),
-            sampler: SamplerDesc::default(),
-            built_in: true,
-        });
-    }
-
-    let fallback_image = Arc::new(fallback_texture_image());
-    for result in results {
-        match result {
-            TextureDecodeResult::Decoded { key, image } => {
-                let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
-                prepared.push(PreparedTextureImage {
-                    key,
-                    image: Arc::new(image),
-                    sampler,
-                    built_in: false,
-                });
-            }
-            TextureDecodeResult::Failed { key, message } => {
-                warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
-                let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
-                prepared.push(PreparedTextureImage {
-                    key,
-                    image: Arc::clone(&fallback_image),
-                    sampler,
-                    built_in: false,
-                });
-            }
-        }
-    }
-    prepared
 }
 
 pub fn prepare_texture_key_load(
@@ -227,52 +249,44 @@ pub fn prepare_texture_key_load(
     }
 }
 
+/// Decodes on workers while the caller consumes completed images immediately.
+///
+/// The bounded handoff limits retained decoded pixels to roughly one image per
+/// worker instead of the full startup corpus.
+///
 /// # Panics
 ///
-/// Panics if an internal worker fails or disconnects unexpectedly.
-pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
+/// Panics if an internal worker fails.
+pub(crate) fn decode_texture_jobs_with<E>(
+    jobs: Vec<TextureDecodeJob>,
+    mut consume: impl FnMut(TextureDecodeResult) -> Result<(), E>,
+) -> Result<(), E> {
     let job_count = jobs.len();
     if job_count == 0 {
-        return Vec::new();
+        return Ok(());
     }
 
     let worker_count = std::thread::available_parallelism()
         .map(std::num::NonZero::get)
         .unwrap_or(1)
         .min(job_count);
-
-    parallel_map_batches(jobs, worker_count, decode_rgba)
-}
-
-fn parallel_map_batches<T, R>(
-    jobs: Vec<T>,
-    worker_count: usize,
-    work: impl Fn(T) -> R + Sync,
-) -> Vec<R>
-where
-    T: Send,
-    R: Send,
-{
-    if jobs.is_empty() {
-        return Vec::new();
-    }
-    let worker_count = worker_count.clamp(1, jobs.len());
     if worker_count == 1 {
-        return jobs.into_iter().map(work).collect();
+        for job in jobs {
+            consume(decode_rgba(job))?;
+        }
+        return Ok(());
     }
 
-    let job_count = jobs.len();
     let jobs = Mutex::new(jobs.into_iter());
-    let results = Mutex::new(Vec::with_capacity(job_count));
+    let slot = DecodeSlot::new(worker_count);
     std::thread::scope(|scope| {
         let mut workers = Vec::with_capacity(worker_count);
-        let work = &work;
         for _ in 0..worker_count {
             let jobs = &jobs;
-            let results = &results;
+            let slot = &slot;
             workers.push(scope.spawn(move || {
+                let _worker = DecodeWorker(slot);
                 let mut batch = Vec::with_capacity(DECODE_JOB_BATCH_SIZE);
-                let mut completed = Vec::with_capacity(DECODE_JOB_BATCH_SIZE);
                 loop {
                     {
                         let mut jobs = jobs.lock().expect("texture decode job queue poisoned");
@@ -281,22 +295,28 @@ where
                     if batch.is_empty() {
                         return;
                     }
-                    completed.extend(batch.drain(..).map(work));
-                    results
-                        .lock()
-                        .expect("texture decode result queue poisoned")
-                        .extend(completed.drain(..));
+                    for job in batch.drain(..) {
+                        if !slot.send(decode_rgba(job)) {
+                            return;
+                        }
+                    }
                 }
             }));
         }
 
+        let mut result = Ok(());
+        while let Some(decoded) = slot.receive() {
+            if let Err(error) = consume(decoded) {
+                slot.cancel();
+                result = Err(error);
+                break;
+            }
+        }
         for worker in workers {
             worker.join().expect("texture decode worker panicked");
         }
-    });
-    results
-        .into_inner()
-        .expect("texture decode result queue poisoned")
+        result
+    })
 }
 
 #[cfg(test)]
@@ -305,39 +325,14 @@ mod tests {
 
     #[test]
     fn decodes_empty_job_list() {
-        assert!(decode_texture_jobs_parallel(Vec::new()).is_empty());
-    }
+        let mut called = false;
+        decode_texture_jobs_with(Vec::new(), |_| {
+            called = true;
+            Ok::<_, std::convert::Infallible>(())
+        })
+        .unwrap();
 
-    #[test]
-    fn prepare_initial_texture_images_includes_builtins() {
-        let prepared = prepare_initial_texture_images(Vec::new(), |_| false);
-
-        assert_eq!(prepared.len(), 2);
-        assert_eq!(prepared[0].key, crate::WHITE_TEXTURE_KEY);
-        assert!(prepared[0].built_in);
-        assert_eq!(prepared[1].key, crate::BLACK_TEXTURE_KEY);
-        assert!(prepared[1].built_in);
-    }
-
-    #[test]
-    fn prepare_initial_texture_images_uses_fallback_for_failed_decode() {
-        let prepared = prepare_initial_texture_images(
-            vec![TextureDecodeJob {
-                key: "grades/goldstar (stretch).png".to_string(),
-                path: PathBuf::from("__missing_initial_texture__.png"),
-            }],
-            |_| true,
-        );
-
-        assert_eq!(prepared.len(), 3);
-        assert_eq!(prepared[2].key, "grades/goldstar (stretch).png");
-        assert!(!prepared[2].built_in);
-        assert_eq!(prepared[2].image.width(), 2);
-        assert_eq!(prepared[2].image.height(), 2);
-        assert_eq!(
-            prepared[2].sampler.wrap,
-            deadlib_render_core::SamplerWrap::Repeat
-        );
+        assert!(!called);
     }
 
     #[test]
@@ -402,10 +397,18 @@ mod tests {
 
     #[test]
     fn reports_missing_texture_decode_failure() {
-        let results = decode_texture_jobs_parallel(vec![TextureDecodeJob {
-            key: "missing".to_string(),
-            path: PathBuf::from("__missing_texture__.png"),
-        }]);
+        let mut results = Vec::new();
+        decode_texture_jobs_with(
+            vec![TextureDecodeJob {
+                key: "missing".to_string(),
+                path: PathBuf::from("__missing_texture__.png"),
+            }],
+            |result| {
+                results.push(result);
+                Ok::<_, std::convert::Infallible>(())
+            },
+        )
+        .unwrap();
 
         assert_eq!(results.len(), 1);
         match &results[0] {

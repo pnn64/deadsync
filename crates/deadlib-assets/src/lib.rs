@@ -22,9 +22,8 @@ pub use builtin::{
 };
 pub use context::{ASSET_TEXTURE_CONTEXT, AssetTextureContext};
 pub use decode::{
-    GraphicTextureDiscovery, PreparedTextureImage, TextureAssetSpec, TextureDecodeJob,
-    TextureDecodeResult, TextureKeyLoad, decode_texture_image, decode_texture_jobs_parallel,
-    initial_texture_decode_jobs, prepare_initial_texture_images, prepare_texture_key_load,
+    GraphicTextureDiscovery, TextureAssetSpec, TextureDecodeJob, TextureDecodeResult,
+    TextureKeyLoad, decode_texture_image, initial_texture_decode_jobs, prepare_texture_key_load,
     texture_asset,
 };
 pub use discover::{
@@ -656,48 +655,34 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
     }
 }
 
-fn edge_alpha_rgb(image: &RgbaImage, reverse: bool) -> Option<[u8; 3]> {
-    let width = image.width();
-    let height = image.height();
-    if width == 0 || height == 0 {
-        return None;
-    }
-
-    if reverse {
-        for y in (0..height).rev() {
-            for x in (0..width).rev() {
-                let [r, g, b, a] = image.get_pixel(x, y).0;
-                if a != 0 {
-                    return Some([r, g, b]);
-                }
-            }
-        }
-    } else {
-        for y in 0..height {
-            for x in 0..width {
-                let [r, g, b, a] = image.get_pixel(x, y).0;
-                if a != 0 {
-                    return Some([r, g, b]);
-                }
-            }
-        }
-    }
-    None
-}
-
 pub fn fix_hidden_alpha(image: &mut RgbaImage) {
-    let Some(first) = edge_alpha_rgb(image, false) else {
+    let Some(first) = image
+        .as_raw()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .find(|pixel| pixel[3] != 0)
+        .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+    else {
         return;
     };
-    let Some(last) = edge_alpha_rgb(image, true) else {
+    let Some(last) = image
+        .as_raw()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .rev()
+        .find(|pixel| pixel[3] != 0)
+        .map(|pixel| [pixel[0], pixel[1], pixel[2]])
+    else {
         return;
     };
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
-    for pixel in image.pixels_mut() {
-        if pixel.0[3] == 0 {
-            pixel.0[0] = r;
-            pixel.0[1] = g;
-            pixel.0[2] = b;
+    for pixel in image.as_mut().as_chunks_mut::<4>().0 {
+        if pixel[3] == 0 {
+            pixel[0] = r;
+            pixel[1] = g;
+            pixel[2] = b;
         }
     }
 }
@@ -948,6 +933,26 @@ mod tests {
 
         assert_eq!(image.get_pixel(0, 0).0, [0, 0, 0, 0]);
         assert_eq!(image.get_pixel(3, 0).0, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn fix_hidden_alpha_preserves_fully_transparent_image() {
+        let original = vec![12, 34, 56, 0, 78, 90, 12, 0];
+        let mut image = RgbaImage::from_raw(2, 1, original.clone()).expect("test image");
+
+        fix_hidden_alpha(&mut image);
+
+        assert_eq!(image.as_raw(), &original);
+    }
+
+    #[test]
+    fn fix_hidden_alpha_preserves_opaque_image() {
+        let original = vec![12, 34, 56, 255, 78, 90, 12, 128];
+        let mut image = RgbaImage::from_raw(2, 1, original.clone()).expect("test image");
+
+        fix_hidden_alpha(&mut image);
+
+        assert_eq!(image.as_raw(), &original);
     }
 
     #[test]
