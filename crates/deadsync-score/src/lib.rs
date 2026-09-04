@@ -3111,6 +3111,7 @@ const LUA_SCORE_SUBMIT_ALLOWLIST: &[&str] = &[
     // "f95bc209c6f2cbfe", // Levels (SM)
     // "b50d0c3916e75b84", // Levels (SH)
     // "f41a24722a37758f", // Levels (SX)
+    "3a6b2cedcc3fdca3", // Gemini in Clockland (SX)
 ];
 
 #[inline(always)]
@@ -9560,13 +9561,14 @@ mod tests {
     }
 
     #[test]
-    fn lua_submit_allowlist_is_disabled() {
+    fn lua_submit_allowlist_requires_known_hash() {
+        assert!(lua_chart_submit_allowed("3a6b2cedcc3fdca3"));
+        assert!(lua_chart_submit_allowed(" 3A6B2CEDCC3FDCA3 "));
         assert!(!lua_chart_submit_allowed("d5bd4dd7224f68ff"));
-        assert!(!lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
         assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
-        assert!(!lua_submit_allowed(true, "d5bd4dd7224f68ff"));
+        assert!(lua_submit_allowed(true, "3a6b2cedcc3fdca3"));
     }
 
     #[test]
