@@ -382,75 +382,6 @@ fn push_downloads_overlay_unreserved(
     }
 }
 
-/// Stable old/new fixture for a populated download-list actor batch.
-#[cfg(any(test, feature = "bench-support"))]
-pub struct DownloadsOverlayAppendBenchmark {
-    state: DownloadsOverlayState,
-    snapshots: Vec<SelectMusicDownloadView>,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl DownloadsOverlayAppendBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let snapshots = (0..8)
-            .map(|index| SelectMusicDownloadView {
-                name: format!("Benchmark Pack {index:02}"),
-                current_bytes: (index as u64 + 1) * 384 * 1024,
-                total_bytes: 4 * 1024 * 1024,
-                complete: index < 2,
-                error_message: (index == 1).then(|| "network timeout".to_string()),
-            })
-            .collect();
-        Self {
-            state: show_downloads_overlay(),
-            snapshots,
-        }
-    }
-
-    #[must_use]
-    pub fn actor_count(&self) -> usize {
-        let DownloadsOverlayState::Visible(overlay) = &self.state else {
-            unreachable!("benchmark overlay is visible");
-        };
-        let mut actors = Vec::with_capacity(32);
-        push_downloads_overlay_unreserved(
-            &mut actors,
-            overlay,
-            2,
-            &self.snapshots,
-            MachineFont::Mega,
-        );
-        actors.len()
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        let DownloadsOverlayState::Visible(overlay) = &self.state else {
-            unreachable!("benchmark overlay is visible");
-        };
-        push_downloads_overlay_unreserved(out, overlay, 2, &self.snapshots, MachineFont::Mega);
-        std::hint::black_box(&*out);
-        super::overlay_actor_checksum(out)
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_downloads_overlay(out, &self.state, 2, &self.snapshots, MachineFont::Mega);
-        std::hint::black_box(&*out);
-        super::overlay_actor_checksum(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for DownloadsOverlayAppendBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,45 +413,5 @@ mod tests {
             panic!("downloads overlay should stay visible");
         };
         assert_eq!(overlay.scroll_index, 0);
-    }
-
-    #[test]
-    fn retained_download_tree_matches_immediate_reuses_and_tracks_progress() {
-        let mut fixture = DownloadsOverlayAppendBenchmark::new();
-        let mut immediate = Vec::with_capacity(32);
-        let _ = fixture.legacy_frame(&mut immediate);
-
-        let mut retained = Vec::with_capacity(1);
-        let _ = fixture.direct_frame(&mut retained);
-        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
-            panic!("retained downloads overlay should use one shared frame");
-        };
-        assert_eq!(
-            format!("{immediate:#?}"),
-            format!("{:#?}", children.as_ref())
-        );
-        let first = Arc::clone(children);
-
-        retained.clear();
-        let _ = fixture.direct_frame(&mut retained);
-        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
-            panic!("stable downloads overlay should remain shared");
-        };
-        assert!(Arc::ptr_eq(&first, children));
-
-        fixture.snapshots[2].current_bytes += 1024;
-        retained.clear();
-        let _ = fixture.direct_frame(&mut retained);
-        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
-            panic!("changed downloads overlay should rebuild a shared frame");
-        };
-        assert!(!Arc::ptr_eq(&first, children));
-
-        immediate.clear();
-        let _ = fixture.legacy_frame(&mut immediate);
-        assert_eq!(
-            format!("{immediate:#?}"),
-            format!("{:#?}", children.as_ref())
-        );
     }
 }

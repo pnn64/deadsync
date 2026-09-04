@@ -2935,31 +2935,6 @@ fn push_selection_info(
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_edit_info_text_into(
-    out: &mut String,
-    cursor_beat: f32,
-    current_second: f32,
-    selection_anchor: Option<f32>,
-    selection_end: Option<f32>,
-    snap_index: usize,
-    suffix: &str,
-) {
-    out.clear();
-    build_edit_info_text_into(
-        out,
-        EditInfoSource {
-            cursor_beat,
-            current_second,
-            selection_anchor,
-            selection_end,
-            snap_index,
-        },
-        suffix,
-    );
-}
-
 fn push_info_line(status: &mut String, label: &str, value: &str) {
     if value.is_empty() {
         return;

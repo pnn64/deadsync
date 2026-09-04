@@ -13,8 +13,6 @@ use deadsync_rules::timing::{
     default_combos, default_tickcounts, default_time_signatures,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "bench-support")]
-use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::hash::Hasher;
@@ -597,84 +595,6 @@ impl CachedTimingSegments {
             combos,
         }
     }
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_timing_handoff_baseline(rounds: usize) -> u64 {
-    (0..rounds).fold(0u64, |checksum, _| {
-        let segments = Arc::new(timing_handoff_fixture());
-        let cached = CachedTimingSegments::from_rssp(
-            &segments,
-            vec![(0.0, 4, 4)],
-            vec![(0.0, 4)],
-            vec![(0.0, 1, 1)],
-        );
-        checksum.wrapping_add(timing_handoff_checksum(&cached))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_timing_handoff_current(rounds: usize) -> u64 {
-    (0..rounds).fold(0u64, |checksum, _| {
-        let segments = Arc::new(timing_handoff_fixture());
-        let cached = CachedTimingSegments::from_rssp_owned(
-            segments,
-            vec![(0.0, 4, 4)],
-            vec![(0.0, 4)],
-            vec![(0.0, 1, 1)],
-        );
-        checksum.wrapping_add(timing_handoff_checksum(&cached))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn timing_handoff_fixture() -> rssp::timing::TimingSegments {
-    let pairs = || {
-        (0..64)
-            .map(|index| (index as f32 * 4.0, index as f32 + 1.0))
-            .collect()
-    };
-    rssp::timing::TimingSegments {
-        beat0_offset_adjust: 0.25,
-        bpms: pairs(),
-        stops: pairs(),
-        delays: pairs(),
-        warps: pairs(),
-        speeds: (0..64)
-            .map(|index| {
-                (
-                    index as f32 * 4.0,
-                    index as f32 + 1.0,
-                    0.5,
-                    rssp::timing::SpeedUnit::Beats,
-                )
-            })
-            .collect(),
-        scrolls: pairs(),
-        fakes: pairs(),
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn timing_handoff_checksum(segments: &CachedTimingSegments) -> u64 {
-    [
-        segments.bpms.len(),
-        segments.stops.len(),
-        segments.delays.len(),
-        segments.warps.len(),
-        segments.speeds.len(),
-        segments.scrolls.len(),
-        segments.fakes.len(),
-        segments.time_signatures.len(),
-        segments.tickcounts.len(),
-        segments.combos.len(),
-    ]
-    .into_iter()
-    .fold(0u64, |checksum, len| {
-        checksum.wrapping_mul(31).wrapping_add(len as u64)
-    })
 }
 
 impl From<CachedTimingSegments> for TimingSegments {
@@ -1530,24 +1450,6 @@ pub fn build_chart_meta_from_cache(chart: CachedChartMeta) -> ChartData {
     }
 }
 
-#[must_use]
-pub fn build_gameplay_chart(
-    chart: SerializableChartData,
-    global_offset_seconds: f32,
-) -> GameplayChartData {
-    build_gameplay_chart_from_payload(
-        CachedChartPayload {
-            offset: chart.offset,
-            notes: chart.notes,
-            parsed_notes: chart.parsed_notes,
-            row_to_beat: chart.row_to_beat,
-            timing_segments: chart.timing_segments,
-            chart_attacks: chart.chart_attacks,
-        },
-        global_offset_seconds,
-    )
-}
-
 fn build_gameplay_chart_from_ref(
     chart: &SerializableChartData,
     global_offset_seconds: f32,
@@ -1578,26 +1480,6 @@ pub fn build_requested_gameplay_charts(
                 .get(chart_ix)
                 .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
             Ok(build_gameplay_chart_from_ref(chart, global_offset_seconds))
-        })
-        .collect()
-}
-
-#[cfg(test)]
-#[doc(hidden)]
-pub fn build_requested_gameplay_charts_legacy(
-    song: &SerializableSongData,
-    requested_chart_ixs: &[usize],
-    global_offset_seconds: f32,
-) -> Result<Vec<GameplayChartData>, String> {
-    requested_chart_ixs
-        .iter()
-        .map(|&chart_ix| {
-            let chart = song
-                .charts
-                .get(chart_ix)
-                .cloned()
-                .ok_or_else(|| format!("Chart index {chart_ix} out of range"))?;
-            Ok(build_gameplay_chart(chart, global_offset_seconds))
         })
         .collect()
 }
@@ -1828,54 +1710,6 @@ fn cache_hash_path(cache_dir: &Path, hash: u64) -> PathBuf {
     path
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_song_cache_paths_legacy(
-    cache_dir: &Path,
-    simfile_path: &Path,
-    iterations: usize,
-) -> Result<u64, std::io::Error> {
-    benchmark_song_cache_paths(
-        cache_dir,
-        simfile_path,
-        iterations,
-        |cache_dir, simfile_path| {
-            let canonical_path = simfile_path.canonicalize()?;
-            let mut hasher = XxHash64::with_seed(0);
-            hasher.write(canonical_path.to_string_lossy().as_bytes());
-            let hash_hex = format!("{:016x}", hasher.finish());
-            let shard2 = &hash_hex[..2];
-            Ok(cache_dir.join(shard2).join(format!("{hash_hex}.bin")))
-        },
-    )
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_song_cache_paths_current(
-    cache_dir: &Path,
-    simfile_path: &Path,
-    iterations: usize,
-) -> Result<u64, std::io::Error> {
-    benchmark_song_cache_paths(cache_dir, simfile_path, iterations, song_cache_path)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_song_cache_paths(
-    cache_dir: &Path,
-    simfile_path: &Path,
-    iterations: usize,
-    make_path: impl Fn(&Path, &Path) -> Result<PathBuf, std::io::Error>,
-) -> Result<u64, std::io::Error> {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let path = make_path(cache_dir, simfile_path)?;
-        for byte in path.to_string_lossy().bytes() {
-            checksum = checksum.wrapping_mul(131).wrapping_add(u64::from(byte));
-        }
-        std::hint::black_box(path);
-    }
-    Ok(checksum)
-}
-
 #[must_use]
 pub fn load_song_cache_file(
     path: &Path,
@@ -1896,21 +1730,6 @@ fn load_song_cache_file_in(
     Some(build_song_meta_from_cache(cached_song.data))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn encode_chart_payloads_separate(
-    data: &SerializableSongData,
-) -> Result<Vec<Vec<u8>>, bincode::error::EncodeError> {
-    data.charts
-        .iter()
-        .map(|chart| {
-            bincode::encode_to_vec(
-                BorrowedCachedChartPayload::from(chart),
-                bincode::config::standard(),
-            )
-        })
-        .collect()
-}
-
 fn encode_chart_payloads_reused<'a>(
     data: &SerializableSongData,
     payloads: &'a mut Vec<Vec<u8>>,
@@ -1927,217 +1746,6 @@ fn encode_chart_payloads_reused<'a>(
         }
     }
     Ok(&payloads[..data.charts.len()])
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn benchmark_chart_payload_encoding_baseline(
-    data: &SerializableSongData,
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let payloads = encode_chart_payloads_separate(std::hint::black_box(data))
-            .expect("benchmark chart payloads should encode");
-        for payload in &payloads {
-            checksum = fold_payload_checksum(checksum, payload);
-        }
-        std::hint::black_box(payloads);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn benchmark_chart_payload_encoding_current(
-    data: &SerializableSongData,
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    let mut scratch = Vec::new();
-    for _ in 0..iterations {
-        let payloads = encode_chart_payloads_reused(std::hint::black_box(data), &mut scratch)
-            .expect("benchmark chart payloads should encode");
-        for payload in payloads {
-            checksum = fold_payload_checksum(checksum, payload);
-        }
-        std::hint::black_box(&scratch);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-fn fold_payload_checksum(mut checksum: u64, bytes: &[u8]) -> u64 {
-    for &byte in bytes {
-        checksum = checksum.wrapping_mul(131).wrapping_add(u64::from(byte));
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if cache metadata cannot be encoded.
-pub fn benchmark_cache_metadata_encoding_baseline(
-    data: &SerializableSongData,
-    global_offset_seconds: f32,
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let metadata = build_cached_song_meta(std::hint::black_box(data), global_offset_seconds);
-        let bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())
-            .expect("benchmark cache metadata should encode");
-        checksum = fold_payload_checksum(checksum, &bytes);
-        std::hint::black_box(metadata);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if cache metadata cannot be encoded.
-pub fn benchmark_cache_metadata_encoding_current(
-    data: &SerializableSongData,
-    global_offset_seconds: f32,
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let metadata =
-            BorrowedCachedSongMeta::new(std::hint::black_box(data), global_offset_seconds);
-        let bytes = bincode::encode_to_vec(&metadata, bincode::config::standard())
-            .expect("benchmark cache metadata should encode");
-        checksum = fold_payload_checksum(checksum, &bytes);
-        std::hint::black_box(metadata);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_cache_payload_indices_baseline(
-    payload_lengths: &[usize],
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let mut indices = Vec::with_capacity(payload_lengths.len());
-        append_chart_payload_indices(payload_lengths.iter().map(|&len| len as u64), &mut indices);
-        checksum = fold_chart_payload_index_checksum(checksum, &indices);
-        std::hint::black_box(indices);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_cache_payload_indices_current(
-    payload_lengths: &[usize],
-    iterations: usize,
-) -> u64 {
-    let mut checksum = 0u64;
-    let mut indices = Vec::new();
-    for _ in 0..iterations {
-        indices.clear();
-        indices.reserve_exact(payload_lengths.len());
-        append_chart_payload_indices(payload_lengths.iter().map(|&len| len as u64), &mut indices);
-        checksum = fold_chart_payload_index_checksum(checksum, &indices);
-        std::hint::black_box(&indices);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-fn fold_chart_payload_index_checksum(
-    mut checksum: u64,
-    indices: &[CachedChartPayloadIndex],
-) -> u64 {
-    for index in indices {
-        checksum = checksum
-            .wrapping_mul(131)
-            .wrapping_add(index.offset)
-            .wrapping_mul(131)
-            .wrapping_add(index.len);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if the cache header cannot be encoded.
-pub fn benchmark_cache_header_buffer_baseline(
-    data: &SerializableSongData,
-    global_offset_seconds: f32,
-    iterations: usize,
-) -> u64 {
-    benchmark_cache_header_buffer(data, global_offset_seconds, iterations, false)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if the cache header cannot be encoded.
-pub fn benchmark_cache_header_buffer_current(
-    data: &SerializableSongData,
-    global_offset_seconds: f32,
-    iterations: usize,
-) -> u64 {
-    benchmark_cache_header_buffer(data, global_offset_seconds, iterations, true)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_cache_header_buffer(
-    data: &SerializableSongData,
-    global_offset_seconds: f32,
-    iterations: usize,
-    reuse_buffer: bool,
-) -> u64 {
-    let metadata = BorrowedCachedSongMeta::new(data, global_offset_seconds);
-    let chart_payloads = data
-        .charts
-        .iter()
-        .enumerate()
-        .map(|(chart_ix, _)| CachedChartPayloadIndex {
-            offset: chart_ix as u64 * 1_024,
-            len: 1_024,
-        })
-        .collect::<Vec<_>>();
-    let cached_song = BorrowedCachedSong {
-        cache_version: SONG_CACHE_VERSION,
-        rssp_version: rssp::RSSP_VERSION,
-        mono_threshold: SONG_ANALYSIS_MONO_THRESHOLD,
-        directory_hash: 0xDEAD_5A1C,
-        data: metadata,
-        chart_payloads: &chart_payloads,
-    };
-    let mut checksum = 0u64;
-    let mut scratch = Vec::new();
-    for _ in 0..iterations {
-        if reuse_buffer {
-            bincode::encode_into_vec(&cached_song, &mut scratch, bincode::config::standard())
-                .expect("benchmark cache header should encode");
-            checksum = fold_payload_checksum(checksum, &scratch);
-        } else {
-            let bytes = bincode::encode_to_vec(&cached_song, bincode::config::standard())
-                .expect("benchmark cache header should encode");
-            checksum = fold_payload_checksum(checksum, &bytes);
-            std::hint::black_box(bytes);
-        }
-    }
-    checksum
 }
 
 pub fn write_song_cache_file(
@@ -2280,37 +1888,6 @@ fn collect_requested_cached_charts(
         charts.push(chart);
     }
     Some(charts)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_chart_requests_legacy(requests: &[usize], rounds: usize) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..rounds {
-        let mut positions = HashMap::<usize, usize>::with_capacity(requests.len());
-        for &chart_ix in requests {
-            let next = positions.len();
-            let position = *positions.entry(chart_ix).or_insert(next);
-            checksum = checksum.wrapping_mul(131).wrapping_add(position as u64);
-        }
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_chart_requests_current(requests: &[usize], rounds: usize) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..rounds {
-        for (request_position, &chart_ix) in requests.iter().enumerate() {
-            let position = requests[..request_position]
-                .iter()
-                .position(|&loaded_ix| loaded_ix == chart_ix)
-                .unwrap_or(request_position);
-            checksum = checksum.wrapping_mul(131).wrapping_add(position as u64);
-        }
-    }
-    checksum
 }
 
 pub struct GameplayChartLoadOptions<'a> {
@@ -2554,25 +2131,6 @@ fn runtime_song_parse_log_entry(simfile_path: &Path, fastload: bool) -> RuntimeS
     } else {
         RuntimeSongLoadLogEntry::debug(format!("Parsing (fastload disabled): {file_name:?}"))
     }
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_runtime_debug_logs(song_count: usize, capture_debug_logs: bool) -> usize {
-    let simfile_path = Path::new("Songs/Benchmark Pack/Benchmark Song/chart.ssc");
-    (0..song_count)
-        .map(|_| {
-            let mut entries = if capture_debug_logs {
-                Vec::with_capacity(3)
-            } else {
-                Vec::new()
-            };
-            if capture_debug_logs {
-                entries.push(runtime_song_parse_log_entry(simfile_path, true));
-            }
-            std::hint::black_box(entries).len()
-        })
-        .sum()
 }
 
 pub fn gameplay_chart_load_log_entries(
@@ -2968,95 +2526,6 @@ fn decode_cached_song_header(header: &[u8]) -> Option<CachedSong> {
     Some(cached_song)
 }
 
-#[cfg(feature = "bench-support")]
-fn load_cached_song_base_baseline(cache_path: &Path) -> Option<(CachedSong, u64)> {
-    let Ok(mut file) = fs::File::open(cache_path) else {
-        return None;
-    };
-    let mut prefix = [0u8; 16];
-    file.read_exact(&mut prefix).ok()?;
-    if prefix[..8] != SONG_CACHE_MAGIC {
-        return None;
-    }
-    let header_len = u64::from_le_bytes(prefix[8..16].try_into().ok()?);
-    let file_len = file.metadata().ok()?.len();
-    if header_len == 0
-        || header_len > MAX_SONG_CACHE_HEADER_BYTES as u64
-        || header_len > file_len.saturating_sub(16)
-    {
-        return None;
-    }
-    let mut header = vec![0u8; usize::try_from(header_len).ok()?];
-    file.read_exact(&mut header).ok()?;
-    Some((decode_cached_song_header(&header)?, 16 + header_len))
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_cache_header_loads_baseline(cache_path: &Path, iterations: usize) -> u64 {
-    benchmark_cache_header_loads(cache_path, iterations, |cache_path, _| {
-        load_cached_song_base_baseline(cache_path)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_cache_header_loads_current(cache_path: &Path, iterations: usize) -> u64 {
-    benchmark_cache_header_loads(cache_path, iterations, load_cached_song_base_in)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_cache_header_loads(
-    cache_path: &Path,
-    iterations: usize,
-    mut load: impl FnMut(&Path, &mut Vec<u8>) -> Option<(CachedSong, u64)>,
-) -> u64 {
-    let mut header = Vec::new();
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        let (song, payload_start) = load(std::hint::black_box(cache_path), &mut header)
-            .expect("benchmark cache should decode");
-        checksum = checksum
-            .wrapping_mul(131)
-            .wrapping_add(payload_start)
-            .wrapping_add(song.data.charts.len() as u64);
-        std::hint::black_box(song);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_cache_probes_legacy(cache_path: &Path, iterations: usize) -> std::io::Result<u64> {
-    benchmark_cache_probes(cache_path, iterations, true)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_cache_probes_current(
-    cache_path: &Path,
-    iterations: usize,
-) -> std::io::Result<u64> {
-    benchmark_cache_probes(cache_path, iterations, false)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_cache_probes(
-    cache_path: &Path,
-    iterations: usize,
-    check_exists: bool,
-) -> std::io::Result<u64> {
-    let mut checksum = 0u64;
-    for _ in 0..iterations {
-        if check_exists && !cache_path.exists() {
-            continue;
-        }
-        let mut file = fs::File::open(cache_path)?;
-        let mut prefix = [0u8; 16];
-        file.read_exact(&mut prefix)?;
-        checksum = checksum.wrapping_add(u64::from(prefix[0]));
-        std::hint::black_box(file);
-    }
-    Ok(checksum)
-}
-
 #[cfg(test)]
 fn load_cached_song(path: &Path, cache_path: &Path, verify_freshness: bool) -> Option<CachedSong> {
     let mut header = Vec::new();
@@ -3384,18 +2853,10 @@ mod tests {
         second.notes = b"second".to_vec();
         song.charts = vec![first, second];
 
-        let legacy = build_requested_gameplay_charts_legacy(&song, &[1, 0], 0.0).unwrap();
         let charts = build_requested_gameplay_charts(&song, &[1, 0], 0.0).unwrap();
 
         assert_eq!(charts[0].notes, b"second");
         assert_eq!(charts[1].notes, b"first");
-        for (chart, legacy) in charts.iter().zip(&legacy) {
-            assert_eq!(chart.notes, legacy.notes);
-            assert_eq!(chart.parsed_notes, legacy.parsed_notes);
-            assert_eq!(chart.row_to_beat, legacy.row_to_beat);
-            assert_eq!(chart.timing_segments.bpms, legacy.timing_segments.bpms);
-            assert_eq!(chart.chart_attacks, legacy.chart_attacks);
-        }
     }
 
     #[test]
@@ -3588,32 +3049,6 @@ mod tests {
         assert_eq!((indices[0].offset, indices[0].len), (0, 7));
         assert_eq!(indices.as_ptr(), retained_ptr);
         assert_eq!(indices.capacity(), retained_capacity);
-    }
-
-    #[test]
-    fn reused_chart_payloads_match_separate_encoding() {
-        let root = test_dir("reused-chart-payloads");
-        let simfile = root.join("song.ssc");
-        let mut data = cached_song(&simfile);
-        let mut first = test_serializable_chart("dance-single", "Hard", 4, Some(12));
-        first.notes = b"2000\n0000\n3000\n".to_vec();
-        first.chart_attacks = Some("TIME=1.5:LEN=2.0:MODS=drunk".to_string());
-        let mut second = test_serializable_chart("dance-double", "Challenge", 8, None);
-        second.notes = b"10000000\n".to_vec();
-        data.charts = vec![first, second];
-
-        let separate = encode_chart_payloads_separate(&data).unwrap();
-        let mut scratch = Vec::new();
-        let reused = encode_chart_payloads_reused(&data, &mut scratch).unwrap();
-        assert_eq!(reused, separate);
-
-        data.charts.truncate(1);
-        data.charts[0].notes = b"1000\n0100\n0010\n0001\n".to_vec();
-        let separate = encode_chart_payloads_separate(&data).unwrap();
-        let reused = encode_chart_payloads_reused(&data, &mut scratch).unwrap();
-        assert_eq!(reused, separate);
-        assert_eq!(scratch.len(), 2, "unused worker buffers stay reusable");
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

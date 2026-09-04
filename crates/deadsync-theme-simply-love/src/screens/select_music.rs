@@ -44,8 +44,6 @@ use deadlib_present::space::{
     widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
-#[cfg(feature = "bench-support")]
-use deadsync_chart::SyncPref;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
@@ -236,8 +234,8 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 /// lives for the thread/session, holds exactly one shared string, and warms on
 /// first use. A miss probes the existing bounded hash cache and replaces the
 /// prior entry without scanning or pruning; replaced strings drop on the game
-/// thread. The benchmark pair below instruments hit cost. Worst-case work is
-/// one key comparison, one bounded-cache probe, and formatting on a double miss.
+/// thread. Worst-case work is one key comparison, one bounded-cache probe, and
+/// formatting on a double miss.
 type BpmTextKey = (u64, u64, u32);
 type LastTextCell<K> = RefCell<Option<(K, Arc<str>)>>;
 
@@ -252,8 +250,6 @@ thread_local! {
     static MUSIC_RATE_FMT_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(256));
     static MUSIC_RATE_BANNER_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(128));
     static CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(text_cache_with_capacity(512));
-    #[cfg(any(test, feature = "bench-support"))]
-    static LEGACY_CHART_INFO_CACHE: RefCell<TextCache<(u8, u32, u64, u64)>> = RefCell::new(text_cache_with_capacity(512));
     static STAMINA_MONO_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
     static STAMINA_CANDLES_CACHE: RefCell<TextCache<u64>> = RefCell::new(text_cache_with_capacity(512));
     static STREAM_TOTAL_CACHE: RefCell<TextCache<(u32, u32)>> = RefCell::new(text_cache_with_capacity(512));
@@ -416,105 +412,6 @@ fn cached_chart_info_text(
             }
         },
     )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn cached_chart_info_text_legacy(
-    show_peak_nps: bool,
-    show_effective_bpm: bool,
-    show_matrix_rating: bool,
-    meter: u32,
-    peak_nps: f64,
-    matrix_rating: f64,
-) -> Arc<str> {
-    let peak_nps = if peak_nps.is_finite() {
-        peak_nps.max(0.0)
-    } else {
-        0.0
-    };
-    let matrix_rating = if matrix_rating.is_finite() {
-        matrix_rating.max(0.0)
-    } else {
-        0.0
-    };
-    let mut mask = u8::from(show_peak_nps)
-        | (u8::from(show_effective_bpm) << 1)
-        | (u8::from(show_matrix_rating) << 2);
-    if mask == 0 {
-        mask = 1;
-    }
-    let effective_bpm = peak_nps * 15.0;
-    let matrix_rating_rounded = (matrix_rating * 100.0).round() / 100.0;
-    let matrix_rating_text = chart_matrix_rating_text(meter, matrix_rating_rounded);
-    cached_text(
-        &LEGACY_CHART_INFO_CACHE,
-        (mask, meter, peak_nps.to_bits(), matrix_rating.to_bits()),
-        TEXT_CACHE_LIMIT,
-        || match mask {
-            0b001 => tr_fmt(
-                "SelectMusic",
-                "PeakNpsOnly",
-                &[("peak_nps", &format!("{peak_nps:.1}"))],
-            )
-            .to_string(),
-            0b010 => tr_fmt(
-                "SelectMusic",
-                "PeakEbpmOnly",
-                &[("effective_bpm", &format!("{effective_bpm:.0}"))],
-            )
-            .to_string(),
-            0b011 => tr_fmt(
-                "SelectMusic",
-                "PnpsAndEbpm",
-                &[
-                    ("peak_nps", &format!("{peak_nps:.1}")),
-                    ("effective_bpm", &format!("{effective_bpm:.0}")),
-                ],
-            )
-            .to_string(),
-            0b100 => matrix_rating_text,
-            0b101 => tr_fmt(
-                "SelectMusic",
-                "PnpsAndMr",
-                &[
-                    ("peak_nps", &format!("{peak_nps:.1}")),
-                    ("mr", &matrix_rating_text),
-                ],
-            )
-            .to_string(),
-            0b110 => tr_fmt(
-                "SelectMusic",
-                "EbpmAndMr",
-                &[
-                    ("effective_bpm", &format!("{effective_bpm:.0}")),
-                    ("mr", &matrix_rating_text),
-                ],
-            )
-            .to_string(),
-            _ => tr_fmt(
-                "SelectMusic",
-                "PnpsEbpmAndMr",
-                &[
-                    ("peak_nps", &format!("{peak_nps:.1}")),
-                    ("effective_bpm", &format!("{effective_bpm:.0}")),
-                    ("mr", &matrix_rating_text),
-                ],
-            )
-            .to_string(),
-        },
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_chart_info_text_old() -> Arc<str> {
-    cached_chart_info_text_legacy(true, true, true, 17, 12.5, 14.327)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_chart_info_text_new() -> Arc<str> {
-    cached_chart_info_text(true, true, true, 17, 12.5, 14.327)
 }
 
 #[inline(always)]
@@ -1382,8 +1279,7 @@ struct FolderStatsPackSummaries {
 /// Hits: two Fx lookups with no allocation or source entry/chart scan.
 /// Eviction: none; history replacement clears summaries and content reload
 /// builds a fresh screen cache. Entries are destroyed with the screen.
-/// Instrumentation: the `select_music_folder_stats` benchmark covers solo and
-/// versus hit paths. Worst-case frame work is one pack scan per newly requested
+/// Worst-case frame work is one pack scan per newly requested
 /// side/chart-type/difficulty combination.
 #[derive(Default)]
 struct FolderStatsCache {
@@ -1737,9 +1633,8 @@ pub struct State {
     /// A later dynamic Favorites or user-playlist view can grow it once; those
     /// unbounded inputs are deliberately not used for eager reservation. There
     /// are no evictions. Replacement entries release on the main thread and the
-    /// allocation is destroyed with the screen. The
-    /// `select_music_hot_paths` benchmark instruments allocator churn and the
-    /// worst per-frame work is one linear scan of the active sort list.
+    /// allocation is destroyed with the screen. Worst per-frame work is one
+    /// linear scan of the active sort list.
     pub entries: Vec<MusicWheelEntry>,
     /// Main-thread content revision assigned whenever `entries` is refilled.
     /// It lets the shell skip reconstructing the fixed 19-slot request while
@@ -2428,22 +2323,6 @@ fn fill_displayed_entries(
             }
         }
     }
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_fill_displayed_entries(
-    entries: &mut Vec<MusicWheelEntry>,
-    all_entries: &[MusicWheelEntry],
-    expanded_pack_name: Option<&str>,
-) {
-    fill_displayed_entries(
-        entries,
-        all_entries,
-        None,
-        expanded_pack_name,
-        crate::config::SelectMusicWheelStyle::Itg,
-        false,
-    );
 }
 
 #[inline(always)]
@@ -7309,132 +7188,6 @@ fn push_manual_sync_overlay_unreserved(
     ));
 }
 
-/// Stable old/new fixture for a populated automatic-sync actor batch.
-#[cfg(any(test, feature = "bench-support"))]
-pub struct SyncOverlayAppendBenchmark {
-    state: SyncOverlayState,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SyncOverlayAppendBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let cols = 3;
-        let digest_rows = 3;
-        Self {
-            state: SyncOverlayState::NullOrDie(Box::new(NullOrDieOverlayData {
-                simfile_path: PathBuf::from("Songs/Benchmark/song.ssc"),
-                song_title: "Benchmark Sync Song".to_string(),
-                chart_label: "Challenge 16".to_string(),
-                kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
-                kernel_type: crate::SimplyLoveSyncKernel::Rising,
-                graph_mode: SyncGraphMode::PostKernelFingerprint,
-                graph_orientation: GraphOrientation::Vertical,
-                graph_origin: GraphOrigin::Bottom,
-                confidence_threshold: 0.8,
-                cols,
-                freq_rows: 0,
-                total_beats: digest_rows,
-                digest_rows,
-                times_ms: vec![-12.0, 0.0, 12.0],
-                freq_domain: Vec::new(),
-                beat_digest: vec![0.1, 0.3, 0.7, 0.2, 0.8, 0.4, 0.1, 0.5, 0.2],
-                digest_col_sums: Vec::new(),
-                post_rows: digest_rows,
-                post_kernel: vec![0.2, 0.4, 0.6, 0.3, 0.9, 0.5, 0.1, 0.4, 0.2],
-                convolution: vec![0.15, 0.95, 0.25],
-                curve_mesh: None,
-                edge_discard: 0,
-                beats_processed: digest_rows,
-                preview_bias_ms: None,
-                final_bias_ms: Some(-4.25),
-                final_confidence: Some(0.93),
-                result_cached: false,
-                phase: NullOrDieOverlayPhase::Ready,
-                phase_changed_at: Instant::now(),
-                error_text: None,
-                manual_delta_seconds: 0.002,
-                nav_held_dir: None,
-                nav_held_since: None,
-                nav_last_tick_at: None,
-                nav_last_sfx_at: None,
-                confirm_selection: Some(ConfirmAction::Confirm),
-                presentation_revision: 0,
-                presentation: RefCell::new(None),
-            })),
-        }
-    }
-
-    #[must_use]
-    pub fn actor_count(&self) -> usize {
-        let mut actors = Vec::with_capacity(48);
-        let SyncOverlayState::NullOrDie(overlay) = &self.state else {
-            unreachable!("sync fixture uses automatic sync");
-        };
-        push_null_or_die_overlay_unreserved(
-            &mut actors,
-            overlay,
-            3,
-            crate::config::MachineFont::Mega,
-        );
-        actors.len()
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        let SyncOverlayState::NullOrDie(overlay) = &self.state else {
-            unreachable!("sync fixture uses automatic sync");
-        };
-        push_null_or_die_overlay_unreserved(out, overlay, 3, crate::config::MachineFont::Mega);
-        std::hint::black_box(&*out);
-        select_music_overlay_actor_checksum(out)
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_sync_overlay(out, &self.state, 3, crate::config::MachineFont::Mega);
-        std::hint::black_box(&*out);
-        select_music_overlay_actor_checksum(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for SyncOverlayAppendBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn select_music_overlay_actor_checksum(actors: &[Actor]) -> u64 {
-    let semantic_actors = match actors {
-        [Actor::SharedFrame { children, .. }] => children.as_ref(),
-        _ => actors,
-    };
-    semantic_actors
-        .iter()
-        .fold(semantic_actors.len() as u64, |checksum, actor| {
-            let value = match actor {
-                Actor::Text { content, z, .. } => content
-                    .as_str()
-                    .bytes()
-                    .fold(u64::from(*z as u16), |hash, byte| {
-                        hash.rotate_left(7) ^ u64::from(byte)
-                    }),
-                Actor::Frame { children, z, .. } => {
-                    select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
-                }
-                Actor::SharedFrame { children, z, .. } => {
-                    select_music_overlay_actor_checksum(children) ^ u64::from(*z as u16)
-                }
-                _ => 1,
-            };
-            checksum.rotate_left(11) ^ value
-        })
-}
-
 /// Carry the song-search request counter over from the screen being replaced.
 ///
 /// The worker and its result queue are shell-owned and outlive this screen, so
@@ -8600,204 +8353,7 @@ fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapsh
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[derive(Default)]
-struct LegacyLobbySync {
-    joined_code: Option<String>,
-    machine_sig: Option<String>,
-    published_song_sig: Option<String>,
-    observed_local_song_sig: Option<String>,
-    applied_remote_song_sig: Option<String>,
-    failed_remote_song_sig: Option<String>,
-}
-
-#[cfg(feature = "bench-support")]
-fn legacy_lobby_machine_signature(
-    session: SelectMusicSessionView,
-    profiles: &SelectMusicProfileView,
-) -> String {
-    let mut parts = vec!["ScreenSelectMusic".to_string()];
-    let mut any_joined = false;
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if !session.side_joined(side) {
-            continue;
-        }
-        any_joined = true;
-        let player_id = match side {
-            profile_data::PlayerSide::P1 => "P1",
-            profile_data::PlayerSide::P2 => "P2",
-        };
-        parts.push(format!("{player_id}:{}", profiles.display_name(side)));
-    }
-    if !any_joined {
-        let side = session.player_side;
-        let player_id = match side {
-            profile_data::PlayerSide::P1 => "P1",
-            profile_data::PlayerSide::P2 => "P2",
-        };
-        parts.push(format!("{player_id}:{}", profiles.display_name(side)));
-    }
-    parts.join("|")
-}
-
-#[cfg(feature = "bench-support")]
-fn legacy_lobby_song_signature(song_info: &lobby_data::LobbySongInfo) -> String {
-    let rate_bits = song_info.rate.unwrap_or(1.0).to_bits();
-    format!(
-        "{}|{}|{}|{}",
-        normalize_lobby_song_path(song_info.song_path.as_str()),
-        song_info.chart_hash.as_deref().unwrap_or(""),
-        song_info.chart_type.as_deref().unwrap_or(""),
-        rate_bits,
-    )
-}
-
-#[cfg(feature = "bench-support")]
-fn legacy_lobby_song_matches_remote_selection(
-    local_song_info: &lobby_data::LobbySongInfo,
-    remote_song_info: &lobby_data::LobbySongInfo,
-) -> bool {
-    normalize_lobby_song_path(local_song_info.song_path.as_str())
-        == normalize_lobby_song_path(remote_song_info.song_path.as_str())
-        && lobby_song_metadata_matches_remote_selection(local_song_info, remote_song_info)
-}
-
-#[cfg(feature = "bench-support")]
-fn legacy_sync_lobby_select_music(
-    state: &mut State,
-    cache: &mut LegacyLobbySync,
-    snapshot: &lobby_data::Snapshot,
-) {
-    let Some(joined) = snapshot.joined_lobby.as_ref() else {
-        *cache = LegacyLobbySync::default();
-        return;
-    };
-
-    if cache.joined_code.as_deref() != Some(joined.code.as_str()) {
-        cache.joined_code = Some(joined.code.clone());
-        cache.machine_sig = None;
-        cache.published_song_sig = None;
-        cache.observed_local_song_sig =
-            build_local_lobby_song_info(state).map(|song| legacy_lobby_song_signature(&song));
-        cache.applied_remote_song_sig = None;
-        cache.failed_remote_song_sig = None;
-    }
-    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
-        cache.machine_sig = None;
-        cache.published_song_sig = None;
-        cache.failed_remote_song_sig = None;
-        return;
-    }
-
-    cache.machine_sig = Some(legacy_lobby_machine_signature(
-        state.session,
-        &state.profiles,
-    ));
-    queue_online(
-        state,
-        crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::UpdateMachineState {
-            screen_name: "ScreenSelectMusic",
-            ready: true,
-        }),
-    );
-
-    if let Some(song_info) = joined.song_info.as_ref() {
-        let remote_sig = legacy_lobby_song_signature(song_info);
-        if cache.applied_remote_song_sig.as_deref() != Some(remote_sig.as_str()) {
-            if apply_remote_lobby_song_selection(state, song_info) {
-                cache.observed_local_song_sig = build_local_lobby_song_info(state)
-                    .map(|song| legacy_lobby_song_signature(&song));
-                cache.applied_remote_song_sig = Some(remote_sig);
-                cache.failed_remote_song_sig = None;
-            } else if cache.failed_remote_song_sig.as_deref() != Some(remote_sig.as_str()) {
-                cache.failed_remote_song_sig = Some(remote_sig);
-            }
-        }
-    } else {
-        cache.failed_remote_song_sig = None;
-    }
-
-    if let Some(song_info) = build_local_lobby_song_info(state) {
-        let local_sig = legacy_lobby_song_signature(&song_info);
-        cache.observed_local_song_sig = Some(local_sig.clone());
-        if joined
-            .song_info
-            .as_ref()
-            .is_some_and(|remote| legacy_lobby_song_matches_remote_selection(&song_info, remote))
-        {
-            cache.published_song_sig = Some(local_sig);
-        }
-    } else {
-        cache.observed_local_song_sig = None;
-        cache.published_song_sig = None;
-    }
-}
-
 /// Opaque joined-lobby fixture used by the deterministic reconciliation bench.
-#[cfg(feature = "bench-support")]
-pub struct LobbyReconcileBench {
-    state: State,
-    legacy: LegacyLobbySync,
-}
-
-#[cfg(feature = "bench-support")]
-impl LobbyReconcileBench {
-    #[inline(never)]
-    pub fn legacy_frame(&mut self) -> u64 {
-        let snapshot = Arc::clone(&self.state.lobby_view.snapshot);
-        legacy_sync_lobby_select_music(&mut self.state, &mut self.legacy, &snapshot);
-        self.finish_frame(self.legacy.applied_remote_song_sig.is_some())
-    }
-
-    #[inline(never)]
-    pub fn retained_frame(&mut self) -> u64 {
-        sync_lobby_select_music(&mut self.state);
-        self.finish_frame(self.state.lobby_last_applied_remote_song.is_some())
-    }
-
-    fn finish_frame(&mut self, remote_applied: bool) -> u64 {
-        let checksum = self.state.selected_index as u64
-            ^ (self.state.pending_online.len() as u64).rotate_left(7)
-            ^ u64::from(remote_applied).rotate_left(17);
-        self.state.pending_online.clear();
-        checksum
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn benchmark_lobby_reconcile_fixture() -> LobbyReconcileBench {
-    let mut state = init_placeholder();
-    state.profiles.display_names = [Arc::from("Alice"), Arc::from("Bob")];
-    let entry = MusicWheelEntry::Song(test_folder_stats_song(0));
-    state.group_entries = Arc::from([entry.clone()]);
-    state.entries = vec![entry];
-    let song_info = build_local_lobby_song_info(&state).expect("fixture should select a chart");
-    state.lobby_view.snapshot = Arc::new(lobby_data::Snapshot {
-        connection: lobby_data::ConnectionState::Connected,
-        joined_lobby: Some(lobby_data::JoinedLobby {
-            code: "BENCH".to_string(),
-            players: vec![lobby_data::LobbyPlayer {
-                label: "Remote".to_string(),
-                ready: false,
-                screen_name: "ScreenSelectMusic".to_string(),
-                judgments: None,
-                score: None,
-                ex_score: None,
-            }],
-            song_info: Some(song_info),
-        }),
-        ..Default::default()
-    });
-    LobbyReconcileBench {
-        state,
-        legacy: LegacyLobbySync::default(),
-    }
-}
-
 fn select_music_lobby_lock_text(state: &State) -> Option<String> {
     let snapshot = &state.lobby_view.snapshot;
     let joined = snapshot.joined_lobby.as_ref()?;
@@ -12969,28 +12525,6 @@ fn format_chart_length_hashed(key: i32) -> Arc<str> {
     })
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_info_text_hashed() -> [Arc<str>; 3] {
-    [
-        format_bpm_with_rate_hashed(128.0, 184.0, 1.25),
-        format_chart_length_hashed(197),
-        format_padded_time_hashed(4_050),
-    ]
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_info_text_front_cached() -> [Arc<str>; 3] {
-    [
-        format_bpm_with_rate(Some((128.0, 184.0)), 1.25),
-        format_chart_length(197),
-        format_padded_time(4_050.0),
-    ]
-}
-
 #[inline(always)]
 fn allow_gs_fetch_for_selection(state: &State) -> bool {
     state.nav_key_held_direction.is_none()
@@ -13169,7 +12703,7 @@ fn push_sl_select_music_wheel_cascade_mask(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn test_folder_stats_song(index: usize) -> Arc<SongData> {
     let mut song = (*test_media_song(index)).clone();
     song.banner_path = None;
@@ -13219,15 +12753,15 @@ fn test_folder_stats_song(index: usize) -> Arc<SongData> {
     Arc::new(song)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn test_media_song(index: usize) -> Arc<SongData> {
     Arc::new(SongData {
         simfile_path: PathBuf::from(format!("Songs/Bench/Song{index}/song.ssc")),
-        title: format!("Media benchmark song {index}"),
+        title: format!("Media test song {index}"),
         subtitle: String::new(),
         translit_title: String::new(),
         translit_subtitle: String::new(),
-        artist: "Benchmark".to_string(),
+        artist: "Test".to_string(),
         translit_artist: String::new(),
         genre: String::new(),
         banner_path: Some(PathBuf::from(format!("Songs/Bench/Song{index}/banner.png"))),
@@ -13257,104 +12791,6 @@ fn test_media_song(index: usize) -> Arc<SongData> {
         precise_last_second_seconds: 120.0,
         charts: Vec::new(),
     })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_select_music_entries(
-    pack_count: usize,
-    songs_per_pack: usize,
-) -> Arc<[MusicWheelEntry]> {
-    let song = test_media_song(0);
-    let mut entries = Vec::with_capacity(pack_count.saturating_mul(songs_per_pack + 1));
-    for pack_index in 0..pack_count {
-        let name: Arc<str> = format!("Benchmark Pack {pack_index:04}").into();
-        entries.push(MusicWheelEntry::PackHeader {
-            name: Arc::clone(&name),
-            original_index: pack_index,
-            banner_path: Some(Arc::from(PathBuf::from(format!(
-                "Benchmark/Packs/{pack_index:04}/banner.png"
-            )))),
-            song_count: songs_per_pack,
-            pack_key: Some(name),
-            parent_series: None,
-        });
-        entries.extend(
-            std::iter::repeat_with(|| MusicWheelEntry::Song(Arc::clone(&song)))
-                .take(songs_per_pack),
-        );
-    }
-    entries.into()
-}
-
-#[cfg(feature = "bench-support")]
-pub struct WheelSongMetaBench {
-    songs: Vec<Arc<SongData>>,
-    prepared: FxHashMap<usize, music_wheel::WheelSongMeta>,
-}
-
-#[cfg(feature = "bench-support")]
-impl WheelSongMetaBench {
-    #[must_use]
-    pub fn songs(&self) -> &[Arc<SongData>] {
-        &self.songs
-    }
-
-    #[must_use]
-    pub fn prepared_checksum(&self) -> u64 {
-        self.songs
-            .iter()
-            .enumerate()
-            .fold(0u64, |checksum, (index, song)| {
-                let meta = &self.prepared[&(Arc::as_ptr(song) as usize)];
-                checksum.wrapping_add(
-                    meta.preferred_chart_indices[index % STANDARD_DIFFICULTY_COUNT] as u64
-                        ^ u64::from(meta.has_edit).rotate_left(8)
-                        ^ u64::from(meta.is_srpg_event).rotate_left(16)
-                        ^ u64::from(meta.is_itl_unlock_pack).rotate_left(24)
-                        ^ (meta.sync_pref as u64).rotate_left(32),
-                )
-            })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_wheel_song_meta(song_count: usize) -> WheelSongMetaBench {
-    let mut songs = Vec::with_capacity(song_count);
-    let mut prepared =
-        FxHashMap::with_capacity_and_hasher(song_count, rustc_hash::FxBuildHasher::default());
-    for index in 0..song_count {
-        let mut song = (*test_folder_stats_song(index)).clone();
-        let pack = if index % 2 == 0 {
-            "Stamina RPG 10 Unlocks"
-        } else {
-            "Benchmark Pack"
-        };
-        song.simfile_path = PathBuf::from(format!("Songs/{pack}/Song {index:04}/song.ssc"));
-        let has_edit = index % 3 == 0;
-        if has_edit && let Some(chart) = song.charts.last_mut() {
-            chart.difficulty = "Edit".to_string();
-        }
-        let sync_pref = if index % 2 == 0 {
-            SyncPref::Itg
-        } else {
-            SyncPref::Null
-        };
-        let song = Arc::new(song);
-        prepared.insert(
-            Arc::as_ptr(&song) as usize,
-            music_wheel::wheel_song_meta(
-                &song,
-                "dance-single",
-                has_edit,
-                score_data::is_itl_unlocks_pack(pack),
-                sync_pref,
-            ),
-        );
-        songs.push(song);
-    }
-    WheelSongMetaBench { songs, prepared }
 }
 
 fn push_folder_stats_overlay(
@@ -16084,38 +15520,6 @@ mod tests {
     }
 
     #[test]
-    fn chart_info_cached_formatter_matches_legacy_for_every_mask() {
-        let values = [
-            (8, 0.0, 0.0),
-            (10, 7.25, 12.345),
-            (11, 12.5, 14.327),
-            (20, f64::NAN, f64::INFINITY),
-        ];
-        for mask in 0u8..=0b111 {
-            for &(meter, peak_nps, matrix_rating) in &values {
-                let flags = (mask & 0b001 != 0, mask & 0b010 != 0, mask & 0b100 != 0);
-                let old = super::cached_chart_info_text_legacy(
-                    flags.0,
-                    flags.1,
-                    flags.2,
-                    meter,
-                    peak_nps,
-                    matrix_rating,
-                );
-                let new = super::cached_chart_info_text(
-                    flags.0,
-                    flags.1,
-                    flags.2,
-                    meter,
-                    peak_nps,
-                    matrix_rating,
-                );
-                assert_eq!(new, old, "mask={mask:03b}, meter={meter}");
-            }
-        }
-    }
-
-    #[test]
     fn matrix_rating_cache_reuses_chart_and_rate_result() {
         let mut song = (*super::test_folder_stats_song(0)).clone();
         song.charts[0].matrix_rating = 10.0;
@@ -16273,14 +15677,14 @@ mod tests {
             Arc::from("120"),
             Arc::from("2:00"),
         );
-        let legacy = super::build_info_box_children(
+        let expected = super::build_info_box_children(
             cache
                 .key
                 .as_ref()
                 .expect("cache should retain its input key"),
             320.0,
         );
-        assert_eq!(format!("{legacy:?}"), format!("{:?}", first.as_ref()));
+        assert_eq!(format!("{expected:?}"), format!("{:?}", first.as_ref()));
 
         let repeated = cache.resolve(
             320.0,
@@ -20056,58 +19460,6 @@ mod tests {
         let top = marker_ys(&overlay);
         assert_eq!(top.len(), 3);
         assert!(top[0] < top[1] && top[1] < top[2]);
-    }
-
-    #[test]
-    fn direct_sync_overlay_append_matches_legacy_batch() {
-        crate::assets::i18n::init_for_tests();
-        let fixture = super::SyncOverlayAppendBenchmark::new();
-        let mut legacy = Vec::with_capacity(48);
-        let mut direct = Vec::with_capacity(48);
-
-        let legacy_checksum = fixture.legacy_frame(&mut legacy);
-        let direct_checksum = fixture.direct_frame(&mut direct);
-
-        assert_eq!(legacy_checksum, direct_checksum);
-        assert_eq!(legacy.len(), fixture.actor_count());
-        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
-            panic!("expected a retained automatic-sync result tree");
-        };
-        assert_eq!(format!("{legacy:#?}"), format!("{children:#?}"));
-        let children = Arc::clone(children);
-        let _ = fixture.direct_frame(&mut direct);
-        let [
-            Actor::SharedFrame {
-                children: repeated, ..
-            },
-        ] = direct.as_slice()
-        else {
-            panic!("expected a retained automatic-sync result tree");
-        };
-        assert!(Arc::ptr_eq(&children, repeated));
-    }
-
-    #[test]
-    fn sync_review_mutation_invalidates_retained_tree() {
-        crate::assets::i18n::init_for_tests();
-        let mut fixture = super::SyncOverlayAppendBenchmark::new();
-        let mut actors = Vec::with_capacity(48);
-        let old_checksum = fixture.direct_frame(&mut actors);
-        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
-            panic!("expected a retained automatic-sync result tree");
-        };
-        let old = Arc::clone(children);
-
-        let super::SyncOverlayState::NullOrDie(overlay) = &mut fixture.state else {
-            unreachable!("sync fixture uses automatic sync");
-        };
-        super::apply_sync_song_manual_nudge(overlay, 0.001);
-        let new_checksum = fixture.direct_frame(&mut actors);
-        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
-            panic!("expected a retained automatic-sync result tree");
-        };
-        assert!(!Arc::ptr_eq(&old, children));
-        assert_ne!(old_checksum, new_checksum);
     }
 
     #[test]

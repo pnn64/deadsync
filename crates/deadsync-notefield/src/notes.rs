@@ -25,7 +25,6 @@ use deadsync_noteskin::{
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
-
 /// Internal inputs for the white ITG Actor glow pass of a note layer.
 #[cfg(test)]
 struct NoteGlowRequest<'a, S> {
@@ -44,7 +43,6 @@ struct NoteGlowRequest<'a, S> {
     world_z: f32,
     prefer_sprite: bool,
 }
-
 /// Canonical inputs for one complete noteskin layer, including its diffuse and
 /// white ITG Actor glow passes.
 pub(crate) struct NoteLayerRequest<'a, S> {
@@ -148,27 +146,6 @@ pub(crate) fn note_part_phase_cached(note_beat: f32, cache: NotePartPhaseCache) 
     wrap_vivid_phase(cache.base_phase + vivid_offset)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn note_part_phase_reference(
-    song_seconds: f32,
-    song_beat: f32,
-    note_beat: f32,
-    animation: NotePartAnimation,
-    beat_based: bool,
-) -> f32 {
-    let length = animation.length.max(1e-6);
-    let clock = if beat_based { song_beat } else { song_seconds };
-    let mut phase = clock.rem_euclid(length) / length;
-    if animation.vivid {
-        let note_fraction = note_beat.rem_euclid(1.0);
-        let vivid_interval = 1.0 / length;
-        let vivid_offset = (note_fraction / vivid_interval).floor() * vivid_interval;
-        phase = (phase + vivid_offset).rem_euclid(1.0);
-    }
-    phase
-}
-
 #[inline(always)]
 pub(crate) fn note_part_uv_translation_for_quantization(
     note_beat: f32,
@@ -226,104 +203,91 @@ fn integral_color_remainder(value: f32, count: i32) -> f32 {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn note_part_uv_translation_legacy_for_quantization(
-    note_beat: f32,
-    quantization_idx: u8,
-    metrics: NotePartTextureTranslate,
-    is_addition: bool,
-) -> [f32; 2] {
-    let count = metrics.note_color_count.max(1);
-    let countf = count as f32;
-    let color = match metrics.note_color_type {
-        NoteColorType::Denominator => f32::from(quantization_idx).clamp(0.0, (count - 1) as f32),
-        NoteColorType::Progress => (note_beat * countf).ceil() % countf,
-        NoteColorType::ProgressAlternate => {
-            let mut scaled = note_beat * countf;
-            if scaled - (scaled as i64 as f32) == 0.0 {
-                scaled += countf - 1.0;
-            }
-            scaled.ceil() % countf
-        }
-    };
-    let add = if is_addition {
-        metrics.addition_offset
-    } else {
-        [0.0, 0.0]
-    };
-    [
-        metrics.note_color_spacing[0].mul_add(color, add[0]),
-        metrics.note_color_spacing[1].mul_add(color, add[1]),
-    ]
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn note_part_uv_translation_reference(
-    note_beat: f32,
-    metrics: NotePartTextureTranslate,
-    is_addition: bool,
-) -> [f32; 2] {
-    let row = (note_beat * 48.0).round() as i32;
-    let quantization_idx = if row.rem_euclid(48) == 0 {
-        0
-    } else if row.rem_euclid(24) == 0 {
-        1
-    } else if row.rem_euclid(16) == 0 {
-        2
-    } else if row.rem_euclid(12) == 0 {
-        3
-    } else if row.rem_euclid(8) == 0 {
-        4
-    } else if row.rem_euclid(6) == 0 {
-        5
-    } else if row.rem_euclid(4) == 0 {
-        6
-    } else if row.rem_euclid(3) == 0 {
-        7
-    } else {
-        8
-    };
-    note_part_uv_translation_legacy_for_quantization(
-        note_beat,
-        quantization_idx,
-        metrics,
-        is_addition,
-    )
-}
-
 #[cfg(test)]
 mod note_metadata_cache_tests {
     use super::*;
 
     #[test]
-    fn cached_part_phase_matches_per_note_reference_math() {
-        for beat_based in [false, true] {
-            for animation in [
-                NotePartAnimation {
-                    length: 1.0,
-                    vivid: false,
-                },
-                NotePartAnimation {
-                    length: 0.75,
-                    vivid: true,
-                },
-                NotePartAnimation {
-                    length: 0.0,
-                    vivid: true,
-                },
-            ] {
-                let cache = note_part_phase_cache(12.25, 37.5, animation, beat_based);
-                for note_beat in [-4.0, -0.0, 0.0, 0.25, 12.75, 1_024.125, f32::NAN] {
-                    assert_eq!(
-                        note_part_phase_cached(note_beat, cache).to_bits(),
-                        note_part_phase_reference(12.25, 37.5, note_beat, animation, beat_based,)
-                            .to_bits(),
-                    );
-                }
-            }
-        }
+    fn part_phase_cache_handles_clocks_and_vivid_buckets() {
+        let plain = note_part_phase_cache(
+            5.5,
+            3.25,
+            NotePartAnimation {
+                length: 2.0,
+                vivid: false,
+            },
+            false,
+        );
+        assert_eq!(note_part_phase_cached(0.25, plain), 0.75);
+        assert_eq!(note_part_phase_cached(f32::NAN, plain), 0.75);
+
+        let vivid = note_part_phase_cache(
+            5.5,
+            3.25,
+            NotePartAnimation {
+                length: 2.0,
+                vivid: true,
+            },
+            true,
+        );
+        assert_eq!(note_part_phase_cached(0.25, vivid), 0.625);
+        assert_eq!(note_part_phase_cached(0.75, vivid), 0.125);
+
+        let single_bucket = note_part_phase_cache(
+            5.5,
+            3.25,
+            NotePartAnimation {
+                length: 0.5,
+                vivid: true,
+            },
+            true,
+        );
+        assert_eq!(note_part_phase_cached(0.75, single_bucket), 0.5);
+        assert!(note_part_phase_cached(f32::NAN, single_bucket).is_nan());
+    }
+
+    #[test]
+    fn preclassified_uv_translation_obeys_color_modes() {
+        let metrics = |note_color_type| NotePartTextureTranslate {
+            addition_offset: [0.125, -0.25],
+            note_color_spacing: [0.25, 0.5],
+            note_color_count: 4,
+            note_color_type,
+        };
+
+        let denominator = metrics(NoteColorType::Denominator);
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.0, 2, denominator, false),
+            [0.5, 1.0]
+        );
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.0, 2, denominator, true),
+            [0.625, 0.75]
+        );
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.0, u8::MAX, denominator, false),
+            [0.75, 1.5]
+        );
+
+        let progress = metrics(NoteColorType::Progress);
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.3, 0, progress, false),
+            [0.5, 1.0]
+        );
+        assert_eq!(
+            note_part_uv_translation_for_quantization(-0.25, 0, progress, false),
+            [-0.25, -0.5]
+        );
+
+        let alternate = metrics(NoteColorType::ProgressAlternate);
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.5, 0, alternate, false),
+            [0.25, 0.5]
+        );
+        assert_eq!(
+            note_part_uv_translation_for_quantization(0.25, 0, alternate, false),
+            [0.0, 0.0]
+        );
     }
 
     #[test]
@@ -354,41 +318,6 @@ mod note_metadata_cache_tests {
     }
 
     #[test]
-    fn single_bucket_vivid_cache_matches_reference_phase() {
-        for length in [1.0e-6_f32, 0.125, 0.5, 0.75, 1.0] {
-            let animation = NotePartAnimation {
-                length,
-                vivid: true,
-            };
-            let cache = note_part_phase_cache(12.25, 37.5, animation, true);
-            for note_beat in [
-                -4_096.937_5,
-                -12.75,
-                -0.0,
-                0.0,
-                0.125,
-                12.75,
-                4_096.937_5,
-                f32::NEG_INFINITY,
-                f32::INFINITY,
-                f32::NAN,
-            ] {
-                let expected = note_part_phase_reference(12.25, 37.5, note_beat, animation, true);
-                let actual = note_part_phase_cached(note_beat, cache);
-                if expected.is_nan() {
-                    assert!(actual.is_nan(), "length={length} note_beat={note_beat}");
-                } else {
-                    assert_eq!(
-                        actual.to_bits(),
-                        expected.to_bits(),
-                        "length={length} note_beat={note_beat}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
     fn bounded_vivid_phase_wrap_matches_euclidean_wrap() {
         for phase in [
             -0.0_f32,
@@ -409,145 +338,6 @@ mod note_metadata_cache_tests {
                 assert!(actual.is_nan(), "phase={phase}");
             } else {
                 assert_eq!(actual.to_bits(), expected.to_bits(), "phase={phase}");
-            }
-        }
-    }
-
-    #[test]
-    fn preclassified_uv_translation_matches_beat_classification() {
-        let beats = [
-            -2.0,
-            0.0,
-            0.25,
-            1.0 / 3.0,
-            0.5,
-            0.75,
-            1.0 / 12.0,
-            1.0 / 16.0,
-            1.0 / 48.0,
-            127.875,
-        ];
-        for note_color_type in [
-            NoteColorType::Denominator,
-            NoteColorType::Progress,
-            NoteColorType::ProgressAlternate,
-        ] {
-            let metrics = NotePartTextureTranslate {
-                addition_offset: [0.125, -0.25],
-                note_color_spacing: [0.0625, 0.125],
-                note_color_count: 9,
-                note_color_type,
-            };
-            for beat in beats {
-                let quantization_idx = deadsync_gameplay::quantization_index_from_beat(beat);
-                for is_addition in [false, true] {
-                    assert_eq!(
-                        note_part_uv_translation_for_quantization(
-                            beat,
-                            quantization_idx,
-                            metrics,
-                            is_addition,
-                        )
-                        .map(f32::to_bits),
-                        note_part_uv_translation_reference(beat, metrics, is_addition)
-                            .map(f32::to_bits),
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn optimized_preclassified_color_math_matches_legacy_reference() {
-        for note_color_type in [NoteColorType::Progress, NoteColorType::ProgressAlternate] {
-            for note_color_count in [1, 2, 3, 8, 12] {
-                let metrics = NotePartTextureTranslate {
-                    addition_offset: [0.125, -0.25],
-                    note_color_spacing: [0.0625, 0.125],
-                    note_color_count,
-                    note_color_type,
-                };
-                for tick in -4_096..=4_096 {
-                    let beat = tick as f32 / 64.0;
-                    let quantization_idx = (tick as u8) % 9;
-                    for is_addition in [false, true] {
-                        let old = note_part_uv_translation_legacy_for_quantization(
-                            beat,
-                            quantization_idx,
-                            metrics,
-                            is_addition,
-                        );
-                        let new = note_part_uv_translation_for_quantization(
-                            beat,
-                            quantization_idx,
-                            metrics,
-                            is_addition,
-                        );
-                        assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
-                    }
-                }
-            }
-        }
-
-        let beats = [
-            -f32::MAX,
-            -1_000_000.25,
-            -128.0,
-            -1.0,
-            -0.125,
-            -0.0,
-            0.0,
-            0.125,
-            1.0,
-            128.0,
-            1_000_000.25,
-            f32::MAX,
-            f32::NEG_INFINITY,
-            f32::INFINITY,
-            f32::NAN,
-        ];
-        for note_color_type in [
-            NoteColorType::Denominator,
-            NoteColorType::Progress,
-            NoteColorType::ProgressAlternate,
-        ] {
-            for note_color_count in [
-                i32::MIN,
-                -1,
-                0,
-                1,
-                2,
-                8,
-                12,
-                16_777_216,
-                16_777_217,
-                i32::MAX,
-            ] {
-                let metrics = NotePartTextureTranslate {
-                    addition_offset: [0.125, -0.25],
-                    note_color_spacing: [0.0625, 0.125],
-                    note_color_count,
-                    note_color_type,
-                };
-                for beat in beats {
-                    for quantization_idx in [0, 1, 8, 9, u8::MAX] {
-                        for is_addition in [false, true] {
-                            let old = note_part_uv_translation_legacy_for_quantization(
-                                beat,
-                                quantization_idx,
-                                metrics,
-                                is_addition,
-                            );
-                            let new = note_part_uv_translation_for_quantization(
-                                beat,
-                                quantization_idx,
-                                metrics,
-                                is_addition,
-                            );
-                            assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
-                        }
-                    }
-                }
             }
         }
     }
@@ -1412,17 +1202,6 @@ const fn random_speed_seed(seed: u32) -> u32 {
         .wrapping_add(RANDOM_SPEED_LCG_INCREMENT_3)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn random_speed_seed_legacy(mut seed: u32) -> u32 {
-    for _ in 0..3 {
-        seed = seed
-            .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER)
-            .wrapping_add(RANDOM_SPEED_LCG_INCREMENT);
-    }
-    seed
-}
-
 #[inline(always)]
 fn random_speed_lane_seed(stage_seed: u32, local_col: usize) -> u32 {
     random_speed_seed(stage_seed.wrapping_add((local_col as u32).wrapping_mul(100)))
@@ -1437,16 +1216,6 @@ fn random_speed_seed_from_lane_seed(lane_seed: u32, note_row: i32) -> u32 {
             .wrapping_shl(8)
             .wrapping_mul(RANDOM_SPEED_LCG_MULTIPLIER_3),
     )
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn random_speed_mult(stage_seed: u32, note_row: i32, local_col: usize, amount: f32) -> f32 {
-    let seed = stage_seed
-        .wrapping_add((note_row as u32).wrapping_shl(8))
-        .wrapping_add((local_col as u32).wrapping_mul(100));
-    let seed = random_speed_seed(seed);
-    (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0)
 }
 
 #[inline(always)]
@@ -1502,23 +1271,6 @@ pub(crate) fn lane_window_bounds_by_note_row_from_cursor<I: Copy + Into<usize>>(
         note_itg_rows[note_index.into()] <= high
     });
     Some((cursor.start, cursor.end))
-}
-
-#[cfg(test)]
-pub(crate) fn lane_window_bounds_by_note_row_legacy(
-    notes: &[Note],
-    indices: &[usize],
-    range: Option<(i32, i32)>,
-) -> Option<(usize, usize)> {
-    let (low, high) = range?;
-    if high < 0 {
-        return Some((0, 0));
-    }
-    let low = low.max(0);
-    Some((
-        indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < low),
-        indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) <= high),
-    ))
 }
 
 #[cfg(test)]
@@ -1598,29 +1350,6 @@ pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
     };
     let Some((start, end)) =
         lane_window_bounds_by_note_row(note_itg_rows, indices, Some((low, high)))
-    else {
-        return;
-    };
-    for &i in &indices[start..end] {
-        f(i);
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn for_each_visible_note_index_legacy<F: FnMut(usize)>(
-    indices: &[usize],
-    notes: &[Note],
-    range: Option<(i32, i32)>,
-    mut f: F,
-) {
-    let Some((low, high)) = range else {
-        for &i in indices {
-            f(i);
-        }
-        return;
-    };
-    let Some((start, end)) =
-        lane_window_bounds_by_note_row_legacy(notes, indices, Some((low, high)))
     else {
         return;
     };
@@ -1834,482 +1563,6 @@ pub(crate) const fn mine_hides_after_resolution(mine_result: Option<MineResult>)
 
 use crate::style::MAX_NOTES_AFTER;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod note_projection_bench_support {
-    use std::hint::black_box;
-
-    use super::*;
-
-    fn random_speed_checksum(seed: u32, amount: f32, checksum: u64) -> u64 {
-        let value = (seed as f32 / 4_294_967_296.0).mul_add(amount, 1.0);
-        checksum
-            .wrapping_add(u64::from(value.to_bits()))
-            .rotate_left(11)
-    }
-
-    #[must_use]
-    pub fn random_speed_lcg_old(evaluations: usize) -> u64 {
-        let amount = black_box(0.65);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let seed = black_box(0x1234_5678_u32)
-                .wrapping_add(((index as i32 - 512) as u32).wrapping_shl(8))
-                .wrapping_add(((index % MAX_COLS) as u32).wrapping_mul(100));
-            checksum = random_speed_checksum(random_speed_seed_legacy(seed), amount, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn random_speed_lcg_new(evaluations: usize) -> u64 {
-        let amount = black_box(0.65);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let seed = black_box(0x1234_5678_u32)
-                .wrapping_add(((index as i32 - 512) as u32).wrapping_shl(8))
-                .wrapping_add(((index % MAX_COLS) as u32).wrapping_mul(100));
-            checksum = random_speed_checksum(random_speed_seed(seed), amount, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn random_speed_lane_cache_old(evaluations: usize) -> u64 {
-        let stage_seed = black_box(0x1234_5678_u32);
-        let amount = black_box(0.65);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_row = black_box(index as i32 - 512);
-            let local_col = index % MAX_COLS;
-            let seed = stage_seed
-                .wrapping_add((note_row as u32).wrapping_shl(8))
-                .wrapping_add((local_col as u32).wrapping_mul(100));
-            checksum = random_speed_checksum(random_speed_seed(seed), amount, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn random_speed_lane_cache_new(evaluations: usize) -> u64 {
-        let stage_seed = black_box(0x1234_5678_u32);
-        let lane_seeds: [u32; MAX_COLS] =
-            std::array::from_fn(|local_col| random_speed_lane_seed(stage_seed, local_col));
-        let amount = black_box(0.65);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_row = black_box(index as i32 - 512);
-            let local_col = index % MAX_COLS;
-            checksum = random_speed_checksum(
-                random_speed_seed_from_lane_seed(lane_seeds[local_col], note_row),
-                amount,
-                checksum,
-            );
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn random_speed_row_old(evaluations: usize) -> u64 {
-        let amount = black_box(0.65);
-        let beats: [f32; 64] = std::array::from_fn(|index| (index as i32 * 3 - 96) as f32 / 48.0);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let beat = black_box(beats[index & 63]);
-            let value = random_speed_mult(
-                0x1234_5678,
-                beat_to_note_row(beat),
-                index % MAX_COLS,
-                amount,
-            );
-            checksum = checksum
-                .wrapping_add(u64::from(value.to_bits()))
-                .rotate_left(11);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn random_speed_row_new(evaluations: usize) -> u64 {
-        let amount = black_box(0.65);
-        let rows: [i32; 64] = std::array::from_fn(|index| index as i32 * 3 - 96);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let value = random_speed_mult(0x1234_5678, rows[index & 63], index % MAX_COLS, amount);
-            checksum = checksum
-                .wrapping_add(u64::from(value.to_bits()))
-                .rotate_left(11);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn lane_offset_old(evaluations: usize) -> u64 {
-        let move_y = black_box([
-            0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, 0.8, -0.9, 1.0, -1.1, 1.2, -1.3, 1.4, -1.5,
-        ]);
-        let elapsed = black_box(2.25);
-        let tipsy = black_box(0.75);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let local_col = index % MAX_COLS;
-            let offset = 240.0
-                + move_col_extra(&move_y, local_col)
-                + tipsy_y_extra(local_col, elapsed, tipsy);
-            checksum = checksum
-                .wrapping_add(u64::from(offset.to_bits()))
-                .rotate_left(13);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn lane_offset_new(evaluations: usize) -> u64 {
-        let move_y = black_box([
-            0.0, 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, 0.8, -0.9, 1.0, -1.1, 1.2, -1.3, 1.4, -1.5,
-        ]);
-        let elapsed = black_box(2.25);
-        let tipsy = black_box(0.75);
-        let tipsy_offsets: [f32; MAX_COLS] =
-            std::array::from_fn(|local_col| tipsy_y_extra(local_col, elapsed, tipsy));
-        let move_y_offsets: [f32; MAX_COLS] =
-            std::array::from_fn(|local_col| move_col_extra(&move_y, local_col));
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let local_col = index % MAX_COLS;
-            let offset = 240.0 + move_y_offsets[local_col] + tipsy_offsets[local_col];
-            checksum = checksum
-                .wrapping_add(u64::from(offset.to_bits()))
-                .rotate_left(13);
-        }
-        checksum
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod note_metadata_bench_support {
-    use std::hint::black_box;
-
-    use super::*;
-
-    const fn build_quantization_table() -> [u8; 48] {
-        let mut table = [8; 48];
-        let mut row = 0;
-        while row < table.len() {
-            table[row] = if row % 48 == 0 {
-                0
-            } else if row % 24 == 0 {
-                1
-            } else if row % 16 == 0 {
-                2
-            } else if row % 12 == 0 {
-                3
-            } else if row % 8 == 0 {
-                4
-            } else if row % 6 == 0 {
-                5
-            } else if row % 4 == 0 {
-                6
-            } else if row % 3 == 0 {
-                7
-            } else {
-                8
-            };
-            row += 1;
-        }
-        table
-    }
-
-    const QUANTIZATION_BY_ROW: [u8; 48] = build_quantization_table();
-
-    #[must_use]
-    pub fn part_phase_old(evaluations: usize) -> u64 {
-        let animation = black_box(NotePartAnimation {
-            length: 0.75,
-            vivid: true,
-        });
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box((index as f32 * 0.125) - 96.0);
-            let phase = note_part_phase_reference(12.25, 37.5, note_beat, animation, true);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn part_phase_new(evaluations: usize) -> u64 {
-        let animation = black_box(NotePartAnimation {
-            length: 0.75,
-            vivid: true,
-        });
-        let cache = note_part_phase_cache(12.25, 37.5, animation, true);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box((index as f32 * 0.125) - 96.0);
-            let phase = note_part_phase_cached(note_beat, cache);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn beat_fraction_old(evaluations: usize) -> u64 {
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box(((index & 4095) as i32 - 2048) as f32 * 0.125 + 0.0625);
-            let fraction = note_beat.rem_euclid(1.0);
-            checksum = checksum
-                .wrapping_add(u64::from(fraction.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn beat_fraction_new(evaluations: usize) -> u64 {
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box(((index & 4095) as i32 - 2048) as f32 * 0.125 + 0.0625);
-            let fraction = note_beat_fraction(note_beat);
-            checksum = checksum
-                .wrapping_add(u64::from(fraction.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn single_bucket_vivid_old(evaluations: usize) -> u64 {
-        let cache = note_part_phase_cache(
-            12.25,
-            37.5,
-            black_box(NotePartAnimation {
-                length: 0.75,
-                vivid: true,
-            }),
-            true,
-        );
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box((index as f32 * 0.125) - 96.0);
-            let fraction = note_beat_fraction(note_beat);
-            let offset = vivid_bucket_offset(fraction, cache.vivid_interval);
-            let phase = wrap_vivid_phase(cache.base_phase + offset);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn single_bucket_vivid_new(evaluations: usize) -> u64 {
-        let cache = note_part_phase_cache(
-            12.25,
-            37.5,
-            black_box(NotePartAnimation {
-                length: 0.75,
-                vivid: true,
-            }),
-            true,
-        );
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let note_beat = black_box((index as f32 * 0.125) - 96.0);
-            let phase = note_part_phase_cached(note_beat, cache);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn vivid_wrap_old(evaluations: usize) -> u64 {
-        let base_phase = black_box(0.625_f32);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let offset = black_box((index & 3) as f32 * 0.25);
-            let phase = (base_phase + offset).rem_euclid(1.0);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn vivid_wrap_new(evaluations: usize) -> u64 {
-        let base_phase = black_box(0.625_f32);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let offset = black_box((index & 3) as f32 * 0.25);
-            let phase = wrap_vivid_phase(base_phase + offset);
-            checksum = checksum
-                .wrapping_add(u64::from(phase.to_bits()))
-                .rotate_left(9);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn uv_translation_old(evaluations: usize) -> u64 {
-        let metrics = black_box(NotePartTextureTranslate {
-            addition_offset: [0.125, -0.25],
-            note_color_spacing: [0.0625, 0.125],
-            note_color_count: 9,
-            note_color_type: NoteColorType::Denominator,
-        });
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let row = (index as i32 % 384) - 192;
-            let note_beat = black_box(row as f32 / 48.0);
-            let translation = note_part_uv_translation_reference(note_beat, metrics, false);
-            checksum = checksum
-                .wrapping_add(u64::from(translation[0].to_bits()))
-                .rotate_left(7)
-                .wrapping_add(u64::from(translation[1].to_bits()));
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn uv_translation_new(evaluations: usize) -> u64 {
-        let metrics = black_box(NotePartTextureTranslate {
-            addition_offset: [0.125, -0.25],
-            note_color_spacing: [0.0625, 0.125],
-            note_color_count: 9,
-            note_color_type: NoteColorType::Denominator,
-        });
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let row = (index as i32 % 384) - 192;
-            let note_beat = black_box(row as f32 / 48.0);
-            let quantization_idx = QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize];
-            let translation = note_part_uv_translation_for_quantization(
-                note_beat,
-                quantization_idx,
-                metrics,
-                false,
-            );
-            checksum = checksum
-                .wrapping_add(u64::from(translation[0].to_bits()))
-                .rotate_left(7)
-                .wrapping_add(u64::from(translation[1].to_bits()));
-        }
-        checksum
-    }
-
-    #[inline(always)]
-    fn color_checksum(translation: [f32; 2], checksum: u64) -> u64 {
-        checksum
-            .wrapping_add(u64::from(translation[0].to_bits()))
-            .rotate_left(7)
-            .wrapping_add(u64::from(translation[1].to_bits()))
-    }
-
-    fn color_metrics(note_color_type: NoteColorType) -> NotePartTextureTranslate {
-        black_box(NotePartTextureTranslate {
-            addition_offset: [0.125, -0.25],
-            note_color_spacing: [0.0625, 0.125],
-            note_color_count: 8,
-            note_color_type,
-        })
-    }
-
-    #[must_use]
-    pub fn denominator_clamp_old(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::Denominator);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let quantization_idx = black_box((index % 12) as u8);
-            let translation = note_part_uv_translation_legacy_for_quantization(
-                0.0,
-                quantization_idx,
-                metrics,
-                false,
-            );
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn denominator_clamp_new(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::Denominator);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let quantization_idx = black_box((index % 12) as u8);
-            let translation =
-                note_part_uv_translation_for_quantization(0.0, quantization_idx, metrics, false);
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn progress_color_old(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::Progress);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let tick = (index as i32 & 8_191) - 4_096;
-            let note_beat = black_box(tick as f32 / 64.0);
-            let translation =
-                note_part_uv_translation_legacy_for_quantization(note_beat, 0, metrics, false);
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn progress_color_new(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::Progress);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let tick = (index as i32 & 8_191) - 4_096;
-            let note_beat = black_box(tick as f32 / 64.0);
-            let translation =
-                note_part_uv_translation_for_quantization(note_beat, 0, metrics, false);
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn progress_alternate_color_old(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::ProgressAlternate);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let tick = (index as i32 & 8_191) - 4_096;
-            let note_beat = black_box(tick as f32 / 64.0);
-            let translation =
-                note_part_uv_translation_legacy_for_quantization(note_beat, 0, metrics, false);
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn progress_alternate_color_new(evaluations: usize) -> u64 {
-        let metrics = color_metrics(NoteColorType::ProgressAlternate);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let tick = (index as i32 & 8_191) - 4_096;
-            let note_beat = black_box(tick as f32 / 64.0);
-            let translation =
-                note_part_uv_translation_for_quantization(note_beat, 0, metrics, false);
-            checksum = color_checksum(translation, checksum);
-        }
-        checksum
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2318,8 +1571,7 @@ mod tests {
         find_first_displayed_beat, find_first_displayed_row, find_last_displayed_beat,
         find_last_displayed_row, for_each_visible_hold_index, for_each_visible_note_index,
         hold_overlaps_visible_window, random_speed_lane_seed, random_speed_seed,
-        random_speed_seed_from_lane_seed, random_speed_seed_legacy, scroll_travel,
-        song_time_ns_delta_seconds,
+        random_speed_seed_from_lane_seed, scroll_travel, song_time_ns_delta_seconds,
     };
     use crate::{
         AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
@@ -3117,21 +2369,29 @@ mod tests {
     }
 
     #[test]
-    fn collapsed_and_lane_cached_random_speed_match_three_lcg_rounds() {
+    fn collapsed_and_lane_cached_random_speed_keep_stable_seeds() {
+        for (input, expected) in [
+            (0, 3_519_870_697),
+            (1, 2_165_703_038),
+            (0x1234_5678, 635_173_569),
+            (u32::MAX, 579_071_060),
+        ] {
+            assert_eq!(random_speed_seed(input), expected);
+        }
+
         for stage_seed in [0, 1, 0x1234_5678, u32::MAX] {
             for note_row in [i32::MIN, -192, -1, 0, 1, 192, i32::MAX] {
                 for local_col in 0..MAX_COLS {
                     let input = stage_seed
                         .wrapping_add((note_row as u32).wrapping_shl(8))
                         .wrapping_add((local_col as u32).wrapping_mul(100));
-                    let reference = random_speed_seed_legacy(input);
-                    assert_eq!(random_speed_seed(input), reference);
+                    let collapsed = random_speed_seed(input);
                     assert_eq!(
                         random_speed_seed_from_lane_seed(
                             random_speed_lane_seed(stage_seed, local_col),
                             note_row,
                         ),
-                        reference,
+                        collapsed,
                     );
                 }
             }

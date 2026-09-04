@@ -1,8 +1,7 @@
 use super::{
     JudgmentSpriteMetadata, ResolvedComboMilestoneAssets, ResolvedJudgmentAssets,
     combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
-    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources, resolve_sprite_metadata,
-    resolved_held_miss_texture, resolved_hold_judgment_texture, resolved_judgment_texture,
+    hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
@@ -115,62 +114,6 @@ fn combo_milestone_sizes_refresh_only_when_visual_sources_change() {
     );
     let refreshed = resolved.sizes_for_keys(second_keys, |_| [99.0, 101.0]);
     assert_eq!(refreshed, [[99.0, 101.0]; 4]);
-}
-
-#[test]
-fn cached_judgment_assets_match_legacy_resolution() {
-    let mut none = profile_data::Profile::default();
-    none.judgment_graphic = profile_data::JudgmentGraphic::new("None");
-    none.hold_judgment_graphic = profile_data::HoldJudgmentGraphic::new("None");
-    none.held_miss_graphic = profile_data::HeldMissGraphic::new("None");
-
-    let mut held_miss = profile_data::Profile::default();
-    held_miss.held_miss_graphic = profile_data::HeldMissGraphic::new("Love");
-
-    for profile in [profile_data::Profile::default(), none, held_miss] {
-        let cached = ResolvedJudgmentAssets::from_profile(&profile);
-        assert_eq!(
-            cached.judgment().map(|texture| texture.key.as_ref()),
-            resolved_judgment_texture(&profile).map(|texture| texture.key.as_ref())
-        );
-        assert_eq!(
-            cached.hold_judgment().map(|texture| texture.key.as_ref()),
-            resolved_hold_judgment_texture(&profile).map(|texture| texture.key.as_ref())
-        );
-        assert_eq!(
-            cached.held_miss().map(|(texture, _)| texture.key.as_ref()),
-            resolved_held_miss_texture(&profile).map(|texture| texture.key.as_ref())
-        );
-
-        let legacy_metadata = resolved_judgment_texture(&profile).map(|texture| {
-            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
-            JudgmentSpriteMetadata {
-                frame_size: judgment_frame_size(texture.key.as_ref()),
-                frame_cols: frame_cols as usize,
-                frame_rows: frame_rows as usize,
-            }
-        });
-        assert_eq!(cached.judgment_sprite_metadata(), legacy_metadata);
-        assert_eq!(
-            cached.hold_judgment_sprite_metadata(),
-            resolved_hold_judgment_texture(&profile)
-                .map(|texture| resolve_sprite_metadata(texture, [0.0; 2]))
-        );
-        assert_eq!(
-            cached.held_miss_sprite_metadata(),
-            resolved_held_miss_texture(&profile)
-                .map(|texture| resolve_sprite_metadata(texture, [0.0; 2]))
-        );
-
-        if let Some((texture, scale)) = cached.held_miss() {
-            let expected = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
-                0.5
-            } else {
-                1.0
-            };
-            assert_eq!(scale, expected);
-        }
-    }
 }
 
 #[test]

@@ -15,9 +15,8 @@ const GAMEPLAY_LAYOUT_SLOT: u8 = 1;
 /// integer per sync, performs no locking or background work, and is dropped with
 /// its screen. A slot overwrites its prior layout when the visible second changes;
 /// there is no scan or eviction. Only values too large for 14 inline bytes fall
-/// back to shared heap text. Focused format tests and the screen allocation
-/// benchmark instrument the path; worst-case normal synchronization is fixed-size
-/// decimal formatting.
+/// back to shared heap text. Focused format tests cover the path; worst-case
+/// normal synchronization is fixed-size decimal formatting.
 #[derive(Clone, Debug)]
 pub struct TimerText {
     second: u64,

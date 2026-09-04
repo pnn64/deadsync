@@ -118,16 +118,6 @@ fn pane3_solid_arrow_mask_key(texture_key: &str) -> Pane3SolidArrowMaskKey {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn pane3_solid_arrow_mask_key_legacy(texture_key: &str) -> String {
-    let mut hasher = XxHash64::default();
-    hasher.write(texture_key.as_bytes());
-    format!(
-        "{PANE3_SOLID_ARROW_MASK_KEY_PREFIX}{:016x}",
-        hasher.finish()
-    )
-}
-
 fn pane3_solid_arrow_texture(texture_key: &str) -> Arc<str> {
     let key = pane3_solid_arrow_mask_key(texture_key);
     if let Some(key) = assets::generated_texture_shared_key(key.as_str()) {
@@ -1188,7 +1178,7 @@ pub(crate) fn push_pane3_arrow_preview(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 pub(crate) fn build_pane3_arrow_preview(
     noteskin: &deadsync_assets::noteskin::Noteskin,
     col_idx: usize,
@@ -1210,156 +1200,12 @@ pub(crate) fn build_pane3_arrow_preview(
     actors
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub struct ColumnPaneCacheBenchmark {
-    columns: [ColumnJudgments; 4],
-    noteskin: deadsync_assets::noteskin::Noteskin,
-    presentation: ColumnPanePresentation,
-    asset_manager: AssetManager,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ColumnPaneCacheBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let columns = std::array::from_fn(|index| ColumnJudgments {
-            w0: 100 + index as u32,
-            w1: 200 + index as u32,
-            w2: 30 + index as u32,
-            w3: 4 + index as u32,
-            w4: 2,
-            w5: 1,
-            miss: index as u32,
-            early_w1: 80,
-            early_w2: 12,
-            early_w3: 2,
-            early_w4: 1,
-            early_w5: 1,
-            early_total_w4: 3,
-            early_total_w5: 2,
-            held_miss: index as u32,
-            ..ColumnJudgments::default()
-        });
-        let noteskin = deadsync_assets::noteskin::load_itg_default(&deadsync_noteskin::Style {
-            num_cols: 4,
-            num_players: 1,
-        })
-        .expect("bundled dance noteskin should load");
-        let inputs = ColumnPaneInputs {
-            columns: &columns,
-            noteskin: Some(&noteskin),
-            show_fa_plus_rows: true,
-            track_early_judgments: true,
-            disabled_timing_windows: [false; 5],
-        };
-        let presentation = ColumnPanePresentation::from_inputs(inputs);
-        let fixture = Self {
-            columns,
-            noteskin,
-            presentation,
-            asset_manager: super::benchmark_asset_manager(),
-        };
-        let mut warm = Vec::with_capacity(1);
-        let _ = fixture.retained_frame(&mut warm);
-        fixture
-    }
-
-    fn inputs(&self) -> ColumnPaneInputs<'_> {
-        ColumnPaneInputs {
-            columns: &self.columns,
-            noteskin: Some(&self.noteskin),
-            show_fa_plus_rows: true,
-            track_early_judgments: true,
-            disabled_timing_windows: [false; 5],
-        }
-    }
-
-    fn benchmark_texture_key(&self) -> &str {
-        self.noteskin
-            .note_layers
-            .iter()
-            .flat_map(|layers| layers.iter())
-            .next()
-            .expect("benchmark noteskin should contain a tap-note layer")
-            .texture_key()
-    }
-
-    #[must_use]
-    pub fn legacy_mask_key(&self) -> Arc<str> {
-        let key = pane3_solid_arrow_mask_key_legacy(self.benchmark_texture_key());
-        assert!(
-            assets::texture_dims(&key).is_some(),
-            "benchmark generated mask should be primed"
-        );
-        Arc::from(key)
-    }
-
-    #[must_use]
-    pub fn shared_mask_key(&self) -> Arc<str> {
-        pane3_solid_arrow_texture(self.benchmark_texture_key())
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        out.extend(build_column_judgments_pane_from_inputs(
-            self.inputs(),
-            profile_data::PlayerSide::P1,
-            profile_data::PlayerSide::P1,
-            &self.asset_manager,
-            1.25,
-            false,
-            JudgmentPalette::default(),
-        ));
-        std::hint::black_box(&*out);
-        column_actor_count(out)
-    }
-
-    #[must_use]
-    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_cached_column_judgments_pane_from_inputs(
-            out,
-            &self.presentation,
-            self.inputs(),
-            profile_data::PlayerSide::P1,
-            profile_data::PlayerSide::P1,
-            &self.asset_manager,
-            1.25,
-            false,
-            JudgmentPalette::default(),
-        );
-        std::hint::black_box(&*out);
-        column_actor_count(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for ColumnPaneCacheBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn column_actor_count(actors: &[Actor]) -> u64 {
-    actors
-        .iter()
-        .map(|actor| match actor {
-            Actor::Frame { children, .. } => column_actor_count(children),
-            Actor::SharedFrame { children, .. } => column_actor_count(children),
-            _ => 1,
-        })
-        .sum()
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
-        ColumnPaneCacheBenchmark, FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts,
-        RowKind, STANDARD_ROWS, build_pane3_arrow_preview, column_row_counts,
-        pane3_solid_arrow_mask_key, pane3_solid_arrow_mask_key_legacy, pane3_width, row_disabled,
+        FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, STANDARD_ROWS,
+        build_pane3_arrow_preview, column_row_counts, pane3_width, row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::actors::Actor;
@@ -1367,22 +1213,6 @@ mod tests {
     use deadsync_assets::noteskin::load_itg_default;
     use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
-    use std::sync::Arc;
-
-    #[test]
-    fn stack_arrow_mask_keys_match_legacy_formatting() {
-        for texture_key in [
-            "noteskins/pump/default/DownLeft Tap Note 8x4.png",
-            "noteskins/dance/love/Left Tap Note.png",
-            "short.png",
-            "",
-        ] {
-            assert_eq!(
-                pane3_solid_arrow_mask_key(texture_key).as_str(),
-                pane3_solid_arrow_mask_key_legacy(texture_key)
-            );
-        }
-    }
 
     #[test]
     fn static_column_rows_preserve_judgment_order_and_labels() {
@@ -1566,45 +1396,5 @@ mod tests {
             })
         };
         assert_ne!(first_uv(&at_start), first_uv(&at_next_frame));
-    }
-
-    #[test]
-    fn retained_column_pane_matches_direct_and_reuses_its_buffer() {
-        let fixture = ColumnPaneCacheBenchmark::new();
-        let mut direct = Vec::new();
-        let mut retained = Vec::with_capacity(1);
-        assert_eq!(
-            fixture.direct_frame(&mut direct),
-            fixture.retained_frame(&mut retained),
-        );
-        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
-            panic!("expected retained column pane in one shared frame");
-        };
-        let [
-            Actor::Frame {
-                children: retained_actors,
-                ..
-            },
-        ] = children.as_ref()
-        else {
-            panic!("expected reusable identity frame inside column pane");
-        };
-        assert_eq!(format!("{direct:#?}"), format!("{retained_actors:#?}"));
-
-        let source_ptr = Arc::as_ptr(children).cast::<()>() as usize;
-        retained.clear();
-        let _ = fixture.retained_frame(&mut retained);
-        let [
-            Actor::SharedFrame {
-                children: repeated, ..
-            },
-        ] = retained.as_slice()
-        else {
-            panic!("expected repeated retained column pane");
-        };
-        assert_eq!(source_ptr, Arc::as_ptr(repeated).cast::<()>() as usize);
-        let stats = fixture.presentation.scratch.borrow().stats();
-        assert_eq!(stats.growths, 0);
-        assert_eq!(stats.replacements, 0);
     }
 }

@@ -361,100 +361,7 @@ pub fn push_stutter(actors: &mut Vec<Actor>, events: &[VisibleStutterSample]) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn legacy_ms_text(ns: u64) -> String {
-    if ns == 0 {
-        "n/a".to_string()
-    } else {
-        format!("{:.2}ms", ns as f64 / 1_000_000.0)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn legacy_timing_text(timing: TimingHealth) -> String {
-    let mut text = format!(
-        "Disp err {:+.2}ms catch:{}\nPresent int {}\nMode {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
-        timing.display_error_ms,
-        flag(timing.display_catching_up),
-        legacy_ms_text(timing.interval_ns),
-        timing.present_mode,
-        timing.display_clock,
-        timing.host_clock,
-        flag(timing.host_mapped),
-        timing.in_flight_images,
-        flag(timing.waited_for_image),
-        flag(timing.applied_back_pressure),
-        flag(timing.queue_idle_waited),
-        flag(timing.suboptimal),
-        timing.submitted_present_id,
-        timing.completed_present_id,
-        legacy_ms_text(timing.calibration_error_ns),
-    );
-    if let Some(audio) = timing.audio {
-        let _ = write!(
-            text,
-            "\nAudio {} {}Hz req {} fb:{}\nClk {} {} sf:{} cf:{} out {} xr {}\nBuf {} pad {} q {} tick {} span {}",
-            audio.backend,
-            audio.sample_rate_hz,
-            audio.requested_output_mode,
-            flag(audio.fallback_from_native),
-            audio.timing_clock,
-            audio.timing_quality,
-            audio.timing_sanity_failure_count,
-            audio.clock_fallback_count,
-            legacy_ms_text(audio.estimated_output_delay_ns),
-            audio.underrun_count,
-            audio.buffer_frames,
-            audio.padding_frames,
-            audio.queued_frames,
-            legacy_ms_text(audio.device_period_ns),
-            legacy_ms_text(audio.stream_latency_ns),
-        );
-    }
-    text
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_timing_text_legacy(timing: TimingHealth) -> String {
-    legacy_timing_text(timing)
-}
-
 /// Exact owned-string implementation used immediately before retained telemetry text.
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_timing_text_prepass(timing: TimingHealth) -> String {
-    timing_text(timing)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_timing_text_current(timing: TimingHealth) -> Arc<str> {
-    retained_timing_text(timing)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_build_legacy(
-    backend: BackendType,
-    fps: f32,
-    vpf: u32,
-    timing: Option<TimingHealth>,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(2);
-    push(&mut actors, backend, fps, vpf, timing);
-    actors
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_build_stutter_legacy(events: &[VisibleStutterSample]) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(events.len() + 1);
-    push_stutter(&mut actors, events);
-    actors
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -499,23 +406,6 @@ mod tests {
     }
 
     #[test]
-    fn one_pass_timing_text_matches_legacy_output() {
-        for timing in [timing(false), timing(true)] {
-            assert_eq!(
-                retained_timing_text(timing).as_ref(),
-                legacy_timing_text(timing)
-            );
-        }
-        let mut zero = timing(false);
-        zero.interval_ns = 0;
-        zero.calibration_error_ns = 0;
-        assert_eq!(
-            retained_timing_text(zero).as_ref(),
-            legacy_timing_text(zero)
-        );
-    }
-
-    #[test]
     fn timing_text_reuses_exact_sources_and_refreshes_changed_values() {
         let source = timing(true);
         let first = retained_timing_text(source);
@@ -527,32 +417,5 @@ mod tests {
         let refreshed = retained_timing_text(changed);
         assert!(!Arc::ptr_eq(&first, &refreshed));
         assert_ne!(first.as_ref(), refreshed.as_ref());
-        assert_eq!(refreshed.as_ref(), legacy_timing_text(changed));
-    }
-
-    #[test]
-    fn direct_overlay_append_matches_owned_builders() {
-        let stutters = [VisibleStutterSample {
-            timestamp_seconds: 61.25,
-            frame_ms: 33.3,
-            frame_multiple: 2.0,
-            severity: 2,
-            age_seconds: 0.4,
-        }];
-        let mut expected =
-            benchmark_build_legacy(BackendType::OpenGL, 120.0, 42, Some(timing(true)));
-        expected.extend(benchmark_build_stutter_legacy(&stutters));
-
-        let mut actual = Vec::new();
-        push(
-            &mut actual,
-            BackendType::OpenGL,
-            120.0,
-            42,
-            Some(timing(true)),
-        );
-        push_stutter(&mut actual, &stutters);
-
-        assert_eq!(format!("{actual:#?}"), format!("{expected:#?}"));
     }
 }

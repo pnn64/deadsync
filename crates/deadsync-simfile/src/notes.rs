@@ -96,35 +96,6 @@ pub(crate) fn parse_chart_notes_as_with_capacity<T>(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub(crate) fn parse_chart_notes_legacy(
-    minimized_note_data: &[u8],
-    lanes: usize,
-) -> Vec<ParsedNote> {
-    let note_capacity = minimized_note_data
-        .iter()
-        .filter(|&&ch| {
-            matches!(
-                ch,
-                b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
-            )
-        })
-        .count();
-    let mut hold_heads = vec![None; lanes.max(1)];
-    parse_chart_notes_with_heads(
-        minimized_note_data,
-        &mut hold_heads,
-        note_capacity,
-        |row_index, column, note_type| ParsedNote {
-            row_index,
-            column,
-            note_type,
-            tail_row_index: None,
-        },
-        |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
-    )
-}
-
 fn parse_chart_notes_with_heads<T>(
     minimized_note_data: &[u8],
     hold_heads: &mut [Option<usize>],
@@ -211,8 +182,7 @@ fn parse_chart_notes_with_heads<T>(
 #[cfg(test)]
 mod tests {
     use super::{
-        ParsedNote, parse_chart_notes, parse_chart_notes_as_with_capacity,
-        parse_chart_notes_legacy, step_type_lanes,
+        ParsedNote, parse_chart_notes, parse_chart_notes_as_with_capacity, step_type_lanes,
     };
     use deadsync_core::note::NoteType;
 
@@ -295,22 +265,6 @@ mod tests {
                 tail_row_index: Some(2),
             }]
         );
-    }
-
-    #[test]
-    fn stack_hold_state_matches_legacy_heap_parsing() {
-        let fixtures: &[(&[u8], usize)] = &[
-            (b"2000\n0100\n3000\nM00L\nF000\n", 4),
-            (b"2400000000\n0030000000\n0000300000\n1000000001\n", 10),
-            (b"200000000000\n300000000000\n000000000001\n", 12),
-        ];
-        for &(notes, lanes) in fixtures {
-            assert_eq!(
-                parse_chart_notes(notes, lanes),
-                parse_chart_notes_legacy(notes, lanes),
-                "note parsing diverged for {lanes} lanes"
-            );
-        }
     }
 
     #[test]

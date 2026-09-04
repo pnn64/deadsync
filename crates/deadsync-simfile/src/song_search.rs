@@ -92,28 +92,6 @@ pub fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> Strin
     out
 }
 
-/// Pre-optimization five-scan formatter retained for benchmark comparisons.
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn song_search_difficulties_text_reference(song: &SongData, chart_type: &str) -> String {
-    const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
-    let mut out = String::new();
-    for difficulty in ORDER {
-        if let Some(chart) = song.charts.iter().find(|chart| {
-            chart.chart_type.eq_ignore_ascii_case(chart_type)
-                && chart.difficulty.eq_ignore_ascii_case(difficulty)
-        }) {
-            if out.is_empty() {
-                out.reserve(32);
-            } else {
-                out.push_str("   ");
-            }
-            write!(out, "{}", chart.meter).expect("writing to a String cannot fail");
-        }
-    }
-    if out.is_empty() { "-".to_string() } else { out }
-}
-
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     let mut filter = SongSearchFilter::default();
     let mut stripped = String::with_capacity(input.len());
@@ -192,18 +170,6 @@ pub fn parse_song_search_live(input: &str) -> SongSearchLiveQuery {
     }
 }
 
-/// Pre-optimization copying parser retained for benchmark comparisons.
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn parse_song_search_live_reference(input: &str) -> SongSearchLiveQuery {
-    let filter = parse_song_search_filter(input);
-    SongSearchLiveQuery {
-        text: filter.terms.trim().to_string(),
-        difficulty: filter.difficulty,
-        bpm_tier: filter.bpm_tier,
-    }
-}
-
 /// Whether `song` has the chart type and passes the `[###]` filters. Title
 /// matching is the ranker's job, not this predicate's.
 #[must_use]
@@ -231,55 +197,6 @@ pub fn song_passes_search_filters(
         }
     }
     if !has_chart_type || !has_difficulty {
-        return false;
-    }
-
-    if let Some(want_tier) = bpm_tier {
-        let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
-            return false;
-        };
-        let mut lo = song_search_bpm_tier(bpm_lo);
-        let mut hi = song_search_bpm_tier(bpm_hi);
-        if lo > hi {
-            std::mem::swap(&mut lo, &mut hi);
-        }
-        if lo == hi {
-            if want_tier != lo {
-                return false;
-            }
-        } else if want_tier < lo || want_tier > hi {
-            return false;
-        }
-    }
-
-    true
-}
-
-/// Pre-optimization predicate retained only for exact benchmark comparisons.
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-#[inline]
-pub fn song_passes_search_filters_reference(
-    song: &SongData,
-    chart_type: &str,
-    difficulty: Option<u8>,
-    bpm_tier: Option<i32>,
-) -> bool {
-    if !song
-        .charts
-        .iter()
-        .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
-    {
-        return false;
-    }
-
-    if let Some(diff) = difficulty
-        && !song.charts.iter().any(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type)
-                && !c.difficulty.eq_ignore_ascii_case("edit")
-                && c.meter == u32::from(diff)
-        })
-    {
         return false;
     }
 
@@ -595,25 +512,6 @@ mod tests {
     }
 
     #[test]
-    fn live_query_move_path_matches_copying_reference() {
-        for input in [
-            "",
-            "   ",
-            "Song",
-            "  FINALs/[12]SoNG [180] Mix  ",
-            "[999999999999999999999999]Overflow",
-            "Pack/[x]ÄBC",
-            "\u{2003}[35] Unicode Mix\u{2002}",
-        ] {
-            assert_eq!(
-                parse_song_search_live(input),
-                parse_song_search_live_reference(input),
-                "input={input:?}",
-            );
-        }
-    }
-
-    #[test]
     fn pack_and_song_terms_filter_candidates() {
         let alpha = test_song_with_bpm("Alpha", "128", 128.0, 128.0);
         let beta = test_song_with_bpm("Beta", "128", 128.0, 128.0);
@@ -684,50 +582,6 @@ mod tests {
     }
 
     #[test]
-    fn live_filter_matches_double_scan_reference() {
-        let mut varied = (*test_song_with_bpm("Varied", "120:180", 120.0, 180.0)).clone();
-        let mut easy = test_chart("dance-single");
-        easy.difficulty = "Easy".to_string();
-        easy.meter = 5;
-        let mut edit = test_chart("dance-single");
-        edit.difficulty = "Edit".to_string();
-        edit.meter = 12;
-        let mut hard = test_chart("dance-single");
-        hard.difficulty = "Hard".to_string();
-        hard.meter = 12;
-        varied.charts = vec![easy, edit, test_chart("dance-double"), hard];
-
-        let mut no_bpm = (*test_song("No BPM", "")).clone();
-        no_bpm.charts = vec![test_chart("dance-single")];
-        no_bpm.display_bpm.clear();
-        no_bpm.min_bpm = 0.0;
-        no_bpm.max_bpm = 0.0;
-
-        let empty = test_song("Empty", "");
-        let songs = [Arc::new(varied), Arc::new(no_bpm), empty];
-        let chart_types = ["dance-single", "dance-double", "pump-single"];
-        let difficulties = [None, Some(5), Some(12), Some(13)];
-        let bpm_tiers = [None, Some(120), Some(150), Some(180), Some(200)];
-
-        for song in &songs {
-            for chart_type in chart_types {
-                for difficulty in difficulties {
-                    for bpm_tier in bpm_tiers {
-                        assert_eq!(
-                            song_passes_search_filters(song, chart_type, difficulty, bpm_tier),
-                            song_passes_search_filters_reference(
-                                song, chart_type, difficulty, bpm_tier,
-                            ),
-                            "song={:?} type={chart_type} difficulty={difficulty:?} bpm={bpm_tier:?}",
-                            song.title,
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
     fn difficulties_text_uses_standard_order() {
         let mut song = (*test_song("Song", "")).clone();
         let mut hard = test_chart("dance-single");
@@ -748,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn single_pass_difficulties_preserve_first_chart_and_type_filtering() {
+    fn difficulties_preserve_first_chart_and_type_filtering() {
         let mut song = (*test_song("Song", "")).clone();
         let mut charts = Vec::new();
         for (chart_type, difficulty, meter) in [
@@ -772,14 +626,7 @@ mod tests {
             song_search_difficulties_text(&song, "dance-single"),
             "2   5   9   12   14"
         );
-        assert_eq!(
-            song_search_difficulties_text(&song, "dance-single"),
-            song_search_difficulties_text_reference(&song, "dance-single")
-        );
-        assert_eq!(
-            song_search_difficulties_text(&song, "pump-single"),
-            song_search_difficulties_text_reference(&song, "pump-single")
-        );
+        assert_eq!(song_search_difficulties_text(&song, "pump-single"), "99");
     }
 
     #[test]

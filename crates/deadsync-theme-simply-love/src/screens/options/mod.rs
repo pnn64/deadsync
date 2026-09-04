@@ -87,17 +87,11 @@ pub use reload::sync_reload_events;
 use reload::*;
 mod score_import;
 use score_import::*;
-#[cfg(any(test, feature = "bench-support"))]
-pub use score_import::{ScoreImportOverlayBenchmark, ScoreImportPickerBenchmark};
 mod apply_replaygain;
-#[cfg(any(test, feature = "bench-support"))]
-pub use apply_replaygain::ReplayGainOverlayBenchmark;
 use apply_replaygain::*;
 mod pack_sync;
 pub(crate) mod qr_login;
 use pack_sync::*;
-#[cfg(any(test, feature = "bench-support"))]
-pub use qr_login::QrOverlayBenchmark;
 mod download_packs;
 use download_packs::*;
 mod judgment_palettes;
@@ -113,13 +107,9 @@ mod render;
 use render::*;
 
 // Public API re-exports
-#[cfg(any(test, feature = "bench-support"))]
-pub use crate::screens::pack_sync::PackSyncOverlayBenchmark;
 pub use download_packs::sync_stepmaniaonline;
 pub use input::handle_input;
 pub use layout::clear_submenu_row_layout_cache;
-#[cfg(any(test, feature = "bench-support"))]
-pub use render::{OptionsModalAppendBenchmark, OptionsOverlayHotBenchmark};
 pub use render::{
     clear_description_layout_cache, clear_render_cache, get_actors, push_actors,
     sync_updater_panels,

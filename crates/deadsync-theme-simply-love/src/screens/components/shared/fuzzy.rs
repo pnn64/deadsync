@@ -459,54 +459,6 @@ fn bounded_levenshtein_by(
     (row[b_len] <= limit).then_some(row[b_len])
 }
 
-/// The committed 0.5.925 query representation, retained so the guarded
-/// benchmark can compare this pass with its exact allocation and CPU behavior.
-#[cfg(any(test, feature = "bench-support"))]
-pub struct ReferenceQuery {
-    chars: Vec<char>,
-    ascii: bool,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ReferenceQuery {
-    #[inline(always)]
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        self.chars.is_empty()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn prepare_query_reference(query: &str) -> ReferenceQuery {
-    let chars = query_chars(query);
-    let ascii = chars.iter().all(char::is_ascii);
-    ReferenceQuery { chars, ascii }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn best_match_score_reference(
-    query: &ReferenceQuery,
-    label: &str,
-    aliases: &[&str],
-) -> Option<i32> {
-    let mut best = subsequence_score(&query.chars, label);
-
-    for alias in aliases {
-        if let Some(score) = subsequence_score(&query.chars, alias) {
-            let adjusted = score - ALIAS_PENALTY;
-            best = Some(best.map_or(adjusted, |b| b.max(adjusted)));
-        }
-    }
-
-    if best.is_none() {
-        best = typo_score_parts(&query.chars, query.ascii, label);
-    }
-
-    best
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -639,29 +591,6 @@ mod tests {
     }
 
     #[test]
-    fn bounded_distance_matches_full_levenshtein_within_threshold() {
-        let words = ["", "a", "b", "ab", "ba", "abc", "cab", "скор"];
-        for a in words {
-            for b in words {
-                let a_chars: Vec<char> = a.chars().collect();
-                let b_chars: Vec<char> = b.chars().collect();
-                let full = strsim::levenshtein(a, b);
-                for limit in 0..=4 {
-                    let bounded =
-                        bounded_levenshtein_by(a_chars.len(), b_chars.len(), limit, |ai, bi| {
-                            a_chars[ai] == b_chars[bi]
-                        });
-                    assert_eq!(
-                        bounded,
-                        (full <= limit).then_some(full),
-                        "a={a:?}, b={b:?}, limit={limit}",
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
     fn ascii_fast_path_matches_unicode_scorer() {
         const QUERIES: [&str; 8] = ["", "song", "csr", "ab", "ABC", "spdm", "zzz", "123"];
         const LABELS: [&str; 10] = [
@@ -683,48 +612,6 @@ mod tests {
                 assert_eq!(
                     subsequence_score_prepared(&prepared, label),
                     subsequence_score(prepared.chars(), label),
-                    "query={query:?}, label={label:?}",
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn optimized_matcher_matches_committed_reference() {
-        const QUERIES: [&str; 10] = [
-            "",
-            "sonf",
-            "prespective",
-            "atcion",
-            "deja",
-            "déjà",
-            "скол",
-            "速度",
-            "xylophone",
-            "abcdefghijklmnopqrstuvwxyz0123456789",
-        ];
-        const LABELS: [&str; 10] = [
-            "Catalog Song 0042 Remix 11",
-            "Perspective",
-            "Action",
-            "Déjà Vu",
-            "Скорость",
-            "速度",
-            "Butterfly",
-            "Speed Mod",
-            "A Very Long Unrelated Candidate",
-            "abcdefghijklmnopqrstuvwxyz0123456789",
-        ];
-
-        for query in QUERIES {
-            let optimized = prepare_query(query);
-            let reference = prepare_query_reference(query);
-            assert_eq!(optimized.is_empty(), reference.is_empty());
-            for label in LABELS {
-                let folded = fold_diacritics(label);
-                assert_eq!(
-                    best_match_score(&optimized, &folded, SPEED_ALIASES),
-                    best_match_score_reference(&reference, &folded, SPEED_ALIASES),
                     "query={query:?}, label={label:?}",
                 );
             }

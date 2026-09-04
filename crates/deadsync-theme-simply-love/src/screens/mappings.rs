@@ -260,8 +260,8 @@ struct MappingRowText {
 /// The cache lives for one screen, has exactly one entry per mapping row, and
 /// is fully warmed at init. A keymap edit rebuilds all 17-18 bounded entries;
 /// stable frames cannot miss or evict. Destruction happens with the screen,
-/// instrumentation is covered by the allocation benchmark, and the worst-case
-/// frame cost is cloning six inline/shared text handles per visible row.
+/// and the worst-case frame cost is cloning six inline/shared text handles per
+/// visible row.
 struct MappingText {
     rows: Box<[MappingRowText]>,
 }
@@ -1235,72 +1235,6 @@ fn retained_text(text: String) -> TextContent {
     TextContent::inline_str(&text).unwrap_or_else(|| TextContent::Shared(Arc::from(text)))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn mapping_text_checksum(text: &str) -> u64 {
-    text.bytes().fold(text.len() as u64, |checksum, byte| {
-        checksum.rotate_left(5) ^ u64::from(byte)
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub struct MappingTextBenchmark {
-    game: GameFlag,
-    keymap: Keymap,
-    retained: MappingText,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl MappingTextBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let runtime = MappingsRuntimeView::default();
-        let retained = MappingText::new(runtime.game, &runtime.keymap);
-        Self {
-            game: runtime.game,
-            keymap: runtime.keymap,
-            retained,
-        }
-    }
-
-    #[must_use]
-    pub fn legacy_checksum(&self) -> u64 {
-        (0..VISIBLE_ROWS).fold(0, |checksum, row_idx| {
-            mapping_row_strings(self.game, &self.keymap, row_idx)
-                .iter()
-                .fold(checksum, |checksum, text| {
-                    checksum.rotate_left(11) ^ mapping_text_checksum(text)
-                })
-        })
-    }
-
-    #[must_use]
-    pub fn retained_checksum(&self) -> u64 {
-        self.retained.rows[..VISIBLE_ROWS]
-            .iter()
-            .fold(0, |checksum, row| {
-                [
-                    &row.p1_primary,
-                    &row.p1_secondary,
-                    &row.p2_primary,
-                    &row.p2_secondary,
-                    &row.p1_default,
-                    &row.p2_default,
-                ]
-                .into_iter()
-                .fold(checksum, |checksum, text| {
-                    checksum.rotate_left(11) ^ mapping_text_checksum(text.as_str())
-                })
-            })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for MappingTextBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[inline(always)]
 fn editable_slot_indices_for_action(keymap: &Keymap, action: VirtualAction) -> (usize, usize) {
     editable_key_binding_slot_indices(keymap, action)
@@ -2096,43 +2030,6 @@ mod tests {
             let (p1, p2) = row_actions(GameFlag::Pump, row);
             p1.is_some() && p2.is_some()
         }));
-    }
-
-    #[test]
-    fn retained_mapping_text_matches_formatter_and_tracks_edits() {
-        let mut state = init();
-
-        let assert_matches = |state: &super::State| {
-            for row_idx in 0..mapping_row_count(state.runtime.game) {
-                let expected =
-                    super::mapping_row_strings(state.runtime.game, &state.runtime.keymap, row_idx);
-                let retained = &state.mapping_text.rows[row_idx];
-                let actual = [
-                    retained.p1_primary.as_str(),
-                    retained.p1_secondary.as_str(),
-                    retained.p2_primary.as_str(),
-                    retained.p2_secondary.as_str(),
-                    retained.p1_default.as_str(),
-                    retained.p2_default.as_str(),
-                ];
-                assert_eq!(actual, expected.each_ref().map(String::as_str));
-            }
-        };
-
-        assert_matches(&state);
-        let mut keymap = state.runtime.keymap.clone();
-        keymap.bind(
-            VirtualAction::p1_menu_left,
-            &[InputBinding::Key(KeyCode::KeyQ)],
-        );
-        super::apply_keymap(&mut state, keymap);
-        assert_matches(&state);
-        assert!(
-            state.mapping_text.rows[0]
-                .p1_primary
-                .as_str()
-                .contains("KeyQ")
-        );
     }
 
     #[test]

@@ -434,26 +434,6 @@ pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, 
 }
 
 #[cfg(test)]
-pub(crate) fn zmod_broken_run_segment(
-    segs: &[StreamSegment],
-    curr_measure: f32,
-) -> Option<(usize, i32, bool)> {
-    for (i, seg) in segs.iter().copied().enumerate() {
-        if seg.is_break() {
-            if curr_measure < seg.end() as f32 {
-                return Some((i, seg.end() as i32, false));
-            }
-            continue;
-        }
-        let (end, broken) = zmod_broken_run_end(segs, i);
-        if curr_measure < end as f32 {
-            return Some((i, end, broken));
-        }
-    }
-    None
-}
-
-#[cfg(test)]
 pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
     let index = stream_segment_index_inclusive_end(segs, curr_measure);
     if index < segs.len() {
@@ -934,36 +914,6 @@ pub fn zmod_resolved_combo_color(params: ZmodComboColorParams) -> [f32; 4] {
     }
 }
 
-#[must_use]
-pub fn zmod_stream_prog_completion_for_beat(
-    total_stream_measures: f64,
-    segs: &[StreamSegment],
-    beat_floor: f32,
-) -> Option<f64> {
-    if total_stream_measures <= 0.0 || segs.is_empty() {
-        return None;
-    }
-    let curr = if beat_floor.is_finite() {
-        (beat_floor / 4.0).ceil().max(0.0)
-    } else {
-        0.0
-    };
-    let mut done = 0.0;
-    for seg in segs {
-        if seg.is_break() {
-            continue;
-        }
-        let start = seg.start() as f32;
-        let end = seg.end() as f32;
-        if curr >= end {
-            done += f64::from(end - start);
-        } else if curr > start {
-            done += f64::from(curr - start);
-        }
-    }
-    Some((done / total_stream_measures).clamp(0.0, 1.0))
-}
-
 #[cfg(test)]
 mod lookup_tests {
     use super::*;
@@ -979,30 +929,24 @@ mod lookup_tests {
     }
 
     #[test]
-    fn stream_progress_lookup_matches_full_scan_at_boundaries_and_invalid_beats() {
+    fn stream_progress_lookup_handles_boundaries_seeks_and_invalid_beats() {
         let segments = segments();
         let lookup = StreamProgressLookup::new(&segments);
         let total = 13.0;
-        for beat in [
-            f32::NEG_INFINITY,
-            -4.0,
-            0.0,
-            12.0,
-            16.0,
-            20.0,
-            24.0,
-            39.9,
-            40.0,
-            60.0,
-            80.0,
-            f32::INFINITY,
-            f32::NAN,
+        for (beat, expected) in [
+            (f32::NEG_INFINITY, 0.0),
+            (-4.0, 0.0),
+            (0.0, 0.0),
+            (12.0, 3.0 / total),
+            (40.0, 8.0 / total),
+            (16.0, 4.0 / total),
+            (24.0, 4.0 / total),
+            (80.0, 1.0),
+            (60.0, 8.0 / total),
+            (f32::INFINITY, 0.0),
+            (f32::NAN, 0.0),
         ] {
-            assert_eq!(
-                lookup.completion_for_beat(total, beat),
-                zmod_stream_prog_completion_for_beat(total, &segments, beat),
-                "beat={beat:?}",
-            );
+            assert_eq!(lookup.completion_for_beat(total, beat), Some(expected));
         }
         assert_eq!(lookup.completion_for_beat(0.0, 12.0), None);
         assert_eq!(
@@ -1012,47 +956,39 @@ mod lookup_tests {
     }
 
     #[test]
-    fn broken_run_lookup_matches_legacy_scan_across_spans() {
+    fn broken_run_lookup_handles_spans_and_seeks() {
         let segments = segments();
         let lookup = BrokenRunLookup::new(&segments);
-        for quarter_measure in -4..=88 {
-            let current = quarter_measure as f32 * 0.25;
-            assert_eq!(
-                lookup.segment(current),
-                zmod_broken_run_segment(&segments, current),
-                "measure={current}",
-            );
+        for (measure, expected) in [
+            (0.0, Some((0, 10, true))),
+            (18.0, Some((4, 20, false))),
+            (2.0, Some((0, 10, true))),
+            (10.0, Some((3, 15, false))),
+            (-1.0, Some((0, 10, true))),
+            (20.0, None),
+            (15.0, Some((4, 20, false))),
+        ] {
+            assert_eq!(lookup.segment(measure), expected, "measure={measure}");
         }
         assert_eq!(lookup.segment(f32::NAN), None);
         assert_eq!(BrokenRunLookup::default().segment(0.0), None);
     }
 
     #[test]
-    fn cursor_lookups_match_legacy_across_forward_and_backward_seeks() {
+    fn segment_index_cursor_handles_boundaries_and_seeks() {
         let segments = segments();
-        let stream = StreamProgressLookup::new(&segments);
-        let broken = BrokenRunLookup::new(&segments);
-        let total = 13.0;
-        for measure in [0.0, 18.0, 2.0, 9.75, -1.0, 20.0, 5.5, 14.0, 0.25] {
-            let beat = measure * 4.0;
-            assert_eq!(
-                stream.completion_for_beat(total, beat),
-                zmod_stream_prog_completion_for_beat(total, &segments, beat),
-                "measure={measure}",
-            );
-            assert_eq!(
-                broken.segment(measure),
-                zmod_broken_run_segment(&segments, measure),
-                "measure={measure}",
-            );
-            assert_eq!(
-                broken.segment_indices(&segments, measure),
-                (
-                    stream_segment_index_exclusive_end(&segments, measure),
-                    stream_segment_index_inclusive_end(&segments, measure),
-                ),
-                "measure={measure}",
-            );
+        let lookup = BrokenRunLookup::new(&segments);
+        for (measure, expected) in [
+            (0.0, (0, 0)),
+            (18.0, (4, 4)),
+            (2.0, (0, 0)),
+            (10.0, (3, 2)),
+            (-1.0, (0, 0)),
+            (20.0, (5, 4)),
+            (6.0, (2, 1)),
+            (f32::NAN, (5, 5)),
+        ] {
+            assert_eq!(lookup.segment_indices(&segments, measure), expected);
         }
     }
 

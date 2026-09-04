@@ -263,73 +263,6 @@ pub(crate) fn push(
     }
 }
 
-/// Old/new actor-staging fixture for the retained updater panel. The legacy
-/// side models the former temporary `Vec` handoff; the current side appends
-/// into caller-owned frame storage.
-#[cfg(any(test, feature = "bench-support"))]
-pub struct PanelAppendBenchmark {
-    content: PanelContent,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl PanelAppendBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            content: PanelContent::new(
-                "Update available".to_owned(),
-                Some("v9.9.9".to_owned()),
-                vec![
-                    "A new DeadSync release is ready.".to_owned(),
-                    "Install it now?".to_owned(),
-                ],
-                "Press Start to continue".to_owned(),
-                None,
-                false,
-            ),
-        }
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self, actors: &mut Vec<Actor>) -> u64 {
-        actors.clear();
-        let mut staged = Vec::with_capacity(8);
-        push_panel(&mut staged, &self.content, 2);
-        actors.extend(staged);
-        std::hint::black_box(&*actors);
-        panel_actor_checksum(actors)
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, actors: &mut Vec<Actor>) -> u64 {
-        actors.clear();
-        push_panel(actors, &self.content, 2);
-        std::hint::black_box(&*actors);
-        panel_actor_checksum(actors)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for PanelAppendBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn panel_actor_checksum(actors: &[Actor]) -> u64 {
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        if let Actor::Text { content, z, .. } = actor {
-            content.bytes().fold(
-                checksum.rotate_left(5) ^ (*z as u16 as u64) ^ content.len() as u64,
-                |hash, byte| hash.rotate_left(7) ^ u64::from(byte),
-            )
-        } else {
-            checksum.rotate_left(3) ^ 1
-        }
-    })
-}
-
 /// Animated spinner sprite, frame derived from wall-clock time so the
 /// renderer doesn't need to thread per-overlay state through every
 /// build call.  Reuses the 10×3 spritesheet from the evaluation
@@ -784,19 +717,6 @@ fn format_sha256_short(raw: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn direct_panel_append_matches_temporary_staging() {
-        let benchmark = PanelAppendBenchmark::new();
-        let mut legacy = Vec::with_capacity(8);
-        let mut direct = Vec::with_capacity(8);
-
-        assert_eq!(
-            benchmark.legacy_frame(&mut legacy),
-            benchmark.direct_frame(&mut direct)
-        );
-        assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
-    }
 
     fn build_phase(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
         let content = prepare(phase);

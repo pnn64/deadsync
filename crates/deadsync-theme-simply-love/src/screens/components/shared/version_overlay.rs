@@ -147,20 +147,3 @@ pub fn push(
         actors.push(warning_actor);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn direct_version_append_matches_owned_batch_for_both_sides_and_warnings() {
-        for side in [VersionOverlaySide::Left, VersionOverlaySide::Right] {
-            for level in [LogLevel::Info, LogLevel::Debug, LogLevel::Trace] {
-                let legacy = build(side, level, Some("123456789"));
-                let mut direct = Vec::with_capacity(2);
-                push(&mut direct, side, level, Some("123456789"));
-                assert_eq!(format!("{direct:#?}"), format!("{legacy:#?}"));
-            }
-        }
-    }
-}

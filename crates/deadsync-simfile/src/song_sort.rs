@@ -149,33 +149,6 @@ fn fill_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec
     meters.dedup();
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn song_meters_for_sort_reference(song: &SongData, chart_type: &str) -> Vec<u32> {
-    let mut meters = Vec::new();
-    let mut has_non_edit = false;
-    for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
-            continue;
-        }
-        if !chart.difficulty.eq_ignore_ascii_case("edit") {
-            if !has_non_edit {
-                meters.clear();
-                meters.reserve(song.charts.len());
-                has_non_edit = true;
-            }
-            meters.push(chart.meter);
-        } else if !has_non_edit {
-            if meters.is_empty() {
-                meters.reserve(song.charts.len());
-            }
-            meters.push(chart.meter);
-        }
-    }
-    meters.sort_unstable();
-    meters.dedup();
-    meters
-}
-
 #[must_use]
 pub fn title_grouped_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     alpha_grouped_songs(
@@ -188,19 +161,6 @@ pub fn title_grouped_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
         },
         SongSortGroup::Title,
     )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn title_grouped_songs_reference(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    songs.sort_by(|left, right| {
-        title_group_bucket(left)
-            .cmp(&title_group_bucket(right))
-            .then_with(|| song_title_cmp(left, right))
-            .then_with(|| left.title.cmp(&right.title))
-            .then_with(|| left.subtitle.cmp(&right.subtitle))
-    });
-    grouped_contiguous_songs(songs, |song| SongSortGroup::Title(title_group_bucket(song)))
 }
 
 #[must_use]
@@ -220,26 +180,6 @@ pub fn artist_grouped_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
         },
         SongSortGroup::Artist,
     )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn artist_grouped_songs_reference(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    songs.sort_by(|left, right| {
-        alpha_group_bucket_from_text(&left.artist)
-            .cmp(&alpha_group_bucket_from_text(&right.artist))
-            .then_with(|| cmp_ignore_ascii_case(&left.artist, &right.artist))
-            .then_with(|| {
-                cmp_ignore_ascii_case(
-                    left.simfile_path.to_string_lossy().as_ref(),
-                    right.simfile_path.to_string_lossy().as_ref(),
-                )
-            })
-            .then_with(|| song_title_cmp(left, right))
-    });
-    grouped_contiguous_songs(songs, |song| {
-        SongSortGroup::Artist(alpha_group_bucket_from_text(&song.artist))
-    })
 }
 
 #[must_use]
@@ -299,33 +239,6 @@ fn grouped_genre_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
         });
     }
     groups
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn genre_grouped_songs_reference(
-    mut songs: Vec<Arc<SongData>>,
-    unknown_genre_label: &str,
-) -> Vec<GroupedSongs> {
-    songs.sort_by(|left, right| {
-        let left_genre = left.genre.trim();
-        let left_name = if left_genre.is_empty() {
-            unknown_genre_label
-        } else {
-            &left.genre
-        };
-        let right_genre = right.genre.trim();
-        let right_name = if right_genre.is_empty() {
-            unknown_genre_label
-        } else {
-            &right.genre
-        };
-        cmp_ignore_ascii_case(left_name, right_name).then_with(|| song_title_cmp(left, right))
-    });
-    grouped_contiguous_songs(songs, |song| {
-        let genre = song.genre.trim();
-        SongSortGroup::Genre((!genre.is_empty()).then(|| song.genre.clone()))
-    })
 }
 
 #[must_use]
@@ -409,38 +322,6 @@ pub fn meter_grouped_songs(songs: Vec<Arc<SongData>>, chart_type: &str) -> Vec<G
         });
     }
     groups
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn meter_grouped_songs_reference(
-    songs: Vec<Arc<SongData>>,
-    chart_type: &str,
-) -> Vec<GroupedSongs> {
-    let mut buckets: BTreeMap<Option<u32>, Vec<Arc<SongData>>> = BTreeMap::new();
-    for song in songs {
-        let meters = song_meters_for_sort_reference(song.as_ref(), chart_type);
-        if meters.is_empty() {
-            buckets.entry(None).or_default().push(song);
-        } else {
-            for meter in meters {
-                buckets.entry(Some(meter)).or_default().push(song.clone());
-            }
-        }
-    }
-
-    let mut buckets: Vec<(Option<u32>, Vec<Arc<SongData>>)> = buckets.into_iter().collect();
-    buckets.sort_by_key(|(meter, _)| (meter.is_none(), meter.unwrap_or(0)));
-    buckets
-        .into_iter()
-        .map(|(meter, mut songs)| {
-            songs.sort_by(|left, right| song_title_cmp(left, right));
-            GroupedSongs {
-                group: SongSortGroup::Meter(meter),
-                songs,
-            }
-        })
-        .collect()
 }
 
 #[must_use]
@@ -599,17 +480,6 @@ mod tests {
         }
     }
 
-    fn assert_grouped_eq(actual: Vec<GroupedSongs>, expected: Vec<GroupedSongs>) {
-        assert_eq!(actual.len(), expected.len());
-        for (actual, expected) in actual.into_iter().zip(expected) {
-            assert_eq!(actual.group, expected.group);
-            assert_eq!(actual.songs.len(), expected.songs.len());
-            for (actual, expected) in actual.songs.iter().zip(&expected.songs) {
-                assert_eq!(actual.simfile_path, expected.simfile_path);
-            }
-        }
-    }
-
     #[test]
     fn song_title_sort_key_prefers_translit_and_path_tiebreaker() {
         let mut song = test_song();
@@ -657,66 +527,12 @@ mod tests {
             test_chart("Medium", 7, false),
         ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![11, 13]);
-        assert_eq!(
-            song_meters_for_sort(&song, "dance-single"),
-            song_meters_for_sort_reference(&song, "dance-single")
-        );
-
         song.charts = vec![
             test_chart("Edit", 19, true),
             test_chart("Edit", 21, true),
             test_chart("Edit", 19, true),
         ];
         assert_eq!(song_meters_for_sort(&song, "dance-single"), vec![19, 21]);
-        assert_eq!(
-            song_meters_for_sort(&song, "dance-single"),
-            song_meters_for_sort_reference(&song, "dance-single")
-        );
-    }
-
-    #[test]
-    fn grouped_sort_optimizations_match_allocating_references() {
-        let genres = ["Pop", "pop", "Rock", "", "   ", "Electronic"];
-        let artists = ["Shared Artist", "shared artist", "Other Artist"];
-        let mut songs = Vec::new();
-        for index in 0usize..96 {
-            let mut song = test_song();
-            song.title = format!("Title {:03}", index.wrapping_mul(37) % 96);
-            song.artist = artists[index % artists.len()].to_string();
-            song.genre = genres[index % genres.len()].to_string();
-            song.simfile_path = PathBuf::from(format!(
-                "Pack {:02}/Song {:03}/chart.ssc",
-                index % 8,
-                95 - index
-            ));
-            song.charts = vec![
-                test_chart("Edit", 17 + (index % 3) as u32, true),
-                test_chart("Hard", 7 + (index % 5) as u32, index % 9 != 0),
-                test_chart("Challenge", 10 + (index % 4) as u32, true),
-                test_chart("Challenge", 10 + (index % 4) as u32, true),
-            ];
-            if index == 0 {
-                song.charts.push(test_chart("Challenge", 512, true));
-            }
-            songs.push(Arc::new(song));
-        }
-
-        assert_grouped_eq(
-            title_grouped_songs(songs.clone()),
-            title_grouped_songs_reference(songs.clone()),
-        );
-        assert_grouped_eq(
-            artist_grouped_songs(songs.clone()),
-            artist_grouped_songs_reference(songs.clone()),
-        );
-        assert_grouped_eq(
-            genre_grouped_songs(songs.clone(), "Unknown Genre"),
-            genre_grouped_songs_reference(songs.clone(), "Unknown Genre"),
-        );
-        assert_grouped_eq(
-            meter_grouped_songs(songs.clone(), "dance-single"),
-            meter_grouped_songs_reference(songs, "dance-single"),
-        );
     }
 
     #[test]

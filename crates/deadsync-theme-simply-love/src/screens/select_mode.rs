@@ -32,25 +32,6 @@ const ARROW_H: f32 = 20.0;
 const ARROW_PAD_Y: f32 = 5.0;
 const ARROW_SPRITE_SZ: f32 = 150.0;
 
-#[cfg(any(test, feature = "bench-support"))]
-fn choice_labels_legacy() -> [String; 3] {
-    [
-        tr("SelectMode", "Regular").to_string(),
-        tr("SelectMode", "Marathon").to_string(),
-        tr("SelectMode", "PremiumFree").to_string(),
-    ]
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn choice_description_legacy(choice: Choice) -> String {
-    let key = match choice {
-        Choice::Regular => "RegularDescription",
-        Choice::Marathon => "MarathonDescription",
-        Choice::PremiumFree => "PremiumFreeDescription",
-    };
-    tr("SelectMode", key).replace("\\n", "\n")
-}
-
 fn choice_description(choice: Choice) -> Arc<str> {
     let key = match choice {
         Choice::Regular => "RegularDescription",
@@ -694,67 +675,6 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
     actors
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn select_mode_text_checksum(values: [&str; 5]) -> u64 {
-    values.iter().fold(0u64, |checksum, value| {
-        value
-            .bytes()
-            .fold(checksum ^ value.len() as u64, |hash, byte| {
-                hash.rotate_left(5) ^ u64::from(byte)
-            })
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub struct SelectModeTextBenchmark {
-    text: SelectModeText,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SelectModeTextBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            text: SelectModeText::build(i18n::revision()),
-        }
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self, selected_index: usize) -> u64 {
-        let title = tr("ScreenTitles", "SelectMode");
-        let labels = choice_labels_legacy();
-        let description = choice_description_legacy(Choice::from_index(selected_index));
-        select_mode_text_checksum([
-            title.as_ref(),
-            labels[0].as_str(),
-            labels[1].as_str(),
-            labels[2].as_str(),
-            description.as_str(),
-        ])
-    }
-
-    pub fn current_frame(&mut self, selected_index: usize) -> u64 {
-        self.text.sync();
-        let title = Arc::clone(&self.text.title);
-        let labels = self.text.labels.each_ref().map(Arc::clone);
-        let description = Arc::clone(&self.text.descriptions[selected_index]);
-        select_mode_text_checksum([
-            title.as_ref(),
-            labels[0].as_ref(),
-            labels[1].as_ref(),
-            labels[2].as_ref(),
-            description.as_ref(),
-        ])
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for SelectModeTextBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -771,17 +691,6 @@ mod tests {
         assert_eq!(demo.field_zoom, 0.9);
         assert_eq!(column_zoom(GameFlag::Pump, "center"), 0.165);
         assert_eq!(column_zoom(GameFlag::Pump, "upleft"), 0.2);
-    }
-
-    #[test]
-    fn retained_select_mode_text_matches_live_translation() {
-        let mut benchmark = SelectModeTextBenchmark::new();
-        for selected in 0..2 {
-            assert_eq!(
-                benchmark.legacy_frame(selected),
-                benchmark.current_frame(selected)
-            );
-        }
     }
 
     #[test]

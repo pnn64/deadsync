@@ -242,20 +242,6 @@ fn push_shared_qr_login_overlay(
     });
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn push_qr_login_overlay_actors_legacy(
-    out: &mut Vec<Actor>,
-    ui: &QrLoginUiState,
-    active_color_index: i32,
-    alpha_multiplier: f32,
-) {
-    let start = out.len();
-    push_qr_login_overlay(out, ui, active_color_index);
-    for actor in &mut out[start..] {
-        actor.mul_alpha(alpha_multiplier);
-    }
-}
-
 fn push_qr_login_overlay(out: &mut Vec<Actor>, ui: &QrLoginUiState, active_color_index: i32) {
     out.reserve(24);
 
@@ -537,90 +523,6 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
     ));
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn qr_text_checksum(text: &str) -> u64 {
-    text.bytes().fold(text.len() as u64, |checksum, byte| {
-        checksum.rotate_left(5) ^ u64::from(byte)
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn qr_actor_checksum(actors: &[Actor]) -> u64 {
-    let actors = match actors {
-        [Actor::SharedFrame { children, .. }] => children.as_ref(),
-        _ => actors,
-    };
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, .. } => qr_text_checksum(content),
-            Actor::Frame { children, .. } => qr_actor_checksum(children),
-            Actor::SharedFrame { children, .. } => qr_actor_checksum(children),
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub struct QrOverlayBenchmark {
-    ui: QrLoginUiState,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl QrOverlayBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let benchmark = Self {
-            ui: QrLoginUiState {
-                slots: [
-                    LoginSlot {
-                        side: profile_data::PlayerSide::P1,
-                        state: SlotState::Pending {
-                            short_code: Arc::from("ABCD-EFGH"),
-                            verification_url: Arc::from("https://example.com/device/benchmark"),
-                        },
-                        kind: BackendKind::ArrowCloud,
-                        display_name: "Benchmark Player One".into(),
-                        had_existing_key: true,
-                    },
-                    LoginSlot {
-                        side: profile_data::PlayerSide::P2,
-                        state: SlotState::Failed {
-                            reason: Arc::from("benchmark network failure"),
-                        },
-                        kind: BackendKind::ArrowCloud,
-                        display_name: "Benchmark Player Two".into(),
-                        had_existing_key: false,
-                    },
-                ],
-                presentation: RefCell::default(),
-            },
-        };
-        let mut warm = Vec::with_capacity(24);
-        push_qr_login_overlay_actors(&mut warm, &benchmark.ui, 2, 0.75);
-        benchmark
-    }
-
-    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_qr_login_overlay_actors_legacy(out, &self.ui, 2, 0.75);
-        qr_actor_checksum(out)
-    }
-
-    pub fn current_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_qr_login_overlay_actors(out, &self.ui, 2, 0.75);
-        qr_actor_checksum(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for QrOverlayBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -743,44 +645,5 @@ mod tests {
             }
             .is_workless()
         );
-    }
-
-    #[test]
-    fn retained_overlay_matches_immediate_tree_reuses_and_invalidates() {
-        let mut benchmark = QrOverlayBenchmark::new();
-        let mut legacy = Vec::with_capacity(24);
-        push_qr_login_overlay_actors_legacy(&mut legacy, &benchmark.ui, 2, 1.0);
-
-        let mut current = Vec::with_capacity(1);
-        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 1.0);
-        let [Actor::SharedFrame { children, tint, .. }] = current.as_slice() else {
-            panic!("retained QR overlay should use one shared frame");
-        };
-        assert_eq!(*tint, [1.0; 4]);
-        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
-        let first = Arc::clone(children);
-
-        current.clear();
-        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 0.5);
-        let [Actor::SharedFrame { children, tint, .. }] = current.as_slice() else {
-            panic!("retained QR overlay should stay shared");
-        };
-        assert!(Arc::ptr_eq(&first, children));
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.5]);
-
-        apply_events(
-            &mut benchmark.ui,
-            [SimplyLoveQrLoginEvent::Failed {
-                service: SimplyLoveQrLoginService::ArrowCloud,
-                side: profile_data::PlayerSide::P1,
-                reason: "expired".into(),
-            }],
-        );
-        current.clear();
-        push_qr_login_overlay_actors(&mut current, &benchmark.ui, 2, 1.0);
-        let [Actor::SharedFrame { children, .. }] = current.as_slice() else {
-            panic!("invalidated QR overlay should rebuild a shared frame");
-        };
-        assert!(!Arc::ptr_eq(&first, children));
     }
 }

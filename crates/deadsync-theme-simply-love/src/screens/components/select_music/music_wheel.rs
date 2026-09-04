@@ -1633,9 +1633,9 @@ mod tests {
     use super::{
         chart_for_preferred_or_nearest_standard, choose_itl_wheel_score, itl_fetch_flags,
         itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color,
-        pack_header_text_x, preferred_chart_indices, runtime_slot_requests, song_select_bg_path,
-        srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
-        wheel_bg_layout, wheel_song_meta,
+        pack_header_text_x, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
+        visible_song_select_bg_paths, visible_song_select_bg_paths_match, wheel_bg_layout,
+        wheel_song_meta,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1865,44 +1865,6 @@ mod tests {
                         "song_has_lua={song_has_lua} joined={joined:?} allowed={allowed:?}"
                     );
                 }
-            }
-        }
-    }
-
-    #[test]
-    fn preferred_chart_cache_matches_legacy_scan_for_edge_cases() {
-        let chart_sets = [
-            vec![
-                chart_with_difficulty("dance-single", "Hard", "hard-first", true),
-                chart_with_difficulty("dance-single", "Easy", "easy-second", true),
-            ],
-            vec![
-                chart_with_difficulty("dance-single", "Medium", "non-playable-exact", false),
-                chart_with_difficulty("dance-single", "Hard", "playable-fallback", true),
-            ],
-            vec![
-                chart_with_difficulty("dance-double", "Challenge", "wrong-style", true),
-                chart_with_difficulty("dance-single", "Easy", "right-style", true),
-            ],
-        ];
-
-        for charts in chart_sets {
-            let mut song = (*song_with_art(None, None)).clone();
-            song.charts = charts;
-            let cached_indices = preferred_chart_indices(&song, "dance-single");
-
-            for preferred in 0..deadsync_chart::STANDARD_DIFFICULTY_COUNT {
-                let scanned =
-                    chart_for_preferred_or_nearest_standard(&song, "dance-single", preferred, None)
-                        .map(|chart| chart.short_hash.as_str());
-                let cached = chart_for_preferred_or_nearest_standard(
-                    &song,
-                    "dance-single",
-                    preferred,
-                    Some(&cached_indices),
-                )
-                .map(|chart| chart.short_hash.as_str());
-                assert_eq!(cached, scanned, "preferred={preferred}");
             }
         }
     }

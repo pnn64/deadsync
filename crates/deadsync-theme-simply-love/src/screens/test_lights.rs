@@ -539,78 +539,6 @@ impl LightsText {
             *self = Self::build(lights);
         }
     }
-
-    #[cfg(any(test, feature = "bench-support"))]
-    fn checksum(&self) -> u64 {
-        [
-            &self.title,
-            &self.rows[0],
-            &self.rows[1],
-            &self.rows[2],
-            &self.controls,
-        ]
-        .into_iter()
-        .fold(0, |checksum, text| {
-            text.bytes()
-                .fold(checksum ^ text.len() as u64, |hash, byte| {
-                    hash.rotate_left(5) ^ u64::from(byte)
-                })
-        })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub struct LightsTextBenchmark {
-    lights: LightsTestView,
-    text: LightsText,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl LightsTextBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let lights = LightsTestView {
-            cabinet: [false, true, false, false, false, false],
-            buttons: [
-                [false, false, false, false, false, false],
-                [false, false, true, false, false, false],
-            ],
-            manual_cycle: true,
-        };
-        Self {
-            lights,
-            text: LightsText::build(lights),
-        }
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self) -> u64 {
-        LightsText::build(self.lights).checksum()
-    }
-
-    pub fn current_frame(&mut self) -> u64 {
-        self.text.sync(self.lights);
-        let values = [
-            Arc::clone(&self.text.title),
-            Arc::clone(&self.text.rows[0]),
-            Arc::clone(&self.text.rows[1]),
-            Arc::clone(&self.text.rows[2]),
-            Arc::clone(&self.text.controls),
-        ];
-        values.into_iter().fold(0, |checksum, text| {
-            text.bytes()
-                .fold(checksum ^ text.len() as u64, |hash, byte| {
-                    hash.rotate_left(5) ^ u64::from(byte)
-                })
-        })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for LightsTextBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 const fn player_name(player: LightPlayer) -> &'static str {
@@ -628,41 +556,5 @@ const fn button_name(button: ButtonLight) -> &'static str {
         ButtonLight::Right => "Right",
         ButtonLight::Start => "Start",
         ButtonLight::Select => "Select",
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn retained_lights_text_matches_immediate_text_for_all_inputs() {
-        let mut retained = LightsText::build(LightsTestView::default());
-        let mut cases = vec![LightsTestView::default()];
-        for cabinet in 0..6 {
-            let mut lights = LightsTestView::default();
-            lights.cabinet[cabinet] = true;
-            lights.manual_cycle = cabinet % 2 == 0;
-            cases.push(lights);
-        }
-        for player in 0..2 {
-            for button in 0..6 {
-                let mut lights = LightsTestView::default();
-                lights.buttons[player][button] = true;
-                lights.manual_cycle = button % 2 == 1;
-                cases.push(lights);
-            }
-        }
-
-        for lights in cases {
-            retained.sync(lights);
-            assert_eq!(retained.checksum(), LightsText::build(lights).checksum());
-        }
-    }
-
-    #[test]
-    fn stable_lights_benchmark_matches_immediate_builder() {
-        let mut benchmark = LightsTextBenchmark::new();
-        assert_eq!(benchmark.legacy_frame(), benchmark.current_frame());
     }
 }

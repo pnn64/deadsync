@@ -1,7 +1,5 @@
 use deadsync_chart::SongData;
 use std::cmp::Ordering;
-#[cfg(feature = "bench-support")]
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -446,79 +444,6 @@ fn ini_section_keys(text: &str, section: &str) -> HashSet<String> {
     keys
 }
 
-#[cfg(feature = "bench-support")]
-fn parse_ini_sections_legacy(text: &str) -> HashMap<String, Vec<(String, String)>> {
-    let mut sections = HashMap::<String, Vec<(String, String)>>::new();
-    let mut current = String::new();
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            line[1..line.len() - 1].trim().clone_into(&mut current);
-            sections.entry(current.clone()).or_default();
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let pair = (key.trim().to_owned(), value.trim().to_owned());
-        if let Some(section) = sections.get_mut(current.as_str()) {
-            section.push(pair);
-        } else {
-            sections.insert(current.clone(), vec![pair]);
-        }
-    }
-    sections
-}
-
-#[cfg(feature = "bench-support")]
-fn genre_whitelist_from_text_legacy(text: &str, genre: &str) -> Option<HashSet<String>> {
-    let sections = parse_ini_sections_legacy(text);
-    let genre_section = sections
-        .get("GenreToSection")?
-        .iter()
-        .find(|(key, _)| key.eq_ignore_ascii_case(genre.trim()))?
-        .1
-        .trim();
-    let out = sections
-        .get(genre_section)?
-        .iter()
-        .map(|(key, _)| key.trim().to_owned())
-        .filter(|key| !key.is_empty())
-        .collect::<HashSet<_>>();
-    (!out.is_empty()).then_some(out)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_genre_whitelist_legacy(text: &str, genre: &str, rounds: usize) -> u64 {
-    benchmark_genre_whitelist(text, genre, rounds, genre_whitelist_from_text_legacy)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_genre_whitelist_current(text: &str, genre: &str, rounds: usize) -> u64 {
-    benchmark_genre_whitelist(text, genre, rounds, genre_whitelist_from_text)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_genre_whitelist(
-    text: &str,
-    genre: &str,
-    rounds: usize,
-    parse: fn(&str, &str) -> Option<HashSet<String>>,
-) -> u64 {
-    let mut checksum = 0u64;
-    for _ in 0..rounds {
-        let whitelist = parse(text, genre).unwrap_or_default();
-        checksum = checksum
-            .wrapping_mul(131)
-            .wrapping_add(whitelist.len() as u64)
-            .wrapping_add(whitelist.iter().map(|key| key.len() as u64).sum::<u64>());
-    }
-    checksum
-}
-
 #[must_use]
 pub fn is_song_art_image(path: &Path) -> bool {
     path.extension()
@@ -541,15 +466,6 @@ pub fn song_art_file_key(path: &Path) -> String {
         _ => ch.to_ascii_lowercase(),
     }));
     key
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn song_art_file_key_reference_for_bench(path: &Path) -> String {
-    path.to_string_lossy()
-        .replace('\\', "/")
-        .to_ascii_lowercase()
 }
 
 #[must_use]
@@ -612,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn single_pass_song_art_keys_match_committed_behavior() {
+    fn song_art_keys_match_committed_behavior() {
         let cases = [
             ("Visuals/Banner.PNG", "visuals/banner.png"),
             (r"Visuals\Pack\BANNER.JpG", "visuals/pack/banner.jpg"),
@@ -626,11 +542,6 @@ mod tests {
             let path = Path::new(path);
             let actual = song_art_file_key(path);
             assert_eq!(actual, expected, "case: {path:?}");
-            assert_eq!(
-                actual,
-                song_art_file_key_reference_for_bench(path),
-                "case: {path:?}"
-            );
         }
     }
 

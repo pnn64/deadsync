@@ -768,120 +768,8 @@ fn push_overlay_unreserved(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn pack_overlay_checksum(actors: &[Actor]) -> u64 {
-    let actors = match actors {
-        [Actor::SharedFrame { children, .. }] => children.as_ref(),
-        _ => actors,
-    };
-    actors.iter().fold(actors.len() as u64, |checksum, actor| {
-        let value = match actor {
-            Actor::Text { content, z, .. } => content
-                .as_str()
-                .bytes()
-                .fold(u64::from(*z as u16), |hash, byte| {
-                    hash.rotate_left(7) ^ u64::from(byte)
-                }),
-            Actor::Frame { children, z, .. } => {
-                pack_overlay_checksum(children) ^ u64::from(*z as u16)
-            }
-            _ => 1,
-        };
-        checksum.rotate_left(11) ^ value
-    })
-}
-
 /// Stable running pack-sync frame used to compare the former 96-slot actor
 /// batch with direct append into the screen-owned actor list.
-#[cfg(any(test, feature = "bench-support"))]
-pub struct PackSyncOverlayBenchmark {
-    state: OverlayState,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl PackSyncOverlayBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let rows = (0..12)
-            .map(|index| RowState {
-                simfile_path: PathBuf::new(),
-                text: RowText {
-                    title: retained_text(format_args!("{}. Benchmark Song", index + 1)),
-                    chart: TextContent::Static("Challenge 15"),
-                    bar: TextContent::Static("64 / 128 beats"),
-                    result: TextContent::Static("Working"),
-                },
-                total_beats: 128,
-                beats_processed: 64,
-                final_bias_ms: None,
-                final_confidence: None,
-                cached: false,
-                phase: RowPhase::Running,
-                error_text: None,
-            })
-            .collect::<Vec<_>>();
-        let summary = Summary {
-            total: rows.len(),
-            ..Summary::default()
-        };
-        let phase = OverlayPhase::Running;
-        Self {
-            state: OverlayState::Visible(Box::new(OverlayStateData {
-                rows,
-                summary,
-                text: build_overlay_text("Benchmark Pack", summary, 0.80, phase, 0),
-                scroll_index: 0,
-                auto_follow: true,
-                yes_selected: true,
-                phase,
-                min_confidence: 0.80,
-                owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
-                current_row: Some(3),
-                menu_lr_chord: screen_input::MenuLrChordTracker::default(),
-                presentation_revision: 0,
-                presentation: RefCell::new(None),
-            })),
-        }
-    }
-
-    #[must_use]
-    pub fn actor_count(&self) -> usize {
-        let mut actors = Vec::with_capacity(96);
-        let OverlayState::Visible(overlay) = &self.state else {
-            unreachable!("benchmark overlay is visible");
-        };
-        push_overlay_unreserved(&mut actors, overlay, 2, MachineFont::Mega);
-        actors.len()
-    }
-
-    #[must_use]
-    pub fn legacy_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        let OverlayState::Visible(overlay) = &self.state else {
-            unreachable!("benchmark overlay is visible");
-        };
-        push_overlay_unreserved(out, overlay, 2, MachineFont::Mega);
-        std::hint::black_box(&*out);
-        pack_overlay_checksum(out)
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        let visible = push_overlay(out, &self.state, 2, MachineFont::Mega);
-        debug_assert!(visible);
-        std::hint::black_box(&*out);
-        pack_overlay_checksum(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for PackSyncOverlayBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequest> {
     let request = match state {
         OverlayState::Visible(overlay) if overlay.phase == OverlayPhase::Running => {
@@ -1753,10 +1641,9 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
 #[cfg(test)]
 mod tests {
     use super::{
-        NavigationPolicy, OverlayPhase, OverlayState, OverlayStateData, PackSyncOverlayBenchmark,
-        RowDisposition, RowPhase, RowState, RowText, Summary, build_overlay_text, can_save,
-        confidence_threshold_percent, refresh_row_text, result_text, review_choice_delta,
-        row_disposition,
+        NavigationPolicy, OverlayPhase, OverlayState, OverlayStateData, RowDisposition, RowPhase,
+        RowState, RowText, Summary, build_overlay_text, can_save, confidence_threshold_percent,
+        refresh_row_text, result_text, review_choice_delta, row_disposition,
     };
     use crate::screens::ThemeEffect;
     use deadlib_present::actors::{Actor, TextContent};
@@ -2070,24 +1957,6 @@ mod tests {
             }
             .dedicated_three_key()
         );
-    }
-
-    #[test]
-    fn direct_pack_sync_append_matches_legacy_batch() {
-        crate::assets::i18n::init_for_tests();
-        let benchmark = PackSyncOverlayBenchmark::new();
-        let mut legacy = Vec::with_capacity(96);
-        let mut direct = Vec::with_capacity(96);
-
-        assert_eq!(
-            benchmark.legacy_frame(&mut legacy),
-            benchmark.direct_frame(&mut direct)
-        );
-        assert_eq!(legacy.len(), benchmark.actor_count());
-        let [Actor::SharedFrame { children, .. }] = direct.as_slice() else {
-            panic!("retained pack sync should use one shared frame");
-        };
-        assert_eq!(format!("{legacy:#?}"), format!("{:#?}", children.as_ref()));
     }
 
     #[test]

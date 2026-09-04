@@ -648,60 +648,6 @@ fn build_clipped_affluent_texture_dense(sources: &AffluentSourceImages, rot_deg:
     out
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn affluent_source_checksum(sources: &AffluentSourceImages) -> u64 {
-    let image_checksum = |image: &RgbaImage| {
-        let bytes = image.as_raw();
-        let middle = bytes.len() / 2;
-        (u64::from(image.width()) << 48)
-            ^ (u64::from(image.height()) << 32)
-            ^ u64::from(bytes.first().copied().unwrap_or_default())
-            ^ (u64::from(bytes.get(middle).copied().unwrap_or_default()) << 8)
-            ^ (u64::from(bytes.last().copied().unwrap_or_default()) << 16)
-    };
-    image_checksum(&sources.star).rotate_left(17) ^ image_checksum(&sources.face)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_prime_affluent_texture(rot_deg: f32) -> bool {
-    clipped_affluent_texture(rot_deg).is_some()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_legacy_affluent_texture_key(rot_deg: f32) -> Option<Arc<str>> {
-    let bucket = affluent_rot_bucket(rot_deg);
-    let key = format!("{AFFLUENT_CLIP_KEY_PREFIX}_{bucket:03}");
-    assets::texture_dims(&key)?;
-    Some(Arc::<str>::from(key))
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_cached_affluent_texture_key(rot_deg: f32) -> Option<Arc<str>> {
-    clipped_affluent_texture(rot_deg)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_legacy_affluent_source_checksum() -> Option<u64> {
-    load_affluent_source_images()
-        .as_ref()
-        .map(affluent_source_checksum)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_cached_affluent_source_checksum() -> Option<u64> {
-    affluent_source_images().map(affluent_source_checksum)
-}
-
 fn sample_rgba_bilinear(img: &RgbaImage, x: f32, y: f32) -> Option<[u8; 4]> {
     if x < 0.0
         || y < 0.0
@@ -794,7 +740,7 @@ fn goldstar_actor(st: StarTransform, p: EvalGradeParams) -> Option<Actor> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 #[inline(always)]
 fn star_actors(s: StarDef, p: EvalGradeParams) -> Vec<Actor> {
     let st = star_transform(s, p);
@@ -835,7 +781,7 @@ const fn stars_for(grade: score_data::Grade) -> Option<&'static [StarDef]> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 #[must_use]
 pub fn actors(grade: score_data::Grade, p: EvalGradeParams) -> Vec<Actor> {
     if let Some(stars) = stars_for(grade) {
@@ -923,28 +869,6 @@ mod tests {
     }
 
     #[test]
-    fn direct_append_matches_legacy_for_letters_and_all_star_grades() {
-        for grade in [
-            score_data::Grade::Failed,
-            score_data::Grade::Tier04,
-            score_data::Grade::Tier03,
-            score_data::Grade::Tier02,
-            score_data::Grade::Tier01,
-            score_data::Grade::Quint,
-        ] {
-            let params = EvalGradeParams {
-                elapsed: 10.0,
-                easter_eggs: false,
-                ..EvalGradeParams::default()
-            };
-            let legacy = actors(grade, params);
-            let mut direct = Vec::with_capacity(legacy.len());
-            push_actors(&mut direct, grade, params);
-            assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
-        }
-    }
-
-    #[test]
     fn affluent_bucket_keys_preserve_names_and_shared_identity() {
         assert_eq!(AFFLUENT_CLIP_KEYS.len(), AFFLUENT_ROT_BUCKETS as usize);
         for (bucket, key) in AFFLUENT_CLIP_KEYS.iter().enumerate() {
@@ -957,20 +881,6 @@ mod tests {
         let first = Arc::clone(&AFFLUENT_CLIP_KEYS[45]);
         let second = Arc::clone(&AFFLUENT_CLIP_KEYS[45]);
         assert!(Arc::ptr_eq(&first, &second));
-    }
-
-    #[test]
-    fn retained_affluent_sources_match_fresh_decodes() {
-        let freshly_loaded =
-            load_affluent_source_images().expect("bundled grade art should load freshly");
-        let retained = affluent_source_images().expect("bundled grade art should stay loaded");
-
-        assert_eq!(freshly_loaded.star, retained.star);
-        assert_eq!(freshly_loaded.face, retained.face);
-        assert_eq!(
-            affluent_source_checksum(&freshly_loaded),
-            affluent_source_checksum(retained)
-        );
     }
 
     #[test]

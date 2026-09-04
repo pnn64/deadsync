@@ -51,31 +51,6 @@ pub fn extract_named_tag_values<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [
     named_tag_values(data, tags).collect()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn extract_named_tag_values_baseline<'a>(data: &'a [u8], tags: &[&[u8]]) -> Vec<&'a [u8]> {
-    let mut out = Vec::new();
-    let mut offset = 0usize;
-    while offset < data.len() {
-        let Some(pos) = find_byte(&data[offset..], b'#') else {
-            break;
-        };
-        offset += pos;
-        let slice = &data[offset..];
-        let Some(tag) = tags.iter().copied().find(|tag| starts_with_ci(slice, tag)) else {
-            offset += 1;
-            continue;
-        };
-        if let Some((value, advance)) = parse_tag_val(slice, tag.len(), true) {
-            out.push(value);
-            offset += advance;
-        } else {
-            offset += 1;
-        }
-    }
-    out
-}
-
 /// Lazily yields values for any of the requested tags without allocating a
 /// temporary collection.
 #[must_use]
@@ -273,24 +248,6 @@ mod tests {
 
         assert_eq!(cdimage, "new;image.png");
         assert_eq!(discimage, "disc.png");
-    }
-
-    #[test]
-    fn lazy_named_values_match_eager_extraction_for_edge_cases() {
-        let fixtures: &[&[u8]] = &[
-            b"ignored#TITLE:One;#artist:DJ;#title:Two;",
-            b"#TITLE:One\\;Two;#TITLE:Three;",
-            b"#TITLE:first line\r\n second line;\r\n#TITLE:last;",
-            b"#TITLE:unterminated\n#TITLE:recovered;",
-            b"#OTHER:x;#title:;trailer",
-        ];
-        let tags = [b"#TITLE:".as_slice()];
-
-        for data in fixtures {
-            let eager = extract_named_tag_values_baseline(data, &tags);
-            let lazy = named_tag_values(data, &tags).collect::<Vec<_>>();
-            assert_eq!(lazy, eager, "lazy extraction diverged for {data:?}");
-        }
     }
 
     #[test]

@@ -152,79 +152,9 @@ fn push_modifiers_pane_with_text(
     ));
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_build_modifiers_pane(text: Arc<str>) -> Vec<Actor> {
-    build_modifiers_pane_with_text(text, 320.0, 300.0, false)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn benchmark_push_modifiers_pane(out: &mut Vec<Actor>, text: Arc<str>) {
-    push_modifiers_pane_with_text(out, text, 320.0, 300.0, false);
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub struct ModifiersPaneCacheBenchmark {
-    presentation: ModifiersPanePresentation,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ModifiersPaneCacheBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let presentation = ModifiersPanePresentation {
-            text: Arc::from("M700, 40% Mini, Overhead, cel"),
-            cached: RefCell::new(None),
-        };
-        let _ = presentation.cached_actors(320.0, 300.0, false);
-        Self { presentation }
-    }
-
-    #[must_use]
-    pub fn direct_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_modifiers_pane_with_text(
-            out,
-            Arc::clone(&self.presentation.text),
-            320.0,
-            300.0,
-            false,
-        );
-        actor_tree_checksum(out)
-    }
-
-    #[must_use]
-    pub fn retained_frame(&self, out: &mut Vec<Actor>) -> u64 {
-        out.clear();
-        push_cached_modifiers_pane(out, &self.presentation, 320.0, 300.0, false);
-        actor_tree_checksum(out)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for ModifiersPaneCacheBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_tree_checksum(actors: &[Actor]) -> u64 {
-    let semantic_actors = match actors {
-        [Actor::SharedFrame { children, .. }] => children.as_ref(),
-        _ => actors,
-    };
-    let stats = deadlib_present::actors::actor_tree_stats(semantic_actors);
-    (u64::from(stats.total) << 32) | u64::from(stats.text_chars)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        ModifiersPaneCacheBenchmark, build_modifiers_pane_with_text, push_modifiers_pane_with_text,
-    };
+    use super::build_modifiers_pane_with_text;
     use deadlib_present::actors::Actor;
     use std::sync::Arc;
 
@@ -243,39 +173,5 @@ mod tests {
             panic!("expected a text actor in the modifiers pane");
         };
         assert_eq!(content.as_str(), "M700, 40% Mini, Overhead, cel");
-    }
-
-    #[test]
-    fn direct_append_matches_legacy_modifiers_bar() {
-        let text = Arc::<str>::from("M700, 40% Mini, Overhead, cel");
-        let legacy = build_modifiers_pane_with_text(Arc::clone(&text), 320.0, 300.0, false);
-        let mut direct = Vec::with_capacity(legacy.len());
-        push_modifiers_pane_with_text(&mut direct, text, 320.0, 300.0, false);
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
-    }
-
-    #[test]
-    fn retained_modifiers_match_direct_and_reuse_the_shared_slice() {
-        let fixture = ModifiersPaneCacheBenchmark::new();
-        let mut direct = Vec::new();
-        let mut retained = Vec::new();
-        let _ = fixture.direct_frame(&mut direct);
-        let _ = fixture.retained_frame(&mut retained);
-        let [Actor::SharedFrame { children, .. }] = retained.as_slice() else {
-            panic!("expected retained modifiers in one shared frame");
-        };
-        assert_eq!(format!("{direct:#?}"), format!("{children:#?}"));
-
-        let children = Arc::clone(children);
-        let _ = fixture.retained_frame(&mut retained);
-        let [
-            Actor::SharedFrame {
-                children: repeated, ..
-            },
-        ] = retained.as_slice()
-        else {
-            panic!("expected retained modifiers in one shared frame");
-        };
-        assert!(Arc::ptr_eq(&children, repeated));
     }
 }

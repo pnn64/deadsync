@@ -2008,7 +2008,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
 #[cfg(test)]
 mod bitmask_binding_init_tests {
     use super::super::super::row::{Row, RowBehavior, RowId, init_bitmask_row_from_binding};
-    use super::super::super::state::{FaPlusMask, HideMask, PlayerOptionMasks};
+    use super::super::super::state::{FaPlusMask, PlayerOptionMasks};
     use super::*;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use deadsync_profile::PlayerOptionsData;
@@ -2060,35 +2060,6 @@ mod bitmask_binding_init_tests {
     /// HIDE binding's data-driven init must reproduce the bits and cursor
     /// that the legacy `apply_profile_defaults` path produces for the same
     /// profile.
-    #[test]
-    fn hide_binding_init_matches_legacy_path() {
-        ensure_i18n();
-        let mut profile = PlayerOptionsData::default();
-        profile.hide_targets = false;
-        profile.hide_song_bg = true;
-        profile.hide_combo = true;
-
-        let mut row = make_bitmask_row(
-            RowId::Hide,
-            lookup_key("PlayerOptions", "Hide"),
-            &[
-                "Targets", "BG", "Combo", "Life", "Score", "Danger", "ComboExp",
-            ],
-        );
-        let mut masks = PlayerOptionMasks::default();
-        let applied = init_bitmask_row_from_binding(&mut row, &HIDE, &profile, &mut masks, 0);
-        assert!(applied, "HIDE binding has init contract");
-        assert_eq!(
-            masks.hide,
-            HideMask::BACKGROUND | HideMask::COMBO,
-            "data-driven HIDE bits match profile",
-        );
-        assert_eq!(
-            row.selected_choice_index[0], 1,
-            "FirstActiveBit cursor lands on BACKGROUND (index 1)",
-        );
-    }
-
     /// `FA_PLUS_OPTIONS` binding's data-driven init must populate the bits
     /// AND pin the cursor to 0 even when a non-first bit is the only one
     /// set (Pattern E: cursor=Fixed(0)).

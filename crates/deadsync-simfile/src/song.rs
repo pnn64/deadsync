@@ -9,24 +9,13 @@ use crate::changes::{
     resolve_background_changes_from_roots, resolve_background_layer2_changes_from_roots,
 };
 use crate::media::resolve_song_asset_path_like_itg;
-#[cfg(any(test, feature = "bench-support"))]
-use crate::notes::{
-    parse_chart_notes_as, parse_chart_notes_as_with_capacity, parse_chart_notes_legacy,
-    step_type_lanes,
-};
 use crate::stats::build_stamina_counts;
-#[cfg(test)]
-use crate::timing::timing_segments_from_rssp;
 use crate::timing::{parse_cached_combos, parse_cached_tickcounts, parse_cached_time_signatures};
-#[cfg(test)]
-use crate::timing::{
-    parse_combos_baseline, parse_tickcounts_baseline, parse_time_signatures_baseline,
-};
 use deadsync_chart::{STANDARD_DIFFICULTY_NAMES, SongData, song::standard_difficulty_index};
 use deadsync_core::note::NoteType;
 use rssp::{
     AnalysisOptions, AnalysisScratch, ChartNoteType, ParsedChartNote, PreparedAnalysis,
-    SimfileSummary, analyze_prepared_in, analyze_prepared_in_with_notes,
+    SimfileSummary, analyze_prepared_in_with_notes,
 };
 use std::cmp::Ordering;
 #[cfg(test)]
@@ -113,43 +102,6 @@ impl SongParseScratch {
     }
 }
 
-#[derive(Clone, Copy)]
-enum SongBuildMode {
-    Direct,
-    #[cfg(feature = "bench-support")]
-    Baseline,
-    #[cfg(test)]
-    Legacy,
-}
-
-impl SongBuildMode {
-    const fn rssp_note_output(self) -> bool {
-        matches!(self, Self::Direct)
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn parsed_note_capacity(total_arrows: u32, mines: u32, fakes: u32) -> usize {
-    // RSSP counts taps, valid hold/roll heads, and lifts in total_arrows.
-    let total = u64::from(total_arrows) + u64::from(mines) + u64::from(fakes);
-    usize::try_from(total).unwrap_or(0)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn new_cached_note(row_index: usize, column: usize, note_type: NoteType) -> CachedParsedNote {
-    CachedParsedNote {
-        row_index: row_index as u32,
-        column: column as u8,
-        note_type: note_type.into(),
-        tail_row_index: None,
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-const fn set_cached_tail(note: &mut CachedParsedNote, tail_row_index: usize) {
-    note.tail_row_index = Some(tail_row_index as u32);
-}
-
 fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
     let note_type = match note.note_type {
         ChartNoteType::Tap => NoteType::Tap,
@@ -167,25 +119,6 @@ fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_cached_notes(
-    note_data: &[u8],
-    lanes: usize,
-    note_capacity: Option<usize>,
-) -> Vec<CachedParsedNote> {
-    if let Some(note_capacity) = note_capacity {
-        parse_chart_notes_as_with_capacity(
-            note_data,
-            lanes,
-            note_capacity,
-            new_cached_note,
-            set_cached_tail,
-        )
-    } else {
-        parse_chart_notes_as(note_data, lanes, new_cached_note, set_cached_tail)
-    }
-}
-
 struct SongBuildInput<'a> {
     path: &'a Path,
     simfile_dir: &'a Path,
@@ -193,7 +126,6 @@ struct SongBuildInput<'a> {
     song_music_path: Option<PathBuf>,
     music_length_seconds: f32,
     options: &'a ParseSongOptions,
-    mode: SongBuildMode,
     parsed_notes: &'a mut Vec<Vec<CachedParsedNote>>,
 }
 
@@ -214,24 +146,6 @@ pub fn parse_song_file_in(
     scratch: &mut SongParseScratch,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    parse_song_file_in_mode(
-        path,
-        options,
-        analyzer,
-        scratch,
-        SongBuildMode::Direct,
-        music_len,
-    )
-}
-
-fn parse_song_file_in_mode(
-    path: &Path,
-    options: &ParseSongOptions,
-    analyzer: &SongAnalyzer,
-    scratch: &mut SongParseScratch,
-    build_mode: SongBuildMode,
-    music_len: impl FnOnce(Option<&Path>) -> f32,
-) -> Result<SerializableSongData, String> {
     if analyzer.prepared.options().mono_threshold != options.mono_threshold {
         return Err("Song analyzer does not match parse options".to_string());
     }
@@ -246,19 +160,14 @@ fn parse_song_file_in_mode(
     file.read_to_end(input)
         .map_err(|e| format!("Could not read file: {e}"))?;
     let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let summary = if build_mode.rssp_note_output() {
-        analyze_prepared_in_with_notes(
-            input,
-            extension,
-            &analyzer.prepared,
-            analysis,
-            parsed_notes,
-            cached_note_from_rssp,
-        )?
-    } else {
-        parsed_notes.clear();
-        analyze_prepared_in(input, extension, &analyzer.prepared, analysis)?
-    };
+    let summary = analyze_prepared_in_with_notes(
+        input,
+        extension,
+        &analyzer.prepared,
+        analysis,
+        parsed_notes,
+        cached_note_from_rssp,
+    )?;
     let simfile_dir = path
         .parent()
         .ok_or_else(|| "Could not determine simfile directory".to_string())?;
@@ -273,7 +182,6 @@ fn parse_song_file_in_mode(
             song_music_path,
             music_length_seconds,
             options,
-            mode: build_mode,
             parsed_notes,
         },
     ))
@@ -313,43 +221,6 @@ pub fn parse_song_data_file_in(
     Ok(song)
 }
 
-#[cfg(test)]
-fn parse_song_file_fresh(
-    path: &Path,
-    options: &ParseSongOptions,
-    music_len: impl FnOnce(Option<&Path>) -> f32,
-) -> Result<SerializableSongData, String> {
-    let simfile_data = fs::read(path).map_err(|e| format!("Could not read file: {e}"))?;
-    let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let summary = rssp::analyze(
-        &simfile_data,
-        extension,
-        &AnalysisOptions {
-            mono_threshold: options.mono_threshold,
-            ..AnalysisOptions::default()
-        },
-    )?;
-    let simfile_dir = path
-        .parent()
-        .ok_or_else(|| "Could not determine simfile directory".to_string())?;
-    let song_music_path = resolve_music_path(simfile_dir, &summary.music_path);
-    let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
-    let mut parsed_notes = Vec::new();
-    Ok(build_song_data(
-        summary,
-        SongBuildInput {
-            path,
-            simfile_dir,
-            simfile_data: &simfile_data,
-            song_music_path,
-            music_length_seconds,
-            options,
-            mode: SongBuildMode::Legacy,
-            parsed_notes: &mut parsed_notes,
-        },
-    ))
-}
-
 fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> SerializableSongData {
     let SongBuildInput {
         path,
@@ -358,14 +229,12 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         song_music_path,
         music_length_seconds,
         options,
-        mode,
         parsed_notes,
     } = input;
     let charts = build_charts(
         &mut summary,
         simfile_dir,
         song_music_path.as_deref(),
-        mode,
         parsed_notes,
     );
     let artwork = resolve_song_artwork_like_itg(
@@ -444,7 +313,6 @@ fn build_charts(
     summary: &mut SimfileSummary,
     simfile_dir: &Path,
     song_music_path: Option<&Path>,
-    build_mode: SongBuildMode,
     parsed_notes: &mut Vec<Vec<CachedParsedNote>>,
 ) -> Vec<SerializableChartData> {
     let charts = std::mem::take(&mut summary.charts);
@@ -457,30 +325,9 @@ fn build_charts(
     let mut charts: Vec<SerializableChartData> = charts
         .into_iter()
         .map(|chart| {
-            #[cfg(any(test, feature = "bench-support"))]
-            let lanes = step_type_lanes(&chart.step_type_str);
-            let parsed_notes = match build_mode {
-                SongBuildMode::Direct => parsed_notes
-                    .next()
-                    .expect("RSSP chart notes align with chart summaries"),
-                #[cfg(feature = "bench-support")]
-                SongBuildMode::Baseline => parse_cached_notes(
-                    &chart.minimized_note_data,
-                    lanes,
-                    Some(parsed_note_capacity(
-                        chart.stats.total_arrows,
-                        chart.stats.mines,
-                        chart.stats.fakes,
-                    )),
-                ),
-                #[cfg(test)]
-                SongBuildMode::Legacy => {
-                    parse_chart_notes_legacy(&chart.minimized_note_data, lanes)
-                        .iter()
-                        .map(CachedParsedNote::from)
-                        .collect()
-                }
-            };
+            let parsed_notes = parsed_notes
+                .next()
+                .expect("RSSP chart notes align with chart summaries");
             let chart_time_signatures = chart
                 .chart_time_signatures
                 .as_deref()
@@ -524,31 +371,12 @@ fn build_charts(
             let music_path = chart_music_path(simfile_dir, song_music_path, &chart.music_path);
             let min_bpm = min_chart_bpm(&chart.timing_segments.bpms);
             let max_bpm = max_chart_bpm(&chart.timing_segments.bpms);
-            let timing_segments = match build_mode {
-                SongBuildMode::Direct => CachedTimingSegments::from_rssp_owned(
-                    chart.timing_segments,
-                    parse_cached_time_signatures(time_signature_tag),
-                    parse_cached_tickcounts(tickcount_tag),
-                    parse_cached_combos(combo_tag),
-                ),
-                #[cfg(feature = "bench-support")]
-                SongBuildMode::Baseline => CachedTimingSegments::from_rssp_owned(
-                    chart.timing_segments,
-                    parse_cached_time_signatures(time_signature_tag),
-                    parse_cached_tickcounts(tickcount_tag),
-                    parse_cached_combos(combo_tag),
-                ),
-                #[cfg(test)]
-                SongBuildMode::Legacy => {
-                    let mut timing_segments =
-                        timing_segments_from_rssp(chart.timing_segments.as_ref());
-                    timing_segments.time_signatures =
-                        parse_time_signatures_baseline(time_signature_tag);
-                    timing_segments.tickcounts = parse_tickcounts_baseline(tickcount_tag);
-                    timing_segments.combos = parse_combos_baseline(combo_tag);
-                    (&timing_segments).into()
-                }
-            };
+            let timing_segments = CachedTimingSegments::from_rssp_owned(
+                chart.timing_segments,
+                parse_cached_time_signatures(time_signature_tag),
+                parse_cached_tickcounts(tickcount_tag),
+                parse_cached_combos(combo_tag),
+            );
             let stats = (&chart.stats).into();
             let tech_counts = (&chart.tech_counts).into();
             let stamina_counts = (&stamina_counts).into();
@@ -595,15 +423,7 @@ fn build_charts(
             }
         })
         .collect();
-    match build_mode {
-        SongBuildMode::Direct => adjust_duplicate_charts(&mut charts),
-        #[cfg(feature = "bench-support")]
-        SongBuildMode::Baseline => adjust_duplicate_charts(&mut charts),
-        #[cfg(test)]
-        SongBuildMode::Legacy => {
-            adjust_duplicate_charts_legacy(&mut charts);
-        }
-    }
+    adjust_duplicate_charts(&mut charts);
     charts
 }
 
@@ -724,84 +544,6 @@ fn lowercase_cmp(left: &str, right: &str) -> Ordering {
         .cmp(right.chars().flat_map(char::to_lowercase))
 }
 
-#[cfg(test)]
-fn adjust_duplicate_charts_legacy(charts: &mut Vec<SerializableChartData>) {
-    remove_identical_charts_legacy(charts);
-
-    let mut groups: Vec<(String, usize)> = Vec::new();
-    for chart in charts.iter() {
-        let Some(difficulty) = standard_difficulty_index(&chart.difficulty) else {
-            continue;
-        };
-        if !groups.iter().any(|(chart_type, group_difficulty)| {
-            *group_difficulty == difficulty && chart_type.eq_ignore_ascii_case(&chart.chart_type)
-        }) {
-            groups.push((chart.chart_type.clone(), difficulty));
-        }
-    }
-
-    for (chart_type, difficulty) in groups {
-        let difficulty_name = STANDARD_DIFFICULTY_NAMES[difficulty];
-        let mut indices: Vec<usize> = charts
-            .iter()
-            .enumerate()
-            .filter_map(|(index, chart)| {
-                (chart.chart_type.eq_ignore_ascii_case(&chart_type)
-                    && chart.difficulty.eq_ignore_ascii_case(difficulty_name))
-                .then_some(index)
-            })
-            .collect();
-        if indices.len() < 2 {
-            continue;
-        }
-
-        indices.sort_by(|&left, &right| duplicate_chart_cmp_legacy(&charts[left], &charts[right]));
-        for index in indices.into_iter().skip(1) {
-            let chart = &mut charts[index];
-            chart.difficulty = "Edit".to_string();
-            if chart.description.is_empty() {
-                chart.description = format!("{difficulty_name} Edit");
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-fn remove_identical_charts_legacy(charts: &mut Vec<SerializableChartData>) {
-    let mut unique: Vec<SerializableChartData> = Vec::with_capacity(charts.len());
-    for chart in charts.drain(..) {
-        let is_standard = standard_difficulty_index(&chart.difficulty).is_some();
-        let duplicate = is_standard
-            && unique.iter().any(|candidate| {
-                candidate.chart_type.eq_ignore_ascii_case(&chart.chart_type)
-                    && candidate.difficulty.eq_ignore_ascii_case(&chart.difficulty)
-                    && candidate.description == chart.description
-                    && candidate.step_artist == chart.step_artist
-                    && candidate.meter == chart.meter
-                    && candidate.notes == chart.notes
-            });
-        if !duplicate {
-            unique.push(chart);
-        }
-    }
-    *charts = unique;
-}
-
-#[cfg(test)]
-fn duplicate_chart_cmp_legacy(
-    left: &SerializableChartData,
-    right: &SerializableChartData,
-) -> Ordering {
-    left.meter
-        .cmp(&right.meter)
-        .then_with(|| left.stats.total_steps.cmp(&right.stats.total_steps))
-        .then_with(|| {
-            left.description
-                .to_lowercase()
-                .cmp(&right.description.to_lowercase())
-        })
-}
-
 fn chart_music_path(
     simfile_dir: &Path,
     song_music_path: Option<&Path>,
@@ -843,276 +585,10 @@ fn max_chart_bpm(bpms: &[(f32, f32)]) -> f64 {
         .fold(0.0_f64, f64::max)
 }
 
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_song_parse_previous(path: &Path, rounds: usize) -> u64 {
-    benchmark_song_parse_mode(path, SongBuildMode::Baseline, rounds)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn benchmark_rssp_note_handoff_baseline(simfile_data: &[u8], rounds: usize) -> u64 {
-    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-    let analyzer = SongAnalyzer::new(&options);
-    let mut analysis = AnalysisScratch::default();
-    (0..rounds).fold(0u64, |checksum, _| {
-        let summary = analyze_prepared_in(simfile_data, "ssc", &analyzer.prepared, &mut analysis)
-            .expect("benchmark fixture should analyze");
-        summary.charts.iter().fold(checksum, |checksum, chart| {
-            let notes = parse_cached_notes(
-                &chart.minimized_note_data,
-                step_type_lanes(&chart.step_type_str),
-                Some(parsed_note_capacity(
-                    chart.stats.total_arrows,
-                    chart.stats.mines,
-                    chart.stats.fakes,
-                )),
-            );
-            checksum.wrapping_add(note_checksum(&notes))
-        })
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn benchmark_rssp_note_handoff_current(simfile_data: &[u8], rounds: usize) -> u64 {
-    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-    let analyzer = SongAnalyzer::new(&options);
-    let mut analysis = AnalysisScratch::default();
-    let mut chart_notes = Vec::new();
-    (0..rounds).fold(0u64, |checksum, _| {
-        analyze_prepared_in_with_notes(
-            simfile_data,
-            "ssc",
-            &analyzer.prepared,
-            &mut analysis,
-            &mut chart_notes,
-            cached_note_from_rssp,
-        )
-        .expect("benchmark fixture should analyze");
-        chart_notes.iter().fold(checksum, |checksum, notes| {
-            checksum.wrapping_add(note_checksum(notes))
-        })
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_song_parse_current(path: &Path, rounds: usize) -> u64 {
-    benchmark_song_parse_mode(path, SongBuildMode::Direct, rounds)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_song_bytes_previous(path: &Path) -> Vec<u8> {
-    benchmark_song_bytes(path, SongBuildMode::Baseline)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_song_bytes_current(path: &Path) -> Vec<u8> {
-    benchmark_song_bytes(path, SongBuildMode::Direct)
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_song_parse_mode(path: &Path, mode: SongBuildMode, rounds: usize) -> u64 {
-    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-    let analyzer = SongAnalyzer::new(&options);
-    let mut scratch = SongParseScratch::default();
-    (0..rounds).fold(0u64, |checksum, _| {
-        let song = parse_song_file_in_mode(path, &options, &analyzer, &mut scratch, mode, |_| 0.0)
-            .expect("benchmark fixture should parse");
-        checksum.wrapping_add(song_parse_checksum(&song))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_song_bytes(path: &Path, mode: SongBuildMode) -> Vec<u8> {
-    let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-    let analyzer = SongAnalyzer::new(&options);
-    let mut scratch = SongParseScratch::default();
-    let song = parse_song_file_in_mode(path, &options, &analyzer, &mut scratch, mode, |_| 0.0)
-        .expect("benchmark fixture should parse");
-    bincode::encode_to_vec(song, bincode::config::standard())
-        .expect("benchmark fixture should serialize")
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_note_parse_legacy(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
-    (0..rounds).fold(0u64, |checksum, _| {
-        let notes: Vec<_> = parse_chart_notes_legacy(note_data, lanes)
-            .iter()
-            .map(CachedParsedNote::from)
-            .collect();
-        checksum.wrapping_add(note_checksum(&notes))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_note_parse_current(note_data: &[u8], lanes: usize, rounds: usize) -> u64 {
-    (0..rounds).fold(0u64, |checksum, _| {
-        let notes = parse_cached_notes(note_data, lanes, None);
-        checksum.wrapping_add(note_checksum(&notes))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_note_parse_precomputed(
-    note_data: &[u8],
-    lanes: usize,
-    note_capacity: usize,
-    rounds: usize,
-) -> u64 {
-    (0..rounds).fold(0u64, |checksum, _| {
-        let notes = parse_cached_notes(note_data, lanes, Some(note_capacity));
-        checksum.wrapping_add(note_checksum(&notes))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn note_checksum(notes: &[CachedParsedNote]) -> u64 {
-    notes.iter().fold(0u64, |checksum, note| {
-        checksum
-            .wrapping_mul(131)
-            .wrapping_add(u64::from(note.row_index))
-            .wrapping_add(u64::from(note.column))
-            .wrapping_add(u64::from(note.tail_row_index.unwrap_or_default()))
-            .wrapping_add(note.note_type as u64)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn song_parse_checksum(song: &SerializableSongData) -> u64 {
-    song.charts.iter().fold(
-        checksum_bytes(checksum_bytes(0, &song.title), &song.artist),
-        |checksum, chart| {
-            checksum_bytes(
-                checksum_bytes(checksum, &chart.difficulty),
-                &chart.description,
-            )
-            .wrapping_add(chart.notes.len() as u64)
-            .wrapping_add(chart.parsed_notes.len() as u64)
-            .wrapping_add(u64::from(chart.stats.total_steps))
-        },
-    )
-}
-
-#[cfg(feature = "bench-support")]
-fn checksum_bytes(checksum: u64, value: &str) -> u64 {
-    value.as_bytes().iter().fold(checksum, |checksum, byte| {
-        checksum.wrapping_mul(131).wrapping_add(u64::from(*byte))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn rssp_stats_exactly_size_valid_note_output() {
-        let summary = rssp::analyze(
-            b"#VERSION:0.83;\n\
-              #TITLE:Note Capacity;\n\
-              #BPMS:0=120;\n\
-              #NOTEDATA:;\n\
-              #STEPSTYPE:dance-single;\n\
-              #DIFFICULTY:Challenge;\n\
-              #METER:1;\n\
-              #NOTES:\n\
-              1MLF\n\
-              2000\n\
-              3000\n\
-              0400\n\
-              0300\n\
-              ;",
-            "ssc",
-            &AnalysisOptions::default(),
-        )
-        .unwrap();
-        let chart = &summary.charts[0];
-        let capacity = parsed_note_capacity(
-            chart.stats.total_arrows,
-            chart.stats.mines,
-            chart.stats.fakes,
-        );
-
-        assert_eq!(capacity, 6);
-        assert_eq!(
-            parse_cached_notes(&chart.minimized_note_data, 4, None).len(),
-            capacity
-        );
-    }
-
-    #[test]
-    fn rssp_note_handoff_matches_dead_sync_parser() {
-        let root = test_dir("rssp-note-handoff");
-        let simfile = root.join("song.ssc");
-        fs::write(
-            &simfile,
-            b"#VERSION:0.83;\n\
-              #TITLE:Note Handoff;\n\
-              #BPMS:0=120;\n\
-              #NOTEDATA:;\n\
-              #STEPSTYPE:dance-single;\n\
-              #DIFFICULTY:Challenge;\n\
-              #METER:1;\n\
-              #NOTES:\n\
-              1MLF\n\
-              mlf0\n\
-              2000\n\
-              3000\n\
-              0400\n\
-              0300\n\
-              2000\n\
-              1000\n\
-              3000\n\
-              ;",
-        )
-        .unwrap();
-        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
-
-        let direct = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
-        let legacy = parse_song_file_fresh(&simfile, &options, |_| 0.0).unwrap();
-
-        assert_eq!(
-            bincode::encode_to_vec(direct, bincode::config::standard()).unwrap(),
-            bincode::encode_to_vec(legacy, bincode::config::standard()).unwrap()
-        );
-    }
-
-    #[test]
-    fn streaming_lowercase_order_matches_allocated_order() {
-        let values = [
-            "",
-            "alpha",
-            "ALPHA",
-            "Beta",
-            "Ärger",
-            "İstanbul",
-            "Σ",
-            "ß",
-            "🙂",
-        ];
-        for left in values {
-            for right in values {
-                assert_eq!(
-                    lowercase_cmp(left, right),
-                    left.to_lowercase().cmp(&right.to_lowercase()),
-                    "lowercase ordering diverged for {left:?} and {right:?}"
-                );
-            }
-        }
-    }
 
     #[test]
     fn reused_analysis_matches_fresh_parsing_across_files() {
@@ -1146,7 +622,7 @@ mod tests {
         let mut scratch = SongParseScratch::default();
 
         for path in [&large, &small, &large] {
-            let expected = parse_song_file_fresh(path, &options, |_| 7.5).unwrap();
+            let expected = parse_song_file(path, &options, |_| 7.5).unwrap();
             let actual =
                 parse_song_file_in(path, &options, &analyzer, &mut scratch, |_| 7.5).unwrap();
             let expected = bincode::encode_to_vec(expected, bincode::config::standard()).unwrap();
@@ -1272,11 +748,6 @@ mod tests {
         let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
 
         let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
-        let legacy = parse_song_file_fresh(&simfile, &options, |_| 0.0).unwrap();
-        assert_eq!(
-            bincode::encode_to_vec(&song, bincode::config::standard()).unwrap(),
-            bincode::encode_to_vec(&legacy, bincode::config::standard()).unwrap()
-        );
 
         assert_eq!(song.charts.len(), 1);
         assert_eq!(song.charts[0].chart_type, "pump-single");
@@ -1332,11 +803,6 @@ mod tests {
         let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
 
         let song = parse_song_file(&simfile, &options, |_| 0.0).unwrap();
-        let legacy = parse_song_file_fresh(&simfile, &options, |_| 0.0).unwrap();
-        assert_eq!(
-            bincode::encode_to_vec(&song, bincode::config::standard()).unwrap(),
-            bincode::encode_to_vec(&legacy, bincode::config::standard()).unwrap()
-        );
 
         assert_eq!(
             song.charts

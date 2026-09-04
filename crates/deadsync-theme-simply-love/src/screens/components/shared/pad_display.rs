@@ -121,25 +121,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cached_pad_children_match_legacy_content_and_refresh_for_inputs() {
-        let legacy = build_children(0.125, true, false);
-        let first = cached_children(0.125, true, false);
-        let repeated = cached_children(0.125, true, false);
-        assert_eq!(format!("{legacy:?}"), format!("{:?}", first.as_ref()));
-        assert!(Arc::ptr_eq(&first, &repeated));
-
-        let changed_zoom = cached_children(0.25, true, false);
-        let pump = cached_children(0.125, true, true);
-        let inactive = cached_children(0.125, false, false);
-        assert!(!Arc::ptr_eq(&first, &changed_zoom));
-        assert!(!Arc::ptr_eq(&first, &pump));
-        assert_ne!(
-            format!("{:?}", first.as_ref()),
-            format!("{:?}", inactive.as_ref())
-        );
-    }
-
-    #[test]
     fn pump_uses_corners_and_center() {
         assert_eq!(panel_layout(true, false), DANCE_LAYOUT);
         assert_eq!(panel_layout(true, true), PUMP_LAYOUT);

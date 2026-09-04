@@ -703,19 +703,6 @@ fn numbered_key(key: &str, prefix: &str) -> Option<usize> {
     key.get(prefix.len()..)?.parse().ok()
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn step_stats_numbered_key_for_bench(key: &str, prefix: &str) -> Option<usize> {
-    numbered_key(key, prefix)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn step_stats_numbered_key_reference_for_bench(key: &str, prefix: &str) -> Option<usize> {
-    let lower = key.to_ascii_lowercase();
-    lower.strip_prefix(prefix)?.parse().ok()
-}
-
 fn value_f32(value: &Value) -> Option<f32> {
     let value = match value {
         Value::Integer(value) => Some(*value as f32),
@@ -774,21 +761,6 @@ fn align_value(value: &Value) -> Option<f32> {
     };
     let value = value.to_str().ok()?;
     alignment_name(value.as_ref())
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn step_stats_alignment_name_for_bench(value: &str) -> Option<f32> {
-    alignment_name(value)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn step_stats_alignment_name_reference_for_bench(value: &str) -> Option<f32> {
-    // The committed Lua path first copied the string out of `mlua`, then
-    // allocated a second lowercase string for classification.
-    let owned = value.to_string();
-    alignment_name_lower(&owned.to_ascii_lowercase())
 }
 
 #[derive(Clone, Copy)]
@@ -860,18 +832,6 @@ fn actor_command(method: &str) -> Option<GifActorCommand> {
             None
         }
     })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn step_stats_actor_command_for_bench(method: &str) -> Option<u8> {
-    actor_command(method).map(|command| command as u8)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn step_stats_actor_command_reference_for_bench(method: &str) -> Option<u8> {
-    actor_command_lower(&method.to_ascii_lowercase()).map(|command| command as u8)
 }
 
 fn apply_actor_command(style: &mut GifStyle, method: &str, args: &MultiValue) {
@@ -961,11 +921,6 @@ return t
 
         for (key, prefix, expected) in cases {
             assert_eq!(numbered_key(key, prefix), expected, "case: {key:?}");
-            assert_eq!(
-                numbered_key(key, prefix),
-                step_stats_numbered_key_reference_for_bench(key, prefix),
-                "case: {key:?}"
-            );
         }
     }
 
@@ -985,11 +940,6 @@ return t
 
         for (value, expected) in cases {
             assert_eq!(alignment_name(value), expected, "case: {value:?}");
-            assert_eq!(
-                alignment_name(value),
-                step_stats_alignment_name_reference_for_bench(value),
-                "case: {value:?}"
-            );
         }
     }
 
@@ -1019,11 +969,6 @@ return t
             assert_eq!(
                 actor_command(method).map(|command| command as u8),
                 expected,
-                "case: {method:?}"
-            );
-            assert_eq!(
-                actor_command(method).map(|command| command as u8),
-                step_stats_actor_command_reference_for_bench(method),
                 "case: {method:?}"
             );
         }

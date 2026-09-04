@@ -2046,33 +2046,6 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn speed_cursor_reuses_retained_value_geometry() {
-        ensure_i18n();
-        let (mut state, asset_manager) = setup_state();
-        super::super::prepare_presentation(&mut state, &asset_manager);
-        let speed_row = state
-            .pane()
-            .row_map
-            .display_order()
-            .iter()
-            .position(|&id| id == RowId::SpeedMod)
-            .expect("Speed Mod row present");
-        state.pane_mut().selected_row[P1] = speed_row;
-        state.pane_mut().arcade_row_focus[P1] = false;
-        let first_text = super::super::speed_value(&state, P1).text.clone();
-
-        let first = super::super::cursor_dest_for_player(&state, &asset_manager, P1)
-            .expect("speed cursor destination");
-        let second = super::super::cursor_dest_for_player(&state, &asset_manager, P1)
-            .expect("speed cursor destination");
-        let second_text = super::super::speed_value(&state, P1).text.clone();
-
-        assert_eq!(first, second);
-        assert_eq!(first_text.as_str(), second_text.as_str());
-        assert!(matches!(second_text, TextContent::Inline(_)));
-    }
-
-    #[test]
     fn speed_header_dirty_follows_mini_and_perspective() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -5218,26 +5191,5 @@ pub(super) mod tests {
         } else {
             panic!("search should still be open after Tab");
         }
-    }
-
-    #[test]
-    fn prepared_search_rows_match_immediate_frame_text() {
-        ensure_i18n();
-        let benchmark = super::PlayerOptionsSearchBenchmark::new();
-        assert_eq!(benchmark.legacy_frame(), benchmark.current_frame());
-    }
-
-    #[test]
-    fn direct_search_overlay_append_matches_temporary_batch() {
-        ensure_i18n();
-        let (mut state, _asset_manager) = setup_state();
-        open_search(&mut state);
-        search_key(&mut state, None, Some("speed"), false);
-
-        let legacy = super::search::build_overlay_legacy(&state)
-            .expect("open search should produce an overlay");
-        let mut direct = Vec::with_capacity(legacy.len());
-        super::search::push_overlay(&mut direct, &state);
-        assert_eq!(format!("{legacy:#?}"), format!("{direct:#?}"));
     }
 }

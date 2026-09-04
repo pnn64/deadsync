@@ -636,8 +636,7 @@ const SONG_LUA_CHILD_ORDER_Z: u8 = 2;
 /// Gameplay performs no insertion, growth, eviction, pruning, or destruction;
 /// dynamic ordering saturates at the compiled actor count and only re-sorts a
 /// bounded sibling list after a key change. All storage is released at the
-/// gameplay transition. The frame benchmark exposes full-scan versus planned
-/// state updates and recursive versus flat ordering.
+/// gameplay transition.
 #[derive(Default)]
 struct SongLuaOverlayOrderCache {
     child_lists: Vec<Vec<usize>>,
@@ -875,8 +874,7 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// compiled vertex count or the 4x4 fade grid's 54 triangle vertices, with no
 /// eviction or pruning. Buffers and replaced generations are freed outside
 /// their live actor use, ultimately with the screen. Replacement and capacity
-/// counters are exposed to the benchmark; worst-case frame work is bounded by
-/// that actor's compiled vertex count.
+/// counters bound worst-case frame work to that actor's compiled vertex count.
 /// Static `BitmapText` uppercase content and the seven rainbow-scroll phases are
 /// also compiled into this overlay-local song-lifetime storage during screen
 /// entry. Rainbow phase storage is capped at 64 characters per actor; larger
@@ -1377,8 +1375,7 @@ impl SongLuaProxyRequestIndex {
 /// block's easing enum; steady tween frames only evaluate that enum. Backward
 /// seeks reset and replay message/block cursors, with work bounded by crossed
 /// events and blocks. There are no allocations, misses, eviction, or separate
-/// destruction; the cache drops with frame scratch. Parity tests cover seeks,
-/// and the message-tween benchmark reports cycles and allocation counts.
+/// destruction; the cache drops with frame scratch. Parity tests cover seeks.
 #[derive(Clone, Copy, Debug)]
 struct SongLuaMessageStateCache {
     initialized: bool,
@@ -1648,13 +1645,6 @@ const NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY: usize = ERROR_BAR_HUD_FLAT_DRAW_
 const PLAYER_ACTOR_SCRATCH_CAPACITY: usize =
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY + NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub const BENCH_NOTEFIELD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_ACTOR_SCRATCH_CAPACITY;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub const BENCH_NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY: usize = NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY;
-
 fn gameplay_actor_scratch(active_players: usize, capacity: usize) -> [Vec<Actor>; MAX_PLAYERS] {
     std::array::from_fn(|player| {
         if player < active_players {
@@ -1691,18 +1681,6 @@ enum GameplayStepStatsMode {
     Side,
     Versus,
     Double,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl GameplayStepStatsMode {
-    const fn checksum(self) -> u64 {
-        match self {
-            Self::Hidden => 0,
-            Self::Side => 1,
-            Self::Versus => 2,
-            Self::Double => 3,
-        }
-    }
 }
 
 const fn gameplay_step_stats_mode(
@@ -1749,9 +1727,8 @@ const fn gameplay_step_stats_mode(
 /// active prefix directly; unsorted sources retain the bounded binary
 /// insert/remove and O(n log n) seek fallback, preserving source draw order.
 /// There are no gameplay allocations, misses, eviction, pruning,
-/// synchronization, or destruction before screen exit. The layer-activity
-/// benchmark records steady and boundary cost, allocator activity, and retained
-/// bytes; all storage drops with the screen.
+/// synchronization, or destruction before screen exit; all storage drops with
+/// the screen.
 struct SongLuaLayerActivity {
     start_seconds: Box<[f32]>,
     start_order: Box<[usize]>,
@@ -1861,133 +1838,6 @@ impl SongLuaLayerActivity {
         }
         &self.active
     }
-
-    #[cfg(any(test, feature = "bench-support"))]
-    fn retained_bytes(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + std::mem::size_of_val(self.start_seconds.as_ref())
-            + std::mem::size_of_val(self.start_order.as_ref())
-            + self.active.capacity() * std::mem::size_of::<usize>()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[derive(Default)]
-struct ReferenceSongLuaLayerActivity {
-    starts: Box<[(f32, usize)]>,
-    active: Vec<usize>,
-    next_start: usize,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ReferenceSongLuaLayerActivity {
-    fn new(starts: impl IntoIterator<Item = f32>, now: f32) -> Self {
-        let mut starts = starts
-            .into_iter()
-            .enumerate()
-            .map(|(index, start)| (start, index))
-            .collect::<Vec<_>>();
-        starts.sort_by(|left, right| {
-            left.0
-                .total_cmp(&right.0)
-                .then_with(|| left.1.cmp(&right.1))
-        });
-        let mut activity = Self {
-            active: Vec::with_capacity(starts.len()),
-            starts: starts.into_boxed_slice(),
-            next_start: 0,
-        };
-        activity.sync(now);
-        activity
-    }
-
-    #[inline]
-    fn sync(&mut self, now: f32) -> &[usize] {
-        let old_next_start = self.next_start;
-        while let Some(&(start, _)) = self.starts.get(self.next_start) {
-            if now < start {
-                break;
-            }
-            self.next_start += 1;
-        }
-        while self.next_start > 0 && now < self.starts[self.next_start - 1].0 {
-            self.next_start -= 1;
-        }
-        match self.next_start.abs_diff(old_next_start) {
-            0 => {}
-            1 if self.next_start > old_next_start => {
-                let index = self.starts[old_next_start].1;
-                let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
-                self.active.insert(insert_at, index);
-            }
-            1 => {
-                let index = self.starts[self.next_start].1;
-                if let Ok(remove_at) = self.active.binary_search(&index) {
-                    self.active.remove(remove_at);
-                }
-            }
-            _ => {
-                self.active.clear();
-                self.active.extend(
-                    self.starts[..self.next_start]
-                        .iter()
-                        .map(|(_, index)| *index),
-                );
-                self.active.sort_unstable();
-            }
-        }
-        &self.active
-    }
-
-    fn retained_bytes(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + std::mem::size_of_val(self.starts.as_ref())
-            + self.active.capacity() * std::mem::size_of::<usize>()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct ReferenceSongLuaLayerActivityBenchmark(ReferenceSongLuaLayerActivity);
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ReferenceSongLuaLayerActivityBenchmark {
-    #[must_use]
-    pub fn new(starts: Vec<f32>, now: f32) -> Self {
-        Self(ReferenceSongLuaLayerActivity::new(starts, now))
-    }
-
-    #[inline(always)]
-    pub fn sync(&mut self, now: f32) -> &[usize] {
-        self.0.sync(now)
-    }
-
-    #[must_use]
-    pub fn retained_bytes(&self) -> usize {
-        self.0.retained_bytes()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaLayerActivityBenchmark(SongLuaLayerActivity);
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaLayerActivityBenchmark {
-    #[must_use]
-    pub fn new(starts: Vec<f32>, now: f32) -> Self {
-        Self(SongLuaLayerActivity::new(starts, now))
-    }
-
-    #[inline(always)]
-    pub fn sync(&mut self, now: f32) -> &[usize] {
-        self.0.sync(now)
-    }
-
-    #[must_use]
-    pub fn retained_bytes(&self) -> usize {
-        self.0.retained_bytes()
-    }
 }
 
 /// Game-thread, song-lifetime scratch detached while one actor frame is built.
@@ -1996,8 +1846,7 @@ impl SongLuaLayerActivityBenchmark {
 /// gameplay entry. A frame moves only the owning pointer, so there are no
 /// misses, growth, pruning, synchronization, or destruction on the live path.
 /// The owner is restored before returning and dropped at screen transition.
-/// The frame-orchestration benchmark covers allocation counts and worst-sample
-/// cost; steady-state work is bounded to one pointer take and restore.
+/// Steady-state work is bounded to one pointer take and restore.
 #[derive(Default)]
 struct GameplayFrameScratch {
     lobby_hud_cache: lobby_hud::LobbyHudCache,
@@ -2049,55 +1898,6 @@ struct GameplayFrameScratch {
     player_actor_assembly_cache: [PlayerActorAssemblyCache; MAX_PLAYERS],
     player_field_camera_cache: [PlayerFieldCameraCache; MAX_PLAYERS],
     presentation_skeleton: GameplayPresentationSkeleton,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct GameplayFrameOrchestrationBenchmark {
-    scratch: Option<Box<GameplayFrameScratch>>,
-    layer_scratch: [Vec<Vec<()>>; 6],
-    step_stats_mode: GameplayStepStatsMode,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl GameplayFrameOrchestrationBenchmark {
-    #[must_use]
-    pub fn new(layer_count: usize) -> Self {
-        let mut scratch = GameplayFrameScratch::default();
-        scratch.lobby_hud_status_scratch = String::with_capacity(128);
-        scratch.song_lua_order_scratch = Vec::with_capacity(256);
-        scratch.song_lua_capture_order_scratch = Vec::with_capacity(256);
-        scratch.song_lua_capture_state_scratch = Vec::with_capacity(256);
-        Self {
-            scratch: Some(Box::new(scratch)),
-            layer_scratch: std::array::from_fn(|_| (0..layer_count).map(|_| Vec::new()).collect()),
-            step_stats_mode: gameplay_step_stats_mode(
-                profile_data::PlayStyle::Versus,
-                8,
-                false,
-                true,
-            ),
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Panics if an internal state invariant is violated.
-    pub fn steady_frame(&mut self) -> u64 {
-        let scratch = std::hint::black_box(
-            self.scratch
-                .take()
-                .expect("macrobenchmark scratch is restored after every frame"),
-        );
-        let checksum = (scratch.lobby_hud_status_scratch.capacity()
-            + scratch.song_lua_order_scratch.capacity()
-            + scratch.song_lua_capture_order_scratch.capacity()
-            + scratch.song_lua_capture_state_scratch.capacity()
-            + self.layer_scratch.iter().map(Vec::len).sum::<usize>()) as u64
-            + self.step_stats_mode.checksum();
-        self.scratch = Some(std::hint::black_box(scratch));
-        checksum
-    }
 }
 
 const LIFE_BOUNCE_S: f32 = 0.1;
@@ -2229,8 +2029,7 @@ pub struct State {
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
     /// screen; there are no misses, eviction, synchronization, allocations, or
-    /// per-frame maintenance. The `gameplay_hud_snapshot` benchmark covers its
-    /// old/new allocation and worst-sample costs.
+    /// per-frame maintenance.
     hud_snapshot: profile_data::GameplayHudSnapshot,
     pub noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
@@ -2290,8 +2089,8 @@ pub struct State {
     /// writes at most six stack bytes and replaces one player's last value; a
     /// hit is one quantized-key comparison. There is no synchronization,
     /// allocation, or eviction, and destruction occurs with the gameplay state
-    /// at screen transition. Text-layout counters and the numeric HUD benchmark
-    /// cover activity; six byte writes are the worst-case live-frame work.
+    /// at screen transition. Six byte writes are the worst-case live-frame
+    /// work.
     life_percent_text: GameplayLifeTextPlan,
     /// Fixed two-player, song-lifetime presentation state for Simply Love life
     /// tweens. The gameplay thread advances it once per update and actor
@@ -2319,7 +2118,7 @@ pub struct State {
     /// gameplay thread. Capacity is exact and immutable; steady frames advance
     /// the adjacent cursor without misses, growth, pruning, or allocation.
     /// Backward seeks walk only crossed events. Storage is freed with the
-    /// screen; the benchmark records traversal cost and allocations.
+    /// screen.
     song_layer2_events: Vec<SongLayer2Event>,
     next_song_layer2_event_ix: Cell<usize>,
     pub current_background_path: Option<PathBuf>,
@@ -5647,9 +5446,8 @@ enum GameplayBpmText {
 /// compare the key and copy that payload. There is no lookup, pruning,
 /// synchronization, or eviction. Values too wide for the fixed payload retain
 /// the previous owned-string behavior as a cold compatibility fallback. The
-/// screen transition drops that fallback. The numeric memo benchmark reports
-/// setup/live cycles and allocations; worst normal-frame work is ten decimal
-/// digit writes plus the optional three fractional digits.
+/// screen transition drops that fallback. Worst normal-frame work is ten
+/// decimal digit writes plus the optional three fractional digits.
 struct GameplayBpmTextPlan {
     key: (u64, bool),
     text: GameplayBpmText,
@@ -5688,81 +5486,6 @@ impl GameplayBpmTextPlan {
 impl Default for GameplayBpmTextPlan {
     fn default() -> Self {
         Self::new(0.0, false)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayBpmTextBenchmark {
-    old_values: rustc_hash::FxHashMap<(u64, bool), Arc<str>>,
-    old_key: (u64, bool),
-    old_text: Arc<str>,
-    plan: GameplayBpmTextPlan,
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayBpmTextBenchmark {
-    #[must_use]
-    /// # Panics
-    ///
-    /// Panics if an internal state invariant is violated.
-    pub fn new() -> Self {
-        let old_values = (0..2_048u32)
-            .map(|index| {
-                let bpm = f64::from(index).mul_add(0.001, 40.0);
-                ((bpm.to_bits(), true), Arc::from(owned_bpm_text(bpm, true)))
-            })
-            .collect::<rustc_hash::FxHashMap<_, _>>();
-        let old_key = (40.0f64.to_bits(), true);
-        let old_text = Arc::clone(
-            old_values
-                .get(&old_key)
-                .expect("benchmark BPM was inserted"),
-        );
-        Self {
-            old_values,
-            old_key,
-            old_text,
-            plan: GameplayBpmTextPlan::default(),
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Panics if an internal state invariant is violated.
-    pub fn legacy_frame(&mut self, frame: u32) -> u64 {
-        let bpm = 40.0 + f64::from((frame / 60) % 2_048) * 0.001;
-        let key = (bpm.to_bits(), true);
-        if self.old_key != key {
-            self.old_key = key;
-            self.old_text = Arc::clone(
-                self.old_values
-                    .get(&key)
-                    .expect("benchmark BPM was prewarmed"),
-            );
-        }
-        let text = Arc::clone(&self.old_text);
-        text.bytes().fold(0u64, |checksum, byte| {
-            (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
-        })
-    }
-
-    pub fn optimized_frame(&mut self, frame: u32) -> u64 {
-        let bpm = 40.0 + f64::from((frame / 60) % 2_048) * 0.001;
-        self.plan
-            .resolve(bpm, true)
-            .as_str()
-            .bytes()
-            .fold(0u64, |checksum, byte| {
-                (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
-            })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayBpmTextBenchmark {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -5933,108 +5656,6 @@ fn prewarm_bpm_text_slot(
         TextAlign::Center,
         FRAME_TEXT_VERTEX_BUFFERS,
     );
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_bpm_text_setup(
-    fonts: &font::FontMap,
-    scratch: &mut ComposeScratch,
-    optimized: bool,
-) -> (u64, u32) {
-    let mut cache = TextLayoutCache::new(4_096);
-    cache.begin_frame_stats(true);
-    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
-    if optimized {
-        let mut plan = GameplayBpmTextPlan::default();
-        prewarm_bpm_text_slot(&mut cache, scratch, fonts);
-        for index in 0..2_048u32 {
-            let text = plan.resolve(f64::from(index).mul_add(0.001, 40.0), true);
-            for byte in text.as_str().bytes() {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-    } else {
-        for index in 0..2_048u32 {
-            let text = owned_bpm_text(f64::from(index).mul_add(0.001, 40.0), true);
-            cache.prewarm_text(fonts, "miso", &text, None);
-            for byte in text.bytes() {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-    }
-    (checksum, cache.frame_stats().owned_entries)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_life_text_setup(
-    fonts: &font::FontMap,
-    scratch: &mut ComposeScratch,
-    optimized: bool,
-) -> (u64, u32) {
-    let mut cache = TextLayoutCache::new(4_096);
-    cache.begin_frame_stats(true);
-    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
-    if optimized {
-        let plan = GameplayLifeTextPlan::new();
-        prewarm_life_text_slots(&mut cache, scratch, fonts, MAX_PLAYERS);
-        for key in 0..=1_000 {
-            for byte in plan
-                .resolve(key as f32 / 10.0, key as usize % MAX_PLAYERS)
-                .as_str()
-                .bytes()
-            {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-    } else {
-        let values: Box<[Arc<str>; 1_001]> = Box::new(std::array::from_fn(|key| {
-            Arc::from(format!("{:.1}%", key as f32 / 10.0))
-        }));
-        for text in values.iter() {
-            cache.prewarm_text(fonts, "miso", text.as_ref(), None);
-        }
-        for text in values.iter() {
-            for byte in text.bytes() {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-    }
-    (checksum, cache.frame_stats().owned_entries)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayLifeTextHotBenchmark {
-    plan: GameplayLifeTextPlan,
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayLifeTextHotBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            plan: GameplayLifeTextPlan::new(),
-        }
-    }
-
-    pub fn frame(&self, frame: u32) -> u64 {
-        let key = (frame / 60) % 1_001;
-        let text = self
-            .plan
-            .resolve(key as f32 / 10.0, frame as usize % MAX_PLAYERS);
-        text.as_str().bytes().fold(0u64, |checksum, byte| {
-            (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3)
-        })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayLifeTextHotBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[inline(always)]
@@ -6727,29 +6348,6 @@ fn push_current_bgchange_media(
     }
 }
 
-/// Transition macrobenchmark for the prewarmed SongBgWithMovieViz texture key.
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayBackgroundKeyBenchmark {
-    cached: Arc<str>,
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayBackgroundKeyBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let path = PathBuf::from("Songs/Benchmark Pack/Benchmark Song/background image.png");
-        let cached = crate::assets::media_path_key(&path);
-        Self { cached }
-    }
-
-    #[must_use]
-    pub fn frame(&self) -> usize {
-        let key = Arc::clone(std::hint::black_box(&self.cached));
-        std::hint::black_box(key.len())
-    }
-}
-
 fn push_bgchange_transition(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -6999,8 +6597,7 @@ struct SongLuaForegroundOwnerPath {
 /// at screen entry. Foreground events select a path with binary search; gameplay
 /// frames read only its contiguous owner range. Misses saturate to an empty
 /// range, there is no growth, eviction, synchronization, or live-frame pruning,
-/// and storage is freed at screen exit. The foreground-owner benchmark covers
-/// full scans versus indexed reads, allocation counts, and worst-sample cost.
+/// and storage is freed at screen exit.
 #[derive(Default)]
 struct SongLuaForegroundOwnerIndex {
     paths: Box<[SongLuaForegroundOwnerPath]>,
@@ -8160,19 +7757,6 @@ fn song_lua_overlay_runtime_updates_at(
         .get()
         .and_then(|index| overlays.get(index))
         .and_then(|overlay| match &overlay.kind {
-            SongLuaOverlayKind::UpdateTracks { tracks } => Some(tracks.as_slice()),
-            _ => None,
-        })
-        .unwrap_or(&[])
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_overlay_runtime_updates_reference(
-    overlays: &[SongLuaOverlayActor],
-) -> &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack] {
-    overlays
-        .iter()
-        .find_map(|overlay| match &overlay.kind {
             SongLuaOverlayKind::UpdateTracks { tracks } => Some(tracks.as_slice()),
             _ => None,
         })
@@ -10597,31 +10181,6 @@ fn song_lua_direct_proxy(
 }
 
 #[cfg(test)]
-fn song_lua_fold_direct_aft_proxy(
-    overlay: &SongLuaOverlayActor,
-    state: SongLuaOverlayState,
-    z: i16,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-    mut proxy: SongLuaDirectProxy,
-) -> SongLuaDirectProxy {
-    let (capture_offset, capture_camera) =
-        song_lua_capture_placement(overlay, state, overlay_space_width, overlay_space_height);
-    proxy.offset[0] += capture_offset[0];
-    proxy.offset[1] += capture_offset[1];
-    proxy.z = song_lua_add_z(z, proxy.z);
-    proxy.style.push_enclosing_tint(state.diffuse);
-    if state.blend != SongLuaOverlayBlendMode::Alpha {
-        proxy.blend = song_lua_overlay_blend(state.blend);
-    }
-    if proxy.camera.is_some() {
-        proxy.enclosing_camera = capture_camera;
-    }
-    proxy.camera = proxy.camera.or(capture_camera);
-    proxy
-}
-
-#[cfg(test)]
 fn song_lua_build_proxy_frame_actor_with_scratch(
     state: SongLuaOverlayState,
     z: i16,
@@ -11048,31 +10607,6 @@ fn song_lua_capture_overlay_states_into_scratch(
     if out.len() != overlays.len() {
         out.resize(overlays.len(), SongLuaOverlayState::default());
     }
-    song_lua_fill_capture_overlay_states(
-        overlays,
-        overlay_states,
-        local_overlay_states,
-        order_cache,
-        capture_index,
-        overlay_space_width,
-        overlay_space_height,
-        out,
-    );
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_capture_overlay_states_reference(
-    overlays: &[SongLuaOverlayActor],
-    overlay_states: &[SongLuaOverlayState],
-    local_overlay_states: &[SongLuaOverlayState],
-    order_cache: &SongLuaOverlayOrderCache,
-    capture_index: usize,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-    out: &mut Vec<SongLuaOverlayState>,
-) {
-    out.clear();
-    out.resize(overlays.len(), SongLuaOverlayState::default());
     song_lua_fill_capture_overlay_states(
         overlays,
         overlay_states,
@@ -11632,122 +11166,6 @@ fn song_lua_overlay_apply_blocks_cached(
     *block_state
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_overlay_apply_blocks_cached_reference(
-    state: SongLuaOverlayState,
-    blocks: &[SongLuaOverlayCommandBlock],
-    elapsed: f32,
-    next_block: &mut usize,
-    block_state: &mut SongLuaOverlayState,
-    last_elapsed: &mut f32,
-) -> SongLuaOverlayState {
-    if !elapsed.is_finite() {
-        return state;
-    }
-    if elapsed < *last_elapsed {
-        *next_block = 0;
-        *block_state = state;
-    }
-    *last_elapsed = elapsed;
-
-    while let Some(block) = blocks.get(*next_block) {
-        if elapsed < block.start {
-            break;
-        }
-        if block.duration <= f32::EPSILON || elapsed >= block.start + block.duration {
-            apply_song_lua_overlay_delta(block_state, &block.delta);
-            *next_block += 1;
-            continue;
-        }
-        let target = song_lua_overlay_state_with_delta(*block_state, &block.delta);
-        let t = song_lua_ease_factor(
-            block.easing.as_deref(),
-            ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
-            block.opt1,
-            block.opt2,
-        );
-        return song_lua_overlay_state_lerp(*block_state, target, t, &block.delta);
-    }
-    *block_state
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaMessageTweenBenchmark {
-    blocks: [SongLuaOverlayCommandBlock; 1],
-    frame: usize,
-    next_block: usize,
-    active_easing: Option<(usize, SongLuaEase)>,
-    block_state: SongLuaOverlayState,
-    last_elapsed: f32,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl Default for SongLuaMessageTweenBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaMessageTweenBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            blocks: [SongLuaOverlayCommandBlock {
-                start: 0.0,
-                duration: 20.0,
-                easing: Some("inOutElastic".to_owned()),
-                opt1: Some(0.35),
-                opt2: None,
-                delta: SongLuaOverlayStateDelta {
-                    x: Some(640.0),
-                    ..SongLuaOverlayStateDelta::default()
-                },
-            }],
-            frame: 0,
-            next_block: 0,
-            active_easing: None,
-            block_state: SongLuaOverlayState::default(),
-            last_elapsed: f32::NEG_INFINITY,
-        }
-    }
-
-    #[inline(always)]
-    fn elapsed(&mut self) -> f32 {
-        let elapsed = (self.frame % 1_200) as f32 / 120.0;
-        self.frame = self.frame.wrapping_add(1);
-        elapsed
-    }
-
-    pub fn reference_frame(&mut self) -> u64 {
-        let elapsed = self.elapsed();
-        let state = song_lua_overlay_apply_blocks_cached_reference(
-            SongLuaOverlayState::default(),
-            &self.blocks,
-            elapsed,
-            &mut self.next_block,
-            &mut self.block_state,
-            &mut self.last_elapsed,
-        );
-        u64::from(state.x.to_bits())
-    }
-
-    pub fn compiled_frame(&mut self) -> u64 {
-        let elapsed = self.elapsed();
-        let state = song_lua_overlay_apply_blocks_cached(
-            SongLuaOverlayState::default(),
-            &self.blocks,
-            elapsed,
-            &mut self.next_block,
-            &mut self.active_easing,
-            &mut self.block_state,
-            &mut self.last_elapsed,
-        );
-        u64::from(state.x.to_bits())
-    }
-}
-
 fn song_lua_overlay_update_value_lerp(
     from: &deadsync_song_lua::SongLuaOverlayUpdateValue,
     to: &deadsync_song_lua::SongLuaOverlayUpdateValue,
@@ -11822,37 +11240,6 @@ fn song_lua_overlay_update_snap(
         });
     }
     None
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_overlay_update_snap_reference(
-    now: f32,
-    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
-) -> Option<SongLuaOverlayUpdateSnap> {
-    use deadsync_song_lua::{
-        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
-    };
-    tracks
-        .iter()
-        .filter(|track| track.target == Target::Visible)
-        .find_map(|track| {
-            let next = track.samples.partition_point(|sample| sample.second <= now);
-            let from = track.samples.get(next.checked_sub(1)?)?;
-            let to = track.samples.get(next)?;
-            if to.second - from.second > SONG_LUA_UPDATE_SNAP_MAX_SECONDS {
-                return None;
-            }
-            let t = match (&from.value, &to.value) {
-                (Value::Bool(false), Value::Bool(true)) => 1.0,
-                (Value::Bool(true), Value::Bool(false)) => 0.0,
-                _ => return None,
-            };
-            Some(SongLuaOverlayUpdateSnap {
-                start_second: from.second,
-                end_second: to.second,
-                t,
-            })
-        })
 }
 
 fn apply_song_lua_overlay_update_value(
@@ -12016,455 +11403,6 @@ fn apply_song_lua_overlay_runtime_updates_for(
                 from.second
             });
         }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn apply_song_lua_overlay_runtime_updates_for_reference(
-    now: f32,
-    overlay_index: usize,
-    tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack],
-    current: &mut SongLuaOverlayState,
-) {
-    let start = tracks.partition_point(|track| track.overlay_index < overlay_index);
-    let end = start + tracks[start..].partition_point(|track| track.overlay_index == overlay_index);
-    for track in &tracks[start..end] {
-        let samples = &track.samples;
-        let next = samples.partition_point(|sample| sample.second <= now);
-        if next == 0 {
-            continue;
-        }
-        let from = &samples[next - 1];
-        let to = samples.get(next).unwrap_or(from);
-        let t = if to.second <= from.second + f32::EPSILON {
-            1.0
-        } else {
-            (now - from.second) / (to.second - from.second)
-        };
-        let value = song_lua_overlay_update_value_lerp(&from.value, &to.value, t);
-        apply_song_lua_overlay_update_value(current, track.target, &value);
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaUpdateLookupBenchmark {
-    tracks: Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack>,
-    ranges: Box<[std::ops::Range<usize>]>,
-    cursors: Vec<usize>,
-    states: Vec<SongLuaOverlayState>,
-    frame: usize,
-    sample_count: usize,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaUpdateLookupBenchmark {
-    #[must_use]
-    pub fn new(overlay_count: usize, sample_count: usize) -> Self {
-        use deadsync_song_lua::{
-            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
-            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
-        };
-        let sample_count = sample_count.max(2);
-        let mut tracks = Vec::with_capacity(overlay_count.saturating_mul(2));
-        for overlay_index in 0..overlay_count {
-            for target in [Target::X, Target::SkewX] {
-                let samples = (0..sample_count)
-                    .map(|sample| Sample {
-                        second: sample as f32 / 120.0,
-                        value: Value::F32((sample as f32).mul_add(0.03125, overlay_index as f32)),
-                    })
-                    .collect();
-                tracks.push(Track {
-                    overlay_index,
-                    target,
-                    samples,
-                });
-            }
-        }
-        let ranges = (0..overlay_count)
-            .map(|overlay| overlay * 2..overlay * 2 + 2)
-            .collect();
-        Self {
-            cursors: vec![0; tracks.len()],
-            tracks,
-            ranges,
-            states: vec![SongLuaOverlayState::default(); overlay_count],
-            frame: 0,
-            sample_count,
-        }
-    }
-
-    #[inline(always)]
-    fn now(&mut self) -> f32 {
-        let now = (self.frame % self.sample_count) as f32 / 120.0;
-        self.frame = self.frame.wrapping_add(1);
-        now
-    }
-
-    pub fn reference_frame(&mut self) -> u64 {
-        let now = self.now();
-        for (overlay_index, state) in self.states.iter_mut().enumerate() {
-            apply_song_lua_overlay_runtime_updates_for_reference(
-                now,
-                overlay_index,
-                &self.tracks,
-                state,
-            );
-        }
-        self.checksum()
-    }
-
-    pub fn current_frame(&mut self) -> u64 {
-        let now = self.now();
-        for (overlay_index, state) in self.states.iter_mut().enumerate() {
-            apply_song_lua_overlay_runtime_updates_for(
-                now,
-                &self.tracks,
-                self.ranges[overlay_index].clone(),
-                &mut self.cursors,
-                None,
-                state,
-            );
-        }
-        self.checksum()
-    }
-
-    fn checksum(&self) -> u64 {
-        self.states
-            .iter()
-            .enumerate()
-            .fold(0, |checksum, (index, state)| {
-                checksum.rotate_left(7)
-                    ^ u64::from(state.x.to_bits())
-                    ^ u64::from(state.skew_x.to_bits()).rotate_left(index as u32 & 31)
-            })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaUpdateSnapBenchmark {
-    tracks: Vec<deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack>,
-    visible_indices: Box<[usize]>,
-    cursors: Vec<usize>,
-    frame: usize,
-    sample_count: usize,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaUpdateSnapBenchmark {
-    #[must_use]
-    pub fn new(track_count: usize, sample_count: usize) -> Self {
-        use deadsync_song_lua::{
-            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
-            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
-        };
-        let track_count = track_count.max(1);
-        let sample_count = sample_count.max(2);
-        let tracks = (0..track_count)
-            .map(|index| {
-                let visible = index + 1 == track_count;
-                Track {
-                    overlay_index: index,
-                    target: if visible { Target::Visible } else { Target::X },
-                    samples: (0..sample_count)
-                        .map(|sample| Sample {
-                            second: sample as f32 / 120.0,
-                            value: if visible {
-                                Value::Bool(sample % 2 == 0)
-                            } else {
-                                Value::F32(sample as f32)
-                            },
-                        })
-                        .collect(),
-                }
-            })
-            .collect::<Vec<_>>();
-        Self {
-            visible_indices: Box::new([track_count - 1]),
-            cursors: vec![0; tracks.len()],
-            tracks,
-            frame: 0,
-            sample_count,
-        }
-    }
-
-    #[inline(always)]
-    fn now(&mut self) -> f32 {
-        let now = (self.frame % self.sample_count) as f32 / 120.0;
-        self.frame = self.frame.wrapping_add(1);
-        now
-    }
-
-    pub fn reference_frame(&mut self) -> u64 {
-        let now = self.now();
-        Self::checksum(song_lua_overlay_update_snap_reference(now, &self.tracks))
-    }
-
-    pub fn current_frame(&mut self) -> u64 {
-        let now = self.now();
-        Self::checksum(song_lua_overlay_update_snap(
-            now,
-            &self.tracks,
-            &self.visible_indices,
-            &mut self.cursors,
-        ))
-    }
-
-    fn checksum(snap: Option<SongLuaOverlayUpdateSnap>) -> u64 {
-        snap.map_or(0, |snap| {
-            u64::from(snap.start_second.to_bits())
-                ^ u64::from(snap.end_second.to_bits()).rotate_left(11)
-                ^ u64::from(snap.t.to_bits()).rotate_left(23)
-        })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaUpdateSourceBenchmark {
-    overlays: Vec<SongLuaOverlayActor>,
-    update_actor_index: SongLuaOverlayIndex,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaUpdateSourceBenchmark {
-    #[must_use]
-    pub fn new(actor_count: usize) -> Self {
-        use deadsync_song_lua::{
-            SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
-            SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
-        };
-        let actor_count = actor_count.max(1);
-        let mut overlays = (0..actor_count.saturating_sub(1))
-            .map(|_| SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Actor,
-                name: None,
-                parent_index: None,
-                initial_state: SongLuaOverlayState::default(),
-                message_commands: Vec::new(),
-            })
-            .collect::<Vec<_>>();
-        overlays.push(SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::UpdateTracks {
-                tracks: vec![Track {
-                    overlay_index: actor_count / 2,
-                    target: Target::X,
-                    samples: vec![Sample {
-                        second: 0.0,
-                        value: Value::F32(42.0),
-                    }],
-                }],
-            },
-            name: None,
-            parent_index: None,
-            initial_state: SongLuaOverlayState::default(),
-            message_commands: Vec::new(),
-        });
-        let update_actor_index = SongLuaOverlayIndex::new(Some(overlays.len() - 1));
-        Self {
-            overlays,
-            update_actor_index,
-        }
-    }
-
-    #[must_use]
-    pub fn reference_frame(&self) -> u64 {
-        Self::checksum(song_lua_overlay_runtime_updates_reference(&self.overlays))
-    }
-
-    #[must_use]
-    pub fn current_frame(&self) -> u64 {
-        Self::checksum(song_lua_overlay_runtime_updates_at(
-            &self.overlays,
-            self.update_actor_index,
-        ))
-    }
-
-    fn checksum(tracks: &[deadsync_song_lua::SongLuaOverlayRuntimeUpdateTrack]) -> u64 {
-        tracks.first().map_or(0, |track| {
-            tracks.len() as u64
-                ^ (track.overlay_index as u64).rotate_left(13)
-                ^ track.samples.first().map_or(0, |sample| {
-                    u64::from(sample.second.to_bits()).rotate_left(29)
-                })
-        })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaAftSpriteIndexBenchmark {
-    targets: Vec<SongLuaOverlayIndex>,
-    indices: Box<[usize]>,
-    visible: Box<[bool]>,
-    frame: usize,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaAftSpriteIndexBenchmark {
-    #[must_use]
-    pub fn new(actor_count: usize, sprite_count: usize) -> Self {
-        let actor_count = actor_count.max(1);
-        let sprite_count = sprite_count.min(actor_count);
-        let indices = (0..sprite_count)
-            .map(|sprite| sprite * actor_count / sprite_count.max(1))
-            .collect::<Box<[_]>>();
-        let mut targets = vec![SongLuaOverlayIndex::default(); actor_count];
-        for (capture, &index) in indices.iter().enumerate() {
-            targets[index] = SongLuaOverlayIndex::new(Some(capture));
-        }
-        Self {
-            targets,
-            indices,
-            visible: vec![true; actor_count].into_boxed_slice(),
-            frame: 0,
-        }
-    }
-
-    fn advance(&mut self) {
-        if let Some(&index) = self.indices.get(self.frame % self.indices.len().max(1)) {
-            self.visible[index] = !self.visible[index];
-        }
-        self.frame = self.frame.wrapping_add(1);
-    }
-
-    pub fn reference_frame(&mut self) -> u64 {
-        self.advance();
-        self.targets
-            .iter()
-            .copied()
-            .enumerate()
-            .filter_map(|(index, target)| {
-                self.visible[index]
-                    .then_some(target)
-                    .and_then(SongLuaOverlayIndex::get)
-            })
-            .fold(0u64, |checksum, target| {
-                checksum.rotate_left(7) ^ target as u64
-            })
-    }
-
-    pub fn current_frame(&mut self) -> u64 {
-        self.advance();
-        self.indices
-            .iter()
-            .copied()
-            .filter(|&index| self.visible[index])
-            .filter_map(|index| self.targets[index].get())
-            .fold(0u64, |checksum, target| {
-                checksum.rotate_left(7) ^ target as u64
-            })
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct SongLuaCaptureStateBenchmark {
-    overlays: Vec<SongLuaOverlayActor>,
-    overlay_states: Vec<SongLuaOverlayState>,
-    local_states: Vec<SongLuaOverlayState>,
-    order_cache: SongLuaOverlayOrderCache,
-    scratch: Vec<SongLuaOverlayState>,
-    capture_children: usize,
-    frame: usize,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl SongLuaCaptureStateBenchmark {
-    #[must_use]
-    pub fn new(actor_count: usize, capture_children: usize) -> Self {
-        let actor_count = actor_count.max(2);
-        let capture_children = capture_children.min(actor_count - 1);
-        let mut overlays = Vec::with_capacity(actor_count);
-        overlays.push(SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::ActorFrameTexture {
-                alpha_buffer: false,
-                depth_buffer: false,
-                preserve_texture: false,
-            },
-            name: Some("benchmark capture".to_string()),
-            parent_index: None,
-            initial_state: SongLuaOverlayState::default(),
-            message_commands: Vec::new(),
-        });
-        overlays.extend((1..actor_count).map(|index| SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Actor,
-            name: None,
-            parent_index: (index <= capture_children).then_some(0),
-            initial_state: SongLuaOverlayState {
-                x: index as f32 * 0.25,
-                y: index as f32 * -0.125,
-                diffuse: [1.0, 0.75, 0.5, 1.0],
-                ..SongLuaOverlayState::default()
-            },
-            message_commands: Vec::new(),
-        }));
-        let overlay_states = overlays
-            .iter()
-            .map(|overlay| overlay.initial_state)
-            .collect::<Vec<_>>();
-        let local_states = overlay_states.clone();
-        Self {
-            order_cache: song_lua_overlay_order_cache_from(&overlays, &[]),
-            scratch: vec![SongLuaOverlayState::default(); overlays.len()],
-            overlays,
-            overlay_states,
-            local_states,
-            capture_children,
-            frame: 0,
-        }
-    }
-
-    fn advance(&mut self) {
-        let phase = (self.frame & 255) as f32 * (1.0 / 255.0);
-        self.frame = self.frame.wrapping_add(1);
-        self.overlay_states[0].diffuse[0] = phase;
-        if self.capture_children != 0 {
-            self.local_states[1].x = phase * 320.0;
-        }
-    }
-
-    pub fn reference_frame(&mut self) -> u64 {
-        self.advance();
-        song_lua_capture_overlay_states_reference(
-            &self.overlays,
-            &self.overlay_states,
-            &self.local_states,
-            &self.order_cache,
-            0,
-            screen_width(),
-            screen_height(),
-            &mut self.scratch,
-        );
-        self.checksum()
-    }
-
-    pub fn current_frame(&mut self) -> u64 {
-        self.advance();
-        song_lua_capture_overlay_states_into_scratch(
-            &self.overlays,
-            &self.overlay_states,
-            &self.local_states,
-            &self.order_cache,
-            0,
-            screen_width(),
-            screen_height(),
-            &mut self.scratch,
-        );
-        self.checksum()
-    }
-
-    fn checksum(&self) -> u64 {
-        self.scratch[..=self.capture_children]
-            .iter()
-            .fold(0, |checksum, state| {
-                checksum.rotate_left(9)
-                    ^ u64::from(state.x.to_bits())
-                    ^ u64::from(state.y.to_bits()).rotate_left(17)
-                    ^ u64::from(state.diffuse[0].to_bits()).rotate_left(31)
-            })
     }
 }
 
@@ -12643,7 +11581,7 @@ fn song_lua_overlay_render_state_dynamic(
     current
 }
 
-fn song_lua_message_state_legacy(
+fn replay_song_lua_message_state(
     now: f32,
     initial_state: SongLuaOverlayState,
     message_commands: &[SongLuaOverlayMessageCommand],
@@ -12707,7 +11645,7 @@ fn song_lua_message_state_cached(
         return initial_state;
     };
     if !now.is_finite() {
-        return song_lua_message_state_legacy(now, initial_state, message_commands, Some(events));
+        return replay_song_lua_message_state(now, initial_state, message_commands, Some(events));
     }
     if !cache.initialized || now < cache.processed_until {
         cache.reset(initial_state);
@@ -13287,225 +12225,6 @@ fn song_lua_style_capture_actor(
             }
         }
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_capture_transform_matrix(
-    state: SongLuaOverlayState,
-    extra_offset: [f32; 2],
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-) -> Option<Matrix4> {
-    let x_scale = screen_width() / overlay_space_width.max(1.0);
-    let y_scale = screen_height() / overlay_space_height.max(1.0);
-    let translate_x = 0.5f32
-        .mul_add(-overlay_space_width, state.x)
-        .mul_add(x_scale, extra_offset[0]);
-    let translate_y = 0.5f32
-        .mul_add(-overlay_space_height, state.y)
-        .mul_add(y_scale, extra_offset[1]);
-    let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
-    let scale_z = song_lua_overlay_z_scale(state);
-    if translate_x.abs() <= f32::EPSILON
-        && translate_y.abs() <= f32::EPSILON
-        && state.rot_z_deg.abs() <= f32::EPSILON
-        && (scale_x - 1.0).abs() <= f32::EPSILON
-        && (scale_y - 1.0).abs() <= f32::EPSILON
-        && (scale_z - 1.0).abs() <= f32::EPSILON
-    {
-        return None;
-    }
-    Some(
-        Matrix4::from_translation(Vector3::new(translate_x, -translate_y, 0.0))
-            * Matrix4::from_rotation_z(state.rot_z_deg.to_radians())
-            * Matrix4::from_scale(Vector3::new(scale_x, scale_y, scale_z)),
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_capture_channel_offset(
-    name: Option<&str>,
-    state: SongLuaOverlayState,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-) -> [f32; 2] {
-    if !state.vibrate {
-        return [0.0, 0.0];
-    }
-    let x = state.effect_magnitude[0].abs() * (screen_width() / overlay_space_width.max(1.0));
-    let y =
-        state.effect_magnitude[1].abs() * (screen_height() / overlay_space_height.max(1.0)) * 0.25;
-    match name {
-        Some(name) if name.ends_with('R') => [-x, -y],
-        Some(name) if name.ends_with('B') => [x, y],
-        _ => [0.0, 0.0],
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_shift_capture_z(actor: &mut Actor, z_shift: i16) {
-    match actor {
-        Actor::Sprite { z, .. }
-        | Actor::Text { z, .. }
-        | Actor::Mesh { z, .. }
-        | Actor::ReusableMesh { z, .. }
-        | Actor::TexturedMesh { z, .. }
-        | Actor::ReusableTexturedMesh { z, .. }
-        | Actor::SharedFrame { z, .. }
-        | Actor::SharedTransform { z, .. }
-        | Actor::RetainedFrame { z, .. } => *z = song_lua_add_z(*z, z_shift),
-        Actor::Frame { children, z, .. } => {
-            *z = song_lua_add_z(*z, z_shift);
-            for child in children {
-                song_lua_shift_capture_z(child, z_shift);
-            }
-        }
-        Actor::Camera { children, .. } => {
-            for child in children {
-                song_lua_shift_capture_z(child, z_shift);
-            }
-        }
-        Actor::Shadow { child, .. } => song_lua_shift_capture_z(child, z_shift),
-        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_capture_placement(
-    overlay: &SongLuaOverlayActor,
-    state: SongLuaOverlayState,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-) -> ([f32; 2], Option<Matrix4>) {
-    let extra_offset = song_lua_capture_channel_offset(
-        overlay.name.as_deref(),
-        state,
-        overlay_space_width,
-        overlay_space_height,
-    );
-    let view_proj = song_lua_capture_transform_matrix(
-        state,
-        extra_offset,
-        overlay_space_width,
-        overlay_space_height,
-    )
-    .map(|transform| {
-        glam::camera::rh::proj::opengl::orthographic(
-            -0.5 * screen_width(),
-            0.5 * screen_width(),
-            -0.5 * screen_height(),
-            0.5 * screen_height(),
-            -1.0,
-            1.0,
-        ) * transform
-    });
-    (view_proj.map_or(extra_offset, |_| [0.0, 0.0]), view_proj)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_lua_build_shared_capture(
-    overlay: &SongLuaOverlayActor,
-    state: SongLuaOverlayState,
-    z: i16,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-    scratch: &mut SharedActorFrameScratch,
-    fill: impl FnOnce(&mut Vec<Actor>),
-) -> Option<Actor> {
-    if !state.visible || state.diffuse[3] <= f32::EPSILON {
-        return None;
-    }
-    let blend = match state.blend {
-        SongLuaOverlayBlendMode::Alpha => None,
-        SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
-        SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
-        SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
-    };
-    let (offset, view_proj) =
-        song_lua_capture_placement(overlay, state, overlay_space_width, overlay_space_height);
-    let children = scratch.refill(offset, |out| {
-        if let Some(view_proj) = view_proj {
-            out.push(Actor::CameraPush { view_proj });
-        }
-        let source_start = out.len();
-        fill(out);
-        if out.len() == source_start {
-            out.clear();
-            return;
-        }
-        for actor in &mut out[source_start..] {
-            song_lua_shift_capture_z(actor, z);
-        }
-        if view_proj.is_some() {
-            out.push(Actor::CameraPop);
-        }
-    })?;
-    Some(Actor::SharedFrame {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        size: [SizeSpec::Fill, SizeSpec::Fill],
-        children,
-        background: None,
-        z: 0,
-        tint: state.diffuse,
-        blend,
-    })
-}
-
-#[cfg(test)]
-fn song_lua_build_capture_actor(
-    overlay: &SongLuaOverlayActor,
-    state: SongLuaOverlayState,
-    z: i16,
-    source: Vec<Actor>,
-    overlay_space_width: f32,
-    overlay_space_height: f32,
-) -> Option<Actor> {
-    if !state.visible || state.diffuse[3] <= f32::EPSILON || source.is_empty() {
-        return None;
-    }
-    let blend = match state.blend {
-        SongLuaOverlayBlendMode::Alpha => None,
-        SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
-        SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),
-        SongLuaOverlayBlendMode::Subtract => Some(BlendMode::Subtract),
-    };
-    let children = source
-        .into_iter()
-        .map(|actor| song_lua_style_capture_actor(actor, state.diffuse, blend, z))
-        .collect::<Vec<_>>();
-    let extra_offset = song_lua_capture_channel_offset(
-        overlay.name.as_deref(),
-        state,
-        overlay_space_width,
-        overlay_space_height,
-    );
-    if let Some(transform) = song_lua_capture_transform_matrix(
-        state,
-        extra_offset,
-        overlay_space_width,
-        overlay_space_height,
-    ) {
-        return Some(Actor::Camera {
-            view_proj: glam::camera::rh::proj::opengl::orthographic(
-                -0.5 * screen_width(),
-                0.5 * screen_width(),
-                -0.5 * screen_height(),
-                0.5 * screen_height(),
-                -1.0,
-                1.0,
-            ) * transform,
-            children,
-        });
-    }
-    Some(Actor::Frame {
-        align: [0.0, 0.0],
-        offset: extra_offset,
-        size: [SizeSpec::Fill, SizeSpec::Fill],
-        children,
-        background: None,
-        z: 0,
-    })
 }
 
 #[inline(always)]
@@ -15161,101 +13880,6 @@ fn song_lua_projected_color_coord(t: f32, start_fade: f32, end_fade: f32) -> f32
         1.0
     } else {
         ((t - start_fade) / (1.0 - start_fade - end_fade).max(f32::EPSILON)).clamp(0.0, 1.0)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct SongLuaAftCaptureBenchmark {
-    overlay: SongLuaOverlayActor,
-    state: SongLuaOverlayState,
-    source: Vec<Actor>,
-    banks: [SharedActorFrameScratch; SONG_LUA_AFT_FRAME_BANKS],
-    active_bank: usize,
-    retained: Option<Actor>,
-}
-
-#[cfg(feature = "bench-support")]
-impl SongLuaAftCaptureBenchmark {
-    #[must_use]
-    pub fn new(actor_count: usize) -> Self {
-        let overlay = SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::AftSprite {
-                capture_name: "bench".to_string(),
-            },
-            name: None,
-            parent_index: None,
-            initial_state: SongLuaOverlayState::default(),
-            message_commands: Vec::new(),
-        };
-        let state = SongLuaOverlayState {
-            x: 0.5 * screen_width(),
-            y: 0.5 * screen_height(),
-            diffuse: [0.75, 0.5, 0.25, 0.8],
-            blend: SongLuaOverlayBlendMode::Add,
-            ..SongLuaOverlayState::default()
-        };
-        let source = (0..actor_count)
-            .map(|index| Actor::Frame {
-                align: [0.0, 0.0],
-                offset: [index as f32, 0.0],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                children: Vec::new(),
-                background: None,
-                z: index.min(i16::MAX as usize) as i16,
-            })
-            .collect();
-        Self {
-            overlay,
-            state,
-            source,
-            banks: std::array::from_fn(|_| SharedActorFrameScratch::with_capacity(actor_count)),
-            active_bank: SONG_LUA_AFT_FRAME_BANKS - 1,
-            retained: None,
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Panics if an internal state invariant is violated.
-    pub fn frame(&mut self) -> u64 {
-        self.active_bank = (self.active_bank + 1) % SONG_LUA_AFT_FRAME_BANKS;
-        let source = &self.source;
-        let actor = song_lua_build_shared_capture(
-            &self.overlay,
-            self.state,
-            100,
-            screen_width(),
-            screen_height(),
-            &mut self.banks[self.active_bank],
-            |out| out.extend(source.iter().cloned()),
-        )
-        .expect("benchmark capture source is visible and nonempty");
-        std::hint::black_box(&actor);
-        let checksum = self.checksum();
-        self.retained = Some(actor);
-        checksum
-    }
-
-    #[must_use]
-    pub fn storage_bytes(&self) -> usize {
-        self.banks
-            .iter()
-            .map(|bank| bank.capacity().saturating_mul(std::mem::size_of::<Actor>()))
-            .sum()
-    }
-
-    fn checksum(&self) -> u64 {
-        self.source.iter().fold(
-            u64::from(self.state.diffuse[3].to_bits()),
-            |checksum, actor| {
-                let z = match actor {
-                    Actor::Frame { z, .. } => song_lua_add_z(*z, 100),
-                    _ => 0,
-                };
-                checksum.rotate_left(7) ^ u64::from(z as u16)
-            },
-        )
     }
 }
 
@@ -17503,126 +16127,6 @@ fn song_lua_player_camera_suffix(transform: SongLuaCaptureTransform) -> Option<M
     })
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_present_identity_notefield(
-    field_actors: &mut Vec<Actor>,
-    hud_actors: &mut Vec<Actor>,
-    out: &mut Vec<Actor>,
-) {
-    out.clear();
-    out.reserve(field_actors.len().saturating_add(hud_actors.len()));
-    out.append(hud_actors);
-    out.append(field_actors);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_normalize_proxy_actor_source(source: &[Actor], out: &mut Vec<Actor>) {
-    song_lua_proxy_local_children_into(source.iter().cloned(), out);
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_normalize_folded_styled_proxy_actor_source(
-    source: &[Actor],
-    out: &mut Vec<Actor>,
-    playfield_center_x: f32,
-    rotation_y_deg: f32,
-) {
-    song_lua_proxy_local_children_into(
-        source.iter().cloned().map(|actor| {
-            song_lua_style_capture_actor(
-                song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg),
-                [0.7, 0.6, 0.9, 0.8],
-                Some(BlendMode::Multiply),
-                SONG_LUA_PLAYER_LAYER_Z_BASE,
-            )
-        }),
-        out,
-    );
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_player_transform() -> SongLuaCaptureTransform {
-    SongLuaCaptureTransform {
-        z_shift: 900,
-        tint: [0.8, 0.7, 0.6, 0.5],
-        blend: Some(BlendMode::Add),
-        playfield_center_x: screen_center_x(),
-        target_x: screen_center_x() + 24.0,
-        target_y: screen_center_y() - 12.0,
-        rotation_x: 4.0,
-        rotation_z: 8.0,
-        rotation_y: 13.0,
-        skew_x: 0.1,
-        skew_y: -0.05,
-        zoom_x: 0.9,
-        zoom_y: 1.1,
-        zoom_z: 1.0,
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayTransformedNotefieldBenchmark {
-    assembly: PlayerActorAssembly,
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayTransformedNotefieldBenchmark {
-    fn default() -> Self {
-        Self {
-            assembly: player_actor_assembly_for_transform(
-                false,
-                true,
-                benchmark_player_transform(),
-            ),
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_present_transformed_notefield<'a>(
-    benchmark: &'a GameplayTransformedNotefieldBenchmark,
-    field_actors: &'a [Actor],
-    hud_actors: &'a [Actor],
-) -> [ActorSegment<'a>; 2] {
-    let PlayerActorAssembly::DirectTransform {
-        z_shift,
-        tint,
-        blend,
-        root_camera,
-        field_camera_suffix,
-        x_fold,
-    } = &benchmark.assembly
-    else {
-        panic!("benchmark transform should compose directly");
-    };
-    [
-        ActorSegment::transformed(
-            hud_actors,
-            *z_shift,
-            tint,
-            *blend,
-            root_camera,
-            &Matrix4::IDENTITY,
-            *x_fold,
-        ),
-        ActorSegment::transformed(
-            field_actors,
-            *z_shift,
-            tint,
-            *blend,
-            root_camera,
-            field_camera_suffix,
-            *x_fold,
-        ),
-    ]
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PlayerActorAssembly {
     Captured,
@@ -17780,7 +16284,7 @@ impl PlayerActorAssemblyCache {
         assembly
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
+    #[cfg(test)]
     const fn stats(&self) -> PlayerActorAssemblyCacheStats {
         self.stats
     }
@@ -17855,152 +16359,9 @@ impl PlayerFieldCameraCache {
         camera
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
+    #[cfg(test)]
     const fn stats(&self) -> PlayerFieldCameraCacheStats {
         self.stats
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[derive(Default)]
-pub struct GameplayPlayerFieldCameraBenchmark {
-    caches: [PlayerFieldCameraCache; MAX_PLAYERS],
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayPlayerFieldCameraBenchmark {
-    #[inline(always)]
-    #[must_use]
-    pub fn rebuild(&self, player: usize) -> f32 {
-        let (field, suffix, _) = benchmark_player_field_cameras(player);
-        player_field_camera_checksum(field * suffix)
-    }
-
-    #[inline(always)]
-    pub fn retained(&mut self, player: usize) -> f32 {
-        let player = player.min(MAX_PLAYERS - 1);
-        let (field, suffix, root) = benchmark_player_field_cameras(player);
-        player_field_camera_checksum(self.caches[player].resolve(7, 13, Some(field), root, suffix))
-    }
-
-    #[must_use]
-    pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
-        self.caches.map(|cache| {
-            let stats = cache.stats();
-            (stats.hits, stats.rebuilds)
-        })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn benchmark_player_field_cameras(player: usize) -> (Matrix4, Matrix4, Matrix4) {
-    let direction = if player == 0 { 1.0 } else { -1.0 };
-    (
-        Matrix4::from_rotation_x(0.17 * direction)
-            * Matrix4::from_translation(Vector3::new(4.0 * direction, 8.0, 12.0)),
-        Matrix4::from_rotation_z(0.11 * direction)
-            * Matrix4::from_scale(Vector3::new(0.9, 1.1, 1.0)),
-        Matrix4::from_translation(Vector3::new(2.0 * direction, 3.0, 4.0)),
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn player_field_camera_checksum(camera: Matrix4) -> f32 {
-    std::hint::black_box(camera.x_axis.x + camera.y_axis.y + camera.w_axis.z)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[derive(Default)]
-pub struct GameplayPlayerTransformBenchmark {
-    caches: [PlayerActorAssemblyCache; MAX_PLAYERS],
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayPlayerTransformBenchmark {
-    #[inline(always)]
-    #[must_use]
-    pub fn resolve_rebuilt(&self, player: usize, transformed: bool) -> f32 {
-        player_actor_assembly_checksum(player_actor_assembly_for_transform(
-            false,
-            true,
-            benchmark_player_capture_transform(player, transformed),
-        ))
-    }
-
-    #[inline(always)]
-    pub fn resolve_retained(&mut self, player: usize, transformed: bool) -> f32 {
-        let player = player.min(MAX_PLAYERS - 1);
-        player_actor_assembly_checksum(self.caches[player].resolve(
-            false,
-            true,
-            benchmark_player_capture_transform(player, transformed),
-        ))
-    }
-
-    #[must_use]
-    pub fn stats(&self) -> [(u64, u64); MAX_PLAYERS] {
-        self.caches.map(|cache| {
-            let stats = cache.stats();
-            (stats.hits, stats.rebuilds)
-        })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn benchmark_player_capture_transform(player: usize, transformed: bool) -> SongLuaCaptureTransform {
-    let playfield_center_x = if player == 0 { 213.5 } else { 640.5 };
-    if transformed {
-        SongLuaCaptureTransform {
-            playfield_center_x,
-            target_x: playfield_center_x + 24.0,
-            ..benchmark_player_transform()
-        }
-    } else {
-        SongLuaCaptureTransform {
-            z_shift: 0,
-            tint: [1.0; 4],
-            blend: None,
-            playfield_center_x,
-            target_x: playfield_center_x,
-            target_y: screen_center_y(),
-            rotation_x: 0.0,
-            rotation_z: 0.0,
-            rotation_y: 0.0,
-            skew_x: 0.0,
-            skew_y: 0.0,
-            zoom_x: 1.0,
-            zoom_y: 1.0,
-            zoom_z: 1.0,
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn player_actor_assembly_checksum(assembly: PlayerActorAssembly) -> f32 {
-    match assembly {
-        PlayerActorAssembly::Captured => 1.0,
-        PlayerActorAssembly::Hidden => 2.0,
-        PlayerActorAssembly::DirectZ { z_shift } => 3.0 + f32::from(z_shift),
-        PlayerActorAssembly::DirectFold { z_shift, .. } => 4.0 + f32::from(z_shift),
-        PlayerActorAssembly::DirectTransform {
-            z_shift,
-            tint,
-            blend,
-            root_camera,
-            field_camera_suffix,
-            x_fold,
-        } => {
-            5.0 + f32::from(z_shift)
-                + tint.into_iter().sum::<f32>()
-                + blend.map_or(0.0, |blend| f32::from(blend as u8))
-                + root_camera.to_cols_array().into_iter().sum::<f32>()
-                + field_camera_suffix.to_cols_array().into_iter().sum::<f32>()
-                + f32::from(u8::from(x_fold.is_some()))
-        }
     }
 }
 
@@ -18348,7 +16709,7 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
 }
 
 #[inline(always)]
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn player_actor_assembly_for_transform(
     requests_player_proxy: bool,
     visible: bool,
@@ -21692,14 +20053,6 @@ mod tests {
     }
 
     #[test]
-    fn steady_frame_macrobenchmark_preserves_prewarmed_storage() {
-        let mut benchmark = GameplayFrameOrchestrationBenchmark::new(7);
-
-        assert_eq!(benchmark.steady_frame(), 940);
-        assert_eq!(benchmark.steady_frame(), 940);
-    }
-
-    #[test]
     fn step_stats_mode_preserves_option_behavior() {
         use profile_data::PlayStyle::{Double, Single, Versus};
 
@@ -21823,7 +20176,7 @@ mod tests {
         let mut cache = SongLuaMessageStateCache::default();
 
         for now in [-1.0, 0.0, 0.125, 1.0, 7.25, 31.75, 63.75, 24.25, 24.5, 63.9] {
-            let expected = song_lua_message_state_legacy(now, initial, &commands, Some(&events));
+            let expected = replay_song_lua_message_state(now, initial, &commands, Some(&events));
             let actual =
                 song_lua_message_state_cached(now, initial, &commands, Some(&events), &mut cache);
             assert_eq!(actual, expected, "now={now}");
@@ -21934,64 +20287,6 @@ mod tests {
             &mut restored,
         );
         assert_eq!(restored.croptop, 0.0);
-    }
-
-    #[test]
-    fn song_lua_update_cursors_match_binary_search_across_wraparound_seeks() {
-        let mut reference = SongLuaUpdateLookupBenchmark::new(32, 257);
-        let mut current = SongLuaUpdateLookupBenchmark::new(32, 257);
-        for frame in 0..1_029 {
-            assert_eq!(
-                reference.reference_frame(),
-                current.current_frame(),
-                "frame={frame}"
-            );
-        }
-    }
-
-    #[test]
-    fn song_lua_indexed_update_source_matches_actor_scan() {
-        let benchmark = SongLuaUpdateSourceBenchmark::new(513);
-        assert_eq!(benchmark.reference_frame(), benchmark.current_frame());
-    }
-
-    #[test]
-    fn song_lua_capture_state_reuse_matches_full_reset() {
-        let mut reference = SongLuaCaptureStateBenchmark::new(513, 31);
-        let mut current = SongLuaCaptureStateBenchmark::new(513, 31);
-        for frame in 0..1_029 {
-            assert_eq!(
-                reference.reference_frame(),
-                current.current_frame(),
-                "frame={frame}"
-            );
-        }
-    }
-
-    #[test]
-    fn song_lua_sparse_aft_sprite_index_matches_full_scan() {
-        let mut reference = SongLuaAftSpriteIndexBenchmark::new(513, 8);
-        let mut current = SongLuaAftSpriteIndexBenchmark::new(513, 8);
-        for frame in 0..1_029 {
-            assert_eq!(
-                reference.reference_frame(),
-                current.current_frame(),
-                "frame={frame}"
-            );
-        }
-    }
-
-    #[test]
-    fn song_lua_visible_track_index_matches_full_scan_across_wraparound_seeks() {
-        let mut reference = SongLuaUpdateSnapBenchmark::new(257, 257);
-        let mut current = SongLuaUpdateSnapBenchmark::new(257, 257);
-        for frame in 0..1_029 {
-            assert_eq!(
-                reference.reference_frame(),
-                current.current_frame(),
-                "frame={frame}"
-            );
-        }
     }
 
     #[test]
@@ -22213,106 +20508,27 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_layer_activity_matches_full_scan_across_boundaries_and_seeks() {
-        let starts = [5.0, 1.0, 9.0, 3.0, 3.0];
-        let mut reference = ReferenceSongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
-        let mut activity = SongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
-        for now in [
-            -1.0,
-            1.0,
-            3.0,
-            8.0,
-            12.0,
-            2.0,
-            f32::NAN,
-            0.0,
-            9.0,
-            f32::INFINITY,
-            f32::NEG_INFINITY,
-        ] {
-            let expected_reference = reference.sync(now);
-            assert_eq!(
-                activity.sync(now),
-                expected_reference,
-                "reference now={now}"
-            );
-            let expected = starts
-                .iter()
-                .enumerate()
-                .filter_map(|(index, start)| (!(now < *start)).then_some(index))
-                .collect::<Vec<_>>();
-            assert_eq!(activity.sync(now), expected, "full scan now={now}");
-        }
-
-        for frame in 0..4_000 {
-            let now = frame as f32 / 120.0;
-            assert_eq!(activity.sync(now), reference.sync(now), "frame={frame}");
-        }
-
-        let malformed = [5.0, f32::NAN, 1.0, f32::NEG_INFINITY];
-        let mut reference = ReferenceSongLuaLayerActivity::new(malformed, f32::NEG_INFINITY);
-        let mut activity = SongLuaLayerActivity::new(malformed, f32::NEG_INFINITY);
-        for now in [-1.0, 2.0, f32::NAN, 0.0, f32::INFINITY] {
-            assert_eq!(
-                activity.sync(now),
-                reference.sync(now),
-                "NaN start now={now}"
-            );
-        }
-    }
-
-    #[test]
-    fn ordered_song_lua_layer_activity_matches_reference_through_bursts_and_rewinds() {
-        let starts = (0..1_024)
-            .map(|index| (index / 16) as f32 * 0.5)
-            .collect::<Vec<_>>();
-        let mut reference = ReferenceSongLuaLayerActivity::new(starts.clone(), f32::NEG_INFINITY);
-        let mut activity = SongLuaLayerActivity::new(starts, f32::NEG_INFINITY);
-        for frame in (0..4_000).chain((0..4_000).rev()).chain(0..4_000) {
-            let now = frame as f32 / 120.0;
-            assert_eq!(activity.sync(now), reference.sync(now), "frame={frame}");
-        }
-        assert!(activity.retained_bytes() < reference.retained_bytes());
-    }
-
-    #[test]
     fn empty_song_lua_layer_skips_preparation_without_changing_output() {
-        let mut legacy_actors = vec![Actor::CameraPop];
-        let mut fast_actors = legacy_actors.clone();
-        let mut legacy_order_cache = SongLuaOverlayOrderCache::default();
-        let mut fast_order_cache = SongLuaOverlayOrderCache::default();
-        let mut legacy_order = vec![7];
-        let mut fast_order = legacy_order.clone();
-        let mut legacy_aft = SongLuaAftCaptureScratch::default();
-        let mut fast_aft = SongLuaAftCaptureScratch::default();
-
-        let _ = prepare_active_song_lua_layer(
-            &mut legacy_actors,
-            &[],
-            &[],
-            SongLuaOverlayState::default(),
-            &mut legacy_order_cache,
-            &mut legacy_order,
-            &mut legacy_aft,
-            SONG_LUA_FOREGROUND_DEPTH,
-        );
+        let mut actors = vec![Actor::CameraPop];
+        let mut order_cache = SongLuaOverlayOrderCache::default();
+        let mut order = vec![7];
+        let mut aft = SongLuaAftCaptureScratch::default();
         assert_eq!(
             prepare_song_lua_layer(
-                &mut fast_actors,
+                &mut actors,
                 &[],
                 &[],
                 SongLuaOverlayState::default(),
-                &mut fast_order_cache,
-                &mut fast_order,
-                &mut fast_aft,
+                &mut order_cache,
+                &mut order,
+                &mut aft,
                 SONG_LUA_FOREGROUND_DEPTH,
             ),
             None
         );
 
-        assert_eq!(fast_actors.len(), legacy_actors.len());
-        assert!(matches!(fast_actors.as_slice(), [Actor::CameraPop]));
-        assert_eq!(fast_order, legacy_order);
+        assert!(matches!(actors.as_slice(), [Actor::CameraPop]));
+        assert!(order.is_empty());
     }
 
     #[test]
@@ -22425,7 +20641,7 @@ mod tests {
         let mut cache = SongLuaMessageStateCache::default();
 
         for now in [0.0, 1.0, 1.1, 8.75, 24.4, 32.8, 9.25, 9.3, 31.0] {
-            let expected = song_lua_message_state_legacy(now, initial, &commands, Some(&events));
+            let expected = replay_song_lua_message_state(now, initial, &commands, Some(&events));
             let actual =
                 song_lua_message_state_cached(now, initial, &commands, Some(&events), &mut cache);
             assert_eq!(actual, expected, "now={now}");
@@ -24707,7 +22923,7 @@ mod tests {
                 &topology_index,
                 overlay_index,
             );
-            let legacy_camera =
+            let scanned_camera =
                 song_lua_overlay_camera_state(&overlays, &overlay_states, overlay.parent_index);
             assert_eq!(
                 topology_index.aft_ancestors[overlay_index].get(),
@@ -24715,12 +22931,12 @@ mod tests {
                 "AFT ancestor diverged for overlay {overlay_index}",
             );
             assert_eq!(
-                indexed_camera, legacy_camera,
+                indexed_camera, scanned_camera,
                 "camera state diverged for overlay {overlay_index}",
             );
             assert_eq!(
                 topology_index.camera_state(&overlay_states, overlay_index),
-                legacy_camera,
+                scanned_camera,
                 "prepared camera state diverged for overlay {overlay_index}",
             );
             let expected_target = match &overlay.kind {
@@ -25996,124 +24212,6 @@ mod tests {
     }
 
     #[test]
-    fn shared_aft_capture_preserves_style_offset_and_nested_z() {
-        let overlay = test_aft_overlay("CaptureAFT", true);
-        let state = SongLuaOverlayState {
-            x: 0.5 * screen_width(),
-            y: 0.5 * screen_height(),
-            diffuse: [0.5, 0.25, 0.1, 0.5],
-            blend: SongLuaOverlayBlendMode::Add,
-            ..SongLuaOverlayState::default()
-        };
-        let source = Actor::Frame {
-            align: [0.0, 0.0],
-            offset: [3.0, 4.0],
-            size: [SizeSpec::Fill, SizeSpec::Fill],
-            children: vec![Actor::Frame {
-                align: [0.0, 0.0],
-                offset: [5.0, 6.0],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                children: Vec::new(),
-                background: None,
-                z: 4,
-            }],
-            background: None,
-            z: 3,
-        };
-        let old = song_lua_build_capture_actor(
-            &overlay,
-            state,
-            7,
-            vec![source.clone()],
-            screen_width(),
-            screen_height(),
-        )
-        .expect("legacy AFT capture");
-        let mut scratch = SharedActorFrameScratch::with_capacity(3);
-        let new = song_lua_build_shared_capture(
-            &overlay,
-            state,
-            7,
-            screen_width(),
-            screen_height(),
-            &mut scratch,
-            |children| children.push(source),
-        )
-        .expect("shared AFT capture");
-
-        let Actor::Frame {
-            offset: old_offset,
-            children: old_children,
-            ..
-        } = old
-        else {
-            panic!("expected untransformed legacy capture frame");
-        };
-        let [
-            Actor::Frame {
-                z: old_z,
-                children: old_nested,
-                ..
-            },
-        ] = old_children.as_slice()
-        else {
-            panic!("expected legacy captured frame");
-        };
-        let [
-            Actor::Frame {
-                z: old_nested_z, ..
-            },
-        ] = old_nested.as_slice()
-        else {
-            panic!("expected legacy nested frame");
-        };
-
-        let Actor::SharedFrame {
-            tint,
-            blend,
-            children,
-            ..
-        } = new
-        else {
-            panic!("expected shared capture frame");
-        };
-        let [
-            Actor::Frame {
-                offset: new_offset,
-                children: new_children,
-                ..
-            },
-        ] = children.as_ref()
-        else {
-            panic!("expected reusable inner frame");
-        };
-        let [
-            Actor::Frame {
-                z: new_z,
-                children: new_nested,
-                ..
-            },
-        ] = new_children.as_slice()
-        else {
-            panic!("expected shared captured frame");
-        };
-        let [
-            Actor::Frame {
-                z: new_nested_z, ..
-            },
-        ] = new_nested.as_slice()
-        else {
-            panic!("expected shared nested frame");
-        };
-
-        assert_eq!(*new_offset, old_offset);
-        assert_eq!((*new_z, *new_nested_z), (*old_z, *old_nested_z));
-        assert_eq!(tint, state.diffuse);
-        assert_eq!(blend, Some(BlendMode::Add));
-        assert_eq!(scratch.stats().growths, 0);
-    }
-
-    #[test]
     fn aft_capture_scratch_prewarms_both_frame_banks() {
         let overlays = vec![
             test_capture_overlay("CaptureAFT"),
@@ -26361,14 +24459,10 @@ mod tests {
             zoom_y: 1.0,
             zoom_z: 1.0,
         };
-        let mut legacy_capture_scratch = SharedActorFrameScratch::with_capacity(5);
-        let legacy = song_lua_render_captured_source(
-            Some(&capture),
-            None,
-            transform,
-            &mut legacy_capture_scratch,
-        )
-        .expect("legacy proxy capture is populated");
+        let mut captured_scratch = SharedActorFrameScratch::with_capacity(5);
+        let captured =
+            song_lua_render_captured_source(Some(&capture), None, transform, &mut captured_scratch)
+                .expect("captured proxy source is populated");
         let mut unused_direct_scratch = SharedActorFrameScratch::with_capacity(5);
         let direct = prepare_proxy_source(
             [Arc::clone(&capture[0])],
@@ -26385,17 +24479,17 @@ mod tests {
             y: transform.target_y,
             ..SongLuaOverlayState::default()
         };
-        let mut legacy_proxy_scratch = SongLuaProxyActorScratch::new(1);
-        legacy_proxy_scratch.begin_frame();
-        let legacy_actor = song_lua_build_proxy_actor_with_scratch(
+        let mut captured_proxy_scratch = SongLuaProxyActorScratch::new(1);
+        captured_proxy_scratch.begin_frame();
+        let captured_actor = song_lua_build_proxy_actor_with_scratch(
             proxy_state,
             321,
-            SongLuaProxySource::new(&legacy),
+            SongLuaProxySource::new(&captured),
             screen_width(),
             screen_height(),
-            Some(&mut legacy_proxy_scratch),
+            Some(&mut captured_proxy_scratch),
         )
-        .expect("legacy proxy renders");
+        .expect("captured proxy renders");
         let mut direct_proxy_scratch = SongLuaProxyActorScratch::new(1);
         direct_proxy_scratch.begin_frame();
         let direct_actor = song_lua_build_proxy_actor_with_scratch(
@@ -26425,10 +24519,10 @@ mod tests {
                 &resources,
             )
         };
-        let legacy_frame = compose(&legacy_actor);
+        let captured_frame = compose(&captured_actor);
         let direct_frame = compose(&direct_actor);
         assert_eq!(
-            compare_render_frames_semantic(&legacy_frame, &direct_frame),
+            compare_render_frames_semantic(&captured_frame, &direct_frame),
             Ok(())
         );
     }
@@ -26728,344 +24822,6 @@ mod tests {
     }
 
     #[test]
-    fn direct_player_proxy_matches_actor_field_and_hud_capture() {
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
-        deadlib_present::space::set_current_metrics(metrics);
-        let draw = |center: [f32; 2], z: i16| {
-            FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
-                center,
-                world_z: 0.0,
-                size: [24.0, 24.0],
-                source: deadlib_present::actors::SpriteSource::Solid,
-                tint: [0.8, 0.6, 0.4, 0.9],
-                glow: [0.0; 4],
-                uv_rect: [0.0, 0.0, 1.0, 1.0],
-                flip_x: false,
-                flip_y: false,
-                fade: [0.0; 4],
-                blend: BlendMode::Alpha,
-                rot_y_deg: 0.0,
-                rot_z_deg: 0.0,
-                z,
-            })
-        };
-        let hud_draws = [draw([380.0, 220.0], 93), draw([400.0, 210.0], 90)];
-        let field_draws = [draw([410.0, 180.0], 143), draw([430.0, 160.0], 140)];
-        let transform = SongLuaCaptureTransform {
-            z_shift: SONG_LUA_PLAYER_LAYER_Z_BASE,
-            tint: [0.7, 0.6, 0.9, 0.8],
-            blend: Some(BlendMode::Multiply),
-            playfield_center_x: 427.0,
-            target_x: 451.0,
-            target_y: 228.0,
-            rotation_x: 7.0,
-            rotation_z: 11.0,
-            rotation_y: 27.0,
-            skew_x: 0.125,
-            skew_y: -0.0625,
-            zoom_x: 0.875,
-            zoom_y: 1.125,
-            zoom_z: 0.75,
-        };
-        assert!(song_lua_player_transform_is_direct_proxy(transform));
-        assert!(song_lua_player_transform_is_direct_proxy(
-            SongLuaCaptureTransform {
-                rotation_y: 1.0,
-                ..transform
-            }
-        ));
-        assert!(!song_lua_player_transform_is_direct_proxy(
-            SongLuaCaptureTransform {
-                rotation_y: f32::NAN,
-                ..transform
-            }
-        ));
-        assert!(!song_lua_player_transform_is_direct_proxy(
-            SongLuaCaptureTransform {
-                tint: [f32::NAN, 1.0, 1.0, 1.0],
-                ..transform
-            }
-        ));
-        let raw_field_camera = Matrix4::from_rotation_x(0.12);
-        let mut field_actors = Vec::with_capacity(field_draws.len() + 2);
-        let mut hud_actors = Vec::with_capacity(hud_draws.len());
-        let mut player_scratch =
-            SharedActorFrameScratch::with_capacity(field_draws.len() + hud_draws.len() + 4);
-        let player_source = capture_flat_player_source(
-            &mut field_actors,
-            &field_draws,
-            Some(raw_field_camera),
-            &mut hud_actors,
-            &hud_draws,
-            transform,
-            &mut player_scratch,
-        )
-        .expect("whole-Player control source should render");
-        let proxy_state = SongLuaOverlayState {
-            x: 32.0,
-            y: -18.0,
-            diffuse: [0.75, 0.5, 1.0, 0.8],
-            blend: SongLuaOverlayBlendMode::Add,
-            ..SongLuaOverlayState::default()
-        };
-        let actor = song_lua_build_proxy_actor(
-            proxy_state,
-            321,
-            &player_source,
-            screen_width(),
-            screen_height(),
-        )
-        .expect("whole-Player control proxy should render");
-        let resources = ActorResourceArena::new(0);
-        let fonts = font::FontMap::default();
-        let compose = |segments: &[ActorSegment<'_>]| {
-            let mut text = TextLayoutCache::default();
-            let mut scratch = ComposeScratch::default();
-            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                segments,
-                [0.0, 0.0, 0.0, 1.0],
-                &metrics,
-                &fonts,
-                0.0,
-                &mut text,
-                &mut scratch,
-                &NullTextureContext,
-                &resources,
-            )
-        };
-        let actor_frame = compose(&[ActorSegment::new(std::slice::from_ref(&actor))]);
-        let hud_camera = song_lua_direct_field_camera(None, transform)
-            .expect("translated Player HUD should have a camera");
-        let field_camera = song_lua_direct_field_camera(Some(raw_field_camera), transform)
-            .expect("translated Player field should have a camera");
-        let offset = [proxy_state.x, proxy_state.y];
-        let blend = song_lua_overlay_blend(proxy_state.blend);
-        let proxy_style = FlatProxyStyle::new(
-            transform.tint,
-            proxy_state.diffuse,
-            song_lua_player_x_fold(transform),
-        );
-        let direct_frame = compose(&[
-            ActorSegment::flat_proxy_styled_with_cameras(
-                &hud_draws,
-                offset,
-                321,
-                &proxy_style,
-                blend,
-                None,
-                Some(&hud_camera),
-            ),
-            ActorSegment::flat_proxy_styled_with_cameras(
-                &field_draws,
-                offset,
-                321,
-                &proxy_style,
-                blend,
-                None,
-                Some(&field_camera),
-            ),
-        ]);
-        assert_eq!(
-            compare_render_frames_semantic(&actor_frame, &direct_frame),
-            Ok(())
-        );
-
-        let mut aft_overlay = test_aft_overlay("cap", true);
-        aft_overlay.name = Some("PlayerCapture".to_string());
-        let aft_state = SongLuaOverlayState {
-            x: 0.5f32.mul_add(screen_width(), 24.0),
-            y: 0.5f32.mul_add(screen_height(), -12.0),
-            rot_z_deg: 8.0,
-            zoom: 1.1,
-            diffuse: [0.5, 0.8, 0.6, 0.7],
-            blend: SongLuaOverlayBlendMode::Multiply,
-            ..SongLuaOverlayState::default()
-        };
-        let player_actor = song_lua_build_proxy_actor(
-            proxy_state,
-            0,
-            &player_source,
-            screen_width(),
-            screen_height(),
-        )
-        .expect("whole-Player AFT control proxy should render");
-        let mut aft_scratch = SharedActorFrameScratch::with_capacity(5);
-        let aft_actor = song_lua_build_shared_capture(
-            &aft_overlay,
-            aft_state,
-            321,
-            screen_width(),
-            screen_height(),
-            &mut aft_scratch,
-            |out| out.push(player_actor),
-        )
-        .expect("whole-Player AFT control should render");
-        let source = |draws, camera| SongLuaDirectProxySource {
-            draws,
-            draw_start: 0,
-            draw_end: match draws {
-                SongLuaDirectDraws::Hud => hud_draws.len(),
-                SongLuaDirectDraws::Field => field_draws.len(),
-                SongLuaDirectDraws::Judgment | SongLuaDirectDraws::Combo => 0,
-            },
-            target: [0.0, 0.0],
-            tint: transform.tint,
-            x_fold: song_lua_player_x_fold(transform),
-            camera,
-            player_camera: None,
-        };
-        let mut aft_direct = song_lua_direct_proxy(
-            proxy_state,
-            0,
-            source(SongLuaDirectDraws::Hud, Some(hud_camera)),
-            0,
-            0,
-            screen_width(),
-            screen_height(),
-        )
-        .expect("whole-Player AFT HUD source should render");
-        let field_direct = song_lua_direct_proxy(
-            proxy_state,
-            0,
-            source(SongLuaDirectDraws::Field, Some(field_camera)),
-            0,
-            0,
-            screen_width(),
-            screen_height(),
-        )
-        .expect("whole-Player AFT field source should render");
-        aft_direct.tail = Some(SongLuaDirectProxyPart {
-            draws: field_direct.draws,
-            draw_start: field_direct.draw_start,
-            draw_end: field_direct.draw_end,
-            camera: field_direct.camera,
-        });
-        let aft_direct = song_lua_fold_direct_aft_proxy(
-            &aft_overlay,
-            aft_state,
-            321,
-            screen_width(),
-            screen_height(),
-            aft_direct,
-        );
-        let tail = aft_direct.tail.expect("whole-Player AFT retains field run");
-        let aft_actor_frame = compose(&[ActorSegment::new(std::slice::from_ref(&aft_actor))]);
-        let aft_direct_frame = compose(&[ActorSegment::flat_proxy_pair_styled(
-            &hud_draws,
-            &field_draws,
-            aft_direct.offset,
-            aft_direct.z,
-            &aft_direct.style,
-            aft_direct.blend,
-            aft_direct.enclosing_camera.as_ref(),
-            [aft_direct.camera.as_ref(), tail.camera.as_ref()],
-        )]);
-        assert_eq!(
-            compare_render_frames_semantic(&aft_actor_frame, &aft_direct_frame),
-            Ok(())
-        );
-    }
-
-    #[test]
-    fn transformed_direct_proxy_matches_actor_proxy_matrix() {
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
-        deadlib_present::space::set_current_metrics(metrics);
-        let draw = FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
-            center: [410.0, 180.0],
-            world_z: 96.0,
-            size: [32.0, 24.0],
-            source: deadlib_present::actors::SpriteSource::Solid,
-            tint: [0.8, 0.6, 0.4, 0.9],
-            glow: [0.0; 4],
-            uv_rect: [0.0, 0.0, 1.0, 1.0],
-            flip_x: false,
-            flip_y: false,
-            fade: [0.0; 4],
-            blend: BlendMode::Alpha,
-            rot_y_deg: 0.0,
-            rot_z_deg: 0.0,
-            z: 7,
-        });
-        let source_camera = Matrix4::from_translation(Vector3::new(0.05, -0.08, 0.0))
-            * song_lua_proxy_source_view_proj();
-        let source = [Arc::<[Actor]>::from([
-            Actor::CameraPush {
-                view_proj: source_camera,
-            },
-            actor_from_flat_draw(draw.clone()),
-            Actor::CameraPop,
-        ])];
-        let proxy_state = SongLuaOverlayState {
-            x: 510.0,
-            y: 190.0,
-            z: 24.0,
-            zoom_x: 0.85,
-            zoom_y: 1.1,
-            zoom_z: 0.2,
-            rot_x_deg: 7.0,
-            rot_y_deg: -11.0,
-            rot_z_deg: 5.0,
-            skew_x: 0.08,
-            ..SongLuaOverlayState::default()
-        };
-        let actor =
-            song_lua_build_proxy_actor(proxy_state, 321, &source, screen_width(), screen_height())
-                .expect("transformed ActorProxy control should render");
-        let direct = song_lua_direct_proxy(
-            proxy_state,
-            321,
-            SongLuaDirectProxySource {
-                draws: SongLuaDirectDraws::Field,
-                draw_start: 0,
-                draw_end: 1,
-                target: [0.0, 0.0],
-                tint: [1.0; 4],
-                x_fold: None,
-                camera: Some(source_camera),
-                player_camera: None,
-            },
-            0,
-            0,
-            screen_width(),
-            screen_height(),
-        )
-        .expect("transformed direct ActorProxy should render");
-        let draws = [draw];
-        let resources = ActorResourceArena::new(0);
-        let fonts = font::FontMap::default();
-        let compose = |segment: ActorSegment<'_>| {
-            let mut text = TextLayoutCache::default();
-            let mut scratch = ComposeScratch::default();
-            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                &[segment],
-                [0.0, 0.0, 0.0, 1.0],
-                &metrics,
-                &fonts,
-                0.0,
-                &mut text,
-                &mut scratch,
-                &NullTextureContext,
-                &resources,
-            )
-        };
-        let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&actor)));
-        let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
-            &draws,
-            direct.offset,
-            direct.z,
-            &direct.style,
-            direct.blend,
-            direct.enclosing_camera.as_ref(),
-            direct.camera.as_ref(),
-        ));
-
-        assert_eq!(
-            compare_render_frames_semantic(&actor_frame, &direct_frame),
-            Ok(())
-        );
-    }
-
-    #[test]
     fn transformed_player_proxy_flattens_depth_before_perspective() {
         let metrics = deadlib_present::space::metrics_for_window(854, 480);
         deadlib_present::space::set_current_metrics(metrics);
@@ -27122,139 +24878,6 @@ mod tests {
         let far = project(96.0);
         assert!((near[0] - far[0]).abs() <= 1e-5);
         assert!((near[1] - far[1]).abs() <= 1e-5);
-    }
-
-    #[test]
-    fn direct_aft_proxy_matches_actor_capture_transform_and_cameras() {
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
-        deadlib_present::space::set_current_metrics(metrics);
-        let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
-            center: [12.0, 18.0],
-            world_z: 0.0,
-            size: [32.0, 24.0],
-            source: deadlib_present::actors::SpriteSource::Solid,
-            tint: [0.8, 0.6, 0.4, 0.9],
-            glow: [0.0; 4],
-            uv_rect: [0.0, 0.0, 1.0, 1.0],
-            flip_x: false,
-            flip_y: false,
-            fade: [0.0; 4],
-            blend: BlendMode::Alpha,
-            rot_y_deg: 0.0,
-            rot_z_deg: 0.0,
-            z: 7,
-        })];
-        let proxy_state = SongLuaOverlayState {
-            x: 48.0,
-            y: 72.0,
-            diffuse: [0.75, 0.5, 1.0, 0.8],
-            blend: SongLuaOverlayBlendMode::Multiply,
-            ..SongLuaOverlayState::default()
-        };
-        let mut aft_overlay = test_aft_overlay("cap", true);
-        aft_overlay.name = Some("CaptureR".to_string());
-        let aft_state = SongLuaOverlayState {
-            x: 0.5f32.mul_add(screen_width(), 24.0),
-            y: 0.5f32.mul_add(screen_height(), -12.0),
-            rot_z_deg: 8.0,
-            zoom: 1.1,
-            diffuse: [0.5, 0.8, 0.6, 0.7],
-            blend: SongLuaOverlayBlendMode::Add,
-            ..SongLuaOverlayState::default()
-        };
-        let resources = ActorResourceArena::new(0);
-        let fonts = font::FontMap::default();
-        let compose = |segment: ActorSegment<'_>| {
-            let mut text = TextLayoutCache::default();
-            let mut scratch = ComposeScratch::default();
-            build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
-                &[segment],
-                [0.0, 0.0, 0.0, 1.0],
-                &metrics,
-                &fonts,
-                0.0,
-                &mut text,
-                &mut scratch,
-                &NullTextureContext,
-                &resources,
-            )
-        };
-        let nested_camera = Matrix4::from_translation(Vector3::new(3.0, -4.0, 0.0));
-        for source_camera in [None, Some(nested_camera)] {
-            let mut source_actors = Vec::with_capacity(3);
-            if let Some(view_proj) = source_camera {
-                source_actors.push(Actor::CameraPush { view_proj });
-            }
-            source_actors.push(actor_from_flat_draw(draws[0].clone()));
-            if source_camera.is_some() {
-                source_actors.push(Actor::CameraPop);
-            }
-            let source = [Arc::<[Actor]>::from(source_actors)];
-            let proxy_actor = song_lua_build_proxy_actor(
-                proxy_state,
-                0,
-                &source,
-                screen_width(),
-                screen_height(),
-            )
-            .expect("proxy source should render");
-            let mut capture_scratch = SharedActorFrameScratch::with_capacity(5);
-            let capture_actor = song_lua_build_shared_capture(
-                &aft_overlay,
-                aft_state,
-                321,
-                screen_width(),
-                screen_height(),
-                &mut capture_scratch,
-                |out| out.push(proxy_actor),
-            )
-            .expect("AFT capture should render");
-
-            let direct = song_lua_direct_proxy(
-                proxy_state,
-                0,
-                SongLuaDirectProxySource {
-                    draws: SongLuaDirectDraws::Field,
-                    draw_start: 0,
-                    draw_end: draws.len(),
-                    target: [0.0, 0.0],
-                    tint: [1.0; 4],
-                    x_fold: None,
-                    camera: source_camera,
-                    player_camera: None,
-                },
-                0,
-                0,
-                screen_width(),
-                screen_height(),
-            )
-            .map(|proxy| {
-                song_lua_fold_direct_aft_proxy(
-                    &aft_overlay,
-                    aft_state,
-                    321,
-                    screen_width(),
-                    screen_height(),
-                    proxy,
-                )
-            })
-            .expect("direct AFT proxy should render");
-
-            let actor_frame = compose(ActorSegment::new(std::slice::from_ref(&capture_actor)));
-            let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
-                &draws,
-                direct.offset,
-                direct.z,
-                &direct.style,
-                direct.blend,
-                direct.enclosing_camera.as_ref(),
-                direct.camera.as_ref(),
-            ));
-            assert_eq!(
-                compare_render_frames_semantic(&actor_frame, &direct_frame),
-                Ok(())
-            );
-        }
     }
 
     #[test]
@@ -27754,7 +25377,7 @@ mod tests {
             glow: [0.25, 0.5, 0.75, 0.5],
             ..SongLuaOverlayState::default()
         };
-        let legacy = build_song_lua_overlay_actor(
+        let expected = build_song_lua_overlay_actor(
             &multi_layer,
             multi_state,
             None,
@@ -27767,7 +25390,7 @@ mod tests {
             1.0,
         )
         .expect_actors("multi-layer model should render");
-        let mut direct = Vec::with_capacity(legacy.len());
+        let mut direct = Vec::with_capacity(expected.len());
         assert_eq!(
             append_song_lua_multi_actor_overlay(
                 &mut direct,
@@ -27784,8 +25407,8 @@ mod tests {
             ),
             Some(true)
         );
-        assert_eq!(legacy.len(), 6);
-        assert_eq!(format!("{legacy:?}"), format!("{direct:?}"));
+        assert_eq!(expected.len(), 6);
+        assert_eq!(format!("{expected:?}"), format!("{direct:?}"));
 
         let mut scratches = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&multi_layer));
         let mut model_scratch = scratches.pop().expect("model scratch should be prewarmed");
@@ -27795,7 +25418,7 @@ mod tests {
             .expect("model glow vertices should be compiled during entry")
             .clone();
         assert_eq!(prewarmed.len(), 3);
-        let mut warmed = Vec::with_capacity(legacy.len());
+        let mut warmed = Vec::with_capacity(expected.len());
         let mut append_warmed = |out: &mut Vec<Actor>| {
             out.clear();
             assert_eq!(
@@ -27822,7 +25445,7 @@ mod tests {
                 *geom_cache_key = INVALID_TMESH_CACHE_KEY;
             }
         }
-        assert_eq!(format!("{legacy:?}"), format!("{normalized:?}"));
+        assert_eq!(format!("{expected:?}"), format!("{normalized:?}"));
         for (layer_index, prewarmed_vertices) in prewarmed.iter().enumerate() {
             let Actor::TexturedMesh {
                 geom_cache_key: base_key,
@@ -27964,7 +25587,7 @@ mod tests {
             glow: [0.25, 0.5, 0.75, 0.5],
             ..SongLuaOverlayState::default()
         };
-        let legacy = build_song_lua_overlay_actor(
+        let expected = build_song_lua_overlay_actor(
             &overlay,
             state,
             None,
@@ -27976,7 +25599,7 @@ mod tests {
             0.0,
             1.0,
         )
-        .expect_actors("legacy noteskin model should render");
+        .expect_actors("noteskin model should render");
         let mut scratches = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
         let scratch = scratches
             .first_mut()
@@ -27986,7 +25609,7 @@ mod tests {
             .as_ref()
             .expect("noteskin glow geometry should prewarm")
             .clone();
-        let mut warmed = Vec::with_capacity(legacy.len());
+        let mut warmed = Vec::with_capacity(expected.len());
         assert_eq!(
             append_song_lua_multi_actor_overlay(
                 &mut warmed,
@@ -28009,7 +25632,7 @@ mod tests {
                 *geom_cache_key = INVALID_TMESH_CACHE_KEY;
             }
         }
-        assert_eq!(format!("{legacy:?}"), format!("{normalized:?}"));
+        assert_eq!(format!("{expected:?}"), format!("{normalized:?}"));
         for (slot_index, actors) in warmed.as_chunks::<2>().0.iter().enumerate() {
             let [
                 Actor::TexturedMesh {
@@ -29996,7 +27619,7 @@ mod tests {
         )
         .expect_actor("projected fading sprite should render");
 
-        let legacy_vertices = match actor {
+        let expected_vertices = match actor {
             Actor::TexturedMesh {
                 tint, vertices, z, ..
             } => {
@@ -30043,7 +27666,7 @@ mod tests {
         else {
             panic!("expected reusable projected textured mesh");
         };
-        assert_eq!(legacy_vertices.as_ref(), reused_vertices.as_slice());
+        assert_eq!(expected_vertices.as_ref(), reused_vertices.as_slice());
         let buffer_ptr = Arc::as_ptr(&reused_vertices);
         drop(reused_vertices);
         let Actor::ReusableTexturedMesh {

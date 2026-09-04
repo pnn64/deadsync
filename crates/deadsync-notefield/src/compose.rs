@@ -679,12 +679,12 @@ mod tests {
     #[test]
     fn active_note_geometry_matches_unconditional_calculation() {
         let cols = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
-        let mut old_invert = [0.0; MAX_COLS];
-        crate::compute_invert_distances(&cols, &mut old_invert);
-        let mut old_tornado = [TornadoBounds::default(); MAX_COLS];
-        crate::compute_tornado_bounds(&cols, &mut old_tornado);
-        let mut new_invert = [0.0; MAX_COLS];
-        let mut new_tornado = [TornadoBounds::default(); MAX_COLS];
+        let mut expected_invert = [0.0; MAX_COLS];
+        crate::compute_invert_distances(&cols, &mut expected_invert);
+        let mut expected_tornado = [TornadoBounds::default(); MAX_COLS];
+        crate::compute_tornado_bounds(&cols, &mut expected_tornado);
+        let mut actual_invert = [0.0; MAX_COLS];
+        let mut actual_tornado = [TornadoBounds::default(); MAX_COLS];
         compute_active_note_geometry(
             &VisualEffects {
                 invert: -0.5,
@@ -692,49 +692,49 @@ mod tests {
                 ..VisualEffects::default()
             },
             &cols,
-            &mut new_invert,
-            &mut new_tornado,
+            &mut actual_invert,
+            &mut actual_tornado,
         );
-        assert_eq!(new_invert, old_invert);
-        assert_eq!(new_tornado, old_tornado);
+        assert_eq!(actual_invert, expected_invert);
+        assert_eq!(actual_tornado, expected_tornado);
     }
 
     #[test]
     fn inactive_note_geometry_does_not_change_note_positions() {
         let cols = [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
-        let mut old_invert = [0.0; MAX_COLS];
-        crate::compute_invert_distances(&cols, &mut old_invert);
-        let mut old_tornado = [TornadoBounds::default(); MAX_COLS];
-        crate::compute_tornado_bounds(&cols, &mut old_tornado);
-        let new_invert = [0.0; MAX_COLS];
-        let new_tornado = [TornadoBounds::default(); MAX_COLS];
+        let mut populated_invert = [0.0; MAX_COLS];
+        crate::compute_invert_distances(&cols, &mut populated_invert);
+        let mut populated_tornado = [TornadoBounds::default(); MAX_COLS];
+        crate::compute_tornado_bounds(&cols, &mut populated_tornado);
+        let empty_invert = [0.0; MAX_COLS];
+        let empty_tornado = [TornadoBounds::default(); MAX_COLS];
         let move_x = [0.0; MAX_COLS];
         for local_col in 0..MAX_COLS {
-            let old = crate::note_x_offset(
+            let expected = crate::note_x_offset(
                 local_col,
                 180.0,
                 0.25,
                 4.0,
                 &cols,
-                &old_invert,
-                &old_tornado,
+                &populated_invert,
+                &populated_tornado,
                 &move_x,
                 crate::NoteXParams::default(),
                 0.0,
             );
-            let new = crate::note_x_offset(
+            let actual = crate::note_x_offset(
                 local_col,
                 180.0,
                 0.25,
                 4.0,
                 &cols,
-                &new_invert,
-                &new_tornado,
+                &empty_invert,
+                &empty_tornado,
                 &move_x,
                 crate::NoteXParams::default(),
                 0.0,
             );
-            assert_eq!(new.to_bits(), old.to_bits());
+            assert_eq!(actual.to_bits(), expected.to_bits());
         }
     }
 }

@@ -337,34 +337,6 @@ fn parse_song_options() -> ParseSongOptions {
     )
 }
 
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_parse_options_per_song(song_count: usize) -> usize {
-    (0..song_count)
-        .map(|_| {
-            let options = std::hint::black_box(parse_song_options());
-            parse_options_checksum(&options)
-        })
-        .sum()
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_parse_options_hoisted(song_count: usize) -> usize {
-    let options = parse_song_options();
-    (0..song_count)
-        .map(|_| parse_options_checksum(std::hint::black_box(&options)))
-        .sum()
-}
-
-#[cfg(feature = "bench-support")]
-const fn parse_options_checksum(options: &ParseSongOptions) -> usize {
-    options.mono_threshold
-        ^ options.song_movie_roots.len()
-        ^ options.random_movie_roots.len()
-        ^ options.bg_animation_roots.len()
-}
-
 fn runtime_song_config() -> RuntimeSongConfig {
     let config = deadsync_config::runtime::get();
     RuntimeSongConfig {

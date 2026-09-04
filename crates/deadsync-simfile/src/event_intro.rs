@@ -56,30 +56,6 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     Some(name.trim().to_string())
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn itl_event_intro_name_for_bench(pack_group: &str) -> Option<String> {
-    itl_event_intro_name(pack_group)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn itl_event_intro_name_reference_for_bench(pack_group: &str) -> Option<String> {
-    let name = pack_group.trim();
-    let lower = name.to_ascii_lowercase();
-    let itl_pack = lower.contains("itl online ")
-        || (lower.starts_with("itl ") && lower.chars().any(|c| c.is_ascii_digit()));
-    if !itl_pack {
-        return None;
-    }
-    const UNLOCKS_MARKER: &str = " unlocks";
-    let name = match lower.find(UNLOCKS_MARKER) {
-        Some(idx) => &name[..idx],
-        None => name,
-    };
-    Some(name.trim().to_string())
-}
-
 #[must_use]
 pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
@@ -95,20 +71,6 @@ pub fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
         return Some("Stamina RPG 9".to_string());
     }
     itl_event_intro_name(name)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn event_intro_name_for_pack_reference_for_bench(pack_group: &str) -> Option<String> {
-    let name = pack_group.trim();
-    let lower = name.to_ascii_lowercase();
-    if lower.contains("stamina rpg 10") || lower.contains("srpg10") {
-        return Some("Stamina RPG 10".to_string());
-    }
-    if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
-        return Some("Stamina RPG 9".to_string());
-    }
-    itl_event_intro_name_reference_for_bench(name)
 }
 
 pub fn gameplay_event_intro_text(song: &SongData) -> Arc<str> {
@@ -230,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn allocation_free_itl_intro_names_match_committed_behavior() {
+    fn itl_intro_names_match_committed_behavior() {
         let cases = [
             ("ITL Online 2026", Some("ITL Online 2026")),
             (
@@ -251,16 +213,11 @@ mod tests {
         for (pack, expected) in cases {
             let actual = itl_event_intro_name(pack);
             assert_eq!(actual.as_deref(), expected, "case: {pack:?}");
-            assert_eq!(
-                actual,
-                itl_event_intro_name_reference_for_bench(pack),
-                "case: {pack:?}"
-            );
         }
     }
 
     #[test]
-    fn allocation_free_event_intro_names_match_committed_behavior() {
+    fn event_intro_names_match_committed_behavior() {
         let cases = [
             ("Stamina RPG 10 Unlocks", Some("Stamina RPG 10")),
             ("prefix SRPG10 suffix", Some("Stamina RPG 10")),
@@ -276,11 +233,6 @@ mod tests {
         for (pack, expected) in cases {
             let actual = event_intro_name_for_pack(pack);
             assert_eq!(actual.as_deref(), expected, "case: {pack:?}");
-            assert_eq!(
-                actual,
-                event_intro_name_for_pack_reference_for_bench(pack),
-                "case: {pack:?}"
-            );
         }
     }
 
@@ -293,32 +245,6 @@ mod tests {
         assert!(!is_srpg_event_group("ITL Online 2026"));
         assert!(!is_srpg_event_group("Stamina RPG Songs"));
         assert!(!is_srpg_event_group("RPG Songs"));
-    }
-
-    #[test]
-    fn srpg_event_detection_matches_legacy_ascii_lowercase_policy() {
-        fn legacy(pack_group: &str) -> bool {
-            let lower = pack_group.trim().to_ascii_lowercase();
-            lower.chars().any(|c| c.is_ascii_digit())
-                && (lower.contains("stamina rpg") || lower.contains("srpg"))
-        }
-
-        let cases = [
-            "",
-            "  Stamina RPG 10  ",
-            "STAMINA rPg 9 Unlocks",
-            "srpg10",
-            "prefix-SrPg-2026-suffix",
-            "Stamina RPG Songs",
-            "SRPG",
-            "RPG 10",
-            "ITL Online 2026",
-            "\u{2003}Stamina RPG 10\u{2003}",
-            "Stamina RÖPG 10",
-        ];
-        for case in cases {
-            assert_eq!(is_srpg_event_group(case), legacy(case), "case: {case:?}");
-        }
     }
 
     #[test]

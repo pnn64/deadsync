@@ -9,7 +9,6 @@ use deadsync_rules::timing::{
 };
 use deadsync_theme::NotefieldStyle;
 use std::ops::Range;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeasureLineMode {
     Off,
@@ -223,18 +222,7 @@ fn sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
         .saturating_sub(1)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn legacy_sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
-    let mut index = 0;
-    for (candidate, sig) in segments.iter().enumerate() {
-        if row >= beat_to_note_row(sig.beat) {
-            index = candidate;
-        }
-    }
-    index
-}
-
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 #[must_use]
 pub fn edit_beat_bar_info_for_row(
     row: i32,
@@ -243,11 +231,11 @@ pub fn edit_beat_bar_info_for_row(
     if row < 0 {
         return None;
     }
-    let idx = legacy_sig_index_at_row(segments, row);
+    let idx = sig_index_at_row(segments, row);
     edit_beat_bar_info(row, segments, idx, measure_index_before(segments, idx))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 fn edit_beat_bar_info(
     row: i32,
     segments: &[TimeSignatureSegment],
@@ -779,102 +767,6 @@ pub(crate) fn compose_measure_lines(
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod edit_bar_geometry_bench_support {
-    use std::hint::black_box;
-
-    use super::*;
-
-    #[derive(Clone, Copy)]
-    struct PreviousEditBeatBarCursor<'a> {
-        segments: &'a [TimeSignatureSegment],
-        index: usize,
-        measure_index_before: i64,
-    }
-
-    impl<'a> PreviousEditBeatBarCursor<'a> {
-        fn new(row: i32, segments: &'a [TimeSignatureSegment]) -> Self {
-            let index = sig_index_at_row(segments, row);
-            Self {
-                segments,
-                index,
-                measure_index_before: measure_index_before(segments, index),
-            }
-        }
-
-        fn info_for_row(&mut self, row: i32) -> Option<EditBeatBarInfo> {
-            if row < 0 {
-                return None;
-            }
-            while self.index + 1 < self.segments.len()
-                && row >= beat_to_note_row(self.segments[self.index + 1].beat)
-            {
-                let sig = sig_at(self.segments, self.index);
-                let next_sig = sig_at(self.segments, self.index + 1);
-                self.measure_index_before += bars_in_segment(
-                    beat_to_note_row(sig.beat),
-                    beat_to_note_row(next_sig.beat),
-                    sig,
-                );
-                self.index += 1;
-            }
-            while self.index > 0 && row < beat_to_note_row(self.segments[self.index].beat) {
-                let previous = self.index - 1;
-                let sig = sig_at(self.segments, previous);
-                let next_sig = sig_at(self.segments, self.index);
-                self.measure_index_before -= bars_in_segment(
-                    beat_to_note_row(sig.beat),
-                    beat_to_note_row(next_sig.beat),
-                    sig,
-                );
-                self.index = previous;
-            }
-            edit_beat_bar_info(row, self.segments, self.index, self.measure_index_before)
-        }
-    }
-
-    fn signatures() -> [TimeSignatureSegment; 8] {
-        std::array::from_fn(|index| TimeSignatureSegment {
-            beat: index as f32 * 32.0,
-            numerator: [4, 3, 7, 5][index & 3],
-            denominator: [4, 8, 16, 4][index & 3],
-        })
-    }
-
-    fn checksum(info: Option<EditBeatBarInfo>) -> u64 {
-        info.map_or(u64::MAX, |info| {
-            u64::from(info.frame) ^ (info.measure_index.unwrap_or(i64::MIN) as u64).rotate_left(17)
-        })
-    }
-
-    #[must_use]
-    pub fn edit_bar_geometry_old(evaluations: usize) -> u64 {
-        let signatures = black_box(signatures());
-        let mut cursor = PreviousEditBeatBarCursor::new(0, &signatures);
-        let mut out = 0_u64;
-        for index in 0..evaluations {
-            out = out
-                .wrapping_add(checksum(cursor.info_for_row(black_box(index as i32 * 3))))
-                .rotate_left(7);
-        }
-        out
-    }
-
-    #[must_use]
-    pub fn edit_bar_geometry_new(evaluations: usize) -> u64 {
-        let signatures = black_box(signatures());
-        let mut cursor = EditBeatBarCursor::new(0, &signatures);
-        let mut out = 0_u64;
-        for index in 0..evaluations {
-            out = out
-                .wrapping_add(checksum(cursor.info_for_row(black_box(index as i32 * 3))))
-                .rotate_left(7);
-        }
-        out
-    }
-}
-
 #[cfg(test)]
 mod tests {
     // Decimal components in these visual fixtures are authored RGB values.
@@ -1259,43 +1151,40 @@ mod tests {
                     .flatten()
                     .next()
                     .expect("measure-line group");
-                let optimized_plan = measure_line_plan(&request);
-                let mut legacy_plan = optimized_plan;
-                legacy_plan.line_step = 0.5;
-                legacy_plan.normal_unit_scale = 1;
+                let planned = measure_line_plan(&request);
+                let mut full_density = planned;
+                full_density.line_step = 0.5;
+                full_density.normal_unit_scale = 1;
 
-                let mut legacy = Vec::new();
-                let mut optimized = Vec::new();
-                let mut legacy_text = Vec::new();
-                let mut optimized_text = Vec::new();
-                let mut legacy_slots = EditMeasureTextSlots::new(0);
-                let mut optimized_slots = EditMeasureTextSlots::new(0);
+                let mut expected = Vec::new();
+                let mut actual = Vec::new();
+                let mut expected_text = Vec::new();
+                let mut actual_text = Vec::new();
+                let mut expected_slots = EditMeasureTextSlots::new(0);
+                let mut actual_slots = EditMeasureTextSlots::new(0);
                 append_group_lines(
-                    &mut legacy_text,
-                    &mut legacy,
+                    &mut expected_text,
+                    &mut expected,
                     &request,
-                    legacy_plan,
+                    full_density,
                     group,
                     None,
-                    &mut legacy_slots,
+                    &mut expected_slots,
                 );
                 append_group_lines(
-                    &mut optimized_text,
-                    &mut optimized,
+                    &mut actual_text,
+                    &mut actual,
                     &request,
-                    optimized_plan,
+                    planned,
                     group,
                     None,
-                    &mut optimized_slots,
+                    &mut actual_slots,
                 );
-                assert!(legacy_text.is_empty());
-                assert!(optimized_text.is_empty());
+                assert!(expected_text.is_empty());
+                assert!(actual_text.is_empty());
                 assert_eq!(
-                    legacy.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
-                    optimized
-                        .iter()
-                        .filter_map(sprite_parts)
-                        .collect::<Vec<_>>(),
+                    expected.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
+                    actual.iter().filter_map(sprite_parts).collect::<Vec<_>>(),
                     "mode={mode:?}, beat={current_beat}, direction={direction}",
                 );
             }
@@ -1625,7 +1514,7 @@ mod tests {
     }
 
     #[test]
-    fn edit_cursor_matches_legacy_metadata_across_playback_and_seeks() {
+    fn edit_cursor_matches_stateless_metadata_across_playback_and_seeks() {
         let signatures = (0..128)
             .map(|index| TimeSignatureSegment {
                 beat: index as f32 * 16.0,

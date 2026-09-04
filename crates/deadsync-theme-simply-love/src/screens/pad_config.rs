@@ -130,7 +130,7 @@ const BAR_HEIGHT: f32 = 140.0;
 const PAD_GAP: f32 = 70.0;
 const PANEL_PAD_X: f32 = 17.0;
 const SCREEN_PAD_X: f32 = 20.0;
-#[cfg(any(test, feature = "bench-support"))]
+#[cfg(test)]
 const FIXTURE_BUTTON_COUNT: usize = 4;
 
 // ── Advanced-view geometry ──
@@ -2611,114 +2611,6 @@ fn push_bar(
     ));
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-const PAD_TEXT_BENCH_ROWS: [(u16, u16, u16, &str); 4] = [
-    (187, 25, 40, "Left"),
-    (203, 35, 35, "Down"),
-    (149, 20, 45, "Up"),
-    (221, 30, 30, "Right"),
-];
-
-#[cfg(any(test, feature = "bench-support"))]
-fn pad_text_checksum(text: &[TextContent], geometry: &[f32], targets: &[u8]) -> u64 {
-    text.iter()
-        .flat_map(|value| value.as_str().bytes())
-        .fold(text.len() as u64, |checksum, byte| {
-            checksum.rotate_left(5) ^ u64::from(byte)
-        })
-        ^ geometry
-            .iter()
-            .fold(geometry.len() as u64, |checksum, value| {
-                checksum.rotate_left(7) ^ u64::from(value.to_bits())
-            })
-        ^ targets
-            .iter()
-            .fold(targets.len() as u64, |checksum, value| {
-                checksum.rotate_left(3) ^ u64::from(*value)
-            })
-}
-
-/// Immediate pre-optimization pad text and scratch preparation.
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_pad_text_legacy(out: &mut Vec<TextContent>) -> u64 {
-    out.clear();
-    let curve = ValueCurve::linear(250);
-    let group_widths = [4usize; FIXTURE_BUTTON_COUNT]
-        .into_iter()
-        .map(group_width)
-        .collect::<Vec<_>>();
-    let geometry = PAD_TEXT_BENCH_ROWS
-        .iter()
-        .flat_map(|(_, min, max, _)| [*min, *max])
-        .filter(|value| *value != 35 && *value != 30)
-        .map(|value| curve.normalize(value))
-        .chain(group_widths)
-        .collect::<Vec<_>>();
-    let targets = (0..18u8).collect::<Vec<_>>();
-
-    for (raw, min, max, label) in PAD_TEXT_BENCH_ROWS {
-        out.push(TextContent::Owned(raw.to_string()));
-        out.push(TextContent::Owned(if min == max {
-            max.to_string()
-        } else {
-            format!("{min}-{max}")
-        }));
-        out.push(TextContent::Owned(label.to_string()));
-        for sensor in 0..4 {
-            out.push(TextContent::Owned((sensor + 1).to_string()));
-        }
-        out.push(TextContent::Owned("ON".to_string()));
-    }
-    out.push(TextContent::Owned("Left/Right - Select Panel".to_owned()));
-    out.push(TextContent::Owned(format!(
-        "Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"
-    )));
-    out.push(TextContent::Owned(
-        "&START; Advanced    &SELECT; Profiles".to_owned(),
-    ));
-    out.push(TextContent::Owned(
-        "Press &BACK; to return to Options".to_owned(),
-    ));
-    pad_text_checksum(out, &geometry, &targets)
-}
-
-/// Stack/inline pad text and scratch preparation used by the live renderer.
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_pad_text_current(out: &mut Vec<TextContent>) -> u64 {
-    out.clear();
-    let curve = ValueCurve::linear(250);
-    let group_widths = std::array::from_fn::<_, FIXTURE_BUTTON_COUNT, _>(|_| group_width(4));
-    let mut geometry = SmallVec::<[f32; 12]>::new();
-    let targets = (0..18u8).collect::<SmallVec<[u8; 18]>>();
-    for (_, min, max, _) in PAD_TEXT_BENCH_ROWS {
-        for value in [min, max] {
-            if value != 35 && value != 30 {
-                geometry.push(curve.normalize(value));
-            }
-        }
-    }
-    geometry.extend(group_widths);
-
-    for (raw, min, max, label) in PAD_TEXT_BENCH_ROWS {
-        out.push(TextContent::inline_u16(raw));
-        out.push(threshold_text(min, max));
-        out.push(TextContent::Static(label));
-        for sensor in 0..4 {
-            out.push(sensor_index_text(sensor));
-        }
-        out.push(TextContent::Static("ON"));
-    }
-    for footer in [
-        "Left/Right - Select Panel",
-        "Up/Down - Threshold +/- 5 (Shift +/- 1)",
-        "&START; Advanced    &SELECT; Profiles",
-        "Press &BACK; to return to Options",
-    ] {
-        out.push(TextContent::Static(footer));
-    }
-    pad_text_checksum(out, &geometry, &targets)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3240,20 +3132,6 @@ mod tests {
         let (raw, threshold_norm) = sensor_threshold_view(&sensor, curve, Some(317));
         assert_eq!(raw, 317);
         assert_eq!(threshold_norm, curve.normalize(raw));
-    }
-
-    #[test]
-    fn inline_pad_text_matches_legacy_preparation() {
-        let mut legacy = Vec::with_capacity(40);
-        let mut current = Vec::with_capacity(40);
-        assert_eq!(
-            benchmark_pad_text_legacy(&mut legacy),
-            benchmark_pad_text_current(&mut current)
-        );
-        assert_eq!(
-            legacy.iter().map(TextContent::as_str).collect::<Vec<_>>(),
-            current.iter().map(TextContent::as_str).collect::<Vec<_>>()
-        );
     }
 
     #[test]

@@ -180,37 +180,6 @@ fn sort_song_art_paths(paths: &mut [PathBuf]) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn sort_song_art_paths_reference_for_bench(paths: &mut [PathBuf]) {
-    paths.sort_by_cached_key(|path| {
-        path.file_name()
-            .map(|name| name.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default()
-    });
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn sort_song_art_paths_for_bench(paths: &mut [PathBuf]) {
-    sort_song_art_paths(paths);
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn find_song_art_hint(
-    images: &[PathBuf],
-    starts_with: &[&str],
-    contains: &[&str],
-    ends_with: &[&str],
-) -> Option<PathBuf> {
-    for image in images {
-        if song_art_stem_matches(image, starts_with, contains, ends_with) {
-            return Some(image.clone());
-        }
-    }
-    None
-}
-
 fn fill_song_art_hints(images: &[PathBuf], candidates: &mut ArtworkCandidates) {
     for image in images {
         let Some(stem) = image.file_stem() else {
@@ -256,74 +225,6 @@ fn fill_song_art_hints(images: &[PathBuf], candidates: &mut ArtworkCandidates) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn fill_song_art_hints_reference(images: &[PathBuf], candidates: &mut ArtworkCandidates) {
-    if candidates.banner.is_none() {
-        candidates.banner = find_song_art_hint(images, &[], &["banner"], &[" bn"]);
-    }
-    if candidates.background.is_none() {
-        candidates.background = find_song_art_hint(images, &[], &["background"], &["bg"]);
-    }
-    if candidates.jacket.is_none() {
-        candidates.jacket = find_song_art_hint(images, &["jk_"], &["jacket", "albumart"], &[]);
-    }
-    if candidates.cdimage.is_none() {
-        candidates.cdimage = find_song_art_hint(images, &[], &[], &["-cd"]);
-    }
-    if candidates.disc.is_none() {
-        candidates.disc = find_song_art_hint(images, &[], &[], &[" disc", " title"]);
-    }
-    if candidates.cdtitle.is_none() {
-        candidates.cdtitle = find_song_art_hint(images, &[], &["cdtitle"], &[]);
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn artwork_candidate_paths(candidates: ArtworkCandidates) -> [Option<PathBuf>; 6] {
-    [
-        candidates.banner,
-        candidates.background,
-        candidates.cdtitle,
-        candidates.jacket,
-        candidates.cdimage,
-        candidates.disc,
-    ]
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn song_art_hints_reference_for_bench(images: &[PathBuf]) -> [Option<PathBuf>; 6] {
-    let mut candidates = ArtworkCandidates::default();
-    fill_song_art_hints_reference(images, &mut candidates);
-    artwork_candidate_paths(candidates)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn song_art_hints_for_bench(images: &[PathBuf]) -> [Option<PathBuf>; 6] {
-    let mut candidates = ArtworkCandidates::default();
-    fill_song_art_hints(images, &mut candidates);
-    artwork_candidate_paths(candidates)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn resolved_required_artwork_reference_for_bench(simfile_data: &[u8]) -> usize {
-    let optional = latest_simfile_tag_values(
-        simfile_data,
-        [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()],
-    );
-    std::hint::black_box(optional);
-    3
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn resolved_required_artwork_for_bench(simfile_data: &[u8]) -> usize {
-    std::hint::black_box(simfile_data);
-    3
-}
-
 fn song_art_matches(candidate: &Path, selected: &Option<PathBuf>) -> bool {
     selected
         .as_ref()
@@ -366,20 +267,6 @@ fn ascii_lowercase_contains(value: &str, expected: &str) -> bool {
                 .map(u8::to_ascii_lowercase)
                 .eq(expected.bytes())
         })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn song_art_stem_matches(
-    path: &Path,
-    starts_with: &[&str],
-    contains: &[&str],
-    ends_with: &[&str],
-) -> bool {
-    let Some(stem) = path.file_stem() else {
-        return false;
-    };
-    let stem = stem.to_string_lossy();
-    song_art_stem_matches_text(&stem, starts_with, contains, ends_with)
 }
 
 fn song_art_stem_matches_text(
@@ -434,21 +321,11 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn artwork_hint_and_path_matching_fold_ascii_without_allocated_keys() {
+    fn artwork_hint_matching_folds_ascii() {
+        assert!(song_art_stem_matches_text("BANNER", &[], &["banner"], &[]));
+        assert!(song_art_stem_matches_text("jk_Song", &["jk_"], &[], &[]));
+        assert!(song_art_stem_matches_text("Song-CD", &[], &[], &["-cd"]));
         let banner = Path::new("Visuals/BANNER.PNG");
-        assert!(song_art_stem_matches(banner, &[], &["banner"], &[]));
-        assert!(song_art_stem_matches(
-            Path::new("jk_Song.JpG"),
-            &["jk_"],
-            &[],
-            &[]
-        ));
-        assert!(song_art_stem_matches(
-            Path::new("Song-CD.png"),
-            &[],
-            &[],
-            &["-cd"]
-        ));
         assert!(song_art_paths_match(
             banner,
             Path::new("visuals\\banner.png")
@@ -457,46 +334,6 @@ mod tests {
             banner,
             Path::new("Visuals/background.png")
         ));
-    }
-
-    #[test]
-    fn pooled_artwork_sort_matches_cached_lowercase_keys() {
-        let paths = vec![
-            PathBuf::new(),
-            PathBuf::from("Visuals/zeta.PNG"),
-            PathBuf::from("Visuals/Alpha.png"),
-            PathBuf::from("Visuals/ALPHA.JPG"),
-            PathBuf::from("Visuals/alpha.png"),
-            PathBuf::from("Visuals/Éclair.png"),
-            PathBuf::from("Visuals/banner.BMP"),
-        ];
-        let mut expected = paths.clone();
-        let mut actual = paths;
-
-        sort_song_art_paths_reference_for_bench(&mut expected);
-        sort_song_art_paths_for_bench(&mut actual);
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn single_pass_artwork_hints_match_independent_scans() {
-        let images = [
-            "00 unrelated.png",
-            "01 song banner.png",
-            "02 song background.jpg",
-            "03 jk_song.png",
-            "04 song-cd.png",
-            "05 song disc.png",
-            "06 cdtitle.png",
-            "07 albumart.png",
-        ]
-        .map(PathBuf::from);
-
-        assert_eq!(
-            song_art_hints_for_bench(&images),
-            song_art_hints_reference_for_bench(&images)
-        );
     }
 
     #[test]

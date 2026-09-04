@@ -446,26 +446,6 @@ fn fixed_2_text(value: f64) -> TextContent {
         .unwrap_or_else(|| TextContent::Owned(format!("{value:.2}")))
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_profile_name_changed(sides: [&[&str]; 2]) -> bool {
-    sides
-        .into_iter()
-        .any(|names| profile_name_changed(names.iter().copied()))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_eval_numeric_text(percent: f64, ex: f64, counts: &[u32; 8]) -> usize {
-    let mut bytes = fixed_2_text(percent).as_str().len() + fixed_2_text(ex).as_str().len();
-    for count in counts {
-        bytes += TextContent::inline_u32(*count).as_str().len();
-    }
-    bytes
-}
-
 fn build_player_stats(
     side: profile_data::PlayerSide,
     p: &stage_stats::PlayerStageSummary,

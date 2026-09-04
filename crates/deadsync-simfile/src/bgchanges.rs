@@ -1,6 +1,3 @@
-#[cfg(any(test, feature = "bench-support"))]
-use std::borrow::Cow;
-
 #[must_use]
 pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
     split_bgchange_sets(changes, entries)
@@ -105,77 +102,6 @@ fn skip_newline_sequence(input: &[u8], index: &mut usize) {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn committed_split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-    let changes = committed_strip_newlines(changes);
-    committed_split_bgchange_sets(&changes, entries)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn committed_split_bgchange_sets(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-    if changes.is_empty() {
-        return Vec::new();
-    }
-    let mut out: Vec<Vec<String>> = Vec::new();
-    let mut start = 0usize;
-    let mut pnum = 0u8;
-    while start <= changes.len() {
-        if matches!(pnum, 1 | 7)
-            && let Some(found) = committed_match_bgchange_entry(changes, start, entries)
-        {
-            committed_push_bgchange_field(out.last_mut().unwrap(), found);
-            start += found.len();
-            if let Some(&delim) = changes.as_bytes().get(start) {
-                pnum = if delim == b'=' { pnum + 1 } else { 0 };
-                start += 1;
-            }
-            continue;
-        }
-        if pnum == 0 {
-            out.push(Vec::with_capacity(4));
-        }
-        let rem = &changes[start..];
-        let eq = rem.find('=').map(|i| start + i);
-        let comma = rem.find(',').map(|i| start + i);
-        let Some((end, next_pnum)) = eq
-            .zip(comma)
-            .map(|(e, c)| if e < c { (e, pnum + 1) } else { (c, 0) })
-            .or_else(|| eq.map(|e| (e, pnum + 1)))
-            .or_else(|| comma.map(|c| (c, 0)))
-        else {
-            committed_push_bgchange_field(out.last_mut().unwrap(), &changes[start..]);
-            break;
-        };
-        committed_push_bgchange_field(out.last_mut().unwrap(), &changes[start..end]);
-        start = end + 1;
-        pnum = next_pnum;
-    }
-    out
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn committed_push_bgchange_field(fields: &mut Vec<String>, field: &str) {
-    if fields.len() == 4 && fields.capacity() == 4 {
-        fields.reserve_exact(7);
-    }
-    fields.push(field.to_string());
-}
-
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{committed_split_bgchange_sets_like_itg, split_bgchange_sets_like_itg};
-
-    #[must_use]
-    pub fn split_bgchange_sets_old(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-        committed_split_bgchange_sets_like_itg(changes, entries)
-    }
-
-    #[must_use]
-    pub fn split_bgchange_sets_new(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-        split_bgchange_sets_like_itg(changes, entries)
-    }
-}
-
 #[must_use]
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
     contains_ignore_ascii_case(field, ".ini") || contains_ignore_ascii_case(field, ".xml")
@@ -261,35 +187,6 @@ pub fn parse_bgchange_color(field: &str) -> Option<[f32; 4]> {
     Some([red, green, blue, alpha])
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn committed_match_bgchange_entry<'a>(
-    changes: &'a str,
-    start: usize,
-    entries: &[String],
-) -> Option<&'a str> {
-    for entry in entries {
-        let Some(head) = changes.get(start..start + entry.len()) else {
-            continue;
-        };
-        if !head.eq_ignore_ascii_case(entry) {
-            continue;
-        }
-        let next = start + entry.len();
-        if matches!(changes.as_bytes().get(next), None | Some(b'=') | Some(b',')) {
-            return Some(head);
-        }
-    }
-    None
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn committed_strip_newlines(text: &str) -> Cow<'_, str> {
-    if !text.contains('\n') {
-        return Cow::Borrowed(text);
-    }
-    Cow::Owned(strip_newlines_owned(text))
-}
-
 fn strip_newlines_owned(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
@@ -354,73 +251,6 @@ mod tests {
                 "1".to_string()
             ]]
         );
-    }
-
-    #[test]
-    fn optimized_splitter_matches_committed_reference() {
-        let entries = vec![
-            "movie,part.mp4".to_string(),
-            "layer=alt.png".to_string(),
-            "movie.mp4".to_string(),
-            "\u{65e5}\u{672c},\u{80cc}\u{666f}.png".to_string(),
-        ];
-        let cases = [
-            "",
-            "0=movie.mp4=1",
-            "0=movie.mp4=1,",
-            ",0=movie.mp4=1",
-            "0=movie,part.mp4=1=0=0=0=0=layer=alt.png=CrossFade",
-            "0=mov\nie.mp4=1",
-            "0=movie.mp4\n=1",
-            "0=movie.mp4\r\n=1,8=layer\n=alt.png=2",
-            "0=movie.mp4\r=1",
-            "0=\u{65e5}\u{672c},\u{80cc}\u{666f}.png=1",
-            "0===,,,8=other.png=2",
-            "\n\n0\n=\nmovie.mp4\n=\n1\n",
-        ];
-
-        for changes in cases {
-            assert_eq!(
-                split_bgchange_sets_like_itg(changes, &entries),
-                committed_split_bgchange_sets_like_itg(changes, &entries),
-                "BG-change split diverged for {changes:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn optimized_splitter_exhaustively_matches_fragments() {
-        let entries = vec![
-            "movie,part.mp4".to_string(),
-            "layer=alt.png".to_string(),
-            "movie.mp4".to_string(),
-        ];
-        let fragments = [
-            "",
-            "0",
-            "=",
-            ",",
-            "\n",
-            "\r\n",
-            "movie.mp4",
-            "movie,part.mp4",
-            "layer=alt.png",
-            "1=0",
-            "\u{e9}",
-        ];
-
-        for first in fragments {
-            for second in fragments {
-                for third in fragments {
-                    let changes = format!("{first}{second}{third}");
-                    assert_eq!(
-                        split_bgchange_sets_like_itg(&changes, &entries),
-                        committed_split_bgchange_sets_like_itg(&changes, &entries),
-                        "BG-change split diverged for {changes:?}"
-                    );
-                }
-            }
-        }
     }
 
     #[test]

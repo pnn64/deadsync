@@ -51,16 +51,10 @@ pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use holds::hold_geometry_bench_support;
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use measure_lines::edit_bar_geometry_bench_support;
 pub use mini_indicator::{
     BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
     MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,
@@ -68,15 +62,9 @@ pub use mini_indicator::{
     ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams, ZmodMiniIndicatorText, zmod_broken_run_end,
     zmod_combo_quint_active, zmod_mini_indicator_output, zmod_mini_indicator_zoom,
     zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
-    zmod_static_combo_color, zmod_stream_prog_completion_for_beat, zmod_target_score_missed,
+    zmod_static_combo_color, zmod_target_score_missed,
 };
 pub use notes::ScrollTravel;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use notes::note_metadata_bench_support;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use notes::note_projection_bench_support;
 pub use noteskin_model::{
     ModelMeshCache, ModelMeshCacheStats, NoteskinFrameCacheStats, noteskin_model_actor,
     noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
@@ -90,12 +78,6 @@ pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use transforms::lane_invariant_cache_bench_support;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use transforms::transform_cache_bench_support;
 pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
@@ -155,8 +137,6 @@ use measure_lines::{
     edit_beat_bar_info_for_row, edit_beat_scroll_travel,
 };
 #[cfg(test)]
-pub(crate) use mini_indicator::zmod_broken_run_segment;
-#[cfg(test)]
 use mini_indicator::{
     rgba8, stream_segment_index_inclusive_end, zmod_combo_glow_color, zmod_combo_glow_pair,
     zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
@@ -179,42 +159,16 @@ pub(crate) use notes::{
 };
 pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
 
-/// Stable entry points used by the standalone hot-path benchmark.
+/// Stable entry points used by external notefield instrumentation.
 #[doc(hidden)]
 pub mod performance {
     pub use crate::field_frame::measure_cue_range_search_enabled;
-    #[cfg(feature = "bench-support")]
-    pub use crate::holds::{HoldMeshPoolBench, ReferenceHoldMeshPoolBench};
-    #[cfg(feature = "bench-support")]
-    pub use crate::measure_lines::edit_beat_bar_info_for_row;
     pub use crate::measure_lines::{
         CueSegmentRanges, EditBeatBarCursor, EditBeatBarInfo, cue_segment_ranges,
     };
     pub use crate::notes::{
         find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
     };
-    #[cfg(feature = "bench-support")]
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub fn notefield_view_proj(
-        screen_w: f32,
-        screen_h: f32,
-        playfield_center_x: f32,
-        center_y: f32,
-        tilt: f32,
-        skew: f32,
-        reverse: bool,
-    ) -> Option<glam::Mat4> {
-        crate::placement::notefield_view_proj(
-            screen_w,
-            screen_h,
-            playfield_center_x,
-            center_y,
-            tilt,
-            skew,
-            reverse,
-        )
-    }
 }
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
@@ -262,24 +216,25 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        AccelYParams, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
+        AccelYParams, BrokenRunLookup, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
         DISPLAY_TURN_UD_MIRROR, EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER, EditMeasureTextSlots,
         GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets, HudLayoutParams,
         JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
         MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
-        MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, TapJudgmentRowsParams,
-        TapReplacementHead, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
-        ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput,
-        ZmodMiniIndicatorParams, ZmodMiniIndicatorText, actor_with_world_z, appearance_needs_rows,
-        appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
-        append_average_error_bar_part, append_beat_bar, append_cue_bar,
-        append_disabled_timing_windows, append_edit_measure_number, append_mini_part,
-        append_perspective_parts, append_turn_parts, apply_accel_y, apply_accel_y_with_peak,
-        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
-        bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16, clipped_hold_body_bounds,
-        column_cue_alpha, column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
-        column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
-        column_flash_height, column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
+        MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, StreamProgressLookup,
+        TapJudgmentRowsParams, TapReplacementHead, TornadoBounds, VisualEffectParams,
+        ZmodComboColorParams, ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText,
+        ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams, ZmodMiniIndicatorText,
+        actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha,
+        appearance_note_alpha, appearance_note_glow, append_average_error_bar_part,
+        append_beat_bar, append_cue_bar, append_disabled_timing_windows,
+        append_edit_measure_number, append_mini_part, append_perspective_parts, append_turn_parts,
+        apply_accel_y, apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor,
+        beat_scroll_travel, beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
+        clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored,
+        column_cue_alpha_with_fade, column_cue_height, column_cue_reverse_top_y,
+        column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
+        column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
         drunk_x_extra, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
         edit_beat_bar_info_for_row, edit_beat_scroll_travel, effective_mini_value,
@@ -308,13 +263,12 @@ mod tests {
         visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
         visual_note_rotation_z, visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
         visual_use_legacy_hold_sprites, zmod_broken_run_counter_text, zmod_broken_run_end,
-        zmod_broken_run_segment, zmod_combo_glow_color, zmod_combo_glow_pair,
-        zmod_combo_quint_active, zmod_combo_rainbow_color, zmod_combo_solid_color,
-        zmod_indicator_default_color, zmod_indicator_detailed_color, zmod_layout_ys,
-        zmod_measure_counter_text, zmod_mini_indicator_output, zmod_mini_indicator_zoom,
-        zmod_pacemaker_color, zmod_percent_from_points, zmod_resolved_combo_color,
-        zmod_resolved_mini_indicator_mode, zmod_rival_color, zmod_run_timer_index,
-        zmod_static_combo_color, zmod_stream_prog_color, zmod_stream_prog_completion_for_beat,
+        zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
+        zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
+        zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
+        zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
+        zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
+        zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color, zmod_stream_prog_color,
         zmod_subtractive_counter_state, zmod_subtractive_points, zmod_target_score_missed,
     };
     use deadsync_core::note::NoteType;
@@ -2222,10 +2176,11 @@ mod tests {
             StreamSegment::new(14, 20, true),
         ];
 
+        let lookup = BrokenRunLookup::new(&segs);
         assert_eq!(zmod_broken_run_end(&segs, 0), (14, true));
-        assert_eq!(zmod_broken_run_segment(&segs, 9.0), Some((0, 14, true)));
-        assert_eq!(zmod_broken_run_segment(&segs, 15.0), Some((3, 20, false)));
-        assert_eq!(zmod_broken_run_segment(&segs, 21.0), None);
+        assert_eq!(lookup.segment(9.0), Some((0, 14, true)));
+        assert_eq!(lookup.segment(15.0), Some((3, 20, false)));
+        assert_eq!(lookup.segment(21.0), None);
 
         let three_measure_break = [
             StreamSegment::new(0, 8, false),
@@ -2233,15 +2188,10 @@ mod tests {
             StreamSegment::new(11, 15, false),
         ];
 
+        let lookup = BrokenRunLookup::new(&three_measure_break);
         assert_eq!(zmod_broken_run_end(&three_measure_break, 0), (15, true));
-        assert_eq!(
-            zmod_broken_run_segment(&three_measure_break, 9.0),
-            Some((0, 15, true))
-        );
-        assert_eq!(
-            zmod_broken_run_segment(&three_measure_break, 12.0),
-            Some((0, 15, true))
-        );
+        assert_eq!(lookup.segment(9.0), Some((0, 15, true)));
+        assert_eq!(lookup.segment(12.0), Some((0, 15, true)));
     }
 
     #[test]
@@ -3102,29 +3052,18 @@ mod tests {
             StreamSegment::new(2, 4, true),
             StreamSegment::new(4, 6, false),
         ];
+        let lookup = StreamProgressLookup::new(&segs);
 
+        assert_eq!(lookup.completion_for_beat(4.0, -1.0), Some(0.0));
+        assert_eq!(lookup.completion_for_beat(4.0, f32::NAN), Some(0.0));
+        assert_eq!(lookup.completion_for_beat(0.0, 1.0), None);
         assert_eq!(
-            zmod_stream_prog_completion_for_beat(4.0, &segs, -1.0),
-            Some(0.0)
+            StreamProgressLookup::default().completion_for_beat(4.0, 1.0),
+            None
         );
-        assert_eq!(
-            zmod_stream_prog_completion_for_beat(4.0, &segs, f32::NAN),
-            Some(0.0)
-        );
-        assert_eq!(zmod_stream_prog_completion_for_beat(0.0, &segs, 1.0), None);
-        assert_eq!(zmod_stream_prog_completion_for_beat(4.0, &[], 1.0), None);
-        assert_eq!(
-            zmod_stream_prog_completion_for_beat(4.0, &segs, 3.0),
-            Some(0.25)
-        );
-        assert_eq!(
-            zmod_stream_prog_completion_for_beat(4.0, &segs, 19.0),
-            Some(0.75)
-        );
-        assert_eq!(
-            zmod_stream_prog_completion_for_beat(4.0, &segs, 23.0),
-            Some(1.0)
-        );
+        assert_eq!(lookup.completion_for_beat(4.0, 3.0), Some(0.25));
+        assert_eq!(lookup.completion_for_beat(4.0, 19.0), Some(0.75));
+        assert_eq!(lookup.completion_for_beat(4.0, 23.0), Some(1.0));
     }
 
     #[test]
@@ -4153,46 +4092,6 @@ mod tests {
     }
 
     #[test]
-    fn cached_visible_note_windows_match_legacy_search_across_range_sweep() {
-        let notes = [
-            (-2.0, 90usize),
-            (-0.01, 70),
-            (0.0, 50),
-            (0.01, 30),
-            (0.5, 20),
-            (3.999, 10),
-            (4.0, 1),
-            (4.011, 0),
-            (12.5, 2),
-            (64.0, 3),
-        ]
-        .into_iter()
-        .map(|(beat, dense_row)| test_note_at_dense_row(beat, dense_row))
-        .collect::<Vec<_>>();
-        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
-        let mut note_indices = (0..notes.len()).collect::<Vec<_>>();
-        note_indices.sort_unstable_by_key(|&index| (note_itg_rows[index], index));
-
-        for low in (-120..=3_120).step_by(17) {
-            for width in [0, 1, 47, 48, 97, 384] {
-                let range = Some((low, low + width));
-                let mut legacy = Vec::new();
-                let mut cached = Vec::new();
-                crate::notes::for_each_visible_note_index_legacy(
-                    &note_indices,
-                    &notes,
-                    range,
-                    |index| legacy.push(index),
-                );
-                for_each_visible_note_index(&note_indices, &note_itg_rows, range, |index| {
-                    cached.push(index);
-                });
-                assert_eq!(cached, legacy, "range={range:?}");
-            }
-        }
-    }
-
-    #[test]
     fn hinted_visible_note_windows_match_binary_search_across_playback_and_seeks() {
         let note_itg_rows = (0..8_192).map(|row| row * 3).collect::<Vec<_>>();
         let note_indices = (0..note_itg_rows.len()).collect::<Vec<_>>();
@@ -4326,68 +4225,6 @@ mod tests {
             find_first_displayed_beat(20.0, 120.0, &stats, |_| 0.0).expect("finite beat range");
 
         assert!((3.9..=4.1).contains(&first), "first beat was {first}");
-    }
-
-    #[test]
-    fn find_first_displayed_beat_matches_uncached_high_lookup() {
-        fn legacy(current_beat: f32, draw_distance: f32, stats: &[NoteCountStat]) -> Option<f32> {
-            if !current_beat.is_finite() || !draw_distance.is_finite() {
-                return None;
-            }
-            let note_count_at = |beat: f32| {
-                let index = stats
-                    .partition_point(|stat| stat.beat <= beat)
-                    .saturating_sub(1);
-                stats.get(index).copied().unwrap_or(NoteCountStat {
-                    beat: 0.0,
-                    notes_lower: 0,
-                    notes_upper: 0,
-                })
-            };
-            let mut high = current_beat.max(0.0);
-            let has_cache = !stats.is_empty();
-            let mut low = if has_cache { 0.0 } else { high - 4.0 };
-            let mut first = low;
-            for _ in 0..24 {
-                let mid = f32::midpoint(low, high);
-                let note_limit_hit = if has_cache {
-                    let low_count = note_count_at(mid);
-                    let high_count = note_count_at(current_beat);
-                    high_count.notes_upper.saturating_sub(low_count.notes_lower)
-                        > crate::style::MAX_NOTES_AFTER
-                } else {
-                    false
-                };
-                if (mid - current_beat) * 48.0 < -draw_distance || note_limit_hit {
-                    first = mid;
-                    low = mid;
-                } else {
-                    high = mid;
-                }
-            }
-            Some(first)
-        }
-
-        let stats = (0..2_048)
-            .map(|i| NoteCountStat {
-                beat: i as f32 * 0.125,
-                notes_lower: i * 2,
-                notes_upper: i * 2 + 2,
-            })
-            .collect::<Vec<_>>();
-        for current_beat in [-2.0, 0.0, 4.25, 63.5, 255.0] {
-            for draw_distance in [64.0, 320.0, 1_024.0] {
-                let old = legacy(current_beat, draw_distance, &stats);
-                let new = find_first_displayed_beat(current_beat, draw_distance, &stats, |beat| {
-                    (beat - current_beat) * 48.0
-                });
-                assert_eq!(
-                    old.map(f32::to_bits),
-                    new.map(f32::to_bits),
-                    "current_beat={current_beat}, draw_distance={draw_distance}"
-                );
-            }
-        }
     }
 
     #[test]

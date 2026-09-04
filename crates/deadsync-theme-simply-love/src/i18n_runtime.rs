@@ -284,22 +284,6 @@ fn write_translation_template(out: &mut String, template: &str, args: &[(&str, &
     out.push_str(&template[cursor..]);
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_format_translation_reference(template: &str, args: &[(&str, &str)]) -> Arc<str> {
-    let mut text = String::new();
-    append_translation_template_sequential(&mut text, template, args);
-    Arc::from(text)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_format_translation_current(template: &str, args: &[(&str, &str)]) -> Arc<str> {
-    format_translation_template(template, args)
-}
-
 fn replace_named_placeholder(text: &mut String, start: usize, name: &str, value: &str) {
     let mut search_from = start;
     while let Some(relative_open) = text[search_from..].find('{') {
@@ -459,50 +443,5 @@ mod tests {
             format_translation_template("{{remove}name}", &[("remove", ""), ("name", "ready")]);
 
         assert_eq!(text.as_ref(), "ready");
-        assert_eq!(
-            text,
-            benchmark_format_translation_reference(
-                "{{remove}name}",
-                &[("remove", ""), ("name", "ready")],
-            )
-        );
-    }
-
-    #[test]
-    fn template_format_long_output_matches_ground_truth_and_reference() {
-        let template = "{value}|".repeat(64);
-        let value = "expanded-placeholder-value";
-        let expected = format!("{}|", value).repeat(64);
-        let args = [("value", value)];
-        let current = format_translation_template(&template, &args);
-
-        assert_eq!(current.as_ref(), expected);
-        assert_eq!(
-            current,
-            benchmark_format_translation_reference(&template, &args)
-        );
-    }
-
-    #[test]
-    fn template_format_matches_reference_matrix() {
-        let fixtures: [(&str, &[(&str, &str)]); 6] = [
-            ("plain text", &[]),
-            ("{a}/{b}/{a}", &[("a", "1"), ("b", "two")]),
-            ("{known} {missing}", &[("known", "yes")]),
-            ("Δ {name} ✓", &[("name", "Miyuki")]),
-            (
-                "{first}/{second}",
-                &[("first", "{second}"), ("second", "done")],
-            ),
-            ("{{remove}name}", &[("remove", ""), ("name", "ready")]),
-        ];
-
-        for (template, args) in fixtures {
-            assert_eq!(
-                format_translation_template(template, args),
-                benchmark_format_translation_reference(template, args),
-                "template={template:?}"
-            );
-        }
     }
 }

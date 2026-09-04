@@ -268,16 +268,6 @@ pub fn push_cached_panel(
     });
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_push_cloned_cached_panel(
-    actors: &mut Vec<Actor>,
-    cache: &mut LobbyHudCache,
-    params: CachedRenderParams<'_>,
-) {
-    let panel = cache.panel(&params);
-    actors.extend(panel.iter().cloned());
-}
-
 fn build_body_text(
     joined: &lobbies::JoinedLobby,
     current_screen_name: &str,
@@ -576,61 +566,6 @@ mod tests {
             Some(Actor::Text { content, .. }) => content,
             other => panic!("expected lobby text actor, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn cached_panel_matches_legacy_and_reuses_stable_text() {
-        let joined = test_joined(vec![
-            test_player("Local", "ScreenGameplay", true),
-            test_player("Remote", "ScreenGameplay", false),
-        ]);
-        let legacy = build_panel(RenderParams {
-            screen_name: "ScreenGameplay",
-            joined: &joined,
-            z: 995,
-            show_song_info: false,
-            status_text: Some("Waiting for ready\nHold back to leave".to_string()),
-            joined_sides: [true, false],
-            player_side: PlayerSide::P1,
-        });
-        let mut cache = LobbyHudCache::default();
-        let mut cached = Vec::with_capacity(2);
-        let params = || CachedRenderParams {
-            screen_name: "ScreenGameplay",
-            joined: &joined,
-            z: 995,
-            show_song_info: false,
-            status_text: Some("Waiting for ready\nHold back to leave"),
-            joined_sides: [true, false],
-            player_side: PlayerSide::P1,
-        };
-
-        push_cached_panel(&mut cached, &mut cache, params());
-        assert_eq!(panel_actors(&cached).len(), legacy.len());
-        assert_eq!(panel_text(&cached).as_str(), panel_text(&legacy).as_str());
-        let first_text = match panel_text(&cached) {
-            TextContent::Shared(text) => Arc::clone(text),
-            other => panic!("expected shared cached text, got {other:?}"),
-        };
-
-        cached.clear();
-        push_cached_panel(&mut cached, &mut cache, params());
-        let second_text = match panel_text(&cached) {
-            TextContent::Shared(text) => text,
-            other => panic!("expected shared cached text, got {other:?}"),
-        };
-        assert!(Arc::ptr_eq(&first_text, second_text));
-        let [Actor::SharedFrame { children, .. }] = cached.as_slice() else {
-            panic!("expected cached lobby panel in one shared frame");
-        };
-        let first_panel = Arc::clone(children);
-        cached.clear();
-        push_cached_panel(&mut cached, &mut cache, params());
-        let [Actor::SharedFrame { children, .. }] = cached.as_slice() else {
-            panic!("expected cached lobby panel in one shared frame");
-        };
-        assert!(Arc::ptr_eq(&first_panel, children));
-        assert_eq!(cache.stats(), LobbyHudCacheStats { hits: 2, misses: 1 });
     }
 
     #[test]

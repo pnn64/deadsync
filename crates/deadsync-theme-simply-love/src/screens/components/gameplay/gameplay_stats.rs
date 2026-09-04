@@ -118,9 +118,8 @@ impl<K: Copy + Eq, V: Copy, const N: usize> SlotTextCache<K, V, N> {
 // no eviction work beyond overwriting that actor's own value. Destruction
 // occurs at thread shutdown. The remaining 32-entry table serves only
 // non-slotted panes. Split judgment counts bypass a cache entirely by combining
-// a static zero run with inline decimal text. Benchmark counters report all
-// allocator activity; the worst frame performs one bounded rebuild per changed
-// actor.
+// a static zero run with inline decimal text. The worst frame performs one
+// bounded rebuild per changed actor.
 thread_local! {
     static PADDED_NUM_INLINE_CACHE: RefCell<FixedTextCache<(u32, u8), InlineText, 32>> = const {
         RefCell::new(FixedTextCache::new())
@@ -222,7 +221,6 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
 ];
 
 #[inline(always)]
-
 fn time_remaining_text(state: &State) -> Arc<str> {
     Arc::clone(&state.gameplay_stats_text.time_remaining)
 }
@@ -372,65 +370,6 @@ impl GameplayStatsTextPlan {
 
     pub(crate) fn sync_music_rate(&mut self, max_nps: [f32; MAX_PLAYERS], rate: f32) {
         self.peak_nps = max_nps.map(|peak| peak_nps_text((peak * rate).max(0.0)));
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn stats_text_checksum(checksum: usize, text: &Arc<str>) -> usize {
-    checksum.rotate_left(5) ^ text.len()
-}
-
-/// Transition macrobenchmark for prewarmed Step Statistics text.
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayStatsTextBenchmark {
-    plan: GameplayStatsTextPlan,
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayStatsTextBenchmark {
-    #[must_use]
-    pub fn new() -> Self {
-        let artist = "Benchmark Artist".to_string();
-        let chart_text = [
-            ("Hard 11".to_string(), "P1 Credit".to_string()),
-            ("Expert 13".to_string(), "P2 Credit".to_string()),
-        ];
-        let blue_window_ms = [15.0, 18.0];
-        let plan = GameplayStatsTextPlan::from_parts_with_derived(
-            artist.as_str(),
-            std::array::from_fn(|player| {
-                (chart_text[player].0.as_str(), chart_text[player].1.as_str())
-            }),
-            false,
-            [peak_nps_text(24.5), peak_nps_text(31.75)],
-            blue_window_ms.map(|ms| blue_window_label(ms as i32)),
-            blue_window_ms,
-        );
-        Self { plan }
-    }
-
-    #[must_use]
-    pub fn frame(&self, elapsed_seconds: f32) -> usize {
-        let mut checksum = 0usize;
-        for index in 0..4 {
-            checksum = stats_text_checksum(checksum, &self.plan.step_info(index));
-        }
-        for index in 0..3 {
-            checksum = stats_text_checksum(checksum, &self.plan.holds_mines_rolls(index));
-        }
-        for index in 0..6 {
-            checksum = stats_text_checksum(checksum, &self.plan.judgment(index));
-        }
-        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.time_remaining));
-        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.time_total));
-        checksum = stats_text_checksum(checksum, &Arc::clone(&self.plan.song_artist));
-        for player in 0..MAX_PLAYERS {
-            checksum =
-                stats_text_checksum(checksum, &self.plan.description(player, elapsed_seconds));
-        }
-        std::hint::black_box(checksum)
     }
 }
 
@@ -654,33 +593,33 @@ mod density_life_clip_tests {
         let initial = (0..VISIBLE_POINTS)
             .map(|index| [index as f32, (index % 7) as f32])
             .collect::<Vec<_>>();
-        let mut legacy = initial.clone();
+        let mut incremental = initial.clone();
         let mut batched = initial;
         batched.reserve_exact(DENSITY_LIFE_COMPACT_THRESHOLD);
         let capacity = batched.capacity();
-        let mut legacy_moves = 0usize;
+        let mut incremental_moves = 0usize;
         let mut batched_moves = 0usize;
 
         for step in 1..=DENSITY_LIFE_COMPACT_THRESHOLD * 3 {
             let x = (VISIBLE_POINTS + step - 1) as f32;
             let point = [x, (step % 11) as f32];
-            legacy.push(point);
+            incremental.push(point);
             batched.push(point);
             let offset = step as f32 + 0.25;
 
-            legacy_moves += clip_density_life_points_impl(&mut legacy, offset, 1);
+            incremental_moves += clip_density_life_points_impl(&mut incremental, offset, 1);
             batched_moves +=
                 clip_density_life_points_impl(&mut batched, offset, DENSITY_LIFE_COMPACT_THRESHOLD);
 
             assert_eq!(
                 visible_points(&batched, offset),
-                visible_points(&legacy, offset)
+                visible_points(&incremental, offset)
             );
-            assert!(batched.len() < legacy.len() + DENSITY_LIFE_COMPACT_THRESHOLD);
+            assert!(batched.len() < incremental.len() + DENSITY_LIFE_COMPACT_THRESHOLD);
             assert_eq!(batched.capacity(), capacity);
         }
 
-        assert!(batched_moves * 20 < legacy_moves);
+        assert!(batched_moves * 20 < incremental_moves);
     }
 
     #[test]
@@ -1200,23 +1139,6 @@ mod dynamic_hud_text_tests {
     }
 
     #[test]
-    fn direct_actor_memos_match_scanned_memos_across_value_changes() {
-        let mut scanned = super::FixedTextCache::<(u32, u8), InlineText, 8>::new();
-        let mut slotted = super::SlotTextCache::<(u32, u8), InlineText, 3>::new();
-        for frame in 0..10_000u32 {
-            for slot in 0..3 {
-                let seconds = (frame.wrapping_mul(17) + slot as u32 * 113) % 7_201;
-                let mode = (frame as usize + slot) as u8 % 3;
-                let key = (seconds, mode);
-                let old = scanned.get_or_insert(key, || super::format_game_time(seconds, mode));
-                let new =
-                    slotted.get_or_insert(slot, key, || super::format_game_time(seconds, mode));
-                assert_eq!(new, old, "frame={frame} slot={slot}");
-            }
-        }
-    }
-
-    #[test]
     fn live_timing_preserves_tenth_rounding_and_nonfinite_fallback() {
         for (recent, all, expected) in [
             (0.0, 0.0, "0.0/0.0"),
@@ -1551,219 +1473,6 @@ fn prewarm_count_slots(
                 FRAME_TEXT_VERTEX_BUFFERS,
             );
         }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-fn numeric_bench_checksum(mut checksum: u64, text: &str) -> u64 {
-    for byte in text.bytes() {
-        checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_count_text_setup(
-    fonts: &font::FontMap,
-    scratch: &mut ComposeScratch,
-    font_name: &'static str,
-    optimized: bool,
-) -> (u64, u32) {
-    const MAX_COUNT: u32 = 2_048;
-    let mut cache = TextLayoutCache::new(4_096);
-    cache.begin_frame_stats(true);
-    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
-    if optimized {
-        prewarm_count_static_text(&mut cache, fonts, font_name, 4);
-        prewarm_count_slots(&mut cache, scratch, fonts, font_name, MAX_PLAYERS);
-        for count in 0..=MAX_COUNT {
-            let slot = count_text_slot(count as usize % MAX_PLAYERS, count as usize % 7, false);
-            let (dim, bright) = padded_runs_for_window(count, 4, false, slot);
-            checksum = numeric_bench_checksum(checksum, dim.as_str());
-            checksum = numeric_bench_checksum(checksum, bright.as_str());
-        }
-    } else {
-        for count in 0..=MAX_COUNT {
-            let (dim, bright) = padded_runs(count, 4);
-            cache.prewarm_text(fonts, font_name, dim.as_str(), None);
-            cache.prewarm_text(fonts, font_name, bright.as_str(), None);
-            checksum = numeric_bench_checksum(checksum, dim.as_str());
-            checksum = numeric_bench_checksum(checksum, bright.as_str());
-        }
-    }
-    (checksum, cache.frame_stats().owned_entries)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn benchmark_clock_text_setup(
-    fonts: &font::FontMap,
-    scratch: &mut ComposeScratch,
-    optimized: bool,
-) -> (u64, u32) {
-    const LAST_SECOND: u32 = 600;
-    let mut cache = TextLayoutCache::new(4_096);
-    cache.begin_frame_stats(true);
-    let mut checksum = 0xcbf2_9ce4_8422_2325u64;
-    if optimized {
-        prewarm_clock_slots(&mut cache, scratch, fonts);
-        for second in 0..=LAST_SECOND {
-            let text = game_time_text(second, 1, second as usize % 4);
-            checksum = numeric_bench_checksum(checksum, text.as_str());
-        }
-    } else {
-        for second in 0..=LAST_SECOND {
-            let text = format_game_time(second, 1);
-            cache.prewarm_text(fonts, "miso", text.as_str(), None);
-            checksum = numeric_bench_checksum(checksum, text.as_str());
-        }
-    }
-    (checksum, cache.frame_stats().owned_entries)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayStatsNumericHotBenchmark;
-
-#[cfg(feature = "bench-support")]
-impl GameplayStatsNumericHotBenchmark {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self
-    }
-
-    #[must_use]
-    pub fn frame(&self, frame: u32) -> u64 {
-        let second = (frame / 60) % 601;
-        let mut checksum = 0xcbf2_9ce4_8422_2325u64;
-        for (slot, value) in [600, 600 - second, 600, 600 - second]
-            .into_iter()
-            .enumerate()
-        {
-            let text = game_time_text(value, 1, slot);
-            checksum = numeric_bench_checksum(checksum, text.as_str());
-        }
-        for player in 0..MAX_PLAYERS {
-            for row in 0..FRAME_TEXT_STATS_COUNT_ROWS as usize {
-                let count = (frame / (row as u32 + 1)) % 2_049;
-                let slot = count_text_slot(player, row, false);
-                let (dim, bright) = padded_runs_for_window(count, 4, row == 6, slot);
-                checksum = numeric_bench_checksum(checksum, dim.as_str());
-                checksum = numeric_bench_checksum(checksum, bright.as_str());
-            }
-        }
-        checksum
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayStatsNumericHotBenchmark {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub struct GameplayHudMemoBenchmark {
-    old_count: FixedTextCache<(u32, u8), InlineText, 32>,
-    new_count: SlotTextCache<(u32, u8), InlineText, 7>,
-    old_width: FixedTextCache<(u32, u8), f32, 8>,
-    new_width: SlotTextCache<(u32, u8), f32, 3>,
-}
-
-#[cfg(feature = "bench-support")]
-impl GameplayHudMemoBenchmark {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            old_count: FixedTextCache::new(),
-            new_count: SlotTextCache::new(),
-            old_width: FixedTextCache::new(),
-            new_width: SlotTextCache::new(),
-        }
-    }
-
-    pub fn warm(&mut self, frame: u32) {
-        for row in 0..7 {
-            let count = ((frame / 60) + row as u32 * 37) % 10_000;
-            let count_key = (count, 4);
-            let _ = self
-                .old_count
-                .get_or_insert(count_key, || format_padded_num_inline(count, 4));
-            let _ = self
-                .new_count
-                .get_or_insert(row, count_key, || format_padded_num_inline(count, 4));
-        }
-        let seconds = 599 - (frame / 60) % 600;
-        for (slot, value) in [599, seconds, 599].into_iter().enumerate() {
-            let width_key = (value, 2);
-            let width = || f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0;
-            let _ = self.old_width.get_or_insert(width_key, width);
-            let _ = self.new_width.get_or_insert(slot, width_key, width);
-        }
-    }
-
-    pub fn legacy_count_frame(&mut self, frame: u32) -> u64 {
-        let mut checksum = 0u64;
-        for row in 0..7 {
-            let count = ((frame / 60) + row as u32 * 37) % 10_000;
-            let text = self
-                .old_count
-                .get_or_insert((count, 4), || format_padded_num_inline(count, 4));
-            for byte in text.as_str().bytes() {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-        checksum
-    }
-
-    pub fn optimized_count_frame(&mut self, frame: u32) -> u64 {
-        let mut checksum = 0u64;
-        for row in 0..7 {
-            let count = ((frame / 60) + row as u32 * 37) % 10_000;
-            let text = self
-                .new_count
-                .get_or_insert(row, (count, 4), || format_padded_num_inline(count, 4));
-            for byte in text.as_str().bytes() {
-                checksum = (checksum ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
-            }
-        }
-        checksum
-    }
-
-    pub fn legacy_width_frame(&mut self, frame: u32) -> u64 {
-        let seconds = 599 - (frame / 60) % 600;
-        [599, seconds, 599]
-            .into_iter()
-            .fold(0u64, |checksum, value| {
-                let width = self.old_width.get_or_insert((value, 2), || {
-                    f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0
-                });
-                checksum.rotate_left(7) ^ u64::from(width.to_bits())
-            })
-    }
-
-    pub fn optimized_width_frame(&mut self, frame: u32) -> u64 {
-        let seconds = 599 - (frame / 60) % 600;
-        [599, seconds, 599]
-            .into_iter()
-            .enumerate()
-            .fold(0u64, |checksum, (slot, value)| {
-                let width = self.new_width.get_or_insert(slot, (value, 2), || {
-                    f32::from(format_game_time(value, 2).as_str().len() as u16) * 8.0
-                });
-                checksum.rotate_left(7) ^ u64::from(width.to_bits())
-            })
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for GameplayHudMemoBenchmark {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

@@ -466,102 +466,6 @@ fn sample_exp_from_logs(logs: &[f32], x: f32) -> f32 {
     (lerp(logs[i0], logs[i0 + 1], t)).exp()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn legacy_wheel_samples(num_slots: i32, screen_w: f32) -> (Vec<f32>, Vec<f32>, f32) {
-    let x_spacing = screen_w / (num_slots as f32 - 1.0);
-    let side_slots = (num_slots / 2) as usize;
-    let mut x = Vec::with_capacity(side_slots + 1);
-    for k in 0..=side_slots {
-        x.push(k as f32 * x_spacing);
-    }
-
-    let max_off_all = 0.5 * (num_slots as f32 - 1.0);
-    let max_off_visible = (max_off_all - 1.0).max(1.0);
-    let r = EDGE_MIN_RATIO.powf(1.0 / max_off_visible);
-    let ln_zc = ZOOM_CENTER.ln();
-    let ln_r = r.ln();
-    let mut zoom_logs = Vec::with_capacity(side_slots + 1);
-    for k in 0..=side_slots {
-        let a = (k as f32).min(max_off_visible);
-        zoom_logs.push(ln_zc + a * ln_r);
-    }
-    for &(k, mult) in ZOOM_MULT_OVERRIDES {
-        if k <= side_slots && mult > 0.0 {
-            zoom_logs[k] += mult.ln();
-        }
-    }
-    (x, zoom_logs, max_off_visible)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[inline]
-fn benchmark_wheel_actor(x: f32, zoom: f32, slot: i32) -> Actor {
-    act!(quad:
-        xy(x, 200.0):
-        zoom(zoom):
-        z(WHEEL_Z_BASE - slot as i16)
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn mix_wheel_value(checksum: u64, value: f32) -> u64 {
-    checksum.rotate_left(9) ^ u64::from(value.to_bits())
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_wheel_legacy(out: &mut Vec<Actor>, wide: bool, scroll: f32) -> u64 {
-    out.clear();
-    let num_slots = if wide { 11 } else { 7 };
-    let center_slot = num_slots / 2;
-    let (x, zoom_logs, max_off_visible) = legacy_wheel_samples(num_slots, 1280.0);
-    let base = scroll.floor() as i32;
-    let frac = scroll - base as f32;
-    let mut checksum = u64::from(base as u32);
-    let mut wheel = Vec::new();
-    for slot in 0..num_slots {
-        let offset = slot - center_slot;
-        let relative = offset as f32 - frac;
-        let distance = relative.abs();
-        let x_off = sample_linear(&x, distance);
-        let zoom = sample_exp_from_logs(&zoom_logs, distance.min(max_off_visible));
-        checksum = mix_wheel_value(mix_wheel_value(checksum, x_off), zoom);
-        wheel.push(benchmark_wheel_actor(x_off, zoom, slot));
-    }
-    for actor in &mut wheel {
-        actor.mul_alpha(0.75);
-    }
-    out.extend(wheel);
-    checksum ^ out.len() as u64
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn benchmark_wheel_current(out: &mut Vec<Actor>, wide: bool, scroll: f32) -> u64 {
-    out.clear();
-    let num_slots = if wide { 11 } else { 7 };
-    let center_slot = num_slots / 2;
-    let samples = wheel_samples(num_slots, 1280.0);
-    let base = scroll.floor() as i32;
-    let frac = scroll - base as f32;
-    let mut checksum = u64::from(base as u32);
-    out.reserve(num_slots as usize);
-    for slot in 0..num_slots {
-        let offset = slot - center_slot;
-        let relative = offset as f32 - frac;
-        let distance = relative.abs();
-        let x_off = sample_linear(&samples.x[..samples.len], distance);
-        let zoom = sample_exp_from_logs(
-            &samples.zoom_logs[..samples.len],
-            distance.min(samples.max_off_visible),
-        );
-        checksum = mix_wheel_value(mix_wheel_value(checksum, x_off), zoom);
-        let mut actor = benchmark_wheel_actor(x_off, zoom, slot);
-        actor.mul_alpha(0.75);
-        out.push(actor);
-    }
-    checksum ^ out.len() as u64
-}
-
 /* ------------------------------- update ------------------------------- */
 
 pub fn update(state: &mut State, dt: f32) {
@@ -739,20 +643,5 @@ mod tests {
             effects[1],
             ThemeEffect::Navigate(Screen::SelectStyle)
         ));
-    }
-
-    #[test]
-    fn stack_wheel_geometry_matches_legacy_vectors_and_append_order() {
-        for wide in [false, true] {
-            for scroll in [-2.75, 0.0, 3.25, 12.9] {
-                let mut legacy = Vec::with_capacity(16);
-                let mut current = Vec::with_capacity(16);
-                assert_eq!(
-                    benchmark_wheel_legacy(&mut legacy, wide, scroll),
-                    benchmark_wheel_current(&mut current, wide, scroll)
-                );
-                assert_eq!(format!("{legacy:#?}"), format!("{current:#?}"));
-            }
-        }
     }
 }

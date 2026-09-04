@@ -14,8 +14,8 @@ use deadlib_render_core::BlendMode;
 /// on a live frame. A miss, oversized value, or saturation takes the exact
 /// Actor path without inserting into the prepared cache. Entries are destroyed
 /// with that presentation cache at screen teardown. Unit tests cover slot
-/// saturation and the benchmark reports time, cycles, and allocations. The
-/// per-frame cost is bounded by the existing visible-measure traversal.
+/// saturation. Per-frame cost is bounded by the existing visible-measure
+/// traversal.
 pub const EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER: u8 = 72;
 
 #[derive(Clone, Copy, Debug)]
