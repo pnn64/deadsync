@@ -9,10 +9,10 @@ conformance = []
 
 [dependencies]
 deadlib-render-core = { path = "../deadlib-render-core" }
-glam = "0.33.5"
+glam = "0.33.6"
 image = "0.25.10"
 log = "0.4.34"
-smallvec = "1.15.2"
+smallvec = "1.16.0"
 rustc-hash = "2.1.3"
 
 [lints.clippy]

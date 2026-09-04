@@ -11,7 +11,7 @@ libloading = "0.9.0"
 log = "0.4.34"
 
 [build-dependencies]
-cc = "1.4.4"
+cc = "1.4.5"
 pkg-config = "0.3.34"
 
 [lints.clippy]

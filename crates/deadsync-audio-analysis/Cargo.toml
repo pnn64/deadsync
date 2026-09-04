@@ -9,7 +9,7 @@ bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 ebur128 = "0.1.10"
 rustc-hash = "2.1.3"
-twox-hash = "2.1.3"
+twox-hash = "2.1.4"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

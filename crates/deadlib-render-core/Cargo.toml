@@ -13,7 +13,7 @@ required-features = ["test-util"]
 
 [dependencies]
 bytemuck = { version = "1.25.2", features = ["derive"] }
-glam = "0.33.5"
+glam = "0.33.6"
 rustc-hash = "2.1.3"
 serde = { version = "1.0.229", features = ["derive"] }
 

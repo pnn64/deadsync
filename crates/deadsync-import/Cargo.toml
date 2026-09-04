@@ -9,7 +9,7 @@ deadsync-chart = { path = "../deadsync-chart" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
-flate2 = "1.1.9"
+flate2 = "1.1.10"
 hashbrown = "0.17.1"
 rustc-hash = "2.1.3"
 
