@@ -4,19 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "fsr_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "pad_snapshot_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 arrayvec = "0.7.8"
 deadsync-input = { path = "../deadsync-input" }
@@ -24,16 +11,16 @@ deadsync-smx = { path = "../deadsync-smx" }
 log = "0.4.34"
 
 [target.'cfg(windows)'.dependencies]
-hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false, features = ["linux-static-hidraw"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["linux-static-hidraw"] }
 
 [target.'cfg(target_os = "freebsd")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false }
+hidapi = { version = "2.6.7", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false }
+hidapi = { version = "2.6.7", default-features = false }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

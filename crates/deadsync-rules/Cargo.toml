@@ -4,47 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[[bench]]
-name = "timing_summary_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "stream_analysis_hot_paths"
-harness = false
-
-[[bench]]
-name = "stream_analysis_followup_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "stream_initialization_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "stream_compact_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "timing_storage_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "timing_query_hot_paths"
-harness = false
-
-[[bench]]
-name = "ex_score_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[features]
-bench-support = []
-
 [dependencies]
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.34"

@@ -792,39 +792,6 @@ pub fn sprite_frame_index_with_timing(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn sprite_frame_index_legacy(
-    frame_count: usize,
-    rate: AnimationRate,
-    frame_durations: Option<&[f32]>,
-    time: f32,
-    beat: f32,
-) -> usize {
-    let frames = frame_count.max(1);
-    if frames <= 1 {
-        return 0;
-    }
-    if let Some(durations) = frame_durations {
-        let clock = match rate {
-            AnimationRate::FramesPerSecond(_) => time,
-            AnimationRate::FramesPerBeat(_) => beat,
-        };
-        if let Some(total) = frame_duration_total(durations, frames)
-            && let Some(idx) = duration_frame_index(durations, frames, clock.rem_euclid(total))
-        {
-            return idx;
-        }
-    }
-    let frame = match rate {
-        AnimationRate::FramesPerSecond(fps) if fps > 0.0 => (time * fps).floor() as isize,
-        AnimationRate::FramesPerBeat(frames_per_beat) if frames_per_beat > 0.0 => {
-            (beat * frames_per_beat).floor() as isize
-        }
-        _ => return 0,
-    };
-    ((frame % frames as isize) + frames as isize) as usize % frames
-}
-
 #[must_use]
 pub fn sprite_frame_index_from_phase(
     frame_count: usize,
@@ -861,26 +828,6 @@ pub fn sprite_frame_index_from_phase_with_timing(
         {
             return idx;
         }
-    }
-    ((p * frames as f32).floor() as usize).min(frames - 1)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn sprite_frame_index_from_phase_legacy(
-    frame_count: usize,
-    frame_durations: Option<&[f32]>,
-    phase: f32,
-) -> usize {
-    let frames = frame_count.max(1);
-    if frames <= 1 {
-        return 0;
-    }
-    let p = phase.rem_euclid(1.0);
-    if let Some(durations) = frame_durations
-        && let Some(total) = frame_duration_total(durations, frames)
-        && let Some(idx) = duration_frame_index(durations, frames, p * total)
-    {
-        return idx;
     }
     ((p * frames as f32).floor() as usize).min(frames - 1)
 }
@@ -1086,148 +1033,6 @@ impl SpriteAtlasUvCache {
         self.uv[inset_texels as usize]
     }
 }
-
-#[cfg(any(test, feature = "bench-support"))]
-fn sprite_atlas_uv_legacy(
-    tex_dims: [u32; 2],
-    def: &SpriteDefinition,
-    inset_texels: bool,
-) -> [f32; 4] {
-    let tw = tex_dims[0].max(1) as f32;
-    let th = tex_dims[1].max(1) as f32;
-    let mut u0 = def.src[0] as f32;
-    let mut v0 = def.src[1] as f32;
-    let mut u1 = (def.src[0] + def.size[0]) as f32;
-    let mut v1 = (def.src[1] + def.size[1]) as f32;
-
-    if inset_texels {
-        if def.size[0] > 0 {
-            u0 += 0.5;
-            u1 -= 0.5;
-        }
-        if def.size[1] > 0 {
-            v0 += 0.5;
-            v1 -= 0.5;
-        }
-    }
-
-    [u0 / tw, v0 / th, u1 / tw, v1 / th]
-}
-
-#[must_use]
-pub fn sprite_animated_uv(
-    tex_dims: [u32; 2],
-    def: &SpriteDefinition,
-    frame_size: [i32; 2],
-    grid: [usize; 2],
-    frame_count: usize,
-    frame_indices: Option<&[usize]>,
-    frame_index: usize,
-    inset_texels: bool,
-) -> [f32; 4] {
-    let frames = frame_count.max(1);
-    let idx = frame_index % frames;
-    let cols = grid[0].max(1);
-    let available = cols.saturating_mul(grid[1].max(1)).max(1);
-    let source_idx = frame_indices
-        .and_then(|indices| indices.get(idx).copied())
-        .map_or(idx, |idx| idx % available);
-    let row = source_idx / cols;
-    let col = source_idx % cols;
-    let (src_x, src_y) = if frame_indices.is_some() {
-        (col as i32 * frame_size[0], row as i32 * frame_size[1])
-    } else {
-        (
-            def.src[0] + (col as i32 * frame_size[0]),
-            def.src[1] + (row as i32 * frame_size[1]),
-        )
-    };
-    let frame_def = SpriteDefinition {
-        src: [src_x, src_y],
-        size: frame_size,
-        rotation_deg: 0,
-        mirror_h: false,
-        mirror_v: false,
-    };
-    sprite_atlas_uv(tex_dims, &frame_def, inset_texels)
-}
-
-#[must_use]
-pub fn sprite_animated_uv_scaled(
-    texel_scale: [f32; 2],
-    def: &SpriteDefinition,
-    frame_size: [i32; 2],
-    grid: [usize; 2],
-    frame_count: usize,
-    frame_indices: Option<&[usize]>,
-    frame_index: usize,
-    inset_texels: bool,
-) -> [f32; 4] {
-    let frames = frame_count.max(1);
-    let idx = frame_index % frames;
-    let cols = grid[0].max(1);
-    let available = cols.saturating_mul(grid[1].max(1)).max(1);
-    let source_idx = frame_indices
-        .and_then(|indices| indices.get(idx).copied())
-        .map_or(idx, |idx| idx % available);
-    let row = source_idx / cols;
-    let col = source_idx % cols;
-    let (src_x, src_y) = if frame_indices.is_some() {
-        (col as i32 * frame_size[0], row as i32 * frame_size[1])
-    } else {
-        (
-            def.src[0] + (col as i32 * frame_size[0]),
-            def.src[1] + (row as i32 * frame_size[1]),
-        )
-    };
-    let frame_def = SpriteDefinition {
-        src: [src_x, src_y],
-        size: frame_size,
-        rotation_deg: 0,
-        mirror_h: false,
-        mirror_v: false,
-    };
-    sprite_atlas_uv_scaled(texel_scale, &frame_def, inset_texels)
-}
-
-#[cfg(test)]
-fn sprite_animated_uv_legacy(
-    tex_dims: [u32; 2],
-    def: &SpriteDefinition,
-    frame_size: [i32; 2],
-    grid: [usize; 2],
-    frame_count: usize,
-    frame_indices: Option<&[usize]>,
-    frame_index: usize,
-    inset_texels: bool,
-) -> [f32; 4] {
-    let frames = frame_count.max(1);
-    let idx = frame_index % frames;
-    let cols = grid[0].max(1);
-    let available = cols.saturating_mul(grid[1].max(1)).max(1);
-    let source_idx = frame_indices
-        .and_then(|indices| indices.get(idx).copied())
-        .map_or(idx, |idx| idx % available);
-    let row = source_idx / cols;
-    let col = source_idx % cols;
-    let (src_x, src_y) = if frame_indices.is_some() {
-        (col as i32 * frame_size[0], row as i32 * frame_size[1])
-    } else {
-        (
-            def.src[0] + (col as i32 * frame_size[0]),
-            def.src[1] + (row as i32 * frame_size[1]),
-        )
-    };
-    let frame_def = SpriteDefinition {
-        src: [src_x, src_y],
-        size: frame_size,
-        rotation_deg: 0,
-        mirror_h: false,
-        mirror_v: false,
-    };
-    sprite_atlas_uv_legacy(tex_dims, &frame_def, inset_texels)
-}
-
 #[must_use]
 pub fn sprite_uv_scroll_clock(elapsed: f32, cycle_seconds: Option<f32>) -> f32 {
     cycle_seconds
@@ -1256,7 +1061,13 @@ pub fn sprite_scrolled_uv(
         || (uv[1] == 0.0 && uv[1].is_sign_negative())
         || (uv[3] == 0.0 && uv[3].is_sign_negative());
     if !elapsed.is_finite() {
-        return sprite_scrolled_uv_legacy(uv, uv_velocity, uv_offset, elapsed, model_cycle_seconds);
+        return sprite_scrolled_uv_nonfinite(
+            uv,
+            uv_velocity,
+            uv_offset,
+            elapsed,
+            model_cycle_seconds,
+        );
     }
     if let Some(cycle_seconds) = model_cycle_seconds {
         let clock = sprite_uv_scroll_clock(elapsed, Some(cycle_seconds));
@@ -1297,7 +1108,7 @@ pub fn sprite_scrolled_uv(
     uv
 }
 
-fn sprite_scrolled_uv_legacy(
+fn sprite_scrolled_uv_nonfinite(
     mut uv: [f32; 4],
     uv_velocity: [f32; 2],
     uv_offset: [f32; 2],
@@ -1339,332 +1150,6 @@ fn sprite_scrolled_uv_legacy(
         uv[3] += v_shift;
     }
     uv
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod sprite_math_bench_support {
-    use std::hint::black_box;
-
-    use super::*;
-
-    #[inline(always)]
-    fn frame_checksum(frame: usize, checksum: u64) -> u64 {
-        checksum.wrapping_add(frame as u64).rotate_left(7)
-    }
-
-    #[inline(always)]
-    fn uv_checksum(uv: [f32; 4], checksum: u64) -> u64 {
-        uv.into_iter().fold(checksum, |checksum, value| {
-            checksum
-                .wrapping_add(u64::from(value.to_bits()))
-                .rotate_left(7)
-        })
-    }
-
-    #[inline(always)]
-    fn normalized_uv_checksum(uv: [f32; 4], checksum: u64) -> u64 {
-        uv.into_iter().fold(checksum, |checksum, value| {
-            checksum
-                .wrapping_add((value * 65_536.0).round() as i64 as u64)
-                .rotate_left(7)
-        })
-    }
-
-    fn uniform_frame_index(evaluations: usize, legacy: bool) -> u64 {
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
-            let frame = if legacy {
-                sprite_frame_index_legacy(17, AnimationRate::FramesPerSecond(30.0), None, time, 0.0)
-            } else {
-                sprite_frame_index(17, AnimationRate::FramesPerSecond(30.0), None, time, 0.0)
-            };
-            checksum = frame_checksum(frame, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn uniform_frame_index_old(evaluations: usize) -> u64 {
-        uniform_frame_index(evaluations, true)
-    }
-
-    #[must_use]
-    pub fn uniform_frame_index_new(evaluations: usize) -> u64 {
-        uniform_frame_index(evaluations, false)
-    }
-
-    fn atlas_uv(evaluations: usize, legacy: bool) -> u64 {
-        let def = black_box(SpriteDefinition {
-            src: [64, 96],
-            size: [48, 64],
-            rotation_deg: 0,
-            mirror_h: false,
-            mirror_v: false,
-        });
-        let texel_scales = black_box([[1.0 / 257.0, 1.0 / 509.0], [1.0 / 258.0, 1.0 / 510.0]]);
-        let mut total = [0.0_f32; 4];
-        for index in 0..evaluations {
-            let tex_dims = black_box([257 + (index & 1) as u32, 509 + (index & 1) as u32]);
-            let uv = if legacy {
-                sprite_atlas_uv_legacy(tex_dims, &def, true)
-            } else {
-                sprite_atlas_uv_scaled(texel_scales[index & 1], &def, true)
-            };
-            for (total, value) in total.iter_mut().zip(uv) {
-                *total += value;
-            }
-        }
-        let average = total.map(|value| value / evaluations as f32);
-        normalized_uv_checksum(average, 0)
-    }
-
-    #[must_use]
-    pub fn atlas_uv_old(evaluations: usize) -> u64 {
-        atlas_uv(evaluations, true)
-    }
-
-    #[must_use]
-    pub fn atlas_uv_new(evaluations: usize) -> u64 {
-        atlas_uv(evaluations, false)
-    }
-
-    fn cached_atlas_uv(evaluations: usize, legacy: bool) -> u64 {
-        let def = black_box(SpriteDefinition {
-            src: [64, 96],
-            size: [48, 64],
-            rotation_deg: 0,
-            mirror_h: false,
-            mirror_v: false,
-        });
-        let texel_scale = black_box([1.0 / 512.0, 1.0 / 256.0]);
-        let cache = black_box(SpriteAtlasUvCache::new(texel_scale, &def));
-        let mut total = [0.0_f32; 4];
-        for index in 0..evaluations {
-            let inset = black_box(index & 1 != 0);
-            let uv = if legacy {
-                sprite_atlas_uv_scaled(texel_scale, &def, inset)
-            } else {
-                cache.get(inset)
-            };
-            for (total, value) in total.iter_mut().zip(uv) {
-                *total += value;
-            }
-        }
-        let average = total.map(|value| value / evaluations as f32);
-        normalized_uv_checksum(average, 0)
-    }
-
-    #[must_use]
-    pub fn cached_atlas_uv_old(evaluations: usize) -> u64 {
-        cached_atlas_uv(evaluations, true)
-    }
-
-    #[must_use]
-    pub fn cached_atlas_uv_new(evaluations: usize) -> u64 {
-        cached_atlas_uv(evaluations, false)
-    }
-
-    fn cached_weighted_frame_index(evaluations: usize, legacy: bool) -> u64 {
-        let durations = black_box([
-            0.031_25, 0.062_5, 0.093_75, 0.125, 0.156_25, 0.187_5, 0.218_75, 0.25, 0.281_25,
-            0.312_5, 0.343_75, 0.375, 0.406_25, 0.437_5, 0.468_75, 0.5,
-        ]);
-        let timing = black_box(SpriteFrameTiming::new(durations.len(), &durations));
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
-            let frame = if legacy {
-                sprite_frame_index_legacy(
-                    durations.len(),
-                    AnimationRate::FramesPerSecond(30.0),
-                    Some(&durations),
-                    time,
-                    0.0,
-                )
-            } else {
-                sprite_frame_index_with_timing(
-                    durations.len(),
-                    AnimationRate::FramesPerSecond(30.0),
-                    Some(&durations),
-                    Some(timing),
-                    time,
-                    0.0,
-                )
-            };
-            checksum = frame_checksum(frame, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn cached_weighted_frame_index_old(evaluations: usize) -> u64 {
-        cached_weighted_frame_index(evaluations, true)
-    }
-
-    #[must_use]
-    pub fn cached_weighted_frame_index_new(evaluations: usize) -> u64 {
-        cached_weighted_frame_index(evaluations, false)
-    }
-
-    fn uniform_weighted_frame_index(evaluations: usize, arithmetic: bool) -> u64 {
-        let durations = black_box([0.125_f32; 32]);
-        let timing = black_box(SpriteFrameTiming::new(durations.len(), &durations));
-        let scan_timing = SpriteFrameTiming {
-            uniform_duration: None,
-            ..timing
-        };
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let time = black_box((index & 65_535) as f32 * 0.003_906_25);
-            let frame = sprite_frame_index_with_timing(
-                durations.len(),
-                AnimationRate::FramesPerSecond(8.0),
-                Some(&durations),
-                Some(if arithmetic { timing } else { scan_timing }),
-                time,
-                0.0,
-            );
-            checksum = frame_checksum(frame, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn uniform_weighted_frame_index_old(evaluations: usize) -> u64 {
-        uniform_weighted_frame_index(evaluations, false)
-    }
-
-    #[must_use]
-    pub fn uniform_weighted_frame_index_new(evaluations: usize) -> u64 {
-        uniform_weighted_frame_index(evaluations, true)
-    }
-
-    fn cached_animated_uv(evaluations: usize, cached: bool) -> u64 {
-        let def = black_box(SpriteDefinition {
-            src: [64, 32],
-            size: [32, 32],
-            rotation_deg: 0,
-            mirror_h: false,
-            mirror_v: false,
-        });
-        let frame_indices = black_box([7, 0, 5, 2, 3, 1, 6, 4]);
-        let texel_scale = black_box([1.0 / 512.0, 1.0 / 256.0]);
-        let frame_size = black_box([32, 32]);
-        let grid = black_box([4, 2]);
-        let frame_count = black_box(frame_indices.len());
-        let cache = black_box(SpriteAnimatedUvCache::new(
-            texel_scale,
-            &def,
-            frame_size,
-            grid,
-            frame_count,
-            true,
-        ));
-        let mut total = [0.0_f32; 4];
-        for index in 0..evaluations {
-            let frame_index = black_box(index & 255);
-            let inset = black_box(index & 1 != 0);
-            let uv = if cached {
-                cache.get(Some(&frame_indices), frame_index, inset)
-            } else {
-                sprite_animated_uv_scaled(
-                    texel_scale,
-                    &def,
-                    frame_size,
-                    grid,
-                    frame_count,
-                    Some(&frame_indices),
-                    frame_index,
-                    inset,
-                )
-            };
-            for (total, value) in total.iter_mut().zip(uv) {
-                *total += value;
-            }
-        }
-        let average = total.map(|value| value / evaluations as f32);
-        normalized_uv_checksum(average, 0)
-    }
-
-    #[must_use]
-    pub fn cached_animated_uv_old(evaluations: usize) -> u64 {
-        cached_animated_uv(evaluations, false)
-    }
-
-    #[must_use]
-    pub fn cached_animated_uv_new(evaluations: usize) -> u64 {
-        cached_animated_uv(evaluations, true)
-    }
-
-    #[must_use]
-    pub fn normalized_phase_old(evaluations: usize) -> u64 {
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let phase = black_box((index & 4_095) as f32 / 4_096.0);
-            let frame = sprite_frame_index_from_phase_legacy(8, None, phase);
-            checksum = frame_checksum(frame, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn normalized_phase_new(evaluations: usize) -> u64 {
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let phase = black_box((index & 4_095) as f32 / 4_096.0);
-            let frame = sprite_frame_index_from_phase(8, None, phase);
-            checksum = frame_checksum(frame, checksum);
-        }
-        checksum
-    }
-
-    fn scroll_old(evaluations: usize, velocity: [f32; 2], offset: [f32; 2]) -> u64 {
-        let uv = black_box([0.0, 0.0, 0.25, 0.5]);
-        let velocity = black_box(velocity);
-        let offset = black_box(offset);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let elapsed = black_box(((index & 8_191) as f32 - 4_096.0) * 0.031_25);
-            let uv = sprite_scrolled_uv_legacy(uv, velocity, offset, elapsed, None);
-            checksum = uv_checksum(uv, checksum);
-        }
-        checksum
-    }
-
-    fn scroll_new(evaluations: usize, velocity: [f32; 2], offset: [f32; 2]) -> u64 {
-        let uv = black_box([0.0, 0.0, 0.25, 0.5]);
-        let velocity = black_box(velocity);
-        let offset = black_box(offset);
-        let mut checksum = 0_u64;
-        for index in 0..evaluations {
-            let elapsed = black_box(((index & 8_191) as f32 - 4_096.0) * 0.031_25);
-            let uv = sprite_scrolled_uv(uv, velocity, offset, elapsed, None);
-            checksum = uv_checksum(uv, checksum);
-        }
-        checksum
-    }
-
-    #[must_use]
-    pub fn horizontal_scroll_old(evaluations: usize) -> u64 {
-        scroll_old(evaluations, [0.125, 0.0], [0.031_25, 0.0])
-    }
-
-    #[must_use]
-    pub fn horizontal_scroll_new(evaluations: usize) -> u64 {
-        scroll_new(evaluations, [0.125, 0.0], [0.031_25, 0.0])
-    }
-
-    #[must_use]
-    pub fn vertical_scroll_old(evaluations: usize) -> u64 {
-        scroll_old(evaluations, [0.0, -0.125], [0.0, 0.031_25])
-    }
-
-    #[must_use]
-    pub fn vertical_scroll_new(evaluations: usize) -> u64 {
-        scroll_new(evaluations, [0.0, -0.125], [0.0, 0.031_25])
-    }
 }
 
 #[must_use]
@@ -1780,29 +1265,16 @@ mod tests {
 
     use super::{
         AnimationRate, SpriteAnimatedUvCache, SpriteAnimationPlan, SpriteAtlasUvCache,
-        SpriteDefinition, SpriteFrameTiming, SpriteSourcePlan, SpriteStatePropertiesAnimation,
+        SpriteDefinition, SpriteSourcePlan, SpriteStatePropertiesAnimation,
         all_frames_sprite_slot_plan, atlas_sprite_slot_plan, duration_frame_index,
         frame_duration_total, frame_sprite_slot_plan, generated_animation_sprite_slot_plan,
         itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
         itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
         itg_sprite_slot_plan_from_path, model_vertex_for_sprite, neg_rot_sin_cos,
-        sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animated_uv_legacy,
-        sprite_animated_uv_scaled, sprite_animation_plan, sprite_atlas_uv, sprite_atlas_uv_legacy,
+        sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
         sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
-        sprite_frame_index_from_phase_legacy, sprite_frame_index_from_phase_with_timing,
-        sprite_frame_index_legacy, sprite_frame_index_with_timing, sprite_scrolled_uv,
-        sprite_scrolled_uv_legacy, sprite_sheet_frame, sprite_state_properties_animation,
+        sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
     };
-
-    fn assert_uv_close(old: [f32; 4], new: [f32; 4]) {
-        for (old, new) in old.into_iter().zip(new) {
-            let tolerance = old.abs().max(1.0) * f32::EPSILON * 2.0;
-            assert!(
-                (old - new).abs() <= tolerance,
-                "legacy {old:?} and optimized {new:?} UV coordinates differ"
-            );
-        }
-    }
 
     #[test]
     fn neg_rotation_uses_exact_cardinal_values() {
@@ -2170,250 +1642,6 @@ mod tests {
         );
         assert_eq!(sprite_frame_index_from_phase(2, Some(&durations), -0.05), 1);
     }
-
-    #[test]
-    fn single_remainder_frame_wrapping_matches_legacy_selection() {
-        let durations = [0.125, 0.375, 0.25, 0.25];
-        for frame_count in [0, 1, 2, 4, 8, 17] {
-            for rate in [
-                AnimationRate::FramesPerSecond(30.0),
-                AnimationRate::FramesPerBeat(4.0),
-                AnimationRate::FramesPerSecond(0.0),
-            ] {
-                for frame_durations in [None, Some(durations.as_slice())] {
-                    for tick in -8_192..=8_192 {
-                        let time = tick as f32 / 256.0;
-                        let beat = tick as f32 / 1_024.0;
-                        assert_eq!(
-                            sprite_frame_index(frame_count, rate, frame_durations, time, beat),
-                            sprite_frame_index_legacy(
-                                frame_count,
-                                rate,
-                                frame_durations,
-                                time,
-                                beat,
-                            )
-                        );
-                    }
-                    for clock in [
-                        -f32::MAX,
-                        -0.0,
-                        0.0,
-                        f32::MAX,
-                        f32::NEG_INFINITY,
-                        f32::INFINITY,
-                        f32::NAN,
-                    ] {
-                        assert_eq!(
-                            sprite_frame_index(frame_count, rate, frame_durations, clock, clock),
-                            sprite_frame_index_legacy(
-                                frame_count,
-                                rate,
-                                frame_durations,
-                                clock,
-                                clock,
-                            )
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn cached_weighted_timing_matches_legacy_frame_selection() {
-        let nonuniform = [
-            0.031_25, 0.062_5, 0.093_75, 0.125, 0.156_25, 0.187_5, 0.218_75, 0.25,
-        ];
-        let uniform = [0.125; 8];
-        for durations in [nonuniform.as_slice(), uniform.as_slice()] {
-            for frame_count in [2, 7, 8, 13] {
-                let timing = SpriteFrameTiming::new(frame_count, durations);
-                for rate in [
-                    AnimationRate::FramesPerSecond(30.0),
-                    AnimationRate::FramesPerBeat(4.0),
-                ] {
-                    for tick in -8_192..=8_192 {
-                        let time = tick as f32 / 1_024.0;
-                        let beat = tick as f32 / 4_096.0;
-                        assert_eq!(
-                            sprite_frame_index_with_timing(
-                                frame_count,
-                                rate,
-                                Some(durations),
-                                Some(timing),
-                                time,
-                                beat,
-                            ),
-                            sprite_frame_index_legacy(
-                                frame_count,
-                                rate,
-                                Some(durations),
-                                time,
-                                beat,
-                            )
-                        );
-                        let phase = tick as f32 / 4_096.0;
-                        assert_eq!(
-                            sprite_frame_index_from_phase_with_timing(
-                                frame_count,
-                                Some(durations),
-                                Some(timing),
-                                phase,
-                            ),
-                            sprite_frame_index_from_phase_legacy(
-                                frame_count,
-                                Some(durations),
-                                phase,
-                            )
-                        );
-                    }
-                }
-                for value in [
-                    -f32::MAX,
-                    -0.0,
-                    0.0,
-                    f32::MAX,
-                    f32::NEG_INFINITY,
-                    f32::INFINITY,
-                    f32::NAN,
-                ] {
-                    assert_eq!(
-                        sprite_frame_index_with_timing(
-                            frame_count,
-                            AnimationRate::FramesPerSecond(30.0),
-                            Some(durations),
-                            Some(timing),
-                            value,
-                            value,
-                        ),
-                        sprite_frame_index_legacy(
-                            frame_count,
-                            AnimationRate::FramesPerSecond(30.0),
-                            Some(durations),
-                            value,
-                            value,
-                        )
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn reciprocal_atlas_uv_normalization_matches_legacy_coordinates() {
-        let definitions = [
-            SpriteDefinition::default(),
-            SpriteDefinition {
-                src: [17, 31],
-                size: [47, 63],
-                ..SpriteDefinition::default()
-            },
-            SpriteDefinition {
-                src: [-19, -7],
-                size: [-3, 0],
-                ..SpriteDefinition::default()
-            },
-        ];
-        for tex_dims in [[0, 0], [1, 1], [257, 509], [4_096, 2_047]] {
-            for def in &definitions {
-                for inset in [false, true] {
-                    assert_uv_close(
-                        sprite_atlas_uv_legacy(tex_dims, def, inset),
-                        sprite_atlas_uv_scaled(
-                            [
-                                1.0 / tex_dims[0].max(1) as f32,
-                                1.0 / tex_dims[1].max(1) as f32,
-                            ],
-                            def,
-                            inset,
-                        ),
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn scaled_animated_uv_matches_legacy_addressing() {
-        let def = SpriteDefinition {
-            src: [64, 32],
-            size: [32, 32],
-            ..SpriteDefinition::default()
-        };
-        let indices = [7, 0, 5, 2, 19, 1, 6, 3];
-        for grid in [[8, 1], [1, 8], [4, 2], [3, 3]] {
-            for frame_indices in [None, Some(indices.as_slice())] {
-                for frame_index in 0..32 {
-                    for inset in [false, true] {
-                        let old = sprite_animated_uv_legacy(
-                            [512, 256],
-                            &def,
-                            [32, 32],
-                            grid,
-                            8,
-                            frame_indices,
-                            frame_index,
-                            inset,
-                        );
-                        let texel_scale = [1.0 / 512.0, 1.0 / 256.0];
-                        let new = sprite_animated_uv_scaled(
-                            texel_scale,
-                            &def,
-                            [32, 32],
-                            grid,
-                            8,
-                            frame_indices,
-                            frame_index,
-                            inset,
-                        );
-                        assert_uv_close(old, new);
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn cached_animated_uv_matches_uncached_addressing() {
-        let def = SpriteDefinition {
-            src: [64, 32],
-            size: [32, 32],
-            ..SpriteDefinition::default()
-        };
-        let indices = [7, 0, 5, 2, 19, 1, 6, 3];
-        let texel_scale = [1.0 / 512.0, 1.0 / 256.0];
-        for grid in [[8, 1], [1, 8], [4, 2], [3, 3]] {
-            for frame_indices in [None, Some(indices.as_slice())] {
-                let cache = SpriteAnimatedUvCache::new(
-                    texel_scale,
-                    &def,
-                    [32, 32],
-                    grid,
-                    8,
-                    frame_indices.is_some(),
-                );
-                for frame_index in 0..32 {
-                    for inset in [false, true] {
-                        assert_uv_close(
-                            sprite_animated_uv_scaled(
-                                texel_scale,
-                                &def,
-                                [32, 32],
-                                grid,
-                                8,
-                                frame_indices,
-                                frame_index,
-                                inset,
-                            ),
-                            cache.get(frame_indices, frame_index, inset),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
     #[test]
     fn static_atlas_uv_cache_preserves_both_inset_variants() {
         let scale = [1.0 / 257.0, 1.0 / 509.0];
@@ -2433,73 +1661,6 @@ mod tests {
     }
 
     #[test]
-    fn normalized_phase_fast_path_matches_legacy_frame_selection() {
-        let durations = [0.125, 0.375, 0.25, 0.25];
-        for frame_count in [0, 1, 2, 4, 8, 17] {
-            for frame_durations in [None, Some(durations.as_slice())] {
-                for tick in -8_192..=8_192 {
-                    let phase = tick as f32 / 4_096.0;
-                    assert_eq!(
-                        sprite_frame_index_from_phase(frame_count, frame_durations, phase,),
-                        sprite_frame_index_from_phase_legacy(frame_count, frame_durations, phase,),
-                    );
-                }
-                for phase in [
-                    -f32::MAX,
-                    -0.0,
-                    0.0,
-                    1.0,
-                    f32::MAX,
-                    f32::NEG_INFINITY,
-                    f32::INFINITY,
-                    f32::NAN,
-                ] {
-                    assert_eq!(
-                        sprite_frame_index_from_phase(frame_count, frame_durations, phase,),
-                        sprite_frame_index_from_phase_legacy(frame_count, frame_durations, phase,),
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn axis_specialized_uv_scrolling_matches_legacy_math() {
-        let uvs = [
-            [0.0, 0.0, 0.25, 0.5],
-            [0.25, 0.5, 0.0, 0.0],
-            [-0.0, -0.0, 1.0, 1.0],
-            [f32::NEG_INFINITY, 0.0, f32::INFINITY, 1.0],
-        ];
-        let motions = [
-            ([0.0, 0.0], [0.0, 0.0]),
-            ([0.125, 0.0], [0.031_25, 0.0]),
-            ([0.0, -0.125], [0.0, 0.031_25]),
-            ([0.125, -0.125], [0.031_25, -0.031_25]),
-        ];
-        for uv in uvs {
-            for (velocity, offset) in motions {
-                for elapsed in [
-                    -128.0,
-                    -0.0,
-                    0.0,
-                    0.125,
-                    128.0,
-                    f32::NEG_INFINITY,
-                    f32::INFINITY,
-                    f32::NAN,
-                ] {
-                    for cycle in [None, Some(10.0), Some(0.0), Some(f32::NAN)] {
-                        let old = sprite_scrolled_uv_legacy(uv, velocity, offset, elapsed, cycle);
-                        let new = sprite_scrolled_uv(uv, velocity, offset, elapsed, cycle);
-                        assert_eq!(old.map(f32::to_bits), new.map(f32::to_bits));
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
     fn sprite_uv_helpers_apply_texel_inset_and_scrolling() {
         let def = SpriteDefinition {
             src: [0, 0],
@@ -2514,16 +1675,15 @@ mod tests {
             [0.5 / 128.0, 0.5 / 128.0, 63.5 / 128.0, 63.5 / 128.0]
         );
         assert_eq!(
-            sprite_animated_uv(
-                [128, 128],
+            SpriteAnimatedUvCache::new(
+                [1.0 / 128.0, 1.0 / 128.0],
                 &def,
                 [64, 64],
                 [2, 1],
                 2,
-                Some(&[1, 0]),
-                0,
-                false
-            ),
+                true,
+            )
+            .get(Some(&[1, 0]), 0, false),
             [0.5, 0.0, 1.0, 0.5]
         );
         assert_eq!(

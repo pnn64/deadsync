@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn itl_intro_names_match_committed_behavior() {
+    fn recognizes_itl_intro_names() {
         let cases = [
             ("ITL Online 2026", Some("ITL Online 2026")),
             (
@@ -217,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn event_intro_names_match_committed_behavior() {
+    fn recognizes_supported_event_intro_names() {
         let cases = [
             ("Stamina RPG 10 Unlocks", Some("Stamina RPG 10")),
             ("prefix SRPG10 suffix", Some("Stamina RPG 10")),

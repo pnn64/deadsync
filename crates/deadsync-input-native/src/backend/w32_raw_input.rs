@@ -157,12 +157,6 @@ pub fn set_capture_enabled(enabled: bool) {
     }
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_prepare_capture(enabled: bool) {
-    CAPTURE_ENABLED.store(enabled, Ordering::Relaxed);
-    REGISTERED_KEYBOARD_CAPTURE.store(keyboard_capture_state(enabled), Ordering::Release);
-}
-
 #[inline(always)]
 const fn keyboard_capture_state(enabled: bool) -> u8 {
     if enabled {

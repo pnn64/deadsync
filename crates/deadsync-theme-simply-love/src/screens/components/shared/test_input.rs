@@ -1006,40 +1006,6 @@ pub const fn evaluation_panel_size() -> (f32, f32) {
     )
 }
 
-/// Build the `TestInput` evaluation panel anchored at its **top-left corner**.
-///
-/// `(anchor_x, anchor_y)` is the screen-space position of the panel's
-/// top-left corner. `scale` uniformly scales the entire panel.
-#[must_use]
-pub fn build_evaluation_panel(
-    state: &State,
-    game: GameFlag,
-    slot: PlayerSlot,
-    anchor_x: f32,
-    anchor_y: f32,
-    scale: f32,
-    title_font: &'static str,
-    title: Arc<str>,
-    body_font: &'static str,
-    instructions: Arc<str>,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(10);
-    push_evaluation_panel(
-        &mut actors,
-        state,
-        game,
-        slot,
-        anchor_x,
-        anchor_y,
-        scale,
-        title_font,
-        title,
-        body_font,
-        instructions,
-    );
-    actors
-}
-
 /// Append a complete `TestInput` evaluation panel to an existing actor batch.
 #[allow(clippy::too_many_arguments)]
 pub fn push_evaluation_panel(

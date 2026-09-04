@@ -238,8 +238,7 @@ enum InstanceBinding {
 /// cold, emits a bind on an exact-key miss, and is dropped after recording; it
 /// has no heap capacity, eviction, pruning, or deferred destruction. Immediate
 /// projection storage is explicitly invalidated when a pipeline layout changes,
-/// while uniform groups remain compatible. Each query is constant time. The
-/// fixed fields and backend command benchmark provide its instrumentation.
+/// while uniform groups remain compatible. Each query is constant time.
 #[derive(Debug, Default)]
 struct DrawBindingCache {
     camera: Option<u8>,

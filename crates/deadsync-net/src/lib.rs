@@ -4,7 +4,6 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::Read;
 use std::sync::LazyLock;
-use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -250,13 +249,6 @@ pub fn get_streaming_agent() -> ureq::Agent {
     STREAMING_AGENT.clone()
 }
 
-pub fn get_json<T>(url: &str) -> Result<T, NetworkError>
-where
-    T: DeserializeOwned,
-{
-    get_json_with(&get_agent(), url)
-}
-
 pub fn get_json_with<T>(agent: &ureq::Agent, url: &str) -> Result<T, NetworkError>
 where
     T: DeserializeOwned,
@@ -278,14 +270,6 @@ where
         .map_err(error_from_ureq)?;
     ensure_success(response.status().as_u16())?;
     read_json_body(response)
-}
-
-pub fn spawn_request<F, T>(task: F) -> JoinHandle<T>
-where
-    F: FnOnce() -> T + Send + 'static,
-    T: Send + 'static,
-{
-    thread::spawn(task)
 }
 
 #[cfg(test)]

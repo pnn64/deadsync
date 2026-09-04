@@ -826,118 +826,6 @@ fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<Srpg
     })
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_catalog_reference(
-    body: &str,
-    shop_id: u32,
-    lifetime_balance: u64,
-) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
-    let value: Value = serde_json::from_str(body)
-        .map_err(|error| SrpgShopError::InvalidResponse(error.to_string()))?;
-    let rows = match &value {
-        Value::Object(map) => object_array(map, &["data", "aaData", "rows", "items"]),
-        Value::Array(rows) => Some(rows),
-        _ => None,
-    }
-    .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
-    let mut rows = rows.iter().collect::<Vec<_>>();
-    rows.sort_by_key(|row| catalog_row_key_reference(row));
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| catalog_item_reference(row, shop_id, lifetime_balance))
-        .collect())
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn catalog_row_key_reference(row: &Value) -> (u64, u64, u64, u64, u64) {
-    (
-        catalog_cell_number_reference(row, 11),
-        catalog_cell_number_reference(row, 8),
-        catalog_cell_number_reference(row, 12),
-        catalog_cell_number_reference(row, 13),
-        catalog_cell_number_reference(row, 7),
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn catalog_cell_number_reference(row: &Value, index: usize) -> u64 {
-    row.as_array()
-        .and_then(|cells| cells.get(index))
-        .map(value_text)
-        .map(|value| value.replace(',', ""))
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(u64::MAX)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn catalog_item_reference(
-    row: &Value,
-    shop_id: u32,
-    lifetime_balance: u64,
-) -> Option<SrpgShopItem> {
-    let cells = row.as_array()?;
-    let cell = |index: usize| cells.get(index).map(value_text).unwrap_or_default();
-    let type_id = cell(11).parse().unwrap_or(0);
-    let kind = if type_id == 1 {
-        SrpgShopItemKind::Song
-    } else {
-        SrpgShopItemKind::Relic
-    };
-    let cost = cell(7).replace(',', "").parse().ok();
-    let censor = shop_id == 2 && cost.is_some_and(|cost| cost > lifetime_balance);
-    Some(SrpgShopItem {
-        item_id: cell(0),
-        kind,
-        name: if censor {
-            "???".to_string()
-        } else {
-            clean_cell(&cell(2))
-        },
-        description: if censor {
-            "Reach the required lifetime Jej total to reveal this song.".to_string()
-        } else {
-            clean_cell(&cell(3))
-        },
-        effect: if censor {
-            "Difficulty: ???  •  Speed Tier: ???".to_string()
-        } else {
-            clean_cell(&cell(4)).replace('|', "  •  ")
-        },
-        cost,
-        difficulty: (kind == SrpgShopItemKind::Song && !censor)
-            .then(|| cell(12).parse().ok())
-            .flatten(),
-        bpm: (kind == SrpgShopItemKind::Song && !censor)
-            .then(|| cell(13).parse().ok())
-            .flatten(),
-        type_id,
-        owned: false,
-        site_downloaded: false,
-        downloaded: false,
-        download_url: None,
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_catalog_for_bench(
-    body: &str,
-    shop_id: u32,
-    lifetime_balance: u64,
-) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
-    parse_catalog(body, shop_id, lifetime_balance)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_catalog_reference_for_bench(
-    body: &str,
-    shop_id: u32,
-    lifetime_balance: u64,
-) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
-    parse_catalog_reference(body, shop_id, lifetime_balance)
-}
-
 fn download_from_object(map: &Map<String, Value>) -> Option<ParsedDownload> {
     let url = object_text(map, &["url", "href", "download_url"])?;
     if !url.contains(".zip") {
@@ -1159,45 +1047,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn optimized_catalog_parser_matches_committed_behavior() {
-        let body = r#"{"AaData":[
-            ["7","chart.png","<b>Fast &amp; Loud</b>","  Purchase   now  ","Difficulty: 14|Speed Tier: 180 BPM","2","0","1,234","2","0","0","1","14","180","0"],
-            [8,"chart.png","Equal Key First","First","Difficulty: 14|Speed Tier: 180 BPM","2","0",1234,2,"0","0",1,14,180,"0"],
-            [9,"chart.png","Equal Key Second","Second","Difficulty: 14|Speed Tier: 180 BPM","2","0",1234,2,"0","0",1,14,180,"0"],
-            ["2","axe.png",true,null,42,"0","0","294","0","0","0","0","---","---","---"],
-            {"ignored":"non-array row"}
-        ]}"#;
-
-        for (shop_id, balance) in [(0, 0), (2, 1_000), (2, 1_234)] {
-            assert_eq!(
-                parse_catalog(body, shop_id, balance).unwrap(),
-                parse_catalog_reference(body, shop_id, balance).unwrap(),
-                "shop {shop_id}, balance {balance} changed"
-            );
-        }
-    }
-
-    #[test]
-    fn allocation_free_catalog_number_parser_keeps_committed_semantics() {
-        for text in [
-            "0",
-            "1,234",
-            "+1,234",
-            ",+12",
-            "1,,2",
-            ",",
-            "+",
-            " 12",
-            "-1",
-            "12.0",
-            "18446744073709551615",
-            "18446744073709551616",
+    fn catalog_number_parser_accepts_comma_separated_unsigned_values() {
+        for (text, expected) in [
+            ("0", Some(0)),
+            ("1,234", Some(1_234)),
+            ("+1,234", Some(1_234)),
+            (",+12", Some(12)),
+            ("1,,2", Some(12)),
+            (",", None),
+            ("+", None),
+            (" 12", None),
+            ("-1", None),
+            ("12.0", None),
+            ("18446744073709551615", Some(u64::MAX)),
+            ("18446744073709551616", None),
         ] {
             let value = Value::String(text.to_string());
             assert_eq!(
                 catalog_number_with_commas(&value),
-                text.replace(',', "").parse().ok(),
-                "number {text:?} changed"
+                expected,
+                "number {text:?}"
             );
         }
     }

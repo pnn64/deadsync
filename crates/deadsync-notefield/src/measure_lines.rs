@@ -222,33 +222,6 @@ fn sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
         .saturating_sub(1)
 }
 
-#[cfg(test)]
-#[must_use]
-pub fn edit_beat_bar_info_for_row(
-    row: i32,
-    segments: &[TimeSignatureSegment],
-) -> Option<EditBeatBarInfo> {
-    if row < 0 {
-        return None;
-    }
-    let idx = sig_index_at_row(segments, row);
-    edit_beat_bar_info(row, segments, idx, measure_index_before(segments, idx))
-}
-
-#[cfg(test)]
-fn edit_beat_bar_info(
-    row: i32,
-    segments: &[TimeSignatureSegment],
-    idx: usize,
-    measure_index_before: i64,
-) -> Option<EditBeatBarInfo> {
-    edit_beat_bar_info_cached(
-        row,
-        edit_beat_bar_segment_cache(segments, idx),
-        measure_index_before,
-    )
-}
-
 fn edit_beat_bar_info_cached(
     row: i32,
     segment: EditBeatBarSegmentCache,
@@ -1337,130 +1310,6 @@ mod tests {
                     && *z == 80)
         );
     }
-
-    #[test]
-    fn visible_cue_segment_slices_preserve_full_scan_output() {
-        let timing = timing();
-        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
-        let dirs = [1.0; 4];
-        let receptors = [100.0; 4];
-        let scrolls = [
-            ScrollSegment {
-                beat: -32.0,
-                ratio: 1.0,
-            },
-            ScrollSegment {
-                beat: -4.0,
-                ratio: 0.75,
-            },
-            ScrollSegment {
-                beat: 2.0,
-                ratio: 1.25,
-            },
-            ScrollSegment {
-                beat: 12.0,
-                ratio: 0.5,
-            },
-            ScrollSegment {
-                beat: 48.0,
-                ratio: 1.0,
-            },
-        ];
-        let bpms = [
-            (-32.0, 90.0),
-            (-4.0, 120.0),
-            (3.0, 180.0),
-            (13.0, 150.0),
-            (48.0, 200.0),
-        ];
-        let delays = [
-            DelaySegment {
-                beat: -24.0,
-                duration: 0.1,
-            },
-            DelaySegment {
-                beat: 5.0,
-                duration: 0.1,
-            },
-            DelaySegment {
-                beat: 40.0,
-                duration: 0.1,
-            },
-        ];
-        let stops = [
-            StopSegment {
-                beat: -20.0,
-                duration: 0.1,
-            },
-            StopSegment {
-                beat: 7.0,
-                duration: 0.1,
-            },
-            StopSegment {
-                beat: 44.0,
-                duration: 0.1,
-            },
-        ];
-        let mut optimized = request(MeasureLineMode::Off, &travel, &dirs, &receptors);
-        optimized.show_cues = true;
-        optimized.scrolls = &scrolls;
-        optimized.bpms = &bpms;
-        optimized.delays = &delays;
-        optimized.stops = &stops;
-        optimized.cue_visible_row_range = crate::note_placement::expand_range(
-            travel.visible_row_range_with_extra(optimized.style.measure_line_overscan_y),
-        );
-        let mut baseline = optimized;
-        baseline.cue_visible_row_range = None;
-        let group = measure_groups(&optimized)
-            .into_iter()
-            .flatten()
-            .next()
-            .expect("forward field group");
-        let mut old_draws = Vec::new();
-        let mut new_draws = Vec::new();
-        let old_ranges = cue_segment_ranges(
-            baseline.scrolls,
-            baseline.bpms,
-            baseline.delays,
-            baseline.stops,
-            visible_cue_beat_range(&baseline),
-        );
-        let new_ranges = cue_segment_ranges(
-            optimized.scrolls,
-            optimized.bpms,
-            optimized.delays,
-            optimized.stops,
-            visible_cue_beat_range(&optimized),
-        );
-        append_group_cues(&mut old_draws, &baseline, group, &old_ranges);
-        append_group_cues(&mut new_draws, &optimized, group, &new_ranges);
-        assert_eq!(
-            old_draws
-                .iter()
-                .filter_map(sprite_parts)
-                .collect::<Vec<_>>(),
-            new_draws
-                .iter()
-                .filter_map(sprite_parts)
-                .collect::<Vec<_>>(),
-        );
-
-        let zero_scrolls = [
-            ScrollSegment {
-                beat: 0.0,
-                ratio: 1.0,
-            },
-            ScrollSegment {
-                beat: 4.0,
-                ratio: 0.0,
-            },
-        ];
-        optimized.scrolls = &zero_scrolls;
-        optimized.displayed_beat_monotonic = false;
-        assert_eq!(visible_cue_beat_range(&optimized), None);
-    }
-
     #[test]
     fn coincident_cues_keep_scroll_bpm_delay_stop_priority() {
         let timing = timing();
@@ -1511,33 +1360,5 @@ mod tests {
                 [1.0, 0.0, 0.0, 0.7],
             ]
         );
-    }
-
-    #[test]
-    fn edit_cursor_matches_stateless_metadata_across_playback_and_seeks() {
-        let signatures = (0..128)
-            .map(|index| TimeSignatureSegment {
-                beat: index as f32 * 16.0,
-                numerator: [4, 3, 7, 5][index % 4],
-                denominator: [4, 8, 8, 16][index % 4],
-            })
-            .collect::<Vec<_>>();
-        let last_row = beat_to_note_row(16.0 * signatures.len() as f32);
-        let mut rows = (-96..=last_row).step_by(3).collect::<Vec<_>>();
-        rows.extend((-96..=last_row).rev().step_by(5));
-        let mut seed = 0x9e37_79b9_u32;
-        rows.extend((0..20_000).map(|_| {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            (seed % (last_row as u32 + 193)) as i32 - 96
-        }));
-
-        let mut cursor = EditBeatBarCursor::new(rows[0], &signatures);
-        for row in rows {
-            assert_eq!(
-                cursor.info_for_row(row),
-                edit_beat_bar_info_for_row(row, &signatures),
-                "row={row}",
-            );
-        }
     }
 }

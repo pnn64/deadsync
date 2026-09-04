@@ -768,8 +768,6 @@ fn push_overlay_unreserved(
     }
 }
 
-/// Stable running pack-sync frame used to compare the former 96-slot actor
-/// batch with direct append into the screen-owned actor list.
 pub fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequest> {
     let request = match state {
         OverlayState::Visible(overlay) if overlay.phase == OverlayPhase::Running => {

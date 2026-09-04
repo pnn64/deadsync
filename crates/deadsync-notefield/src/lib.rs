@@ -82,8 +82,6 @@ pub use transforms::{
     TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
 };
 
-#[cfg(test)]
-pub(crate) use actor_builder::actor_with_world_z;
 pub(crate) use actor_builder::{
     NotefieldFramePlanRequest, notefield_frame_plan, share_actor_range,
 };
@@ -130,26 +128,20 @@ pub use measure_actors::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER;
 use measure_actors::{
     EditMeasureTextSlots, append_beat_bar, append_cue_bar, append_edit_measure_number,
 };
-pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
 #[cfg(test)]
 use measure_lines::{
-    beat_scroll_travel, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
-    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+    EditBeatBarCursor, EditBeatBarInfo, beat_scroll_travel, edit_bar_candidate_step_rows,
+    edit_bar_scroll_speed, edit_beat_scroll_travel,
 };
+pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
 #[cfg(test)]
 use mini_indicator::{
-    rgba8, stream_segment_index_inclusive_end, zmod_combo_glow_color, zmod_combo_glow_pair,
-    zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
-    zmod_indicator_detailed_color, zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color,
-    zmod_subtractive_counter_state, zmod_subtractive_points,
+    rgba8, zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_rainbow_color,
+    zmod_combo_solid_color, zmod_indicator_default_color, zmod_indicator_detailed_color,
+    zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color, zmod_subtractive_counter_state,
+    zmod_subtractive_points,
 };
-#[cfg(test)]
-pub(crate) use mini_indicator::{stream_segment_index_exclusive_end, zmod_run_timer_index};
 pub(crate) use mini_indicator::{zmod_broken_run_counter_text, zmod_measure_counter_text};
-#[cfg(test)]
-pub(crate) use notes::for_each_visible_hold_index;
-#[cfg(test)]
-pub(crate) use notes::for_each_visible_note_index;
 pub(crate) use notes::{
     MineLayerRequest, NoteLayerRequest, NotePartPhaseCache, ScrollTravelRequest,
     compose_flat_mine_layers, compose_flat_note_layer, for_each_lane_index,
@@ -159,17 +151,6 @@ pub(crate) use notes::{
 };
 pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
 
-/// Stable entry points used by external notefield instrumentation.
-#[doc(hidden)]
-pub mod performance {
-    pub use crate::field_frame::measure_cue_range_search_enabled;
-    pub use crate::measure_lines::{
-        CueSegmentRanges, EditBeatBarCursor, EditBeatBarInfo, cue_segment_ranges,
-    };
-    pub use crate::notes::{
-        find_first_displayed_beat, find_first_displayed_row, find_last_displayed_row,
-    };
-}
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
 pub(crate) use placement::{
@@ -196,52 +177,50 @@ pub(crate) use transforms::{
 };
 #[cfg(test)]
 use transforms::{
-    appearance_needs_rows, apply_accel_y, apply_accel_y_with_peak, beat_x_extra, bumpy_angle,
-    drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_world_z_for_bumpy, note_x_extra,
-    quantize_step, signed_effect_active, sm_scale, tornado_x_extra, visual_effect_params_for_col,
-    visual_note_rotation_z, visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
+    appearance_needs_rows, beat_x_extra, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
+    note_x_extra, quantize_step, signed_effect_active, sm_scale, tornado_x_extra,
+    visual_effect_params_for_col, visual_pulse_inner_zoom, visual_pulse_zoom_for_y,
+    visual_tiny_zoom,
 };
 #[cfg(test)]
-pub(crate) use transforms::{
-    appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
-    compute_invert_distances, compute_tornado_bounds,
-};
+pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource, TextAlign};
-    use deadlib_present::anim::EffectState;
     use deadlib_render_core::BlendMode;
     use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
     use std::sync::Arc;
 
+    use super::transforms::{
+        accel_y_cache, appearance_note_actor_alpha_from_alpha, appearance_note_alpha_cached,
+        appearance_note_glow_from_alpha, apply_accel_y_cached, apply_accel_y_with_peak_cached,
+        note_world_z_for_bumpy_cached, visual_note_rotation_z_cached,
+    };
     use super::{
         AccelYParams, BrokenRunLookup, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
-        DISPLAY_TURN_UD_MIRROR, EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER, EditMeasureTextSlots,
-        GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets, HudLayoutParams,
-        JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
-        MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
-        MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, StreamProgressLookup,
-        TapJudgmentRowsParams, TapReplacementHead, TornadoBounds, VisualEffectParams,
-        ZmodComboColorParams, ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText,
-        ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams, ZmodMiniIndicatorText,
-        actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha,
-        appearance_note_alpha, appearance_note_glow, append_average_error_bar_part,
+        DISPLAY_TURN_UD_MIRROR, EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER, EditBeatBarCursor,
+        EditBeatBarInfo, EditMeasureTextSlots, GameplayModsAttackMode, GameplayModsTextParams,
+        HudLayoutOffsets, HudLayoutParams, JudgmentTiltParams, LayoutMiniIndicatorPosition,
+        MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
+        MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams,
+        StreamProgressLookup, TapJudgmentRowsParams, TapReplacementHead, TornadoBounds,
+        VisualEffectParams, ZmodComboColorParams, ZmodComboColorStyle, ZmodLayoutParams,
+        ZmodMeasureCounterText, ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams,
+        ZmodMiniIndicatorText, appearance_needs_rows, append_average_error_bar_part,
         append_beat_bar, append_cue_bar, append_disabled_timing_windows,
         append_edit_measure_number, append_mini_part, append_perspective_parts, append_turn_parts,
-        apply_accel_y, apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor,
-        beat_scroll_travel, beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
-        clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored,
-        column_cue_alpha_with_fade, column_cue_height, column_cue_reverse_top_y,
-        column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
-        column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
+        average_error_bar_mini_scale, beat_factor, beat_scroll_travel, beat_x_extra,
+        bottom_cap_uv_window, clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha,
+        column_cue_alpha_anchored, column_cue_alpha_with_fade, column_cue_height,
+        column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
+        column_flash_height, column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
         drunk_x_extra, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
-        edit_beat_bar_info_for_row, edit_beat_scroll_travel, effective_mini_value,
-        error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
-        error_bar_text_scalable_zoom, error_bar_tick_alpha, field_effect_height,
-        fill_gameplay_lane_effects, fill_lane_col_offsets, find_first_displayed_beat,
-        find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
+        edit_beat_scroll_travel, effective_mini_value, error_bar_boundaries_s,
+        error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+        error_bar_tick_alpha, field_effect_height, fill_gameplay_lane_effects,
+        fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
         gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
         hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
         hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
@@ -250,30 +229,101 @@ mod tests {
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, lane_note_transform_cache,
         maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
-        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
-        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
-        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
-        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
-        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
-        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
-        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
-        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
+        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_x_extra, note_x_offset,
+        notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
+        quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
+        scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, share_actor_range,
+        signed_effect_active, sm_scale, smoothstep01, song_time_ns_delta_seconds,
+        song_time_ns_to_seconds, tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
+        timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, top_cap_rotation_deg,
+        tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
         visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-        visual_note_rotation_z, visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
+        visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
         visual_use_legacy_hold_sprites, zmod_broken_run_counter_text, zmod_broken_run_end,
         zmod_combo_glow_color, zmod_combo_glow_pair, zmod_combo_quint_active,
         zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
         zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
         zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
         zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
-        zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color, zmod_stream_prog_color,
+        zmod_rival_color, zmod_static_combo_color, zmod_stream_prog_color,
         zmod_subtractive_counter_state, zmod_subtractive_points, zmod_target_score_missed,
     };
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
+
+    fn appearance_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+        appearance_note_alpha_cached(y, &super::note_appearance_cache(elapsed, mini, params))
+    }
+
+    fn appearance_glow(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+        appearance_note_glow_from_alpha(appearance_alpha(y, elapsed, mini, params))
+    }
+
+    fn appearance_actor_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+        appearance_note_actor_alpha_from_alpha(appearance_alpha(y, elapsed, mini, params))
+    }
+
+    fn cached_accel_y(
+        raw_y: f32,
+        elapsed: f32,
+        effect_height: f32,
+        screen_height: f32,
+        accel: AccelYParams,
+    ) -> f32 {
+        apply_accel_y_cached(
+            raw_y,
+            effect_height,
+            screen_height,
+            accel,
+            accel_y_cache(elapsed, effect_height, accel),
+        )
+    }
+
+    fn cached_accel_y_with_peak(
+        raw_y: f32,
+        elapsed: f32,
+        effect_height: f32,
+        screen_height: f32,
+        accel: AccelYParams,
+    ) -> (f32, bool) {
+        apply_accel_y_with_peak_cached(
+            raw_y,
+            effect_height,
+            screen_height,
+            accel,
+            accel_y_cache(elapsed, effect_height, accel),
+        )
+    }
+
+    fn cached_bumpy_z(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
+        note_world_z_for_bumpy_cached(
+            y,
+            super::bumpy_frame_cache(offset, period),
+            lane_note_transform_cache(
+                0.0,
+                VisualEffectParams {
+                    bumpy,
+                    ..VisualEffectParams::default()
+                },
+            ),
+        )
+    }
+
+    fn cached_note_rotation(
+        note_beat: f32,
+        song_beat: f32,
+        is_hold_head: bool,
+        params: VisualEffectParams,
+    ) -> f32 {
+        let cache = lane_note_transform_cache(song_beat, params);
+        if is_hold_head {
+            visual_hold_head_rotation_z_cached(cache)
+        } else {
+            visual_note_rotation_z_cached(note_beat, cache)
+        }
+    }
     use deadsync_rules::note::{HoldData, MineResult, Note, NoteCountStat};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::stream::StreamSegment;
@@ -366,21 +416,22 @@ mod tests {
         note
     }
 
+    fn edit_bar_info(row: i32, segments: &[TimeSignatureSegment]) -> Option<EditBeatBarInfo> {
+        EditBeatBarCursor::new(row, segments).info_for_row(row)
+    }
+
     #[test]
     fn edit_beat_bar_labels_default_measure_indices() {
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(0.0), &[])
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(0.0), &[]).and_then(|info| info.measure_index),
             Some(0)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[])
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(1.0), &[]).and_then(|info| info.measure_index),
             None
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[])
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(4.0), &[]).and_then(|info| info.measure_index),
             Some(1)
         );
     }
@@ -388,19 +439,19 @@ mod tests {
     #[test]
     fn edit_beat_bar_frames_use_sixteenth_spacing() {
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(0.25), &[]).map(|info| info.frame),
+            edit_bar_info(beat_to_note_row(0.25), &[]).map(|info| info.frame),
             Some(3)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(0.5), &[]).map(|info| info.frame),
+            edit_bar_info(beat_to_note_row(0.5), &[]).map(|info| info.frame),
             Some(2)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[]).map(|info| info.frame),
+            edit_bar_info(beat_to_note_row(1.0), &[]).map(|info| info.frame),
             Some(1)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[]).map(|info| info.frame),
+            edit_bar_info(beat_to_note_row(4.0), &[]).map(|info| info.frame),
             Some(0)
         );
     }
@@ -421,18 +472,15 @@ mod tests {
         ];
 
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(0.0), &segments)
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(0.0), &segments).and_then(|info| info.measure_index),
             Some(0)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(3.0), &segments)
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(3.0), &segments).and_then(|info| info.measure_index),
             Some(1)
         );
         assert_eq!(
-            edit_beat_bar_info_for_row(beat_to_note_row(6.0), &segments)
-                .and_then(|info| info.measure_index),
+            edit_bar_info(beat_to_note_row(6.0), &segments).and_then(|info| info.measure_index),
             Some(2)
         );
     }
@@ -1144,18 +1192,12 @@ mod tests {
     }
 
     #[test]
-    fn bumpy_angle_sanitizes_non_finite_options() {
-        assert!((bumpy_angle(16.0, f32::NAN, f32::NAN) - 1.0).abs() <= 1e-6);
-        assert!((bumpy_angle(16.0, 1.0, 1.0) - 3.625).abs() <= 1e-6);
-    }
-
-    #[test]
     fn accel_y_boost_matches_itg_formula() {
         let accel = AccelYParams {
             boost: 1.0,
             ..AccelYParams::default()
         };
-        let y = apply_accel_y(120.0, 0.0, 480.0, 480.0, accel);
+        let y = cached_accel_y(120.0, 0.0, 480.0, 480.0, accel);
         assert!((y - 166.15385).abs() <= 0.001);
     }
 
@@ -1168,9 +1210,9 @@ mod tests {
             brake: 1.0,
             ..AccelYParams::default()
         };
-        let itg_order = apply_accel_y(raw_y, 0.0, effect_height, 480.0, accel) * scroll_speed;
+        let itg_order = cached_accel_y(raw_y, 0.0, effect_height, 480.0, accel) * scroll_speed;
         let pre_scaled_order =
-            apply_accel_y(raw_y * scroll_speed, 0.0, effect_height, 480.0, accel);
+            cached_accel_y(raw_y * scroll_speed, 0.0, effect_height, 480.0, accel);
         let expected_itg_order = raw_y * (raw_y / effect_height) * scroll_speed;
 
         assert!(itg_order < pre_scaled_order);
@@ -1183,24 +1225,24 @@ mod tests {
             boomerang: 1.0,
             ..AccelYParams::default()
         };
-        assert!(apply_accel_y_with_peak(100.0, 0.0, 480.0, 480.0, accel).1);
-        assert!(apply_accel_y_with_peak(300.0, 0.0, 480.0, 480.0, accel).1);
-        assert!(!apply_accel_y_with_peak(400.0, 0.0, 480.0, 480.0, accel).1);
+        assert!(cached_accel_y_with_peak(100.0, 0.0, 480.0, 480.0, accel).1);
+        assert!(cached_accel_y_with_peak(300.0, 0.0, 480.0, 480.0, accel).1);
+        assert!(!cached_accel_y_with_peak(400.0, 0.0, 480.0, 480.0, accel).1);
     }
 
     #[test]
     fn note_world_z_for_bumpy_uses_itg_sine_formula() {
-        let z = note_world_z_for_bumpy(8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
+        let z = cached_bumpy_z(8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
         assert!((z - 40.0).abs() <= 0.0001);
 
-        let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
+        let z = cached_bumpy_z(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
         assert!((z - 40.0).abs() <= 0.0001);
 
-        let z = note_world_z_for_bumpy(-8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
+        let z = cached_bumpy_z(-8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
         assert!((z + 40.0).abs() <= 0.0001);
 
-        assert_eq!(note_world_z_for_bumpy(8.0, 0.0, 0.0, 0.0), 0.0);
-        assert_eq!(note_world_z_for_bumpy(8.0, f32::NAN, 0.0, 0.0), 0.0);
+        assert_eq!(cached_bumpy_z(8.0, 0.0, 0.0, 0.0), 0.0);
+        assert_eq!(cached_bumpy_z(8.0, f32::NAN, 0.0, 0.0), 0.0);
     }
 
     #[test]
@@ -1577,7 +1619,7 @@ mod tests {
             confusion: 1.5,
             ..VisualEffectParams::default()
         };
-        let rotation = visual_note_rotation_z(12.0, 3.5, true, params);
+        let rotation = cached_note_rotation(12.0, 3.5, true, params);
         let itg_expected = (3.5_f32 * params.confusion).rem_euclid(std::f32::consts::TAU)
             * (-180.0 / std::f32::consts::PI);
         assert!((rotation + itg_expected).abs() <= 1e-6);
@@ -1586,7 +1628,7 @@ mod tests {
             dizzy: 2.0,
             ..VisualEffectParams::default()
         };
-        let rotation = visual_note_rotation_z(6.75, 3.5, false, params);
+        let rotation = cached_note_rotation(6.75, 3.5, false, params);
         let itg_expected =
             ((6.75 - 3.5) * params.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
         assert!((rotation + itg_expected).abs() <= 1e-6);
@@ -1599,8 +1641,8 @@ mod tests {
             dizzy: 2.0,
             ..VisualEffectParams::default()
         };
-        let hold_rotation = visual_note_rotation_z(6.75, 3.5, true, params);
-        let tap_rotation = visual_note_rotation_z(6.75, 3.5, false, params);
+        let hold_rotation = cached_note_rotation(6.75, 3.5, true, params);
+        let tap_rotation = cached_note_rotation(6.75, 3.5, false, params);
         let expected = -visual_confusion_rotation_deg(3.5, params);
         let cached = visual_hold_head_rotation_z_cached(lane_note_transform_cache(3.5, params));
 
@@ -1615,7 +1657,7 @@ mod tests {
             dizzy: -0.5,
             ..VisualEffectParams::default()
         };
-        let rotation = visual_note_rotation_z(70.0, 68.0, false, params);
+        let rotation = cached_note_rotation(70.0, 68.0, false, params);
         let itg_expected =
             ((70.0 - 68.0) * params.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
 
@@ -1834,7 +1876,7 @@ mod tests {
 
     #[test]
     fn appearance_blink_alpha_matches_itg_boolean_behavior() {
-        let partial = appearance_note_alpha(
+        let partial = appearance_alpha(
             100.0,
             0.0,
             0.0,
@@ -1843,7 +1885,7 @@ mod tests {
                 ..NoteAlphaParams::default()
             },
         );
-        let full = appearance_note_alpha(
+        let full = appearance_alpha(
             100.0,
             0.0,
             0.0,
@@ -1855,7 +1897,7 @@ mod tests {
         assert!((partial - full).abs() <= 1e-6);
         assert_eq!(full, 0.0);
 
-        let visible_phase = appearance_note_alpha(
+        let visible_phase = appearance_alpha(
             100.0,
             0.1,
             0.0,
@@ -1873,18 +1915,18 @@ mod tests {
             hidden: 1.0,
             ..NoteAlphaParams::default()
         };
-        assert_eq!(appearance_note_alpha(-1.0, 0.0, 0.0, hidden), 1.0);
-        assert_eq!(appearance_note_alpha(120.0, 0.0, 0.0, hidden), 0.0);
-        assert!((appearance_note_alpha(140.0, 0.0, 0.0, hidden) - 0.5).abs() <= 1e-6);
-        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, hidden), 1.0);
+        assert_eq!(appearance_alpha(-1.0, 0.0, 0.0, hidden), 1.0);
+        assert_eq!(appearance_alpha(120.0, 0.0, 0.0, hidden), 0.0);
+        assert!((appearance_alpha(140.0, 0.0, 0.0, hidden) - 0.5).abs() <= 1e-6);
+        assert_eq!(appearance_alpha(160.0, 0.0, 0.0, hidden), 1.0);
 
         let sudden = NoteAlphaParams {
             sudden: 1.0,
             ..NoteAlphaParams::default()
         };
-        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, sudden), 1.0);
-        assert!((appearance_note_alpha(180.0, 0.0, 0.0, sudden) - 0.5).abs() <= 1e-6);
-        assert_eq!(appearance_note_alpha(200.0, 0.0, 0.0, sudden), 0.0);
+        assert_eq!(appearance_alpha(160.0, 0.0, 0.0, sudden), 1.0);
+        assert!((appearance_alpha(180.0, 0.0, 0.0, sudden) - 0.5).abs() <= 1e-6);
+        assert_eq!(appearance_alpha(200.0, 0.0, 0.0, sudden), 0.0);
     }
 
     #[test]
@@ -1894,9 +1936,9 @@ mod tests {
             sudden: 1.0,
             ..NoteAlphaParams::default()
         };
-        assert_eq!(appearance_note_alpha(110.0, 0.0, 0.0, combo), 0.0);
-        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, combo), 1.0);
-        assert_eq!(appearance_note_alpha(210.0, 0.0, 0.0, combo), 0.0);
+        assert_eq!(appearance_alpha(110.0, 0.0, 0.0, combo), 0.0);
+        assert_eq!(appearance_alpha(160.0, 0.0, 0.0, combo), 1.0);
+        assert_eq!(appearance_alpha(210.0, 0.0, 0.0, combo), 0.0);
     }
 
     #[test]
@@ -1905,13 +1947,13 @@ mod tests {
             random_vanish: 1.0,
             ..NoteAlphaParams::default()
         };
-        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, random_vanish), 0.0);
-        assert_eq!(appearance_note_alpha(320.0, 0.0, 0.0, random_vanish), 1.0);
+        assert_eq!(appearance_alpha(160.0, 0.0, 0.0, random_vanish), 0.0);
+        assert_eq!(appearance_alpha(320.0, 0.0, 0.0, random_vanish), 1.0);
     }
 
     #[test]
     fn appearance_stealth_glow_matches_itg_visibility_curve() {
-        let glow = appearance_note_glow(
+        let glow = appearance_glow(
             100.0,
             0.0,
             0.0,
@@ -1925,7 +1967,7 @@ mod tests {
 
     #[test]
     fn appearance_note_actor_alpha_matches_itg_visibility_gate() {
-        let half_visible = appearance_note_actor_alpha(
+        let half_visible = appearance_actor_alpha(
             100.0,
             0.0,
             0.0,
@@ -1934,7 +1976,7 @@ mod tests {
                 ..NoteAlphaParams::default()
             },
         );
-        let mostly_visible = appearance_note_actor_alpha(
+        let mostly_visible = appearance_actor_alpha(
             100.0,
             0.0,
             0.0,
@@ -1971,7 +2013,7 @@ mod tests {
 
     #[test]
     fn appearance_sudden_offset_shifts_fade_band_like_itg() {
-        let base = appearance_note_alpha(
+        let base = appearance_alpha(
             180.0,
             0.0,
             0.0,
@@ -1980,7 +2022,7 @@ mod tests {
                 ..NoteAlphaParams::default()
             },
         );
-        let shifted = appearance_note_alpha(
+        let shifted = appearance_alpha(
             180.0,
             0.0,
             0.0,
@@ -2126,47 +2168,6 @@ mod tests {
         assert_eq!(len, 5);
         assert_eq!(&bounds[..len], &windows);
     }
-
-    #[test]
-    fn stream_segment_indices_handle_boundaries_and_nan() {
-        let segs = [
-            StreamSegment::new(0, 4, false),
-            StreamSegment::new(4, 8, true),
-        ];
-
-        assert_eq!(stream_segment_index_exclusive_end(&segs, 4.0), 1);
-        assert_eq!(stream_segment_index_inclusive_end(&segs, 4.0), 0);
-        assert_eq!(
-            stream_segment_index_exclusive_end(&segs, f32::NEG_INFINITY),
-            0
-        );
-        assert_eq!(
-            stream_segment_index_inclusive_end(&segs, f32::NEG_INFINITY),
-            0
-        );
-        assert_eq!(
-            stream_segment_index_exclusive_end(&segs, f32::INFINITY),
-            segs.len()
-        );
-        assert_eq!(
-            stream_segment_index_inclusive_end(&segs, f32::INFINITY),
-            segs.len()
-        );
-        assert_eq!(
-            stream_segment_index_exclusive_end(&segs, f32::NAN),
-            segs.len()
-        );
-        assert_eq!(
-            stream_segment_index_inclusive_end(&segs, f32::NAN),
-            segs.len()
-        );
-        assert_eq!(zmod_run_timer_index(&segs, 3.0), Some(0));
-        assert_eq!(zmod_run_timer_index(&segs, 4.0), Some(0));
-        assert_eq!(zmod_run_timer_index(&segs, 4.5), Some(1));
-        assert_eq!(zmod_run_timer_index(&segs, 8.0), Some(1));
-        assert_eq!(zmod_run_timer_index(&segs, 9.0), None);
-    }
-
     #[test]
     fn zmod_broken_run_merges_short_breaks_and_adjacent_streams() {
         let segs = [
@@ -3780,60 +3781,6 @@ mod tests {
     }
 
     #[test]
-    fn actor_with_world_z_updates_sprite_depth() {
-        let actor = actor_with_world_z(
-            Actor::Sprite {
-                align: [0.5; 2],
-                offset: [0.0; 2],
-                world_z: 0.0,
-                size: [SizeSpec::Px(1.0); 2],
-                source: SpriteSource::Solid,
-                tint: [1.0; 4],
-                glow: [0.0; 4],
-                z: 42,
-                cell: None,
-                grid: None,
-                uv_rect: None,
-                visible: true,
-                flip_x: false,
-                flip_y: false,
-                cropleft: 0.0,
-                cropright: 0.0,
-                croptop: 0.0,
-                cropbottom: 0.0,
-                fadeleft: 0.0,
-                faderight: 0.0,
-                fadetop: 0.0,
-                fadebottom: 0.0,
-                blend: BlendMode::Alpha,
-                mask_source: false,
-                mask_dest: false,
-                rot_x_deg: 0.0,
-                rot_y_deg: 0.0,
-                rot_z_deg: 0.0,
-                skew: [0.0, 0.0],
-                local_offset: [0.0; 2],
-                local_offset_rot_sin_cos: [0.0, 1.0],
-                texcoordvelocity: None,
-                animate: false,
-                state_delay: 0.0,
-                scale: [1.0; 2],
-                shadow_len: [0.0; 2],
-                shadow_color: [0.0; 4],
-                effect: EffectState::default(),
-            },
-            12.5,
-        );
-        assert!(matches!(
-            actor,
-            Actor::Sprite {
-                world_z,
-                ..
-            } if (world_z - 12.5).abs() <= 1e-6
-        ));
-    }
-
-    #[test]
     fn share_actor_range_drains_into_shared_frame() {
         let mut actors = vec![
             Actor::Frame {
@@ -4041,17 +3988,16 @@ mod tests {
         ];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
-        let mut visited = Vec::new();
-
-        for_each_visible_note_index(
-            &note_indices,
+        let bounds = crate::notes::lane_window_bounds_by_note_row_from_cursor(
             &note_itg_rows,
+            &note_indices,
             Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
-            |note_index| visited.push(note_index),
-        );
+            &mut crate::notes::LaneWindowCursor::default(),
+        )
+        .expect("finite visible range");
 
         assert_eq!(note_itg_row(&notes[1]), beat_to_note_row(4.0));
-        assert_eq!(visited, vec![1]);
+        assert_eq!(&note_indices[bounds.0..bounds.1], &[1]);
     }
 
     #[test]
@@ -4062,16 +4008,15 @@ mod tests {
         ];
         let note_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
-        let mut visited = Vec::new();
-
-        for_each_visible_note_index(
-            &note_indices,
+        let bounds = crate::notes::lane_window_bounds_by_note_row_from_cursor(
             &note_itg_rows,
+            &note_indices,
             Some((beat_to_note_row(-2.0), beat_to_note_row(0.0))),
-            |note_index| visited.push(note_index),
-        );
+            &mut crate::notes::LaneWindowCursor::default(),
+        )
+        .expect("finite visible range");
 
-        assert_eq!(visited, vec![1]);
+        assert_eq!(&note_indices[bounds.0..bounds.1], &[1]);
     }
 
     #[test]
@@ -4079,114 +4024,34 @@ mod tests {
         let notes = [test_note_at_dense_row(-1.0, 0)];
         let note_indices = vec![0usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
-        let mut visited = Vec::new();
-
-        for_each_visible_note_index(
-            &note_indices,
+        let bounds = crate::notes::lane_window_bounds_by_note_row_from_cursor(
             &note_itg_rows,
+            &note_indices,
             Some((beat_to_note_row(-4.0), beat_to_note_row(-2.0))),
-            |note_index| visited.push(note_index),
-        );
+            &mut crate::notes::LaneWindowCursor::default(),
+        )
+        .expect("finite visible range");
 
-        assert!(visited.is_empty());
+        assert_eq!(bounds, (0, 0));
     }
-
-    #[test]
-    fn hinted_visible_note_windows_match_binary_search_across_playback_and_seeks() {
-        let note_itg_rows = (0..8_192).map(|row| row * 3).collect::<Vec<_>>();
-        let note_indices = (0..note_itg_rows.len()).collect::<Vec<_>>();
-        let mut cursor = crate::notes::LaneWindowCursor::default();
-        let ranges = (0..4_096)
-            .map(|frame| {
-                let low = frame * 2;
-                Some((low, low + 768))
-            })
-            .chain([
-                Some((18_000, 19_000)),
-                Some((300, 900)),
-                Some((-1_000, -10)),
-                Some((0, 0)),
-                None,
-                Some((2_000, 2_500)),
-            ]);
-
-        for range in ranges {
-            let expected =
-                crate::notes::lane_window_bounds_by_note_row(&note_itg_rows, &note_indices, range);
-            let actual = crate::notes::lane_window_bounds_by_note_row_from_cursor(
-                &note_itg_rows,
-                &note_indices,
-                range,
-                &mut cursor,
-            );
-            assert_eq!(actual, expected, "range={range:?}");
-        }
-    }
-
-    #[test]
-    fn hinted_visible_hold_windows_match_binary_search_across_playback_and_seeks() {
-        let notes = (0..512)
-            .map(|index| {
-                let beat = index as f32 * 0.5;
-                test_hold_at_beat(beat, ((index % 16) as f32).mul_add(0.25, beat + 1.0))
-            })
-            .collect::<Vec<_>>();
-        let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
-        let hold_indices = (0..notes.len()).collect::<Vec<_>>();
-        let mut cursor = crate::notes::LaneWindowCursor::default();
-        let ranges = (0..2_048)
-            .map(|frame| {
-                let low = frame * 6;
-                Some((low, low + 768))
-            })
-            .chain([
-                Some((10_000, 11_000)),
-                Some((300, 900)),
-                Some((-1_000, -10)),
-                Some((0, 0)),
-                None,
-                Some((2_000, 2_500)),
-            ]);
-
-        for range in ranges {
-            let expected = crate::notes::lane_hold_window_bounds_by_note_row(
-                &notes,
-                &note_itg_rows,
-                &hold_indices,
-                range,
-            );
-            let actual = crate::notes::lane_hold_window_bounds_by_note_row_from_cursor(
-                &notes,
-                &note_itg_rows,
-                &hold_indices,
-                range,
-                &mut cursor,
-            );
-            assert_eq!(actual, expected, "range={range:?}");
-        }
-    }
-
     #[test]
     fn visible_hold_window_includes_holds_started_before_range() {
         let notes = vec![test_hold_at_beat(0.0, 8.0), test_hold_at_beat(12.0, 16.0)];
         let hold_indices = vec![0usize, 1usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(4.0), beat_to_note_row(5.0)));
-        let mut visited = Vec::new();
-
-        for_each_visible_hold_index(
-            &hold_indices,
+        let bounds = crate::notes::lane_hold_window_bounds_by_note_row_from_cursor(
             &notes,
             &note_itg_rows,
+            &hold_indices,
             visible_range,
-            |note_index| {
-                visited.push(note_index);
-            },
-        );
+            &mut crate::notes::LaneWindowCursor::default(),
+        )
+        .expect("finite visible range");
 
         assert!(hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(!hold_overlaps_visible_window(1, &notes, visible_range));
-        assert_eq!(visited, vec![0]);
+        assert_eq!(&hold_indices[bounds.0..bounds.1], &[0]);
     }
 
     #[test]
@@ -4195,20 +4060,17 @@ mod tests {
         let hold_indices = vec![0usize];
         let note_itg_rows = notes.iter().map(note_itg_row).collect::<Vec<_>>();
         let visible_range = Some((beat_to_note_row(-4.0), beat_to_note_row(-1.0)));
-        let mut visited = Vec::new();
-
-        for_each_visible_hold_index(
-            &hold_indices,
+        let bounds = crate::notes::lane_hold_window_bounds_by_note_row_from_cursor(
             &notes,
             &note_itg_rows,
+            &hold_indices,
             visible_range,
-            |note_index| {
-                visited.push(note_index);
-            },
-        );
+            &mut crate::notes::LaneWindowCursor::default(),
+        )
+        .expect("finite visible range");
 
         assert!(!hold_overlaps_visible_window(0, &notes, visible_range));
-        assert!(visited.is_empty());
+        assert_eq!(bounds, (0, 0));
     }
 
     #[test]

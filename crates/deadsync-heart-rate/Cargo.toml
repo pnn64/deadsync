@@ -4,14 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "worker_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [target.'cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))'.dependencies]
 btleplug = "0.13.0"
 futures-util = "0.3.34"

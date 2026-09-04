@@ -919,23 +919,6 @@ impl MachineStateSignatureCache {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[derive(Debug, Default)]
-pub struct MachineStateSignatureCacheForBench(MachineStateSignatureCache);
-
-#[cfg(feature = "bench-support")]
-impl MachineStateSignatureCacheForBench {
-    #[must_use]
-    pub fn update(&mut self, joined_code: &str, machine_state: &Value) -> bool {
-        if self.0.prepare(joined_code, machine_state) {
-            return false;
-        }
-        self.0.commit_prepared();
-        true
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn machine_state_update_command(
@@ -1423,60 +1406,6 @@ fn lobby_profile_names_equal(previous: &str, current: &str) -> bool {
         .bytes()
         .chain(previous.body.bytes())
         .eq(current.prefix.bytes().chain(current.body.bytes()))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[derive(Debug, Default)]
-pub struct DefaultMachineStateCacheForBench {
-    input: Option<RuntimeMachineStateInput>,
-}
-
-#[cfg(feature = "bench-support")]
-impl DefaultMachineStateCacheForBench {
-    #[allow(clippy::too_many_arguments)]
-    #[must_use]
-    pub fn update(
-        &mut self,
-        joined_code: &str,
-        screen_name: &str,
-        p1_ready: bool,
-        p2_ready: bool,
-        p1_stats: Option<&MachinePlayerStats>,
-        p2_stats: Option<&MachinePlayerStats>,
-        active_side: PlayerSide,
-        joined: [bool; 2],
-        display_names: [&str; 2],
-    ) -> bool {
-        if self.input.as_ref().is_some_and(|last| {
-            last.matches_machine_state(
-                joined_code,
-                screen_name,
-                p1_ready,
-                p2_ready,
-                p1_stats,
-                p2_stats,
-                active_side,
-                joined,
-                display_names,
-            )
-        }) {
-            return false;
-        }
-        RuntimeMachineStateInput::store(
-            &mut self.input,
-            joined_code,
-            screen_name,
-            p1_ready,
-            p2_ready,
-            p1_stats,
-            p2_stats,
-            active_side,
-            joined,
-            display_names,
-        );
-        true
-    }
 }
 
 #[inline(always)]
@@ -2197,35 +2126,6 @@ mod tests {
             [true, false],
             ["Player", "Bob"],
         );
-    }
-
-    #[test]
-    fn reusable_machine_state_signature_matches_allocating_reference() {
-        let states = [
-            ("ROOM", serde_json::json!({"player1": null})),
-            (
-                "ROOM",
-                serde_json::json!({"player1": {"ready": true, "score": 98.5}}),
-            ),
-            (
-                "NEXT",
-                serde_json::json!({"player1": {"ready": true, "score": 98.5}}),
-            ),
-        ];
-        let mut reference = None;
-        let mut cache = MachineStateSignatureCache::default();
-        for (code, state) in states.iter().chain(states.iter().rev()) {
-            let signature = machine_state_signature(code, state);
-            let reference_changed = reference.as_deref() != Some(signature.as_str());
-            if reference_changed {
-                reference = Some(signature);
-            }
-            let duplicate = cache.prepare(code, state);
-            assert_eq!(!duplicate, reference_changed);
-            if !duplicate {
-                cache.commit_prepared();
-            }
-        }
     }
 
     #[test]

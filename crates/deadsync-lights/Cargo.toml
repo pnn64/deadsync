@@ -16,33 +16,20 @@ log = "0.4.34"
 libc = "0.2.189"
 
 [target.'cfg(windows)'.dependencies]
-hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["windows-native"] }
 windows-sys = { version = "0.61.2", features = [
     "Win32_Devices_Communication",
     "Win32_Foundation",
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false, features = ["linux-static-hidraw"] }
+hidapi = { version = "2.6.7", default-features = false, features = ["linux-static-hidraw"] }
 
 [target.'cfg(target_os = "freebsd")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false }
+hidapi = { version = "2.6.7", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-hidapi = { version = "2.6.6", default-features = false }
-
-[features]
-bench-support = []
-
-[[bench]]
-name = "lighting_frame_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "cabinet_chart_hot_paths"
-harness = false
-required-features = ["bench-support"]
+hidapi = { version = "2.6.7", default-features = false }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

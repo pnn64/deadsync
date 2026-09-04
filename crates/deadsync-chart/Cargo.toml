@@ -9,24 +9,6 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 rustc-hash = "2.1.3"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "background_expansion_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_selection_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "chart_index_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

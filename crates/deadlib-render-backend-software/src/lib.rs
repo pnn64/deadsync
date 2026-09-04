@@ -14,7 +14,6 @@ use winit::{dpi::PhysicalSize, window::Window};
 
 const SOFTWARE_ROW_CHUNK: usize = 32;
 // Staging wins once enough row workers would otherwise repeat every transform.
-// The paired projection benchmark puts the crossover between 8 and 15 stripes.
 const MIN_STAGE_MESH_STRIPES: usize = 12;
 // Covers the current two-player density graph while bounding retained memory.
 // Frames that exceed either buffer render through the direct path instead.

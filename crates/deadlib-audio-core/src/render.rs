@@ -443,81 +443,6 @@ impl RenderState {
     }
 }
 
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{advance_gain, convert_music_samples, f32_to_i16, i16_to_f32, write_i16_samples};
-
-    fn convert_music_samples_old(
-        src: &[i16],
-        dst: &mut [f32],
-        channels: usize,
-        music_vol: f32,
-        target_gain: f32,
-        current_gain: &mut f32,
-    ) {
-        if *current_gain == target_gain {
-            let scale = music_vol * target_gain;
-            for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = i16_to_f32(src) * scale;
-            }
-            return;
-        }
-        for (src_frame, dst_frame) in src
-            .chunks_exact(channels)
-            .zip(dst.chunks_exact_mut(channels))
-        {
-            advance_gain(current_gain, target_gain);
-            let scale = music_vol * *current_gain;
-            for (dst, &src) in dst_frame.iter_mut().zip(src_frame) {
-                *dst = i16_to_f32(src) * scale;
-            }
-        }
-    }
-
-    pub fn music_convert_old(
-        src: &[i16],
-        dst: &mut [f32],
-        channels: usize,
-        music_vol: f32,
-        target_gain: f32,
-        current_gain: &mut f32,
-    ) {
-        convert_music_samples_old(src, dst, channels, music_vol, target_gain, current_gain);
-    }
-
-    pub fn music_convert_new(
-        src: &[i16],
-        dst: &mut [f32],
-        channels: usize,
-        music_vol: f32,
-        target_gain: f32,
-        current_gain: &mut f32,
-    ) {
-        convert_music_samples(src, dst, channels, music_vol, target_gain, current_gain);
-    }
-
-    pub fn music_copy_old(src: &[i16], scratch: &mut [f32], dst: &mut [f32], gain: f32) {
-        let mut current_gain = gain;
-        convert_music_samples(src, scratch, 2, 1.0, gain, &mut current_gain);
-        dst.copy_from_slice(scratch);
-    }
-
-    pub fn music_direct_new(src: &[i16], dst: &mut [f32], gain: f32) {
-        let mut current_gain = gain;
-        convert_music_samples(src, dst, 2, 1.0, gain, &mut current_gain);
-    }
-
-    pub fn silent_i16_old(src: &[f32], dst: &mut [i16]) {
-        for (dst, &src) in dst.iter_mut().zip(src) {
-            *dst = f32_to_i16(src);
-        }
-    }
-
-    pub fn silent_i16_new(src: &[f32], dst: &mut [i16]) {
-        write_i16_samples(src, dst, false);
-    }
-}
-
 impl Drop for RenderState {
     fn drop(&mut self) {
         let _ = self.recycle_active();
@@ -526,10 +451,7 @@ impl Drop for RenderState {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MIX_CHUNK_FRAMES, MUSIC_GAIN_MAX_STEP, RenderState, advance_gain, convert_music_samples,
-        write_i16_samples,
-    };
+    use super::{MIX_CHUNK_FRAMES, MUSIC_GAIN_MAX_STEP, RenderState, write_i16_samples};
     use crate::ring::{
         AudioRenderHandle, MusicBlockTiming, MusicBlockWriter, PlayedMapReader, music_transport,
     };
@@ -547,82 +469,6 @@ mod tests {
     const EFFECT_BUS: MixBus = MixBus::new(0);
     const SEC_PER_FRAME: f64 = 1.0 / 48_000.0;
     static GLOBAL_AUDIO_STATE_BUSY: AtomicBool = AtomicBool::new(false);
-
-    fn convert_music_samples_legacy(
-        src: &[i16],
-        dst: &mut [f32],
-        channels: usize,
-        music_vol: f32,
-        target_gain: f32,
-        current_gain: &mut f32,
-    ) {
-        if *current_gain == target_gain {
-            let scale = music_vol * target_gain;
-            for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = i16_to_f32(src) * scale;
-            }
-            return;
-        }
-        for (src_frame, dst_frame) in src
-            .chunks_exact(channels)
-            .zip(dst.chunks_exact_mut(channels))
-        {
-            advance_gain(current_gain, target_gain);
-            let scale = music_vol * *current_gain;
-            for (dst, &src) in dst_frame.iter_mut().zip(src_frame) {
-                *dst = i16_to_f32(src) * scale;
-            }
-        }
-    }
-
-    #[test]
-    fn music_conversion_fast_paths_match_legacy_bits() {
-        let src = (0..72)
-            .map(|index| [i16::MIN, -20_001, -1, 0, 1, 12_345, i16::MAX][index % 7])
-            .collect::<Vec<_>>();
-        for (channels, music_vol, current, target) in [
-            (2usize, 0.0f32, 1.0f32, 1.0f32),
-            (2, -0.0, 1.0, 1.0),
-            (2, 1.0, 1.0, 1.0),
-            (2, 0.9, 1.0, 0.5),
-            (1, 0.9, 1.0, 0.5),
-            (6, 0.9, 1.0, 0.5),
-        ] {
-            let mut expected = vec![f32::NAN; src.len()];
-            let mut expected_gain = current;
-            convert_music_samples_legacy(
-                &src,
-                &mut expected,
-                channels,
-                music_vol,
-                target,
-                &mut expected_gain,
-            );
-            let mut actual = vec![f32::NAN; src.len()];
-            let mut actual_gain = current;
-            convert_music_samples(
-                &src,
-                &mut actual,
-                channels,
-                music_vol,
-                target,
-                &mut actual_gain,
-            );
-
-            assert_eq!(
-                actual
-                    .iter()
-                    .map(|value| value.to_bits())
-                    .collect::<Vec<_>>(),
-                expected
-                    .iter()
-                    .map(|value| value.to_bits())
-                    .collect::<Vec<_>>(),
-                "channels={channels} volume={music_vol:?} current={current} target={target}"
-            );
-            assert_eq!(actual_gain.to_bits(), expected_gain.to_bits());
-        }
-    }
 
     #[test]
     fn silent_i16_fast_path_matches_sample_conversion() {

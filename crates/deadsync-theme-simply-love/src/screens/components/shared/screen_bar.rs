@@ -171,16 +171,6 @@ const fn bar_background(
 }
 
 #[must_use]
-pub fn build(params: ScreenBarParams) -> Actor {
-    build_with_context(params, ScreenBarContext::Normal)
-}
-
-#[must_use]
-pub fn build_shared(params: ScreenBarParams) -> Actor {
-    build_cached(params)
-}
-
-#[must_use]
 pub fn build_select_music(params: ScreenBarParams) -> Actor {
     build_cached_with_context(params, ScreenBarContext::SelectMusic)
 }
@@ -191,7 +181,7 @@ pub fn build_select_music(params: ScreenBarParams) -> Actor {
 /// A hit performs no allocation; a miss synchronously replaces the old actor
 /// tree on the game thread.
 #[must_use]
-pub fn build_cached(params: ScreenBarParams) -> Actor {
+pub fn build(params: ScreenBarParams) -> Actor {
     build_cached_with_context(params, ScreenBarContext::Normal)
 }
 
@@ -245,25 +235,15 @@ fn shared_frame(actor: Actor) -> Actor {
     }
 }
 
-#[must_use]
-pub fn build_title_menu(params: ScreenBarParams) -> Actor {
-    build_with_context(params, ScreenBarContext::TitleMenu)
-}
-
 /// Retains a title-menu screen bar across unchanged frames.
 #[must_use]
-pub fn build_title_menu_cached(params: ScreenBarParams) -> Actor {
+pub fn build_title_menu(params: ScreenBarParams) -> Actor {
     build_cached_with_context(params, ScreenBarContext::TitleMenu)
-}
-
-#[must_use]
-pub fn build_no_background(params: ScreenBarParams) -> Actor {
-    build_with_context(params, ScreenBarContext::NoBackground)
 }
 
 /// Retains a background-free screen bar across unchanged frames.
 #[must_use]
-pub fn build_no_background_cached(params: ScreenBarParams) -> Actor {
+pub fn build_no_background(params: ScreenBarParams) -> Actor {
     build_cached_with_context(params, ScreenBarContext::NoBackground)
 }
 
@@ -437,8 +417,8 @@ mod tests {
     #[test]
     fn no_background_bar_has_no_frame_background() {
         let actor = build_no_background(empty_bar_params());
-        let Actor::Frame { background, .. } = actor else {
-            panic!("screen bar should build a frame");
+        let Actor::SharedFrame { background, .. } = actor else {
+            panic!("screen bar should build a shared frame");
         };
         assert!(background.is_none());
     }
@@ -447,8 +427,8 @@ mod tests {
     fn colored_bar_uses_prepared_rgba() {
         let mut params = empty_bar_params();
         params.visual_policy.screen_bar = ScreenBarBackgroundView::Colored([0.1, 0.2, 0.3, 1.0]);
-        let Actor::Frame { background, .. } = build(params) else {
-            panic!("screen bar should build a frame");
+        let Actor::SharedFrame { background, .. } = build(params) else {
+            panic!("screen bar should build a shared frame");
         };
         assert!(matches!(
             background,
@@ -473,7 +453,7 @@ mod tests {
             tint,
             blend,
             ..
-        } = build_shared(params)
+        } = build(params)
         else {
             panic!("shared screen bar should build a shared frame");
         };

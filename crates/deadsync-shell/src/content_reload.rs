@@ -13,8 +13,7 @@ use std::time::{Duration, Instant};
 /// and never grows. Progress updates are sampled and may be skipped when full;
 /// phase and terminal events block until admitted and are never dropped. There
 /// is no eviction or gameplay miss path. At most eight events are integrated in
-/// one frame, and the focused worker-progress benchmark reports queue/frame
-/// cost, allocation churn, and eventual drain behavior.
+/// one frame.
 pub(crate) const PROGRESS_QUEUE_CAPACITY: usize = 32;
 pub(crate) const PROGRESS_EVENTS_PER_FRAME: usize = 8;
 const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(16);
@@ -404,59 +403,6 @@ fn replaygain_music_paths_from_packs(
     paths.into_iter().map(Path::to_path_buf).collect()
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_replaygain_paths_reference(
-    packs: &[deadsync_chart::SongPack],
-    restrict_to: Option<&[PathBuf]>,
-) -> Vec<PathBuf> {
-    let mut paths = std::collections::BTreeSet::new();
-    for pack in packs {
-        for song in &pack.songs {
-            if let Some(path) = song.music_path.as_ref() {
-                if let Some(dirs) = restrict_to
-                    && !dirs.iter().any(|dir| path.starts_with(dir))
-                {
-                    continue;
-                }
-                paths.insert(path.clone());
-            }
-        }
-    }
-    paths.into_iter().collect()
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_replaygain_paths(
-    packs: &[deadsync_chart::SongPack],
-    restrict_to: Option<&[PathBuf]>,
-) -> Vec<PathBuf> {
-    replaygain_music_paths_from_packs(packs, restrict_to)
-}
-
-#[cfg(feature = "bench-support")]
-pub fn benchmark_sample_progress<T>(
-    samples: &[(usize, usize, Duration)],
-    mut make_event: impl FnMut(usize, usize) -> T,
-) -> Vec<T> {
-    let start = Instant::now();
-    let mut gate = ProgressGate::default();
-    samples
-        .iter()
-        .filter_map(|&(done, total, elapsed)| {
-            gate.should_emit_at(done, total, start + elapsed)
-                .then(|| make_event(done, total))
-        })
-        .collect()
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_receive_ready<T>(rx: &Receiver<T>) -> SmallVec<[T; PROGRESS_EVENTS_PER_FRAME]> {
-    receive_ready(rx).events
-}
-
 fn artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
     let course_capacity = deadsync_simfile::runtime_cache::get_course_cache().len();
     let (mut banner, cdtitle) = {
@@ -513,35 +459,6 @@ fn artwork_cache_paths_from_packs(
         }
     }
     (banner, cdtitle)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_artwork_paths_reference(
-    packs: &[deadsync_chart::SongPack],
-) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    let mut banner = Vec::new();
-    let mut cdtitle = Vec::new();
-    for pack in packs {
-        if let Some(path) = pack.banner_path.as_ref() {
-            banner.push(path.clone());
-        }
-        for song in &pack.songs {
-            if let Some(path) = song.banner_path.as_ref() {
-                banner.push(path.clone());
-            }
-            if let Some(path) = song.cdtitle_path.as_ref() {
-                cdtitle.push(path.clone());
-            }
-        }
-    }
-    (banner, cdtitle)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_artwork_paths(packs: &[deadsync_chart::SongPack]) -> (Vec<PathBuf>, Vec<PathBuf>) {
-    artwork_cache_paths_from_packs(packs, 0)
 }
 
 pub(crate) fn cache_progress_lines(path: Option<&Path>) -> (String, String) {
@@ -626,60 +543,6 @@ fn file_stem_owned(path: &Path, file_name: &str) -> String {
         .and_then(|name| name.to_str())
         .unwrap_or(file_name)
         .to_owned()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn benchmark_progress_fallback_reference(path: &Path) -> (String, String) {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("");
-    let file_stem = path
-        .file_stem()
-        .and_then(|name| name.to_str())
-        .unwrap_or(file_name)
-        .to_owned();
-    let parts: Vec<_> = path
-        .components()
-        .filter_map(|component| match component {
-            std::path::Component::Normal(name) => name.to_str(),
-            _ => None,
-        })
-        .collect();
-    if let Some(index) = parts
-        .iter()
-        .position(|part| part.eq_ignore_ascii_case("songs"))
-        && let Some(pack) = parts.get(index + 1)
-    {
-        let song = parts
-            .get(index + 2)
-            .copied()
-            .filter(|name| !name.eq_ignore_ascii_case(file_name))
-            .map(str::to_owned)
-            .unwrap_or(file_stem);
-        return ((*pack).to_owned(), song);
-    }
-    if let Some(index) = parts
-        .iter()
-        .position(|part| part.eq_ignore_ascii_case("courses"))
-        && let Some(group) = parts.get(index + 1)
-    {
-        return ((*group).to_owned(), file_stem);
-    }
-    let parent = path
-        .parent()
-        .and_then(|path| path.file_name())
-        .and_then(|name| name.to_str())
-        .unwrap_or("")
-        .to_owned();
-    (parent, file_stem)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_progress_fallback(path: &Path) -> (String, String) {
-    cache_progress_fallback(path)
 }
 
 fn song_cache_progress_lines(path: &Path) -> Option<(String, String)> {
@@ -806,65 +669,7 @@ fn validated_song_dir(simfile_path: &Path, song_scan_roots: &[PathBuf]) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::{SongData, SongPack, SyncPref};
-    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn cached_song(
-        simfile: &str,
-        music: Option<&str>,
-        banner: Option<&str>,
-        cdtitle: Option<&str>,
-    ) -> Arc<SongData> {
-        Arc::new(SongData {
-            simfile_path: PathBuf::from(simfile),
-            title: String::new(),
-            subtitle: String::new(),
-            translit_title: String::new(),
-            translit_subtitle: String::new(),
-            artist: String::new(),
-            translit_artist: String::new(),
-            genre: String::new(),
-            banner_path: banner.map(PathBuf::from),
-            background_path: None,
-            background_changes: Vec::new(),
-            background_layer2_changes: Vec::new(),
-            foreground_changes: Vec::new(),
-            background_lua_changes: Vec::new(),
-            foreground_lua_changes: Vec::new(),
-            has_lua: false,
-            cdtitle_path: cdtitle.map(PathBuf::from),
-            music_path: music.map(PathBuf::from),
-            display_bpm: String::new(),
-            offset: 0.0,
-            sample_start: None,
-            sample_length: None,
-            min_bpm: 0.0,
-            max_bpm: 0.0,
-            normalized_bpms: String::new(),
-            music_length_seconds: 0.0,
-            first_second: 0.0,
-            total_length_seconds: 0,
-            precise_last_second_seconds: 0.0,
-            charts: Vec::new(),
-        })
-    }
-
-    fn cached_pack(group: &str, banner: Option<&str>, songs: Vec<Arc<SongData>>) -> SongPack {
-        SongPack {
-            group_name: group.to_owned(),
-            name: group.to_owned(),
-            sort_title: String::new(),
-            translit_title: String::new(),
-            series: String::new(),
-            folder_series: String::new(),
-            year: 0,
-            sync_pref: SyncPref::Default,
-            directory: PathBuf::from("Songs").join(group),
-            banner_path: banner.map(PathBuf::from),
-            songs,
-        }
-    }
 
     fn test_dir(name: &str) -> PathBuf {
         let nonce = SystemTime::now()
@@ -998,95 +803,5 @@ mod tests {
             cache_progress_lines(Some(Path::new("Cache/banner.png"))),
             ("Cache".to_owned(), "banner".to_owned())
         );
-    }
-
-    #[test]
-    fn dense_replaygain_collection_matches_tree_reference() {
-        let packs = vec![
-            cached_pack(
-                "Pack B",
-                None,
-                vec![
-                    cached_song(
-                        "Songs/Pack B/Song 2/song.ssc",
-                        Some("Songs/Pack B/Song 2/music.ogg"),
-                        None,
-                        None,
-                    ),
-                    cached_song(
-                        "Songs/Pack B/Song 1/song.ssc",
-                        Some("Songs/Shared/music.ogg"),
-                        None,
-                        None,
-                    ),
-                ],
-            ),
-            cached_pack(
-                "Pack A",
-                None,
-                vec![
-                    cached_song(
-                        "Songs/Pack A/Song 1/song.ssc",
-                        Some("Songs/Shared/music.ogg"),
-                        None,
-                        None,
-                    ),
-                    cached_song("Songs/Pack A/Song 2/song.ssc", None, None, None),
-                ],
-            ),
-        ];
-        let restricted = vec![PathBuf::from("Songs/Pack B")];
-        for restriction in [None, Some(restricted.as_slice()), Some(&[][..])] {
-            assert_eq!(
-                replaygain_music_paths_from_packs(&packs, restriction),
-                benchmark_replaygain_paths_reference(&packs, restriction)
-            );
-        }
-    }
-
-    #[test]
-    fn reserved_artwork_collection_matches_growing_reference() {
-        let packs = vec![cached_pack(
-            "Pack",
-            Some("Songs/Pack/banner.png"),
-            vec![
-                cached_song(
-                    "Songs/Pack/Song 1/song.ssc",
-                    None,
-                    Some("Songs/Pack/Song 1/banner.png"),
-                    Some("Songs/Pack/Song 1/cdtitle.png"),
-                ),
-                cached_song(
-                    "Songs/Pack/Song 2/song.ssc",
-                    None,
-                    None,
-                    Some("Songs/Pack/Song 2/cdtitle.png"),
-                ),
-            ],
-        )];
-        assert_eq!(
-            artwork_cache_paths_from_packs(&packs, 0),
-            benchmark_artwork_paths_reference(&packs)
-        );
-    }
-
-    #[test]
-    fn streaming_progress_fallback_matches_component_vector_reference() {
-        for path in [
-            Path::new("Songs/Pack/Song/banner.png"),
-            Path::new("Songs/Pack/banner.png"),
-            Path::new("Courses/Group/course-banner.png"),
-            Path::new("Courses/Outer/Songs/Pack/Song/music.ogg"),
-            Path::new("Courses/Group/Songs"),
-            Path::new("Cache/banner.png"),
-            Path::new("single-file.png"),
-            Path::new("Songs/Café/Défi/background.png"),
-        ] {
-            assert_eq!(
-                cache_progress_fallback(path),
-                benchmark_progress_fallback_reference(path),
-                "path={path:?}"
-            );
-        }
     }
 }

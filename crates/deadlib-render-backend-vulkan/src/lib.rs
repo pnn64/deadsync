@@ -184,8 +184,7 @@ enum InstanceBinding {
 /// The render thread owns this fixed scalar state. It starts cold for each
 /// command buffer, emits a command on a slot-kind miss, and is dropped after
 /// recording. It has no heap capacity, eviction, pruning, or deferred
-/// destruction; every query is constant time. The fixed fields and backend
-/// command benchmark provide its instrumentation.
+/// destruction; every query is constant time.
 #[derive(Debug, Default)]
 struct VertexBindingCache {
     instance: Option<InstanceBinding>,

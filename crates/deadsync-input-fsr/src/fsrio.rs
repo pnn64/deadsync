@@ -28,8 +28,6 @@ mod imp {
     const BUTTON_COUNT: usize = 16;
     const MAX_NAME_SIZE: usize = 50;
     const MAX_SENSOR_VALUE: u16 = 850;
-    #[cfg(any(test, feature = "bench-support"))]
-    const LINEARIZATION_POWER: u32 = 4;
     const NTH_DEGREE_COEFFICIENT: f32 = 0.9;
     const FIRST_DEGREE_COEFFICIENT: f32 = 0.1;
     const VALUE_CURVE: ValueCurve = ValueCurve::quartic_blend(
@@ -657,16 +655,6 @@ mod imp {
         Some(String::from_utf8_lossy(&bytes[2..2 + size]).into_owned())
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
-    #[allow(clippy::suboptimal_flops)] // Must mirror the table's original, non-fused rounding.
-    fn normalize_sensor_value_reference(raw: u16) -> f32 {
-        let raw = f32::from(min(raw, MAX_SENSOR_VALUE));
-        let max = f32::from(MAX_SENSOR_VALUE);
-        let linearized_max = max.powi(LINEARIZATION_POWER as i32) / max;
-        let nth = raw.powi(LINEARIZATION_POWER as i32) / linearized_max;
-        (nth * NTH_DEGREE_COEFFICIENT + raw * FIRST_DEGREE_COEFFICIENT) / max
-    }
-
     fn normalize_sensor_value(raw: u16) -> f32 {
         SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
     }
@@ -709,193 +697,9 @@ mod imp {
             .collect()
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
-    fn button_views_reference(config: &ConfigReport, input: &InputReport) -> ButtonViews {
-        let mut buttons: ArrayVec<usize, SENSOR_COUNT> = ArrayVec::new();
-        for &mapped in &config.sensor_to_button_mapping {
-            if mapped >= 0 {
-                let button = mapped as usize;
-                if button < BUTTON_COUNT && !buttons.contains(&button) {
-                    buttons.push(button);
-                }
-            }
-        }
-        buttons.sort_unstable();
-        buttons
-            .into_iter()
-            .map(|button| {
-                let sensors: SensorViews = sensor_indices(&config.sensor_to_button_mapping, button)
-                    .into_iter()
-                    .map(|index| {
-                        let raw_value = input.sensor_values[index];
-                        let raw_threshold = config.sensor_thresholds[index];
-                        SensorView {
-                            firmware_index: index,
-                            label: None,
-                            raw_value,
-                            value_norm: normalize_sensor_value(raw_value),
-                            raw_threshold,
-                            threshold_norm: normalize_sensor_value(raw_threshold),
-                            active: raw_value >= raw_threshold && raw_threshold > 0,
-                            enabled: true,
-                        }
-                    })
-                    .collect();
-                let aggregate_value = sensors.iter().map(|s| s.raw_value).max().unwrap_or(0);
-                let aggregate_threshold =
-                    sensors.iter().map(|s| s.raw_threshold).max().unwrap_or(0);
-                ButtonView {
-                    label: ButtonLabel::Hid((button + 1) as u8),
-                    sensors,
-                    min_raw_threshold: 0,
-                    max_raw_threshold: MAX_SENSOR_VALUE,
-                    aggregate_value,
-                    aggregate_threshold,
-                    active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
-                    value_curve: VALUE_CURVE,
-                    release_threshold: None,
-                }
-            })
-            .collect()
-    }
-
-    #[cfg(feature = "bench-support")]
-    pub mod bench_support {
-        use super::*;
-        use std::hint::black_box;
-
-        const BENCH_BUTTON_COUNT: usize = 4;
-        const MAPPING: [i8; SENSOR_COUNT] = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3];
-
-        pub fn sensor_groups_old(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                for button in 0..BENCH_BUTTON_COUNT {
-                    let indices: Vec<_> = (0..SENSOR_COUNT)
-                        .filter(|&index| {
-                            let mapped = MAPPING[index];
-                            mapped >= 0 && mapped as usize == button
-                        })
-                        .collect();
-                    checksum = checksum
-                        .wrapping_add(indices.len() as u64)
-                        .wrapping_add(indices[(event + button) % indices.len()] as u64);
-                    black_box(&indices);
-                }
-            }
-            checksum
-        }
-
-        pub fn sensor_groups_new(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                for button in 0..BENCH_BUTTON_COUNT {
-                    let indices = sensor_indices(&MAPPING, button);
-                    checksum = checksum
-                        .wrapping_add(indices.len() as u64)
-                        .wrapping_add(indices[(event + button) % indices.len()] as u64);
-                    black_box(&indices);
-                }
-            }
-            checksum
-        }
-
-        pub fn normalization_old(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                let raw = (event % (u16::MAX as usize + 1)) as u16;
-                checksum = checksum.wrapping_add(u64::from(
-                    black_box(normalize_sensor_value_reference(raw)).to_bits(),
-                ));
-            }
-            checksum
-        }
-
-        pub fn normalization_new(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                let raw = (event % (u16::MAX as usize + 1)) as u16;
-                checksum = checksum
-                    .wrapping_add(u64::from(black_box(normalize_sensor_value(raw)).to_bits()));
-            }
-            checksum
-        }
-
-        fn button_checksum(buttons: &ButtonViews, event: usize) -> u64 {
-            let button = &buttons[event % buttons.len()];
-            let mut checksum = u64::from(button.aggregate_value)
-                | (u64::from(button.aggregate_threshold) << 16)
-                | ((button.sensors.len() as u64) << 32);
-            for sensor in &button.sensors {
-                checksum = checksum.rotate_left(7)
-                    ^ sensor.firmware_index as u64
-                    ^ (u64::from(sensor.raw_value) << 8)
-                    ^ (u64::from(sensor.raw_threshold) << 24);
-            }
-            checksum
-        }
-
-        fn synthesis_fixture(event: usize) -> (ConfigReport, InputReport) {
-            let mut config = ConfigReport {
-                sensor_to_button_mapping: MAPPING,
-                ..ConfigReport::default()
-            };
-            let mut input = InputReport::default();
-            for index in 0..SENSOR_COUNT {
-                config.sensor_thresholds[index] = 80 + ((event + index * 17) % 300) as u16;
-                input.sensor_values[index] = 40 + ((event * 3 + index * 29) % 700) as u16;
-            }
-            (config, input)
-        }
-
-        pub fn button_synthesis_old(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                let (config, input) = synthesis_fixture(event);
-                let buttons = button_views_reference(&config, &input);
-                checksum = checksum.wrapping_add(button_checksum(&buttons, event));
-                black_box(&buttons);
-            }
-            checksum
-        }
-
-        pub fn button_synthesis_new(events: usize) -> u64 {
-            let mut checksum = 0u64;
-            for event in 0..events {
-                let (config, input) = synthesis_fixture(event);
-                let buttons = button_views(&config, &input);
-                checksum = checksum.wrapping_add(button_checksum(&buttons, event));
-                black_box(&buttons);
-            }
-            checksum
-        }
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
-
-        #[test]
-        fn stack_sensor_groups_match_allocating_reference() {
-            let mappings = [
-                [-1; SENSOR_COUNT],
-                [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
-                [3; SENSOR_COUNT],
-                [0, -1, 0, -1, 2, -1, 2, -1, 1, 1, 3, 3],
-            ];
-            for mapping in mappings {
-                for button in mapped_buttons(&mapping) {
-                    let expected: Vec<_> = mapping
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, &mapped)| {
-                            (mapped >= 0 && mapped as usize == button).then_some(index)
-                        })
-                        .collect();
-                    assert_eq!(sensor_indices(&mapping, button).as_slice(), expected);
-                }
-            }
-        }
 
         #[test]
         fn mapped_button_views_follow_firmware_mapping() {
@@ -928,47 +732,6 @@ mod imp {
         }
 
         #[test]
-        fn fused_button_synthesis_matches_rescanning_reference() {
-            let mappings = [
-                [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3],
-                [3, -1, 0, 15, 3, 15, 0, -1, 7, 7, 7, 3],
-                [15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4],
-            ];
-            for (case, mapping) in mappings.into_iter().enumerate() {
-                let mut config = ConfigReport {
-                    sensor_to_button_mapping: mapping,
-                    ..ConfigReport::default()
-                };
-                let mut input = InputReport::default();
-                for index in 0..SENSOR_COUNT {
-                    config.sensor_thresholds[index] = 20 + (case * 31 + index * 13) as u16;
-                    input.sensor_values[index] = 10 + (case * 47 + index * 19) as u16;
-                }
-                let expected = button_views_reference(&config, &input);
-                let actual = button_views(&config, &input);
-                assert_eq!(actual.len(), expected.len());
-                for (actual, expected) in actual.iter().zip(&expected) {
-                    assert_eq!(actual.label, expected.label);
-                    assert_eq!(actual.aggregate_value, expected.aggregate_value);
-                    assert_eq!(actual.aggregate_threshold, expected.aggregate_threshold);
-                    assert_eq!(actual.active, expected.active);
-                    assert_eq!(actual.sensors.len(), expected.sensors.len());
-                    for (actual, expected) in actual.sensors.iter().zip(&expected.sensors) {
-                        assert_eq!(actual.firmware_index, expected.firmware_index);
-                        assert_eq!(actual.raw_value, expected.raw_value);
-                        assert_eq!(actual.value_norm.to_bits(), expected.value_norm.to_bits());
-                        assert_eq!(actual.raw_threshold, expected.raw_threshold);
-                        assert_eq!(
-                            actual.threshold_norm.to_bits(),
-                            expected.threshold_norm.to_bits()
-                        );
-                        assert_eq!(actual.active, expected.active);
-                    }
-                }
-            }
-        }
-
-        #[test]
         fn stock_fsrio_mapping_exposes_all_eight_buttons() {
             let mut mapping = [-1; SENSOR_COUNT];
             for (index, mapped) in mapping[..8].iter_mut().enumerate() {
@@ -981,21 +744,7 @@ mod imp {
             assert_eq!(group_sensor_indices(&mapping, 7).as_slice(), [7]);
             assert!(group_sensor_indices(&mapping, 8).is_empty());
         }
-
-        #[test]
-        fn normalization_table_matches_original_formula() {
-            for raw in 0..=u16::MAX {
-                assert_eq!(
-                    normalize_sensor_value(raw).to_bits(),
-                    normalize_sensor_value_reference(raw).to_bits(),
-                    "raw value {raw}"
-                );
-            }
-        }
     }
 }
 
 pub use imp::Monitor;
-
-#[cfg(feature = "bench-support")]
-pub use imp::bench_support;

@@ -7,13 +7,7 @@ use crate::transforms::{
 use crate::{
     ModelMeshCache, itg_actor_glow_alpha, noteskin_model_flat_draw_cached, song_lua_note_model_draw,
 };
-#[cfg(test)]
-use crate::{actor_with_world_z, noteskin_model_actor_from_draw_cached};
-#[cfg(test)]
-use deadlib_present::actors::Actor;
 use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
-#[cfg(test)]
-use deadlib_present::dsl::SpriteBuilder;
 use deadlib_render_core::BlendMode;
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::song_time::SongTimeNs;
@@ -25,24 +19,6 @@ use deadsync_noteskin::{
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
-/// Internal inputs for the white ITG Actor glow pass of a note layer.
-#[cfg(test)]
-struct NoteGlowRequest<'a, S> {
-    slot: &'a S,
-    draw: ModelDrawState,
-    model_center: [f32; 2],
-    sprite_center: [f32; 2],
-    size: [f32; 2],
-    uv: [f32; 4],
-    rotation_y_deg: f32,
-    model_rotation_z_deg: f32,
-    sprite_rotation_z_deg: f32,
-    alpha: f32,
-    blend: BlendMode,
-    z: i16,
-    world_z: f32,
-    prefer_sprite: bool,
-}
 /// Canonical inputs for one complete noteskin layer, including its diffuse and
 /// white ITG Actor glow passes.
 pub(crate) struct NoteLayerRequest<'a, S> {
@@ -608,153 +584,6 @@ fn compose_flat_mine_slot<S, F, Z>(
     );
 }
 
-/// Appends one note layer's diffuse pass followed by its optional glow pass.
-/// Concrete asset owners inject the sprite source so cached texture handles
-/// remain outside the canonical notefield crate.
-#[cfg(test)]
-pub(crate) fn compose_note_layer<S, F>(
-    actors: &mut Vec<Actor>,
-    model_cache: &mut ModelMeshCache,
-    request: NoteLayerRequest<'_, S>,
-    sprite_source: &F,
-) where
-    S: NoteskinSlot,
-    F: Fn(&S) -> SpriteSource,
-{
-    if !request.prefer_sprite
-        && let Some(actor) = noteskin_model_actor_from_draw_cached(
-            request.slot,
-            request.draw,
-            request.model_center,
-            request.size,
-            request.uv,
-            request.model_rotation_z_deg,
-            request.tint,
-            request.blend,
-            request.z,
-            model_cache,
-        )
-    {
-        actors.push(actor_with_world_z(actor, request.world_z));
-    } else {
-        let mut actor = SpriteBuilder::with_source(sprite_source(request.slot));
-        actor.align(0.5, 0.5);
-        actor.xy(request.sprite_center[0], request.sprite_center[1]);
-        actor.size(request.size[0], request.size[1]);
-        actor.zoomx(if request.slot.sprite_def().mirror_h {
-            -1.0
-        } else {
-            1.0
-        });
-        actor.zoomy(if request.slot.sprite_def().mirror_v {
-            -1.0
-        } else {
-            1.0
-        });
-        actor.rotationy(request.rotation_y_deg);
-        actor.rotationz(request.sprite_rotation_z_deg);
-        actor.customtexturerect(request.uv);
-        actor.fadeleft(request.draw.fade[0]);
-        actor.faderight(request.draw.fade[1]);
-        actor.fadetop(request.draw.fade[2]);
-        actor.fadebottom(request.draw.fade[3]);
-        actor.diffuse(request.tint);
-        actor.blend(request.blend);
-        actor.z(request.z);
-        actors.push(actor_with_world_z(actor.build(0), request.world_z));
-    }
-
-    compose_note_glow(
-        actors,
-        model_cache,
-        NoteGlowRequest {
-            slot: request.slot,
-            draw: request.draw,
-            model_center: request.model_center,
-            sprite_center: request.sprite_center,
-            size: request.size,
-            uv: request.uv,
-            rotation_y_deg: request.rotation_y_deg,
-            model_rotation_z_deg: request.model_rotation_z_deg,
-            sprite_rotation_z_deg: request.sprite_rotation_z_deg,
-            alpha: request.glow_alpha,
-            blend: request.blend,
-            z: request.z,
-            world_z: request.world_z,
-            prefer_sprite: request.prefer_sprite,
-        },
-        sprite_source,
-    );
-}
-
-/// Appends one note layer's glow pass, preserving model fallback and actor order.
-#[cfg(test)]
-fn compose_note_glow<S, F>(
-    actors: &mut Vec<Actor>,
-    model_cache: &mut ModelMeshCache,
-    request: NoteGlowRequest<'_, S>,
-    sprite_source: &F,
-) where
-    S: NoteskinSlot,
-    F: Fn(&S) -> SpriteSource,
-{
-    let glow_alpha = itg_actor_glow_alpha(request.alpha);
-    if glow_alpha <= f32::EPSILON {
-        return;
-    }
-    if !request.prefer_sprite
-        && let Some(mut actor) = noteskin_model_actor_from_draw_cached(
-            request.slot,
-            request.draw,
-            request.model_center,
-            request.size,
-            request.uv,
-            request.model_rotation_z_deg,
-            [1.0, 1.0, 1.0, 0.0],
-            request.blend,
-            request.z,
-            model_cache,
-        )
-    {
-        if let Actor::TexturedMesh { glow, .. } = &mut actor {
-            *glow = [1.0, 1.0, 1.0, glow_alpha];
-        }
-        actors.push(actor_with_world_z(actor, request.world_z));
-        return;
-    }
-
-    let mut actor = SpriteBuilder::with_source(sprite_source(request.slot));
-    actor.align(0.5, 0.5);
-    actor.xy(request.sprite_center[0], request.sprite_center[1]);
-    actor.size(request.size[0], request.size[1]);
-    actor.zoomx(if request.slot.sprite_def().mirror_h {
-        -1.0
-    } else {
-        1.0
-    });
-    actor.zoomy(if request.slot.sprite_def().mirror_v {
-        -1.0
-    } else {
-        1.0
-    });
-    actor.rotationy(request.rotation_y_deg);
-    actor.rotationz(request.sprite_rotation_z_deg);
-    actor.customtexturerect(request.uv);
-    actor.fadeleft(request.draw.fade[0]);
-    actor.faderight(request.draw.fade[1]);
-    actor.fadetop(request.draw.fade[2]);
-    actor.fadebottom(request.draw.fade[3]);
-    actor.diffuse([1.0, 1.0, 1.0, 0.0]);
-    actor.glow([1.0, 1.0, 1.0, glow_alpha]);
-    actor.blend(if request.draw.blend_add {
-        BlendMode::Add
-    } else {
-        BlendMode::Alpha
-    });
-    actor.z(request.z);
-    actors.push(actor_with_world_z(actor.build(0), request.world_z));
-}
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ScrollTravelRequest<'a> {
     pub timing: &'a TimingData,
@@ -931,17 +760,7 @@ impl ScrollTravel<'_> {
         }
     }
 
-    #[must_use]
-    pub fn raw_note(&self, note: &Note, use_hold_end: bool) -> f32 {
-        let beat = if use_hold_end {
-            note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat)
-        } else {
-            note.beat
-        };
-        self.raw_beat(beat)
-    }
-
-    pub(crate) fn raw_note_cached(
+    pub(crate) fn raw_note(
         &self,
         note: &Note,
         use_hold_end: bool,
@@ -986,7 +805,12 @@ impl ScrollTravel<'_> {
                 displayed_speed_percent,
             );
         }
-        self.raw_note(note, use_hold_end)
+        let beat = if use_hold_end {
+            note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat)
+        } else {
+            note.beat
+        };
+        self.raw_beat(beat)
     }
 
     #[inline(always)]
@@ -1227,24 +1051,6 @@ fn random_speed_mult_from_lane_seed(lane_seed: u32, note_row: i32, amount: f32) 
 pub(crate) fn note_itg_row(note: &Note) -> i32 {
     beat_to_note_row(note.beat)
 }
-
-#[cfg(test)]
-pub(crate) fn lane_window_bounds_by_note_row<I: Copy + Into<usize>>(
-    note_itg_rows: &[i32],
-    indices: &[I],
-    range: Option<(i32, i32)>,
-) -> Option<(usize, usize)> {
-    let (low, high) = range?;
-    if high < 0 {
-        return Some((0, 0));
-    }
-    let low = low.max(0);
-    Some((
-        indices.partition_point(|&note_index| note_itg_rows[note_index.into()] < low),
-        indices.partition_point(|&note_index| note_itg_rows[note_index.into()] <= high),
-    ))
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct LaneWindowCursor {
     pub start: usize,
@@ -1272,31 +1078,6 @@ pub(crate) fn lane_window_bounds_by_note_row_from_cursor<I: Copy + Into<usize>>(
     });
     Some((cursor.start, cursor.end))
 }
-
-#[cfg(test)]
-pub(crate) fn lane_hold_window_bounds_by_note_row<I: Copy + Into<usize>>(
-    notes: &[Note],
-    note_itg_rows: &[i32],
-    indices: &[I],
-    range: Option<(i32, i32)>,
-) -> Option<(usize, usize)> {
-    let (low, _) = range?;
-    let (mut start, end) = lane_window_bounds_by_note_row(note_itg_rows, indices, range)?;
-    let low = low.max(0);
-    while start > 0 {
-        let prev_note_index = indices[start - 1].into();
-        let prev_end_row = notes[prev_note_index].hold.as_ref().map_or_else(
-            || note_itg_row(&notes[prev_note_index]),
-            |hold| beat_to_note_row(hold.end_beat),
-        );
-        if prev_end_row < low {
-            break;
-        }
-        start -= 1;
-    }
-    Some((start, end))
-}
-
 pub(crate) fn lane_hold_window_bounds_by_note_row_from_cursor<I: Copy + Into<usize>>(
     notes: &[Note],
     note_itg_rows: &[i32],
@@ -1334,54 +1115,6 @@ pub(crate) fn for_each_lane_index<F: FnMut(usize)>(
         f(index.get());
     }
 }
-
-#[cfg(test)]
-pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
-    indices: &[usize],
-    note_itg_rows: &[i32],
-    range: Option<(i32, i32)>,
-    mut f: F,
-) {
-    let Some((low, high)) = range else {
-        for &i in indices {
-            f(i);
-        }
-        return;
-    };
-    let Some((start, end)) =
-        lane_window_bounds_by_note_row(note_itg_rows, indices, Some((low, high)))
-    else {
-        return;
-    };
-    for &i in &indices[start..end] {
-        f(i);
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
-    indices: &[usize],
-    notes: &[Note],
-    note_itg_rows: &[i32],
-    range: Option<(i32, i32)>,
-    mut f: F,
-) {
-    let Some((low, high)) = range else {
-        for &i in indices {
-            f(i);
-        }
-        return;
-    };
-    let Some((start, end)) =
-        lane_hold_window_bounds_by_note_row(notes, note_itg_rows, indices, Some((low, high)))
-    else {
-        return;
-    };
-    for &i in &indices[start..end] {
-        f(i);
-    }
-}
-
 pub(crate) fn hold_overlaps_visible_window(
     note_index: usize,
     notes: &[Note],
@@ -1426,23 +1159,14 @@ fn note_count_cutoff_beat(stats: &[NoteCountStat], high: NoteCountStat) -> Optio
     }
 }
 
-pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
+#[cfg(test)]
+pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     current_beat: f32,
     draw_distance: f32,
     stats: &[NoteCountStat],
     y_for_beat: F,
 ) -> Option<f32> {
     find_first_displayed_beat_inner(current_beat, draw_distance, stats, y_for_beat, false)
-}
-
-pub fn find_first_displayed_row<F: FnMut(f32) -> f32>(
-    current_beat: f32,
-    draw_distance: f32,
-    stats: &[NoteCountStat],
-    y_for_beat: F,
-) -> Option<i32> {
-    find_first_displayed_beat_inner(current_beat, draw_distance, stats, y_for_beat, true)
-        .map(beat_to_note_row)
 }
 
 fn find_first_displayed_beat_inner<F: FnMut(f32) -> f32>(
@@ -1493,24 +1217,6 @@ pub(crate) fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
         y_for_beat,
         false,
     )
-}
-
-pub fn find_last_displayed_row<F: FnMut(f32) -> (f32, bool)>(
-    current_beat: f32,
-    draw_distance: f32,
-    displayed_speed_percent: f32,
-    boomerang: bool,
-    y_for_beat: F,
-) -> Option<i32> {
-    find_last_displayed_beat_inner(
-        current_beat,
-        draw_distance,
-        displayed_speed_percent,
-        boomerang,
-        y_for_beat,
-        true,
-    )
-    .map(beat_to_note_row)
 }
 
 fn find_last_displayed_beat_inner<F: FnMut(f32) -> (f32, bool)>(
@@ -1566,18 +1272,14 @@ use crate::style::MAX_NOTES_AFTER;
 #[cfg(test)]
 mod tests {
     use super::{
-        MineLayerRequest, NoteGlowRequest, NoteLayerRequest, ScrollTravelRequest,
-        compose_flat_mine_layers, compose_flat_note_layer, compose_note_glow, compose_note_layer,
-        find_first_displayed_beat, find_first_displayed_row, find_last_displayed_beat,
-        find_last_displayed_row, for_each_visible_hold_index, for_each_visible_note_index,
-        hold_overlaps_visible_window, random_speed_lane_seed, random_speed_seed,
+        LaneWindowCursor, MineLayerRequest, NoteLayerRequest, ScrollTravelRequest,
+        compose_flat_mine_layers, compose_flat_note_layer, hold_overlaps_visible_window,
+        lane_hold_window_bounds_by_note_row_from_cursor,
+        lane_window_bounds_by_note_row_from_cursor, random_speed_lane_seed, random_speed_seed,
         random_speed_seed_from_lane_seed, scroll_travel, song_time_ns_delta_seconds,
     };
-    use crate::{
-        AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
-        tipsy_y_extra,
-    };
-    use deadlib_present::actors::{Actor, FlatDraw, SizeSpec, SpriteSource};
+    use crate::{AccelYParams, ModelMeshCache, ModelMeshCacheStats, move_col_extra, tipsy_y_extra};
+    use deadlib_present::actors::{FlatDraw, SpriteSource};
     use deadlib_render_core::BlendMode;
     use deadsync_core::input::MAX_COLS;
     use deadsync_core::note::NoteType;
@@ -1585,11 +1287,10 @@ mod tests {
     use deadsync_noteskin::{
         ModelDrawState, ModelMesh, ModelVertex, NoteskinSlot, SpriteDefinition,
     };
-    use deadsync_rules::note::{HoldData, Note, NoteCountStat};
+    use deadsync_rules::note::{HoldData, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
-        DelaySegment, ScrollSegment, SpeedSegment, SpeedUnit, StopSegment, TimingData,
-        TimingSegments, WarpSegment,
+        ScrollSegment, SpeedSegment, SpeedUnit, TimingData, TimingSegments,
     };
     use std::cell::Cell;
     use std::sync::Arc;
@@ -1681,25 +1382,6 @@ mod tests {
         }
     }
 
-    fn glow_request(slot: &GlowSlot) -> NoteGlowRequest<'_, GlowSlot> {
-        NoteGlowRequest {
-            slot,
-            draw: ModelDrawState::default(),
-            model_center: [10.0, 20.0],
-            sprite_center: [30.0, 40.0],
-            size: [48.0, 56.0],
-            uv: [0.1, 0.2, 0.7, 0.8],
-            rotation_y_deg: 12.0,
-            model_rotation_z_deg: 23.0,
-            sprite_rotation_z_deg: 34.0,
-            alpha: 0.75,
-            blend: BlendMode::Add,
-            z: 140,
-            world_z: 9.0,
-            prefer_sprite: false,
-        }
-    }
-
     fn layer_request(slot: &GlowSlot) -> NoteLayerRequest<'_, GlowSlot> {
         NoteLayerRequest {
             slot,
@@ -1762,31 +1444,6 @@ mod tests {
         }
     }
 
-    fn full_precision_visible_range(
-        travel: &super::ScrollTravel<'_>,
-        draw_after: f32,
-        draw_before: f32,
-    ) -> Option<(i32, i32)> {
-        let first = find_first_displayed_beat(
-            travel.request.search_beat,
-            draw_after,
-            travel.request.note_count_stats,
-            |beat| travel.adjusted(travel.raw_beat(beat)),
-        );
-        let last = find_last_displayed_beat(
-            travel.request.search_beat,
-            draw_before,
-            travel.displayed_speed_percent,
-            travel.request.accel.boomerang > f32::EPSILON,
-            |beat| travel.adjusted_with_peak(travel.raw_beat(beat)),
-        );
-        first.zip(last).map(|(first, last)| {
-            let first_row = beat_to_note_row(first);
-            let last_row = beat_to_note_row(last.max(first)).max(first_row);
-            (first_row, last_row)
-        })
-    }
-
     fn assert_near(actual: f32, expected: f32) {
         assert!(
             (actual - expected).abs() <= 0.001,
@@ -1795,137 +1452,7 @@ mod tests {
     }
 
     #[test]
-    fn note_glow_skips_zero_alpha_before_resolving_sprite_source() {
-        let slot = GlowSlot::sprite();
-        let mut request = glow_request(&slot);
-        request.alpha = f32::NAN;
-        let mut actors = Vec::new();
-        let mut cache = ModelMeshCache::default();
-        let source_calls = Cell::new(0);
-
-        compose_note_glow(&mut actors, &mut cache, request, &|_| {
-            source_calls.set(source_calls.get() + 1);
-            SpriteSource::static_texture("unused")
-        });
-
-        assert!(actors.is_empty());
-        assert_eq!(source_calls.get(), 0);
-        assert_eq!(cache.stats(), ModelMeshCacheStats::default());
-    }
-
-    #[test]
-    fn note_glow_uses_cached_model_actor_and_preserves_layer_fields() {
-        let slot = GlowSlot::model();
-        let mut actors = Vec::new();
-        let mut cache = ModelMeshCache::with_capacity(1);
-        cache.begin_hit_stats(true);
-
-        for _ in 0..2 {
-            compose_note_glow(&mut actors, &mut cache, glow_request(&slot), &|_| {
-                panic!("model glow must not resolve a sprite source")
-            });
-        }
-
-        assert_eq!(actors.len(), 2);
-        assert_eq!(
-            cache.stats(),
-            ModelMeshCacheStats {
-                hits: 1,
-                misses: 1,
-                saturated_misses: 0,
-            }
-        );
-        let Actor::TexturedMesh {
-            offset,
-            world_z,
-            tint,
-            glow,
-            blend,
-            z,
-            ..
-        } = &actors[0]
-        else {
-            panic!("model-backed glow should emit a textured mesh");
-        };
-        assert_eq!(*offset, [10.0, 20.0]);
-        assert_eq!(*world_z, 9.0);
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
-        assert_eq!(*blend, BlendMode::Add);
-        assert_eq!(*z, 140);
-    }
-
-    #[test]
-    fn note_glow_prefer_sprite_uses_supplied_source_and_sprite_transform() {
-        let slot = GlowSlot::model();
-        let mut request = glow_request(&slot);
-        request.prefer_sprite = true;
-        let mut actors = Vec::new();
-        let mut cache = ModelMeshCache::default();
-        let source_calls = Cell::new(0);
-
-        compose_note_glow(&mut actors, &mut cache, request, &|_| {
-            source_calls.set(source_calls.get() + 1);
-            SpriteSource::static_texture("fast-path")
-        });
-
-        assert_eq!(source_calls.get(), 1);
-        assert_eq!(cache.stats(), ModelMeshCacheStats::default());
-        let Actor::Sprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            z,
-            uv_rect,
-            blend,
-            rot_y_deg,
-            rot_z_deg,
-            ..
-        } = &actors[0]
-        else {
-            panic!("preferred sprite glow should emit a sprite");
-        };
-        assert_eq!(*align, [0.5, 0.5]);
-        assert_eq!(*offset, [30.0, 40.0]);
-        assert_eq!(*world_z, 9.0);
-        assert!(matches!(size, [SizeSpec::Px(48.0), SizeSpec::Px(56.0)]));
-        assert_eq!(source.texture_key(), Some("fast-path"));
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
-        assert_eq!(*z, 140);
-        assert_eq!(*uv_rect, Some([0.1, 0.2, 0.7, 0.8]));
-        assert_eq!(*blend, BlendMode::Alpha);
-        assert_eq!(*rot_y_deg, 12.0);
-        assert_eq!(*rot_z_deg, 34.0);
-    }
-
-    #[test]
-    fn note_glow_sprite_uses_authored_additive_blend() {
-        let slot = GlowSlot::sprite();
-        let mut request = glow_request(&slot);
-        request.draw.blend_add = true;
-        let mut actors = Vec::new();
-        let mut cache = ModelMeshCache::default();
-
-        compose_note_glow(&mut actors, &mut cache, request, &|_| {
-            SpriteSource::static_texture("additive")
-        });
-
-        assert!(matches!(
-            actors.as_slice(),
-            [Actor::Sprite {
-                blend: BlendMode::Add,
-                ..
-            }]
-        ));
-    }
-
-    #[test]
-    fn note_layer_sprite_preserves_diffuse_then_glow_and_additive_blend() {
+    fn flat_note_layer_emits_diffuse_then_glow() {
         let mut slot = GlowSlot::sprite();
         slot.def.mirror_h = true;
         slot.def.mirror_v = true;
@@ -1933,167 +1460,47 @@ mod tests {
         request.draw.blend_add = true;
         request.draw.fade = [0.1, 0.2, 0.3, 0.4];
         request.blend = BlendMode::Add;
-        let mut actors = Vec::new();
-        let mut cache = ModelMeshCache::default();
-
-        compose_note_layer(&mut actors, &mut cache, request, &|_| {
-            SpriteSource::static_texture("additive-layer")
-        });
-
-        assert_eq!(actors.len(), 2);
-        let Actor::Sprite {
-            source,
-            tint,
-            glow,
-            blend,
-            world_z,
-            rot_y_deg,
-            rot_z_deg,
-            flip_x,
-            flip_y,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            ..
-        } = &actors[0]
-        else {
-            panic!("sprite-backed diffuse pass should emit a sprite");
-        };
-        assert_eq!(source.texture_key(), Some("additive-layer"));
-        assert_eq!(*tint, [0.2, 0.3, 0.4, 0.5]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*blend, BlendMode::Add);
-        assert_eq!(*world_z, 9.0);
-        assert_eq!(*rot_y_deg, 12.0);
-        assert_eq!(*rot_z_deg, 34.0);
-        assert!(*flip_x);
-        assert!(*flip_y);
-        assert_eq!(
-            [*fadeleft, *faderight, *fadetop, *fadebottom],
-            [0.1, 0.2, 0.3, 0.4]
-        );
-
-        let Actor::Sprite {
-            tint,
-            glow,
-            blend,
-            world_z,
-            flip_x,
-            flip_y,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            ..
-        } = &actors[1]
-        else {
-            panic!("sprite-backed glow pass should follow the diffuse pass");
-        };
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
-        assert_eq!(*blend, BlendMode::Add);
-        assert_eq!(*world_z, 9.0);
-        assert!(*flip_x);
-        assert!(*flip_y);
-        assert_eq!(
-            [*fadeleft, *faderight, *fadetop, *fadebottom],
-            [0.1, 0.2, 0.3, 0.4]
-        );
-    }
-
-    #[test]
-    fn flat_note_layer_preserves_legacy_sprite_payloads() {
-        let mut slot = GlowSlot::sprite();
-        slot.def.mirror_h = true;
-        slot.def.mirror_v = true;
-        let mut actor_request = layer_request(&slot);
-        actor_request.draw.blend_add = true;
-        actor_request.draw.fade = [0.1, 0.2, 0.3, 0.4];
-        actor_request.blend = BlendMode::Add;
-        let mut flat_request = layer_request(&slot);
-        flat_request.draw.blend_add = true;
-        flat_request.draw.fade = [0.1, 0.2, 0.3, 0.4];
-        flat_request.blend = BlendMode::Add;
         let source = |_: &GlowSlot| SpriteSource::static_texture("flat-layer");
-        let mut actors = Vec::new();
         let mut draws = Vec::new();
 
-        compose_note_layer(
-            &mut actors,
-            &mut ModelMeshCache::default(),
-            actor_request,
-            &source,
-        );
-        compose_flat_note_layer(
-            &mut draws,
-            &mut ModelMeshCache::default(),
-            flat_request,
-            &source,
-        );
+        compose_flat_note_layer(&mut draws, &mut ModelMeshCache::default(), request, &source);
 
-        assert_eq!(actors.len(), draws.len());
-        for (actor, draw) in actors.iter().zip(&draws) {
-            let Actor::Sprite {
-                align,
-                offset,
-                world_z,
-                size,
-                source,
-                tint,
-                glow,
-                z,
-                uv_rect,
-                flip_x,
-                flip_y,
-                fadeleft,
-                faderight,
-                fadetop,
-                fadebottom,
-                blend,
-                rot_y_deg,
-                rot_z_deg,
-                ..
-            } = actor
-            else {
-                panic!("legacy note layer should emit sprites");
-            };
-            let FlatDraw::Sprite(sprite) = draw else {
-                panic!("flat note layer should emit sprites");
-            };
-            assert_eq!(*align, [0.5, 0.5]);
-            assert_eq!(*offset, sprite.center);
-            assert_eq!(*world_z, sprite.world_z);
-            assert!(matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if [*w, *h] == sprite.size));
-            assert_eq!(source.texture_key(), sprite.source.texture_key());
-            assert_eq!(*tint, sprite.tint);
-            assert_eq!(*glow, sprite.glow);
-            assert_eq!(*z, sprite.z);
-            assert_eq!(*uv_rect, Some(sprite.uv_rect));
-            assert_eq!(*flip_x, sprite.flip_x);
-            assert_eq!(*flip_y, sprite.flip_y);
-            assert_eq!([*fadeleft, *faderight, *fadetop, *fadebottom], sprite.fade);
-            assert_eq!(*blend, sprite.blend);
-            assert_eq!(*rot_y_deg, sprite.rot_y_deg);
-            assert_eq!(*rot_z_deg, sprite.rot_z_deg);
-        }
+        let [FlatDraw::Sprite(diffuse), FlatDraw::Sprite(glow)] = draws.as_slice() else {
+            panic!("sprite note layer should emit diffuse and glow sprites");
+        };
+        assert_eq!(diffuse.center, [30.0, 40.0]);
+        assert_eq!(diffuse.world_z, 9.0);
+        assert_eq!(diffuse.size, [48.0, 56.0]);
+        assert_eq!(diffuse.source.texture_key(), Some("flat-layer"));
+        assert_eq!(diffuse.tint, [0.2, 0.3, 0.4, 0.5]);
+        assert_eq!(diffuse.glow, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(diffuse.uv_rect, [0.1, 0.2, 0.7, 0.8]);
+        assert!(diffuse.flip_x);
+        assert!(diffuse.flip_y);
+        assert_eq!(diffuse.fade, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(diffuse.blend, BlendMode::Add);
+        assert_eq!(diffuse.rot_y_deg, 12.0);
+        assert_eq!(diffuse.rot_z_deg, 34.0);
+        assert_eq!(diffuse.z, 140);
+        assert_eq!(glow.tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(glow.glow, [1.0, 1.0, 1.0, 0.75]);
+        assert_eq!(glow.blend, BlendMode::Add);
     }
 
     #[test]
     fn note_layer_model_reuses_cached_geometry_for_diffuse_and_glow() {
         let slot = GlowSlot::model();
-        let mut actors = Vec::new();
+        let mut draws = Vec::new();
         let mut cache = ModelMeshCache::with_capacity(1);
         cache.begin_hit_stats(true);
 
-        compose_note_layer(&mut actors, &mut cache, layer_request(&slot), &|_| {
-            panic!("model-backed note layer must not resolve a sprite source")
-        });
-        compose_note_layer(&mut actors, &mut cache, layer_request(&slot), &|_| {
-            panic!("cached model-backed note layer must not resolve a sprite source")
-        });
+        for _ in 0..2 {
+            compose_flat_note_layer(&mut draws, &mut cache, layer_request(&slot), &|_| {
+                panic!("model-backed note layer must not resolve a sprite source")
+            });
+        }
 
-        assert_eq!(actors.len(), 4);
+        assert_eq!(draws.len(), 4);
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -2102,30 +1509,21 @@ mod tests {
                 saturated_misses: 0,
             }
         );
-        let Actor::TexturedMesh {
-            offset,
-            tint,
-            glow,
-            blend,
-            world_z,
-            z,
-            ..
-        } = &actors[0]
-        else {
+        let FlatDraw::TexturedMesh(mesh) = &draws[0] else {
             panic!("model-backed diffuse pass should emit a textured mesh");
         };
-        assert_eq!(*offset, [10.0, 20.0]);
-        assert_eq!(*tint, [0.2, 0.3, 0.4, 0.5]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*blend, BlendMode::Alpha);
-        assert_eq!(*world_z, 9.0);
-        assert_eq!(*z, 140);
+        assert_eq!(mesh.offset, [10.0, 20.0]);
+        assert_eq!(mesh.tint, [0.2, 0.3, 0.4, 0.5]);
+        assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(mesh.blend, BlendMode::Alpha);
+        assert_eq!(mesh.world_z, 9.0);
+        assert_eq!(mesh.z, 140);
 
-        let Actor::TexturedMesh { tint, glow, .. } = &actors[1] else {
+        let FlatDraw::TexturedMesh(glow) = &draws[1] else {
             panic!("model-backed glow pass should follow the diffuse pass");
         };
-        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
+        assert_eq!(glow.tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(glow.glow, [1.0, 1.0, 1.0, 0.75]);
     }
 
     fn named_slot(mut slot: GlowSlot, key: &'static str) -> GlowSlot {
@@ -2448,100 +1846,6 @@ mod tests {
     }
 
     #[test]
-    fn cached_note_timing_values_match_queries_for_taps_and_hold_tails() {
-        let timing = TimingData::from_segments(
-            0.037,
-            -0.011,
-            &TimingSegments {
-                bpms: vec![(0.0, 120.0), (4.0, 173.0), (9.0, 91.0)],
-                stops: vec![StopSegment {
-                    beat: 5.0,
-                    duration: 0.125,
-                }],
-                delays: vec![DelaySegment {
-                    beat: 7.0,
-                    duration: 0.075,
-                }],
-                warps: vec![WarpSegment {
-                    beat: 10.0,
-                    length: 1.0,
-                }],
-                scrolls: vec![
-                    ScrollSegment {
-                        beat: 0.0,
-                        ratio: 1.0,
-                    },
-                    ScrollSegment {
-                        beat: 4.0,
-                        ratio: 0.5,
-                    },
-                    ScrollSegment {
-                        beat: 9.0,
-                        ratio: 1.75,
-                    },
-                ],
-                ..TimingSegments::default()
-            },
-            &[],
-        );
-        let travel = scroll_travel(request(&timing, ScrollSpeedSetting::CMod(725.0), 3.0));
-        let tap = note(8.0);
-        let held = hold(6.0, 13.0);
-
-        for (note, use_hold_end) in [(&tap, false), (&held, false), (&held, true)] {
-            let beat = if use_hold_end {
-                note.hold.as_ref().expect("hold fixture").end_beat
-            } else {
-                note.beat
-            };
-            let cached_time_ns = timing.get_time_for_beat_ns(beat);
-            assert_eq!(
-                travel
-                    .raw_note_cached(note, use_hold_end, Some(cached_time_ns), None)
-                    .to_bits(),
-                travel.raw_note(note, use_hold_end).to_bits(),
-            );
-            assert_eq!(
-                travel
-                    .raw_note_cached(note, use_hold_end, None, None)
-                    .to_bits(),
-                travel.raw_note(note, use_hold_end).to_bits(),
-            );
-        }
-
-        for speed in [
-            ScrollSpeedSetting::XMod(2.0),
-            ScrollSpeedSetting::MMod(600.0),
-        ] {
-            let beat_travel = scroll_travel(request(&timing, speed, 3.0));
-            for (note, use_hold_end) in [(&tap, false), (&held, false), (&held, true)] {
-                let beat = if use_hold_end {
-                    note.hold.as_ref().expect("hold fixture").end_beat
-                } else {
-                    note.beat
-                };
-                assert_eq!(
-                    beat_travel
-                        .raw_note_cached(
-                            note,
-                            use_hold_end,
-                            Some(i64::MAX),
-                            Some(timing.get_displayed_beat(beat)),
-                        )
-                        .to_bits(),
-                    beat_travel.raw_note(note, use_hold_end).to_bits(),
-                );
-                assert_eq!(
-                    beat_travel
-                        .raw_note_cached(note, use_hold_end, Some(i64::MAX), None)
-                        .to_bits(),
-                    beat_travel.raw_note(note, use_hold_end).to_bits(),
-                );
-            }
-        }
-    }
-
-    #[test]
     fn invalid_rate_and_reference_bpm_keep_existing_fallbacks() {
         let timing = timing();
         let mut cmod_request = request(&timing, ScrollSpeedSetting::CMod(600.0), 4.0);
@@ -2563,38 +1867,17 @@ mod tests {
         brake_request.accel.brake = 1.0;
         let brake = scroll_travel(brake_request);
         let raw = brake.raw_beat(1.0);
-        let expected = apply_accel_y(
-            raw,
-            0.0,
-            brake_request.effect_height,
-            brake_request.screen_height,
-            brake_request.accel,
-        ) * 2.0;
+        let expected = raw * (raw / brake_request.effect_height) * 2.0;
+        let pre_scaled = raw * 2.0 * (raw * 2.0 / brake_request.effect_height);
         assert_near(brake.adjusted(raw), expected);
-        assert_ne!(
-            brake.adjusted(raw),
-            apply_accel_y(
-                raw * 2.0,
-                0.0,
-                brake_request.effect_height,
-                brake_request.screen_height,
-                brake_request.accel,
-            )
-        );
+        assert_ne!(brake.adjusted(raw), pre_scaled);
 
         let mut boomerang_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 0.0);
         boomerang_request.accel.boomerang = 1.0;
         let boomerang = scroll_travel(boomerang_request);
         let raw = boomerang.raw_beat(10.0);
         let (adjusted, before_peak) = boomerang.adjusted_with_peak(raw);
-        let (expected, expected_before_peak) = crate::apply_accel_y_with_peak(
-            raw,
-            0.0,
-            boomerang_request.effect_height,
-            boomerang_request.screen_height,
-            boomerang_request.accel,
-        );
-        assert_eq!(before_peak, expected_before_peak);
+        let expected = 1.5f32.mul_add(raw, -raw * raw / boomerang_request.screen_height);
         assert!(!before_peak);
         assert_near(adjusted, expected * 2.0);
     }
@@ -2648,7 +1931,7 @@ mod tests {
     }
 
     #[test]
-    fn inactive_acceleration_cache_matches_the_canonical_formula() {
+    fn inactive_acceleration_options_select_identity_path() {
         let timing = timing();
         let mut travel_request = request(&timing, ScrollSpeedSetting::XMod(2.0), 4.0);
         travel_request.field_zoom = 0.75;
@@ -2661,139 +1944,16 @@ mod tests {
         };
         let travel = scroll_travel(travel_request);
         assert!(travel.accel_is_identity);
-        for raw in [-128.0, -0.0, 0.0, 160.0, 640.0, f32::NAN] {
-            let expected = apply_accel_y(
-                raw,
-                travel_request.elapsed_screen_s,
-                travel_request.effect_height,
-                travel_request.screen_height,
-                travel_request.accel,
-            ) * travel.post_accel_scale;
+        for raw in [-128.0, -0.0, 0.0, 160.0, 640.0] {
+            let expected = raw * travel.post_accel_scale;
             assert_eq!(travel.adjusted(raw).to_bits(), expected.to_bits());
-
-            let (expected, expected_before_peak) = crate::apply_accel_y_with_peak(
-                raw,
-                travel_request.elapsed_screen_s,
-                travel_request.effect_height,
-                travel_request.screen_height,
-                travel_request.accel,
-            );
             let (actual, actual_before_peak) = travel.adjusted_with_peak(raw);
-            assert_eq!(
-                actual.to_bits(),
-                (expected * travel.post_accel_scale).to_bits()
-            );
-            assert_eq!(actual_before_peak, expected_before_peak);
+            assert_eq!(actual.to_bits(), expected.to_bits());
+            assert!(actual_before_peak);
         }
 
         travel_request.accel.wave = f32::EPSILON * 2.0;
         assert!(!scroll_travel(travel_request).accel_is_identity);
-    }
-
-    #[test]
-    fn row_precision_search_matches_full_precision_boundaries() {
-        let stats = (0..4_096)
-            .map(|index| NoteCountStat {
-                beat: index as f32 * 0.25,
-                notes_lower: index * 2,
-                notes_upper: index * 2 + 2,
-            })
-            .collect::<Vec<_>>();
-        for current in [-2.0, 0.0, 0.1, 4.25, 63.5, 255.0, 1_023.0] {
-            for distance in [0.0, 1.0, 64.0, 320.0, 1_024.0] {
-                for slope in [0.25, 16.0, 48.0, 128.0] {
-                    let first = find_first_displayed_beat(current, distance, &stats, |beat| {
-                        (beat - current) * slope
-                    })
-                    .map(beat_to_note_row);
-                    let first_row = find_first_displayed_row(current, distance, &stats, |beat| {
-                        (beat - current) * slope
-                    });
-                    assert_eq!(first_row, first);
-
-                    for displayed_speed in [0.5, 0.75, 1.0] {
-                        for boomerang in [false, true] {
-                            let travel =
-                                |beat: f32| ((beat - current) * slope, beat <= current + 4.0);
-                            let last = find_last_displayed_beat(
-                                current,
-                                distance,
-                                displayed_speed,
-                                boomerang,
-                                travel,
-                            )
-                            .map(beat_to_note_row);
-                            let last_row = find_last_displayed_row(
-                                current,
-                                distance,
-                                displayed_speed,
-                                boomerang,
-                                travel,
-                            );
-                            assert_eq!(last_row, last);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn cmod_visible_range_matches_full_precision_with_timing_events() {
-        let timing = TimingData::from_segments(
-            0.0,
-            0.0,
-            &TimingSegments {
-                bpms: vec![(0.0, 120.0), (16.0, 180.0), (48.0, 90.0), (96.0, 240.0)],
-                stops: vec![StopSegment {
-                    beat: 32.0,
-                    duration: 0.5,
-                }],
-                delays: vec![DelaySegment {
-                    beat: 64.0,
-                    duration: 0.25,
-                }],
-                warps: vec![WarpSegment {
-                    beat: 80.0,
-                    length: 4.0,
-                }],
-                speeds: vec![SpeedSegment {
-                    beat: 0.0,
-                    ratio: 0.5,
-                    delay: 0.0,
-                    unit: SpeedUnit::Beats,
-                }],
-                ..TimingSegments::default()
-            },
-            &[],
-        );
-        let stats = (0..1_024)
-            .map(|index| NoteCountStat {
-                beat: index as f32 * 0.25,
-                notes_lower: index,
-                notes_upper: index + 1,
-            })
-            .collect::<Vec<_>>();
-        for beat in [-4.0, 0.0, 15.75, 32.0, 63.9, 80.0, 84.0, 127.0] {
-            for rate in [0.75, 1.0, 1.5] {
-                for boomerang in [0.0, 0.4] {
-                    let mut request = request(&timing, ScrollSpeedSetting::CMod(300.0), beat);
-                    request.music_rate = rate;
-                    request.accel.boomerang = boomerang;
-                    request.note_count_stats = &stats;
-                    let travel = scroll_travel(request);
-                    assert_eq!(
-                        travel.visible_row_range(),
-                        full_precision_visible_range(
-                            &travel,
-                            request.draw_distance_after_targets,
-                            request.draw_distance_before_targets,
-                        ),
-                        "beat={beat}, rate={rate}, boomerang={boomerang}",
-                    );
-                }
-            }
-        }
     }
 
     #[test]
@@ -2842,15 +2002,29 @@ mod tests {
             .map(|note| beat_to_note_row(note.beat))
             .collect::<Vec<_>>();
 
-        let mut taps = Vec::new();
-        for_each_visible_note_index(&[0, 1, 2], &note_itg_rows, Some(range), |i| taps.push(i));
-        assert_eq!(taps, vec![1]);
+        let note_indices = [0usize, 1, 2];
+        let note_bounds = lane_window_bounds_by_note_row_from_cursor(
+            &note_itg_rows,
+            &note_indices,
+            Some(range),
+            &mut LaneWindowCursor::default(),
+        )
+        .expect("finite row range");
+        assert_eq!(&note_indices[note_bounds.0..note_bounds.1], &[1]);
 
-        let mut holds = Vec::new();
-        for_each_visible_hold_index(&[0], &notes, &note_itg_rows, Some(range), |i| holds.push(i));
-        assert_eq!(holds, vec![0]);
+        let hold_indices = [0usize];
+        let hold_bounds = lane_hold_window_bounds_by_note_row_from_cursor(
+            &notes,
+            &note_itg_rows,
+            &hold_indices,
+            Some(range),
+            &mut LaneWindowCursor::default(),
+        )
+        .expect("finite row range");
+        assert_eq!(&hold_indices[hold_bounds.0..hold_bounds.1], &[0]);
         assert!(hold_overlaps_visible_window(0, &notes, Some(range)));
-        assert_near(travel.raw_note(&notes[0], true), 0.0);
+        let hold_end = notes[0].hold.as_ref().expect("hold fixture").end_beat;
+        assert_near(travel.raw_beat(hold_end), 0.0);
     }
 
     #[test]

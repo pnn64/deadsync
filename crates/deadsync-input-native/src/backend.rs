@@ -8,29 +8,22 @@ mod deferred_sample;
 pub mod devd;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub mod evdev;
-#[cfg(any(target_os = "freebsd", test, feature = "bench-support"))]
+#[cfg(any(target_os = "freebsd", test))]
 mod hid_report_cache;
 #[cfg(target_os = "freebsd")]
 pub mod hidraw;
 #[cfg(target_os = "macos")]
 pub mod iohid;
-#[cfg(any(target_os = "macos", test, feature = "bench-support"))]
+#[cfg(any(target_os = "macos", test))]
 mod iohid_filter;
 #[cfg(any(target_os = "linux", target_os = "freebsd", test))]
 mod poll_registration;
-#[cfg(any(unix, test, feature = "bench-support"))]
-pub mod unix_time;
+#[cfg(any(unix, test))]
+mod unix_time;
 #[cfg(windows)]
 pub mod w32_raw_input;
 #[cfg(all(windows, not(target_vendor = "win7")))]
 pub mod wgi;
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use hid_report_cache::HidReportRoute;
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use iohid_filter::{AxisCache, HostInstantMap, PadValueKind, classify_pad_value};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadBackend {

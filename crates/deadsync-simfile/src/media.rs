@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn song_art_keys_match_committed_behavior() {
+    fn normalizes_song_art_keys_across_path_styles() {
         let cases = [
             ("Visuals/Banner.PNG", "visuals/banner.png"),
             (r"Visuals\Pack\BANNER.JpG", "visuals/pack/banner.jpg"),

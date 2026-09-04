@@ -447,14 +447,14 @@ fn compose_field_contents<S, F>(
         let head_travel_offset = if is_head_dynamic {
             travel.raw_beat(head_beat)
         } else {
-            travel.raw_note_cached(
+            travel.raw_note(
                 note,
                 false,
                 request.chart.cached_note_time_ns(note_index, false),
                 request.chart.cached_displayed_beat(note_index, false),
             )
         };
-        let tail_travel_offset = travel.raw_note_cached(
+        let tail_travel_offset = travel.raw_note(
             note,
             true,
             request.chart.cached_note_time_ns(note_index, true),
@@ -941,7 +941,7 @@ fn compose_visible_notes<S, F>(
                     .copied()
                     .unwrap_or_else(|| deadsync_core::timing::beat_to_note_row(note.beat));
                 let adjusted_travel = travel.adjusted_note_for_row(
-                    travel.raw_note_cached(
+                    travel.raw_note(
                         note,
                         false,
                         request.chart.cached_note_time_ns(note_index, false),

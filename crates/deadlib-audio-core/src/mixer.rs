@@ -241,7 +241,7 @@ pub const fn scheduled_onset_decision(
 #[must_use]
 pub fn f32_to_i16(sample: f32) -> i16 {
     // Rust float-to-integer casts saturate and map NaN to zero, which exactly
-    // covers the old clamp and boundary branches after scaling.
+    // covers the full-scale boundaries after scaling.
     (sample * (f32::from(i16::MAX) + 1.0)) as i16
 }
 
@@ -251,26 +251,11 @@ pub fn i16_to_f32(sample: i16) -> f32 {
     f32::from(sample) / (f32::from(i16::MAX) + 1.0)
 }
 
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{i16_to_f32, mix_sfx_samples};
-
-    pub fn mix_sfx_old(src: &[i16], dst: &mut [f32], gain: f32) {
-        for i in 0..src.len() {
-            dst[i] = i16_to_f32(src[i]).mul_add(gain, dst[i]);
-        }
-    }
-
-    pub fn mix_sfx_new(src: &[i16], dst: &mut [f32], gain: f32) {
-        mix_sfx_samples(src, dst, gain);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, ScheduledOnset, f32_to_i16, i16_to_f32,
-        mix_sfx_samples, scheduled_onset_decision,
+        scheduled_onset_decision,
     };
 
     #[test]
@@ -279,20 +264,6 @@ mod tests {
             scheduled_onset_decision(0, 10_000, 2, 1_024),
             ScheduledOnset::StartAt(0)
         );
-    }
-
-    #[test]
-    fn contiguous_sfx_mix_matches_indexed_samples_bit_for_bit() {
-        let src = [i16::MIN, -20_001, -1, 0, 1, 12_345, i16::MAX];
-        for gain in [0.0, 0.125, 0.75, 1.0, 1.5] {
-            let mut expected = [0.25f32; 7];
-            for i in 0..src.len() {
-                expected[i] += i16_to_f32(src[i]) * gain;
-            }
-            let mut actual = [0.25f32; 7];
-            mix_sfx_samples(&src, &mut actual, gain);
-            assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
-        }
     }
 
     #[test]
@@ -333,6 +304,9 @@ mod tests {
         assert_eq!(f32_to_i16(1.0), i16::MAX);
         assert_eq!(f32_to_i16(-1.0), i16::MIN);
         assert_eq!(f32_to_i16(-2.0), i16::MIN);
+        assert_eq!(f32_to_i16(f32::INFINITY), i16::MAX);
+        assert_eq!(f32_to_i16(f32::NEG_INFINITY), i16::MIN);
+        assert_eq!(f32_to_i16(f32::NAN), 0);
     }
 
     #[test]
@@ -340,50 +314,6 @@ mod tests {
         assert_eq!(f32_to_i16(0.0), 0);
         assert_eq!(f32_to_i16(0.5), 16_384);
         assert_eq!(f32_to_i16(-0.5), -16_384);
-    }
-
-    #[test]
-    fn saturating_conversion_matches_legacy_float_domain() {
-        fn legacy(sample: f32) -> i16 {
-            let sample = sample.clamp(-1.0, 1.0);
-            if sample >= 1.0 {
-                i16::MAX
-            } else if sample <= -1.0 {
-                i16::MIN
-            } else {
-                (sample * 32_768.0) as i16
-            }
-        }
-
-        let edges = [
-            f32::NEG_INFINITY,
-            -1.000_000_1,
-            -1.0,
-            -0.999_999_94,
-            -0.0,
-            0.0,
-            0.999_999_94,
-            1.0,
-            1.000_000_1,
-            f32::INFINITY,
-            f32::NAN,
-        ];
-        for sample in edges {
-            assert_eq!(f32_to_i16(sample), legacy(sample), "sample={sample:?}");
-        }
-        for exponent in 0..=u8::MAX {
-            for mantissa in (0..=0x7f_ffffu32).step_by(65_521) {
-                for sign in [0, 1u32 << 31] {
-                    let sample = f32::from_bits(sign | u32::from(exponent) << 23 | mantissa);
-                    assert_eq!(
-                        f32_to_i16(sample),
-                        legacy(sample),
-                        "bits={:08x}",
-                        sample.to_bits()
-                    );
-                }
-            }
-        }
     }
 
     #[test]

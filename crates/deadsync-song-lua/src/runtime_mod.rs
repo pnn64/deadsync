@@ -675,19 +675,6 @@ impl RuntimeModEntryDedup {
 /// Collects exact-unique runtime-mod entries in first-seen order. The
 /// compilation-only lookup stays inline through 1,024 source entries and
 /// retains at most 256 output slots before measured growth is necessary.
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn collect_unique_runtime_mod_entries(
-    entries: impl IntoIterator<Item = RuntimeModEaseEntry>,
-    entry_count: usize,
-) -> Vec<RuntimeModEaseEntry> {
-    let mut out = RuntimeModEntryDedup::new(entry_count);
-    for entry in entries {
-        out.push(entry);
-    }
-    out.finish()
-}
-
 #[must_use]
 pub fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
     runtime_mod_player_indices(player).collect()
@@ -868,24 +855,8 @@ impl RuntimeOverlayCaptureDedup {
     }
 }
 
-/// Collects exact-unique overlay capture keys in first-seen order. This is
-/// exposed only so the load-path benchmark can compare against the former
-/// linear scan without duplicating the production index.
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn collect_unique_runtime_overlay_capture_keys(
-    keys: impl IntoIterator<Item = RuntimeOverlayCaptureKey>,
-    entry_count: usize,
-) -> Vec<RuntimeOverlayCaptureKey> {
-    let mut dedup = RuntimeOverlayCaptureDedup::new(entry_count);
-    for key in keys {
-        dedup.insert(key);
-    }
-    dedup.keys
-}
-
 #[must_use]
-pub fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
+fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
     Some(match key {
         "z" => SongLuaEaseTarget::PlayerZ,
         "rotationx" => SongLuaEaseTarget::PlayerRotationX,
@@ -1009,31 +980,6 @@ pub fn extend_runtime_mod_sustains(windows: &mut [SongLuaEaseWindow]) {
     }
 }
 
-#[cfg(test)]
-fn extend_runtime_mod_sustains_reference(windows: &mut [SongLuaEaseWindow]) {
-    const DEFAULT_SUSTAIN_BEATS: f32 = 1_000_000.0;
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
-    for index in 0..windows.len() {
-        let end = windows[index].start + windows[index].limit;
-        let next_start = windows
-            .iter()
-            .enumerate()
-            .filter_map(|(other_index, other)| {
-                (other_index != index
-                    && other.player == windows[index].player
-                    && other.target == windows[index].target
-                    && other.start > windows[index].start + SAME_TICK_EPSILON)
-                    .then_some(other.start)
-            })
-            .min_by(f32::total_cmp)
-            .unwrap_or(DEFAULT_SUSTAIN_BEATS);
-        if next_start > end + SAME_TICK_EPSILON {
-            windows[index].sustain = Some(next_start - end);
-        }
-    }
-}
-
 pub fn record_unsupported_xero_overlay_function_ease(
     info: &mut SongLuaCompileInfo,
     entry: &RuntimeModEaseEntry,
@@ -1055,95 +1001,6 @@ pub fn record_unsupported_xero_overlay_function_ease(
 mod tests {
     use super::*;
 
-    fn runtime_mod_fixture(count: usize, unique: usize) -> Vec<RuntimeModEaseEntry> {
-        let unique = unique.max(1);
-        (0..count)
-            .map(|index| {
-                let key = (index * 73) % unique;
-                RuntimeModEaseEntry {
-                    unit: if key % 7 == 0 {
-                        SongLuaTimeUnit::Second
-                    } else {
-                        SongLuaTimeUnit::Beat
-                    },
-                    start: key as f32 * 0.125,
-                    limit: ((key % 5) as f32).mul_add(0.0625, 0.25),
-                    easing: format!("ease{}", key % 11),
-                    to: (key as f32 * -0.75).copysign(if key % 2 == 0 { 1.0 } else { -1.0 }),
-                    target: format!("mod{}", key % 37),
-                    start_val: (key % 3 == 0).then_some(key as f32),
-                    opt1: (key % 4 == 0).then_some(key as f32 * 0.5),
-                    opt2: (key % 6 == 0).then_some(key as f32 * -0.25),
-                    player: Some((key % 2 + 1) as u8),
-                    add: key % 5 == 0,
-                }
-            })
-            .collect()
-    }
-
-    fn dedup_runtime_mod_entries_reference(
-        entries: impl IntoIterator<Item = RuntimeModEaseEntry>,
-    ) -> Vec<RuntimeModEaseEntry> {
-        let mut out = Vec::new();
-        for entry in entries {
-            if !out
-                .iter()
-                .any(|other| runtime_mod_entries_equal(other, &entry))
-            {
-                out.push(entry);
-            }
-        }
-        out
-    }
-
-    fn overlay_capture_key_fixture(count: usize, unique: usize) -> Vec<RuntimeOverlayCaptureKey> {
-        let unique = unique.max(1);
-        (0..count)
-            .map(|index| {
-                let key = (index * 73) % unique;
-                RuntimeOverlayCaptureKey {
-                    function: 0x1000 + key % 31,
-                    unit: if key % 7 == 0 {
-                        SongLuaTimeUnit::Second
-                    } else {
-                        SongLuaTimeUnit::Beat
-                    },
-                    start: (key as f32 * 0.125).to_bits(),
-                    limit: ((key % 5) as f32).mul_add(0.0625, 0.25).to_bits(),
-                    easing: format!("ease{}", key % 11),
-                    target: format!("node{}", key % 37),
-                    from: (key as f32 * 0.5).to_bits(),
-                    to: (key as f32 * -0.75).to_bits(),
-                    opt1: (key % 4 == 0).then(|| (key as f32 * 0.5).to_bits()),
-                    opt2: (key % 6 == 0).then(|| (key as f32 * -0.25).to_bits()),
-                }
-            })
-            .collect()
-    }
-
-    fn sustain_fixture(count: usize) -> Vec<SongLuaEaseWindow> {
-        (0..count)
-            .map(|index| SongLuaEaseWindow {
-                unit: SongLuaTimeUnit::Beat,
-                start: ((index * 73) % count.max(1)) as f32 * 0.25,
-                limit: ((index % 5) as f32).mul_add(0.0625, 0.125),
-                span_mode: SongLuaSpanMode::Len,
-                from: 0.0,
-                to: 1.0,
-                target: if index % 3 == 0 {
-                    SongLuaEaseTarget::PlayerRotationZ
-                } else {
-                    SongLuaEaseTarget::Mod(format!("mod{}", index % 11))
-                },
-                easing: Some("linear".to_string()),
-                player: Some((index % 2 + 1) as u8),
-                sustain: None,
-                opt1: None,
-                opt2: None,
-            })
-            .collect()
-    }
-
     #[test]
     fn exported_player_list_keeps_invalid_player_fallback_behavior() {
         assert_eq!(runtime_mod_entry_players(Some(1)), vec![0]);
@@ -1151,53 +1008,5 @@ mod tests {
         assert_eq!(runtime_mod_entry_players(None), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(0)), vec![0, 1]);
         assert_eq!(runtime_mod_entry_players(Some(3)), vec![0, 1]);
-    }
-
-    #[test]
-    fn indexed_runtime_mod_dedup_matches_first_seen_scan() {
-        for (count, unique) in [(0, 1), (1, 1), (33, 11), (513, 127), (513, 513)] {
-            let source = runtime_mod_fixture(count, unique);
-            let reference = dedup_runtime_mod_entries_reference(source.iter().cloned());
-            let current = collect_unique_runtime_mod_entries(source, count);
-            assert_eq!(
-                current.len(),
-                reference.len(),
-                "count={count} unique={unique}"
-            );
-            assert!(
-                current
-                    .iter()
-                    .zip(&reference)
-                    .all(|(left, right)| runtime_mod_entries_equal(left, right)),
-                "count={count} unique={unique}"
-            );
-        }
-    }
-
-    #[test]
-    fn indexed_overlay_capture_dedup_matches_first_seen_scan() {
-        for (count, unique) in [(0, 1), (1, 1), (33, 11), (513, 127), (513, 513)] {
-            let source = overlay_capture_key_fixture(count, unique);
-            let mut reference = Vec::new();
-            for key in source.iter().cloned() {
-                if !reference.contains(&key) {
-                    reference.push(key);
-                }
-            }
-            assert_eq!(
-                collect_unique_runtime_overlay_capture_keys(source, count),
-                reference,
-                "count={count} unique={unique}"
-            );
-        }
-    }
-
-    #[test]
-    fn grouped_sustain_extension_matches_full_scan_for_unordered_windows() {
-        let mut reference = sustain_fixture(513);
-        let mut current = reference.clone();
-        extend_runtime_mod_sustains_reference(&mut reference);
-        extend_runtime_mod_sustains(&mut current);
-        assert_eq!(current, reference);
     }
 }

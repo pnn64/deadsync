@@ -270,146 +270,6 @@ fn song_video_key_is_desired(key: &str, desired: &[Cow<'_, str>]) -> bool {
     desired.iter().any(|candidate| candidate.as_ref() == key)
 }
 
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub const fn benchmark_media_completion_budget() -> usize {
-    MAX_MEDIA_COMPLETIONS_PER_FRAME
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_video_membership_reference(
-    paths: &[PathBuf],
-    active: &[String],
-    failed: &[String],
-) -> u64 {
-    let desired = paths
-        .iter()
-        .filter(|path| dynamic::is_dynamic_video_path(path))
-        .map(|path| path.to_string_lossy())
-        .collect::<FxHashSet<_>>();
-    active.iter().chain(failed).fold(0, |sum, key| {
-        sum.wrapping_mul(131)
-            .wrapping_add(key.len() as u64)
-            .wrapping_add(u64::from(desired.contains(key.as_str())))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_video_membership(paths: &[PathBuf], active: &[String], failed: &[String]) -> u64 {
-    let desired = song_video_keys(paths);
-    active.iter().chain(failed).fold(0, |sum, key| {
-        sum.wrapping_mul(131)
-            .wrapping_add(key.len() as u64)
-            .wrapping_add(u64::from(song_video_key_is_desired(key, &desired)))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_stale_extract_reference(
-    active: &mut FxHashMap<String, u64>,
-    desired: &FxHashSet<String>,
-) -> u64 {
-    let initial_len = active.len();
-    let stale = active
-        .keys()
-        .filter(|key| !desired.contains(key.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-    stale.into_iter().fold(initial_len as u64, |sum, key| {
-        let value = active
-            .remove(&key)
-            .expect("collected stale benchmark key remains active");
-        sum.wrapping_add(value)
-            .wrapping_add((key.len() as u64).rotate_left(17))
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_stale_extract(
-    active: &mut FxHashMap<String, u64>,
-    desired: &FxHashSet<String>,
-) -> u64 {
-    let initial_len = active.len();
-    let mut retired = 0u64;
-    let stale = extract_stale_media(
-        active,
-        |key, _| !desired.contains(key),
-        |value| retired = retired.wrapping_add(value),
-    );
-    stale
-        .into_iter()
-        .fold(initial_len as u64 + retired, |sum, key| {
-            sum.wrapping_add((key.len() as u64).rotate_left(17))
-        })
-}
-
-#[cfg(feature = "bench-support")]
-pub struct BenchmarkMediaPrepDispatch {
-    worker: MediaPrepWorker<usize, usize>,
-}
-
-#[cfg(feature = "bench-support")]
-impl BenchmarkMediaPrepDispatch {
-    pub fn new() -> Self {
-        Self {
-            worker: MediaPrepWorker::new(
-                "media-prep-bench",
-                BANNER_VIDEO_PREP_WORKERS,
-                MAX_CACHED_BANNER_VIDEO_PATHS,
-                BANNER_VIDEO_PREP_RESULTS,
-                std::convert::identity,
-            ),
-        }
-    }
-
-    /// # Panics
-    ///
-    /// Panics if an internal worker fails or disconnects unexpectedly.
-    pub fn warm(&mut self) {
-        assert!(self.worker.start());
-    }
-
-    pub fn submit_burst(&mut self) -> usize {
-        (0..MAX_CACHED_BANNER_VIDEO_PATHS)
-            .filter(|&job| self.worker.try_submit(job))
-            .count()
-    }
-
-    #[must_use]
-    /// # Panics
-    ///
-    /// Panics if an internal worker fails or disconnects unexpectedly.
-    pub fn drain_burst(&self) -> usize {
-        let mut checksum = 0usize;
-        for _ in 0..MAX_CACHED_BANNER_VIDEO_PATHS {
-            loop {
-                match self.worker.try_recv() {
-                    Ok(result) => {
-                        checksum ^= result;
-                        break;
-                    }
-                    Err(mpsc::TryRecvError::Empty) => thread::yield_now(),
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        panic!("media preparation benchmark worker disconnected")
-                    }
-                }
-            }
-        }
-        checksum
-    }
-}
-
-#[cfg(feature = "bench-support")]
-impl Default for BenchmarkMediaPrepDispatch {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// Render-thread snapshot of the desired banner-video set.
 ///
 /// Owner/threading: `DynamicMedia` on the render thread; no synchronization.
@@ -417,9 +277,8 @@ impl Default for BenchmarkMediaPrepDispatch {
 /// paths inline, matching the largest live caller; larger sets bypass the
 /// settled fast path. Warmup: gameplay entry. Miss/eviction: a changed request
 /// reconciles immediately and replaces the snapshot; no gameplay pruning.
-/// Destruction: paths drop with `DynamicMedia`. Instrumentation: the release
-/// benchmark compares reconciled and settled frames. Worst steady-frame cost:
-/// at most eight path comparisons and no allocation, decoder, upload, or scan.
+/// Destruction: paths drop with `DynamicMedia`. Worst steady-frame cost is at
+/// most eight path comparisons and no allocation, decoder, upload, or scan.
 #[derive(Default)]
 struct BannerVideoRequest {
     paths: SmallVec<[PathBuf; MAX_CACHED_BANNER_VIDEO_PATHS]>,

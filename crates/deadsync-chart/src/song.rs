@@ -758,157 +758,6 @@ fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle
     })
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub mod bench_support {
-    use super::*;
-
-    #[inline]
-    #[must_use]
-    pub fn standard_chart_indices_reference(
-        song: &SongData,
-        chart_type: &str,
-    ) -> [Option<usize>; STANDARD_DIFFICULTY_COUNT] {
-        let mut out = [None; STANDARD_DIFFICULTY_COUNT];
-        for (chart_ix, chart) in song.charts.iter().enumerate() {
-            if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
-                continue;
-            }
-            for (diff_ix, diff_name) in STANDARD_DIFFICULTY_NAMES.iter().enumerate() {
-                if out[diff_ix].is_none() && chart.difficulty.eq_ignore_ascii_case(diff_name) {
-                    out[diff_ix] = Some(chart_ix);
-                    break;
-                }
-            }
-        }
-        out
-    }
-
-    #[must_use]
-    pub fn edit_chart_indices_sorted_reference(song: &SongData, chart_type: &str) -> Vec<usize> {
-        let mut indices: Vec<usize> = song
-            .charts
-            .iter()
-            .enumerate()
-            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
-            .collect();
-        indices.sort_by(|&left, &right| edit_chart_cmp(&song.charts[left], &song.charts[right]));
-        indices
-    }
-
-    #[must_use]
-    pub fn steps_index_for_chart_hash_reference(
-        song: &SongData,
-        chart_type: &str,
-        chart_hash: &str,
-    ) -> Option<usize> {
-        let chart = song.charts.iter().find(|chart| {
-            chart.chart_type.eq_ignore_ascii_case(chart_type) && chart.short_hash == chart_hash
-        })?;
-
-        if let Some(index) = standard_difficulty_index(&chart.difficulty) {
-            return Some(index);
-        }
-        if chart.difficulty.eq_ignore_ascii_case("edit") {
-            let target_index = song
-                .charts
-                .iter()
-                .enumerate()
-                .filter(|(_, candidate)| {
-                    is_edit_chart(candidate, chart_type) && candidate.short_hash == chart_hash
-                })
-                .map(|(index, _)| index)
-                .min_by(|&left, &right| song.edit_chart_index_cmp(left, right))?;
-            let rank = song
-                .charts
-                .iter()
-                .enumerate()
-                .filter(|(_, candidate)| is_edit_chart(candidate, chart_type))
-                .filter(|(index, _)| song.edit_chart_index_cmp(*index, target_index).is_lt())
-                .count();
-            return Some(STANDARD_DIFFICULTY_COUNT + rank);
-        }
-        None
-    }
-
-    #[must_use]
-    pub fn format_display_bpm_range_reference(
-        range: Option<(f64, f64)>,
-        music_rate: f32,
-    ) -> String {
-        let Some((lo, hi)) = range else {
-            return String::new();
-        };
-        let rate = if music_rate.is_finite() && music_rate > 0.0 {
-            music_rate
-        } else {
-            1.0
-        };
-        let lo = lo * f64::from(rate);
-        let hi = hi * f64::from(rate);
-        let use_decimals = (rate - 1.0).abs() > 0.001;
-        let fmt_one = |value: f64| {
-            if use_decimals {
-                let text = format!("{value:.1}");
-                text.trim_end_matches('0').trim_end_matches('.').to_string()
-            } else {
-                format!("{value:.0}")
-            }
-        };
-        if (lo - hi).abs() < 1.0e-6 {
-            fmt_one(lo)
-        } else {
-            format!("{} - {}", fmt_one(lo.min(hi)), fmt_one(lo.max(hi)))
-        }
-    }
-
-    #[inline]
-    pub fn chart_for_steps_index_reference<'a>(
-        song: &'a SongData,
-        chart_type: &str,
-        steps_index: usize,
-    ) -> Option<&'a ChartData> {
-        if let Some(diff_name) = STANDARD_DIFFICULTY_NAMES.get(steps_index) {
-            return song.charts.iter().find(|chart| {
-                chart.chart_type.eq_ignore_ascii_case(chart_type)
-                    && chart.difficulty.eq_ignore_ascii_case(diff_name)
-            });
-        }
-
-        let edit_index = steps_index.checked_sub(STANDARD_DIFFICULTY_COUNT)?;
-        song.edit_charts_sorted(chart_type).get(edit_index).copied()
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn best_steps_index_reference(
-        song: &SongData,
-        chart_type: &str,
-        preferred_difficulty_index: usize,
-    ) -> Option<usize> {
-        let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT - 1);
-        let mut best_standard = None;
-        let mut best_distance = usize::MAX;
-        for index in 0..STANDARD_DIFFICULTY_COUNT {
-            if chart_for_steps_index_reference(song, chart_type, index).is_none() {
-                continue;
-            }
-            let distance = index.abs_diff(preferred);
-            if distance < best_distance {
-                best_distance = distance;
-                best_standard = Some(index);
-            }
-        }
-        if best_standard.is_some() {
-            return best_standard;
-        }
-
-        song.charts
-            .iter()
-            .any(|chart| is_edit_chart(chart, chart_type))
-            .then_some(STANDARD_DIFFICULTY_COUNT)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1061,26 +910,6 @@ mod tests {
     }
 
     #[test]
-    fn single_buffer_bpm_formatter_matches_reference_edge_cases() {
-        for (range, rate) in [
-            (None, 1.0),
-            (Some((100.0, 200.0)), 1.0),
-            (Some((200.0, 100.0)), 1.5),
-            (Some((150.0, 150.0)), 1.25),
-            (Some((120.04, 120.04)), 0.75),
-            (Some((-0.0, -0.0)), 1.25),
-            (Some((f64::NAN, 180.0)), 1.0),
-            (Some((f64::NEG_INFINITY, f64::INFINITY)), 1.25),
-        ] {
-            assert_eq!(
-                format_display_bpm_range(range, rate),
-                bench_support::format_display_bpm_range_reference(range, rate),
-                "range={range:?}, rate={rate}",
-            );
-        }
-    }
-
-    #[test]
     fn display_bpm_pair_inherits_song_tag() {
         let mut song = song_data();
         song.display_bpm = "100:160".to_string();
@@ -1164,10 +993,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["alpha", "first-tie", "second-tie", "zulu"]
         );
-        assert_eq!(
-            indices,
-            bench_support::edit_chart_indices_sorted_reference(&song, "dance-single")
-        );
     }
 
     #[test]
@@ -1187,10 +1012,6 @@ mod tests {
 
         let expected = [Some(2), Some(1), Some(3), Some(4), Some(5)];
         assert_eq!(song.standard_chart_indices("dance-single"), expected);
-        assert_eq!(
-            song.standard_chart_indices("dance-single"),
-            bench_support::standard_chart_indices_reference(&song, "dance-single")
-        );
     }
 
     #[test]
@@ -1214,18 +1035,6 @@ mod tests {
             song.steps_index_for_chart_hash("dance-single", "duplicate"),
             Some(STANDARD_DIFFICULTY_COUNT + 1)
         );
-        for (chart_type, hash) in [
-            ("dance-single", "duplicate"),
-            ("DANCE-SINGLE", "Easy-hash"),
-            ("dance-single", "missing"),
-            ("pump-single", "duplicate"),
-        ] {
-            assert_eq!(
-                song.steps_index_for_chart_hash(chart_type, hash),
-                bench_support::steps_index_for_chart_hash_reference(&song, chart_type, hash),
-                "chart_type={chart_type:?}, hash={hash:?}",
-            );
-        }
     }
 
     #[test]

@@ -146,7 +146,38 @@ pub fn resolve<'a>(
 
 #[must_use]
 pub fn serialize(profiles: &[PadConfigProfile]) -> String {
-    serialize_with::<true, true, true>(profiles)
+    let mut content = String::with_capacity(serialized_len(profiles));
+    for (i, p) in profiles.iter().enumerate() {
+        content.push_str("[PadProfile");
+        let _ = write!(content, "{i}");
+        content.push_str("]\nName=");
+        content.push_str(&p.name);
+        content.push_str("\nBackend=");
+        content.push_str(&p.backend);
+        content.push_str("\nPadType=");
+        content.push_str(p.pad_type.as_deref().unwrap_or(""));
+        content.push_str("\nSerial=");
+        content.push_str(p.serial.as_deref().unwrap_or(""));
+        content.push_str("\nDefaultFor=");
+        if let Some((first, rest)) = p.default_for_serials.split_first() {
+            content.push_str(first);
+            for serial in rest {
+                content.push(' ');
+                content.push_str(serial);
+            }
+        }
+        content.push_str("\nGlobalDefault=");
+        content.push(if p.global_default { '1' } else { '0' });
+        content.push('\n');
+        for (key, value) in &p.settings {
+            content.push_str(key);
+            content.push('=');
+            content.push_str(value);
+            content.push('\n');
+        }
+        content.push('\n');
+    }
+    content
 }
 
 const fn decimal_digits(mut value: usize) -> usize {
@@ -186,68 +217,6 @@ fn serialized_len(profiles: &[PadConfigProfile]) -> usize {
                 .saturating_add(74)
         })
         .fold(0, usize::saturating_add)
-}
-
-fn serialize_with<const RESERVE: bool, const STREAM_DEFAULTS: bool, const DIRECT_FIELDS: bool>(
-    profiles: &[PadConfigProfile],
-) -> String {
-    let mut content = if RESERVE {
-        String::with_capacity(serialized_len(profiles))
-    } else {
-        String::new()
-    };
-    for (i, p) in profiles.iter().enumerate() {
-        if DIRECT_FIELDS {
-            content.push_str("[PadProfile");
-            let _ = write!(content, "{i}");
-            content.push_str("]\nName=");
-            content.push_str(&p.name);
-            content.push_str("\nBackend=");
-            content.push_str(&p.backend);
-            content.push_str("\nPadType=");
-            content.push_str(p.pad_type.as_deref().unwrap_or(""));
-            content.push_str("\nSerial=");
-            content.push_str(p.serial.as_deref().unwrap_or(""));
-            content.push('\n');
-        } else {
-            let _ = writeln!(content, "[PadProfile{i}]");
-            let _ = writeln!(content, "Name={}", p.name);
-            let _ = writeln!(content, "Backend={}", p.backend);
-            let _ = writeln!(content, "PadType={}", p.pad_type.as_deref().unwrap_or(""));
-            let _ = writeln!(content, "Serial={}", p.serial.as_deref().unwrap_or(""));
-        }
-        content.push_str("DefaultFor=");
-        if STREAM_DEFAULTS {
-            if let Some((first, rest)) = p.default_for_serials.split_first() {
-                content.push_str(first);
-                for serial in rest {
-                    content.push(' ');
-                    content.push_str(serial);
-                }
-            }
-        } else {
-            content.push_str(&p.default_for_serials.join(" "));
-        }
-        content.push('\n');
-        if DIRECT_FIELDS {
-            content.push_str("GlobalDefault=");
-            content.push(if p.global_default { '1' } else { '0' });
-            content.push('\n');
-            for (key, value) in &p.settings {
-                content.push_str(key);
-                content.push('=');
-                content.push_str(value);
-                content.push('\n');
-            }
-        } else {
-            let _ = writeln!(content, "GlobalDefault={}", u8::from(p.global_default));
-            for (key, value) in &p.settings {
-                let _ = writeln!(content, "{key}={value}");
-            }
-        }
-        content.push('\n');
-    }
-    content
 }
 
 #[must_use]
@@ -338,74 +307,6 @@ fn flush_borrowed_profile<'a>(
 
 fn owned_nonempty(value: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_owned())
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_owned(content: &str) -> Vec<PadConfigProfile> {
-    let mut out = Vec::new();
-    let mut in_section = false;
-    let mut name = String::new();
-    let mut backend = String::new();
-    let mut pad_type = String::new();
-    let mut serial = String::new();
-    let mut default_for = String::new();
-    let mut global_default = false;
-    let mut settings: Vec<(String, String)> = Vec::new();
-
-    for raw in content.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            if in_section {
-                flush_profile(
-                    &mut name,
-                    &mut backend,
-                    &mut pad_type,
-                    &mut serial,
-                    &mut default_for,
-                    &mut global_default,
-                    &mut settings,
-                    &mut out,
-                );
-            }
-            in_section = line[1..line.len() - 1].trim().starts_with("PadProfile");
-            continue;
-        }
-        if !in_section {
-            continue;
-        }
-        if let Some(eq) = line.find('=') {
-            let key = line[..eq].trim();
-            let val = line[eq + 1..].trim();
-            match key {
-                "Name" => name = val.to_string(),
-                "Backend" => backend = val.to_string(),
-                "PadType" => pad_type = val.to_string(),
-                "Serial" => serial = val.to_string(),
-                "DefaultFor" => default_for = val.to_string(),
-                "GlobalDefault" => global_default = val == "1",
-                _ if !META_KEYS.contains(&key) => settings.push((key.to_string(), val.to_string())),
-                _ => {}
-            }
-        }
-    }
-    if in_section {
-        flush_profile(
-            &mut name,
-            &mut backend,
-            &mut pad_type,
-            &mut serial,
-            &mut default_for,
-            &mut global_default,
-            &mut settings,
-            &mut out,
-        );
-    }
-
-    out.sort_by(|a, b| unicode_case_insensitive_cmp(&a.name, &b.name));
-    out
 }
 
 pub fn load_path(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
@@ -682,66 +583,6 @@ pub fn delete_profile_id_report(
     delete_path(&path, name).map_err(|error| pad_config_io_error(path, error))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-fn flush_profile(
-    name: &mut String,
-    backend: &mut String,
-    pad_type: &mut String,
-    serial: &mut String,
-    default_for: &mut String,
-    global_default: &mut bool,
-    settings: &mut Vec<(String, String)>,
-    out: &mut Vec<PadConfigProfile>,
-) {
-    if !name.trim().is_empty() && !backend.trim().is_empty() && !settings.is_empty() {
-        out.push(PadConfigProfile {
-            name: std::mem::take(name).trim().to_string(),
-            backend: std::mem::take(backend).trim().to_string(),
-            pad_type: opt_string(pad_type),
-            serial: opt_string(serial),
-            default_for_serials: default_for.split_whitespace().map(str::to_string).collect(),
-            global_default: *global_default,
-            settings: std::mem::take(settings),
-        });
-    }
-    name.clear();
-    backend.clear();
-    pad_type.clear();
-    serial.clear();
-    default_for.clear();
-    *global_default = false;
-    settings.clear();
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn opt_string(s: &str) -> Option<String> {
-    let trimmed = s.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn serialize_unreserved_for_bench(profiles: &[PadConfigProfile]) -> String {
-    serialize_with::<false, true, false>(profiles)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn serialize_joined_defaults_for_bench(profiles: &[PadConfigProfile]) -> String {
-    serialize_with::<true, false, true>(profiles)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn parse_owned_for_bench(content: &str) -> Vec<PadConfigProfile> {
-    parse_owned(content)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -780,7 +621,7 @@ mod tests {
     }
 
     #[test]
-    fn optimized_serializers_preserve_pad_config_wire_format() {
+    fn serializer_preserves_pad_config_wire_format() {
         let mut profile = sample("Alpha", "smx", Some("fsr"), Some("S1"), &["S1", "S2"]);
         profile.global_default = true;
         let profiles = [profile];
@@ -798,13 +639,11 @@ DebounceMs=4
 ";
 
         assert_eq!(serialize(&profiles), expected);
-        assert_eq!(serialize_with::<false, true, false>(&profiles), expected);
-        assert_eq!(serialize_with::<true, false, true>(&profiles), expected);
         assert_eq!(serialized_len(&profiles), expected.len());
     }
 
     #[test]
-    fn borrowed_parser_matches_owned_parser_for_mixed_sections() {
+    fn borrowed_parser_handles_mixed_sections() {
         let content = "\
 ; ignored comment
 [PadProfile0]
@@ -832,9 +671,7 @@ Backend=fsrio
 Custom= value
 ";
 
-        let expected = parse_owned(content);
         let actual = parse(content);
-        assert_eq!(actual, expected);
         assert_eq!(actual.len(), 2);
         assert_eq!(actual[0].name, "alpha");
         assert_eq!(actual[1].name, "Beta");

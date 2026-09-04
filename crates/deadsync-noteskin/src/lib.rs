@@ -19,9 +19,6 @@ pub mod runtime;
 pub mod script;
 pub mod sprite;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use draw::model_draw_bench_support;
 pub use draw::{
     ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
     ModelMesh, ModelTweenCursor, ModelTweenSegment, ModelVertex, TweenType, glowshift_mix,
@@ -29,26 +26,17 @@ pub use draw::{
     model_effect_mix, model_glow_at, model_glow_with_draw, model_texture_uv_params,
     model_texture_uv_params_cached,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use explosion::explosion_bench_support;
 pub use explosion::{
     ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState, GlowEffect,
     itg_direct_tap_explosion_layers, itg_explosion_source, itg_explosion_wrapper,
     parse_explosion_animation,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use mine::mine_bench_support;
 pub use model::{ItgModelSlotPlan, itg_load_model_slots_from_path};
 pub use parts::{
     ITG_DANCE_COL_SPACING, NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType,
     NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, Quantization, Style,
     clamped_hold_let_go_gray_percent, itg_column_xs,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use receptor::receptor_bench_support;
 pub use receptor::{
     ItgReceptorVisuals, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse,
     ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,
@@ -79,16 +67,7 @@ pub use runtime::{
     itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled, itg_tap_note_column,
     itg_tap_note_layers,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use runtime::{
-    mine_explosion_bench_support, tap_column_bench_support, tap_explosion_bench_support,
-    uv_color_bench_support,
-};
 pub use script::{ItgCommandEffect, model_draw_program};
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use sprite::sprite_math_bench_support;
 pub use sprite::{
     AnimationRate, NoteskinSlot, SpriteAnimatedUvCache, SpriteAnimationPlan, SpriteAtlasUvCache,
     SpriteDefinition, SpriteFramePlan, SpriteFrameTiming, SpriteSlotPlan, SpriteSourcePlan,
@@ -98,9 +77,9 @@ pub use sprite::{
     generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
     itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
     itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
-    neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv,
-    sprite_animated_uv_scaled, sprite_animation_plan, sprite_atlas_uv, sprite_atlas_uv_scaled,
-    sprite_frame_index, sprite_frame_index_from_phase, sprite_frame_index_from_phase_with_timing,
-    sprite_frame_index_with_timing, sprite_scrolled_uv, sprite_sheet_frame,
-    sprite_state_properties_animation, sprite_uv_scroll_clock, state_properties_source_plan,
+    neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animation_plan, sprite_atlas_uv,
+    sprite_atlas_uv_scaled, sprite_frame_index, sprite_frame_index_from_phase,
+    sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing, sprite_scrolled_uv,
+    sprite_sheet_frame, sprite_state_properties_animation, sprite_uv_scroll_clock,
+    state_properties_source_plan,
 };

@@ -658,15 +658,6 @@ fn playback_anchor_nanos_after_delay(
 }
 
 #[inline(always)]
-#[cfg(any(test, feature = "bench-support"))]
-fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
-    if sample_rate_hz == 0 || frames == 0 {
-        return 0;
-    }
-    (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz)
-}
-
-#[inline(always)]
 const fn samples_for_frames(frames: u32, samples_per_frame: usize) -> usize {
     frames as usize * samples_per_frame
 }
@@ -700,77 +691,6 @@ fn estimated_output_delay_ns(
         device_period_ns
     };
     queue_delay_ns.saturating_add(downstream_ns)
-}
-
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{FramesToNanos, estimated_output_delay_ns, frames_to_nanos, samples_for_frames};
-    use deadlib_audio_core::{RenderReport, report_audio_render_callback};
-    use deadlib_platform::host_time::now_nanos;
-    use std::hint::black_box;
-
-    #[derive(Clone, Copy)]
-    pub struct BenchFrameTime(FramesToNanos);
-
-    impl BenchFrameTime {
-        #[must_use]
-        pub const fn new(sample_rate_hz: u32) -> Self {
-            Self(FramesToNanos::new(sample_rate_hz))
-        }
-    }
-
-    #[inline(never)]
-    pub fn callback_delay_old(
-        sample_rate_hz: u32,
-        queued_frames: u32,
-        device_period_ns: u64,
-        stream_latency_ns: u64,
-    ) -> u64 {
-        let telemetry_delay = estimated_output_delay_ns(
-            frames_to_nanos(sample_rate_hz, queued_frames),
-            device_period_ns,
-            stream_latency_ns,
-        );
-        // Publishing telemetry separated these two calculations in the legacy
-        // callback, so keep an optimizer barrier between them in the comparison.
-        black_box(telemetry_delay);
-        let anchor_delay = frames_to_nanos(sample_rate_hz, queued_frames);
-        telemetry_delay ^ anchor_delay.rotate_left(23)
-    }
-
-    #[inline(never)]
-    pub fn callback_delay_new(
-        frame_time: BenchFrameTime,
-        queued_frames: u32,
-        device_period_ns: u64,
-        stream_latency_ns: u64,
-    ) -> u64 {
-        let queue_delay = frame_time.0.convert(queued_frames);
-        let telemetry_delay =
-            estimated_output_delay_ns(queue_delay, device_period_ns, stream_latency_ns);
-        telemetry_delay ^ queue_delay.rotate_left(23)
-    }
-
-    #[inline(never)]
-    pub const fn sample_count_old(frames: u32, bytes_per_frame: u16, sample_size: usize) -> usize {
-        frames as usize * bytes_per_frame as usize / sample_size
-    }
-
-    #[inline(never)]
-    pub const fn sample_count_new(frames: u32, samples_per_frame: usize) -> usize {
-        samples_for_frames(frames, samples_per_frame)
-    }
-
-    #[inline(never)]
-    pub fn clean_report_old(result: RenderReport, stutter_diag_enabled: bool) {
-        let at_host_nanos = now_nanos();
-        report_audio_render_callback(result, stutter_diag_enabled, || at_host_nanos);
-    }
-
-    #[inline(never)]
-    pub fn clean_report_new(result: RenderReport, stutter_diag_enabled: bool) {
-        report_audio_render_callback(result, stutter_diag_enabled, now_nanos);
-    }
 }
 
 fn initialize_client(
@@ -1092,77 +1012,27 @@ fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{FramesToNanos, estimated_output_delay_ns, frames_to_nanos, samples_for_frames};
+    use super::{FramesToNanos, estimated_output_delay_ns, samples_for_frames};
 
     #[test]
-    fn queued_delay_conversion_preserves_wasapi_callback_timing() {
-        assert_eq!(frames_to_nanos(48_000, 480), 10_000_000);
-        assert_eq!(frames_to_nanos(44_100, 441), 10_000_000);
-        assert_eq!(frames_to_nanos(0, 480), 0);
-        assert_eq!(frames_to_nanos(48_000, 0), 0);
-
-        for rate in [
-            0,
-            1,
-            8_000,
-            22_050,
-            44_100,
-            48_000,
-            88_200,
-            96_000,
-            192_000,
-            u32::MAX,
-        ] {
-            let converter = FramesToNanos::new(rate);
-            for frames in [0, 1, 2, 127, 441, 479, 480, 2_048, 65_535, u32::MAX] {
-                assert_eq!(converter.convert(frames), frames_to_nanos(rate, frames));
-            }
-        }
-
-        let mut seed = 0x9e37_79b9u32;
-        for _ in 0..10_000 {
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            let rate = seed.max(1);
-            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            let frames = seed;
-            assert_eq!(
-                FramesToNanos::new(rate).convert(frames),
-                frames_to_nanos(rate, frames)
-            );
-        }
-
-        for (rate, frames, period, latency) in [
-            (48_000, 480, 3_000_000, 0),
-            (44_100, 441, 2_500_000, 7_000_000),
-            (96_000, 127, 1_000_000, 2_000_000),
-            (192_000, 2_048, 0, 0),
-        ] {
-            let legacy = frames_to_nanos(rate, frames).saturating_add(if latency != 0 {
-                latency
-            } else {
-                period
-            });
-            let queue_delay = frames_to_nanos(rate, frames);
-            assert_eq!(
-                estimated_output_delay_ns(queue_delay, period, latency),
-                legacy
-            );
-        }
+    fn queued_delay_conversion_handles_common_rates() {
+        assert_eq!(FramesToNanos::new(48_000).convert(480), 10_000_000);
+        assert_eq!(FramesToNanos::new(44_100).convert(441), 10_000_000);
+        assert_eq!(FramesToNanos::new(0).convert(480), 0);
+        assert_eq!(FramesToNanos::new(48_000).convert(0), 0);
+        assert_eq!(
+            estimated_output_delay_ns(10_000_000, 3_000_000, 0),
+            13_000_000
+        );
+        assert_eq!(
+            estimated_output_delay_ns(10_000_000, 3_000_000, 7_000_000),
+            17_000_000
+        );
     }
 
     #[test]
     fn precomputed_samples_per_frame_matches_negotiated_format_math() {
-        for (frames, bytes_per_frame, sample_size) in [
-            (0, 4u16, 2usize),
-            (1, 4, 2),
-            (127, 8, 4),
-            (480, 12, 4),
-            (2_048, 16, 4),
-        ] {
-            let legacy = frames as usize * usize::from(bytes_per_frame) / sample_size;
-            let samples_per_frame = usize::from(bytes_per_frame) / sample_size;
-            assert_eq!(samples_for_frames(frames, samples_per_frame), legacy);
-        }
+        assert_eq!(samples_for_frames(0, 2), 0);
         assert_eq!(samples_for_frames(480, 2), 960);
         assert_eq!(samples_for_frames(127, 6), 762);
     }

@@ -502,23 +502,6 @@ const fn screen_entry_runtime_views(screen: CurrentScreen) -> u8 {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-#[must_use]
-pub const fn benchmark_smx_screen_work(
-    screen: CurrentScreen,
-    fsr_active: bool,
-    options_lights_active: bool,
-    player_options_lights_active: bool,
-) -> u8 {
-    smx_runtime::screen_work(
-        screen,
-        fsr_active,
-        options_lights_active,
-        player_options_lights_active,
-    )
-}
-
 const MAX_TRANSITION_LOBBY_EFFECTS: usize = 3;
 
 fn retain_lobby_effects(effects: &mut Vec<ThemeEffect>) {
@@ -1592,9 +1575,9 @@ pub struct App {
     /// Its session lifetime and fixed capacity require no allocation or
     /// eviction. The first Gameplay/Practice frame warms it; screen, window,
     /// or mode changes replace it, while unfinished media workers bypass it.
-    /// Destruction follows `App`. The banner-media benchmark covers request
-    /// reconciliation. Worst steady-frame work is one compact key comparison
-    /// and one pending-work boolean, with no path derivation or collection.
+    /// Destruction follows `App`. Worst steady-frame work is one compact key
+    /// comparison and one pending-work boolean, with no path derivation or
+    /// collection.
     gameplay_banner_sync_key: Option<GameplayBannerSyncKey>,
     /// Game-thread-owned compact selection for post-stage presentation and
     /// banner media. It retains at most one index per played stage for the

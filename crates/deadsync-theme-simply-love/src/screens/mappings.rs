@@ -1269,7 +1269,7 @@ pub fn push_actors(
 
     /* ------------------------------ TOP BAR ------------------------------- */
     const FG: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-    actors.push(screen_bar::build_cached(screen_bar::ScreenBarParams {
+    actors.push(screen_bar::build(screen_bar::ScreenBarParams {
         visual_policy,
         title: "KEYBOARD/PAD MAPPINGS",
         title_placement: ScreenBarTitlePlacement::Left,

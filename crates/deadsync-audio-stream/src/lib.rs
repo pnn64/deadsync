@@ -45,10 +45,6 @@ pub use sfx_cache::SfxId;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
 use stretch::SolaStretcher;
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use stretch::bench_support as sola_bench_support;
-
 #[derive(Clone, Copy, Debug)]
 pub struct Cut {
     pub start_sec: f64,
@@ -127,26 +123,6 @@ fn planar_window(planar: &PlanarAccum, frames: usize) -> ResampleSlices<'_> {
     slices
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod decode_bench_support {
-    use super::{PlanarAccum, planar_window};
-
-    #[inline]
-    #[must_use]
-    pub fn planar_window_checksum(planar: &PlanarAccum, frames: usize) -> u64 {
-        planar_window(planar, frames).iter().enumerate().fold(
-            0u64,
-            |checksum, (channel, samples)| {
-                checksum
-                    .rotate_left(5)
-                    .wrapping_add(u64::from(samples[channel % samples.len()].to_bits()))
-                    .wrapping_add(u64::from(samples[samples.len() - 1].to_bits()))
-            },
-        )
-    }
-}
-
 fn compat_lead_frames(ratio: f64) -> usize {
     // Rubato 0.16 obtained the sinc lookahead by requesting extra input before
     // its first fixed-output block. Rubato 4 emits that lookahead as leading
@@ -179,95 +155,6 @@ pub struct MusicDecodeContext {
 pub struct MusicStream {
     pub thread: thread::JoinHandle<MusicBlockWriter>,
     control: Arc<MusicControl>,
-    #[cfg(feature = "test-support")]
-    backpressure_stats: Arc<MusicBackpressureCounters>,
-}
-
-#[cfg(feature = "test-support")]
-#[derive(Clone, Copy, Debug)]
-/// Backpressure variants exposed only to the benchmark harness.
-pub enum MusicBackpressureBenchmarkMode {
-    /// Retry a full pool every 300 microseconds.
-    Fixed300Micros,
-    /// Retry a full pool every 2 milliseconds.
-    Fixed2Millis,
-    /// Refill between duration-derived low and high watermarks.
-    OccupancyDeadline,
-    /// Use the same watermarks with a non-interruptible sleep for comparison.
-    OccupancySleep,
-}
-
-#[cfg(feature = "test-support")]
-#[derive(Clone, Copy, Debug, Default)]
-/// Snapshot of decoder pacing activity collected by the benchmark harness.
-pub struct MusicBackpressureStats {
-    /// Number of blocking waits entered.
-    pub waits: u64,
-    /// Blocks published into reserved capacity during a generation transition.
-    pub transition_pushes: u64,
-    /// Largest observed render-owned block count.
-    pub max_outstanding: u64,
-}
-
-#[cfg(feature = "test-support")]
-struct MusicBackpressureCounters {
-    waits: AtomicU64,
-    transition_pushes: AtomicU64,
-    max_outstanding: AtomicU64,
-}
-
-#[cfg(feature = "test-support")]
-impl MusicBackpressureCounters {
-    const fn new() -> Self {
-        Self {
-            waits: AtomicU64::new(0),
-            transition_pushes: AtomicU64::new(0),
-            max_outstanding: AtomicU64::new(0),
-        }
-    }
-
-    fn snapshot(&self) -> MusicBackpressureStats {
-        MusicBackpressureStats {
-            waits: self.waits.load(Ordering::Relaxed),
-            transition_pushes: self.transition_pushes.load(Ordering::Relaxed),
-            max_outstanding: self.max_outstanding.load(Ordering::Relaxed),
-        }
-    }
-}
-
-#[cfg(feature = "test-support")]
-impl MusicStream {
-    /// Returns a snapshot of benchmark-only pacing counters.
-    #[must_use]
-    pub fn backpressure_stats(&self) -> MusicBackpressureStats {
-        self.backpressure_stats.snapshot()
-    }
-
-    /// Clears benchmark-only pacing counters after warmup.
-    pub fn reset_backpressure_stats_for_benchmark(&self) {
-        self.backpressure_stats.waits.store(0, Ordering::Relaxed);
-        self.backpressure_stats
-            .transition_pushes
-            .store(0, Ordering::Relaxed);
-        self.backpressure_stats
-            .max_outstanding
-            .store(0, Ordering::Relaxed);
-    }
-
-    /// Publishes a benchmark rate generation and interrupts any current park.
-    pub fn set_rate_for_benchmark(&self, rate: f32, generation: u64) {
-        self.control
-            .rate_bits
-            .store(rate.to_bits(), Ordering::Release);
-        self.control.generation.store(generation, Ordering::Release);
-        self.control.wake.notify();
-    }
-
-    /// Stops a benchmark decoder and interrupts any current park.
-    pub fn stop_for_benchmark(&self) {
-        self.control.stop_signal.store(true, Ordering::Release);
-        self.control.wake.notify();
-    }
 }
 
 struct MusicControl {
@@ -306,17 +193,7 @@ impl DecoderWake {
     }
 }
 
-#[derive(Clone, Copy)]
-enum BackpressureMode {
-    OccupancyDeadline,
-    #[cfg(feature = "test-support")]
-    OccupancySleep,
-    #[cfg(feature = "test-support")]
-    FixedRetry(Duration),
-}
-
 struct MusicBackpressure {
-    mode: BackpressureMode,
     sample_rate_hz: u32,
     capacity_blocks: usize,
     low_blocks: usize,
@@ -327,8 +204,6 @@ struct MusicBackpressure {
     await_render_drain: bool,
     transition_ready: bool,
     transition_published: usize,
-    #[cfg(feature = "test-support")]
-    stats: Arc<MusicBackpressureCounters>,
 }
 
 // Keep enough already-decoded audio to cover the measured Ogg + rubato rebuild
@@ -357,12 +232,7 @@ fn block_duration(blocks: usize, sample_rate_hz: u32) -> Duration {
 }
 
 impl MusicBackpressure {
-    fn new(
-        mode: BackpressureMode,
-        sample_rate_hz: u32,
-        capacity_blocks: usize,
-        generation: u64,
-    ) -> Self {
+    fn new(sample_rate_hz: u32, capacity_blocks: usize, generation: u64) -> Self {
         let capacity_blocks = capacity_blocks.max(1);
         let low_blocks = duration_blocks(sample_rate_hz, MUSIC_LOW_WATER_MS)
             .min(capacity_blocks.saturating_sub(2).max(1));
@@ -373,7 +243,6 @@ impl MusicBackpressure {
             duration_blocks(sample_rate_hz, MUSIC_TRANSITION_PREFILL_MS)
                 .min(capacity_blocks.saturating_sub(1).max(1));
         Self {
-            mode,
             sample_rate_hz,
             capacity_blocks,
             low_blocks,
@@ -384,8 +253,6 @@ impl MusicBackpressure {
             await_render_drain: false,
             transition_ready: false,
             transition_published: 0,
-            #[cfg(feature = "test-support")]
-            stats: Arc::new(MusicBackpressureCounters::new()),
         }
     }
 
@@ -403,16 +270,7 @@ impl MusicBackpressure {
             self.transition_published = 0;
         }
 
-        match self.mode {
-            BackpressureMode::OccupancyDeadline => {}
-            #[cfg(feature = "test-support")]
-            BackpressureMode::OccupancySleep => {}
-            #[cfg(feature = "test-support")]
-            BackpressureMode::FixedRetry(_) => return false,
-        }
-
         let outstanding = writer.outstanding_blocks();
-        self.note_outstanding(outstanding);
         if self.transition
             && self.transition_ready
             && self.await_render_drain
@@ -445,15 +303,9 @@ impl MusicBackpressure {
             return;
         }
         self.transition_published = self.transition_published.saturating_add(1);
-        self.note_transition_push();
         if !self.transition_ready && self.transition_published >= self.transition_prefill_blocks {
             writer.publish_generation_ready(generation);
             self.transition_ready = true;
-            #[cfg(feature = "test-support")]
-            if matches!(self.mode, BackpressureMode::FixedRetry(_)) {
-                self.transition = false;
-                return;
-            }
             if !self.await_render_drain {
                 self.transition = false;
             }
@@ -478,29 +330,10 @@ impl MusicBackpressure {
     }
 
     fn wait_for_credit(&self, control: &MusicControl, generation: u64) {
-        match self.mode {
-            BackpressureMode::OccupancyDeadline => {
-                self.wait(control, generation, block_duration(1, self.sample_rate_hz));
-            }
-            #[cfg(feature = "test-support")]
-            BackpressureMode::OccupancySleep => {
-                self.wait(control, generation, block_duration(1, self.sample_rate_hz));
-            }
-            #[cfg(feature = "test-support")]
-            BackpressureMode::FixedRetry(duration) => {
-                self.note_wait();
-                thread::sleep(duration);
-            }
-        }
+        self.wait(control, generation, block_duration(1, self.sample_rate_hz));
     }
 
     fn wait(&self, control: &MusicControl, generation: u64, duration: Duration) {
-        self.note_wait();
-        #[cfg(feature = "test-support")]
-        if matches!(self.mode, BackpressureMode::OccupancySleep) {
-            thread::sleep(duration);
-            return;
-        }
         let sequence = control.wake.sequence.load(Ordering::Acquire);
         if control.stop_signal.load(Ordering::Acquire)
             || control.generation.load(Ordering::Acquire) != generation
@@ -512,32 +345,6 @@ impl MusicBackpressure {
         }
         thread::park_timeout(duration);
     }
-
-    #[cfg(feature = "test-support")]
-    fn note_wait(&self) {
-        self.stats.waits.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[cfg(not(feature = "test-support"))]
-    fn note_wait(&self) {}
-
-    #[cfg(feature = "test-support")]
-    fn note_transition_push(&self) {
-        self.stats.transition_pushes.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[cfg(not(feature = "test-support"))]
-    fn note_transition_push(&self) {}
-
-    #[cfg(feature = "test-support")]
-    fn note_outstanding(&self, outstanding: usize) {
-        self.stats
-            .max_outstanding
-            .fetch_max(outstanding as u64, Ordering::Relaxed);
-    }
-
-    #[cfg(not(feature = "test-support"))]
-    fn note_outstanding(&self, _outstanding: usize) {}
 }
 
 #[must_use]
@@ -657,64 +464,6 @@ pub fn spawn_music_decoder_thread(
     writer: MusicBlockWriter,
     context: MusicDecodeContext,
 ) -> MusicStream {
-    spawn_music_decoder_thread_with_mode(
-        path,
-        cut,
-        looping,
-        rate,
-        preserve_pitch,
-        writer,
-        context,
-        BackpressureMode::OccupancyDeadline,
-    )
-}
-
-#[cfg(feature = "test-support")]
-/// Spawns a decoder with a benchmark-selected backpressure implementation.
-#[allow(clippy::too_many_arguments)]
-pub fn spawn_music_decoder_thread_for_benchmark(
-    path: PathBuf,
-    cut: Cut,
-    looping: bool,
-    rate: f32,
-    preserve_pitch: bool,
-    writer: MusicBlockWriter,
-    context: MusicDecodeContext,
-    mode: MusicBackpressureBenchmarkMode,
-) -> MusicStream {
-    let mode = match mode {
-        MusicBackpressureBenchmarkMode::Fixed300Micros => {
-            BackpressureMode::FixedRetry(Duration::from_micros(300))
-        }
-        MusicBackpressureBenchmarkMode::Fixed2Millis => {
-            BackpressureMode::FixedRetry(Duration::from_millis(2))
-        }
-        MusicBackpressureBenchmarkMode::OccupancyDeadline => BackpressureMode::OccupancyDeadline,
-        MusicBackpressureBenchmarkMode::OccupancySleep => BackpressureMode::OccupancySleep,
-    };
-    spawn_music_decoder_thread_with_mode(
-        path,
-        cut,
-        looping,
-        rate,
-        preserve_pitch,
-        writer,
-        context,
-        mode,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn spawn_music_decoder_thread_with_mode(
-    path: PathBuf,
-    cut: Cut,
-    looping: bool,
-    rate: f32,
-    preserve_pitch: bool,
-    writer: MusicBlockWriter,
-    context: MusicDecodeContext,
-    mode: BackpressureMode,
-) -> MusicStream {
     let control = Arc::new(MusicControl {
         stop_signal: AtomicBool::new(false),
         rate_bits: AtomicU32::new(rate.to_bits()),
@@ -723,10 +472,6 @@ fn spawn_music_decoder_thread_with_mode(
         wake: DecoderWake::new(),
     });
     let decoder_control = Arc::clone(&control);
-    #[cfg(feature = "test-support")]
-    let backpressure_stats = Arc::new(MusicBackpressureCounters::new());
-    #[cfg(feature = "test-support")]
-    let decoder_backpressure_stats = Arc::clone(&backpressure_stats);
 
     let thread = thread::spawn(move || {
         let mut writer = writer;
@@ -736,17 +481,7 @@ fn spawn_music_decoder_thread_with_mode(
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             #[cfg(windows)]
             let _thread_policy = boost_current_thread(ThreadRole::AudioDecode);
-            music_decoder_thread_loop(
-                path,
-                cut,
-                looping,
-                &decoder_control,
-                &mut writer,
-                context,
-                mode,
-                #[cfg(feature = "test-support")]
-                decoder_backpressure_stats,
-            )
+            music_decoder_thread_loop(path, cut, looping, &decoder_control, &mut writer, context)
         }));
         match result {
             Ok(Ok(())) => {}
@@ -756,12 +491,7 @@ fn spawn_music_decoder_thread_with_mode(
         writer
     });
 
-    MusicStream {
-        thread,
-        control,
-        #[cfg(feature = "test-support")]
-        backpressure_stats,
-    }
+    MusicStream { thread, control }
 }
 
 #[inline]
@@ -820,8 +550,6 @@ fn music_decoder_thread_loop(
     control: &MusicControl,
     writer: &mut MusicBlockWriter,
     context: MusicDecodeContext,
-    backpressure_mode: BackpressureMode,
-    #[cfg(feature = "test-support")] backpressure_stats: Arc<MusicBackpressureCounters>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let MusicControl {
         stop_signal: stop,
@@ -837,16 +565,8 @@ fn music_decoder_thread_loop(
 
     let out_ch = context.output.channels;
     let out_hz = context.output.sample_rate_hz;
-    let mut backpressure = MusicBackpressure::new(
-        backpressure_mode,
-        out_hz,
-        writer.capacity_blocks(),
-        context.generation,
-    );
-    #[cfg(feature = "test-support")]
-    {
-        backpressure.stats = backpressure_stats;
-    }
+    let mut backpressure =
+        MusicBackpressure::new(out_hz, writer.capacity_blocks(), context.generation);
     let is_ogg_stream = matches!(&reader, decode::Reader::Ogg(_));
 
     debug!(
@@ -1539,9 +1259,9 @@ pub fn load_and_resample_sfx(
 #[cfg(test)]
 mod tests {
     use super::{
-        BackpressureMode, DecoderWake, MAX_SFX_PREALLOC_SAMPLES, MusicBackpressure, MusicControl,
-        OutputFormat, lead_in_silence_timing, music_output_start_sec, planar_window,
-        push_music_block, seek_preroll_in_frames, sfx_output_capacity,
+        DecoderWake, MAX_SFX_PREALLOC_SAMPLES, MusicBackpressure, MusicControl, OutputFormat,
+        lead_in_silence_timing, music_output_start_sec, planar_window, push_music_block,
+        seek_preroll_in_frames, sfx_output_capacity,
     };
     use deadlib_audio_core::{MusicBlockTiming, music_transport};
     use deadsync_audio_decode::resample::PlanarAccum;
@@ -1675,12 +1395,8 @@ mod tests {
         let mut writer = stream.writer;
         let thread = std::thread::spawn(move || {
             control_thread.wake.register_current();
-            let mut backpressure = MusicBackpressure::new(
-                BackpressureMode::OccupancyDeadline,
-                SAMPLE_RATE,
-                writer.capacity_blocks(),
-                GENERATION,
-            );
+            let mut backpressure =
+                MusicBackpressure::new(SAMPLE_RATE, writer.capacity_blocks(), GENERATION);
             entered_thread.store(true, Ordering::Release);
             let result = push_music_block(
                 &mut writer,
@@ -1726,12 +1442,8 @@ mod tests {
         const OLD_GENERATION: u64 = 11;
         const NEW_GENERATION: u64 = 12;
         let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
-        let mut backpressure = MusicBackpressure::new(
-            BackpressureMode::OccupancyDeadline,
-            SAMPLE_RATE,
-            stream.writer.capacity_blocks(),
-            OLD_GENERATION,
-        );
+        let mut backpressure =
+            MusicBackpressure::new(SAMPLE_RATE, stream.writer.capacity_blocks(), OLD_GENERATION);
         let control = control(NEW_GENERATION);
         let samples = vec![1; deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES * CHANNELS];
         let old_timing = MusicBlockTiming {
@@ -1773,12 +1485,8 @@ mod tests {
         const GENERATION: u64 = 21;
         let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
         let control = control(GENERATION);
-        let mut backpressure = MusicBackpressure::new(
-            BackpressureMode::OccupancyDeadline,
-            SAMPLE_RATE,
-            stream.writer.capacity_blocks(),
-            GENERATION,
-        );
+        let mut backpressure =
+            MusicBackpressure::new(SAMPLE_RATE, stream.writer.capacity_blocks(), GENERATION);
         let samples = [1, -1];
         push_music_block(
             &mut stream.writer,
@@ -1808,12 +1516,8 @@ mod tests {
         const NEW_GENERATION: u64 = 32;
         let (mut stream, _render) = music_transport(SAMPLE_RATE, CHANNELS);
         let control = control(NEW_GENERATION);
-        let mut backpressure = MusicBackpressure::new(
-            BackpressureMode::OccupancyDeadline,
-            SAMPLE_RATE,
-            stream.writer.capacity_blocks(),
-            OLD_GENERATION,
-        );
+        let mut backpressure =
+            MusicBackpressure::new(SAMPLE_RATE, stream.writer.capacity_blocks(), OLD_GENERATION);
         let samples = vec![
             1;
             backpressure.transition_prefill_blocks
@@ -1846,12 +1550,8 @@ mod tests {
     fn watermarks_leave_at_least_190_ms_transition_reserve() {
         for sample_rate_hz in [44_100, 48_000, 96_000] {
             let (stream, _render) = music_transport(sample_rate_hz, 8);
-            let backpressure = MusicBackpressure::new(
-                BackpressureMode::OccupancyDeadline,
-                sample_rate_hz,
-                stream.writer.capacity_blocks(),
-                1,
-            );
+            let backpressure =
+                MusicBackpressure::new(sample_rate_hz, stream.writer.capacity_blocks(), 1);
             let reserve_frames = (backpressure.capacity_blocks - backpressure.high_blocks)
                 * deadlib_audio_core::ring::MUSIC_BLOCK_FRAMES;
             assert!(

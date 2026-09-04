@@ -73,45 +73,6 @@ fn pump_tap_rows_and_hold_count(notes: &[Note], note_range: (usize, usize)) -> (
     (rows, hold_count)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
-    pump_tap_rows_and_hold_count(notes, note_range).0
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn pump_tap_rows_reference(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
-    let end = note_range.1.min(notes.len());
-    let mut rows: Vec<usize> = notes[note_range.0.min(end)..end]
-        .iter()
-        .filter(|note| {
-            note.can_be_judged
-                && !note.is_fake
-                && matches!(
-                    note.note_type,
-                    NoteType::Tap | NoteType::Hold | NoteType::Roll
-                )
-        })
-        .map(|note| beat_to_note_row(note.beat).max(0) as usize)
-        .collect();
-    rows.sort_unstable();
-    rows.dedup();
-    rows
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn pump_tap_rows_for_bench(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
-    pump_tap_rows(notes, note_range)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn pump_tap_rows_reference_for_bench(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
-    pump_tap_rows_reference(notes, note_range)
-}
-
 fn push_pump_checkpoints(
     events: &mut Vec<PumpHoldEvent>,
     notes: &[Note],
@@ -287,30 +248,6 @@ fn build_pump_hold_events_core(
         }
     }
     (events, score_rows)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-#[must_use]
-pub fn build_pump_hold_events_reference(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-    note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[SongTimeNs],
-    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
-    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
-    num_players: usize,
-) -> (Vec<PumpHoldEvent>, [u32; MAX_PLAYERS]) {
-    build_pump_hold_events_core(
-        notes,
-        note_ranges,
-        note_time_cache_ns,
-        hold_end_time_cache_ns,
-        timing_players,
-        gameplay_charts,
-        num_players,
-        false,
-    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1381,87 +1318,6 @@ pub fn collect_due_autoplay_active_hold_resolutions_masked(
         stopped: false,
     }
 }
-
-#[cfg(test)]
-pub fn update_active_hold_columns(
-    active_holds: &mut [Option<ActiveHold>],
-    notes: &mut [Note],
-    inputs: &[bool; MAX_COLS],
-    num_cols: usize,
-    cols_per_player: usize,
-    num_players: usize,
-    timing_players: &[&TimingData; MAX_PLAYERS],
-    target_time_ns: SongTimeNs,
-    music_rate: f32,
-    live_autoplay: bool,
-    events: &mut [Option<ActiveHoldColumnResolution>],
-) -> ActiveHoldColumnsUpdate {
-    let columns = num_cols.min(MAX_COLS).min(active_holds.len());
-    let mut event_count = 0usize;
-    for column in 0..columns {
-        if event_count >= events.len() {
-            return ActiveHoldColumnsUpdate {
-                columns_scanned: column,
-                event_count,
-                stopped: true,
-            };
-        }
-        sync_active_hold_pressed_column(active_holds, column, live_autoplay, inputs[column]);
-        let player = player_index_for_column(num_players, cols_per_player, column);
-        let Some(resolution) = integrate_active_hold_column(
-            active_holds,
-            notes,
-            column,
-            timing_players[player],
-            target_time_ns,
-            music_rate,
-        ) else {
-            continue;
-        };
-        events[event_count] = Some(ActiveHoldColumnResolution { column, resolution });
-        event_count += 1;
-    }
-    ActiveHoldColumnsUpdate {
-        columns_scanned: columns,
-        event_count,
-        stopped: false,
-    }
-}
-
-#[cfg(test)]
-pub fn collect_due_autoplay_active_hold_resolutions(
-    active_holds: &mut [Option<ActiveHold>],
-    num_cols: usize,
-    cutoff_time_ns: SongTimeNs,
-    events: &mut [Option<ActiveHoldColumnResolution>],
-) -> ActiveHoldColumnsUpdate {
-    let columns = num_cols.min(MAX_COLS).min(active_holds.len());
-    let mut event_count = 0usize;
-    for column in 0..columns {
-        if event_count >= events.len() {
-            return ActiveHoldColumnsUpdate {
-                columns_scanned: column,
-                event_count,
-                stopped: true,
-            };
-        }
-        let Some(resolution) = active_holds[column]
-            .as_ref()
-            .and_then(|active| autoplay_due_active_hold_resolution(active, cutoff_time_ns))
-        else {
-            continue;
-        };
-        active_holds[column] = None;
-        events[event_count] = Some(ActiveHoldColumnResolution { column, resolution });
-        event_count += 1;
-    }
-    ActiveHoldColumnsUpdate {
-        columns_scanned: columns,
-        event_count,
-        stopped: false,
-    }
-}
-
 pub fn settle_replaced_active_hold_column(
     active_holds: &mut [Option<ActiveHold>],
     notes: &mut [Note],
@@ -1815,30 +1671,6 @@ pub fn collect_next_autoplay_row_events(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[inline(always)]
-fn collect_active_autoplay_roll_columns_full(
-    active_holds: &[Option<ActiveHold>],
-    num_cols: usize,
-    columns: &mut [usize],
-) -> usize {
-    let cols = num_cols.min(MAX_COLS).min(active_holds.len());
-    let mut count = 0usize;
-    for (column, active) in active_holds.iter().take(cols).enumerate() {
-        if count >= columns.len() {
-            break;
-        }
-        if active
-            .as_ref()
-            .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go)
-        {
-            columns[count] = column;
-            count += 1;
-        }
-    }
-    count
-}
-
 /// Collects active autoplay rolls into caller-owned fixed storage.
 ///
 /// The game thread maintains the exact roll mask at hold mutation points, so
@@ -1870,17 +1702,6 @@ pub fn collect_active_autoplay_roll_columns_indexed(
         pending &= pending - 1;
     }
     count
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[inline]
-pub fn collect_active_autoplay_roll_columns_reference(
-    active_holds: &[Option<ActiveHold>],
-    num_cols: usize,
-    columns: &mut [usize],
-) -> usize {
-    collect_active_autoplay_roll_columns_full(active_holds, num_cols, columns)
 }
 
 #[inline(always)]

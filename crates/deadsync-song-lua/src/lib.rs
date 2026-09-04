@@ -61,13 +61,6 @@ pub use files::{
     retarget_loader_env, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
     song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use files::{
-    actor_util_extension_type_for_bench, actor_util_extension_type_reference_for_bench,
-    ascii_lowercase_contains_for_bench, ascii_lowercase_contains_reference_for_bench,
-    song_lookup_matches_reference_for_bench,
-};
 pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
@@ -208,12 +201,6 @@ pub use option_rows::{
     create_theme_prefs_rows_table, create_theme_prefs_table, custom_option_default_text,
     custom_option_row_spec, operator_menu_option_row_spec, option_value_text, theme_pref_row_spec,
 };
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub use option_rows::{
-    conf_option_row_spec_reference_for_bench, custom_option_row_spec_reference_for_bench,
-    theme_pref_row_spec_reference_for_bench,
-};
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
     SongLuaPerframeSample, SongLuaUpdateModState, active_perframe_entries,
@@ -246,13 +233,9 @@ pub use runtime_mod::{
     XeroRuntimeOverlayFunctionEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
     read_runtime_mod_eases, read_xero_runtime_mod_eases_for_overlay_actors,
     read_xero_runtime_mod_eases_with_overlay_capture, read_xero_runtime_mod_entries,
-    record_unsupported_xero_overlay_function_ease, runtime_mod_ease_target, runtime_mod_end_value,
+    record_unsupported_xero_overlay_function_ease, runtime_mod_end_value,
     runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
     runtime_overlay_capture_key, runtime_player_option_ease_target,
-};
-#[cfg(any(test, feature = "bench-support"))]
-pub use runtime_mod::{
-    collect_unique_runtime_mod_entries, collect_unique_runtime_overlay_capture_keys,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
@@ -285,8 +268,6 @@ pub use theme_colors::{
     song_lua_palette, song_lua_player_color, song_lua_player_dark_color,
     song_lua_player_score_color, stage_color, tone_color,
 };
-#[cfg(any(test, feature = "bench-support"))]
-pub use timing::timing_window_arg_index_reference_for_bench;
 pub use timing::{
     SONG_LUA_TIMING_WINDOW_NAMES, timing_window_arg_index, timing_window_name,
     timing_window_seconds, worst_judgment_from_offsets,
@@ -306,8 +287,6 @@ pub use values::{
     player_number_name, read_boolish, read_easing_name, read_f32, read_f64, read_i32_value,
     read_player, read_span_mode, read_string, read_u32_value, truthy,
 };
-#[cfg(any(test, feature = "bench-support"))]
-pub use values::{read_boolish_reference_for_bench, read_span_mode_reference_for_bench};
 pub use version::{
     is_minimum_product_version, is_product_version, song_lua_is_minimum_product_version,
     song_lua_is_product_version, version_args, version_parts,
@@ -476,17 +455,6 @@ fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn song_lua_style_info_reference_for_bench(style_name: &str) -> SongLuaStyleInfo {
-    let normalized = style_name
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['_', '-', ' '], "");
-    song_lua_style_info_normalized(&normalized)
-}
-
 #[inline(always)]
 #[must_use]
 pub fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
@@ -548,30 +516,6 @@ impl SongLuaDifficulty {
 
     #[inline(always)]
     #[must_use]
-    pub const fn from_chart_name(difficulty: &str) -> Self {
-        if difficulty.eq_ignore_ascii_case("beginner") {
-            Self::Beginner
-        } else if difficulty.eq_ignore_ascii_case("easy")
-            || difficulty.eq_ignore_ascii_case("basic")
-        {
-            Self::Easy
-        } else if difficulty.eq_ignore_ascii_case("medium")
-            || difficulty.eq_ignore_ascii_case("standard")
-        {
-            Self::Medium
-        } else if difficulty.eq_ignore_ascii_case("hard")
-            || difficulty.eq_ignore_ascii_case("difficult")
-        {
-            Self::Hard
-        } else if difficulty.eq_ignore_ascii_case("edit") {
-            Self::Edit
-        } else {
-            Self::Challenge
-        }
-    }
-
-    #[inline(always)]
-    #[must_use]
     pub const fn sort_key(self) -> u8 {
         match self {
             Self::Beginner => 0,
@@ -605,18 +549,6 @@ fn song_lua_difficulty_from_normalized(normalized: &str) -> Option<SongLuaDiffic
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn song_lua_difficulty_from_value_reference_for_bench(
-    value: mlua::Value,
-) -> Option<SongLuaDifficulty> {
-    let normalized = read_string(value)?
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['_', '-', ' '], "");
-    song_lua_difficulty_from_normalized(&normalized)
-}
-
 pub fn song_lua_steps_type_is_dance_single(value: mlua::Value) -> bool {
     let mlua::Value::String(value) = value else {
         return false;
@@ -635,16 +567,6 @@ fn song_lua_steps_type_is_dance_single_normalized(normalized: &str) -> bool {
         normalized,
         "stepstypedancesingle" | "dancesingle" | "single"
     )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn song_lua_steps_type_is_dance_single_reference_for_bench(value: mlua::Value) -> bool {
-    let Some(raw) = read_string(value) else {
-        return false;
-    };
-    let normalized = raw.trim().to_ascii_lowercase().replace(['_', '-', ' '], "");
-    song_lua_steps_type_is_dance_single_normalized(&normalized)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1003,20 +925,6 @@ fn theme_screen_fallback_normalized(key: &str) -> Option<&'static str> {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn theme_screen_fallback_for_bench(group: &str) -> Option<&'static str> {
-    theme_screen_fallback(group)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn theme_screen_fallback_reference_for_bench(group: &str) -> Option<&'static str> {
-    theme_screen_fallback_normalized(&group.to_ascii_lowercase())
-}
-
 pub fn theme_metric_bool(value: mlua::Value) -> bool {
     match value {
         mlua::Value::Boolean(value) => value,
@@ -1258,15 +1166,6 @@ fn theme_pref_default_normalized(lua: &mlua::Lua, key: &str) -> mlua::Result<mlu
         return Ok(mlua::Value::String(lua.create_string(value)?));
     }
     Ok(mlua::Value::Boolean(matches!(key, "useimagecache")))
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn theme_pref_default_reference_for_bench(
-    lua: &mlua::Lua,
-    name: &str,
-) -> mlua::Result<mlua::Value> {
-    theme_pref_default_normalized(lua, &name.to_ascii_lowercase())
 }
 
 pub type SongLuaNoteskinPathResolver = fn(&str, &str, &str) -> Option<PathBuf>;
@@ -2042,13 +1941,6 @@ fn parse_overlay_effect_mode_normalized(key: &str) -> Option<EffectMode> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_overlay_effect_mode_reference_for_bench(raw: &str) -> Option<EffectMode> {
-    parse_overlay_effect_mode_normalized(&raw.trim().to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn parse_overlay_effect_clock(raw: &str) -> Option<EffectClock> {
     let raw = raw.trim().trim_matches('"').trim_matches('\'');
@@ -2067,14 +1959,6 @@ fn parse_overlay_effect_clock_normalized(key: &str) -> Option<EffectClock> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_overlay_effect_clock_reference_for_bench(raw: &str) -> Option<EffectClock> {
-    let raw = raw.trim().trim_matches('"').trim_matches('\'');
-    parse_overlay_effect_clock_normalized(&raw.to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn parse_overlay_text_align(raw: &str) -> Option<TextAlign> {
     let raw = raw.trim().trim_matches('"').trim_matches('\'');
@@ -2090,14 +1974,6 @@ fn parse_overlay_text_align_normalized(key: &str) -> Option<TextAlign> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_overlay_text_align_reference_for_bench(raw: &str) -> Option<TextAlign> {
-    let raw = raw.trim().trim_matches('"').trim_matches('\'');
-    parse_overlay_text_align_normalized(&raw.to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
     let raw = raw.trim().trim_matches('"').trim_matches('\'');
@@ -2111,14 +1987,6 @@ fn parse_overlay_text_glow_mode_normalized(key: &str) -> Option<SongLuaTextGlowM
         "both" | "textglowmode_both" => Some(SongLuaTextGlowMode::Both),
         _ => None,
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_overlay_text_glow_mode_reference_for_bench(raw: &str) -> Option<SongLuaTextGlowMode> {
-    let raw = raw.trim().trim_matches('"').trim_matches('\'');
-    parse_overlay_text_glow_mode_normalized(&raw.to_ascii_lowercase())
 }
 
 #[must_use]
@@ -4773,13 +4641,13 @@ mod tests {
         SongLuaSpeedMod, SongLuaSpriteState, SongLuaTextGlowMode, SongLuaTimeUnit,
         THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
         UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers, actor_overlay_initial_state,
-        actor_pointers_touch_actor, add_actor_child_from_path as add_lua_actor_child_from_path,
-        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
-        capture_function_action_blocks, capture_indexed_actor_function_blocks,
-        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
-        column_offset_windows_from_samples, compile_song_lua_layers_with_actors,
-        compile_song_lua_with_actors, compile_song_runtime_values, compiled_song_lua_sound_paths,
-        create_chunk_env_proxy, create_debug_table, create_dummy_actor as create_lua_dummy_actor,
+        add_actor_child_from_path as add_lua_actor_child_from_path, capture_actor_message_commands,
+        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
+        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
+        compile_song_lua_layers_with_actors, compile_song_lua_with_actors,
+        compile_song_runtime_values, compiled_song_lua_sound_paths, create_chunk_env_proxy,
+        create_debug_table, create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
         file_path_string, function_named_upvalue_tables, graph_display_body_size,
@@ -4789,28 +4657,21 @@ mod tests {
         note_field_column_actors as create_note_field_column_actors, note_hide_window_from_indices,
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
         overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
-        parse_overlay_blend_mode, parse_overlay_effect_clock,
-        parse_overlay_effect_clock_reference_for_bench, parse_overlay_effect_mode,
-        parse_overlay_effect_mode_reference_for_bench, parse_overlay_text_align,
-        parse_overlay_text_align_reference_for_bench, parse_overlay_text_glow_mode,
-        parse_overlay_text_glow_mode_reference_for_bench, push_multitap_arrow_sample,
-        push_overlay_sample_eases, push_song_lua_overlay_sound_paths, push_song_lua_video_paths,
-        push_startup_message_if_listened, read_global_function_nested_tables,
-        read_graph_display_body_state, read_graph_display_line_state,
-        read_song_meter_display_state, read_update_function_nested_tables,
-        read_update_function_tables, record_song_lua_broadcast, reset_actor_capture,
-        reset_indexed_actor_capture_tables, runtime_static_overlay_index_by_path,
-        scale_to_rect_plan, set_compile_song_runtime_values, song_lua_arch_name,
-        song_lua_difficulty_from_value, song_lua_difficulty_from_value_reference_for_bench,
-        song_lua_human_player_count, song_lua_steps_type_is_dance_single,
-        song_lua_steps_type_is_dance_single_reference_for_bench, song_lua_style_info,
-        song_lua_style_info_reference_for_bench, song_lua_video_paths, sort_compiled_song_lua,
+        parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
+        push_multitap_arrow_sample, push_overlay_sample_eases, push_song_lua_overlay_sound_paths,
+        push_song_lua_video_paths, push_startup_message_if_listened,
+        read_global_function_nested_tables, read_graph_display_body_state,
+        read_graph_display_line_state, read_song_meter_display_state,
+        read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
+        reset_actor_capture, reset_indexed_actor_capture_tables,
+        runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
+        song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
+        song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
         sprite_custom_animation_state_from, sprite_frame_count, sprite_image_frame_size,
         sprite_texture_rect, sprite_texture_rect_with_offset, texture_pixel_offset_rect,
         theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_pref_default,
-        theme_pref_default_reference_for_bench, theme_screen_fallback,
-        theme_screen_fallback_reference_for_bench, theme_string, theme_string_names,
+        theme_string, theme_string_names,
     };
     use std::collections::HashSet;
     use std::fs;
@@ -19631,90 +19492,6 @@ return Def.ActorFrame{
     }
 
     #[test]
-    fn stack_compact_style_classification_matches_committed_behavior() {
-        let long_unknown = "É".repeat(40);
-        let cases = [
-            ("double", "double"),
-            (" Dance_Double ", "double"),
-            ("STEPS-TYPE DANCE DOUBLE", "double"),
-            ("versus", "versus"),
-            ("VERSUS", "versus"),
-            ("single", "single"),
-            ("unknown", "single"),
-            (long_unknown.as_str(), "single"),
-        ];
-        for (raw, expected_name) in cases {
-            let current = song_lua_style_info(raw);
-            assert_eq!(current.name, expected_name, "raw={raw:?}");
-            assert_eq!(
-                current,
-                song_lua_style_info_reference_for_bench(raw),
-                "raw={raw:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn stack_compact_difficulty_classification_matches_committed_behavior() {
-        let lua = Lua::new();
-        let long_unknown = "É".repeat(40);
-        let cases = [
-            ("Difficulty_Beginner", Some(SongLuaDifficulty::Beginner)),
-            (" EASY ", Some(SongLuaDifficulty::Easy)),
-            ("Difficulty-Medium", Some(SongLuaDifficulty::Medium)),
-            ("difficulty hard", Some(SongLuaDifficulty::Hard)),
-            ("DIFFICULTY_CHALLENGE", Some(SongLuaDifficulty::Challenge)),
-            ("expert", Some(SongLuaDifficulty::Challenge)),
-            ("Difficulty_Edit", Some(SongLuaDifficulty::Edit)),
-            ("unknown", None),
-            (long_unknown.as_str(), None),
-        ];
-        for (raw, expected) in cases {
-            let value = Value::String(lua.create_string(raw).unwrap());
-            assert_eq!(
-                song_lua_difficulty_from_value(value.clone()),
-                expected,
-                "raw={raw:?}"
-            );
-            assert_eq!(
-                song_lua_difficulty_from_value(value.clone()),
-                song_lua_difficulty_from_value_reference_for_bench(value),
-                "raw={raw:?}"
-            );
-        }
-        assert_eq!(song_lua_difficulty_from_value(Value::Integer(4)), None);
-    }
-
-    #[test]
-    fn stack_compact_steps_type_classification_matches_committed_behavior() {
-        let lua = Lua::new();
-        let long_unknown = "É".repeat(40);
-        let cases = [
-            ("StepsType_Dance_Single", true),
-            (" DANCE-SINGLE ", true),
-            ("SINGLE", true),
-            ("Steps Type Dance Single", true),
-            ("StepsType_Dance_Double", false),
-            ("unknown", false),
-            (long_unknown.as_str(), false),
-        ];
-        for (raw, expected) in cases {
-            let value = Value::String(lua.create_string(raw).unwrap());
-            assert_eq!(
-                song_lua_steps_type_is_dance_single(value.clone()),
-                expected,
-                "raw={raw:?}"
-            );
-            assert_eq!(
-                song_lua_steps_type_is_dance_single(value.clone()),
-                song_lua_steps_type_is_dance_single_reference_for_bench(value),
-                "raw={raw:?}"
-            );
-        }
-        assert!(!song_lua_steps_type_is_dance_single(Value::Integer(4)));
-    }
-
-    #[test]
     fn actor_indices_for_pointers_matches_known_actor_tables() {
         let actor_ptrs = HashSet::from([20_usize, 40]);
 
@@ -19722,37 +19499,6 @@ return Def.ActorFrame{
             actor_indices_for_pointers(5, |index| (index + 1) * 10, &actor_ptrs),
             vec![1, 3]
         );
-    }
-
-    #[test]
-    fn actor_pointers_touch_actor_requires_probe_hit() {
-        assert!(actor_pointers_touch_actor(
-            4,
-            |index| (index + 1) * 10,
-            &[20, 99]
-        ));
-        assert!(!actor_pointers_touch_actor(
-            4,
-            |index| (index + 1) * 10,
-            &[99]
-        ));
-        assert!(!actor_pointers_touch_actor(
-            4,
-            |index| (index + 1) * 10,
-            &[]
-        ));
-
-        for pointer_count in [9, 17, 63, 192, 257] {
-            let pointers = (0..pointer_count)
-                .map(|index| 5 + ((index * 73) % pointer_count) * 10)
-                .collect::<Vec<_>>();
-            let reference = (0..513).any(|index| pointers.contains(&(10 + index * 10)));
-            assert_eq!(
-                actor_pointers_touch_actor(513, |index| 10 + index * 10, &pointers),
-                reference,
-                "pointer_count={pointer_count}"
-            );
-        }
     }
 
     #[test]
@@ -20984,140 +20730,10 @@ end
     }
 
     #[test]
-    fn stack_normalized_overlay_effect_modes_match_committed_behavior() {
-        let long_unknown = "É".repeat(20);
-        let cases = [
-            (" none ", Some(EffectMode::None)),
-            ("DIFFUSERAMP", Some(EffectMode::DiffuseRamp)),
-            ("DiffuseShift", Some(EffectMode::DiffuseShift)),
-            ("glowSHIFT", Some(EffectMode::GlowShift)),
-            ("Pulse", Some(EffectMode::Pulse)),
-            ("BOB", Some(EffectMode::Bob)),
-            ("Bounce", Some(EffectMode::Bounce)),
-            ("Wag", Some(EffectMode::Wag)),
-            ("SPIN", Some(EffectMode::Spin)),
-            ("\"none\"", None),
-            ("unknown", None),
-            (long_unknown.as_str(), None),
-        ];
-        for (raw, expected) in cases {
-            assert_eq!(parse_overlay_effect_mode(raw), expected, "raw={raw:?}");
-            assert_eq!(
-                parse_overlay_effect_mode(raw),
-                parse_overlay_effect_mode_reference_for_bench(raw),
-                "raw={raw:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn stack_normalized_overlay_text_alignments_match_committed_behavior() {
-        let long_unknown = "É".repeat(20);
-        let cases = [
-            (" LEFT ", Some(TextAlign::Left)),
-            ("'HorizAlign_Left'", Some(TextAlign::Left)),
-            ("\"center\"", Some(TextAlign::Center)),
-            ("Middle", Some(TextAlign::Center)),
-            ("HORIZALIGN_CENTER", Some(TextAlign::Center)),
-            ("horizalign_middle", Some(TextAlign::Center)),
-            ("right", Some(TextAlign::Right)),
-            ("'HORIZALIGN_RIGHT'", Some(TextAlign::Right)),
-            ("unknown", None),
-            (long_unknown.as_str(), None),
-        ];
-        for (raw, expected) in cases {
-            assert_eq!(parse_overlay_text_align(raw), expected, "raw={raw:?}");
-            assert_eq!(
-                parse_overlay_text_align(raw),
-                parse_overlay_text_align_reference_for_bench(raw),
-                "raw={raw:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn stack_normalized_overlay_text_glow_modes_match_committed_behavior() {
-        let long_unknown = "É".repeat(20);
-        let cases = [
-            (" INNER ", Some(SongLuaTextGlowMode::Inner)),
-            ("'TextGlowMode_Inner'", Some(SongLuaTextGlowMode::Inner)),
-            ("Stroke", Some(SongLuaTextGlowMode::Stroke)),
-            ("\"TEXTGLOWMODE_STROKE\"", Some(SongLuaTextGlowMode::Stroke)),
-            ("both", Some(SongLuaTextGlowMode::Both)),
-            ("TextGlowMode_Both", Some(SongLuaTextGlowMode::Both)),
-            ("unknown", None),
-            (long_unknown.as_str(), None),
-        ];
-        for (raw, expected) in cases {
-            assert_eq!(parse_overlay_text_glow_mode(raw), expected, "raw={raw:?}");
-            assert_eq!(
-                parse_overlay_text_glow_mode(raw),
-                parse_overlay_text_glow_mode_reference_for_bench(raw),
-                "raw={raw:?}"
-            );
-        }
-    }
-
-    #[test]
     fn parse_overlay_effect_clock_accepts_music_and_bgm_aliases() {
         assert_eq!(parse_overlay_effect_clock("beat"), Some(EffectClock::Beat));
         assert_eq!(parse_overlay_effect_clock("bgm"), Some(EffectClock::Beat));
         assert_eq!(parse_overlay_effect_clock("music"), Some(EffectClock::Time));
-    }
-
-    #[test]
-    fn stack_normalized_overlay_effect_clocks_match_committed_behavior() {
-        let long_value = "É".repeat(20);
-        let cases = [
-            (" BEAT ", Some(EffectClock::Beat)),
-            ("BeatNoOffset", Some(EffectClock::Beat)),
-            ("BGM", Some(EffectClock::Beat)),
-            ("'timer'", Some(EffectClock::Time)),
-            ("TimerGlobal", Some(EffectClock::Time)),
-            ("\"MUSIC\"", Some(EffectClock::Time)),
-            ("MusicNoOffset", Some(EffectClock::Time)),
-            ("seconds", Some(EffectClock::Time)),
-            ("EffectClock_Beat", Some(EffectClock::Beat)),
-            ("unknown", Some(EffectClock::Time)),
-            ("''", None),
-            (long_value.as_str(), Some(EffectClock::Time)),
-        ];
-        for (raw, expected) in cases {
-            assert_eq!(parse_overlay_effect_clock(raw), expected, "raw={raw:?}");
-            assert_eq!(
-                parse_overlay_effect_clock(raw),
-                parse_overlay_effect_clock_reference_for_bench(raw),
-                "raw={raw:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn stack_normalized_theme_screen_fallbacks_match_committed_behavior() {
-        let long_unknown = "É".repeat(20);
-        let cases = [
-            ("ScreenOptionsService", Some("ScreenOptionsSimple")),
-            ("SCREENVISUALOPTIONS", Some("ScreenOptionsServiceSub")),
-            ("ScreenSystemOptions", Some("ScreenOptionsServiceChild")),
-            (
-                "ScreenGraphicsSoundOptions",
-                Some("ScreenOptionsServiceChild"),
-            ),
-            (
-                "ScreenTournamentModeOptions",
-                Some("ScreenOptionsServiceChild"),
-            ),
-            ("UnknownScreen", None),
-            (long_unknown.as_str(), None),
-        ];
-        for (group, expected) in cases {
-            assert_eq!(theme_screen_fallback(group), expected, "group={group:?}");
-            assert_eq!(
-                theme_screen_fallback(group),
-                theme_screen_fallback_reference_for_bench(group),
-                "group={group:?}"
-            );
-        }
     }
 
     #[test]
@@ -21249,31 +20865,5 @@ end
             theme_pref_default(&lua, "UnknownPreference").unwrap(),
             Value::Boolean(false)
         );
-    }
-
-    #[test]
-    fn stack_normalized_theme_pref_defaults_match_committed_behavior() {
-        let lua = Lua::new();
-        let long_unknown = "É".repeat(20);
-        for name in [
-            "CasualMaxMeter",
-            "NUMBEROFCONTINUESALLOWED",
-            "ScreenEvaluationNonstopMenuTimer",
-            "SimplyLoveColor",
-            "VisualStyle",
-            "ThemeFont",
-            "DefaultGameMode",
-            "SongSelectBG",
-            "EditModeLastSeenDifficulty",
-            "UseImageCache",
-            "UnknownPreference",
-            long_unknown.as_str(),
-        ] {
-            assert_eq!(
-                theme_pref_default(&lua, name).unwrap(),
-                theme_pref_default_reference_for_bench(&lua, name).unwrap(),
-                "name={name:?}"
-            );
-        }
     }
 }

@@ -146,17 +146,6 @@ impl BuiltNotefield {
     }
 }
 
-#[cfg(test)]
-pub(crate) const fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
-    match &mut actor {
-        Actor::Sprite { world_z: z, .. }
-        | Actor::TexturedMesh { world_z: z, .. }
-        | Actor::ReusableTexturedMesh { world_z: z, .. } => *z = world_z,
-        _ => {}
-    }
-    actor
-}
-
 pub(crate) fn share_actor_range(
     actors: &mut Vec<Actor>,
     start: usize,

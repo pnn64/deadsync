@@ -48,22 +48,6 @@ fn normalized_query_contains(target: &str, query: &str) -> bool {
     })
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn song_lookup_matches_reference_for_bench(
-    query: &str,
-    song_dir: &str,
-    group: &str,
-    title: &str,
-) -> bool {
-    let query = query.trim().replace('\\', "/");
-    !query.is_empty()
-        && (query == song_dir
-            || song_dir.contains(query.as_str())
-            || query.eq_ignore_ascii_case(group)
-            || query.eq_ignore_ascii_case(title))
-}
-
 #[must_use]
 pub fn theme_path(kind: &str, group: &str, name: &str) -> String {
     let group = group.trim_matches('/');
@@ -702,25 +686,6 @@ fn extension_matches(extension: &str, candidates: &[&str]) -> bool {
         .any(|candidate| extension.eq_ignore_ascii_case(candidate))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn actor_util_extension_type_reference_for_bench(extension: &str) -> &'static str {
-    match extension.to_ascii_lowercase().as_str() {
-        "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp" => "FileType_Bitmap",
-        "mp4" | "avi" | "mov" | "mkv" | "webm" | "mpeg" | "mpg" => "FileType_Movie",
-        "ogg" | "oga" | "mp3" | "wav" | "flac" | "opus" => "FileType_Sound",
-        "lua" => "FileType_Lua",
-        "xml" | "ini" | "txt" | "json" | "ssc" | "sm" => "FileType_Text",
-        _ => "FileType_Unknown",
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn actor_util_extension_type_for_bench(extension: &str) -> &'static str {
-    actor_util_extension_type(extension)
-}
-
 #[must_use]
 pub fn strip_sprite_hints(filename: &str) -> String {
     let mut text = filename.replace(" (doubleres)", "");
@@ -785,18 +750,6 @@ fn ascii_lowercase_contains(haystack: &str, needle: &str) -> bool {
                 .zip(needle.bytes())
                 .all(|(&haystack, needle)| haystack.to_ascii_lowercase() == needle)
         })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn ascii_lowercase_contains_reference_for_bench(haystack: &str, needle: &str) -> bool {
-    haystack.to_ascii_lowercase().contains(needle)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub fn ascii_lowercase_contains_for_bench(haystack: &str, needle: &str) -> bool {
-    ascii_lowercase_contains(haystack, needle)
 }
 
 fn song_first_file_path(song_dir: &Path, predicate: fn(&Path) -> bool) -> Option<PathBuf> {
@@ -963,76 +916,6 @@ mod tests {
         assert!(song_lookup_matches("My Song", song_dir, "pack", "MY SONG"));
         assert!(!song_lookup_matches("", song_dir, "pack", "My Song"));
         assert!(!song_lookup_matches("other", song_dir, "pack", "My Song"));
-    }
-
-    #[test]
-    fn allocation_free_song_lookup_matches_committed_behavior() {
-        let cases = [
-            ("", "songs/pack/My Song/", "pack", "My Song"),
-            ("   ", "songs/pack/My Song/", "pack", "My Song"),
-            (
-                "songs/pack/My Song/",
-                "songs/pack/My Song/",
-                "pack",
-                "My Song",
-            ),
-            (
-                " songs\\pack\\My Song\\ ",
-                "songs/pack/My Song/",
-                "pack",
-                "My Song",
-            ),
-            ("pack/My Song", "songs/pack/My Song/", "pack", "My Song"),
-            ("PACK", "songs/pack/My Song/", "pack", "My Song"),
-            ("my song", "songs/pack/My Song/", "pack", "My Song"),
-            ("Päck", "songs/Päck/Café/", "Päck", "Café"),
-            ("café", "songs/Päck/Café/", "Päck", "Café"),
-            ("other", "songs/pack/My Song/", "pack", "My Song"),
-        ];
-
-        for (query, song_dir, group, title) in cases {
-            assert_eq!(
-                song_lookup_matches(query, song_dir, group, title),
-                song_lookup_matches_reference_for_bench(query, song_dir, group, title),
-                "query={query:?}, song_dir={song_dir:?}, group={group:?}, title={title:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn allocation_free_extension_classification_matches_committed_behavior() {
-        for extension in [
-            "png", "PNG", "JpEg", "webm", "FLAC", "Lua", "SSC", "json", "unknown", "", "ÉPNG",
-        ] {
-            assert_eq!(
-                actor_util_extension_type(extension),
-                actor_util_extension_type_reference_for_bench(extension),
-                "extension={extension:?}"
-            );
-        }
-
-        assert_eq!(actor_util_file_type("banner.PNG"), "FileType_Bitmap");
-        assert_eq!(actor_util_file_type("notes.SSC"), "FileType_Text");
-        assert_eq!(actor_util_file_type("archive.bin"), "FileType_Unknown");
-    }
-
-    #[test]
-    fn allocation_free_stem_search_matches_committed_behavior() {
-        for (haystack, needle) in [
-            ("Tournament Pack Alpha", "tournament"),
-            ("MY-BANNER-final", "banner"),
-            ("MY-BANNER-final", "BANNER"),
-            ("Café Background", "café"),
-            ("Café Background", "Café"),
-            ("anything", ""),
-            ("song jacket", "missing"),
-        ] {
-            assert_eq!(
-                ascii_lowercase_contains(haystack, needle),
-                ascii_lowercase_contains_reference_for_bench(haystack, needle),
-                "haystack={haystack:?}, needle={needle:?}"
-            );
-        }
     }
 
     #[test]

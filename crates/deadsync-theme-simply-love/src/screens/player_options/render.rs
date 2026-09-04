@@ -19,7 +19,7 @@ pub(super) fn top_bar_actor(
         }
     }
     let title = tr("ScreenTitles", "SelectModifiers");
-    let actor = screen_bar::build_shared(ScreenBarParams {
+    let actor = screen_bar::build(ScreenBarParams {
         visual_policy,
         title: &title,
         title_placement: ScreenBarTitlePlacement::Left,

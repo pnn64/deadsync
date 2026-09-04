@@ -984,26 +984,6 @@ pub fn build_song_lua_constant_windows_for_player<OverlayActor>(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn build_song_lua_constant_windows_for_player_reference<OverlayActor>(
-    compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
-    timing_player: &deadsync_rules::timing::TimingData,
-    player: usize,
-    global_offset_seconds: f32,
-) -> Vec<deadsync_gameplay::AttackMaskWindow> {
-    let time_mods = song_lua_runtime_mod_windows(&compiled.time_mods);
-    let beat_mods = song_lua_runtime_mod_windows(&compiled.beat_mods);
-    deadsync_gameplay::build_song_lua_constant_windows_for_player(
-        &time_mods,
-        &beat_mods,
-        timing_player,
-        player,
-        global_offset_seconds,
-    )
-}
-
 #[must_use]
 pub fn build_song_lua_ease_windows_for_player<OverlayActor>(
     compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
@@ -1014,27 +994,6 @@ pub fn build_song_lua_ease_windows_for_player<OverlayActor>(
 ) -> (Vec<deadsync_gameplay::SongLuaEaseMaskWindow>, usize) {
     deadsync_gameplay::build_song_lua_ease_windows_for_player_iter(
         compiled.eases.iter().map(SongLuaEaseWindowRef::new),
-        timing_player,
-        player,
-        global_offset_seconds,
-        constant_windows,
-        |_| {},
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn build_song_lua_ease_windows_for_player_reference<OverlayActor>(
-    compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
-    timing_player: &deadsync_rules::timing::TimingData,
-    player: usize,
-    global_offset_seconds: f32,
-    constant_windows: &[deadsync_gameplay::AttackMaskWindow],
-) -> (Vec<deadsync_gameplay::SongLuaEaseMaskWindow>, usize) {
-    let eases = song_lua_runtime_ease_windows(&compiled.eases);
-    deadsync_gameplay::build_song_lua_ease_windows_for_player(
-        &eases,
         timing_player,
         player,
         global_offset_seconds,
@@ -1055,24 +1014,6 @@ pub fn build_song_lua_column_offset_windows_for_player<OverlayActor>(
             .column_offsets
             .iter()
             .map(SongLuaColumnOffsetWindowRef),
-        timing_player,
-        player,
-        global_offset_seconds,
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn build_song_lua_column_offset_windows_for_player_reference<OverlayActor>(
-    compiled: &deadsync_song_lua::CompiledSongLua<OverlayActor>,
-    timing_player: &deadsync_rules::timing::TimingData,
-    player: usize,
-    global_offset_seconds: f32,
-) -> Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime> {
-    let column_offsets = song_lua_runtime_column_offset_windows(&compiled.column_offsets);
-    deadsync_gameplay::build_song_lua_column_offset_windows_for_player(
-        &column_offsets,
         timing_player,
         player,
         global_offset_seconds,

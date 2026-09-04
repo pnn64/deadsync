@@ -9,7 +9,6 @@ use std::sync::{Mutex, TryLockError};
 /// and `finish` destroys any unconsumed value on the caller's thread. Replaced
 /// values are destroyed by the publishing worker. There is no eviction scan or
 /// allocation inside the handoff itself; payload allocation belongs to `T`.
-/// Callers expose behavior tests and handoff benchmarks instead of counters.
 /// Worst-case frame work is one atomic load, one uncontended try-lock, and one
 /// moved value.
 pub(crate) struct LatestWorkerValue<T> {

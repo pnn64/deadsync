@@ -1,8 +1,6 @@
 use mlua::Value;
 
 use crate::{read_f32, truthy};
-#[cfg(any(test, feature = "bench-support"))]
-use crate::{read_i32_value, read_string};
 
 pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W1",
@@ -39,16 +37,6 @@ pub fn timing_window_arg_index(value: Value) -> Option<i32> {
         }
         _ => None,
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn timing_window_arg_index_reference_for_bench(value: Value) -> Option<i32> {
-    read_i32_value(value.clone()).or_else(|| {
-        let text = read_string(value)?;
-        let (_, suffix) = text.rsplit_once('W')?;
-        suffix.parse::<i32>().ok()
-    })
 }
 
 pub fn timing_window_name(value: Value) -> Option<&'static str> {
@@ -151,39 +139,5 @@ mod tests {
             Some("TimingWindow_W5")
         );
         assert_eq!(timing_window_name(Value::Integer(8)), None);
-    }
-
-    #[test]
-    fn borrowed_timing_window_argument_matches_owned_string_reference() {
-        let lua = mlua::Lua::new();
-        for raw in [
-            "1",
-            " 2 ",
-            "3.6",
-            "TimingWindow_W4",
-            "Judgment_W-2",
-            "TimingWindow_W5 ",
-            "unknown",
-            "",
-        ] {
-            let current = Value::String(lua.create_string(raw).unwrap());
-            let reference = Value::String(lua.create_string(raw).unwrap());
-            assert_eq!(
-                timing_window_arg_index(current),
-                timing_window_arg_index_reference_for_bench(reference),
-                "value {raw:?}"
-            );
-        }
-        for (current, reference) in [
-            (Value::Integer(i64::MAX), Value::Integer(i64::MAX)),
-            (Value::Number(2.6), Value::Number(2.6)),
-            (Value::Number(f64::NAN), Value::Number(f64::NAN)),
-            (Value::Boolean(true), Value::Boolean(true)),
-        ] {
-            assert_eq!(
-                timing_window_arg_index(current),
-                timing_window_arg_index_reference_for_bench(reference)
-            );
-        }
     }
 }

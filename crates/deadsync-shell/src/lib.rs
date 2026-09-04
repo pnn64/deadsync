@@ -57,45 +57,18 @@ mod transition_effects;
 mod window;
 mod window_state;
 
-#[cfg(feature = "bench-support")]
-pub use app::benchmark_smx_screen_work;
 pub(crate) use command::Command;
-#[cfg(feature = "bench-support")]
-pub use content_reload::{
-    benchmark_artwork_paths, benchmark_artwork_paths_reference, benchmark_progress_fallback,
-    benchmark_progress_fallback_reference, benchmark_receive_ready, benchmark_replaygain_paths,
-    benchmark_replaygain_paths_reference, benchmark_sample_progress,
-};
 pub(crate) use course::CourseRunState;
 pub(crate) use deadsync_theme::views::FrameStatsSample;
-#[cfg(feature = "bench-support")]
-pub use dynamic_media::{
-    BenchmarkMediaPrepDispatch, benchmark_media_completion_budget, benchmark_stale_extract,
-    benchmark_stale_extract_reference, benchmark_video_membership,
-    benchmark_video_membership_reference,
-};
 pub(crate) use frame_loop::FrameLoopState;
 pub(crate) use frame_pacing_trace::GameplayPacingTrace;
 pub(crate) use frame_stats::FrameStatsController;
 pub(crate) use input::UserEvent;
-#[cfg(feature = "bench-support")]
-pub use input::{benchmark_prepare_gameplay_capture, benchmark_sync_gameplay_capture};
 pub(crate) use input_trace::GameplayInputTrace;
 #[cfg(test)]
 pub(crate) use interaction::ExitIntent;
 pub(crate) use interaction::ShellInteractionState;
 pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_audio_plan};
-#[cfg(feature = "bench-support")]
-pub use profile_import::BenchmarkProfileImportService;
-#[cfg(feature = "bench-support")]
-pub use qr_login::{BenchmarkQrLoginService, benchmark_qr_route, benchmark_qr_route_reference};
 pub(crate) use runtime::ShellState;
-#[cfg(feature = "bench-support")]
-pub use score_import::BenchmarkScoreImportService;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
-#[cfg(feature = "bench-support")]
-pub use sync_analysis::{
-    BenchmarkSyncEventRouter, benchmark_sync_finished_owner_filter,
-    benchmark_sync_finished_owner_filter_reference, benchmark_sync_route_reference,
-};

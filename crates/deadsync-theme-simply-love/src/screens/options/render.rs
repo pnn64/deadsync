@@ -451,7 +451,7 @@ fn top_bar_actor(
             return cached.actor.clone();
         }
     }
-    let actor = screen_bar::build_shared(screen_bar::ScreenBarParams {
+    let actor = screen_bar::build(screen_bar::ScreenBarParams {
         visual_policy,
         title,
         title_placement: ScreenBarTitlePlacement::Left,

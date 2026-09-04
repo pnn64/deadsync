@@ -4,8 +4,7 @@ use deadlib_present::actors::{
 };
 use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{
-    ActiveColumnFlash, ColumnCue, active_column_cue_range, active_column_cue_range_from_cursor,
-    column_flash_duration,
+    ActiveColumnFlash, ColumnCue, active_column_cue_range_from_cursor, column_flash_duration,
 };
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -328,12 +327,12 @@ fn compose_column_cue(
                 None => return,
             }
         }
-        ColumnCueKind::Crossover => match request.crossover_cue_cursor {
-            Some(cursor) => {
-                active_column_cue_range_from_cursor(cues, request.current_music_time, cursor)
-            }
-            None => active_column_cue_range(cues, request.current_music_time),
-        },
+        ColumnCueKind::Crossover => {
+            let cursor = request.crossover_cue_cursor.unwrap_or_else(|| {
+                cues.partition_point(|cue| cue.start_time <= request.current_music_time)
+            });
+            active_column_cue_range_from_cursor(cues, request.current_music_time, cursor)
+        }
     };
     if active_range.is_empty() {
         return;

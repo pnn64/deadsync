@@ -2087,17 +2087,6 @@ fn merged_profile_scores_from_sources(
     collect_sorted_profile_scores(merged.into_iter())
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_merged_profile_scores(
-    local: Option<&HashMap<String, CachedScore>>,
-    gs: Option<&HashMap<String, CachedScore>>,
-    ac: Option<&HashMap<String, ArrowCloudScores>>,
-) -> Vec<(String, CachedScore)> {
-    merged_profile_scores_from_sources(local, gs, ac)
-}
-
 impl HeldScoreCaches {
     #[must_use]
     pub const fn new(
@@ -7390,114 +7379,6 @@ mod tests {
             paths.local_index_path(),
             PathBuf::from("Profiles/A/scores/local/index.bin")
         );
-    }
-
-    #[test]
-    fn profile_score_merge_fast_paths_match_legacy_behavior() {
-        fn legacy_merge(
-            local: Option<&HashMap<String, CachedScore>>,
-            gs: Option<&HashMap<String, CachedScore>>,
-            ac: Option<&HashMap<String, ArrowCloudScores>>,
-        ) -> Vec<(String, CachedScore)> {
-            let capacity = local.map_or(0, HashMap::len)
-                + gs.map_or(0, HashMap::len)
-                + ac.map_or(0, HashMap::len);
-            let mut merged = HashMap::with_capacity(capacity);
-            let mut insert = |chart_hash: &str, score: CachedScore| {
-                merged
-                    .entry(chart_hash.to_owned())
-                    .and_modify(|best| {
-                        *best = best_cached_itg_score([Some(*best), Some(score)])
-                            .expect("two fixture scores always produce a best score");
-                    })
-                    .or_insert(score);
-            };
-            if let Some(scores) = local {
-                for (chart_hash, score) in scores {
-                    insert(chart_hash, *score);
-                }
-            }
-            if let Some(scores) = gs {
-                for (chart_hash, score) in scores {
-                    insert(chart_hash, *score);
-                }
-            }
-            if let Some(scores) = ac {
-                for (chart_hash, scores) in scores {
-                    if let Some(score) = scores.itg {
-                        insert(chart_hash, score.to_cached_score());
-                    }
-                }
-            }
-            let mut merged: Vec<_> = merged.into_iter().collect();
-            merged.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-            merged
-        }
-
-        let local_only = cached_score(Grade::Tier05, 0.93, Some(5), Some(6));
-        let shared_local = cached_score(Grade::Tier08, 0.88, Some(8), Some(9));
-        let shared_gs = cached_score(Grade::Tier03, 0.97, Some(3), Some(4));
-        let mut local = HashMap::new();
-        local.insert("z-local".to_owned(), local_only);
-        local.insert("shared".to_owned(), shared_local);
-        let mut gs = HashMap::new();
-        gs.insert("a-gs".to_owned(), shared_local);
-        gs.insert("shared".to_owned(), shared_gs);
-        let mut ac = HashMap::new();
-        ac.insert(
-            "m-ac".to_owned(),
-            ArrowCloudScores {
-                itg: Some(ArrowCloudScore {
-                    score_percent: 0.99,
-                    server_grade: None,
-                    played_at: None,
-                    play_id: Some(1),
-                    is_fail: false,
-                }),
-                ..ArrowCloudScores::default()
-            },
-        );
-        ac.insert(
-            "no-itg".to_owned(),
-            ArrowCloudScores {
-                ex: Some(ArrowCloudScore {
-                    score_percent: 1.0,
-                    server_grade: None,
-                    played_at: None,
-                    play_id: Some(2),
-                    is_fail: false,
-                }),
-                ..ArrowCloudScores::default()
-            },
-        );
-        let mut ac_without_itg = HashMap::new();
-        ac_without_itg.insert("no-itg".to_owned(), ac["no-itg"]);
-
-        let empty_local = HashMap::new();
-        for (local, gs, ac) in [
-            (Some(&local), None, None),
-            (None, Some(&gs), None),
-            (None, None, Some(&ac)),
-            (None, None, Some(&ac_without_itg)),
-            (Some(&local), Some(&gs), Some(&ac)),
-            (Some(&empty_local), Some(&gs), None),
-            (None, None, None),
-        ] {
-            assert_eq!(
-                benchmark_merged_profile_scores(local, gs, ac),
-                legacy_merge(local, gs, ac)
-            );
-        }
-
-        let merged = benchmark_merged_profile_scores(Some(&local), Some(&gs), Some(&ac));
-        assert_eq!(
-            merged
-                .iter()
-                .map(|(chart_hash, _)| chart_hash.as_str())
-                .collect::<Vec<_>>(),
-            ["a-gs", "m-ac", "shared", "z-local"]
-        );
-        assert_eq!(merged[2].1, shared_gs);
     }
 
     #[test]

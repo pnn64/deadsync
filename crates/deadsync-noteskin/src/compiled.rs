@@ -165,20 +165,6 @@ pub fn actor_file_visit_key(path: &Path) -> String {
     key
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_visit_key_reference(button: &str, element: &str) -> String {
-    format!(
-        "{}|{}",
-        button.to_ascii_lowercase(),
-        element.to_ascii_lowercase()
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_file_visit_key_reference(path: &Path) -> String {
-    format!("file:{}", path.display().to_string().to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn compiled_bundle_path(
     cache_dir: &Path,
@@ -274,50 +260,6 @@ pub fn actor_manifest_key_for_dir(dir: &Path, path: &Path) -> Option<String> {
     Some(key)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn actor_manifest_key_for_dir_reference(dir: &Path, path: &Path) -> Option<String> {
-    let game = dir.parent()?.file_name()?.to_str()?;
-    let skin = dir.file_name()?.to_str()?;
-    let file = path.file_name()?.to_str()?;
-    Some(format!("{game}/{skin}/{file}").to_ascii_lowercase())
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod compiled_key_bench_support {
-    use super::*;
-
-    #[must_use]
-    pub fn actor_visit_reference(button: &str, element: &str) -> String {
-        actor_visit_key_reference(button, element)
-    }
-
-    #[must_use]
-    pub fn actor_visit_current(button: &str, element: &str) -> String {
-        actor_visit_key(button, element)
-    }
-
-    #[must_use]
-    pub fn actor_file_visit_reference(path: &Path) -> String {
-        actor_file_visit_key_reference(path)
-    }
-
-    #[must_use]
-    pub fn actor_file_visit_current(path: &Path) -> String {
-        actor_file_visit_key(path)
-    }
-
-    #[must_use]
-    pub fn actor_manifest_reference(dir: &Path, path: &Path) -> Option<String> {
-        actor_manifest_key_for_dir_reference(dir, path)
-    }
-
-    #[must_use]
-    pub fn actor_manifest_current(dir: &Path, path: &Path) -> Option<String> {
-        actor_manifest_key_for_dir(dir, path)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -386,65 +328,6 @@ mod tests {
                 init_command: Some("zoom,2".to_string()),
             }
         );
-    }
-
-    #[test]
-    fn actor_recursion_keys_are_case_normalized() {
-        assert_eq!(actor_visit_key("Down", "Tap Note"), "down|tap note");
-        assert_eq!(
-            actor_file_visit_key(Path::new("Dance/Default/Down Receptor.lua")),
-            "file:dance/default/down receptor.lua"
-        );
-
-        let actor_cases = [
-            ("Down", "Tap Note"),
-            ("PUMP-CENTER", "HoLd HeAd AcTiVe"),
-            ("Café", "Éclair"),
-            ("", ""),
-        ];
-        for (button, element) in actor_cases {
-            assert_eq!(
-                actor_visit_key(button, element),
-                actor_visit_key_reference(button, element),
-                "button={button:?} element={element:?}"
-            );
-        }
-
-        let path_cases = [
-            Path::new("Dance/Default/Down Receptor.lua"),
-            Path::new("NoteSkins/PuMp/CENTER Tap Note.LUA"),
-            Path::new("Skins/Café/Éclair.lua"),
-            Path::new(""),
-        ];
-        for path in path_cases {
-            assert_eq!(
-                actor_file_visit_key(path),
-                actor_file_visit_key_reference(path),
-                "path={path:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn single_buffer_manifest_keys_match_committed_behavior() {
-        let cases = [
-            (
-                Path::new("assets/noteskins/DANCE/DeFaUlT"),
-                Path::new("assets/noteskins/DANCE/DeFaUlT/DOWN RECEPTOR.LUA"),
-            ),
-            (
-                Path::new("root/NoteSkins/PuMp/Café"),
-                Path::new("root/NoteSkins/PuMp/Café/Éclair.lua"),
-            ),
-            (Path::new("dance/default"), Path::new("Tap Note.lua")),
-        ];
-        for (dir, path) in cases {
-            assert_eq!(
-                actor_manifest_key_for_dir(dir, path),
-                actor_manifest_key_for_dir_reference(dir, path),
-                "dir={dir:?} path={path:?}"
-            );
-        }
     }
 
     #[test]

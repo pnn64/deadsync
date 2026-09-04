@@ -124,11 +124,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::w32_raw_input::set_capture_enabled(enabled);
 }
 
-#[cfg(all(windows, feature = "bench-support"))]
-pub fn benchmark_prepare_raw_keyboard_capture(enabled: bool) {
-    crate::backend::w32_raw_input::benchmark_prepare_capture(enabled);
-}
-
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
 pub fn set_raw_keyboard_window_focused(focused: bool) {
@@ -156,15 +151,6 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::evdev::set_keyboard_capture_enabled(enabled);
 }
 
-#[cfg(all(
-    not(windows),
-    feature = "bench-support",
-    any(target_os = "linux", target_os = "freebsd")
-))]
-pub fn benchmark_prepare_raw_keyboard_capture(enabled: bool) {
-    crate::backend::evdev::set_keyboard_capture_enabled(enabled);
-}
-
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 #[inline(always)]
 pub fn unix_raw_keyboard_backend_active() -> bool {
@@ -184,25 +170,11 @@ pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
     crate::backend::iohid::set_keyboard_capture_enabled(enabled);
 }
 
-#[cfg(all(target_os = "macos", feature = "bench-support"))]
-pub fn benchmark_prepare_raw_keyboard_capture(enabled: bool) {
-    crate::backend::iohid::set_keyboard_capture_enabled(enabled);
-}
-
 #[cfg(all(
     not(windows),
     not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
 ))]
 #[inline(always)]
 pub fn set_raw_keyboard_capture_enabled(enabled: bool) {
-    let _ = enabled;
-}
-
-#[cfg(all(
-    not(windows),
-    feature = "bench-support",
-    not(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))
-))]
-pub fn benchmark_prepare_raw_keyboard_capture(enabled: bool) {
     let _ = enabled;
 }

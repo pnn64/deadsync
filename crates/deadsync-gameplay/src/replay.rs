@@ -36,35 +36,6 @@ pub fn quantization_index_from_beat(beat: f32) -> u8 {
     QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize]
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[inline(always)]
-#[must_use]
-pub fn quantization_index_from_beat_reference(beat: f32) -> u8 {
-    // Match ITG's BeatToNoteType path: round beat->row at 48 rows/beat,
-    // then classify by measure-subdivision divisibility.
-    let row = (beat * 48.0).round() as i32;
-    if row.rem_euclid(48) == 0 {
-        QUANT_4TH
-    } else if row.rem_euclid(24) == 0 {
-        QUANT_8TH
-    } else if row.rem_euclid(16) == 0 {
-        QUANT_12TH
-    } else if row.rem_euclid(12) == 0 {
-        QUANT_16TH
-    } else if row.rem_euclid(8) == 0 {
-        QUANT_24TH
-    } else if row.rem_euclid(6) == 0 {
-        QUANT_32ND
-    } else if row.rem_euclid(4) == 0 {
-        QUANT_48TH
-    } else if row.rem_euclid(3) == 0 {
-        QUANT_64TH
-    } else {
-        QUANT_192ND
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RecordedLaneEdge {
     pub lane_index: u8,

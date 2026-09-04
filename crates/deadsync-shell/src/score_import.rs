@@ -154,49 +154,6 @@ impl Service {
     }
 }
 
-#[cfg(feature = "bench-support")]
-pub struct BenchmarkScoreImportService(Service);
-
-#[cfg(feature = "bench-support")]
-impl BenchmarkScoreImportService {
-    #[must_use]
-    pub fn active() -> Self {
-        let mut service = Service::default();
-        service.active = Some((1, Arc::new(AtomicBool::new(false))));
-        service.active_jobs = 1;
-        service.progress.start(1);
-        Self(service)
-    }
-
-    pub fn publish_progress(&self, done: usize, total: usize, detail: &str) {
-        self.0.progress.publish(
-            1,
-            SimplyLoveScoreImportProgress {
-                processed_charts: done,
-                total_charts: total,
-                imported_scores: done.saturating_sub(2),
-                missing_scores: done.min(2),
-                failed_requests: 0,
-                detail: detail.to_owned(),
-            },
-        );
-    }
-
-    #[must_use]
-    pub fn with_progress_burst(events: usize, detail_bytes: usize) -> Self {
-        let service = Self::active();
-        let detail = "p".repeat(detail_bytes);
-        for done in 1..=events {
-            service.publish_progress(done, events, &detail);
-        }
-        service
-    }
-
-    pub fn poll(&mut self) -> Option<SmallVec<[SimplyLoveScoreImportEvent; FRAME_EVENTS]>> {
-        self.0.poll()
-    }
-}
-
 fn progress_view(progress: ScoreImportProgress) -> SimplyLoveScoreImportProgress {
     SimplyLoveScoreImportProgress {
         processed_charts: progress.processed_charts,

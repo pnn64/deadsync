@@ -201,7 +201,7 @@ pub fn push_actors(
     );
 
     let select_style = tr("ScreenTitles", "SelectStyle");
-    actors.push(screen_bar::build_cached(ScreenBarParams {
+    actors.push(screen_bar::build(ScreenBarParams {
         title: &select_style,
         title_placement: ScreenBarTitlePlacement::Left,
         position: ScreenBarPosition::Top,

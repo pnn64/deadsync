@@ -189,71 +189,6 @@ pub const fn cached_hold_end_time_ns(time_ns: SongTimeNs) -> Option<SongTimeNs> 
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn build_column_cues_for_player_reference(
-    notes: &[Note],
-    note_range: (usize, usize),
-    note_time_cache_ns: &[SongTimeNs],
-    col_start: usize,
-    col_end: usize,
-    first_visible_time: f32,
-) -> Vec<ColumnCue> {
-    let (start, end) = note_range;
-    if start >= end || col_start >= col_end {
-        return Vec::new();
-    }
-
-    let mut column_times: Vec<(f32, ColumnCueColumns)> = Vec::with_capacity(end - start);
-    let mut i = start;
-    while i < end {
-        let row = notes[i].row_index;
-        let mut row_time = 0.0_f32;
-        let mut has_row_time = false;
-        let mut columns = ColumnCueColumns::default();
-        while i < end && notes[i].row_index == row {
-            let note = &notes[i];
-            if note.column >= col_start
-                && note.column < col_end
-                && let Some(is_mine) = column_cue_is_mine(note)
-            {
-                if !has_row_time {
-                    row_time = song_time_ns_to_seconds(note_time_cache_ns[i]);
-                    has_row_time = true;
-                }
-                columns.insert(note.column, is_mine);
-            }
-            i += 1;
-        }
-        if has_row_time {
-            column_times.push((row_time, columns));
-        }
-    }
-
-    let mut cues = Vec::with_capacity(column_times.len());
-    let mut prev_time = 0.0_f32;
-    for (time, columns) in column_times {
-        let duration = time - prev_time;
-        if duration >= COLUMN_CUE_MIN_SECONDS || prev_time == 0.0 {
-            cues.push(ColumnCue {
-                start_time: prev_time,
-                duration,
-                columns,
-            });
-        }
-        prev_time = time;
-    }
-
-    if first_visible_time < 0.0
-        && let Some(first) = cues.first_mut()
-    {
-        first.duration -= first_visible_time;
-        first.start_time += first_visible_time;
-    }
-    cues
-}
-
 #[inline(always)]
 pub fn late_note_resolution_window_ns(timing_profile: &TimingProfile, rate: f32) -> SongTimeNs {
     // Mirror ITG's shared late-resolution window from Player::GetMaxStepDistanceSeconds():
@@ -464,8 +399,7 @@ struct CutoffRowsMemo {
 /// walk timing events crossed since the last query.
 /// There is no eviction or deferred destruction. Exact-timestamp cutoff and input
 /// memos stop inserting by replacement and make repeated same-frame work O(1).
-/// The `timing_cache` benchmark is the instrumentation point; runtime counters are
-/// deliberately omitted from the hot path. Worst case after a reset is one full
+/// Runtime counters are deliberately omitted from the hot path. Worst case after a reset is one full
 /// uncached-equivalent traversal per stream, outside steady-state gameplay.
 #[derive(Clone, Debug)]
 pub struct GameplayTimeToBeatCaches {
@@ -1098,19 +1032,6 @@ pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec
     build_assist_clap_rows_with_capacity(notes, note_range, note_row_count(notes, note_range))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn build_assist_clap_rows_reference(
-    notes: &[Note],
-    note_range: (usize, usize),
-) -> Vec<usize> {
-    let end = note_range.1.min(notes.len());
-    build_assist_clap_rows_with_capacity(
-        notes,
-        note_range,
-        end.saturating_sub(note_range.0.min(end)),
-    )
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayTimeBounds {
     pub first_judgable_second: f32,
@@ -1155,105 +1076,6 @@ pub fn compute_gameplay_time_bounds_ns(
             .saturating_add(resolution_distance_ns)
             .max(audio_end_time_ns),
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn compute_gameplay_time_bounds_reference_ns(
-    notes: &[Note],
-    note_time_cache_ns: &[SongTimeNs],
-    hold_end_time_cache_ns: &[SongTimeNs],
-    rate: f32,
-    audio_end_time_ns: SongTimeNs,
-) -> GameplayTimeBounds {
-    let first_judgable_second = notes
-        .iter()
-        .zip(note_time_cache_ns)
-        .filter_map(|(note, &time_ns)| {
-            note.can_be_judged
-                .then_some(song_time_ns_to_seconds(time_ns))
-        })
-        .reduce(f32::min)
-        .unwrap_or(0.0);
-    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
-        notes,
-        note_time_cache_ns,
-        hold_end_time_cache_ns,
-        rate,
-        audio_end_time_ns,
-    );
-    GameplayTimeBounds {
-        first_judgable_second,
-        notes_end_time_ns,
-        music_end_time_ns,
-    }
-}
-
-#[cfg(feature = "bench-support")]
-fn hold_end_cache_checksum(cache: impl IntoIterator<Item = SongTimeNs>) -> u64 {
-    cache.into_iter().fold(0u64, |checksum, time_ns| {
-        checksum.rotate_left(7) ^ (time_ns as u64).wrapping_mul(0x9E37_79B1)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_hold_end_time_cache_reference_for_bench(
-    notes: &[Note],
-    note_time_cache_ns: &[SongTimeNs],
-) -> u64 {
-    let mut cache = Vec::with_capacity(notes.len());
-    for (index, note) in notes.iter().enumerate() {
-        cache.push(
-            note.hold
-                .is_some()
-                .then_some(note_time_cache_ns[index].saturating_add(31_250_000)),
-        );
-    }
-    hold_end_cache_checksum(
-        cache
-            .into_iter()
-            .map(|time_ns| time_ns.unwrap_or(INVALID_SONG_TIME_NS)),
-    )
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_hold_end_time_cache_for_bench(
-    notes: &[Note],
-    note_time_cache_ns: &[SongTimeNs],
-) -> u64 {
-    let mut cache = Vec::with_capacity(notes.len());
-    for (index, note) in notes.iter().enumerate() {
-        cache.push(if note.hold.is_some() {
-            note_time_cache_ns[index].saturating_add(31_250_000)
-        } else {
-            INVALID_SONG_TIME_NS
-        });
-    }
-    hold_end_cache_checksum(cache)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_assist_clap_rows_preallocated_for_bench(
-    notes: &[Note],
-    note_range: (usize, usize),
-    row_capacity: usize,
-) -> Vec<usize> {
-    build_assist_clap_rows_with_capacity(notes, note_range, row_capacity)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_assist_clap_rows_reference_for_bench(
-    notes: &[Note],
-    note_range: (usize, usize),
-) -> Vec<usize> {
-    build_assist_clap_rows_reference(notes, note_range)
 }
 
 #[inline(always)]
@@ -1326,54 +1148,3 @@ fn build_note_count_stats_for_players(
     })
 }
 
-#[cfg(test)]
-fn build_note_count_stats_for_players_reference(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-) -> [Vec<NoteCountStat>; MAX_PLAYERS] {
-    std::array::from_fn(|player| build_note_count_stats(notes, note_ranges[player]))
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_note_count_stats_for_players_for_bench(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-    num_players: usize,
-) -> GameplayNoteCountStatsState {
-    GameplayNoteCountStatsState::new(
-        build_note_count_stats_for_players(notes, note_ranges, num_players),
-        num_players,
-    )
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn build_note_count_stats_reference(
-    notes: &[Note],
-    note_range: (usize, usize),
-) -> Vec<NoteCountStat> {
-    let (start, end) = note_range;
-    let mut cursor = start.min(notes.len());
-    let end = end.min(notes.len());
-    let mut count = 0usize;
-    let mut stats = Vec::new();
-
-    while cursor < end {
-        let row_index = notes[cursor].row_index;
-        let beat = notes[cursor].beat;
-        let notes_lower = count;
-        while cursor < end && notes[cursor].row_index == row_index {
-            count = count.saturating_add(1);
-            cursor += 1;
-        }
-        stats.push(NoteCountStat {
-            beat,
-            notes_lower,
-            notes_upper: count,
-        });
-    }
-
-    stats
-}

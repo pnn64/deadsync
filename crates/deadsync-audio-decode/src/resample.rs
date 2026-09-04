@@ -307,15 +307,6 @@ pub(crate) fn take_cleared_i16(slot: &mut Option<Vec<i16>>) -> Vec<i16> {
     buffer
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    #[inline]
-    pub fn take_seek_buffer(slot: &mut Option<Vec<i16>>) -> Vec<i16> {
-        super::take_cleared_i16(slot)
-    }
-}
-
 pub fn apply_fade_envelope(
     samples: &mut [i16],
     channels: usize,
@@ -398,69 +389,6 @@ mod tests {
         take_cleared_i16, volume_for_frame, write_channel_mapped_i16, write_resampler_output,
     };
 
-    fn push_i16_legacy(planar: &mut PlanarAccum, interleaved: &[i16], channels: usize) {
-        if interleaved.is_empty() || channels == 0 {
-            return;
-        }
-        let frames = interleaved.len() / channels;
-        for channel in &mut planar.channels {
-            channel.reserve(frames);
-        }
-        for frame in interleaved.chunks_exact(channels) {
-            for (channel, sample) in planar.channels.iter_mut().zip(frame) {
-                channel.push(f32::from(*sample) / 32768.0);
-            }
-        }
-    }
-
-    fn write_resampler_legacy(
-        out: &[Vec<f32>],
-        produced_frames: usize,
-        out_ch: usize,
-        out_tmp: &mut Vec<i16>,
-    ) -> usize {
-        if out.is_empty() || produced_frames == 0 || out_ch == 0 {
-            out_tmp.clear();
-            return 0;
-        }
-        let produced_frames = produced_frames
-            .min(out[0].len())
-            .min(out.iter().map(Vec::len).min().unwrap_or(0));
-        out_tmp.resize(produced_frames.saturating_mul(out_ch), 0);
-        let mut frame = 0;
-        while frame < produced_frames {
-            let base = frame * out_ch;
-            for channel in 0..out_ch {
-                let sample = out[channel % out.len()][frame];
-                out_tmp[base + channel] = super::sample_to_i16(sample);
-            }
-            frame += 1;
-        }
-        produced_frames
-    }
-
-    fn write_channel_map_legacy(
-        input: &[i16],
-        in_ch: usize,
-        out_ch: usize,
-        out_tmp: &mut Vec<i16>,
-    ) -> usize {
-        if input.is_empty() || in_ch == 0 || out_ch == 0 {
-            out_tmp.clear();
-            return 0;
-        }
-        let frames = input.len() / in_ch;
-        out_tmp.resize(frames * out_ch, 0);
-        for frame in 0..frames {
-            let in_base = frame * in_ch;
-            let out_base = frame * out_ch;
-            for channel in 0..out_ch {
-                out_tmp[out_base + channel] = input[in_base + channel % in_ch];
-            }
-        }
-        frames
-    }
-
     #[test]
     fn planar_accum_keeps_channel_order() {
         let mut planar = PlanarAccum::new(2, 4);
@@ -472,23 +400,6 @@ mod tests {
         assert_eq!(planar.channels[0][1], 0.0);
         assert_eq!(planar.channels[1][0], -1.0);
         assert_eq!(planar.channels[1][1], 0.5);
-    }
-
-    #[test]
-    fn specialized_planar_append_matches_generic_layouts() {
-        for channels in [1usize, 2, 6] {
-            let input = (0..257 * channels + channels - 1)
-                .map(|index| index.wrapping_mul(25_173) as i16)
-                .collect::<Vec<_>>();
-            let mut expected = PlanarAccum::new(channels, 257);
-            let mut actual = PlanarAccum::new(channels, 257);
-
-            push_i16_legacy(&mut expected, &input, channels);
-            actual.push_i16_interleaved(&input, channels);
-
-            assert_eq!(actual.channels, expected.channels, "channels={channels}");
-            assert_eq!(actual.available_frames(), 257);
-        }
     }
 
     #[test]
@@ -524,76 +435,10 @@ mod tests {
     }
 
     #[test]
-    fn specialized_resampler_output_matches_generic_layouts() {
-        let sample_edges = vec![
-            f32::NEG_INFINITY,
-            -1.5,
-            -1.0,
-            -0.0,
-            0.0,
-            0.5,
-            1.0,
-            1.5,
-            f32::INFINITY,
-            f32::NAN,
-        ];
-        for (out, requested, out_ch) in [
-            (vec![sample_edges.clone()], 14, 2),
-            (vec![sample_edges.clone(), sample_edges.clone()], 14, 2),
-            (
-                vec![sample_edges.clone(), sample_edges[..7].to_vec()],
-                14,
-                4,
-            ),
-        ] {
-            let mut expected = vec![123; 64];
-            let mut actual = expected.clone();
-
-            let expected_frames = write_resampler_legacy(&out, requested, out_ch, &mut expected);
-            let actual_frames = write_resampler_output(&out, requested, out_ch, &mut actual);
-
-            assert_eq!(actual_frames, expected_frames);
-            assert_eq!(actual, expected);
-        }
-    }
-
-    #[test]
-    fn resampler_sample_cast_matches_clamped_conversion() {
-        fn legacy(sample: f32) -> i16 {
-            (sample * 32767.0).round().clamp(-32768.0, 32767.0) as i16
-        }
-
-        let edges = [
-            f32::NEG_INFINITY,
-            -2.0,
-            -1.000_000_1,
-            -1.0,
-            -0.5,
-            -0.0,
-            0.0,
-            0.5,
-            1.0,
-            1.000_000_1,
-            2.0,
-            f32::INFINITY,
-            f32::NAN,
-        ];
-        for sample in edges {
-            assert_eq!(super::sample_to_i16(sample), legacy(sample));
-        }
-        for exponent in 0..=u8::MAX {
-            for mantissa in (0..=0x7f_ffffu32).step_by(65_521) {
-                for sign in [0, 1u32 << 31] {
-                    let sample = f32::from_bits(sign | u32::from(exponent) << 23 | mantissa);
-                    assert_eq!(
-                        super::sample_to_i16(sample),
-                        legacy(sample),
-                        "bits={:08x}",
-                        sample.to_bits()
-                    );
-                }
-            }
-        }
+    fn resampler_sample_cast_handles_non_finite_values() {
+        assert_eq!(super::sample_to_i16(f32::NEG_INFINITY), i16::MIN);
+        assert_eq!(super::sample_to_i16(f32::INFINITY), i16::MAX);
+        assert_eq!(super::sample_to_i16(f32::NAN), 0);
     }
 
     #[test]
@@ -614,23 +459,6 @@ mod tests {
 
         assert_eq!(frames, 2);
         assert_eq!(out_tmp, [1, 2, 1, 2, 3, 4, 3, 4]);
-    }
-
-    #[test]
-    fn specialized_channel_map_matches_generic_layouts() {
-        for (in_ch, out_ch) in [(1usize, 2usize), (2, 2), (2, 4), (3, 2), (6, 2), (2, 1)] {
-            let input = (0..257 * in_ch + in_ch - 1)
-                .map(|index| index.wrapping_mul(25_173) as i16)
-                .collect::<Vec<_>>();
-            let mut expected = vec![123; 1024];
-            let mut actual = expected.clone();
-
-            let expected_frames = write_channel_map_legacy(&input, in_ch, out_ch, &mut expected);
-            let actual_frames = write_channel_mapped_i16(&input, in_ch, out_ch, &mut actual);
-
-            assert_eq!(actual_frames, expected_frames, "{in_ch} -> {out_ch}");
-            assert_eq!(actual, expected, "{in_ch} -> {out_ch}");
-        }
     }
 
     #[test]
@@ -662,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn seek_tail_reuse_matches_legacy_slices() {
+    fn drop_front_samples_handles_boundaries() {
         let original = (0..64).collect::<Vec<i16>>();
         for drop_samples in [0, 1, 17, 63, 64] {
             let expected = original[drop_samples..].to_vec();

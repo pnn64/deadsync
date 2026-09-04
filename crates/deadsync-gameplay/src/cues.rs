@@ -199,28 +199,11 @@ pub struct ColumnCue {
     pub columns: ColumnCueColumns,
 }
 
-#[inline(always)]
-#[must_use]
-pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&ColumnCue> {
-    if cues.is_empty() {
-        return None;
-    }
-    let idx = cues.partition_point(|cue| cue.start_time <= current_time);
-    idx.checked_sub(1).and_then(|i| cues.get(i))
-}
-
 // Returns the half-open index range of cues whose `[start_time, start_time +
 // duration]` window contains `current_time`, in chronological order.
 // Consecutive crossover cues are built to overlap by the fade time, so up to
 // two cues can be active at once; rendering both lets the outgoing cue's
 // fade-out crossfade with the incoming cue's fade-in.
-#[inline]
-#[must_use]
-pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
-    let end = cues.partition_point(|cue| cue.start_time <= current_time);
-    active_column_cue_range_from_cursor(cues, current_time, end)
-}
-
 #[inline]
 #[must_use]
 pub fn active_column_cue_range_from_cursor(
@@ -267,15 +250,6 @@ pub fn column_cue_cursor_from_hint(cues: &[ColumnCue], current_time: f32, cursor
     cursor
 }
 
-// Returns every cue whose `[start_time, start_time + duration]` window contains
-// `current_time`, as a contiguous slice in chronological order. See
-// `active_column_cue_range`.
-#[inline]
-#[must_use]
-pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
-    &cues[active_column_cue_range(cues, current_time)]
-}
-
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
 
@@ -316,24 +290,11 @@ pub fn build_crossover_rows<const LANES: usize>(
     col_start: usize,
 ) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
     let (start, end) = note_range;
-    let mut row_indices = Vec::with_capacity((end - start).saturating_mul(2));
-    for note in &notes[start..end] {
-        if note.column < col_start
-            || note.column - col_start >= LANES
-            || crossover_note_char(note).is_none()
-        {
-            continue;
-        }
-        row_indices.push(note.row_index);
-        if let Some(hold) = note.hold.as_ref() {
-            row_indices.push(hold.end_row_index);
-        }
-    }
-    row_indices.sort_unstable();
-    row_indices.dedup();
+    let end = end.min(notes.len());
+    let start = start.min(end);
+    let mut cells = Vec::with_capacity((end - start).saturating_mul(2));
+    let mut sequence = 0usize;
 
-    let mut row_arrays = vec![[b'0'; LANES]; row_indices.len()];
-    let mut row_to_beat = vec![0.0_f32; row_indices.len()];
     for note in &notes[start..end] {
         if note.column < col_start || note.column - col_start >= LANES {
             continue;
@@ -342,30 +303,39 @@ pub fn build_crossover_rows<const LANES: usize>(
             continue;
         };
         let lane = note.column - col_start;
-        let head = row_indices
-            .binary_search(&note.row_index)
-            .expect("eligible crossover head row must be indexed");
-        if row_arrays[head] == [b'0'; LANES] {
-            row_to_beat[head] = note.beat;
-        }
-        apply_crossover_cell(&mut row_arrays[head], lane, ch);
+        cells.push((note.row_index, sequence, note.beat, lane, ch));
+        sequence += 1;
         if let Some(hold) = note.hold.as_ref() {
-            let tail = row_indices
-                .binary_search(&hold.end_row_index)
-                .expect("eligible crossover tail row must be indexed");
-            if row_arrays[tail] == [b'0'; LANES] {
-                row_to_beat[tail] = hold.end_beat;
-            }
-            apply_crossover_cell(&mut row_arrays[tail], lane, b'3');
+            cells.push((hold.end_row_index, sequence, hold.end_beat, lane, b'3'));
+            sequence += 1;
         }
+    }
+    cells.sort_unstable_by_key(|&(row_index, sequence, _, _, _)| (row_index, sequence));
+
+    let mut row_arrays = Vec::with_capacity(cells.len());
+    let mut row_to_beat = Vec::with_capacity(cells.len());
+    let mut row_indices = Vec::with_capacity(cells.len());
+    for (row_index, _, beat, lane, ch) in cells {
+        if row_indices.last().copied() != Some(row_index) {
+            row_arrays.push([b'0'; LANES]);
+            row_to_beat.push(beat);
+            row_indices.push(row_index);
+        }
+        apply_crossover_cell(
+            row_arrays
+                .last_mut()
+                .expect("a row is inserted before its cells"),
+            lane,
+            ch,
+        );
     }
     (row_arrays, row_to_beat, row_indices)
 }
 
 #[inline(always)]
 fn crossover_note_char(note: &Note) -> Option<u8> {
-    if note.is_fake {
-        return (note.note_type == NoteType::Mine).then_some(b'M');
+    if note.is_fake && !matches!(note.note_type, NoteType::Mine) {
+        return None;
     }
     match note.note_type {
         NoteType::Tap => Some(b'1'),
@@ -386,48 +356,6 @@ fn apply_crossover_cell<const LANES: usize>(row: &mut [u8; LANES], lane: usize, 
     } else {
         row[lane] = ch;
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn build_crossover_rows_reference<const LANES: usize>(
-    notes: &[Note],
-    note_range: (usize, usize),
-    col_start: usize,
-) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
-    use std::collections::BTreeMap;
-
-    let (start, end) = note_range;
-    let mut rows: BTreeMap<usize, ([u8; LANES], f32)> = BTreeMap::new();
-    for note in &notes[start..end] {
-        if note.column < col_start || note.column - col_start >= LANES {
-            continue;
-        }
-        let Some(ch) = crossover_note_char(note) else {
-            continue;
-        };
-        let lane = note.column - col_start;
-        let entry = rows
-            .entry(note.row_index)
-            .or_insert(([b'0'; LANES], note.beat));
-        apply_crossover_cell(&mut entry.0, lane, ch);
-        if let Some(hold) = note.hold.as_ref() {
-            let tail = rows
-                .entry(hold.end_row_index)
-                .or_insert(([b'0'; LANES], hold.end_beat));
-            apply_crossover_cell(&mut tail.0, lane, b'3');
-        }
-    }
-    let mut row_arrays = Vec::with_capacity(rows.len());
-    let mut row_to_beat = Vec::with_capacity(rows.len());
-    let mut row_indices = Vec::with_capacity(rows.len());
-    for (row_index, (arr, beat)) in rows {
-        row_arrays.push(arr);
-        row_to_beat.push(beat);
-        row_indices.push(row_index);
-    }
-    (row_arrays, row_to_beat, row_indices)
 }
 
 pub type CrossoverAnnotationBuilder =
@@ -674,27 +602,4 @@ fn build_crossover_cues_core_with_capacity(
         first.start_time += first_visible_time;
     }
     cues
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_crossover_cues_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
-    build_crossover_cues_core(annos, |beat| beat * 0.5, 0, 500, 8, false, 0.0)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-#[must_use]
-pub fn build_crossover_cues_reference_for_bench(annos: &[CrossoverRow]) -> Vec<ColumnCue> {
-    build_crossover_cues_core_with_capacity(
-        annos,
-        |beat| beat * 0.5,
-        0,
-        500,
-        8,
-        false,
-        0.0,
-        0,
-    )
 }

@@ -4,105 +4,13 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "gameplay_hot_paths"
-harness = false
-
-[[bench]]
-name = "chart_transform_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_init_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "gameplay_index_build_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "mine_insert_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "hold_conversion_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "attack_window_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "intelligent_insert_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "wide_stomp_echo_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "player_transform_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "attack_parse_pipeline_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "attack_order_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "input_slot_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "attack_index_deadline_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "receptor_feedback_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "active_hold_lane_index_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "song_lua_ease_math_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "display_clock_cache_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-rules = { path = "../deadsync-rules" }
 log = "0.4.34"
-twox-hash = "2.1.3"
+twox-hash = "2.1.4"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

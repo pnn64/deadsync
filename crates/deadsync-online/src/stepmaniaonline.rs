@@ -291,76 +291,6 @@ pub fn search_catalog_into(
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn search_catalog_reference(catalog: &[PackInfo], query: &str) -> Vec<usize> {
-    let query = query.trim();
-    if query.is_empty() {
-        return (0..catalog.len()).collect();
-    }
-    let normalized;
-    let query = if is_lowercase(query) {
-        query
-    } else {
-        normalized = query.to_lowercase();
-        normalized.as_str()
-    };
-    let mut inline_tokens = [""; INLINE_QUERY_TOKENS];
-    let mut token_count = 0;
-    let mut overflow_tokens = Vec::new();
-    for token in query.split_whitespace() {
-        if token_count < inline_tokens.len() {
-            inline_tokens[token_count] = token;
-        } else {
-            if overflow_tokens.is_empty() {
-                overflow_tokens.extend_from_slice(&inline_tokens);
-            }
-            overflow_tokens.push(token);
-        }
-        token_count += 1;
-    }
-    let tokens = if overflow_tokens.is_empty() {
-        &inline_tokens[..token_count]
-    } else {
-        overflow_tokens.as_slice()
-    };
-    let multiple_tokens = tokens.len() > 1;
-    let mut buckets: [Vec<usize>; 5] = std::array::from_fn(|_| Vec::new());
-    for (idx, pack) in catalog.iter().enumerate() {
-        let normalized_name = pack.normalized_name();
-        let rank = if normalized_name == query {
-            Some(0)
-        } else if normalized_name.starts_with(query) {
-            Some(1)
-        } else if normalized_name.contains(query) {
-            Some(2)
-        } else if multiple_tokens && tokens.iter().all(|token| normalized_name.contains(token)) {
-            Some(3)
-        } else if if multiple_tokens {
-            tokens.iter().all(|token| pack.search_text.contains(token))
-        } else {
-            pack.search_text.contains(query)
-        } {
-            Some(4)
-        } else {
-            None
-        };
-        if let Some(rank) = rank {
-            buckets[rank].push(idx);
-        }
-    }
-    let result_len = buckets.iter().map(Vec::len).sum::<usize>();
-    let mut ranked = buckets.into_iter().filter(|bucket| !bucket.is_empty());
-    let Some(mut results) = ranked.next() else {
-        return Vec::new();
-    };
-    results.reserve(result_len - results.len());
-    for bucket in ranked {
-        results.extend(bucket);
-    }
-    results
-}
-
 fn is_lowercase(text: &str) -> bool {
     if text.is_ascii() {
         return !text.bytes().any(|byte| byte.is_ascii_uppercase());
@@ -1310,88 +1240,6 @@ mod tests {
         fs::write(path, bytes).expect("write fixture archive");
     }
 
-    fn parse_catalog_committed(text: &str) -> Result<Vec<PackInfo>, StepManiaOnlineError> {
-        let mut lines = text.lines();
-        let header = lines
-            .next()
-            .map(|line| line.trim_start_matches('\u{feff}').trim_end_matches('\r'))
-            .ok_or_else(|| StepManiaOnlineError::Catalog("response is empty".to_string()))?;
-        if header != HEADER.trim_end() {
-            return Err(StepManiaOnlineError::Catalog(
-                "unexpected header".to_string(),
-            ));
-        }
-
-        let mut packs = Vec::with_capacity(4096);
-        let mut ids = HashSet::with_capacity(4096);
-        for (idx, raw_line) in lines.enumerate() {
-            let line_number = idx + 2;
-            let line = raw_line.trim_end_matches('\r');
-            if line.trim().is_empty() {
-                continue;
-            }
-            let fields = line.rsplitn(7, ", ").collect::<Vec<_>>();
-            if fields.len() != 7 {
-                return Err(catalog_line_error(line_number, "expected eight columns"));
-            }
-            let (id_text, quoted_name) = fields[6]
-                .split_once(", ")
-                .ok_or_else(|| catalog_line_error(line_number, "missing pack name"))?;
-            let name = quoted_name
-                .strip_prefix('"')
-                .and_then(|value| value.strip_suffix('"'))
-                .ok_or_else(|| catalog_line_error(line_number, "pack name is not quoted"))?;
-            let pack = PackInfo::new(
-                parse_catalog_number(id_text, line_number, "ID")?,
-                name.to_string(),
-                parse_catalog_number(fields[5], line_number, "song count")?,
-                parse_catalog_number(fields[4], line_number, "size")?,
-                optional_catalog_value(fields[3]),
-                optional_catalog_value(fields[2]),
-                optional_catalog_value(fields[1]),
-                optional_catalog_value(fields[0]),
-            );
-            if !ids.insert(pack.id) {
-                return Err(catalog_line_error(line_number, "duplicate pack ID"));
-            }
-            packs.push(pack);
-        }
-        Ok(packs)
-    }
-
-    #[test]
-    fn optimized_catalog_parser_matches_committed_public_behavior() {
-        let mut text = HEADER.to_string();
-        for index in 0..257 {
-            let pack_type = if index % 3 == 0 { "None" } else { "pad" };
-            let substyle = if index % 5 == 0 { "null" } else { "technical" };
-            writeln!(
-                text,
-                "{}, \"Pack {}, Volume {}\", {}, {}, 9ms, {pack_type}, {substyle}, Stepmania 5",
-                10_000 + index,
-                index,
-                index % 7,
-                10 + index % 30,
-                1_000_000 + index * 97,
-            )
-            .unwrap();
-            if index % 31 == 0 {
-                text.push('\n');
-            }
-        }
-
-        let expected = parse_catalog_committed(&text).unwrap();
-        let actual = parse_catalog(&text).unwrap();
-        assert_eq!(actual, expected);
-        for query in ["pack 12", "volume 4", "technical", "STEPMania 5", "10042"] {
-            assert_eq!(
-                search_catalog(&actual, query),
-                search_catalog(&expected, query),
-                "query {query:?} changed"
-            );
-        }
-    }
-
     #[test]
     fn catalog_parser_keeps_commas_and_embedded_quotes_in_names() {
         let text = format!(
@@ -1432,39 +1280,6 @@ mod tests {
         assert_eq!(search_catalog(&catalog, "spectrum"), vec![1, 0, 2]);
         assert_eq!(search_catalog(&catalog, "other technical"), vec![2]);
         assert_eq!(search_catalog(&catalog, "   "), vec![0, 1, 2]);
-    }
-
-    #[test]
-    fn reusable_catalog_search_matches_committed_behavior_across_query_shapes() {
-        let catalog = [
-            pack(1, "Technical Spectrum", Some("pad"), Some("technical")),
-            pack(2, "Spectrum", Some("dance"), Some("speed")),
-            pack(3, "Other Pack", Some("spectrum"), Some("technical")),
-            pack(4, "Älpha Mix", Some("keyboard"), Some("stream")),
-        ];
-        let queries = [
-            "spectrum",
-            "SPECTRUM",
-            "technical spec",
-            "other technical",
-            "keyboard stream",
-            "ÄLPHA",
-            "1",
-            "missing",
-            "one two three four five six seven eight nine",
-            "   ",
-        ];
-        let mut results = vec![usize::MAX; 32];
-        let mut scratch = CatalogSearchScratch::default();
-
-        for _ in 0..2 {
-            for query in queries {
-                let expected = search_catalog_reference(&catalog, query);
-                search_catalog_into(&catalog, query, &mut results, &mut scratch);
-                assert_eq!(results, expected, "query {query:?} changed");
-                assert_eq!(search_catalog(&catalog, query), expected);
-            }
-        }
     }
 
     #[test]

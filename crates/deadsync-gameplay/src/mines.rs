@@ -8,46 +8,6 @@ pub(crate) fn recycle_pending_mine_hit_batch(
     processed.clear();
     *pending = processed;
 }
-
-#[inline(always)]
-#[must_use]
-pub fn mine_window_bounds_ns(
-    mine_times_ns: &[SongTimeNs],
-    start_t_ns: SongTimeNs,
-    end_t_ns: SongTimeNs,
-) -> (usize, usize) {
-    (
-        mine_times_ns.partition_point(|&t| t < start_t_ns),
-        mine_times_ns.partition_point(|&t| t <= end_t_ns),
-    )
-}
-
-#[inline(always)]
-pub fn lane_note_window_bounds_ns<I: Copy + Into<usize>>(
-    note_indices: &[I],
-    note_times_ns: &[SongTimeNs],
-    start_t_ns: SongTimeNs,
-    end_t_ns: SongTimeNs,
-) -> (usize, usize) {
-    (
-        note_indices.partition_point(|&note_index| note_times_ns[note_index.into()] < start_t_ns),
-        note_indices.partition_point(|&note_index| note_times_ns[note_index.into()] <= end_t_ns),
-    )
-}
-
-#[inline(always)]
-pub fn lane_note_window_bounds_rows<I: Copy + Into<usize>>(
-    note_indices: &[I],
-    notes: &[Note],
-    start_row: usize,
-    end_row: usize,
-) -> (usize, usize) {
-    (
-        note_indices.partition_point(|&note_index| notes[note_index.into()].row_index < start_row),
-        note_indices.partition_point(|&note_index| notes[note_index.into()].row_index < end_row),
-    )
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct LaneNoteWindowCursor {
     pub start: usize,
@@ -106,58 +66,6 @@ pub struct LaneNoteSearch {
     pub search_start_idx: usize,
     pub search_end_idx: usize,
     pub candidate: Option<(usize, SongTimeNs)>,
-}
-
-pub fn closest_lane_note_search<I: Copy + Into<usize>>(
-    note_indices: &[I],
-    notes: &[Note],
-    note_times_ns: &[SongTimeNs],
-    timing: &TimingData,
-    current_time_ns: SongTimeNs,
-) -> LaneNoteSearch {
-    let rows = lane_search_rows_for_timing(timing, current_time_ns);
-    closest_lane_note_search_with_rows(
-        note_indices,
-        notes,
-        note_times_ns,
-        timing,
-        current_time_ns,
-        rows,
-    )
-}
-
-fn closest_lane_note_search_with_rows<I: Copy + Into<usize>>(
-    note_indices: &[I],
-    notes: &[Note],
-    note_times_ns: &[SongTimeNs],
-    timing: &TimingData,
-    current_time_ns: SongTimeNs,
-    rows: LaneSearchRows,
-) -> LaneNoteSearch {
-    let current_row_index = rows.current;
-    let search_start_row = rows.start;
-    let search_end_row = rows.end;
-    let (search_start_idx, search_end_idx) =
-        lane_note_window_bounds_rows(note_indices, notes, search_start_row, search_end_row);
-    let candidate = closest_lane_note_ns(
-        note_indices,
-        notes,
-        note_times_ns,
-        timing,
-        current_time_ns,
-        current_row_index,
-        search_start_idx,
-        search_end_idx,
-    );
-
-    LaneNoteSearch {
-        current_row_index,
-        search_start_row,
-        search_end_row,
-        search_start_idx,
-        search_end_idx,
-        candidate,
-    }
 }
 
 fn closest_lane_note_search_with_rows_from_cursor<I: Copy + Into<usize>>(

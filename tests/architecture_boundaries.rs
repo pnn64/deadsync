@@ -9073,9 +9073,9 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "HoldBodyCapRequest",
         "compose_hold_body_caps(",
         "NoteLayerRequest",
-        "compose_note_layer(",
+        "compose_flat_note_layer(",
         "MineLayerRequest",
-        "compose_mine_layers(",
+        "compose_flat_mine_layers(",
         "compose_notefield_feedback(",
         "ComboFeedbackRequest",
         "compose_combo_feedback(",
@@ -9142,11 +9142,11 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         ),
         (
             "crates/deadsync-notefield/src/notes.rs",
-            "pub fn compose_note_layer",
+            "pub fn compose_flat_note_layer",
         ),
         (
             "crates/deadsync-notefield/src/notes.rs",
-            "pub fn compose_mine_layers",
+            "pub fn compose_flat_mine_layers",
         ),
         (
             "crates/deadsync-notefield/src/frame_feedback.rs",
@@ -9260,7 +9260,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "compose_counter_hud(",
         "compose_mini_indicator(",
         "compose_judgment(",
-        "share_actor_range(\n                actors,\n                judgment_capture_start,",
+        "judgment_capture_start",
+        "&mut capture_scratch.judgment",
     ] {
         let position = hud_entry[previous..]
             .find(marker)
@@ -9470,7 +9471,7 @@ fn error_bar_presentation_stays_on_the_direct_hud_path() {
     }
     assert!(hud.contains("draws: &mut Vec<FlatDraw>"));
     assert!(hud.contains("compose_error(draws, request, prepared, error_bar);"));
-    assert!(hud.contains("actors.extend(draws.drain(..).map(flat_draw_actor));"));
+    assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
     assert!(adapter.contains("frame_text_slot: super::FRAME_TEXT_ERROR_BASE"));
     assert!(prewarm.contains("let error_slot = FRAME_TEXT_ERROR_BASE"));
     assert!(prewarm.contains("error_slot + 3"));
@@ -9518,7 +9519,7 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
         field.contains("compose_notefield_feedback(\n        flat_draws,\n        cue_hud_draws,")
     );
     assert!(hud.contains("if request.capture_requests.player {"));
-    assert!(hud.contains("actors.extend(draws.drain(..).map(flat_draw_actor));"));
+    assert!(hud.contains("actors.extend(draws.drain(..).map(actor_from_flat_draw));"));
     assert!(adapter.contains("countdown_text_slot: super::FRAME_TEXT_COUNTDOWN_BASE"));
     assert!(adapter.contains("compose_notefield_field(\n            actors,\n            flat_draws,\n            hud_flat_draws,"));
     assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
@@ -9549,7 +9550,7 @@ fn judgment_sprites_stay_on_the_direct_hud_path() {
     }
     assert!(hud.contains("let judgment_draw_start = draws.len();"));
     assert!(hud.contains("compose_judgment(draws,"));
-    assert!(hud.contains("draws.drain(judgment_draw_start..).map(flat_draw_actor)"));
+    assert!(hud.contains("draws.drain(judgment_draw_start..).map(actor_from_flat_draw)"));
     assert!(gameplay.contains("JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2"));
 }
 
@@ -9584,7 +9585,7 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
     assert!(hud.contains("let combo_draw_start = draws.len();"));
     assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
     assert!(hud.contains("compose_combo_number(draws, &feedback);"));
-    assert!(hud.contains("draws.drain(draw_start..).map(flat_draw_actor)"));
+    assert!(hud.contains("draws.drain(draw_start..).map(actor_from_flat_draw)"));
     assert!(gameplay.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
     assert!(adapter.contains("ResolvedComboMilestoneAssets"));
     assert!(!adapter.contains("fn combo_number_text"));
@@ -9614,15 +9615,14 @@ fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
     assert!(zmod.contains("fn emit_counter_hud("));
     assert!(zmod.contains("Some(TextContent::FrameInline { .. })"));
     assert!(zmod.contains("actors.push(hud_text_actor(style, font, entry));"));
-    assert!(hud.contains("compose_counter_hud(\n            actors,\n            draws,"));
-    assert!(hud.contains("compose_mini_indicator(\n            actors,\n            draws,"));
+    assert!(hud.contains("compose_counter_hud("));
+    assert!(hud.contains("compose_mini_indicator("));
     assert!(gameplay.contains("const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize"));
-    assert!(gameplay.contains("+ ZMOD_HUD_FLAT_DRAW_CAPACITY;"));
+    assert!(gameplay.contains("+ ZMOD_HUD_FLAT_DRAW_CAPACITY"));
     assert!(theme_zmod.contains(".with_frame_inline_slot(FRAME_TEXT_MINI_BASE"));
     assert!(prewarm.contains("prewarm_prepared_inline_text_slot("));
-    assert!(
-        prewarm.contains("FRAME_TEXT_MINI_BASE + player as u8,\n                TextAlign::Left,")
-    );
+    assert!(prewarm.contains("FRAME_TEXT_MINI_BASE + player as u8"));
+    assert!(prewarm.contains("TextAlign::Left"));
     assert!(!prewarm.contains("prewarm_frame_inline_text_slot("));
 }
 
@@ -9638,13 +9638,13 @@ fn simply_love_note_layers_use_canonical_notefield_owner() {
     let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
 
-    for definition in ["struct NoteLayerRequest", "fn compose_note_layer"] {
+    for definition in ["struct NoteLayerRequest", "fn compose_flat_note_layer"] {
         assert!(
             canonical.contains(definition),
             "canonical note-layer owner is missing {definition}"
         );
     }
-    for delegation in ["NoteLayerRequest {", "compose_note_layer("] {
+    for delegation in ["NoteLayerRequest {", "compose_flat_note_layer("] {
         assert!(
             field.contains(delegation),
             "canonical field frame must delegate note-layer composition through {delegation}"
@@ -9654,7 +9654,11 @@ fn simply_love_note_layers_use_canonical_notefield_owner() {
             "Simply Love must not import low-level note-layer API {delegation}"
         );
     }
-    for retired_public_seam in ["pub struct NoteGlowRequest", "pub fn compose_note_glow"] {
+    for retired_public_seam in [
+        "struct NoteGlowRequest",
+        "fn compose_note_glow",
+        "fn compose_note_layer",
+    ] {
         assert!(
             !canonical.contains(retired_public_seam),
             "canonical notefield still exports transitional seam {retired_public_seam}"
@@ -9695,13 +9699,13 @@ fn simply_love_mine_layers_use_canonical_notefield_owner() {
     let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
         .expect("asset-backed noteskin slot should be readable");
 
-    for definition in ["struct MineLayerRequest", "fn compose_mine_layers"] {
+    for definition in ["struct MineLayerRequest", "fn compose_flat_mine_layers"] {
         assert!(
             canonical.contains(definition),
             "canonical mine-layer owner is missing {definition}"
         );
     }
-    for delegation in ["MineLayerRequest {", "compose_mine_layers("] {
+    for delegation in ["MineLayerRequest {", "compose_flat_mine_layers("] {
         assert!(
             field.contains(delegation),
             "canonical field frame must delegate mine-layer composition through {delegation}"
@@ -9814,7 +9818,6 @@ fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
     for definition in [
         "struct HoldPathSample",
         "struct HoldBodyCapRequest",
-        "enum HoldComposeControl",
         "fn compose_hold_body_caps",
     ] {
         assert!(
@@ -9826,7 +9829,6 @@ fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
         "HoldPathSample {",
         "HoldBodyCapRequest {",
         "compose_hold_body_caps(",
-        "HoldComposeControl::AbortHold",
     ] {
         assert!(
             field.contains(delegation),
@@ -9949,12 +9951,16 @@ fn canonical_notefield_public_symbols_match_allowlist() {
     }
 
     let mut expected = [
+        "BrokenRunLookup",
         "BuiltNotefield",
+        "CapturedActorScratch",
         "CapturedActorSource",
         "clamp_rounded_i16",
         "ComboHudFrame",
         "ComboMilestoneAssets",
+        "ComboMilestoneSprite",
         "COLUMN_COUNTDOWN_SLOTS_PER_PLAYER",
+        "COUNTER_TEXT_SLOTS_PER_PLAYER",
         "compose_notefield_field",
         "compose_notefield_hud",
         "CounterHudFrame",
@@ -9966,6 +9972,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "DISPLAY_TURN_RIGHT",
         "DISPLAY_TURN_SHUFFLE",
         "DISPLAY_TURN_UD_MIRROR",
+        "EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER",
         "error_bar_boundaries_s",
         "ERROR_BAR_TEXT_SLOTS_PER_PLAYER",
         "ErrorBarHudFrame",
@@ -9981,6 +9988,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "IndicatorSprite",
         "JudgmentHudFrame",
         "LayoutMiniIndicatorPosition",
+        "MEASURE_COUNTER_LOOKAHEAD_MAX",
         "MeasureCounterOptions",
         "MeasureLineMode",
         "MiniHudFrame",
@@ -9993,6 +10001,8 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "mod_percent_key",
         "ModelMeshCache",
         "ModelMeshCacheStats",
+        "NotefieldCameraCache",
+        "NotefieldCameraCacheStats",
         "NotefieldChartView",
         "NotefieldComposeRequest",
         "NotefieldFeedbackFrameView",
@@ -10011,31 +10021,28 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NoteskinFrameCacheStats",
         "noteskin_model_actor",
         "noteskin_model_actor_from_draw",
+        "noteskin_model_actor_from_draw_cached",
         "noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
         "offset_center",
         "prepare_notefield",
         "PreparedNotefield",
         "PreparedNotefieldNotes",
-        "PlacementBench",
-        "PlacementBenchFrame",
         "ProxyCaptureRequests",
         "quantize_centi_i32",
         "quantize_centi_u32",
         "ScrollTravel",
-        "SlotFrameBench",
-        "SlotFrameBenchOutput",
         "song_lua_note_model_draw",
         "song_lua_player_skew_x_matrix",
         "song_lua_player_skew_y_matrix",
         "song_lua_player_transform_matrix",
         "song_lua_player_y_fold_actor",
         "SongLuaPlayerTransformRequest",
+        "StreamProgressLookup",
         "TapJudgmentHudFrame",
         "TapJudgmentSprite",
         "TornadoBounds",
         "ViewOverride",
-        "bench_fresh_hold_mesh_frame",
-        "bench_reused_hold_mesh_frame",
+        "actor_from_flat_draw",
         "zmod_broken_run_end",
         "zmod_combo_quint_active",
         "zmod_mini_indicator_output",
@@ -10044,7 +10051,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "zmod_resolved_combo_color",
         "zmod_resolved_mini_indicator_mode",
         "zmod_static_combo_color",
-        "zmod_stream_prog_completion_for_beat",
+        "zmod_target_score_missed",
         "ZmodComboColorParams",
         "ZmodComboColorStyle",
         "ZmodLayoutParams",
@@ -10078,11 +10085,7 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
     for (file, internal) in [
         ("actor_builder.rs", "struct NotefieldFramePlanRequest"),
         ("actor_builder.rs", "fn notefield_frame_plan"),
-        ("actor_builder.rs", "fn actor_with_world_z"),
-        (
-            "noteskin_model.rs",
-            "fn noteskin_model_actor_from_draw_cached",
-        ),
+        ("noteskin_model.rs", "fn noteskin_model_flat_draw_cached"),
         ("placement.rs", "struct FieldLayoutRequest"),
         ("placement.rs", "fn field_layout"),
         ("placement.rs", "fn player_metric_y"),
@@ -10103,7 +10106,6 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("transforms.rs", "fn quantize_step"),
         ("transforms.rs", "fn beat_factor"),
         ("transforms.rs", "fn mod_divisor"),
-        ("transforms.rs", "fn bumpy_angle"),
         ("transforms.rs", "fn apply_accel_y_with_peak"),
         ("transforms.rs", "fn apply_accel_y"),
         ("transforms.rs", "fn itg_actor_rotation_z"),
@@ -10150,7 +10152,6 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("feedback.rs", "fn judgment_tilt_rotation_deg"),
         ("feedback.rs", "fn judgment_actor_zoom"),
         ("feedback.rs", "fn tap_judgment_rows"),
-        ("feedback.rs", "fn itg_actor_glow_alpha"),
         ("feedback.rs", "const fn hold_glow_color"),
         ("explosions.rs", "enum ExplosionRotation"),
         ("explosions.rs", "struct ExplosionComposeRequest"),
@@ -10158,20 +10159,13 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("measure_actors.rs", "fn append_edit_measure_number"),
         ("measure_actors.rs", "fn append_beat_bar"),
         ("measure_actors.rs", "fn append_cue_bar"),
-        ("measure_lines.rs", "struct EditBeatBarInfo"),
-        ("measure_lines.rs", "fn edit_beat_bar_info_for_row"),
         ("measure_lines.rs", "fn edit_bar_candidate_step_rows"),
         ("measure_lines.rs", "fn edit_bar_scroll_speed"),
         ("measure_lines.rs", "fn beat_scroll_travel"),
         ("measure_lines.rs", "fn edit_beat_scroll_travel"),
         ("measure_lines.rs", "fn scaled_edit_bar_alpha"),
-        ("mini_indicator.rs", "fn stream_segment_index_exclusive_end"),
-        ("mini_indicator.rs", "fn stream_segment_index_inclusive_end"),
-        ("mini_indicator.rs", "fn zmod_broken_run_segment"),
-        ("mini_indicator.rs", "fn zmod_run_timer_index"),
         ("mini_indicator.rs", "fn zmod_measure_counter_text"),
         ("mini_indicator.rs", "fn zmod_broken_run_counter_text"),
-        ("mini_indicator.rs", "fn zmod_subtractive_counter_state"),
         ("mini_indicator.rs", "fn zmod_subtractive_points"),
         ("mini_indicator.rs", "fn zmod_rival_color"),
         ("mini_indicator.rs", "fn zmod_pacemaker_color"),
@@ -10183,11 +10177,9 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("mini_indicator.rs", "fn zmod_indicator_detailed_color"),
         ("mini_indicator.rs", "fn zmod_combo_rainbow_color"),
         ("holds.rs", "fn scale_effect_size"),
-        ("holds.rs", "fn hold_entry_head_beat"),
         ("holds.rs", "fn translated_uv_rect"),
         ("holds.rs", "fn scale_sprite_to_arrow"),
         ("holds.rs", "fn song_time_ns_to_seconds"),
-        ("holds.rs", "fn hold_strip_actor"),
         ("holds.rs", "fn bottom_cap_uv_window"),
         ("holds.rs", "fn song_time_ns_delta_seconds"),
         ("error_bar.rs", "fn error_bar_text_scalable_zoom"),
@@ -10215,8 +10207,8 @@ fn simply_love_song_lua_player_transforms_use_canonical_notefield_owner() {
         .expect("canonical Song Lua notefield transforms should be readable");
 
     for definition in [
-        "pub fn song_lua_player_skew_x_matrix",
-        "pub fn song_lua_player_skew_y_matrix",
+        "pub const fn song_lua_player_skew_x_matrix",
+        "pub const fn song_lua_player_skew_y_matrix",
         "fn song_lua_fold_x_around_pivot",
         "pub fn song_lua_player_y_fold_actor",
         "pub fn song_lua_player_transform_matrix",
@@ -10371,9 +10363,11 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     }
     assert!(canonical.contains("pub(crate) fn noteskin_model_actor_from_draw_cached"));
     assert!(!canonical.contains("pub fn noteskin_model_actor_from_draw_cached"));
+    assert!(canonical.contains("pub(crate) fn noteskin_model_flat_draw_cached"));
+    assert!(!canonical.contains("pub fn noteskin_model_flat_draw_cached"));
     let note_composer = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
-    assert!(note_composer.contains("noteskin_model_actor_from_draw_cached"));
+    assert!(note_composer.contains("noteskin_model_flat_draw_cached"));
     for forbidden in ["deadsync_assets", "SpriteSlot", "texture_key_handle()"] {
         assert!(
             !canonical.contains(forbidden),

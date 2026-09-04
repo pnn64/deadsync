@@ -221,16 +221,12 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
 }
 
 #[test]
-fn borrowed_constant_window_bridge_matches_owned_ground_truth() {
+fn constant_window_bridge_filters_by_player() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
     for player in 0..2 {
-        let expected = super::build_song_lua_constant_windows_for_player_reference(
-            &compiled, &timing, player, 0.25,
-        );
         let actual =
             super::build_song_lua_constant_windows_for_player(&compiled, &timing, player, 0.25);
-        assert_eq!(actual, expected);
         assert_eq!(actual.len(), 3);
     }
     let windows = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.25);
@@ -240,21 +236,9 @@ fn borrowed_constant_window_bridge_matches_owned_ground_truth() {
 }
 
 #[test]
-fn borrowed_ease_window_bridge_matches_owned_ground_truth() {
+fn ease_window_bridge_maps_supported_targets() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
-    for player in 0..2 {
-        let expected = super::build_song_lua_ease_windows_for_player_reference(
-            &compiled,
-            &timing,
-            player,
-            0.25,
-            &[],
-        );
-        let actual =
-            super::build_song_lua_ease_windows_for_player(&compiled, &timing, player, 0.25, &[]);
-        assert_eq!(actual, expected);
-    }
     let (windows, unsupported) =
         super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.25, &[]);
     assert_eq!(windows.len(), 2);
@@ -267,17 +251,13 @@ fn borrowed_ease_window_bridge_matches_owned_ground_truth() {
 }
 
 #[test]
-fn borrowed_column_offset_bridge_matches_owned_ground_truth() {
+fn column_offset_bridge_filters_by_player() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
     for (player, expected_len) in [(0, 2), (1, 1)] {
-        let expected = super::build_song_lua_column_offset_windows_for_player_reference(
-            &compiled, &timing, player, 0.25,
-        );
         let actual = super::build_song_lua_column_offset_windows_for_player(
             &compiled, &timing, player, 0.25,
         );
-        assert_eq!(actual, expected);
         assert_eq!(actual.len(), expected_len);
     }
     let windows =

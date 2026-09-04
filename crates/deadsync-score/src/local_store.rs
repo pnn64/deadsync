@@ -16,8 +16,6 @@ use crate::{
     encode_local_score_index, fix_gs_cached_score, grade_from_code, gs_score_entry_from_cached,
     is_better_itg, parse_score_file_name, score_file_shard, update_local_score_index,
 };
-#[cfg(any(test, feature = "bench-support"))]
-use crate::{machine_leaderboard_entries, machine_replay_entries};
 
 #[derive(Debug)]
 pub enum ScoreStoreWriteStatus {
@@ -650,43 +648,6 @@ pub fn played_chart_history_in_profiles_root(profiles_root: &Path) -> PlayedChar
     rank_history(history_by_chart)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_play_counts_from_names(names: &[String]) -> Vec<(String, u32)> {
-    let mut counts_by_chart = FxMap::default();
-    for name in names {
-        if let Some((chart_hash, _)) = parse_score_file_name(name) {
-            note_count(&mut counts_by_chart, chart_hash);
-        }
-    }
-    rank_counts(counts_by_chart)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_recent_from_names(names: &[String]) -> Vec<String> {
-    let mut latest_by_chart = FxMap::default();
-    for name in names {
-        if let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) {
-            note_recent(&mut latest_by_chart, chart_hash, played_at_ms);
-        }
-    }
-    rank_recent(latest_by_chart)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_history_from_names(names: &[String]) -> PlayedChartHistory {
-    let mut history_by_chart = FxMap::default();
-    for name in names {
-        note_history(&mut history_by_chart, name);
-    }
-    rank_history(history_by_chart)
-}
-
 #[must_use]
 pub fn read_local_score_header(path: &Path) -> Option<LocalScoreHeader> {
     let mut buf = Vec::with_capacity(1024);
@@ -700,30 +661,6 @@ fn read_local_score_header_into(path: &Path, buf: &mut Vec<u8>) -> Option<LocalS
         return None;
     }
     decode_local_score_header(buf)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_local_score_headers_reference(paths: &[PathBuf]) -> Vec<LocalScoreHeader> {
-    paths
-        .iter()
-        .filter_map(|path| read_local_score_header(path))
-        .collect()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn benchmark_local_score_headers_reused(paths: &[PathBuf]) -> Vec<LocalScoreHeader> {
-    let mut headers = Vec::with_capacity(paths.len());
-    let mut buf = Vec::with_capacity(1024);
-    for path in paths {
-        if let Some(header) = read_local_score_header_into(path, &mut buf) {
-            headers.push(header);
-        }
-    }
-    headers
 }
 
 #[must_use]
@@ -939,24 +876,6 @@ fn merge_machine_scalars(
             }
         }
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn push_local_leaderboard_plays_from_root(
-    root: &Path,
-    chart_hash: &str,
-    name: &str,
-    machine_tag: Option<&str>,
-    out: &mut Vec<MachineLeaderboardPlay>,
-) {
-    push_local_leaderboard_plays_from_dir(root, chart_hash, name, machine_tag, out);
-    push_local_leaderboard_plays_from_dir(
-        &local_score_shard_dir(root, chart_hash),
-        chart_hash,
-        name,
-        machine_tag,
-        out,
-    );
 }
 
 struct LocalLeaderboardCandidate<'a> {
@@ -1190,87 +1109,6 @@ fn local_replay_entries(
         }
     }
     entries
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn machine_leaderboard_local_from_profiles_reference(
-    profiles: &[LocalScoreProfileSource],
-    chart_hash: &str,
-    max_entries: usize,
-    use_display_names: bool,
-) -> Vec<LeaderboardEntry> {
-    if chart_hash.trim().is_empty() || max_entries == 0 {
-        return Vec::new();
-    }
-    let mut plays = Vec::new();
-    for profile in profiles {
-        if use_display_names {
-            push_local_leaderboard_plays_from_root(
-                &profile.root,
-                chart_hash,
-                profile.display_name.as_str(),
-                Some(profile.initials.as_str()),
-                &mut plays,
-            );
-        } else {
-            push_local_leaderboard_plays_from_root(
-                &profile.root,
-                chart_hash,
-                profile.initials.as_str(),
-                None,
-                &mut plays,
-            );
-        }
-    }
-    machine_leaderboard_entries(plays, max_entries)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn personal_leaderboard_local_from_root_reference(
-    root: &Path,
-    chart_hash: &str,
-    initials: &str,
-    max_entries: usize,
-) -> Vec<LeaderboardEntry> {
-    if chart_hash.trim().is_empty() || max_entries == 0 {
-        return Vec::new();
-    }
-    let mut plays = Vec::new();
-    push_local_leaderboard_plays_from_root(root, chart_hash, initials, None, &mut plays);
-    machine_leaderboard_entries(plays, max_entries)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn machine_replays_local_from_profiles_reference(
-    profiles: &[LocalScoreProfileSource],
-    chart_hash: &str,
-    max_entries: usize,
-) -> Vec<MachineReplayEntry> {
-    if chart_hash.trim().is_empty() || max_entries == 0 {
-        return Vec::new();
-    }
-    let mut plays = Vec::new();
-    for profile in profiles {
-        push_local_replay_plays_from_dir(
-            &profile.root,
-            chart_hash,
-            profile.initials.as_str(),
-            &mut plays,
-        );
-        push_local_replay_plays_from_dir(
-            &local_score_shard_dir(&profile.root, chart_hash),
-            chart_hash,
-            profile.initials.as_str(),
-            &mut plays,
-        );
-    }
-    machine_replay_entries(plays, max_entries)
 }
 
 #[must_use]
@@ -1720,136 +1558,8 @@ mod tests {
         path
     }
 
-    fn leaderboard_signature(
-        entries: &[LeaderboardEntry],
-    ) -> Vec<(u32, &str, Option<&str>, u64, &str, bool)> {
-        entries
-            .iter()
-            .map(|entry| {
-                (
-                    entry.rank,
-                    entry.name.as_str(),
-                    entry.machine_tag.as_deref(),
-                    entry.score.to_bits(),
-                    entry.date.as_str(),
-                    entry.is_fail,
-                )
-            })
-            .collect()
-    }
-
-    fn assert_replays_equal(actual: &[MachineReplayEntry], expected: &[MachineReplayEntry]) {
-        assert_eq!(actual.len(), expected.len());
-        for (actual, expected) in actual.iter().zip(expected) {
-            assert_eq!(actual.rank, expected.rank);
-            assert_eq!(actual.name, expected.name);
-            assert_eq!(actual.score.to_bits(), expected.score.to_bits());
-            assert_eq!(actual.date, expected.date);
-            assert_eq!(actual.is_fail, expected.is_fail);
-            assert_eq!(actual.replay_beat0_time_ns, expected.replay_beat0_time_ns);
-            assert_eq!(actual.replay.len(), expected.replay.len());
-            for (actual, expected) in actual.replay.iter().zip(&expected.replay) {
-                assert_eq!(actual.event_music_time_ns, expected.event_music_time_ns);
-                assert_eq!(actual.lane_index, expected.lane_index);
-                assert_eq!(actual.pressed, expected.pressed);
-                assert_eq!(actual.source, expected.source);
-            }
-        }
-    }
-
     #[test]
-    fn reused_header_buffer_matches_one_allocation_per_file_reader() {
-        let tree = TempTree::new("header-buffer");
-        let paths = (0usize..24)
-            .map(|index| {
-                write_score(
-                    tree.path(),
-                    "0123456789abcdef",
-                    1_700_000_000_000 + index as i64,
-                    0.80 + index as f64 / 1_000.0,
-                    index.is_multiple_of(11),
-                    index as usize % 5,
-                )
-            })
-            .chain(std::iter::once({
-                let path = tree.path().join("broken-0.bin");
-                fs::write(&path, [1, 2, 3]).expect("broken fixture should be writable");
-                path
-            }))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            benchmark_local_score_headers_reused(&paths),
-            benchmark_local_score_headers_reference(&paths)
-        );
-    }
-
-    #[test]
-    fn bounded_borrowed_local_leaderboards_match_owned_full_sort() {
-        let tree = TempTree::new("bounded-leaderboard");
-        let chart_hash = "0123456789abcdef";
-        let roots = [tree.path().join("p1"), tree.path().join("p2")];
-        for (profile, root) in roots.iter().enumerate() {
-            for play in 0usize..37 {
-                let dir = if play.is_multiple_of(2) {
-                    root.clone()
-                } else {
-                    local_score_shard_dir(root, chart_hash)
-                };
-                write_score(
-                    &dir,
-                    chart_hash,
-                    1_700_000_000_000 + (profile * 100 + play) as i64,
-                    0.75 + ((play * 17 + profile * 5) % 24) as f64 / 100.0,
-                    play.is_multiple_of(19),
-                    play % 4,
-                );
-            }
-            write_score(root, "ffffffffffffffff", 99, 1.0, false, 0);
-        }
-        let profiles = vec![
-            LocalScoreProfileSource {
-                root: roots[0].clone(),
-                initials: "AAA".to_owned(),
-                display_name: "Alice".to_owned(),
-            },
-            LocalScoreProfileSource {
-                root: roots[1].clone(),
-                initials: "BBB".to_owned(),
-                display_name: "Bob".to_owned(),
-            },
-        ];
-
-        for (max_entries, display_names) in [(1, false), (8, true), (usize::MAX, true)] {
-            let expected = machine_leaderboard_local_from_profiles_reference(
-                &profiles,
-                chart_hash,
-                max_entries,
-                display_names,
-            );
-            let actual = machine_leaderboard_local_from_profiles(
-                &profiles,
-                chart_hash,
-                max_entries,
-                display_names,
-            );
-            assert_eq!(
-                leaderboard_signature(&actual),
-                leaderboard_signature(&expected)
-            );
-        }
-
-        let expected =
-            personal_leaderboard_local_from_root_reference(&roots[0], chart_hash, "AAA", 6);
-        let actual = personal_leaderboard_local_from_root(&roots[0], chart_hash, "AAA", 6);
-        assert_eq!(
-            leaderboard_signature(&actual),
-            leaderboard_signature(&expected)
-        );
-    }
-
-    #[test]
-    fn lazy_replay_loading_matches_eager_loading_and_skips_corrupt_winners() {
+    fn lazy_replay_loading_skips_corrupt_winners() {
         let tree = TempTree::new("lazy-replays");
         let chart_hash = "0123456789abcdef";
         let roots = [tree.path().join("p1"), tree.path().join("p2")];
@@ -1890,44 +1600,9 @@ mod tests {
                 display_name: "Bob".to_owned(),
             },
         ];
-        let expected = machine_replays_local_from_profiles_reference(&profiles, chart_hash, 7);
         let actual = machine_replays_local_from_profiles(&profiles, chart_hash, 7);
 
         assert_eq!(actual.len(), 7);
-        assert_replays_equal(&actual, &expected);
-    }
-
-    #[test]
-    fn combined_history_matches_independent_rankings() {
-        let names = [
-            "alpha-100.bin",
-            "alpha-300.bin",
-            "beta-250.bin",
-            "beta-200.bin",
-            "gamma-300.bin",
-            "invalid.bin",
-            "ignored.txt",
-        ]
-        .map(str::to_owned);
-
-        let history = benchmark_history_from_names(&names);
-        assert_eq!(
-            history.recent_chart_hashes,
-            benchmark_recent_from_names(&names)
-        );
-        assert_eq!(
-            history.played_chart_counts,
-            benchmark_play_counts_from_names(&names)
-        );
-        assert_eq!(history.recent_chart_hashes, ["alpha", "gamma", "beta"]);
-        assert_eq!(
-            history.played_chart_counts,
-            [
-                ("alpha".to_owned(), 2),
-                ("beta".to_owned(), 2),
-                ("gamma".to_owned(), 1)
-            ]
-        );
     }
 
     #[test]

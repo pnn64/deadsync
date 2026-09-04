@@ -184,19 +184,6 @@ impl Service {
         }
     }
 
-    #[cfg(feature = "bench-support")]
-    fn drain_events_reference(&mut self) -> Vec<SimplyLoveQrLoginEvent> {
-        let worker_events = self.rx.try_iter().collect::<Vec<_>>();
-        let mut events = Vec::with_capacity(worker_events.len());
-        for (id, event) in worker_events {
-            if let Some(event) = self.consume_worker_event(id, event) {
-                events.push(event);
-            }
-        }
-        self.finish_if_complete();
-        events
-    }
-
     fn start_arrowcloud(
         &self,
         id: u64,
@@ -297,115 +284,6 @@ impl Service {
             });
         });
     }
-}
-
-#[cfg(feature = "bench-support")]
-pub struct BenchmarkQrLoginService(Service);
-
-#[cfg(feature = "bench-support")]
-impl BenchmarkQrLoginService {
-    #[must_use]
-    pub fn with_started_burst(service: SimplyLoveQrLoginService, events: usize) -> Self {
-        assert!(events <= PENDING_EVENTS, "benchmark burst fits the queue");
-        let mut inner = Service::default();
-        inner.active = Some(ActiveLogin {
-            id: 1,
-            service,
-            slots: SIDES.map(|side| SimplyLoveQrLoginSlot {
-                side,
-                availability: SimplyLoveQrLoginSlotAvailability::Ready,
-                display_name: String::new(),
-                had_existing_key: false,
-                target_profile_id: None,
-            }),
-            pending_sides: SIDES
-                .into_iter()
-                .fold(0, |mask, side| mask | side_bit(side)),
-            cancel: Arc::new(AtomicBool::new(false)),
-        });
-        for index in 0..events {
-            inner
-                .tx
-                .send((
-                    1,
-                    WorkerEvent::Started {
-                        side: SIDES[index % SIDES.len()],
-                        short_code: String::new(),
-                        verification_url: String::new(),
-                    },
-                ))
-                .expect("benchmark service owns the receiver");
-        }
-        Self(inner)
-    }
-
-    #[must_use]
-    pub fn drain_reference_checksum(&mut self) -> u64 {
-        let Some(service) = self.0.active.as_ref().map(|active| active.service) else {
-            return 0;
-        };
-        let events = self.0.drain_events_reference();
-        qr_event_checksum(service, &events)
-    }
-
-    #[must_use]
-    pub fn drain_checksum(&mut self) -> u64 {
-        let Some((service, events)) = self.0.poll() else {
-            return 0;
-        };
-        debug_assert!(events.iter().all(|event| event.service() == service));
-        qr_event_checksum(service, &events)
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_qr_route_reference(events: Vec<SimplyLoveQrLoginEvent>) -> u64 {
-    let mut arrowcloud = Vec::new();
-    let mut groovestats = Vec::new();
-    for event in events {
-        match event.service() {
-            SimplyLoveQrLoginService::ArrowCloud => arrowcloud.push(event),
-            SimplyLoveQrLoginService::GrooveStats => groovestats.push(event),
-        }
-    }
-    qr_event_checksum(SimplyLoveQrLoginService::ArrowCloud, &arrowcloud)
-        ^ qr_event_checksum(SimplyLoveQrLoginService::GrooveStats, &groovestats)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn benchmark_qr_route(
-    service: SimplyLoveQrLoginService,
-    events: &[SimplyLoveQrLoginEvent],
-) -> u64 {
-    debug_assert!(events.iter().all(|event| event.service() == service));
-    qr_event_checksum(service, events)
-}
-
-#[cfg(feature = "bench-support")]
-fn qr_event_checksum(service: SimplyLoveQrLoginService, events: &[SimplyLoveQrLoginEvent]) -> u64 {
-    if events.is_empty() {
-        return 0;
-    }
-    events.iter().fold(service as u64, |sum, event| {
-        let (side, bytes, variant) = match event {
-            SimplyLoveQrLoginEvent::Started {
-                side,
-                short_code,
-                verification_url,
-                ..
-            } => (*side, short_code.len() + verification_url.len(), 1),
-            SimplyLoveQrLoginEvent::Succeeded {
-                side, display_name, ..
-            } => (*side, display_name.len(), 2),
-            SimplyLoveQrLoginEvent::Failed { side, reason, .. } => (*side, reason.len(), 3),
-        };
-        sum.wrapping_mul(131)
-            .wrapping_add(deadsync_profile::player_side_index(side) as u64)
-            .wrapping_add((bytes as u64).rotate_left(7))
-            .wrapping_add(variant)
-    })
 }
 
 pub(crate) fn request(

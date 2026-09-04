@@ -4,6 +4,7 @@ use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::fs::File;
 use std::io::Read;
 
@@ -378,11 +379,20 @@ fn hash_file(path: &Path) -> String {
         }
         hasher.update(&buffer[..count]);
     }
-    format!("{:x}", hasher.finalize())
+    encode_hash(hasher.finalize())
 }
 
 fn hash_bytes(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    encode_hash(Sha256::digest(bytes))
+}
+
+fn encode_hash(hash: impl AsRef<[u8]>) -> String {
+    let bytes = hash.as_ref();
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    encoded
 }
 
 #[test]

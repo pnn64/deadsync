@@ -906,7 +906,7 @@ return t
 "#;
 
     #[test]
-    fn allocation_free_numbered_keys_match_committed_behavior() {
+    fn parses_ascii_numbered_keys_case_insensitively() {
         let cases = [
             ("Frame0000", "frame", Some(0)),
             ("frame42", "frame", Some(42)),
@@ -925,7 +925,7 @@ return t
     }
 
     #[test]
-    fn borrowed_alignment_names_match_committed_behavior() {
+    fn parses_ascii_alignment_names_case_insensitively() {
         let cases = [
             ("left", Some(0.0)),
             ("TOP", Some(0.0)),
@@ -944,7 +944,7 @@ return t
     }
 
     #[test]
-    fn allocation_free_actor_commands_match_committed_behavior() {
+    fn parses_ascii_actor_commands_case_insensitively() {
         let cases = [
             ("effectclock", Some(GifActorCommand::EffectClock as u8)),
             ("EffectClock", Some(GifActorCommand::EffectClock as u8)),

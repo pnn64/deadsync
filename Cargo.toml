@@ -71,7 +71,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1073"
+version = "0.5.1074"
 
 [[bin]]
 name = "generate_pseudo"
@@ -89,26 +89,28 @@ deadsync-shell = { path = "crates/deadsync-shell" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
-log = "0.4.33"
+log = "0.4.34"
 
 [dev-dependencies]
 deadlib-assets = { path = "crates/deadlib-assets" }
 deadlib-present = { path = "crates/deadlib-present", features = ["conformance"] }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
+deadsync-gameplay = { path = "crates/deadsync-gameplay" }
 deadsync-noteskin = { path = "crates/deadsync-noteskin" }
+deadsync-profile-gameplay = { path = "crates/deadsync-profile-gameplay" }
 deadsync-rules = { path = "crates/deadsync-rules" }
 deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-song-lua = { path = "crates/deadsync-song-lua" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sha2 = "0.10"
-tar = "0.4"
-tempfile = "3.22"
-zstd = "0.13"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+tar = "0.4.46"
+tempfile = "3.27.0"
+zstd = "0.13.3"
 
 [patch.crates-io]
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is

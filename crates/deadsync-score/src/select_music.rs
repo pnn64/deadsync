@@ -412,35 +412,6 @@ pub fn ranked_top_grade_songs<K: Ord>(
     graded_songs
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_ranked_popular_songs_cached<H: AsRef<str>, K: Ord>(
-    songs: Vec<Arc<SongData>>,
-    chart_play_counts: impl IntoIterator<Item = (H, u32)>,
-    limit: usize,
-    include_zero_play_songs: bool,
-    sort_key: impl Fn(&SongData) -> K,
-) -> Vec<(Arc<SongData>, u32)> {
-    let hash_to_song_ix = chart_hash_song_indices(&songs);
-    let mut song_play_counts = vec![0u32; songs.len()];
-    for (chart_hash, chart_plays) in chart_play_counts {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_ref()) else {
-            continue;
-        };
-        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
-    }
-
-    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
-        .into_iter()
-        .enumerate()
-        .filter(|(song_ix, _)| include_zero_play_songs || song_play_counts[*song_ix] > 0)
-        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
-        .collect();
-    ranked
-        .sort_by_cached_key(|(song, play_count)| (std::cmp::Reverse(*play_count), sort_key(song)));
-    ranked.truncate(limit.min(ranked.len()));
-    ranked
-}
-
 fn chart_hash_song_indices(songs: &[Arc<SongData>]) -> FxHashMap<&str, usize> {
     let chart_count = songs
         .iter()

@@ -167,40 +167,6 @@ impl Service {
     }
 }
 
-#[cfg(feature = "bench-support")]
-pub struct BenchmarkProfileImportService(Service);
-
-#[cfg(feature = "bench-support")]
-impl BenchmarkProfileImportService {
-    #[must_use]
-    pub fn active() -> Self {
-        let mut service = Service::default();
-        let import_id = 1;
-        service.active_jobs = 1;
-        service.active_import = Some((import_id, Arc::new(AtomicBool::new(false))));
-        service.progress.start(import_id);
-        Self(service)
-    }
-
-    pub fn publish_progress(&self, done: usize, total: usize, label: &str) {
-        self.0.progress.publish(1, (done, total, label.to_owned()));
-    }
-
-    #[must_use]
-    pub fn with_progress_burst(events: usize, label_bytes: usize) -> Self {
-        let service = Self::active();
-        let label = "p".repeat(label_bytes);
-        for done in 1..=events {
-            service.publish_progress(done, events, &label);
-        }
-        service
-    }
-
-    pub fn poll(&mut self) -> Option<SmallVec<[SimplyLoveProfileImportEvent; FRAME_EVENTS]>> {
-        self.0.poll()
-    }
-}
-
 fn candidate_views(candidates: Vec<ItgProfileCandidate>) -> Vec<SimplyLoveItgProfileCandidate> {
     let existing = profile::scan_local_profiles()
         .into_iter()

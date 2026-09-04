@@ -376,18 +376,19 @@ type GameplayRowIndexBuild = (
     Vec<u32>,
 );
 
-pub const NOTE_ROW_ENTRY_INDEX_MASK: u32 = (1 << 30) - 1;
 pub const NOTE_ROW_FLAGS_SHIFT: u32 = 30;
+const NOTE_ROW_ENTRY_INDEX_MASK: u32 = (1 << NOTE_ROW_FLAGS_SHIFT) - 1;
 
 #[inline(always)]
 #[must_use]
 pub fn tap_row_hold_roll_flags_from_metadata(metadata: &[u32], note_index: usize) -> u8 {
     metadata
         .get(note_index)
-        .map_or(0, |&value| (value >> NOTE_ROW_FLAGS_SHIFT) as u8)
+        .map_or(0, |value| (value >> NOTE_ROW_FLAGS_SHIFT) as u8)
 }
 
-fn build_gameplay_row_indices(
+#[must_use]
+pub fn build_gameplay_row_indices(
     notes: &[Note],
     note_ranges: &[(usize, usize); MAX_PLAYERS],
     note_time_cache_ns: &[SongTimeNs],
@@ -422,18 +423,15 @@ fn build_gameplay_row_indices(
                 }
                 cursor += 1;
             }
+
             let packed_flags = u32::from(row_flags) << NOTE_ROW_FLAGS_SHIFT;
-            for metadata in &mut note_row_entry_indices[row_start..cursor] {
-                *metadata |= packed_flags;
-            }
+            note_row_entry_indices[row_start..cursor]
+                .fill(packed_flags | NOTE_ROW_ENTRY_INDEX_MASK);
             if nonmine_note_count != 0 {
                 let row_entry_index = row_entries.len() as u32;
                 debug_assert!(row_entry_index < NOTE_ROW_ENTRY_INDEX_MASK);
                 for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
-                    let note_index = note_index.get();
-                    note_row_entry_indices[note_index] =
-                        (note_row_entry_indices[note_index] & !NOTE_ROW_ENTRY_INDEX_MASK)
-                            | row_entry_index;
+                    note_row_entry_indices[note_index.get()] = packed_flags | row_entry_index;
                 }
                 row_entries.push(build_row_entry_compact(
                     row_index,
@@ -447,156 +445,6 @@ fn build_gameplay_row_indices(
         row_entry_ranges[player] = (row_range_start, row_entries.len());
     }
     (row_entries, row_entry_ranges, note_row_entry_indices)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-type GameplayRowIndexBuildReference = (
-    Vec<RowEntry>,
-    [(usize, usize); MAX_PLAYERS],
-    Vec<u32>,
-    Vec<u8>,
-);
-
-#[cfg(any(test, feature = "bench-support"))]
-fn build_gameplay_row_indices_reference(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-    note_time_cache_ns: &[SongTimeNs],
-    num_players: usize,
-    row_capacity: usize,
-) -> GameplayRowIndexBuildReference {
-    let mut row_entries = Vec::with_capacity(row_capacity);
-    let mut row_entry_ranges = [(0usize, 0usize); MAX_PLAYERS];
-    let mut note_row_entry_indices = vec![u32::MAX; notes.len()];
-    let mut tap_row_hold_roll_flags = vec![0u8; notes.len()];
-    for player in 0..num_players.min(MAX_PLAYERS) {
-        let row_range_start = row_entries.len();
-        let (note_start, note_end) = note_ranges[player];
-        let mut cursor = note_start;
-        while cursor < note_end {
-            let row_index = ChartRowIndex::from_validated(notes[cursor].row_index);
-            let row_start = cursor;
-            let mut row_flags = 0u8;
-            let mut nonmine_note_indices = [ChartNoteIndex::INVALID; MAX_COLS];
-            let mut nonmine_note_count = 0u8;
-            while cursor < note_end && notes[cursor].row_index == row_index.get() {
-                let note = &notes[cursor];
-                match note.note_type {
-                    NoteType::Hold => row_flags |= 0b01,
-                    NoteType::Roll => row_flags |= 0b10,
-                    _ => {}
-                }
-                if note.can_be_judged && !matches!(note.note_type, NoteType::Mine) {
-                    let count = usize::from(nonmine_note_count);
-                    debug_assert!(count < MAX_COLS);
-                    nonmine_note_indices[count] = ChartNoteIndex::from_validated(cursor);
-                    nonmine_note_count += 1;
-                }
-                cursor += 1;
-            }
-            if nonmine_note_count != 0 {
-                let row_entry_index = row_entries.len() as u32;
-                for &note_index in &nonmine_note_indices[..usize::from(nonmine_note_count)] {
-                    note_row_entry_indices[note_index.get()] = row_entry_index;
-                }
-                row_entries.push(build_row_entry_compact(
-                    row_index,
-                    nonmine_note_indices,
-                    nonmine_note_count,
-                    notes,
-                    note_time_cache_ns,
-                ));
-            }
-            tap_row_hold_roll_flags[row_start..cursor].fill(row_flags);
-        }
-        row_entry_ranges[player] = (row_range_start, row_entries.len());
-    }
-    (
-        row_entries,
-        row_entry_ranges,
-        note_row_entry_indices,
-        tap_row_hold_roll_flags,
-    )
-}
-
-#[cfg(feature = "bench-support")]
-fn row_entry_checksum(entries: &[RowEntry]) -> u64 {
-    entries.iter().fold(0u64, |checksum, entry| {
-        entry
-            .note_indices()
-            .iter()
-            .fold(checksum.rotate_left(7) ^ entry.row_index.get() as u64, |sum, &index| {
-                sum.rotate_left(7) ^ index.get() as u64
-            })
-            ^ (entry.time_ns as u64).rotate_left(17)
-            ^ u64::from(entry.rescore_track_count) << 40
-            ^ u64::from(entry.unresolved_count) << 48
-    })
-}
-
-#[cfg(feature = "bench-support")]
-fn row_metadata_checksum(
-    entries: &[RowEntry],
-    ranges: &[(usize, usize); MAX_PLAYERS],
-    indices: &[u32],
-    flags: impl Iterator<Item = u8>,
-) -> u64 {
-    let checksum = ranges.iter().fold(row_entry_checksum(entries), |sum, range| {
-        sum.rotate_left(7) ^ range.0 as u64 ^ (range.1 as u64).rotate_left(19)
-    });
-    indices
-        .iter()
-        .copied()
-        .zip(flags)
-        .fold(checksum, |sum, (index, flags)| {
-            let index = index & NOTE_ROW_ENTRY_INDEX_MASK;
-            sum.rotate_left(7) ^ u64::from(index) ^ (u64::from(flags) << 40)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn build_gameplay_row_indices_reference_for_bench(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-    note_time_cache_ns: &[SongTimeNs],
-    num_players: usize,
-    row_capacity: usize,
-) -> u64 {
-    let (entries, ranges, indices, flags) = build_gameplay_row_indices_reference(
-        notes,
-        note_ranges,
-        note_time_cache_ns,
-        num_players,
-        row_capacity,
-    );
-    row_metadata_checksum(&entries, &ranges, &indices, flags.into_iter())
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn build_gameplay_row_indices_for_bench(
-    notes: &[Note],
-    note_ranges: &[(usize, usize); MAX_PLAYERS],
-    note_time_cache_ns: &[SongTimeNs],
-    num_players: usize,
-    row_capacity: usize,
-) -> u64 {
-    let (entries, ranges, metadata) = build_gameplay_row_indices(
-        notes,
-        note_ranges,
-        note_time_cache_ns,
-        num_players,
-        row_capacity,
-    );
-    row_metadata_checksum(
-        &entries,
-        &ranges,
-        &metadata,
-        metadata
-            .iter()
-            .map(|&value| (value >> NOTE_ROW_FLAGS_SHIFT) as u8),
-    )
 }
 
 pub fn reset_practice_notes_and_rows(
@@ -1290,44 +1138,6 @@ const fn next_row_grid(
         }
     }
     None
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-/// # Panics
-///
-/// Panics if an internal state invariant is violated.
-pub fn build_row_grids_reference(
-    notes: &[Note],
-    note_range: (usize, usize),
-    col_offset: usize,
-    cols: usize,
-) -> Vec<RowGrid> {
-    let (start, end) = note_range;
-    debug_assert!(start <= end && end <= notes.len());
-    debug_assert!(notes_row_sorted(&notes[start..end]));
-
-    let mut rows = Vec::<RowGrid>::new();
-    for (offset, note) in notes[start..end].iter().enumerate() {
-        let note_idx = start + offset;
-        if note.column < col_offset {
-            continue;
-        }
-        let local = note.column - col_offset;
-        if local >= cols || local >= MAX_COLS {
-            continue;
-        }
-        if !matches!(rows.last(), Some(row) if row.row_index == note.row_index) {
-            rows.push(RowGrid {
-                row_index: note.row_index,
-                note_indices: [usize::MAX; MAX_COLS],
-            });
-        }
-        rows.last_mut()
-            .expect("row grid inserted for current note")
-            .note_indices[local] = note_idx;
-    }
-    rows
 }
 
 #[inline(always)]

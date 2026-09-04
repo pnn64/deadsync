@@ -191,7 +191,7 @@ pub fn player_rows(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize>
     rows
 }
 
-fn player_rows_rescan(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
+fn player_rows_unordered(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
     let mut rows = Vec::with_capacity(notes.len());
     for note in notes {
         if local_player_col(note.column, col_offset, cols).is_some() {
@@ -201,12 +201,6 @@ fn player_rows_rescan(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usi
     rows.sort_unstable();
     rows.dedup();
     rows
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn player_rows_reference(notes: &[Note], col_offset: usize, cols: usize) -> Vec<usize> {
-    player_rows_rescan(notes, col_offset, cols)
 }
 
 #[must_use]
@@ -475,17 +469,6 @@ fn sorted_track_range_has_any_note(
     notes[start..end].iter().any(|note| note.column == column)
 }
 
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn sorted_track_range_has_any_note_bench(
-    notes: &[Note],
-    column: usize,
-    start_row: usize,
-    end_row: usize,
-) -> bool {
-    sorted_track_range_has_any_note(notes, column, start_row, end_row)
-}
-
 pub fn apply_mines_insert(
     notes: &mut Vec<Note>,
     context_notes: &[Note],
@@ -565,74 +548,6 @@ pub fn apply_mines_insert(
         let mine_end = notes[..original_len].partition_point(|note| note.row_index <= mine_row);
         convert_tap_row_to_mines(&mut notes[mine_start..mine_end], mine_row);
         notes.push(mine);
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_mines_insert_reference(
-    notes: &mut Vec<Note>,
-    context_notes: &[Note],
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    start_row: usize,
-    end_row: usize,
-) {
-    if cols == 0 || cols > MAX_COLS || end_row < start_row {
-        return;
-    }
-
-    let player_rows = player_rows_reference(notes, col_offset, cols);
-    let hold_heads: Vec<(usize, usize)> = notes
-        .iter()
-        .filter_map(|note| {
-            matches!(note.note_type, NoteType::Hold | NoteType::Roll)
-                .then_some((note.column, note.hold.as_ref()?.end_row_index))
-        })
-        .collect();
-    let mut mine_rows = Vec::with_capacity(player_rows.len() / 6 + hold_heads.len() + 1);
-    let mut row_count = 0usize;
-    let mut place_every_rows = 6usize;
-    for row in player_rows {
-        if row < start_row || row > end_row {
-            continue;
-        }
-        row_count = row_count.saturating_add(1);
-        if row_count < place_every_rows {
-            continue;
-        }
-        mine_rows.push(row);
-        row_count = 0;
-        place_every_rows = if place_every_rows == 6 { 7 } else { 6 };
-    }
-
-    let half_beat_rows = (ROWS_PER_BEAT.max(1) / 2) as usize;
-    for (column, end_row_index) in hold_heads {
-        let mine_row = end_row_index.saturating_add(half_beat_rows);
-        if mine_row < start_row || mine_row > end_row {
-            continue;
-        }
-        let range_start = mine_row.saturating_sub(half_beat_rows).saturating_add(1);
-        let range_end = mine_row.saturating_add(half_beat_rows).saturating_sub(1);
-        if track_range_has_any_note(context_notes, column, range_start, range_end)
-            || track_range_has_any_note(notes, column, range_start, range_end)
-        {
-            continue;
-        }
-        if !set_added_mine_note(notes, timing_player, mine_row, column) {
-            continue;
-        }
-        mine_rows.push(mine_row);
-    }
-
-    mine_rows.sort_unstable();
-    mine_rows.dedup();
-    for note in notes {
-        if note.note_type == NoteType::Tap && mine_rows.binary_search(&note.row_index).is_ok() {
-            note.note_type = NoteType::Mine;
-            note.hold = None;
-            note.mine_result = None;
-        }
     }
 }
 
@@ -792,7 +707,7 @@ fn set_added_tap_note_sorted(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apply_insert_intelligent_taps_rescan(
+fn apply_insert_intelligent_taps_fallback(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -978,7 +893,7 @@ pub fn apply_insert_intelligent_taps(
             skippy_mode,
         );
     } else {
-        apply_insert_intelligent_taps_rescan(
+        apply_insert_intelligent_taps_fallback(
             notes,
             timing_player,
             col_offset,
@@ -989,156 +904,6 @@ pub fn apply_insert_intelligent_taps(
             skippy_mode,
         );
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-pub fn apply_insert_intelligent_taps_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    window_size_rows: usize,
-    insert_offset_rows: usize,
-    window_stride_rows: usize,
-    skippy_mode: bool,
-) {
-    apply_insert_intelligent_taps_rescan(
-        notes,
-        timing_player,
-        col_offset,
-        cols,
-        window_size_rows,
-        insert_offset_rows,
-        window_stride_rows,
-        skippy_mode,
-    );
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_candidate_count_bench(
-    notes: &[Note],
-    col_offset: usize,
-    cols: usize,
-    window_stride_rows: usize,
-) -> usize {
-    intelligent_candidate_count(notes, col_offset, cols, window_stride_rows)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_candidate_count_reference_bench(
-    notes: &[Note],
-    col_offset: usize,
-    cols: usize,
-    window_stride_rows: usize,
-) -> usize {
-    player_rows(notes, col_offset, cols)
-        .into_iter()
-        .filter(|row| row % window_stride_rows == 0)
-        .count()
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_endpoint_checksum_bench(
-    notes: &[Note],
-    rows: &[usize],
-    window_size_rows: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    rows.iter().fold(0u64, |checksum, &row| {
-        let earlier = intelligent_row_summary(notes, row, col_offset, cols);
-        let later = intelligent_row_summary(
-            notes,
-            row.saturating_add(window_size_rows),
-            col_offset,
-            cols,
-        );
-        let value = u64::from(earlier.nonempty.count_ones())
-            ^ u64::from(earlier.tap_or_hold.count_ones()).rotate_left(8)
-            ^ u64::from(later.nonempty.count_ones()).rotate_left(16)
-            ^ u64::from(later.tap_or_hold.count_ones()).rotate_left(24);
-        checksum.rotate_left(7) ^ value
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_endpoint_checksum_reference_bench(
-    notes: &[Note],
-    rows: &[usize],
-    window_size_rows: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    rows.iter().fold(0u64, |checksum, &row| {
-        let later = row.saturating_add(window_size_rows);
-        let value = count_nonempty_tracks_at_row(notes, row, col_offset, cols) as u64
-            ^ (count_tap_or_hold_tracks_at_row(notes, row, col_offset, cols) as u64).rotate_left(8)
-            ^ (count_nonempty_tracks_at_row(notes, later, col_offset, cols) as u64).rotate_left(16)
-            ^ (count_tap_or_hold_tracks_at_row(notes, later, col_offset, cols) as u64)
-                .rotate_left(24);
-        checksum.rotate_left(7) ^ value
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_window_checksum_bench(
-    notes: &[Note],
-    rows: &[usize],
-    window_size_rows: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    let mut cursor = 0usize;
-    let mut latest = [usize::MAX; MAX_COLS];
-    rows.iter().fold(0u64, |checksum, &row| {
-        let body_row = row.saturating_add(1);
-        let cells = advance_latest_notes(
-            notes,
-            &mut cursor,
-            body_row,
-            col_offset,
-            cols,
-            &mut latest,
-        );
-        let body = tracks_down_mask(notes, &latest, body_row, cols) & !cells;
-        let middle = intelligent_range_has_note(
-            notes,
-            body_row,
-            row.saturating_add(window_size_rows).saturating_sub(1),
-            col_offset,
-            cols,
-        );
-        checksum.rotate_left(7) ^ body ^ (u64::from(middle) << 63)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn intelligent_window_checksum_reference_bench(
-    notes: &[Note],
-    rows: &[usize],
-    window_size_rows: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    rows.iter().fold(0u64, |checksum, &row| {
-        let body_row = row.saturating_add(1);
-        let body = (0..cols).fold(0u64, |mask, local| {
-            mask | (u64::from(is_hold_body_at_row(notes, body_row, col_offset + local)) << local)
-        });
-        let middle = notes.iter().any(|note| {
-            local_player_col(note.column, col_offset, cols).is_some()
-                && note.row_index >= body_row
-                && note.row_index <= row.saturating_add(window_size_rows).saturating_sub(1)
-        });
-        checksum.rotate_left(7) ^ body ^ (u64::from(middle) << 63)
-    })
 }
 
 #[derive(Clone, Copy, Default)]
@@ -1273,7 +1038,7 @@ fn wide_add_track(orig_track: usize, row: usize, rows_per_beat: usize, cols: usi
     add_track as usize
 }
 
-fn apply_wide_insert_rescan(
+fn apply_wide_insert_unordered(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -1399,21 +1164,11 @@ pub fn apply_wide_insert(
     if notes_row_col_sorted(notes) {
         apply_wide_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
-        apply_wide_insert_rescan(notes, timing_player, col_offset, cols);
+        apply_wide_insert_unordered(notes, timing_player, col_offset, cols);
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_wide_insert_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-) {
-    apply_wide_insert_rescan(notes, timing_player, col_offset, cols);
-}
-
-fn apply_stomp_insert_rescan(
+fn apply_stomp_insert_unordered(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -1524,21 +1279,11 @@ pub fn apply_stomp_insert(
     if notes_row_col_sorted(notes) {
         apply_stomp_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
-        apply_stomp_insert_rescan(notes, timing_player, col_offset, cols);
+        apply_stomp_insert_unordered(notes, timing_player, col_offset, cols);
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_stomp_insert_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-) {
-    apply_stomp_insert_rescan(notes, timing_player, col_offset, cols);
-}
-
-fn apply_echo_insert_rescan(
+fn apply_echo_insert_unordered(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -1687,18 +1432,8 @@ pub fn apply_echo_insert(
     if notes_row_col_sorted(notes) {
         apply_echo_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
-        apply_echo_insert_rescan(notes, timing_player, col_offset, cols);
+        apply_echo_insert_unordered(notes, timing_player, col_offset, cols);
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_echo_insert_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-) {
-    apply_echo_insert_rescan(notes, timing_player, col_offset, cols);
 }
 
 fn find_tap_index(notes: &[Note], row: usize, column: usize) -> Option<usize> {
@@ -1817,7 +1552,7 @@ pub fn convert_taps_to_holds(
         return;
     }
     if !notes_row_sorted(notes) {
-        convert_taps_to_holds_rescan(
+        convert_taps_to_holds_unordered(
             notes,
             timing_player,
             col_offset,
@@ -1905,7 +1640,7 @@ pub fn convert_taps_to_holds(
     }
 }
 
-fn convert_taps_to_holds_rescan(
+fn convert_taps_to_holds_unordered(
     notes: &mut [Note],
     timing_player: &TimingData,
     col_offset: usize,
@@ -1915,7 +1650,7 @@ fn convert_taps_to_holds_rescan(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    let rows = player_rows_rescan(notes, col_offset, cols);
+    let rows = player_rows_unordered(notes, col_offset, cols);
     let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
 
     for &row in &rows {
@@ -1984,136 +1719,6 @@ fn convert_taps_to_holds_rescan(
             added_this_row = added_this_row.saturating_add(1);
         }
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn convert_taps_to_holds_reference(
-    notes: &mut [Note],
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    simultaneous_holds: usize,
-) {
-    convert_taps_to_holds_rescan(
-        notes,
-        timing_player,
-        col_offset,
-        cols,
-        simultaneous_holds,
-    );
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_rows_reference_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
-    player_rows_reference(notes, col_offset, cols)
-        .into_iter()
-        .fold(0u64, |checksum, row| {
-            checksum
-                .wrapping_mul(0x9E37_79B1)
-                .wrapping_add(row as u64)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_rows_bench(notes: &[Note], col_offset: usize, cols: usize) -> u64 {
-    let mut cursor = 0usize;
-    let mut latest = [usize::MAX; MAX_COLS];
-    let mut checksum = 0u64;
-    while let Some(row) = next_hold_scan_row(notes, &mut cursor, col_offset, cols, &mut latest) {
-        checksum = checksum
-            .wrapping_mul(0x9E37_79B1)
-            .wrapping_add(row.row as u64);
-    }
-    checksum
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_row_local_reference_bench(
-    notes: &[Note],
-    row: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    (0..cols).fold(0u64, |checksum, local| {
-        let column = col_offset + local;
-        let tap = find_tap_index(notes, row, column).unwrap_or(usize::MAX) as u64;
-        checksum
-            .wrapping_mul(0x9E37_79B1)
-            .wrapping_add(tap)
-            .wrapping_add(u64::from(cell_has_any_note(notes, row, column)) << 63)
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_row_local_bench(
-    notes: &[Note],
-    row: usize,
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    let start = notes.partition_point(|note| note.row_index < row);
-    let end = notes.partition_point(|note| note.row_index <= row);
-    let mut taps = [usize::MAX; MAX_COLS];
-    fill_row_taps(notes, start..end, col_offset, cols, &mut taps);
-    let cell_mask = notes[start..end].iter().fold(0u64, |mask, note| {
-        let Some(local) = local_player_col(note.column, col_offset, cols) else {
-            return mask;
-        };
-        mask | (1u64 << local)
-    });
-    taps[..cols]
-        .iter()
-        .enumerate()
-        .fold(0u64, |checksum, (local, &tap)| {
-            checksum
-                .wrapping_mul(0x9E37_79B1)
-                .wrapping_add(tap as u64)
-                .wrapping_add(((cell_mask >> local) & 1) << 63)
-        })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_body_masks_reference_bench(
-    notes: &[Note],
-    rows: &[usize],
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    rows.iter().fold(0u64, |checksum, &row| {
-        let mask = (0..cols).fold(0u64, |mask, local| {
-            mask | (u64::from(is_hold_body_at_row(notes, row, col_offset + local)) << local)
-        });
-        checksum.rotate_left(7) ^ mask
-    })
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn hold_body_masks_bench(
-    notes: &[Note],
-    rows: &[usize],
-    col_offset: usize,
-    cols: usize,
-) -> u64 {
-    let mut cursor = 0usize;
-    let mut latest = [usize::MAX; MAX_COLS];
-    rows.iter().fold(0u64, |checksum, &row| {
-        let cell_mask = advance_latest_notes(
-            notes,
-            &mut cursor,
-            row,
-            col_offset,
-            cols,
-            &mut latest,
-        );
-        let mask = tracks_down_mask(notes, &latest, row, cols) & !cell_mask;
-        checksum.rotate_left(7) ^ mask
-    })
 }
 
 pub fn apply_uncommon_masks_with_masks(
@@ -2403,60 +2008,6 @@ pub fn apply_uncommon_chart_transforms(
     *note_ranges = transformed_ranges;
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_uncommon_chart_transforms_reference(
-    notes: &mut Vec<Note>,
-    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    cols_per_player: usize,
-    num_players: usize,
-    player_effects: &[ChartAttackEffects; MAX_PLAYERS],
-    timing_players: &[&TimingData; MAX_PLAYERS],
-) {
-    if num_players == 0
-        || !player_effects
-            .iter()
-            .take(num_players)
-            .any(|effects| effects.has_note_masks())
-    {
-        return;
-    }
-
-    let mut transformed = Vec::with_capacity(notes.len());
-    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
-    for player in 0..num_players {
-        let (start, end) = note_ranges[player];
-        let slice_end = end.min(notes.len());
-        let slice_start = start.min(slice_end);
-        let out_start = transformed.len();
-        let effects = player_effects[player];
-        if !effects.has_note_masks() {
-            transformed.extend_from_slice(&notes[slice_start..slice_end]);
-            transformed_ranges[player] = (out_start, transformed.len());
-            continue;
-        }
-        let mut player_notes = notes[slice_start..slice_end].to_vec();
-        apply_uncommon_masks_with_masks(
-            &mut player_notes,
-            effects.insert_mask,
-            effects.remove_mask,
-            effects.holds_mask,
-            timing_players[player],
-            player.saturating_mul(cols_per_player),
-            cols_per_player,
-            &[],
-            None,
-            player,
-        );
-        transformed.extend(player_notes);
-        transformed_ranges[player] = (out_start, transformed.len());
-    }
-    if num_players == 1 {
-        transformed_ranges[1] = transformed_ranges[0];
-    }
-    *notes = transformed;
-    *note_ranges = transformed_ranges;
-}
-
 fn fill_turn_take_from(
     turn: GameplayTurnOption,
     cols: usize,
@@ -2580,39 +2131,6 @@ pub fn apply_turn_permutation(
     let mut old_to_new = vec![0usize; cols];
     for (new_col, &old_col) in take_from.iter().enumerate() {
         old_to_new[old_col] = new_col;
-    }
-    let (start, end) = note_range;
-    for note in &mut notes[start..end] {
-        if note.column < col_offset {
-            continue;
-        }
-        let local = note.column - col_offset;
-        if local < cols {
-            note.column = col_offset + old_to_new[local];
-        }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_turn_permutation_reference(
-    notes: &mut [Note],
-    note_range: (usize, usize),
-    col_offset: usize,
-    cols: usize,
-    turn: GameplayTurnOption,
-    seed: u64,
-) {
-    let Some(take_from) = turn_take_from(turn, cols, seed) else {
-        return;
-    };
-    if take_from.len() != cols {
-        return;
-    }
-    let mut old_to_new = vec![0usize; cols];
-    for (new_col, &old_col) in take_from.iter().enumerate() {
-        if old_col < cols {
-            old_to_new[old_col] = new_col;
-        }
     }
     let (start, end) = note_range;
     for note in &mut notes[start..end] {
@@ -2800,80 +2318,6 @@ pub fn apply_hyper_shuffle(
                 .hold
                 .as_ref()
                 .map(|h| h.end_row_index)
-                .unwrap_or(row);
-            hold_end_row[local] = Some(end);
-        }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_hyper_shuffle_reference(
-    notes: &mut [Note],
-    note_range: (usize, usize),
-    col_offset: usize,
-    cols: usize,
-    seed: u64,
-) {
-    if cols == 0 || cols > MAX_COLS {
-        return;
-    }
-    let row_grids = build_row_grids_reference(notes, note_range, col_offset, cols);
-    let mut rng = TurnRng::new(seed);
-    let mut hold_end_row: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
-
-    for row_grid in row_grids {
-        let row = row_grid.row_index;
-        let grid = row_grid.note_indices;
-        for hold_end in hold_end_row.iter_mut().take(cols) {
-            if let Some(end) = *hold_end
-                && row > end
-            {
-                *hold_end = None;
-            }
-        }
-
-        let mut free_cols = [0usize; MAX_COLS];
-        let mut free_len = 0usize;
-        for (col, hold_end) in hold_end_row.iter().enumerate().take(cols) {
-            if hold_end.is_none() {
-                free_cols[free_len] = col;
-                free_len += 1;
-            }
-        }
-        if free_len == 0 {
-            continue;
-        }
-
-        let mut row_notes = [usize::MAX; MAX_COLS];
-        let mut notes_len = 0usize;
-        for (col, &idx) in grid.iter().enumerate().take(cols) {
-            if hold_end_row[col].is_some() || idx == usize::MAX {
-                continue;
-            }
-            row_notes[notes_len] = idx;
-            notes_len += 1;
-        }
-        if notes_len == 0 {
-            continue;
-        }
-
-        rng.shuffle(&mut free_cols[..free_len]);
-        let place_len = notes_len.min(free_len);
-        for (&idx, &col) in row_notes.iter().zip(free_cols.iter()).take(place_len) {
-            notes[idx].column = col_offset + col;
-        }
-        for &idx in row_notes.iter().take(place_len) {
-            if !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
-                continue;
-            }
-            let local = notes[idx].column.saturating_sub(col_offset);
-            if local >= cols {
-                continue;
-            }
-            let end = notes[idx]
-                .hold
-                .as_ref()
-                .map(|hold| hold.end_row_index)
                 .unwrap_or(row);
             hold_end_row[local] = Some(end);
         }

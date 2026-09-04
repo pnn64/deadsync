@@ -157,28 +157,6 @@ pub const fn zmod_resolved_mini_indicator_mode(
     }
 }
 
-#[cfg(test)]
-pub(crate) fn stream_segment_index_exclusive_end(
-    segs: &[StreamSegment],
-    curr_measure: f32,
-) -> usize {
-    if curr_measure.is_nan() {
-        return segs.len();
-    }
-    segs.partition_point(|s| curr_measure >= s.end() as f32)
-}
-
-#[cfg(test)]
-pub(crate) fn stream_segment_index_inclusive_end(
-    segs: &[StreamSegment],
-    curr_measure: f32,
-) -> usize {
-    if curr_measure.is_nan() {
-        return segs.len();
-    }
-    segs.partition_point(|s| curr_measure > s.end() as f32)
-}
-
 #[derive(Clone, Copy, Debug)]
 struct BrokenRunSpan {
     broken_end: i32,
@@ -213,8 +191,8 @@ impl BrokenRunSpan {
 /// partition boundary, so forward frames usually inspect one nearby entry while
 /// seeks remain logarithmic through an exponential bracket and binary search.
 /// There are no misses, eviction, synchronization, gameplay-time allocation, or
-/// song-time destruction. `storage_bytes` exposes retained entry storage; the
-/// worst frame is O(log n), and the boxed entries are freed on screen exit.
+/// song-time destruction. The worst frame is O(log n), and the boxed entries
+/// are freed on screen exit.
 #[derive(Clone, Debug, Default)]
 pub struct StreamProgressLookup {
     segments: Box<[StreamProgressEntry]>,
@@ -249,12 +227,6 @@ impl StreamProgressLookup {
             segments: entries,
             cursor: Cell::new(0),
         }
-    }
-
-    pub fn storage_bytes(&self) -> usize {
-        self.segments
-            .len()
-            .saturating_mul(std::mem::size_of::<StreamProgressEntry>())
     }
 
     #[inline(always)]
@@ -300,10 +272,9 @@ impl StreamProgressLookup {
 /// in a byte-bounded boxed slice. A game/render-thread-only `Cell` retains the
 /// previous boundary, making forward frames O(1) in the usual case; exponential
 /// bracketing keeps seeks O(log n). There are no misses, eviction,
-/// synchronization, or gameplay-time allocations. `storage_bytes` exposes the
-/// retained span storage. A second cursor serves the measure counter and run
-/// timer from one source-boundary lookup. All storage is released on screen
-/// exit.
+/// synchronization, or gameplay-time allocations. A second cursor serves the
+/// measure counter and run timer from one source-boundary lookup. All storage
+/// is released on screen exit.
 #[derive(Clone, Debug, Default)]
 pub struct BrokenRunLookup {
     spans: Box<[BrokenRunSpan]>,
@@ -342,12 +313,6 @@ impl BrokenRunLookup {
             broken_cursor: Cell::new(0),
             segment_cursor: Cell::new(0),
         }
-    }
-
-    pub fn storage_bytes(&self) -> usize {
-        self.spans
-            .len()
-            .saturating_mul(std::mem::size_of::<BrokenRunSpan>())
     }
 
     #[inline(always)]
@@ -431,16 +396,6 @@ fn broken_run_end_and_next(segments: &[StreamSegment], start_index: usize) -> (i
 pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
     let (end, broken, _) = broken_run_end_and_next(segs, start_index);
     (end, broken)
-}
-
-#[cfg(test)]
-pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
-    let index = stream_segment_index_inclusive_end(segs, curr_measure);
-    if index < segs.len() {
-        Some(index)
-    } else {
-        None
-    }
 }
 
 pub(crate) fn zmod_measure_counter_text(
@@ -994,11 +949,7 @@ mod lookup_tests {
 
     #[test]
     fn stream_lookups_keep_compact_song_lifetime_entries() {
-        let segments = segments();
-
         assert_eq!(std::mem::size_of::<StreamProgressEntry>(), 16);
         assert_eq!(std::mem::size_of::<BrokenRunSpan>(), 8);
-        assert_eq!(StreamProgressLookup::new(&segments).storage_bytes(), 80);
-        assert_eq!(BrokenRunLookup::new(&segments).storage_bytes(), 24);
     }
 }

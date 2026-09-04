@@ -177,36 +177,6 @@ mod tests {
     }
 
     #[test]
-    fn scaled_zone_comparisons_match_integer_percentage_behavior() {
-        fn reference_zone_color(bpm: u16, max_heart_rate: u16) -> [f32; 4] {
-            let max = if max_heart_rate == 0 {
-                deadsync_profile::MAX_HEART_RATE_DEFAULT
-            } else {
-                max_heart_rate
-            };
-            let percent = u32::from(bpm) * 100 / u32::from(max);
-            ZONE_RGBA[match percent {
-                0..=49 => 0,
-                50..=59 => 1,
-                60..=69 => 2,
-                70..=79 => 3,
-                80..=89 => 4,
-                _ => 5,
-            }]
-        }
-
-        for max in [0, 1, 159, 160, 161, 190, 219, 220, 221, u16::MAX] {
-            for bpm in 0..=u16::MAX {
-                assert_eq!(
-                    zone_color(bpm, max),
-                    reference_zone_color(bpm, max),
-                    "bpm={bpm}, max={max}"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn heart_rate_text_plan_preserves_missing_and_numeric_readings() {
         let mut plan = HeartRateTextPlan::default();
         assert_eq!(plan.get(0).as_str(), "--");

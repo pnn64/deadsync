@@ -4,41 +4,13 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
-[[bench]]
-name = "linux_evdev_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "macos_iohid_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "windows_input_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "freebsd_input_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "pad_order_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
 [dependencies]
 arrayvec = "0.7.8"
 deadlib-platform = { path = "../deadlib-platform" }
 deadsync-input = { path = "../deadsync-input" }
 log = "0.4.34"
 rustc-hash = "2.1.3"
-smallvec = "1.15.2"
+smallvec = "1.16.0"
 winit = "0.30.13"
 
 [target.'cfg(unix)'.dependencies]

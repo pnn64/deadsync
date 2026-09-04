@@ -56,33 +56,6 @@ pub fn read_boolish(value: Value) -> Option<bool> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn read_boolish_reference_for_bench(value: Value) -> Option<bool> {
-    match value {
-        Value::Boolean(value) => Some(value),
-        Value::Integer(value) => Some(value != 0),
-        Value::Number(value) => Some(value != 0.0),
-        Value::String(text) => {
-            let text = text.to_str().ok()?.trim().to_string();
-            if text.eq_ignore_ascii_case("true")
-                || text.eq_ignore_ascii_case("yes")
-                || text.eq_ignore_ascii_case("on")
-            {
-                Some(true)
-            } else if text.eq_ignore_ascii_case("false")
-                || text.eq_ignore_ascii_case("no")
-                || text.eq_ignore_ascii_case("off")
-            {
-                Some(false)
-            } else {
-                text.parse::<f32>().ok().map(|value| value != 0.0)
-            }
-        }
-        _ => None,
-    }
-}
-
 #[inline(always)]
 pub fn read_string(value: Value) -> Option<String> {
     match value {
@@ -137,19 +110,6 @@ pub fn read_span_mode(value: Value) -> Option<SongLuaSpanMode> {
         return None;
     };
     let text = text.to_str().ok()?;
-    if text.eq_ignore_ascii_case("len") {
-        Some(SongLuaSpanMode::Len)
-    } else if text.eq_ignore_ascii_case("end") {
-        Some(SongLuaSpanMode::End)
-    } else {
-        None
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn read_span_mode_reference_for_bench(value: Value) -> Option<SongLuaSpanMode> {
-    let text = read_string(value)?;
     if text.eq_ignore_ascii_case("len") {
         Some(SongLuaSpanMode::Len)
     } else if text.eq_ignore_ascii_case("end") {
@@ -243,51 +203,5 @@ pub fn player_number_name(player: usize) -> &'static str {
         0 => "PlayerNumber_P1",
         1 => "PlayerNumber_P2",
         _ => unreachable!("song lua only exposes two player numbers"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn borrowed_boolish_parser_matches_owned_string_reference() {
-        let lua = mlua::Lua::new();
-        for raw in [" true ", "YES", "off", "0", "-2.5", "NaN", "unknown", ""] {
-            let current = Value::String(lua.create_string(raw).unwrap());
-            let reference = Value::String(lua.create_string(raw).unwrap());
-            assert_eq!(
-                read_boolish(current),
-                read_boolish_reference_for_bench(reference),
-                "value {raw:?}"
-            );
-        }
-        for (current, reference) in [
-            (Value::Boolean(false), Value::Boolean(false)),
-            (Value::Integer(-7), Value::Integer(-7)),
-            (Value::Number(0.0), Value::Number(0.0)),
-            (Value::Nil, Value::Nil),
-        ] {
-            assert_eq!(
-                read_boolish(current),
-                read_boolish_reference_for_bench(reference)
-            );
-        }
-    }
-
-    #[test]
-    fn borrowed_span_mode_parser_matches_owned_string_reference() {
-        let lua = mlua::Lua::new();
-        for raw in ["len", "LEN", "End", " end ", "unknown", ""] {
-            let current = Value::String(lua.create_string(raw).unwrap());
-            let reference = Value::String(lua.create_string(raw).unwrap());
-            assert_eq!(
-                read_span_mode(current),
-                read_span_mode_reference_for_bench(reference),
-                "value {raw:?}"
-            );
-        }
-        assert_eq!(read_span_mode(Value::Integer(1)), None);
-        assert_eq!(read_span_mode_reference_for_bench(Value::Integer(1)), None);
     }
 }

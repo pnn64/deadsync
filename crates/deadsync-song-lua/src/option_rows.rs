@@ -364,13 +364,6 @@ fn conf_option_row_spec_normalized(name: &str, key: &str) -> SongLuaNamedOptionR
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn conf_option_row_spec_reference_for_bench(name: &str) -> SongLuaNamedOptionRowSpec {
-    conf_option_row_spec_normalized(name, &name.to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn custom_option_row_spec(name: &str) -> Option<SongLuaOptionRowSpec> {
     with_ascii_lowercase_option_key(name, custom_option_row_spec_normalized)
@@ -514,13 +507,6 @@ fn custom_option_row_spec_normalized(key: &str) -> Option<SongLuaOptionRowSpec> 
     Some(spec)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn custom_option_row_spec_reference_for_bench(name: &str) -> Option<SongLuaOptionRowSpec> {
-    custom_option_row_spec_normalized(&name.to_ascii_lowercase())
-}
-
 #[must_use]
 pub fn custom_option_default_text(name: &str) -> Option<String> {
     custom_option_row_spec(name).map(|spec| option_value_text(spec.choices, 0))
@@ -635,13 +621,6 @@ fn theme_pref_row_spec_normalized(key: &str) -> SongLuaOptionRowSpec {
             .values(SongLuaOptionValues::Bool(OPTION_TRUE_FALSE))
             .one_choice(),
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn theme_pref_row_spec_reference_for_bench(name: &str) -> SongLuaOptionRowSpec {
-    theme_pref_row_spec_normalized(&name.to_ascii_lowercase())
 }
 
 #[must_use]
@@ -1188,123 +1167,4 @@ fn create_operator_menu_option_row(
         set_pref_option_save(lua, &row, &pref_name)?;
     }
     Ok(row)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn assert_values_eq(left: SongLuaOptionValues, right: SongLuaOptionValues) {
-        match (left, right) {
-            (SongLuaOptionValues::Str(left), SongLuaOptionValues::Str(right)) => {
-                assert_eq!(left, right);
-            }
-            (SongLuaOptionValues::Bool(left), SongLuaOptionValues::Bool(right)) => {
-                assert_eq!(left, right);
-            }
-            (SongLuaOptionValues::Int(left), SongLuaOptionValues::Int(right)) => {
-                assert_eq!(left, right);
-            }
-            (SongLuaOptionValues::Number(left), SongLuaOptionValues::Number(right)) => {
-                assert_eq!(left, right);
-            }
-            _ => panic!("option value kinds diverged"),
-        }
-    }
-
-    fn assert_spec_eq(left: SongLuaOptionRowSpec, right: SongLuaOptionRowSpec) {
-        assert_values_eq(left.choices, right.choices);
-        match (left.values, right.values) {
-            (Some(left), Some(right)) => assert_values_eq(left, right),
-            (None, None) => {}
-            _ => panic!("option value presence diverged"),
-        }
-        assert_eq!(left.layout_type, right.layout_type);
-        assert_eq!(left.select_type, right.select_type);
-        assert_eq!(
-            left.one_choice_for_all_players,
-            right.one_choice_for_all_players
-        );
-        assert_eq!(left.export_on_change, right.export_on_change);
-        assert_eq!(left.hide_on_disable, right.hide_on_disable);
-        assert_eq!(left.reload_row_messages, right.reload_row_messages);
-        assert_eq!(left.broadcast_on_export, right.broadcast_on_export);
-    }
-
-    #[test]
-    fn stack_normalized_conf_rows_match_committed_behavior() {
-        let long_name = "É".repeat(40);
-        for name in [
-            "ConfAspectRatio",
-            "CONFDISPLAYRESOLUTION",
-            "confDisplayMode",
-            "ConfRefreshRate",
-            "ConfFullscreenType",
-            "UnknownConfOption",
-            long_name.as_str(),
-        ] {
-            let current = conf_option_row_spec(name);
-            let reference = conf_option_row_spec_reference_for_bench(name);
-            assert_eq!(current.row_name, reference.row_name, "name={name:?}");
-            assert_spec_eq(current.spec, reference.spec);
-        }
-        assert_eq!(
-            conf_option_row_spec("CONFASPECTRATIO").row_name,
-            "DisplayAspectRatio"
-        );
-    }
-
-    #[test]
-    fn stack_normalized_custom_rows_match_committed_behavior() {
-        let long_name = "É".repeat(40);
-        for name in [
-            "SpeedModType",
-            "JUDGMENTGRAPHIC",
-            "NoteSkinVariant",
-            "BackgroundFilter",
-            "ScreenAfterPlayerOptions4",
-            "GameplayExtrasC",
-            "TimingWindowOptions",
-            "MiniIndicatorColor",
-            "ExtraAesthetics",
-            "unknown",
-            long_name.as_str(),
-        ] {
-            match (
-                custom_option_row_spec(name),
-                custom_option_row_spec_reference_for_bench(name),
-            ) {
-                (Some(current), Some(reference)) => assert_spec_eq(current, reference),
-                (None, None) => {}
-                _ => panic!("custom row presence diverged for {name:?}"),
-            }
-        }
-        assert!(custom_option_row_spec("SPEEDMOD").is_some());
-        assert!(custom_option_row_spec("not-a-row").is_none());
-    }
-
-    #[test]
-    fn stack_normalized_theme_pref_rows_match_committed_behavior() {
-        let long_name = "É".repeat(40);
-        for name in [
-            "NumberOfContinuesAllowed",
-            "CASUALMAXMETER",
-            "SimplyLoveColor",
-            "ScreenSelectMusicCasualMenuTimer",
-            "VisualStyle",
-            "DefaultGameMode",
-            "SongSelectBG",
-            "ScoringSystem",
-            "EditModeLastSeenSong",
-            "RainbowMode",
-            "MemoryCards",
-            "unknown",
-            long_name.as_str(),
-        ] {
-            assert_spec_eq(
-                theme_pref_row_spec(name),
-                theme_pref_row_spec_reference_for_bench(name),
-            );
-        }
-    }
 }

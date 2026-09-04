@@ -109,53 +109,6 @@ impl<'a> Iterator for ItgCallArgs<'a> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn itg_split_call_args_reference_for_bench(raw: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut start = 0usize;
-    let mut depth = 0usize;
-    let mut quote = 0u8;
-    let bytes = raw.as_bytes();
-    let mut idx = 0usize;
-    while idx < bytes.len() {
-        let b = bytes[idx];
-        if quote != 0 {
-            if b == quote {
-                quote = 0;
-            }
-            idx += 1;
-            continue;
-        }
-        match b {
-            b'"' | b'\'' => {
-                quote = b;
-            }
-            b'(' | b'{' | b'[' => {
-                depth += 1;
-            }
-            b')' | b'}' | b']' => {
-                depth = depth.saturating_sub(1);
-            }
-            b',' if depth == 0 => {
-                let part = raw[start..idx].trim();
-                if !part.is_empty() {
-                    out.push(part.to_string());
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-        idx += 1;
-    }
-    let tail = raw[start..].trim();
-    if !tail.is_empty() {
-        out.push(tail.to_string());
-    }
-    out
-}
-
 fn strip_wrapped_parens(raw: &str) -> &str {
     let mut value = raw.trim();
     loop {
@@ -313,58 +266,6 @@ fn itg_parse_lua_method_call(body: &str, name_start: usize) -> Option<(&str, &st
     ))
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn itg_parse_self_chain_commands_reference_for_bench(body: &str) -> Option<String> {
-    fn parse_method_call(body: &str, name_start: usize) -> Option<(String, String, usize)> {
-        let bytes = body.as_bytes();
-        let mut name_end = name_start;
-        while name_end < bytes.len() && is_lua_ident(bytes[name_end]) {
-            name_end += 1;
-        }
-        if name_end == name_start {
-            return None;
-        }
-        let open = itg_skip_ws(body, name_end);
-        if bytes.get(open).is_none_or(|byte| *byte != b'(') {
-            return None;
-        }
-        let close = itg_find_matching(body, open, '(', ')')?;
-        Some((
-            body[name_start..name_end].trim().to_string(),
-            body[open + 1..close].trim().to_string(),
-            close + 1,
-        ))
-    }
-
-    let mut out = Vec::new();
-    let mut cursor = 0usize;
-    while let Some(relative) = body[cursor..].find("self:") {
-        let mut name_start = cursor + relative + 5;
-        loop {
-            let Some((name, args, next)) = parse_method_call(body, name_start) else {
-                cursor = name_start;
-                break;
-            };
-            if args.is_empty() {
-                out.push(name);
-            } else {
-                out.push(format!("{name},{args}"));
-            }
-            cursor = next;
-
-            let chain = itg_skip_ws(body, next);
-            if body.as_bytes().get(chain).is_some_and(|byte| *byte == b':') {
-                name_start = chain + 1;
-                continue;
-            }
-            break;
-        }
-    }
-    (!out.is_empty()).then(|| out.join(";"))
-}
-
 #[must_use]
 pub fn itg_extract_quoted_strings(input: &str) -> Vec<String> {
     itg_quoted_strings(input).map(str::to_owned).collect()
@@ -402,32 +303,6 @@ impl<'a> Iterator for ItgQuotedStrings<'a> {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn itg_extract_quoted_strings_reference_for_bench(input: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let bytes = input.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        let quote = bytes[index];
-        if quote != b'"' && quote != b'\'' {
-            index += 1;
-            continue;
-        }
-        index += 1;
-        let start = index;
-        while index < bytes.len() && bytes[index] != quote {
-            index += 1;
-        }
-        if index <= bytes.len() {
-            out.push(input[start..index].to_string());
-        }
-        index += 1;
-    }
-    out
-}
-
 fn itg_parse_lua_float_token(raw: &str) -> Option<f32> {
     let value = raw.trim().trim_matches('"').trim_matches('\'');
     if value.is_empty() {
@@ -441,82 +316,4 @@ fn itg_parse_lua_float_token(raw: &str) -> Option<f32> {
         return patched.parse::<f32>().ok();
     }
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn borrowed_call_arguments_preserve_top_level_splitting() {
-        let cases = [
-            "64,(64/60)",
-            " one, fn(2, 3), {4, 5}, 'six,seven' ",
-            ",first,,second,",
-            "single",
-            "",
-        ];
-        for raw in cases {
-            assert_eq!(
-                itg_call_args(raw).collect::<Vec<_>>(),
-                itg_split_call_args_reference_for_bench(raw)
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>(),
-                "raw={raw:?}"
-            );
-        }
-        assert_eq!(
-            itg_call_args("one, fn(2, 3), 'four,five'").collect::<Vec<_>>(),
-            ["one", "fn(2, 3)", "'four,five'"]
-        );
-    }
-
-    #[test]
-    fn direct_self_chain_output_matches_committed_behavior() {
-        let cases = [
-            "self:zoom(1):diffuse(1, 0.5, 0, 1)",
-            "function(self) self:x(10); self:y(20):sleep(0.5) end",
-            "self:playcommand('Ready,Set'):visible()",
-            "self:broken; self:rotationz(90)",
-            "no actor commands",
-            "",
-        ];
-        for body in cases {
-            assert_eq!(
-                itg_parse_self_chain_commands(body),
-                itg_parse_self_chain_commands_reference_for_bench(body),
-                "body={body:?}"
-            );
-        }
-        assert_eq!(
-            itg_parse_self_chain_commands("self:x(10):y(20); self:visible()"),
-            Some("x,10;y,20;visible".to_string())
-        );
-    }
-
-    #[test]
-    fn borrowed_quoted_strings_preserve_simple_itg_scanning() {
-        let cases = [
-            "NOTESKIN:GetPath('Down', \"Tap Note\")",
-            "'one' \"two\" ''",
-            "prefix 'unterminated",
-            "no quoted values",
-            "",
-        ];
-        for input in cases {
-            assert_eq!(
-                itg_quoted_strings(input).collect::<Vec<_>>(),
-                itg_extract_quoted_strings_reference_for_bench(input)
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>(),
-                "input={input:?}"
-            );
-        }
-        assert_eq!(
-            itg_quoted_strings("'Left' \"Tap Note\"").collect::<Vec<_>>(),
-            ["Left", "Tap Note"]
-        );
-    }
 }

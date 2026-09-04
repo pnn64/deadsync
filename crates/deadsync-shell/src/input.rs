@@ -684,25 +684,6 @@ pub fn raw_keyboard_capture_enabled(
                 && screen_accepts_queued_input(screen, transition)))
 }
 
-#[cfg(feature = "bench-support")]
-pub fn benchmark_prepare_gameplay_capture() {
-    deadsync_input_native::benchmark_prepare_raw_keyboard_capture(true);
-}
-
-#[cfg(feature = "bench-support")]
-#[inline(always)]
-#[must_use]
-pub fn benchmark_sync_gameplay_capture(accepts_live_input: bool) -> bool {
-    let enabled = raw_keyboard_capture_enabled(
-        accepts_live_input,
-        Screen::Gameplay,
-        &TransitionState::Idle,
-        cfg!(windows),
-    );
-    deadsync_input_native::set_raw_keyboard_capture_enabled(enabled);
-    enabled
-}
-
 #[inline(always)]
 pub const fn allowed_gameplay_raw_action(
     action: RawKeyAction,

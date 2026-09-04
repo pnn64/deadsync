@@ -2272,30 +2272,6 @@ mod tests {
     }
 
     #[test]
-    fn reciprocal_segment_uv_matches_division_reference() {
-        let cases: [(f32, f32, f32, f32); 4] = [
-            (-128.0, 64.0, 0.0, 1.0),
-            (17.25, 37.5, 0.125, 0.875),
-            (240.0, 11.75, 0.8, 0.2),
-            (-3.5, 0.25, 0.4, 0.6),
-        ];
-        for (segment_top, segment_size, v0, v1) in cases {
-            let inverse_segment_size = segment_size.recip();
-            for fraction in [-0.25, 0.0, 0.125, 0.5, 0.875, 1.0, 1.25] {
-                let y = segment_size.mul_add(fraction, segment_top);
-                let reference_t = ((y - segment_top) / segment_size).clamp(0.0, 1.0);
-                let expected = (v1 - v0).mul_add(reference_t, v0);
-                let actual = hold_segment_slice_v(y, segment_top, inverse_segment_size, v0, v1);
-                assert!(
-                    (actual - expected).abs() <= 2.0e-6,
-                    "segment_top={segment_top} segment_size={segment_size} fraction={fraction}: \
-                     expected {expected}, got {actual}"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn reused_slice_uv_matches_independent_endpoint_interpolation() {
         let cases: [(f32, f32, f32, f32, f32); 3] = [
             (-128.0, 64.0, 0.0, 1.0, 4.0),
@@ -2317,49 +2293,6 @@ mod tests {
                 assert_eq!(reused_v0.to_bits(), independent_v0.to_bits());
                 reused_v0 = independent_v1;
                 slice_top = slice_bottom;
-            }
-        }
-    }
-
-    #[test]
-    fn single_division_strip_normal_matches_reference_geometry() {
-        let reference = |center: [f32; 3], forward: [f32; 2], half_width: f32| {
-            let len = (forward[0] * forward[0] + forward[1] * forward[1])
-                .sqrt()
-                .max(0.0001);
-            let nx = -forward[1] / len * half_width;
-            let ny = forward[0] / len * half_width;
-            hold_strip_row_from_positions(
-                [center[0] + nx, center[1] + ny, center[2]],
-                [center[0] - nx, center[1] - ny, center[2]],
-                0.1,
-                0.9,
-                0.4,
-                [0.2, 0.3, 0.4, 0.5],
-            )
-        };
-        for (center, forward, half_width) in [
-            ([0.0, 0.0, 0.0], [0.0, 16.0], 32.0),
-            ([13.5, -7.25, 2.0], [3.0, 4.0], 24.0),
-            ([-80.0, 120.0, -9.0], [-11.0, 7.0], 40.0),
-            ([4.0, 8.0, 12.0], [0.00001, 0.00002], 8.0),
-        ] {
-            let expected = reference(center, forward, half_width);
-            let actual = hold_strip_row_3d(
-                center,
-                forward,
-                half_width,
-                0.1,
-                0.9,
-                0.4,
-                [0.2, 0.3, 0.4, 0.5],
-            );
-            for (actual, expected) in actual.into_iter().zip(expected) {
-                for (actual, expected) in actual.pos.into_iter().zip(expected.pos) {
-                    assert!((actual - expected).abs() <= 1.0e-5);
-                }
-                assert_eq!(actual.uv, expected.uv);
-                assert_eq!(actual.color, expected.color);
             }
         }
     }

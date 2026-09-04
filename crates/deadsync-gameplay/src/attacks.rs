@@ -120,83 +120,6 @@ pub fn player_changes_chart<Profile: GameplayProfileData>(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_chart_attack_windows_reference(raw: &str) -> Vec<ChartAttackWindow> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Vec::new();
-    }
-
-    let upper = raw.to_ascii_uppercase();
-    let mut starts = Vec::with_capacity(8);
-    let mut scan = 0usize;
-    while let Some(pos) = upper[scan..].find("TIME=") {
-        let idx = scan + pos;
-        starts.push(idx);
-        scan = idx.saturating_add(5);
-        if scan >= raw.len() {
-            break;
-        }
-    }
-    if starts.is_empty() {
-        return Vec::new();
-    }
-
-    let mut out = Vec::with_capacity(starts.len());
-    for (i, start) in starts.iter().copied().enumerate() {
-        let end = starts.get(i + 1).copied().unwrap_or(raw.len());
-        let chunk = &raw[start..end];
-        let mut time = None;
-        let mut len = None;
-        let mut end_time = None;
-        let mut mods = None;
-
-        for part in chunk.split(':') {
-            let part = part.trim();
-            let Some((k, v)) = part.split_once('=') else {
-                continue;
-            };
-            let key = k.trim().to_ascii_uppercase();
-            let value = v.trim().trim_end_matches(',').trim();
-            if value.is_empty() {
-                continue;
-            }
-            match key.as_str() {
-                "TIME" => time = value.parse::<f32>().ok(),
-                "LEN" => len = value.parse::<f32>().ok(),
-                "END" => end_time = value.parse::<f32>().ok(),
-                "MODS" => mods = Some(value.to_string()),
-                _ => {}
-            }
-        }
-
-        let (Some(start_second), Some(mods)) = (time, mods) else {
-            continue;
-        };
-        if !start_second.is_finite() || mods.is_empty() {
-            continue;
-        }
-        let mut len_seconds = len.unwrap_or(0.0);
-        if let Some(end_second) = end_time
-            && end_second.is_finite()
-        {
-            len_seconds = end_second - start_second;
-        }
-        if !len_seconds.is_finite() || len_seconds < 0.0 {
-            len_seconds = 0.0;
-        }
-        out.push(ChartAttackWindow {
-            start_second,
-            len_seconds,
-            mods,
-        });
-    }
-
-    out
-}
-
 #[inline]
 fn find_attack_time(raw: &[u8], start: usize) -> Option<usize> {
     const TIME: &[u8; 5] = b"TIME=";
@@ -296,40 +219,6 @@ fn parse_chart_attack_chunk(chunk: &str) -> Option<BorrowedChartAttack<'_>> {
         len_seconds,
         mods,
     })
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[must_use]
-pub fn parse_chart_attack_windows_starts_reference(raw: &str) -> Vec<ChartAttackWindow> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Vec::new();
-    }
-    let mut starts = Vec::with_capacity(8);
-    let mut scan = 0usize;
-    while let Some(start) = find_attack_time(raw.as_bytes(), scan) {
-        starts.push(start);
-        scan = start.saturating_add(5);
-        if scan >= raw.len() {
-            break;
-        }
-    }
-    let mut out = Vec::with_capacity(starts.len());
-    for (index, start) in starts.iter().copied().enumerate() {
-        let end = starts.get(index + 1).copied().unwrap_or(raw.len());
-        if let Some(window) = parse_chart_attack_chunk(&raw[start..end]) {
-            out.push(window.to_owned());
-        }
-    }
-    out
-}
-
-#[cfg(test)]
-pub(crate) fn stream_attack_windows(raw: &str) -> Vec<ChartAttackWindow> {
-    ChartAttackChunks::new(raw)
-        .filter_map(parse_chart_attack_chunk)
-        .map(BorrowedChartAttack::to_owned)
-        .collect()
 }
 
 #[must_use]
@@ -452,29 +341,6 @@ pub fn build_attack_mask_windows_for_mode(
         base_seed,
         song_length_seconds,
     );
-    build_attack_mask_windows(&attacks)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn build_attack_mask_windows_for_mode_reference(
-    chart_attacks: Option<&str>,
-    attack_mode: GameplayAttackMode,
-    player: usize,
-    base_seed: u64,
-    song_length_seconds: f32,
-) -> Vec<AttackMaskWindow> {
-    let attacks = match attack_mode {
-        GameplayAttackMode::Off => Vec::new(),
-        GameplayAttackMode::On => chart_attacks
-            .map(parse_chart_attack_windows_starts_reference)
-            .unwrap_or_default(),
-        GameplayAttackMode::Random => {
-            build_random_attack_windows(song_length_seconds, player, base_seed)
-        }
-    };
-    if attacks.is_empty() {
-        return Vec::new();
-    }
     build_attack_mask_windows(&attacks)
 }
 
@@ -869,9 +735,9 @@ struct SongLuaNoteHideRange {
 /// misses, insertion, eviction, or gameplay-time destruction. Each lane stores
 /// prefix maximum end beats so finite queries use one binary search and one end
 /// comparison, with no allocation. Non-finite source/query values take the
-/// behavior-preserving lane scan. `storage_bytes` reports both owned arrays;
-/// the lookup is freed when the gameplay screen is dropped. Worst-case normal
-/// query work is O(log n) for the lane's window count.
+/// behavior-preserving lane scan. The lookup is freed when the gameplay screen
+/// is dropped. Worst-case normal query work is O(log n) for the lane's window
+/// count.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SongLuaNoteHideWindows {
     windows: Box<[SongLuaNoteHideWindowRuntime]>,
@@ -936,45 +802,6 @@ impl SongLuaNoteHideWindows {
         }
     }
 
-    #[cfg(any(test, feature = "bench-support"))]
-    #[doc(hidden)]
-    #[must_use]
-    pub fn new_reference(mut windows: Vec<SongLuaNoteHideWindowRuntime>) -> Self {
-        windows.sort_unstable_by(|left, right| {
-            left.column
-                .cmp(&right.column)
-                .then_with(|| left.start_beat.total_cmp(&right.start_beat))
-        });
-        let lane_ranges = std::array::from_fn(|column| {
-            let start = windows.partition_point(|window| window.column < column);
-            let end = windows.partition_point(|window| window.column <= column);
-            SongLuaNoteHideRange { start, end }
-        });
-        let lane_has_nonfinite = std::array::from_fn(|column| {
-            let range = lane_ranges[column];
-            windows[range.start..range.end]
-                .iter()
-                .any(|window| !window.start_beat.is_finite() || !window.end_beat.is_finite())
-        });
-        let mut prefix_max_ends = Vec::with_capacity(windows.len());
-        let mut column = usize::MAX;
-        let mut max_end = f32::NEG_INFINITY;
-        for window in &windows {
-            if window.column != column {
-                column = window.column;
-                max_end = f32::NEG_INFINITY;
-            }
-            max_end = max_end.max(window.end_beat);
-            prefix_max_ends.push(max_end);
-        }
-        Self {
-            windows: windows.into_boxed_slice(),
-            prefix_max_ends: prefix_max_ends.into_boxed_slice(),
-            lane_ranges,
-            lane_has_nonfinite,
-        }
-    }
-
     #[inline(always)]
     #[must_use]
     pub fn as_slice(&self) -> &[SongLuaNoteHideWindowRuntime] {
@@ -984,18 +811,6 @@ impl SongLuaNoteHideWindows {
     #[inline(always)]
     pub fn iter(&self) -> std::slice::Iter<'_, SongLuaNoteHideWindowRuntime> {
         self.windows.iter()
-    }
-
-    #[must_use]
-    pub fn storage_bytes(&self) -> usize {
-        self.windows
-            .len()
-            .saturating_mul(std::mem::size_of::<SongLuaNoteHideWindowRuntime>())
-            .saturating_add(
-                self.prefix_max_ends
-                    .len()
-                    .saturating_mul(std::mem::size_of::<f32>()),
-            )
     }
 
     #[inline(always)]
@@ -1016,10 +831,10 @@ impl SongLuaNoteHideWindows {
     fn hidden(&self, column: usize, beat: f32) -> bool {
         const EPS: f32 = 1.0e-4;
         let Some(range) = self.lane_ranges.get(column).copied() else {
-            return song_lua_note_hidden_reference(self, column, beat);
+            return song_lua_note_hidden_linear(self, column, beat);
         };
         if !beat.is_finite() || self.lane_has_nonfinite[column] {
-            return song_lua_note_hidden_reference(self, column, beat);
+            return song_lua_note_hidden_linear(self, column, beat);
         }
         let windows = &self.windows[range.start..range.end];
         let started = windows.partition_point(|window| window.start_beat <= beat + EPS);
@@ -1065,23 +880,6 @@ pub fn build_song_lua_note_hide_windows_for_players(
         }
     }
     out.map(SongLuaNoteHideWindows::new)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn build_song_lua_note_hide_windows_for_players_reference(
-    hides: impl IntoIterator<Item = (usize, usize, f32, f32)>,
-) -> [SongLuaNoteHideWindows; MAX_PLAYERS] {
-    let mut out: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
-        std::array::from_fn(|_| Vec::new());
-    for (player, column, start_beat, end_beat) in hides {
-        if player < MAX_PLAYERS {
-            out[player].push(build_song_lua_note_hide_window_runtime(
-                column, start_beat, end_beat,
-            ));
-        }
-    }
-    out.map(SongLuaNoteHideWindows::new_reference)
 }
 
 #[must_use]
@@ -1186,41 +984,6 @@ pub fn song_lua_message_command_index(
         })
     };
     found.ok().map(|entry| indices.entries[entry].index)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn build_song_lua_message_command_indices_reference<'a>(
-    commands: impl IntoIterator<Item = (usize, &'a str)>,
-) -> std::collections::BTreeMap<String, usize> {
-    let mut out = std::collections::BTreeMap::new();
-    for (index, command) in commands {
-        out.entry(command.to_ascii_lowercase()).or_insert(index);
-    }
-    out
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn song_lua_message_command_index_reference(
-    indices: &std::collections::BTreeMap<String, usize>,
-    message: &str,
-) -> Option<usize> {
-    const STACK_MESSAGE_BYTES: usize = 128;
-
-    if !message.bytes().any(|byte| byte.is_ascii_uppercase()) {
-        return indices.get(message).copied();
-    }
-    if message.len() <= STACK_MESSAGE_BYTES {
-        let mut normalized = [0u8; STACK_MESSAGE_BYTES];
-        normalized[..message.len()].copy_from_slice(message.as_bytes());
-        normalized[..message.len()].make_ascii_lowercase();
-        let normalized = std::str::from_utf8(&normalized[..message.len()])
-            .expect("ASCII case folding preserves UTF-8");
-        return indices.get(normalized).copied();
-    }
-    indices.get(&message.to_ascii_lowercase()).copied()
 }
 
 pub fn build_song_lua_message_seconds(
@@ -1756,35 +1519,6 @@ pub fn append_song_lua_ease_targets(
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn append_song_lua_ease_targets_reference(
-    out: &mut Vec<SongLuaEaseMaskWindow>,
-    start_second: f32,
-    end_second: f32,
-    sustain_end_second: f32,
-    target_name: &str,
-    from: f32,
-    to: f32,
-    easing: Option<&str>,
-    opt1: Option<f32>,
-    opt2: Option<f32>,
-) -> bool {
-    let key = attack_token_key(target_name);
-    append_song_lua_ease_targets_key(
-        out,
-        start_second,
-        end_second,
-        sustain_end_second,
-        key.as_str(),
-        from,
-        to,
-        easing,
-        opt1,
-        opt2,
-    )
-}
-
 #[allow(clippy::too_many_arguments)]
 fn append_song_lua_ease_targets_key(
     out: &mut Vec<SongLuaEaseMaskWindow>,
@@ -2226,36 +1960,6 @@ where
         {
             unsupported_targets += 1;
             unsupported_window(&window);
-        }
-    }
-    song_lua_extend_ease_tails(&mut out, constant_windows);
-    (out, unsupported_targets)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn build_song_lua_ease_windows_for_player_reference<Window>(
-    windows: &[Window],
-    timing_player: &TimingData,
-    player: usize,
-    global_offset_seconds: f32,
-    constant_windows: &[AttackMaskWindow],
-    mut unsupported_window: impl FnMut(&Window),
-) -> (Vec<SongLuaEaseMaskWindow>, usize)
-where
-    Window: SongLuaEaseWindowLike,
-{
-    let mut out = Vec::new();
-    let mut unsupported_targets = 0usize;
-    for window in windows {
-        if !song_lua_target_matches_player(window.player(), player) {
-            continue;
-        }
-        if append_song_lua_ease_window_for(&mut out, window, timing_player, global_offset_seconds)
-            == SongLuaRuntimeEaseAppend::Unsupported
-        {
-            unsupported_targets += 1;
-            unsupported_window(window);
         }
     }
     song_lua_extend_ease_tails(&mut out, constant_windows);
@@ -2723,7 +2427,7 @@ fn with_song_lua_tail_indices<Output>(
     }
 }
 
-fn song_lua_extend_ease_tails_legacy(
+fn song_lua_extend_ease_tails_nonfinite(
     out: &mut [SongLuaEaseMaskWindow],
     constants: &[AttackMaskWindow],
 ) {
@@ -2779,7 +2483,7 @@ pub fn song_lua_extend_ease_tails(
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     if out.iter().any(|window| !window.start_second.is_finite()) {
-        song_lua_extend_ease_tails_legacy(out, constants);
+        song_lua_extend_ease_tails_nonfinite(out, constants);
         return;
     }
 
@@ -2832,7 +2536,7 @@ pub fn song_lua_extend_ease_tails(
     });
 }
 
-fn song_lua_extend_column_offset_tails_legacy(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
+fn song_lua_extend_column_offset_tails_nonfinite(out: &mut [SongLuaColumnOffsetWindowRuntime]) {
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     for i in 0..out.len() {
@@ -2872,7 +2576,7 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
     const SAME_TICK_EPSILON: f32 = 0.001;
 
     if out.iter().any(|window| !window.start_second.is_finite()) {
-        song_lua_extend_column_offset_tails_legacy(out);
+        song_lua_extend_column_offset_tails_nonfinite(out);
         return;
     }
 
@@ -2928,10 +2632,10 @@ pub fn song_lua_note_hidden(windows: &SongLuaNoteHideWindows, local_col: usize, 
     windows.hidden(local_col, beat)
 }
 
-/// Linear lane scan retained as the benchmark/reference path.
+/// Linear fallback for invalid range metadata and non-finite beat values.
 #[inline]
 #[must_use]
-pub fn song_lua_note_hidden_reference(
+fn song_lua_note_hidden_linear(
     windows: &SongLuaNoteHideWindows,
     local_col: usize,
     beat: f32,
@@ -3128,7 +2832,7 @@ pub fn apply_attack_turn_mod(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn apply_chart_attack_window_rescan(
+fn apply_chart_attack_window_fallback(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
     col_offset: usize,
@@ -3411,67 +3115,6 @@ fn apply_chart_attack_window_sorted_with_scratch(
     debug_assert!(chart_attack_notes_sorted(notes));
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-fn apply_chart_attack_window_sorted_owned_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    row_bounds: (usize, usize),
-    mods: ParsedAttackMods,
-    turn_seed: u64,
-) {
-    let (start_row, end_row) = row_bounds;
-    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
-        return;
-    }
-    let note_range = chart_attack_note_range(notes, start_row, end_row);
-    if note_range.is_empty() {
-        return;
-    }
-    let insert_at = note_range.start;
-    let mut in_range = notes.drain(note_range).collect::<Vec<_>>();
-    apply_uncommon_masks_with_masks(
-        &mut in_range,
-        mods.insert_mask,
-        mods.remove_mask,
-        mods.holds_mask,
-        timing_player,
-        col_offset,
-        cols,
-        notes,
-        Some(row_bounds),
-        player,
-    );
-    apply_attack_turn_mod(
-        &mut in_range,
-        col_offset,
-        cols,
-        mods.turn_option,
-        turn_seed,
-        player,
-    );
-    if mods.turn_option != GameplayTurnOption::None {
-        sort_player_notes(&mut in_range);
-    }
-
-    let mut insert_at = insert_at;
-    if let (Some(first), Some(last)) = (in_range.first(), in_range.last()) {
-        let first_key = (first.row_index, first.column);
-        let last_key = (last.row_index, last.column);
-        let merge_start = notes.partition_point(|note| (note.row_index, note.column) < first_key);
-        let merge_end = notes.partition_point(|note| (note.row_index, note.column) <= last_key);
-        if merge_start < merge_end {
-            in_range.extend(notes.drain(merge_start..merge_end));
-            sort_player_notes(&mut in_range);
-        }
-        insert_at = merge_start;
-    }
-    drop(notes.splice(insert_at..insert_at, in_range));
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn apply_chart_attack_window(
     notes: &mut Vec<Note>,
@@ -3498,7 +3141,7 @@ pub fn apply_chart_attack_window(
             turn_seed,
         );
     } else {
-        apply_chart_attack_window_rescan(
+        apply_chart_attack_window_fallback(
             notes,
             timing_player,
             col_offset,
@@ -3508,66 +3151,6 @@ pub fn apply_chart_attack_window(
             mods,
             turn_seed,
         );
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-pub fn apply_chart_attack_window_reference(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    row_bounds: (usize, usize),
-    mods: ParsedAttackMods,
-    turn_seed: u64,
-) {
-    apply_chart_attack_window_rescan(
-        notes,
-        timing_player,
-        col_offset,
-        cols,
-        player,
-        row_bounds,
-        mods,
-        turn_seed,
-    );
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn chart_attack_note_range_bench(
-    notes: &[Note],
-    start_row: usize,
-    end_row: usize,
-) -> (usize, usize) {
-    let range = chart_attack_note_range(notes, start_row, end_row);
-    (range.start, range.end)
-}
-
-#[cfg(feature = "bench-support")]
-#[must_use]
-pub fn chart_attack_note_range_reference_bench(
-    notes: &[Note],
-    start_row: usize,
-    end_row: usize,
-) -> (usize, usize) {
-    let mut start = notes.len();
-    let mut end = notes.len();
-    for (index, note) in notes.iter().enumerate() {
-        if note.row_index >= start_row && start == notes.len() {
-            start = index;
-        }
-        if note.row_index > end_row {
-            end = index;
-            break;
-        }
-    }
-    if start == notes.len() {
-        (notes.len(), notes.len())
-    } else {
-        (start, end.max(start))
     }
 }
 
@@ -3605,7 +3188,7 @@ pub fn apply_chart_attack_windows(
                 &mut scratch,
             );
         } else {
-            apply_chart_attack_window_rescan(
+            apply_chart_attack_window_fallback(
                 notes,
                 timing_player,
                 col_offset,
@@ -3616,133 +3199,6 @@ pub fn apply_chart_attack_windows(
                 turn_seed,
             );
             ordered = Some(true);
-        }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-fn apply_window_order_ref(
-    notes: &mut Vec<Note>,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    row_bounds: (usize, usize),
-    mods: ParsedAttackMods,
-    turn_seed: u64,
-    in_range: &mut Vec<Note>,
-) {
-    let (start_row, end_row) = row_bounds;
-    if notes.is_empty() || end_row < start_row || !mods.has_chart_effect() {
-        return;
-    }
-    let note_range = chart_attack_note_range(notes, start_row, end_row);
-    if note_range.is_empty() {
-        return;
-    }
-    if mods.insert_mask == 0 && mods.remove_mask == 0 && mods.holds_mask == 0 {
-        apply_attack_turn_mod(
-            &mut notes[note_range.clone()],
-            col_offset,
-            cols,
-            mods.turn_option,
-            turn_seed,
-            player,
-        );
-        sort_player_notes(&mut notes[note_range]);
-        return;
-    }
-
-    let insert_at = note_range.start;
-    debug_assert!(in_range.is_empty());
-    in_range.reserve(note_range.len());
-    in_range.extend(notes.drain(note_range));
-    apply_uncommon_masks_with_masks(
-        in_range,
-        mods.insert_mask,
-        mods.remove_mask,
-        mods.holds_mask,
-        timing_player,
-        col_offset,
-        cols,
-        notes,
-        Some(row_bounds),
-        player,
-    );
-    apply_attack_turn_mod(
-        in_range,
-        col_offset,
-        cols,
-        mods.turn_option,
-        turn_seed,
-        player,
-    );
-    if mods.turn_option != GameplayTurnOption::None {
-        sort_player_notes(in_range);
-    }
-
-    let mut insert_at = insert_at;
-    if let (Some(first), Some(last)) = (in_range.first(), in_range.last()) {
-        let first_key = (first.row_index, first.column);
-        let last_key = (last.row_index, last.column);
-        let merge_start = notes.partition_point(|note| (note.row_index, note.column) < first_key);
-        let merge_end = notes.partition_point(|note| (note.row_index, note.column) <= last_key);
-        if merge_start < merge_end {
-            in_range.extend(notes.drain(merge_start..merge_end));
-            sort_player_notes(in_range);
-        }
-        insert_at = merge_start;
-    }
-    drop(notes.splice(insert_at..insert_at, in_range.drain(..)));
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-pub fn apply_chart_attack_windows_order_reference(
-    notes: &mut Vec<Note>,
-    attacks: &[ChartAttackWindow],
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    base_seed: u64,
-) {
-    let mut ordered = chart_attack_notes_sorted(notes);
-    let mut scratch = Vec::new();
-    for (index, attack) in attacks.iter().enumerate() {
-        let mods = parse_attack_mods(&attack.mods);
-        if !mods.has_chart_effect() {
-            continue;
-        }
-        let Some(row_bounds) = chart_attack_row_range(attack, timing_player) else {
-            continue;
-        };
-        let turn_seed = chart_attack_turn_seed(base_seed, player, index);
-        if ordered {
-            apply_window_order_ref(
-                notes,
-                timing_player,
-                col_offset,
-                cols,
-                player,
-                row_bounds,
-                mods,
-                turn_seed,
-                &mut scratch,
-            );
-        } else {
-            apply_chart_attack_window_rescan(
-                notes,
-                timing_player,
-                col_offset,
-                cols,
-                player,
-                row_bounds,
-                mods,
-                turn_seed,
-            );
-            ordered = chart_attack_notes_sorted(notes);
         }
     }
 }
@@ -3835,7 +3291,7 @@ fn apply_borrowed_chart_attacks(
                 &mut scratch,
             );
         } else {
-            apply_chart_attack_window_rescan(
+            apply_chart_attack_window_fallback(
                 notes,
                 timing_player,
                 col_offset,
@@ -3846,89 +3302,6 @@ fn apply_borrowed_chart_attacks(
                 turn_seed,
             );
             ordered = Some(true);
-        }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-pub fn apply_chart_attacks_for_mode_reference(
-    notes: &mut Vec<Note>,
-    chart_attacks: Option<&str>,
-    attack_mode: GameplayAttackMode,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    base_seed: u64,
-    song_length_seconds: f32,
-) {
-    let attacks = match attack_mode {
-        GameplayAttackMode::Off => Vec::new(),
-        GameplayAttackMode::On => chart_attacks
-            .map(parse_chart_attack_windows_starts_reference)
-            .unwrap_or_default(),
-        GameplayAttackMode::Random => {
-            build_random_attack_windows(song_length_seconds, player, base_seed)
-        }
-    };
-    if !attacks.is_empty() {
-        apply_chart_attack_windows_per_window_reference(
-            notes,
-            &attacks,
-            timing_player,
-            col_offset,
-            cols,
-            player,
-            base_seed,
-        );
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[allow(clippy::too_many_arguments)]
-fn apply_chart_attack_windows_per_window_reference(
-    notes: &mut Vec<Note>,
-    attacks: &[ChartAttackWindow],
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-    base_seed: u64,
-) {
-    let mut ordered = chart_attack_notes_sorted(notes);
-    for (index, attack) in attacks.iter().enumerate() {
-        let mods = parse_attack_mods(&attack.mods);
-        if !mods.has_chart_effect() {
-            continue;
-        }
-        let Some(row_bounds) = chart_attack_row_range(attack, timing_player) else {
-            continue;
-        };
-        let turn_seed = chart_attack_turn_seed(base_seed, player, index);
-        if ordered {
-            apply_chart_attack_window_sorted_owned_reference(
-                notes,
-                timing_player,
-                col_offset,
-                cols,
-                player,
-                row_bounds,
-                mods,
-                turn_seed,
-            );
-        } else {
-            apply_chart_attack_window_rescan(
-                notes,
-                timing_player,
-                col_offset,
-                cols,
-                player,
-                row_bounds,
-                mods,
-                turn_seed,
-            );
-            ordered = chart_attack_notes_sorted(notes);
         }
     }
 }
@@ -3949,116 +3322,6 @@ impl ChartAttackTransformPlayer<'_> {
 }
 
 pub fn apply_chart_attack_transforms(
-    notes: &mut Vec<Note>,
-    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    cols_per_player: usize,
-    num_players: usize,
-    players: &[ChartAttackTransformPlayer<'_>; MAX_PLAYERS],
-    base_seed: u64,
-    song_length_seconds: f32,
-) {
-    let active_players = num_players.min(MAX_PLAYERS);
-    if active_players == 0
-        || !players
-            .iter()
-            .take(active_players)
-            .any(|player| player.has_chart_attacks())
-    {
-        return;
-    }
-
-    if active_players == 1 {
-        let (start, end) = note_ranges[0];
-        let end = end.min(notes.len());
-        let start = start.min(end);
-        if start == 0 && end == notes.len() {
-            let attack_player = players[0];
-            apply_chart_attacks_for_mode(
-                notes,
-                attack_player.chart_attacks,
-                attack_player.attack_mode,
-                attack_player.timing_player,
-                0,
-                cols_per_player,
-                0,
-                base_seed,
-                song_length_seconds,
-            );
-            note_ranges[0] = (0, notes.len());
-            note_ranges[1] = note_ranges[0];
-            return;
-        }
-    }
-
-    if active_players == 2 {
-        let [(first_start, first_end), (second_start, second_end)] = *note_ranges;
-        if first_start == 0
-            && first_end == second_start
-            && second_end == notes.len()
-        {
-            let mut second_notes = notes.split_off(first_end);
-            for (player, player_notes) in [&mut *notes, &mut second_notes].into_iter().enumerate() {
-                let attack_player = players[player];
-                if attack_player.has_chart_attacks() {
-                    apply_chart_attacks_for_mode(
-                        player_notes,
-                        attack_player.chart_attacks,
-                        attack_player.attack_mode,
-                        attack_player.timing_player,
-                        player.saturating_mul(cols_per_player),
-                        cols_per_player,
-                        player,
-                        base_seed,
-                        song_length_seconds,
-                    );
-                }
-            }
-            let second_start = notes.len();
-            notes.append(&mut second_notes);
-            *note_ranges = [(0, second_start), (second_start, notes.len())];
-            return;
-        }
-    }
-
-    let mut transformed = Vec::with_capacity(notes.len());
-    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
-    for player in 0..active_players {
-        let (start, end) = note_ranges[player];
-        let slice_end = end.min(notes.len());
-        let slice_start = start.min(slice_end);
-        let out_start = transformed.len();
-        let attack_player = players[player];
-        if !attack_player.has_chart_attacks() {
-            transformed.extend_from_slice(&notes[slice_start..slice_end]);
-            transformed_ranges[player] = (out_start, transformed.len());
-            continue;
-        }
-
-        let mut player_notes = notes[slice_start..slice_end].to_vec();
-        apply_chart_attacks_for_mode(
-            &mut player_notes,
-            attack_player.chart_attacks,
-            attack_player.attack_mode,
-            attack_player.timing_player,
-            player.saturating_mul(cols_per_player),
-            cols_per_player,
-            player,
-            base_seed,
-            song_length_seconds,
-        );
-        transformed.extend(player_notes);
-        transformed_ranges[player] = (out_start, transformed.len());
-    }
-
-    if active_players == 1 {
-        transformed_ranges[1] = transformed_ranges[0];
-    }
-    *notes = transformed;
-    *note_ranges = transformed_ranges;
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-pub fn apply_chart_attack_transforms_reference(
     notes: &mut Vec<Note>,
     note_ranges: &mut [(usize, usize); MAX_PLAYERS],
     cols_per_player: usize,
@@ -4552,208 +3815,6 @@ impl ActiveWindowIndex {
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[derive(Clone, Debug, Default)]
-struct ReferenceActiveWindowIndex {
-    source_ptr: usize,
-    source_len: usize,
-    start_order: Vec<usize>,
-    active: Vec<usize>,
-    next_start: usize,
-    last_now: Option<f32>,
-    stats: GameplayWindowIndexStats,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ReferenceActiveWindowIndex {
-    fn new<T>(windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) -> Self {
-        let mut index = Self::default();
-        index.rebuild_source(windows, start_second);
-        index.stats = GameplayWindowIndexStats::default();
-        index
-    }
-
-    fn rebuild_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
-        self.source_ptr = windows.as_ptr() as usize;
-        self.source_len = windows.len();
-        self.start_order.clear();
-        self.start_order.reserve(windows.len());
-        self.active.clear();
-        self.active.reserve(windows.len());
-        self.start_order.extend(
-            windows
-                .iter()
-                .enumerate()
-                .filter_map(|(index, window)| start_second(window).is_finite().then_some(index)),
-        );
-        self.start_order.sort_unstable_by(|&left, &right| {
-            start_second(&windows[left])
-                .total_cmp(&start_second(&windows[right]))
-                .then(left.cmp(&right))
-        });
-        self.next_start = 0;
-        self.last_now = None;
-        self.stats.source_rebuilds = self.stats.source_rebuilds.saturating_add(1);
-    }
-
-    fn ensure_source<T>(&mut self, windows: &[T], start_second: impl Fn(&T) -> f32 + Copy) {
-        if self.source_ptr != windows.as_ptr() as usize || self.source_len != windows.len() {
-            self.rebuild_source(windows, start_second);
-        }
-    }
-
-    fn rebuild_time<T>(
-        &mut self,
-        windows: &[T],
-        now: f32,
-        start_second: impl Fn(&T) -> f32 + Copy,
-        is_active: impl Fn(&T, f32) -> bool + Copy,
-    ) {
-        self.active.clear();
-        if !now.is_finite() {
-            self.next_start = 0;
-        } else {
-            self.next_start = self
-                .start_order
-                .partition_point(|&index| start_second(&windows[index]) <= now);
-            self.active.extend(
-                windows
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, window)| is_active(window, now).then_some(index)),
-            );
-        }
-        self.last_now = Some(now);
-        self.stats.time_rebuilds = self.stats.time_rebuilds.saturating_add(1);
-        self.stats.max_active = self.stats.max_active.max(self.active.len());
-    }
-
-    fn update<T>(
-        &mut self,
-        windows: &[T],
-        now: f32,
-        start_second: impl Fn(&T) -> f32 + Copy,
-        is_active: impl Fn(&T, f32) -> bool + Copy,
-    ) {
-        self.ensure_source(windows, start_second);
-        if !now.is_finite()
-            || self
-                .last_now
-                .is_none_or(|last| !last.is_finite() || now < last)
-        {
-            self.rebuild_time(windows, now, start_second, is_active);
-            return;
-        }
-
-        while let Some(&index) = self.start_order.get(self.next_start) {
-            if start_second(&windows[index]) > now {
-                break;
-            }
-            self.next_start += 1;
-            if is_active(&windows[index], now) {
-                let insert_at = self.active.binary_search(&index).unwrap_or_else(|at| at);
-                self.active.insert(insert_at, index);
-                self.stats.activations = self.stats.activations.saturating_add(1);
-            }
-        }
-        let previous_len = self.active.len();
-        self.active.retain(|&index| is_active(&windows[index], now));
-        self.stats.pruned = self
-            .stats
-            .pruned
-            .saturating_add(previous_len.saturating_sub(self.active.len()) as u64);
-        self.stats.max_active = self.stats.max_active.max(self.active.len());
-        self.last_now = Some(now);
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct ReferenceAttackWindowIndexBench {
-    windows: Vec<AttackMaskWindow>,
-    index: ReferenceActiveWindowIndex,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl ReferenceAttackWindowIndexBench {
-    #[must_use]
-    pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
-        let index = ReferenceActiveWindowIndex::new(&windows, |window| window.start_second);
-        Self { windows, index }
-    }
-
-    #[inline(always)]
-    pub fn update(&mut self, now: f32) {
-        self.index.update(
-            &self.windows,
-            now,
-            |window| window.start_second,
-            attack_window_active,
-        );
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn active(&self) -> &[usize] {
-        &self.index.active
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn stats(&self) -> GameplayWindowIndexStats {
-        self.index.stats
-    }
-
-    #[must_use]
-    pub const fn index_storage_bytes() -> usize {
-        std::mem::size_of::<ReferenceActiveWindowIndex>()
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub struct AttackWindowIndexBench {
-    windows: Vec<AttackMaskWindow>,
-    index: ActiveWindowIndex,
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-impl AttackWindowIndexBench {
-    #[must_use]
-    pub fn new(windows: Vec<AttackMaskWindow>) -> Self {
-        let index = ActiveWindowIndex::new(&windows, |window| window.start_second);
-        Self { windows, index }
-    }
-
-    #[inline(always)]
-    pub fn update(&mut self, now: f32) {
-        self.index.update(
-            &self.windows,
-            now,
-            |window| window.start_second,
-            attack_window_expiry,
-            attack_window_active,
-        );
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub fn active(&self) -> &[usize] {
-        &self.index.active
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn stats(&self) -> GameplayWindowIndexStats {
-        self.index.stats
-    }
-
-    #[must_use]
-    pub const fn index_storage_bytes() -> usize {
-        std::mem::size_of::<ActiveWindowIndex>()
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 struct GameplayPlayerWindowIndex {
     masks: ActiveWindowIndex,
@@ -5228,22 +4289,7 @@ pub fn refresh_active_attack_player_indexed(
     )
 }
 
-/// Full selected-window evaluation retained as the benchmark/reference path.
-#[must_use]
-pub fn refresh_active_attack_player_indexed_reference(
-    input: ActiveAttackRefreshInput<'_>,
-    state: ActiveAttackRefreshState,
-    attack_window_indices: &[usize],
-    ease_window_indices: &[usize],
-) -> ActiveAttackRefreshOutput {
-    refresh_active_attack_player_full(
-        input,
-        state,
-        Some(attack_window_indices),
-        Some(ease_window_indices),
-    )
-}
-
+/// Evaluates the selected attack and ease windows for one player.
 fn refresh_active_attack_player_full(
     input: ActiveAttackRefreshInput<'_>,
     mut state: ActiveAttackRefreshState,
@@ -5776,20 +4822,6 @@ pub fn attack_token_key(token: &str) -> String {
     key
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn attack_token_key_reference(token: &str) -> String {
-    let mut key = String::with_capacity(token.len());
-    for ch in token.chars() {
-        if ch.is_ascii_alphanumeric() {
-            key.push(ch.to_ascii_lowercase());
-        }
-    }
-    while key.as_bytes().first().is_some_and(u8::is_ascii_digit) {
-        key.remove(0);
-    }
-    key
-}
-
 #[inline(always)]
 #[must_use]
 pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
@@ -5822,21 +4854,6 @@ fn parse_attack_scroll_override(token: &str) -> Option<ScrollSpeedSetting> {
         b'm' => Some(ScrollSpeedSetting::MMod(value)),
         _ => None,
     }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_attack_scroll_override_reference(token: &str) -> Option<ScrollSpeedSetting> {
-    use std::str::FromStr;
-
-    let trimmed = token.trim();
-    let value = trimmed
-        .strip_suffix('x')
-        .or_else(|| trimmed.strip_suffix('X'))
-        .and_then(|v| v.trim().parse::<f32>().ok());
-    if let Some(v) = value.filter(|v| v.is_finite() && *v > 0.0) {
-        return Some(ScrollSpeedSetting::XMod(v));
-    }
-    ScrollSpeedSetting::from_str(trimmed).ok()
 }
 
 #[inline(always)]
@@ -6218,38 +5235,6 @@ pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     out
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_attack_mods_reference(mods: &str) -> ParsedAttackMods {
-    let mut out = ParsedAttackMods::default();
-    for token in mods.split(',') {
-        let (approach_speed, token) = parse_attack_approach_prefix(token);
-        if token.is_empty() {
-            continue;
-        }
-        if let Some(scroll_speed) = parse_attack_scroll_override_reference(token) {
-            out.scroll_speed = Some(scroll_speed);
-            continue;
-        }
-        let (percent_value, token_key) = parse_attack_level_token(token);
-        let key = attack_token_key_reference(token_key);
-        if key.is_empty() {
-            continue;
-        }
-        match key.as_str() {
-            "clearall" => {
-                out = ParsedAttackMods {
-                    clear_all: true,
-                    ..ParsedAttackMods::default()
-                };
-            }
-            _ => apply_runtime_mod(&mut out, key.as_str(), percent_value, approach_speed),
-        }
-    }
-    out
-}
-
 #[inline(always)]
 fn parse_song_lua_mod_amount(word: &str) -> Option<f32> {
     let word = word.trim();
@@ -6276,13 +5261,6 @@ fn song_lua_runtime_attack_key<'a, const BUFFERED: bool>(
 #[must_use]
 pub fn parse_song_lua_runtime_mods(mods: &str) -> ParsedAttackMods {
     parse_song_lua_runtime_mods_core::<true>(mods)
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-#[must_use]
-pub fn parse_song_lua_runtime_mods_reference(mods: &str) -> ParsedAttackMods {
-    parse_song_lua_runtime_mods_core::<false>(mods)
 }
 
 fn parse_song_lua_runtime_mods_core<const BUFFERED: bool>(mods: &str) -> ParsedAttackMods {

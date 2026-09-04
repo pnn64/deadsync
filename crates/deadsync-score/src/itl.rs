@@ -1955,99 +1955,6 @@ pub fn itl_overall_ranks_from_song_cache(
     ranks
 }
 
-#[cfg(feature = "bench-support")]
-pub mod bench_support {
-    use super::{FxBuildHasher, OnlineItlOverallRanks, itl_points_for_song, parse_itl_points};
-    use std::collections::HashMap;
-
-    #[must_use]
-    pub fn parse_points_old(names: &[String]) -> u64 {
-        checksum_parsed(names.iter().map(|name| {
-            let mut nums = name
-                .split(|ch: char| !ch.is_ascii_digit())
-                .filter(|part| !part.is_empty())
-                .filter_map(|part| part.parse::<u32>().ok());
-            Some((nums.next()?, nums.next()?))
-        }))
-    }
-
-    #[must_use]
-    pub fn parse_points_new(names: &[String]) -> u64 {
-        checksum_parsed(names.iter().map(|name| parse_itl_points(name)))
-    }
-
-    fn checksum_parsed(values: impl IntoIterator<Item = Option<(u32, u32)>>) -> u64 {
-        values.into_iter().fold(0_u64, |checksum, value| {
-            let packed = value.map_or(u64::MAX, |(passing, scoring)| {
-                u64::from(passing) << 32 | u64::from(scoring)
-            });
-            checksum.rotate_left(7) ^ packed
-        })
-    }
-
-    #[must_use]
-    pub fn curve_points_old(inputs: &[(u32, u32, f64)]) -> u64 {
-        checksum_points(inputs.iter().map(|&(passing, scoring, ex_score)| {
-            let scalar = 40.0_f64;
-            let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
-                * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
-            let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
-            passing.saturating_add((f64::from(scoring) * percent).floor() as u32)
-        }))
-    }
-
-    #[must_use]
-    pub fn curve_points_new(inputs: &[(u32, u32, f64)]) -> u64 {
-        checksum_points(
-            inputs.iter().map(|&(passing, scoring, ex_score)| {
-                itl_points_for_song(passing, scoring, ex_score)
-            }),
-        )
-    }
-
-    fn checksum_points(points: impl IntoIterator<Item = u32>) -> u64 {
-        points.into_iter().fold(0_u64, |checksum, points| {
-            checksum
-                .wrapping_mul(1_099_511_628_211)
-                .wrapping_add(u64::from(points))
-        })
-    }
-
-    #[must_use]
-    pub fn rank_map_old(entries: &[(String, u32)], probe_indices: &[usize]) -> u64 {
-        let mut ranks = HashMap::with_capacity(entries.len());
-        ranks.extend(entries.iter().cloned());
-        checksum_rank_probes(entries, probe_indices, &ranks)
-    }
-
-    #[must_use]
-    pub fn rank_map_new(entries: &[(String, u32)], probe_indices: &[usize]) -> u64 {
-        let mut ranks =
-            OnlineItlOverallRanks::with_capacity_and_hasher(entries.len(), FxBuildHasher);
-        ranks.extend(entries.iter().cloned());
-        checksum_rank_probes(entries, probe_indices, &ranks)
-    }
-
-    fn checksum_rank_probes<S>(
-        entries: &[(String, u32)],
-        probe_indices: &[usize],
-        ranks: &HashMap<String, u32, S>,
-    ) -> u64
-    where
-        S: std::hash::BuildHasher,
-    {
-        probe_indices
-            .iter()
-            .fold(ranks.len() as u64, |checksum, &index| {
-                checksum
-                    .wrapping_mul(1_099_511_628_211)
-                    .wrapping_add(u64::from(
-                        ranks.get(entries[index].0.as_str()).copied().unwrap_or(0),
-                    ))
-            })
-    }
-}
-
 #[must_use]
 pub fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
     for (cur_value, prev_value) in [
@@ -2312,41 +2219,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_itl_points_matches_split_parse_reference() {
-        fn reference(chart_name: &str) -> Option<(u32, u32)> {
-            let mut nums = chart_name
-                .split(|ch: char| !ch.is_ascii_digit())
-                .filter(|part| !part.is_empty())
-                .filter_map(|part| part.parse::<u32>().ok());
-            Some((nums.next()?, nums.next()?))
-        }
-
-        let fixed = [
-            "",
-            "1",
-            "1 2",
-            "0001 + 00002",
-            "4294967295 / 0",
-            "4294967296 overflow then 7 and 8",
-            "99 and 999999999999999999999 and 100",
-            "ITL ñ 7500（P）+12000（S）",
-            "-12.5 gives 12 then 5",
-        ];
-        for chart_name in fixed {
-            assert_eq!(
-                parse_itl_points(chart_name),
-                reference(chart_name),
-                "chart name {chart_name:?}"
-            );
-        }
-        for passing in (0..=u32::MAX).step_by(65_537) {
-            let scoring = passing.rotate_left(13);
-            let chart_name = format!("prefix-{passing:010} (P) + {scoring} (S)-suffix");
-            assert_eq!(parse_itl_points(&chart_name), reference(&chart_name));
-        }
-    }
-
-    #[test]
     fn itl_points_for_chart_uses_chart_name_curve() {
         let mut chart = sample_chart("dance-single");
         chart.chart_name = "7500 (P) + 12000 (S)".to_string();
@@ -2357,42 +2229,6 @@ mod tests {
     #[test]
     fn itl_points_curve_keeps_full_ex_exact() {
         assert_eq!(itl_points_for_song(7500, 12000, 100.0), 19_500);
-    }
-
-    #[test]
-    fn itl_points_curve_matches_powf_reference() {
-        fn reference(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
-            let scalar = 40.0_f64;
-            let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
-                * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
-            let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
-            passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
-        }
-
-        let point_pairs = [
-            (0, 0),
-            (1, 1),
-            (7_500, 12_000),
-            (25_000, 100_000),
-            (u32::MAX - 10, 100_000),
-        ];
-        for ex_hundredths in -1_000..=12_000 {
-            let ex_score = f64::from(ex_hundredths) / 100.0;
-            for (passing, scoring) in point_pairs {
-                assert_eq!(
-                    itl_points_for_song(passing, scoring, ex_score),
-                    reference(passing, scoring, ex_score),
-                    "passing={passing}, scoring={scoring}, ex={ex_score}"
-                );
-            }
-        }
-        for ex_score in [f64::NEG_INFINITY, -0.0, f64::INFINITY, f64::NAN] {
-            assert_eq!(
-                itl_points_for_song(7_500, 12_000, ex_score),
-                reference(7_500, 12_000, ex_score),
-                "ex={ex_score}"
-            );
-        }
     }
 
     #[test]

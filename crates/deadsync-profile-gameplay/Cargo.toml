@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[features]
-bench-support = []
-
 [dependencies]
 chrono = "0.4.45"
 deadsync-config = { path = "../deadsync-config" }
@@ -19,11 +16,6 @@ deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 log = "0.4.34"
-
-[[bench]]
-name = "song_lua_window_bridge_hot_paths"
-harness = false
-required-features = ["bench-support"]
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

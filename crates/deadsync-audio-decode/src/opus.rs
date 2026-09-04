@@ -341,18 +341,6 @@ const fn signed_as_u16(samples: &mut [i16]) -> &mut [u16] {
     unsafe { std::slice::from_raw_parts_mut(samples.as_mut_ptr().cast(), samples.len()) }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::{resize_output, signed_as_u16};
-
-    #[inline]
-    pub fn direct_target(out: &mut Vec<i16>, samples: usize) -> &mut [u16] {
-        resize_output(out, samples);
-        signed_as_u16(out)
-    }
-}
-
 fn read_headers(reader: &mut PacketReader<BufReader<File>>) -> Result<Header, String> {
     let head = reader
         .read_packet()
@@ -432,8 +420,7 @@ fn validate_tags_data(data: &[u8]) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{OPUS_DECODE_RATE_HZ, signed_as_u16};
-    use opusic_c::{Application, Channels, Decoder, Encoder, SampleRate};
+    use super::signed_as_u16;
 
     #[test]
     fn signed_output_view_preserves_every_sample_bit() {
@@ -444,43 +431,6 @@ mod tests {
 
         signed_as_u16(&mut signed).copy_from_slice(&[0, 1, 32_767, 32_768, 65_535]);
         assert_eq!(signed, [0, 1, i16::MAX, i16::MIN, -1]);
-    }
-
-    #[test]
-    fn direct_signed_decode_matches_unsigned_handoff() {
-        const FRAMES: usize = 960;
-        let input = (0..FRAMES * 2)
-            .map(|index| index.wrapping_mul(25_173) as u16)
-            .collect::<Vec<_>>();
-        let mut encoded = vec![0; 4_000];
-        let mut encoder = Encoder::new(Channels::Stereo, SampleRate::Hz48000, Application::Audio)
-            .expect("test encoder should initialize");
-        let encoded_len = encoder
-            .encode_to_slice(&input, &mut encoded)
-            .expect("test frame should encode");
-
-        let mut old_decoder = Decoder::new(Channels::Stereo, SampleRate::Hz48000)
-            .expect("test decoder should initialize");
-        let mut new_decoder = Decoder::new(Channels::Stereo, SampleRate::Hz48000)
-            .expect("test decoder should initialize");
-        let mut old = vec![0u16; input.len()];
-        let mut new = vec![0i16; input.len()];
-        let old_frames = old_decoder
-            .decode_to_slice(&encoded[..encoded_len], &mut old, false)
-            .expect("test packet should decode");
-        let new_frames = new_decoder
-            .decode_to_slice(&encoded[..encoded_len], signed_as_u16(&mut new), false)
-            .expect("test packet should decode");
-
-        assert_eq!(OPUS_DECODE_RATE_HZ, 48_000);
-        assert_eq!(new_frames, old_frames);
-        assert_eq!(
-            &new[..new_frames * 2],
-            old[..old_frames * 2]
-                .iter()
-                .map(|sample| *sample as i16)
-                .collect::<Vec<_>>()
-        );
     }
 
     #[test]
