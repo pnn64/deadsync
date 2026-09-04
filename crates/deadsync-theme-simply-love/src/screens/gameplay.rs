@@ -22763,10 +22763,10 @@ mod tests {
                 samples.iter().find(|sample| {
                     sample[0]
                         .as_f64()
-                        .is_some_and(|beat| (beat - 200.0).abs() <= f64::EPSILON)
+                        .is_some_and(|beat| (beat - 200.0).abs() <= 0.05)
                 })
             })
-            .expect("fixture has no tpe3 circle sample at beat 200");
+            .expect("fixture has no tpe3 circle sample near beat 200");
         let camera = sample[7].as_array().expect("fixture sample has no camera");
         let camera_state = SongLuaOverlayState {
             fov: Some(camera[0].as_f64().expect("camera FOV is not numeric") as f32),

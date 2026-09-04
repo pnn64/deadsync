@@ -2214,7 +2214,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_pad_capture_consumes_accepted_press() {
+    fn raw_pad_capture_consumes_press_and_requests_shell_persistence() {
         let mut state = init();
         let t0 = Instant::now();
         state.selected_row = 8;
@@ -2232,7 +2232,34 @@ mod tests {
 
         let (consumed, effect) = handle_raw_pad_event(&mut state, &event);
         assert!(consumed);
-        assert!(matches!(effect, SimplyLoveEffect::None));
+        assert_eq!(
+            state.runtime.keymap.binding_at(VirtualAction::p1_coin, 1),
+            Some(InputBinding::GamepadCode(
+                deadsync_input::GamepadCodeBinding {
+                    code_u32: 9,
+                    device: Some(0),
+                    uuid: None,
+                }
+            ))
+        );
+        let SimplyLoveEffect::Batch(effects) = effect else {
+            panic!("expected sound followed by a mappings persistence request");
+        };
+        assert_sfx(&effects[0], "assets/sounds/change_value.ogg");
+        assert!(matches!(
+            effects[1],
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Config(
+                SimplyLoveConfigRequest::Mappings(SimplyLoveMappingsConfigRequest::BindGamepad {
+                    action: VirtualAction::p1_coin,
+                    index: 1,
+                    binding: InputBinding::GamepadCode(deadsync_input::GamepadCodeBinding {
+                        code_u32: 9,
+                        device: Some(0),
+                        uuid: None,
+                    }),
+                })
+            ))
+        ));
         assert!(!state.capture_active);
     }
 

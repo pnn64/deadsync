@@ -443,7 +443,7 @@ mod tests {
             children: frame_children,
             background: frame_background,
             ..
-        } = build(params)
+        } = build_with_context(params, ScreenBarContext::Normal)
         else {
             panic!("screen bar should build a frame");
         };
