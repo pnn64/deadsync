@@ -531,61 +531,45 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
-fn chart_for_preferred_or_nearest_standard<'a>(
+fn difficulty_slot(difficulty: &str) -> Option<usize> {
+    STANDARD_DIFFICULTY_NAMES
+        .iter()
+        .position(|name| difficulty.eq_ignore_ascii_case(name))
+        .or_else(|| {
+            difficulty
+                .eq_ignore_ascii_case("edit")
+                .then_some(EDIT_DIFFICULTY_SLOT)
+        })
+}
+
+fn chart_for_difficulty<'a>(
     song: &'a SongData,
     chart_type: &str,
-    preferred_index: usize,
-    cached_indices: Option<&WheelPreferredChartIndices>,
+    difficulty: &str,
+    cached_indices: Option<&WheelChartIndices>,
 ) -> Option<&'a ChartData> {
-    let num_standard = STANDARD_DIFFICULTY_COUNT;
-    if num_standard == 0 {
-        return None;
-    }
-
-    let preferred = preferred_index.min(num_standard - 1);
-    if let Some(indices) = cached_indices {
-        let chart_index = indices[preferred];
+    if let Some((indices, slot)) = cached_indices.zip(difficulty_slot(difficulty)) {
+        let chart_index = indices[slot];
         return (chart_index != NO_CHART_INDEX)
             .then(|| song.charts.get(chart_index))
             .flatten();
     }
 
-    let preferred_name = STANDARD_DIFFICULTY_NAMES[preferred];
-    if let Some(chart) = song.charts.iter().find(|chart| {
+    song.charts.iter().find(|chart| {
         chart.chart_type.eq_ignore_ascii_case(chart_type)
-            && chart.difficulty.eq_ignore_ascii_case(preferred_name)
-    }) {
-        return Some(chart);
-    }
-
-    let mut best_chart = None;
-    let mut best_distance = usize::MAX;
-    for chart in &song.charts {
-        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
-            continue;
-        }
-        let Some(diff_ix) = STANDARD_DIFFICULTY_NAMES
-            .iter()
-            .position(|diff| chart.difficulty.eq_ignore_ascii_case(diff))
-        else {
-            continue;
-        };
-        let distance = diff_ix.abs_diff(preferred);
-        if distance < best_distance {
-            best_distance = distance;
-            best_chart = Some(chart);
-        }
-    }
-    best_chart
+            && chart.difficulty.eq_ignore_ascii_case(difficulty)
+    })
 }
 
 const NO_CHART_INDEX: usize = usize::MAX;
+const EDIT_DIFFICULTY_SLOT: usize = STANDARD_DIFFICULTY_COUNT;
+const WHEEL_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_COUNT + 1;
 
-pub(crate) type WheelPreferredChartIndices = [usize; STANDARD_DIFFICULTY_COUNT];
+type WheelChartIndices = [usize; WHEEL_DIFFICULTY_COUNT];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct WheelSongMeta {
-    pub preferred_chart_indices: WheelPreferredChartIndices,
+    chart_indices: WheelChartIndices,
     pub has_edit: bool,
     pub is_srpg_event: bool,
     pub is_itl_unlock_pack: bool,
@@ -600,7 +584,7 @@ pub(crate) fn wheel_song_meta(
     sync_pref: SyncPref,
 ) -> WheelSongMeta {
     WheelSongMeta {
-        preferred_chart_indices: preferred_chart_indices(song, chart_type),
+        chart_indices: chart_indices(song, chart_type),
         has_edit,
         is_srpg_event: is_srpg_event_song(song),
         is_itl_unlock_pack,
@@ -608,54 +592,36 @@ pub(crate) fn wheel_song_meta(
     }
 }
 
-/// Precompute the exact result of preferred-or-nearest chart selection for
-/// every standard preference. Songs are immutable while Select Music is open,
-/// so these indices can be reused for every wheel frame.
-pub(crate) fn preferred_chart_indices(
-    song: &SongData,
-    chart_type: &str,
-) -> WheelPreferredChartIndices {
-    let mut exact = [NO_CHART_INDEX; STANDARD_DIFFICULTY_COUNT];
-    let mut nearest = [NO_CHART_INDEX; STANDARD_DIFFICULTY_COUNT];
-    let mut nearest_distance = [usize::MAX; STANDARD_DIFFICULTY_COUNT];
+/// Precompute the first chart for each ITGmania difficulty. Songs are immutable
+/// while Select Music is open, so these indices can be reused every wheel frame.
+fn chart_indices(song: &SongData, chart_type: &str) -> WheelChartIndices {
+    let mut indices = [NO_CHART_INDEX; WHEEL_DIFFICULTY_COUNT];
+    let mut remaining = WHEEL_DIFFICULTY_COUNT;
 
     for (chart_index, chart) in song.charts.iter().enumerate() {
         if !chart.chart_type.eq_ignore_ascii_case(chart_type) {
             continue;
         }
-        let Some(difficulty_index) = STANDARD_DIFFICULTY_NAMES
-            .iter()
-            .position(|difficulty| chart.difficulty.eq_ignore_ascii_case(difficulty))
-        else {
+        let Some(slot) = difficulty_slot(&chart.difficulty) else {
             continue;
         };
-        if exact[difficulty_index] == NO_CHART_INDEX {
-            exact[difficulty_index] = chart_index;
-        }
-        if !chart.has_note_data {
+        if indices[slot] != NO_CHART_INDEX {
             continue;
         }
-        for preferred in 0..STANDARD_DIFFICULTY_COUNT {
-            let distance = difficulty_index.abs_diff(preferred);
-            if distance < nearest_distance[preferred] {
-                nearest_distance[preferred] = distance;
-                nearest[preferred] = chart_index;
-            }
+        indices[slot] = chart_index;
+        remaining -= 1;
+        if remaining == 0 {
+            break;
         }
     }
-
-    std::array::from_fn(|preferred| {
-        if exact[preferred] != NO_CHART_INDEX {
-            exact[preferred]
-        } else {
-            nearest[preferred]
-        }
-    })
+    indices
 }
 
 /// Build the fixed borrowed slot request shared by Select Music and Select
 /// Course. Slot-to-entry and side-to-chart mapping intentionally mirrors the
 /// composer so shell-prepared data stays aligned while the wheel animates.
+/// Non-center song scores use each player's current difficulty exactly, as
+/// ITGmania does; the preferred difficulty is used only when no chart is current.
 pub(crate) fn runtime_slot_requests<'a>(
     entries: &'a [MusicWheelEntry],
     selected_index: usize,
@@ -668,6 +634,16 @@ pub(crate) fn runtime_slot_requests<'a>(
         return [MusicWheelSlotRuntimeRequest::Empty; MUSIC_WHEEL_SLOT_COUNT];
     }
     let target_chart_type = play_style.chart_type();
+    let current_difficulties: [&str; profile_data::PLAYER_SLOTS] =
+        std::array::from_fn(|player_index| {
+            selected_charts[player_index].map_or_else(
+                || {
+                    STANDARD_DIFFICULTY_NAMES[preferred_difficulty_index[player_index]
+                        .min(STANDARD_DIFFICULTY_COUNT - 1)]
+                },
+                |chart| chart.difficulty.as_str(),
+            )
+        });
     std::array::from_fn(|slot| {
         let offset = slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
         let list_index =
@@ -688,28 +664,28 @@ pub(crate) fn runtime_slot_requests<'a>(
                 let charts = if slot == CENTER_WHEEL_SLOT_INDEX {
                     selected_charts
                 } else {
-                    let cached_song_indices = song_meta.map(|meta| &meta.preferred_chart_indices);
-                    if preferred_difficulty_index[0] == preferred_difficulty_index[1] {
-                        let chart = chart_for_preferred_or_nearest_standard(
+                    let cached_indices = song_meta.map(|meta| &meta.chart_indices);
+                    if current_difficulties[0].eq_ignore_ascii_case(current_difficulties[1]) {
+                        let chart = chart_for_difficulty(
                             song,
                             target_chart_type,
-                            preferred_difficulty_index[0],
-                            cached_song_indices,
+                            current_difficulties[0],
+                            cached_indices,
                         );
                         [chart, chart]
                     } else {
                         [
-                            chart_for_preferred_or_nearest_standard(
+                            chart_for_difficulty(
                                 song,
                                 target_chart_type,
-                                preferred_difficulty_index[0],
-                                cached_song_indices,
+                                current_difficulties[0],
+                                cached_indices,
                             ),
-                            chart_for_preferred_or_nearest_standard(
+                            chart_for_difficulty(
                                 song,
                                 target_chart_type,
-                                preferred_difficulty_index[1],
-                                cached_song_indices,
+                                current_difficulties[1],
+                                cached_indices,
                             ),
                         ]
                     }
@@ -1631,11 +1607,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        chart_for_preferred_or_nearest_standard, choose_itl_wheel_score, itl_fetch_flags,
-        itl_rank_color, itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color,
-        pack_header_text_x, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
-        visible_song_select_bg_paths, visible_song_select_bg_paths_match, wheel_bg_layout,
-        wheel_song_meta,
+        chart_for_difficulty, choose_itl_wheel_score, itl_fetch_flags, itl_rank_color,
+        itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color, pack_header_text_x,
+        runtime_slot_requests, song_select_bg_path, srpg_rate_color, visible_song_select_bg_paths,
+        visible_song_select_bg_paths_match, wheel_bg_layout, wheel_song_meta,
     };
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1644,7 +1619,7 @@ mod tests {
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
     use deadlib_present::color;
     use deadlib_present::space::{metrics_for_window, set_current_metrics};
-    use deadsync_chart::{ChartData, SongData, SyncPref};
+    use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
     use deadsync_profile as profile_data;
     use deadsync_score::CachedItlScore;
     use deadsync_simfile::event_intro::is_srpg_event_song;
@@ -1890,19 +1865,136 @@ mod tests {
         assert_eq!(meta.is_srpg_event, is_srpg_event_song(&song));
         assert!(meta.is_itl_unlock_pack);
         assert_eq!(meta.sync_pref, SyncPref::Itg);
-        for preferred in 0..deadsync_chart::STANDARD_DIFFICULTY_COUNT {
-            let scanned =
-                chart_for_preferred_or_nearest_standard(&song, "dance-single", preferred, None)
+        for difficulty in STANDARD_DIFFICULTY_NAMES.into_iter().chain(["Edit"]) {
+            let scanned = song
+                .charts
+                .iter()
+                .find(|chart| {
+                    chart.chart_type.eq_ignore_ascii_case("dance-single")
+                        && chart.difficulty.eq_ignore_ascii_case(difficulty)
+                })
+                .map(|chart| chart.short_hash.as_str());
+            let prepared =
+                chart_for_difficulty(&song, "dance-single", difficulty, Some(&meta.chart_indices))
                     .map(|chart| chart.short_hash.as_str());
-            let prepared = chart_for_preferred_or_nearest_standard(
-                &song,
-                "dance-single",
-                preferred,
-                Some(&meta.preferred_chart_indices),
-            )
-            .map(|chart| chart.short_hash.as_str());
-            assert_eq!(prepared, scanned, "preferred={preferred}");
+            assert_eq!(prepared, scanned, "difficulty={difficulty}");
         }
+    }
+
+    #[test]
+    fn wheel_scores_match_itg() {
+        let mut selected = (*song_with_art(None, None)).clone();
+        let mut selected_easy =
+            chart_with_difficulty("dance-single", "Easy", "selected-easy-12", true);
+        selected_easy.meter = 12;
+        selected.charts = vec![selected_easy];
+        let selected = Arc::new(selected);
+
+        let mut neighbor = (*song_with_art(None, None)).clone();
+        let mut neighbor_easy =
+            chart_with_difficulty("dance-single", "Easy", "neighbor-easy-8", true);
+        neighbor_easy.meter = 8;
+        let mut neighbor_hard =
+            chart_with_difficulty("dance-single", "Hard", "neighbor-hard-12", true);
+        neighbor_hard.meter = 12;
+        neighbor.charts = vec![neighbor_easy, neighbor_hard];
+        let neighbor = Arc::new(neighbor);
+
+        let mut no_easy = (*song_with_art(None, None)).clone();
+        let mut no_easy_hard =
+            chart_with_difficulty("dance-single", "Hard", "no-easy-hard-12", true);
+        no_easy_hard.meter = 12;
+        no_easy.charts = vec![no_easy_hard];
+        let no_easy = Arc::new(no_easy);
+
+        let entries = vec![
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(Arc::clone(&neighbor)),
+            MusicWheelEntry::Song(Arc::clone(&no_easy)),
+        ];
+        let mut cached = rustc_hash::FxHashMap::default();
+        for song in [&selected, &neighbor, &no_easy] {
+            cached.insert(
+                Arc::as_ptr(song) as usize,
+                wheel_song_meta(song, "dance-single", false, false, SyncPref::Itg),
+            );
+        }
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [Some(&selected.charts[0]), Some(&selected.charts[0])],
+            [4, 4],
+            profile_data::PlayStyle::Single,
+            Some(&cached),
+        );
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+
+        assert!(matches!(
+            slots[center + 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("neighbor-easy-8"), Some("neighbor-easy-8")],
+                ..
+            }
+        ));
+        assert!(matches!(
+            slots[center + 2],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [None, None],
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn wheel_scores_track_sides() {
+        let mut selected = (*song_with_art(None, None)).clone();
+        let mut selected_easy =
+            chart_with_difficulty("dance-single", "Easy", "selected-easy", true);
+        selected_easy.meter = 12;
+        let mut selected_hard =
+            chart_with_difficulty("dance-single", "Hard", "selected-hard", true);
+        selected_hard.meter = 12;
+        selected.charts = vec![selected_easy, selected_hard];
+        let selected = Arc::new(selected);
+
+        let mut neighbor = (*song_with_art(None, None)).clone();
+        let mut neighbor_easy =
+            chart_with_difficulty("dance-single", "Easy", "neighbor-easy-8", true);
+        neighbor_easy.meter = 8;
+        let mut neighbor_hard =
+            chart_with_difficulty("dance-single", "Hard", "neighbor-hard-10", true);
+        neighbor_hard.meter = 10;
+        let mut neighbor_challenge =
+            chart_with_difficulty("dance-single", "Challenge", "neighbor-challenge-12", true);
+        neighbor_challenge.meter = 12;
+        neighbor.charts = vec![neighbor_easy, neighbor_hard, neighbor_challenge];
+        let neighbor = Arc::new(neighbor);
+
+        let entries = vec![
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(Arc::clone(&neighbor)),
+        ];
+        let mut cached = rustc_hash::FxHashMap::default();
+        cached.insert(
+            Arc::as_ptr(&neighbor) as usize,
+            wheel_song_meta(&neighbor, "dance-single", false, false, SyncPref::Itg),
+        );
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [Some(&selected.charts[0]), Some(&selected.charts[1])],
+            [2, 2],
+            profile_data::PlayStyle::Versus,
+            Some(&cached),
+        );
+
+        assert!(matches!(
+            slots[MUSIC_WHEEL_SLOT_COUNT / 2 + 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("neighbor-easy-8"), Some("neighbor-hard-10")],
+                ..
+            }
+        ));
     }
 
     #[test]
