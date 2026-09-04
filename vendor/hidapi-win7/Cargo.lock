@@ -50,7 +50,7 @@ checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
 name = "hidapi"
-version = "2.6.6"
+version = "2.6.7"
 dependencies = [
  "basic-udev",
  "cc",
