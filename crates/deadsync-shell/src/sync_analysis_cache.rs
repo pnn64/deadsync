@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const CACHE_VERSION: u32 = 1;
 /// Bump whenever a null-or-die update can change bias estimates without an
 /// accompanying input or option change.
-const ANALYSIS_REVISION: u32 = 1;
+const ANALYSIS_REVISION: u32 = 2;
 const MAX_CACHE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_CACHE_ENTRIES: usize = 100_000;
 const MAX_CACHED_PLOTS: usize = 8;
