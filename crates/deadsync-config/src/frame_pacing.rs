@@ -550,35 +550,6 @@ impl StutterSampleRing {
         }
         out
     }
-
-    #[cfg(any(test, feature = "bench-support"))]
-    #[must_use]
-    pub fn visible_legacy(self, now_seconds: f32) -> Vec<VisibleStutterSample> {
-        let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
-        for i in 0..STUTTER_SAMPLE_COUNT {
-            let sample = self.samples[(self.cursor + i) % STUTTER_SAMPLE_COUNT];
-            if sample.severity == 0 {
-                continue;
-            }
-            let age_seconds = now_seconds - sample.at_seconds;
-            if !(0.0..=STUTTER_SAMPLE_LIFETIME).contains(&age_seconds) {
-                continue;
-            }
-            let frame_multiple = if sample.expected_seconds > 0.0 {
-                sample.frame_seconds / sample.expected_seconds
-            } else {
-                0.0
-            };
-            out.push(VisibleStutterSample {
-                timestamp_seconds: sample.at_seconds,
-                frame_ms: sample.frame_seconds * 1000.0,
-                frame_multiple,
-                severity: sample.severity,
-                age_seconds,
-            });
-        }
-        out
-    }
 }
 
 /// Fixed-size copy ring for frame diagnostic samples.
@@ -896,19 +867,6 @@ mod tests {
         assert!((visible[0].frame_multiple - (0.050 / 0.016)).abs() < EPS);
         assert_eq!(visible[0].severity, 2);
         assert!((visible[0].age_seconds - 2.0).abs() < EPS);
-    }
-
-    #[test]
-    fn stack_visible_samples_match_legacy_filtering() {
-        let mut ring = StutterSampleRing::new();
-        ring.push(1.0, 0.050, 0.016, 2);
-        ring.push(2.0, 0.010, 0.016, 0);
-        ring.push(2.5, 0.032, 0.016, 1);
-        ring.push(-10.0, 0.100, 0.016, 3);
-
-        let current = ring.visible(3.0);
-        let legacy = ring.visible_legacy(3.0);
-        assert_eq!(&*current, legacy.as_slice());
     }
 
     #[test]

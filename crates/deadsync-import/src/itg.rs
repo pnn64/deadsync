@@ -186,7 +186,7 @@ fn read_head(path: &Path, cap: u64) -> Option<String> {
         .ok()
         .map(|metadata| bounded_capacity(metadata.len(), cap))
         .unwrap_or(0);
-    read_limited_to_string_with::<_, true, true>(file, cap, capacity)
+    read_limited_to_string(file, cap, capacity)
 }
 
 /// Decompresses up to `cap` bytes from the head of a gzip file as lossy UTF-8.
@@ -194,7 +194,7 @@ fn read_gz_head(path: &Path, cap: u64) -> Option<String> {
     let bytes = fs::read(path).ok()?;
     let decoder = flate2::read::GzDecoder::new(&bytes[..]);
     let capacity = gzip_output_capacity(&bytes).min(cap_as_usize(cap));
-    read_limited_to_string_with::<_, true, true>(decoder, cap, capacity)
+    read_limited_to_string(decoder, cap, capacity)
 }
 
 fn cap_as_usize(cap: u64) -> usize {
@@ -205,45 +205,27 @@ fn bounded_capacity(source_len: u64, cap: u64) -> usize {
     cap_as_usize(source_len.min(cap))
 }
 
-fn read_limited_to_string_with<R: Read, const RESERVE: bool, const REUSE_UTF8: bool>(
-    reader: R,
-    cap: u64,
-    capacity: usize,
-) -> Option<String> {
-    let mut bytes = if RESERVE {
-        Vec::with_capacity(capacity)
-    } else {
-        Vec::new()
-    };
+fn read_limited_to_string<R: Read>(reader: R, cap: u64, capacity: usize) -> Option<String> {
+    let mut bytes = Vec::with_capacity(capacity);
     reader.take(cap).read_to_end(&mut bytes).ok()?;
-    Some(if REUSE_UTF8 {
-        match String::from_utf8(bytes) {
-            Ok(text) => text,
-            Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
-        }
-    } else {
-        String::from_utf8_lossy(&bytes).into_owned()
+    Some(match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
     })
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn decode_plain_head_with<const RESERVE: bool, const REUSE_UTF8: bool>(
-    bytes: &[u8],
-    cap: u64,
-) -> Option<String> {
-    read_limited_to_string_with::<_, RESERVE, REUSE_UTF8>(
+#[cfg(test)]
+fn decode_plain_head(bytes: &[u8], cap: u64) -> Option<String> {
+    read_limited_to_string(
         std::io::Cursor::new(bytes),
         cap,
         bounded_capacity(bytes.len() as u64, cap),
     )
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn decode_gzip_head_with<const RESERVE: bool, const REUSE_UTF8: bool>(
-    bytes: &[u8],
-    cap: u64,
-) -> Option<String> {
-    read_limited_to_string_with::<_, RESERVE, REUSE_UTF8>(
+#[cfg(test)]
+fn decode_gzip_head(bytes: &[u8], cap: u64) -> Option<String> {
+    read_limited_to_string(
         flate2::read::GzDecoder::new(bytes),
         cap,
         gzip_output_capacity(bytes).min(cap_as_usize(cap)),
@@ -387,29 +369,6 @@ fn favorite_capacity_hint(text: &str) -> usize {
         .max(1)
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_favorites_owned_with<S: std::hash::BuildHasher + Default, const RESERVE: bool>(
-    text: &str,
-) -> Vec<String> {
-    let capacity = if RESERVE {
-        favorite_capacity_hint(text)
-    } else {
-        0
-    };
-    let mut seen = HashSet::with_capacity_and_hasher(capacity, S::default());
-    let mut out = Vec::with_capacity(capacity);
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with("---") {
-            continue;
-        }
-        if seen.insert(trimmed.to_ascii_lowercase()) {
-            out.push(trimmed.to_string());
-        }
-    }
-    out
-}
-
 #[derive(Clone, Copy)]
 struct AsciiCaseless<'a>(&'a str);
 
@@ -528,27 +487,17 @@ fn parse_general_data(root: &XmlNode) -> (u32, String) {
 
 fn read_gz_to_string(path: &Path) -> Result<String, std::io::Error> {
     let bytes = fs::read(path)?;
-    decode_gz_to_string_with::<true, true>(&bytes)
+    decode_gz_to_string(&bytes)
 }
 
-fn decode_gz_to_string_with<const RESERVE_OUTPUT: bool, const REUSE_UTF8: bool>(
-    bytes: &[u8],
-) -> Result<String, std::io::Error> {
+fn decode_gz_to_string(bytes: &[u8]) -> Result<String, std::io::Error> {
     let mut decoder = flate2::read::GzDecoder::new(bytes);
-    let mut out = if RESERVE_OUTPUT {
-        Vec::with_capacity(gzip_output_capacity(bytes))
-    } else {
-        Vec::new()
-    };
+    let mut out = Vec::with_capacity(gzip_output_capacity(bytes));
     decoder.read_to_end(&mut out)?;
-    if REUSE_UTF8 {
-        Ok(match String::from_utf8(out) {
-            Ok(text) => text,
-            Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
-        })
-    } else {
-        Ok(String::from_utf8_lossy(&out).into_owned())
-    }
+    Ok(match String::from_utf8(out) {
+        Ok(text) => text,
+        Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
+    })
 }
 
 fn gzip_output_capacity(bytes: &[u8]) -> usize {
@@ -571,24 +520,6 @@ fn gzip_output_capacity(bytes: &[u8]) -> usize {
 
 /// Extracts `<SongScores>` from a parsed `Stats.xml` root (`<Stats>`).
 pub fn parse_song_scores(root: &XmlNode) -> Vec<ItgSongScores> {
-    parse_song_scores_with::<true, true, true>(root)
-}
-
-fn output_vec<T, const RESERVE: bool>(source_len: usize) -> Vec<T> {
-    if RESERVE {
-        Vec::with_capacity(source_len)
-    } else {
-        Vec::new()
-    }
-}
-
-fn parse_song_scores_with<
-    const RESERVE_SONGS: bool,
-    const RESERVE_STEPS: bool,
-    const RESERVE_SCORES: bool,
->(
-    root: &XmlNode,
-) -> Vec<ItgSongScores> {
     // The root is normally <Stats>, with <SongScores> inside. Be tolerant: if we
     // were handed <SongScores> directly, use it.
     let song_scores = if root.tag == "SongScores" {
@@ -600,13 +531,13 @@ fn parse_song_scores_with<
         }
     };
 
-    let mut out = output_vec::<_, RESERVE_SONGS>(song_scores.children.len());
+    let mut out = Vec::with_capacity(song_scores.children.len());
     for song in song_scores.children_named("Song") {
         let dir = song.attr("Dir").unwrap_or("").to_string();
         if dir.is_empty() {
             continue;
         }
-        let mut steps_list = output_vec::<_, RESERVE_STEPS>(song.children.len());
+        let mut steps_list = Vec::with_capacity(song.children.len());
         for steps in song.children_named("Steps") {
             let steps_type = steps.attr("StepsType").unwrap_or("").to_string();
             let difficulty = steps.attr("Difficulty").unwrap_or("").to_string();
@@ -617,7 +548,7 @@ fn parse_song_scores_with<
             let Some(list) = steps.child("HighScoreList") else {
                 continue;
             };
-            let mut high_scores = output_vec::<_, RESERVE_SCORES>(list.children.len());
+            let mut high_scores = Vec::with_capacity(list.children.len());
             for high_score in list.children_named("HighScore") {
                 high_scores.push(parse_high_score(high_score));
             }
@@ -751,16 +682,6 @@ fn parse_hold_judgments_once(node: &XmlNode, score: &mut ImportedHighScore) {
 }
 
 fn parse_song_scores_owned(root: XmlNode) -> Vec<ItgSongScores> {
-    parse_song_scores_owned_with::<true, true, true>(root)
-}
-
-fn parse_song_scores_owned_with<
-    const RESERVE_SONGS: bool,
-    const RESERVE_STEPS: bool,
-    const RESERVE_SCORES: bool,
->(
-    root: XmlNode,
-) -> Vec<ItgSongScores> {
     let song_scores = if root.tag == "SongScores" {
         root
     } else {
@@ -774,7 +695,7 @@ fn parse_song_scores_owned_with<
         }
     };
 
-    let mut out = output_vec::<_, RESERVE_SONGS>(song_scores.children.len());
+    let mut out = Vec::with_capacity(song_scores.children.len());
     for song in song_scores.children {
         if song.tag != "Song" {
             continue;
@@ -787,7 +708,7 @@ fn parse_song_scores_owned_with<
             continue;
         }
 
-        let mut steps_list = output_vec::<_, RESERVE_STEPS>(children.len());
+        let mut steps_list = Vec::with_capacity(children.len());
         for steps in children {
             if steps.tag != "Steps" {
                 continue;
@@ -805,7 +726,7 @@ fn parse_song_scores_owned_with<
             else {
                 continue;
             };
-            let mut high_scores = output_vec::<_, RESERVE_SCORES>(list.children.len());
+            let mut high_scores = Vec::with_capacity(list.children.len());
             for high_score in list.children {
                 if high_score.tag == "HighScore" {
                     high_scores.push(parse_high_score_owned(high_score));
@@ -902,162 +823,6 @@ fn parse_high_score_owned(node: XmlNode) -> ImportedHighScore {
         }
     }
     score
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::*;
-
-    fn checksum(songs: &[ItgSongScores]) -> u64 {
-        songs.iter().fold(0u64, |sum, song| {
-            song.steps
-                .iter()
-                .fold(sum.wrapping_add(song.dir.len() as u64), |sum, steps| {
-                    steps.high_scores.iter().fold(
-                        sum.wrapping_add(steps.steps_type.len() as u64)
-                            .wrapping_add((steps.difficulty.len() as u64) << 8)
-                            .wrapping_add((steps.description.len() as u64) << 16),
-                        |sum, score| {
-                            sum.wrapping_add(score.grade.len() as u64)
-                                .wrapping_add(score.percent_dp.to_bits())
-                                .wrapping_add((score.date_time.len() as u64) << 24)
-                                .wrapping_add(u64::from(score.w1))
-                                .wrapping_add(u64::from(score.w2) << 4)
-                                .wrapping_add(u64::from(score.w3) << 8)
-                                .wrapping_add(u64::from(score.w4) << 12)
-                                .wrapping_add(u64::from(score.w5) << 16)
-                                .wrapping_add(u64::from(score.miss) << 20)
-                                .wrapping_add(u64::from(score.hit_mine) << 24)
-                                .wrapping_add(u64::from(score.avoid_mine) << 28)
-                                .wrapping_add(u64::from(score.held) << 32)
-                                .wrapping_add(u64::from(score.let_go) << 36)
-                                .wrapping_add(u64::from(score.missed_hold) << 40)
-                                .wrapping_add(u64::from(score.survive_seconds.to_bits()))
-                                .wrapping_add((score.modifiers.len() as u64) << 48)
-                        },
-                    )
-                })
-        })
-    }
-
-    pub fn borrowed_from_owned(root: XmlNode) -> u64 {
-        checksum(&parse_song_scores(&root))
-    }
-
-    pub fn consumed(root: XmlNode) -> u64 {
-        checksum(&parse_song_scores_owned(root))
-    }
-
-    pub fn score_capacity_none(root: &XmlNode) -> u64 {
-        checksum(&parse_song_scores_with::<false, false, false>(root))
-    }
-
-    pub fn score_capacity_songs(root: &XmlNode) -> u64 {
-        checksum(&parse_song_scores_with::<true, false, false>(root))
-    }
-
-    pub fn score_capacity_steps(root: &XmlNode) -> u64 {
-        checksum(&parse_song_scores_with::<true, true, false>(root))
-    }
-
-    pub fn score_capacity_all(root: &XmlNode) -> u64 {
-        checksum(&parse_song_scores_with::<true, true, true>(root))
-    }
-
-    pub fn plain_head_unreserved_copy(bytes: &[u8], cap: u64) -> u64 {
-        gzip_checksum(
-            &decode_plain_head_with::<false, false>(bytes, cap)
-                .expect("benchmark plain head must decode"),
-        )
-    }
-
-    pub fn plain_head_reserved_copy(bytes: &[u8], cap: u64) -> u64 {
-        gzip_checksum(
-            &decode_plain_head_with::<true, false>(bytes, cap)
-                .expect("benchmark plain head must decode"),
-        )
-    }
-
-    pub fn plain_head_reserved_reuse(bytes: &[u8], cap: u64) -> u64 {
-        gzip_checksum(
-            &decode_plain_head_with::<true, true>(bytes, cap)
-                .expect("benchmark plain head must decode"),
-        )
-    }
-
-    pub fn gzip_head_unreserved_copy(bytes: &[u8], cap: u64) -> u64 {
-        gzip_checksum(
-            &decode_gzip_head_with::<false, false>(bytes, cap)
-                .expect("benchmark gzip head must decode"),
-        )
-    }
-
-    pub fn gzip_head_reserved_copy(bytes: &[u8], cap: u64) -> u64 {
-        gzip_checksum(
-            &decode_gzip_head_with::<true, false>(bytes, cap)
-                .expect("benchmark gzip head must decode"),
-        )
-    }
-
-    fn gzip_checksum(text: &str) -> u64 {
-        text.as_bytes()
-            .iter()
-            .take(32)
-            .chain(text.as_bytes().iter().rev().take(32))
-            .fold(text.len() as u64, |sum, byte| {
-                sum.rotate_left(5).wrapping_add(u64::from(*byte))
-            })
-    }
-
-    fn gzip_stage<const RESERVE_OUTPUT: bool, const REUSE_UTF8: bool>(bytes: &[u8]) -> u64 {
-        let text = decode_gz_to_string_with::<RESERVE_OUTPUT, REUSE_UTF8>(bytes)
-            .expect("benchmark gzip fixture must decode");
-        gzip_checksum(&text)
-    }
-
-    pub fn gzip_unreserved_copy(bytes: &[u8]) -> u64 {
-        gzip_stage::<false, false>(bytes)
-    }
-
-    pub fn gzip_reserved_copy(bytes: &[u8]) -> u64 {
-        gzip_stage::<true, false>(bytes)
-    }
-
-    pub fn gzip_reserved_reuse(bytes: &[u8]) -> u64 {
-        gzip_stage::<true, true>(bytes)
-    }
-
-    fn favorite_checksum(favorites: &[String]) -> u64 {
-        favorites.iter().fold(0u64, |checksum, favorite| {
-            favorite.bytes().fold(
-                checksum.rotate_left(7).wrapping_add(favorite.len() as u64),
-                |checksum, byte| checksum.rotate_left(5).wrapping_add(u64::from(byte)),
-            )
-        })
-    }
-
-    pub fn favorites_unreserved(text: &str) -> u64 {
-        favorite_checksum(&parse_favorites_owned_with::<
-            std::collections::hash_map::RandomState,
-            false,
-        >(text))
-    }
-
-    pub fn favorites_reserved(text: &str) -> u64 {
-        favorite_checksum(&parse_favorites_owned_with::<
-            std::collections::hash_map::RandomState,
-            true,
-        >(text))
-    }
-
-    pub fn favorites_fast_hash(text: &str) -> u64 {
-        favorite_checksum(&parse_favorites_owned_with::<FxBuildHasher, true>(text))
-    }
-
-    pub fn favorites_borrowed(text: &str) -> u64 {
-        favorite_checksum(&parse_favorites_borrowed(text))
-    }
 }
 
 fn parse_bool(s: &str) -> bool {
@@ -1174,14 +939,8 @@ mod tests {
     }
 
     #[test]
-    fn optimized_song_score_extraction_matches_reference_semantics() {
-        let root = xml::parse(SAMPLE_STATS).expect("xml");
-        assert_song_scores_eq(
-            &parse_song_scores(&root),
-            &parse_song_scores_owned(root.clone()),
-        );
-
-        let duplicate_fields = xml::parse(
+    fn owned_score_extraction_uses_first_duplicate_field() {
+        let root = xml::parse(
             r#"<SongScores>
                 <Song Dir="Songs/Pack/Song/">
                     <Steps StepsType="dance-single" Difficulty="Hard">
@@ -1201,51 +960,23 @@ mod tests {
             </SongScores>"#,
         )
         .expect("xml");
-        let reference = parse_song_scores(&duplicate_fields);
-        assert_song_scores_eq(
-            &reference,
-            &parse_song_scores_owned(duplicate_fields.clone()),
-        );
-        let score = &reference[0].steps[0].high_scores[0];
+        let songs = parse_song_scores_owned(root);
+        let score = &songs[0].steps[0].high_scores[0];
+
+        assert_eq!(songs[0].dir, "Songs/Pack/Song/");
         assert_eq!(score.grade, "Tier02");
+        assert!((score.percent_dp - 0.98).abs() < f64::EPSILON);
+        assert_eq!(score.date_time, "2025-01-02 03:04:05");
         assert_eq!(score.w1, 321);
+        assert_eq!(score.miss, 4);
         assert_eq!(score.held, 12);
+        assert_eq!(score.let_go, 2);
+        assert!((score.survive_seconds - 45.5).abs() < f32::EPSILON);
+        assert_eq!(score.modifiers, "1.2xMusic");
     }
 
     #[test]
-    fn score_capacity_stages_preserve_borrowed_and_owned_results() {
-        let root = xml::parse(SAMPLE_STATS).expect("xml");
-        let borrowed_reference = parse_song_scores_with::<false, false, false>(&root);
-        assert_song_scores_eq(
-            &borrowed_reference,
-            &parse_song_scores_with::<true, false, false>(&root),
-        );
-        assert_song_scores_eq(
-            &borrowed_reference,
-            &parse_song_scores_with::<true, true, false>(&root),
-        );
-        assert_song_scores_eq(
-            &borrowed_reference,
-            &parse_song_scores_with::<true, true, true>(&root),
-        );
-
-        let owned_reference = parse_song_scores_owned_with::<false, false, false>(root.clone());
-        assert_song_scores_eq(
-            &owned_reference,
-            &parse_song_scores_owned_with::<true, false, false>(root.clone()),
-        );
-        assert_song_scores_eq(
-            &owned_reference,
-            &parse_song_scores_owned_with::<true, true, false>(root.clone()),
-        );
-        assert_song_scores_eq(
-            &owned_reference,
-            &parse_song_scores_owned_with::<true, true, true>(root),
-        );
-    }
-
-    #[test]
-    fn optimized_gzip_decode_matches_reference_for_valid_and_invalid_utf8() {
+    fn gzip_decode_preserves_valid_text_and_replaces_invalid_utf8() {
         use flate2::Compression;
         use flate2::write::GzEncoder;
         use std::io::Write as _;
@@ -1257,15 +988,10 @@ mod tests {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
             encoder.write_all(bytes).expect("compress fixture");
             let compressed = encoder.finish().expect("finish fixture");
-            let reference =
-                decode_gz_to_string_with::<false, false>(&compressed).expect("reference decode");
+
             assert_eq!(
-                decode_gz_to_string_with::<true, false>(&compressed).expect("reserved decode"),
-                reference
-            );
-            assert_eq!(
-                decode_gz_to_string_with::<true, true>(&compressed).expect("reused decode"),
-                reference
+                decode_gz_to_string(&compressed).expect("decode"),
+                String::from_utf8_lossy(bytes)
             );
             assert_eq!(gzip_output_capacity(&compressed), bytes.len());
         }
@@ -1273,59 +999,27 @@ mod tests {
     }
 
     #[test]
-    fn optimized_head_readers_match_unreserved_copying_reference() {
+    fn plain_and_gzip_head_readers_honor_caps_and_decode_lossily() {
         use flate2::Compression;
         use flate2::write::GzEncoder;
         use std::io::Write as _;
 
-        let fixtures = [
+        for bytes in [
             b"<Stats><Guid>valid UTF-8 profile</Guid></Stats>".to_vec(),
             b"<Stats><Guid>invalid \xF6 byte</Guid></Stats>".to_vec(),
-        ];
-        for bytes in fixtures {
+        ] {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
             encoder.write_all(&bytes).expect("compress head fixture");
             let compressed = encoder.finish().expect("finish head fixture");
             for cap in [0, 1, 17, bytes.len() as u64, bytes.len() as u64 + 10] {
-                let plain_reference =
-                    decode_plain_head_with::<false, false>(&bytes, cap).expect("plain reference");
-                assert_eq!(
-                    decode_plain_head_with::<true, false>(&bytes, cap)
-                        .expect("reserved plain head"),
-                    plain_reference
-                );
-                assert_eq!(
-                    decode_plain_head_with::<true, true>(&bytes, cap).expect("reused plain head"),
-                    plain_reference
-                );
+                let prefix_len = usize::try_from(cap).unwrap_or(usize::MAX).min(bytes.len());
+                let expected = String::from_utf8_lossy(&bytes[..prefix_len]);
 
-                let gzip_reference = decode_gzip_head_with::<false, false>(&compressed, cap)
-                    .expect("gzip reference");
+                assert_eq!(decode_plain_head(&bytes, cap).as_deref(), Some(&*expected));
                 assert_eq!(
-                    decode_gzip_head_with::<true, false>(&compressed, cap)
-                        .expect("reserved gzip head"),
-                    gzip_reference
+                    decode_gzip_head(&compressed, cap).as_deref(),
+                    Some(&*expected)
                 );
-                assert_eq!(
-                    decode_gzip_head_with::<true, true>(&compressed, cap)
-                        .expect("reused gzip head"),
-                    gzip_reference
-                );
-            }
-        }
-    }
-
-    fn assert_song_scores_eq(expected: &[ItgSongScores], actual: &[ItgSongScores]) {
-        assert_eq!(actual.len(), expected.len());
-        for (actual_song, expected_song) in actual.iter().zip(expected) {
-            assert_eq!(actual_song.dir, expected_song.dir);
-            assert_eq!(actual_song.steps.len(), expected_song.steps.len());
-            for (actual_steps, expected_steps) in actual_song.steps.iter().zip(&expected_song.steps)
-            {
-                assert_eq!(actual_steps.steps_type, expected_steps.steps_type);
-                assert_eq!(actual_steps.difficulty, expected_steps.difficulty);
-                assert_eq!(actual_steps.description, expected_steps.description);
-                assert_eq!(actual_steps.high_scores, expected_steps.high_scores);
             }
         }
     }
@@ -1354,10 +1048,6 @@ mod tests {
                 "Päck/Über".to_string(),
                 "PÄCK/ÜBER".to_string(),
             ]
-        );
-        assert_eq!(
-            favs,
-            parse_favorites_owned_with::<std::collections::hash_map::RandomState, false>(text)
         );
     }
 

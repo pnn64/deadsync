@@ -76,28 +76,19 @@ impl std::error::Error for XmlError {}
 
 /// Parses an XML document and returns its single root element.
 pub fn parse(input: &str) -> Result<XmlNode, XmlError> {
-    parse_with::<true, true, true>(input)
-}
-
-fn parse_with<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>(
-    input: &str,
-) -> Result<XmlNode, XmlError> {
     let bytes = input.as_bytes();
-    let mut p = Parser::<DIRECT_TEXT, SKIP_CLOSING_NAME, TRIM_IN_PLACE> { b: bytes, i: 0 };
+    let mut p = Parser { b: bytes, i: 0 };
     p.skip_prolog()?;
     let root = p.parse_element()?;
     Ok(root)
 }
 
-struct Parser<'a, const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>
-{
+struct Parser<'a> {
     b: &'a [u8],
     i: usize,
 }
 
-impl<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE: bool>
-    Parser<'_, DIRECT_TEXT, SKIP_CLOSING_NAME, TRIM_IN_PLACE>
-{
+impl Parser<'_> {
     #[inline]
     fn peek(&self) -> Option<u8> {
         self.b.get(self.i).copied()
@@ -217,23 +208,15 @@ impl<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE
                         }
                     } else if self.starts_with("</") {
                         self.i += 2;
-                        if SKIP_CLOSING_NAME {
-                            self.skip_name();
-                        } else {
-                            let _close = self.read_name();
-                        }
+                        self.skip_name();
                         self.skip_ws();
                         if self.peek() == Some(b'>') {
                             self.i += 1;
                         } else {
                             return Err(XmlError::Malformed("end tag"));
                         }
-                        if TRIM_IN_PLACE {
-                            trim_string_in_place(&mut text);
-                            node.text = text;
-                        } else {
-                            node.text = text.trim().to_string();
-                        }
+                        trim_string_in_place(&mut text);
+                        node.text = text;
                         return Ok(node);
                     } else {
                         let child = self.parse_element()?;
@@ -250,11 +233,7 @@ impl<const DIRECT_TEXT: bool, const SKIP_CLOSING_NAME: bool, const TRIM_IN_PLACE
                         self.i += 1;
                     }
                     let raw = &self.b[start..self.i];
-                    if DIRECT_TEXT {
-                        append_decoded_entities(&mut text, utf8_subslice(raw));
-                    } else {
-                        text.push_str(&decode_entities(&String::from_utf8_lossy(raw)));
-                    }
+                    append_decoded_entities(&mut text, utf8_subslice(raw));
                 }
             }
         }
@@ -365,32 +344,6 @@ fn append_decoded_entities(out: &mut String, s: &str) {
     }
 }
 
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::{XmlError, XmlNode, parse_with};
-
-    pub fn parse_old(input: &str) -> Result<XmlNode, XmlError> {
-        parse_with::<false, false, false>(input)
-    }
-
-    pub fn parse_direct_text(input: &str) -> Result<XmlNode, XmlError> {
-        parse_with::<true, false, false>(input)
-    }
-
-    pub fn parse_skipped_closing_names(input: &str) -> Result<XmlNode, XmlError> {
-        parse_with::<false, true, false>(input)
-    }
-
-    pub fn parse_trimmed_in_place(input: &str) -> Result<XmlNode, XmlError> {
-        parse_with::<false, false, true>(input)
-    }
-
-    pub fn parse_new(input: &str) -> Result<XmlNode, XmlError> {
-        parse_with::<true, true, true>(input)
-    }
-}
-
 fn decode_numeric_entity(entity: &str) -> Option<char> {
     let rest = entity.strip_prefix('#')?;
     let code = if let Some(hex) = rest.strip_prefix(['x', 'X']) {
@@ -481,16 +434,24 @@ mod tests {
     }
 
     #[test]
-    fn optimized_parser_matches_legacy_parser() {
+    fn parses_direct_text_cdata_unknown_entities_and_spaced_closing_tags() {
         let xml = r#"<Stats label="A &amp; B">
             prefix &lt; <Empty></Empty   >
             <Score id="1">  café &#x2615;  </Score>
             <Score id="2"><![CDATA[  raw & text  ]]></Score>
             suffix &unknown;
         </Stats   >"#;
-        let legacy = parse_with::<false, false, false>(xml).expect("legacy parse");
-        let optimized = parse(xml).expect("optimized parse");
-        assert_eq!(optimized, legacy);
+        let root = parse(xml).expect("parse");
+
+        assert_eq!(root.tag, "Stats");
+        assert_eq!(root.attr("label"), Some("A & B"));
+        assert!(root.text.starts_with("prefix <"));
+        assert!(root.text.ends_with("suffix &unknown;"));
+        assert_eq!(root.children[0].tag, "Empty");
+        assert_eq!(root.children[1].attr("id"), Some("1"));
+        assert_eq!(root.children[1].text, "café ☕");
+        assert_eq!(root.children[2].attr("id"), Some("2"));
+        assert_eq!(root.children[2].text, "raw & text");
     }
 
     #[test]

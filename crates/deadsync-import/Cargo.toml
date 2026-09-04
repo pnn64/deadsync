@@ -4,49 +4,6 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
-[[bench]]
-name = "xml_parser_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "resolver_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "pipeline_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "score_extraction_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "favorites_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "ini_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "options_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "guid_head_hot_paths"
-harness = false
-required-features = ["bench-support"]
-
-[features]
-bench-support = []
-
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-profile = { path = "../deadsync-profile" }

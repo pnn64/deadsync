@@ -1,5 +1,4 @@
 use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
-use deadsync_config::frame_pacing::StutterSampleRing;
 use deadsync_config::prelude::{LogLevel, VersionOverlaySide};
 use deadsync_theme_simply_love::i18n;
 use deadsync_theme_simply_love::screens::components::shared::frame_stats_overlay::{
@@ -54,7 +53,6 @@ const MAPPING_TEXT_OPS: usize = 100_000;
 const TIMING_TEXT_OPS: usize = 200_000;
 const OVERLAY_ACTOR_OPS: usize = 200_000;
 const SELECT_COLOR_WHEEL_OPS: usize = 200_000;
-const STUTTER_FILTER_OPS: usize = 500_000;
 const FRAME_STATS_OVERLAY_OPS: usize = 5_000;
 const PAD_TEXT_OPS: usize = 100_000;
 const SELECT_MODE_TEXT_OPS: usize = 500_000;
@@ -300,32 +298,6 @@ fn stutter_fixture() -> [VisibleStutterSample; 5] {
         severity: 1 + (index % 3) as u8,
         age_seconds: index as f32 * 0.4,
     })
-}
-
-fn stutter_ring_fixture() -> StutterSampleRing {
-    let mut ring = StutterSampleRing::new();
-    for index in 0..5 {
-        ring.push(
-            (index as f32).mul_add(0.25, 10.0),
-            (index as f32).mul_add(0.003, 0.025),
-            1.0 / 120.0,
-            1 + (index % 3) as u8,
-        );
-    }
-    ring
-}
-
-fn visible_stutter_checksum(samples: &[VisibleStutterSample]) -> u64 {
-    samples
-        .iter()
-        .fold(samples.len() as u64, |checksum, sample| {
-            checksum.rotate_left(7)
-                ^ u64::from(sample.timestamp_seconds.to_bits())
-                ^ u64::from(sample.frame_ms.to_bits()).rotate_left(13)
-                ^ u64::from(sample.frame_multiple.to_bits()).rotate_left(23)
-                ^ u64::from(sample.severity)
-                ^ u64::from(sample.age_seconds.to_bits()).rotate_left(31)
-        })
 }
 
 fn frame_stats_fixture() -> (Vec<FrameStatsSample>, FrameStatsSummary) {
@@ -724,24 +696,6 @@ fn main() {
         SELECT_COLOR_WHEEL_OPS,
         &old_wheel,
         &new_wheel,
-    );
-
-    let stutter_ring = stutter_ring_fixture();
-    assert_eq!(
-        stutter_ring.visible_legacy(11.25).as_slice(),
-        &*stutter_ring.visible(11.25)
-    );
-    let old_stutter_filter = measure(STUTTER_FILTER_OPS, 500, || {
-        visible_stutter_checksum(&stutter_ring.visible_legacy(black_box(11.25)))
-    });
-    let new_stutter_filter = measure(STUTTER_FILTER_OPS, 500, || {
-        visible_stutter_checksum(&stutter_ring.visible(black_box(11.25)))
-    });
-    print_pair(
-        "11. fixed stutter filtering",
-        STUTTER_FILTER_OPS,
-        &old_stutter_filter,
-        &new_stutter_filter,
     );
 
     let (frame_samples, frame_summary) = frame_stats_fixture();

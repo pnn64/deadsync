@@ -75,119 +75,19 @@ fn load_sections_borrowed<S: BuildHasher + Default>(sections: &mut IniSections<S
     }
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn load_sections_cloned<S: BuildHasher + Default>(sections: &mut IniSections<S>, content: &str) {
-    let mut current_section: Option<String> = None;
-
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-
-        if line.starts_with('[') && line.ends_with(']') {
-            let section = line[1..line.len() - 1].trim().to_owned();
-            current_section = Some(section.clone());
-            sections
-                .entry(section)
-                .or_insert_with(|| HashMap::with_hasher(S::default()));
-            continue;
-        }
-
-        if let Some(eq_idx) = line.find('=') {
-            let (key_raw, value_raw) = line.split_at(eq_idx);
-            let section = current_section.clone().unwrap_or_default();
-            sections
-                .entry(section)
-                .or_insert_with(|| HashMap::with_hasher(S::default()))
-                .insert(key_raw.trim().to_owned(), value_raw[1..].trim().to_owned());
-        }
-    }
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::*;
-
-    fn text_checksum(text: &str) -> u64 {
-        text.bytes().fold(text.len() as u64, |checksum, byte| {
-            checksum.rotate_left(5).wrapping_add(u64::from(byte))
-        })
-    }
-
-    fn sections_checksum<S: BuildHasher>(sections: &IniSections<S>) -> u64 {
-        sections.iter().fold(0u64, |checksum, (section, values)| {
-            values.iter().fold(
-                checksum.wrapping_add(text_checksum(section)),
-                |checksum, (key, value)| {
-                    checksum
-                        .wrapping_add(text_checksum(key).rotate_left(11))
-                        .wrapping_add(text_checksum(value).rotate_left(23))
-                },
-            )
-        })
-    }
-
-    pub fn parse_cloned_sections(content: &str) -> u64 {
-        let mut sections =
-            IniSections::with_hasher(std::collections::hash_map::RandomState::default());
-        load_sections_cloned(&mut sections, content);
-        sections_checksum(&sections)
-    }
-
-    pub fn parse_borrowed_sections(content: &str) -> u64 {
-        let mut sections =
-            IniSections::with_hasher(std::collections::hash_map::RandomState::default());
-        load_sections_borrowed(&mut sections, content);
-        sections_checksum(&sections)
-    }
-
-    pub fn parse_fast_hash(content: &str) -> u64 {
-        let mut sections = IniSections::with_hasher(FxBuildHasher);
-        load_sections_borrowed(&mut sections, content);
-        sections_checksum(&sections)
-    }
-
-    pub fn load(content: &str) -> SimpleIni {
-        let mut ini = SimpleIni::new();
-        ini.load_from_str(content);
-        ini
-    }
-
-    pub fn lookup_cloned(ini: &SimpleIni, queries: &[(String, String)]) -> u64 {
-        queries.iter().fold(0u64, |checksum, (section, key)| {
-            let value = ini.get(section, key).map(str::to_owned).unwrap_or_default();
-            checksum.wrapping_add(text_checksum(&value))
-        })
-    }
-
-    pub fn lookup_borrowed(ini: &SimpleIni, queries: &[(String, String)]) -> u64 {
-        queries.iter().fold(0u64, |checksum, (section, key)| {
-            checksum.wrapping_add(text_checksum(ini.get(section, key).unwrap_or_default()))
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn borrowed_parser_and_lookups_match_cloned_reference() {
+    fn parser_handles_root_values_sections_comments_and_overrides() {
         let content = "root = before\n[ Alpha ]\nKey = first\nOther=two\n[Beta]\nFlag=true\n[Alpha]\nKey=last\n";
-        let mut reference =
-            IniSections::with_hasher(std::collections::hash_map::RandomState::default());
-        load_sections_cloned(&mut reference, content);
-
         let mut ini = SimpleIni::new();
         ini.load_from_str(content);
-        for (section, values) in &reference {
-            for (key, value) in values {
-                assert_eq!(ini.get(section, key), Some(value.as_str()));
-            }
-        }
+
         assert_eq!(ini.get("Alpha", "Key"), Some("last"));
+        assert_eq!(ini.get("Alpha", "Other"), Some("two"));
+        assert_eq!(ini.get("Beta", "Flag"), Some("true"));
         assert_eq!(ini.get("", "root"), Some("before"));
         assert_eq!(ini.get("missing", "Key"), None);
     }

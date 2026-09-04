@@ -205,44 +205,20 @@ fn collect_score_entries(
     resolver: &ChartResolver<'_>,
     summary: &mut ImportSummary,
 ) -> Vec<(String, LocalScoreEntry)> {
-    collect_score_entries_with::<true, true>(source, resolver, summary)
-}
-
-fn collect_score_entries_with<const RESERVE: bool, const RESOLVE_STEPS_ONCE: bool>(
-    source: &ItgSource,
-    resolver: &ChartResolver<'_>,
-    summary: &mut ImportSummary,
-) -> Vec<(String, LocalScoreEntry)> {
-    let mut entries = if RESERVE {
-        Vec::with_capacity(source.total_high_scores())
-    } else {
-        Vec::new()
-    };
+    let mut entries = Vec::with_capacity(source.total_high_scores());
     for song in &source.songs {
         for steps in &song.steps {
             if steps.high_scores.is_empty() {
                 continue;
             }
-            if RESOLVE_STEPS_ONCE {
-                let resolution = resolver.resolve(
-                    &song.dir,
-                    &steps.steps_type,
-                    &steps.difficulty,
-                    &steps.description,
-                );
-                for high_score in &steps.high_scores {
-                    collect_resolved_score(&mut entries, summary, high_score, &resolution);
-                }
-            } else {
-                for high_score in &steps.high_scores {
-                    let resolution = resolver.resolve(
-                        &song.dir,
-                        &steps.steps_type,
-                        &steps.difficulty,
-                        &steps.description,
-                    );
-                    collect_resolved_score(&mut entries, summary, high_score, &resolution);
-                }
+            let resolution = resolver.resolve(
+                &song.dir,
+                &steps.steps_type,
+                &steps.difficulty,
+                &steps.description,
+            );
+            for high_score in &steps.high_scores {
+                collect_resolved_score(&mut entries, summary, high_score, &resolution);
             }
         }
     }
@@ -271,122 +247,24 @@ fn collect_favorite_hashes(
     resolver: &ChartResolver<'_>,
     summary: &mut ImportSummary,
 ) -> HashSet<String> {
-    collect_favorite_hashes_with::<true>(source, resolver, summary)
-}
-
-fn collect_favorite_hashes_with<const RESERVE: bool>(
-    source: &ItgSource,
-    resolver: &ChartResolver<'_>,
-    summary: &mut ImportSummary,
-) -> HashSet<String> {
-    if RESERVE {
-        let mut resolved_songs = Vec::with_capacity(source.favorites.len());
-        let mut chart_capacity = 0usize;
-        for favorite in &source.favorites {
-            summary.favorites_total += 1;
-            match resolver.resolve_song(favorite) {
-                Some(song) => {
-                    summary.favorites_imported += 1;
-                    chart_capacity = chart_capacity.saturating_add(song.charts.len());
-                    resolved_songs.push(song);
-                }
-                None => summary.favorites_song_not_found += 1,
-            }
-        }
-        let mut favorite_hashes = HashSet::with_capacity(chart_capacity);
-        for song in resolved_songs {
-            for chart in &song.charts {
-                favorite_hashes.insert(chart.short_hash.to_string());
-            }
-        }
-        return favorite_hashes;
-    }
-
-    let mut favorite_hashes = HashSet::new();
-    for fav in &source.favorites {
+    let mut resolved_songs = Vec::with_capacity(source.favorites.len());
+    let mut chart_capacity = 0usize;
+    for favorite in &source.favorites {
         summary.favorites_total += 1;
-        match resolver.resolve_song(fav) {
+        match resolver.resolve_song(favorite) {
             Some(song) => {
                 summary.favorites_imported += 1;
-                for chart in &song.charts {
-                    favorite_hashes.insert(chart.short_hash.to_string());
-                }
+                chart_capacity = chart_capacity.saturating_add(song.charts.len());
+                resolved_songs.push(song);
             }
             None => summary.favorites_song_not_found += 1,
         }
     }
+    let mut favorite_hashes = HashSet::with_capacity(chart_capacity);
+    for song in resolved_songs {
+        for chart in &song.charts {
+            favorite_hashes.insert(chart.short_hash.to_string());
+        }
+    }
     favorite_hashes
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::*;
-
-    fn score_checksum(entries: &[(String, LocalScoreEntry)], summary: &ImportSummary) -> u64 {
-        entries.iter().fold(
-            (summary.scores_total as u64)
-                .wrapping_mul(1_000_003)
-                .wrapping_add((summary.scores_unmapped as u64) << 32)
-                .wrapping_add(summary.charts_song_not_found as u64)
-                .wrapping_add((summary.charts_chart_not_found as u64) << 16),
-            |checksum, (hash, entry)| {
-                checksum
-                    .wrapping_add((hash.len() as u64).wrapping_mul(65_537))
-                    .wrapping_add(u64::from(entry.judgment_counts[0]))
-            },
-        )
-    }
-
-    fn score_stage<const RESERVE: bool, const RESOLVE_STEPS_ONCE: bool>(
-        source: &ItgSource,
-        resolver: &ChartResolver<'_>,
-    ) -> u64 {
-        let mut summary = ImportSummary::default();
-        let entries = collect_score_entries_with::<RESERVE, RESOLVE_STEPS_ONCE>(
-            source,
-            resolver,
-            &mut summary,
-        );
-        score_checksum(&entries, &summary)
-    }
-
-    pub fn scores_unreserved(source: &ItgSource, resolver: &ChartResolver<'_>) -> u64 {
-        score_stage::<false, false>(source, resolver)
-    }
-
-    pub fn scores_reserved(source: &ItgSource, resolver: &ChartResolver<'_>) -> u64 {
-        score_stage::<true, false>(source, resolver)
-    }
-
-    pub fn scores_resolved_per_step(source: &ItgSource, resolver: &ChartResolver<'_>) -> u64 {
-        score_stage::<true, true>(source, resolver)
-    }
-
-    fn favorite_checksum(hashes: &HashSet<String>, summary: &ImportSummary) -> u64 {
-        hashes.iter().fold(
-            (summary.favorites_total as u64)
-                .wrapping_mul(1_000_003)
-                .wrapping_add(summary.favorites_imported as u64)
-                .wrapping_add((summary.favorites_song_not_found as u64) << 32),
-            |checksum, hash| checksum.wrapping_add(hash.len() as u64),
-        )
-    }
-
-    fn favorite_stage<const RESERVE: bool>(
-        source: &ItgSource,
-        resolver: &ChartResolver<'_>,
-    ) -> u64 {
-        let mut summary = ImportSummary::default();
-        let hashes = collect_favorite_hashes_with::<RESERVE>(source, resolver, &mut summary);
-        favorite_checksum(&hashes, &summary)
-    }
-
-    pub fn favorites_unreserved(source: &ItgSource, resolver: &ChartResolver<'_>) -> u64 {
-        favorite_stage::<false>(source, resolver)
-    }
-
-    pub fn favorites_reserved(source: &ItgSource, resolver: &ChartResolver<'_>) -> u64 {
-        favorite_stage::<true>(source, resolver)
-    }
 }

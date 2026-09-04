@@ -441,159 +441,6 @@ fn apply_bool_toggles(out: &mut PlayerOptionsData, map: &SlSettings) {
     set_bool!("ErrorMSDisplay" => error_ms_display);
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_sl_bool_reference(raw: &str) -> Option<bool> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "true" | "1" => Some(true),
-        "false" | "0" => Some(false),
-        _ => None,
-    }
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn leading_i32_reference(raw: &str) -> Option<i32> {
-    let mut digits = String::new();
-    for (index, ch) in raw.trim().chars().enumerate() {
-        if (ch == '-' && index == 0) || ch.is_ascii_digit() {
-            digits.push(ch);
-        } else {
-            break;
-        }
-    }
-    digits.parse::<i32>().ok()
-}
-
-#[cfg(any(test, feature = "bench-support"))]
-fn parse_player_options_string_reference(raw: &str) -> (ScrollOption, Option<TurnOption>) {
-    let mut scroll = ScrollOption::empty();
-    let mut turn = None;
-    for token in raw.split(',') {
-        let normalized: String = token
-            .chars()
-            .filter(|ch| !ch.is_whitespace())
-            .map(|ch| ch.to_ascii_lowercase())
-            .collect();
-        if normalized.is_empty() {
-            continue;
-        }
-        match normalized.as_str() {
-            "reverse" => scroll = scroll.union(ScrollOption::Reverse),
-            "split" => scroll = scroll.union(ScrollOption::Split),
-            "alternate" => scroll = scroll.union(ScrollOption::Alternate),
-            "cross" => scroll = scroll.union(ScrollOption::Cross),
-            "centered" => scroll = scroll.union(ScrollOption::Centered),
-            other => {
-                if let Ok(parsed) = other.parse::<TurnOption>()
-                    && parsed != TurnOption::None
-                {
-                    turn = Some(parsed);
-                }
-            }
-        }
-    }
-    (scroll, turn)
-}
-
-#[cfg(feature = "bench-support")]
-#[doc(hidden)]
-pub mod bench_support {
-    use super::*;
-
-    fn mix(checksum: u64, index: usize, value: u64) -> u64 {
-        checksum
-            .rotate_left(7)
-            .wrapping_add(value)
-            .wrapping_add(index as u64)
-    }
-
-    fn bool_checksum(values: &[String], mut parse: impl FnMut(&str) -> Option<bool>) -> u64 {
-        values
-            .iter()
-            .enumerate()
-            .fold(0, |checksum, (index, value)| {
-                let parsed = match parse(value) {
-                    Some(false) => 1,
-                    Some(true) => 2,
-                    None => 3,
-                };
-                mix(checksum, index, parsed)
-            })
-    }
-
-    fn integer_checksum(values: &[String], mut parse: impl FnMut(&str) -> Option<i32>) -> u64 {
-        values
-            .iter()
-            .enumerate()
-            .fold(0, |checksum, (index, value)| {
-                let parsed = parse(value)
-                    .map(|value| u64::from(value as u32))
-                    .unwrap_or(u64::MAX);
-                mix(checksum, index, parsed)
-            })
-    }
-
-    fn turn_code(turn: Option<TurnOption>) -> u64 {
-        match turn {
-            None => 0,
-            Some(TurnOption::None) => 1,
-            Some(TurnOption::Mirror) => 2,
-            Some(TurnOption::Left) => 3,
-            Some(TurnOption::Right) => 4,
-            Some(TurnOption::LRMirror) => 5,
-            Some(TurnOption::UDMirror) => 6,
-            Some(TurnOption::Shuffle) => 7,
-            Some(TurnOption::Blender) => 8,
-            Some(TurnOption::Random) => 9,
-        }
-    }
-
-    fn scroll_code(scroll: ScrollOption) -> u64 {
-        u64::from(scroll.contains(ScrollOption::Reverse))
-            | (u64::from(scroll.contains(ScrollOption::Split)) << 1)
-            | (u64::from(scroll.contains(ScrollOption::Alternate)) << 2)
-            | (u64::from(scroll.contains(ScrollOption::Cross)) << 3)
-            | (u64::from(scroll.contains(ScrollOption::Centered)) << 4)
-    }
-
-    fn player_options_checksum(
-        values: &[String],
-        mut parse: impl FnMut(&str) -> (ScrollOption, Option<TurnOption>),
-    ) -> u64 {
-        values
-            .iter()
-            .enumerate()
-            .fold(0, |checksum, (index, value)| {
-                let (scroll, turn) = parse(value);
-                let parsed = scroll_code(scroll) | (turn_code(turn) << 32);
-                mix(checksum, index, parsed)
-            })
-    }
-
-    pub fn parse_booleans_allocating(values: &[String]) -> u64 {
-        bool_checksum(values, parse_sl_bool_reference)
-    }
-
-    pub fn parse_booleans_direct(values: &[String]) -> u64 {
-        bool_checksum(values, parse_sl_bool)
-    }
-
-    pub fn parse_integers_allocating(values: &[String]) -> u64 {
-        integer_checksum(values, leading_i32_reference)
-    }
-
-    pub fn parse_integers_borrowed(values: &[String]) -> u64 {
-        integer_checksum(values, leading_i32)
-    }
-
-    pub fn parse_player_options_allocating(values: &[String]) -> u64 {
-        player_options_checksum(values, parse_player_options_string_reference)
-    }
-
-    pub fn parse_player_options_stack(values: &[String]) -> u64 {
-        player_options_checksum(values, parse_player_options_string)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -606,49 +453,82 @@ mod tests {
     }
 
     #[test]
-    fn allocation_free_scalar_parsers_match_owned_references() {
-        for raw in [
-            "true", " TRUE ", "TrUe", "false", " FaLsE ", "1", "0", "yes", "", "trüe",
+    fn scalar_parsers_accept_supported_values_and_reject_invalid_input() {
+        for (raw, expected) in [
+            ("true", Some(true)),
+            (" TRUE ", Some(true)),
+            ("TrUe", Some(true)),
+            ("false", Some(false)),
+            (" FaLsE ", Some(false)),
+            ("1", Some(true)),
+            ("0", Some(false)),
+            ("yes", None),
+            ("", None),
+            ("trüe", None),
         ] {
-            assert_eq!(parse_sl_bool(raw), parse_sl_bool_reference(raw), "{raw:?}");
+            assert_eq!(parse_sl_bool(raw), expected, "{raw:?}");
         }
 
-        for raw in [
-            "50%",
-            " -25 ms ",
-            "0",
-            "2147483647x",
-            "-2147483648x",
-            "2147483648",
-            "-",
-            "+12",
-            "12.5",
-            "１２",
-            "",
+        for (raw, expected) in [
+            ("50%", Some(50)),
+            (" -25 ms ", Some(-25)),
+            ("0", Some(0)),
+            ("2147483647x", Some(i32::MAX)),
+            ("-2147483648x", Some(i32::MIN)),
+            ("2147483648", None),
+            ("-", None),
+            ("+12", None),
+            ("12.5", Some(12)),
+            ("１２", None),
+            ("", None),
         ] {
-            assert_eq!(leading_i32(raw), leading_i32_reference(raw), "{raw:?}");
+            assert_eq!(leading_i32(raw), expected, "{raw:?}");
         }
     }
 
     #[test]
-    fn stack_player_option_parser_matches_allocating_reference() {
+    fn player_option_parser_handles_scroll_flags_turns_and_fallbacks() {
+        let combined = ScrollOption::Split
+            .union(ScrollOption::Alternate)
+            .union(ScrollOption::Cross)
+            .union(ScrollOption::Centered);
         let cases = [
-            String::new(),
-            "1.5x, Reverse, Mirror, Overhead".to_owned(),
-            "split, alternate, cross, centered, left".to_owned(),
-            "super shuffle, hyper shuffle, LR Mirror, UD_Mirror".to_owned(),
-            "m-ir_ror, r e v e r s e, unknown".to_owned(),
-            "Üm-ir_ror, reverse".to_owned(),
-            format!("{}, mirror", "unrecognized".repeat(8)),
-            format!("{}right", " ".repeat(80)),
+            ("", (ScrollOption::empty(), None)),
+            (
+                "1.5x, Reverse, Mirror, Overhead",
+                (ScrollOption::Reverse, Some(TurnOption::Mirror)),
+            ),
+            (
+                "split, alternate, cross, centered, left",
+                (combined, Some(TurnOption::Left)),
+            ),
+            (
+                "super shuffle, hyper shuffle, LR Mirror, UD_Mirror",
+                (ScrollOption::empty(), Some(TurnOption::UDMirror)),
+            ),
+            (
+                "m-ir_ror, r e v e r s e, unknown",
+                (ScrollOption::Reverse, Some(TurnOption::Mirror)),
+            ),
+            (
+                "Üm-ir_ror, reverse",
+                (ScrollOption::Reverse, Some(TurnOption::Mirror)),
+            ),
         ];
-        for raw in cases {
-            assert_eq!(
-                parse_player_options_string(&raw),
-                parse_player_options_string_reference(&raw),
-                "{raw:?}"
-            );
+        for (raw, expected) in cases {
+            assert_eq!(parse_player_options_string(raw), expected, "{raw:?}");
         }
+
+        let long_unknown = format!("{}, mirror", "unrecognized".repeat(8));
+        assert_eq!(
+            parse_player_options_string(&long_unknown),
+            (ScrollOption::empty(), Some(TurnOption::Mirror))
+        );
+        let spaced_right = format!("{}right", " ".repeat(80));
+        assert_eq!(
+            parse_player_options_string(&spaced_right),
+            (ScrollOption::empty(), Some(TurnOption::Right))
+        );
     }
 
     #[test]

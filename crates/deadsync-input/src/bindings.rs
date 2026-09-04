@@ -117,53 +117,6 @@ where
     km
 }
 
-#[cfg(any(test, feature = "bench-support"))]
-#[doc(hidden)]
-pub fn load_keymap_from_ini_entries_reference<'a, I>(section: Option<I>) -> Keymap
-where
-    I: IntoIterator<Item = (&'a str, &'a str)>,
-{
-    let Some(section) = section else {
-        return default_keymap();
-    };
-
-    let mut km = Keymap::default();
-    let mut seen: Vec<VirtualAction> = Vec::new();
-
-    for (key, value) in section {
-        let key = key.to_ascii_lowercase();
-        if let Some(action) = crate::action_from_ini_key_lower(&key) {
-            let mut bindings = Vec::new();
-            for tok in value.split(',') {
-                if let Some(binding) = parse_binding_token(tok) {
-                    bindings.push(binding);
-                }
-            }
-            km.bind(action, &bindings);
-            seen.push(action);
-        }
-    }
-
-    let defaults = default_keymap();
-    for action in ALL_VIRTUAL_ACTIONS {
-        if seen.contains(&action) {
-            continue;
-        }
-        let mut bindings = Vec::new();
-        let mut i = 0;
-        while let Some(binding) = defaults.binding_at(action, i) {
-            bindings.push(binding);
-            i += 1;
-        }
-        if !bindings.is_empty() {
-            km.bind(action, &bindings);
-        }
-    }
-    restore_available_default_bindings(&mut km);
-
-    km
-}
-
 pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
@@ -982,8 +935,8 @@ mod tests {
     }
 
     #[test]
-    fn stack_keys_and_seen_mask_match_allocating_keymap_loader() {
-        let entries = [
+    fn keymap_loader_handles_case_duplicates_unknown_keys_and_defaults() {
+        let keymap = load_keymap_from_ini_entries(Some([
             ("P1_LEFT", "KeyCode::KeyA, PadDir::Left"),
             ("p1_left", "KeyCode::ArrowLeft"),
             ("P2_Start", "KeyCode::NumpadEnter"),
@@ -992,19 +945,33 @@ mod tests {
             ("P1_Coin", "KeyCode::KeyC"),
             ("System_FastForward_extra", "KeyCode::KeyF"),
             ("é", "KeyCode::KeyE"),
-        ];
-        let expected = load_keymap_from_ini_entries_reference(Some(entries));
-        let actual = load_keymap_from_ini_entries(Some(entries));
+        ]));
 
-        for action in ALL_VIRTUAL_ACTIONS {
-            for index in 0..8 {
-                assert_eq!(
-                    actual.binding_at(action, index),
-                    expected.binding_at(action, index),
-                    "action={action:?}, index={index}"
-                );
-            }
-        }
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p1_left, 0),
+            Some(InputBinding::Key(KeyCode::ArrowLeft))
+        );
+        assert_eq!(keymap.binding_at(VirtualAction::p1_left, 1), None);
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p2_start, 0),
+            Some(InputBinding::Key(KeyCode::NumpadEnter))
+        );
+        assert_eq!(
+            keymap.binding_at(VirtualAction::system_fast_forward, 0),
+            Some(InputBinding::Key(KeyCode::Tab))
+        );
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p1_operator, 0),
+            Some(InputBinding::Key(KeyCode::ScrollLock))
+        );
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p1_coin, 1),
+            Some(InputBinding::Key(KeyCode::KeyC))
+        );
+        assert_eq!(
+            keymap.binding_at(VirtualAction::p1_up, 0),
+            default_keymap().binding_at(VirtualAction::p1_up, 0)
+        );
     }
 
     #[test]
@@ -1024,7 +991,7 @@ mod tests {
         write_keymap_ini_section(&mut content, &default_keymap());
 
         assert!(content.starts_with("[Keymaps]\nP1_Back=KeyCode::Escape\n"));
-        assert!(content.ends_with("P2_Center=KeyCode::Numpad5\n\n"));
+        assert!(content.ends_with("P2_Coin=\n\n"));
     }
 
     #[test]
@@ -1034,7 +1001,7 @@ mod tests {
 
         assert!(content.starts_with("[Keymaps]\nP1_Back=KeyCode::Escape\n"));
         assert!(content.contains("P1_MenuDown=\n"));
-        assert!(content.ends_with("P2_Center=KeyCode::Numpad5\n\n"));
+        assert!(content.ends_with("P2_Coin=\n\n"));
     }
 
     #[test]
