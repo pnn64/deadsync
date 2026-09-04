@@ -90,10 +90,21 @@ impl AssetManager {
         font: Font,
         required_textures: &[std::path::PathBuf],
     ) -> Result<(), deadlib_assets::AssetError> {
+        self.upload_font_textures(backend, &font, required_textures)?;
+        self.register_font(name, font);
+        Ok(())
+    }
+
+    fn upload_font_textures(
+        &mut self,
+        backend: &mut Backend,
+        font: &Font,
+        required_textures: &[std::path::PathBuf],
+    ) -> Result<(), deadlib_assets::AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
         let textures =
-            prepare_required_font_textures(&font, required_textures, &asset_roots, |key| {
+            prepare_required_font_textures(font, required_textures, &asset_roots, |key| {
                 self.has_texture_key(key)
             })?;
         for PreparedFontTexture { key, image, hints } in textures {
@@ -102,7 +113,6 @@ impl AssetManager {
             self.insert_texture(key.clone(), texture, image.width(), image.height());
             debug!("Loaded font texture: {key}");
         }
-        self.register_font(name, font);
         Ok(())
     }
 
@@ -270,18 +280,22 @@ impl AssetManager {
     ) -> Result<(), deadlib_assets::AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-        for asset in parse_font_asset_specs(fonts.iter().copied(), &asset_roots, |path| {
+        let parsed = parse_font_asset_specs(fonts.iter().copied(), &asset_roots, |path| {
             dirs.resolve_asset_path(path)
-        })? {
+        })?;
+        let mut font_batch = Vec::with_capacity(parsed.len());
+        for asset in parsed {
             if let Some(fallback) = asset.font.fallback_font_name {
                 debug!(
                     "Font '{}' configured to use '{}' as fallback.",
                     asset.name, fallback
                 );
             }
-            self.register_parsed_font(backend, asset.name, asset.font, &asset.required_textures)?;
+            self.upload_font_textures(backend, &asset.font, &asset.required_textures)?;
+            font_batch.push((asset.name, asset.font));
             debug!("Loaded font '{}' from '{}'", asset.name, asset.ini_path);
         }
+        self.store.register_fonts(font_batch);
         Ok(())
     }
 

@@ -58,6 +58,10 @@ impl<T> AssetStore<T> {
         self.font_store.register_font(name, font);
     }
 
+    pub fn register_fonts(&mut self, fonts: impl IntoIterator<Item = (&'static str, Font)>) {
+        self.font_store.register_fonts(fonts);
+    }
+
     #[must_use]
     pub const fn fonts(&self) -> &FontMap {
         self.font_store.fonts()

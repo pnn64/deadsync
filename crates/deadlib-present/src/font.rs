@@ -647,7 +647,7 @@ struct FontPageSettings<'a> {
     pub(crate) default_width: i32,        // -1 = “use frame width”
     pub(crate) advance_extra_pixels: i32, // SM default is 0
     pub(crate) texture_hints: &'a str,
-    pub(crate) glyph_widths: FxHashMap<usize, i32>,
+    pub(crate) glyph_widths: SmallVec<[&'a GlyphWidths; 3]>,
 }
 
 impl Default for FontPageSettings<'_> {
@@ -664,7 +664,7 @@ impl Default for FontPageSettings<'_> {
             default_width: -1,
             advance_extra_pixels: 1, // SM default
             texture_hints: "default",
-            glyph_widths: FxHashMap::default(),
+            glyph_widths: SmallVec::new(),
         }
     }
 }
@@ -908,9 +908,40 @@ impl Hash for AsciiKey<'_> {
 }
 
 #[derive(Debug, Default)]
+struct GlyphWidths {
+    dense: Vec<Option<i32>>,
+    sparse: FxHashMap<usize, i32>,
+}
+
+impl GlyphWidths {
+    fn insert(&mut self, frame: usize, width: Option<i32>) {
+        if frame < MAX_PREALLOCATED_GLYPH_MAPPINGS {
+            if frame >= self.dense.len() {
+                self.dense.resize(frame + 1, None);
+            }
+            self.dense[frame] = width;
+        } else if let Some(width) = width {
+            self.sparse.insert(frame, width);
+        } else {
+            self.sparse.remove(&frame);
+        }
+    }
+
+    #[inline(always)]
+    fn get(&self, frame: usize) -> Option<i32> {
+        if frame < MAX_PREALLOCATED_GLYPH_MAPPINGS {
+            self.dense.get(frame).copied().flatten()
+        } else {
+            self.sparse.get(&frame).copied()
+        }
+    }
+}
+
+#[derive(Debug, Default)]
 struct ParsedFontIniSection<'a> {
     values: FxHashMap<AsciiKey<'a>, &'a str>,
     raw_lines: FxHashMap<u32, &'a str>,
+    glyph_widths: GlyphWidths,
 }
 
 impl<'a> ParsedFontIniSection<'a> {
@@ -960,6 +991,12 @@ fn parse_font_ini(text: &str) -> ParsedFontIni<'_> {
         }
         if let Some((key, value)) = parse_kv_borrowed(trimmed) {
             let section = parsed.sections.entry(current_section).or_default();
+            if let Ok(frame) = key.parse::<usize>() {
+                section
+                    .glyph_widths
+                    .insert(frame, value.parse::<i32>().ok());
+                continue;
+            }
             section.values.insert(AsciiKey(key), value);
         }
     }
@@ -2445,15 +2482,31 @@ pub fn parse_with_texture_context(
     // Keep track of default metrics from our main/first page (not from imports)
     let mut default_page_metrics = (0, 0);
 
+    let page_sources = texture_paths
+        .iter()
+        .map(|path| {
+            let key = texture_ctx.canonical_texture_key(path);
+            let frames = texture_ctx.sprite_sheet_dims(&key);
+            (key, frames)
+        })
+        .collect::<Vec<_>>();
+    let local_glyph_capacity = page_sources
+        .iter()
+        .map(|(_, (wide, high))| (*wide as usize).saturating_mul(*high as usize))
+        .fold(0usize, usize::saturating_add)
+        .min(MAX_PREALLOCATED_GLYPH_MAPPINGS);
+    all_glyphs.reserve(local_glyph_capacity);
+
     // ---- local pages loop (unchanged logic; our pages override imported glyphs)
-    for (page_idx, tex_path) in texture_paths.iter().enumerate() {
+    for (page_idx, (tex_path, (texture_key, frame_dims))) in
+        texture_paths.iter().zip(&page_sources).enumerate()
+    {
+        let (num_frames_wide, num_frames_high) = *frame_dims;
         let page_name = get_page_name_from_path(tex_path);
         let page_name = page_name.as_ref();
         let tex_dims = image::image_dimensions(tex_path)?;
-        let texture_key = texture_ctx.canonical_texture_key(tex_path);
         required_textures.push(tex_path.clone());
 
-        let (num_frames_wide, num_frames_high) = texture_ctx.sprite_sheet_dims(&texture_key);
         let total_frames = (num_frames_wide * num_frames_high) as usize;
 
         // settings: common → page → legacy
@@ -2464,7 +2517,6 @@ pub fn parse_with_texture_context(
         }
         for section_name in &sections_to_check {
             if let Some(section) = ini.get(section_name) {
-                let map = &section.values;
                 let get_int = |key: &'static str| -> Option<i32> {
                     section.value(key).and_then(|value| value.parse().ok())
                 };
@@ -2502,14 +2554,7 @@ pub fn parse_with_texture_context(
                 if let Some(v) = section.value("texturehints") {
                     settings.set_texture_hints(v);
                 }
-
-                for (key, val) in map {
-                    if let Ok(frame_idx) = key.as_str().parse::<usize>()
-                        && let Ok(w) = val.parse::<i32>()
-                    {
-                        settings.glyph_widths.insert(frame_idx, w);
-                    }
-                }
+                settings.glyph_widths.push(&section.glyph_widths);
             }
         }
 
@@ -2520,9 +2565,9 @@ pub fn parse_with_texture_context(
             texture_hints_map.insert(texture_key.clone(), hints_raw.to_string());
         }
 
-        let has_doubleres = is_doubleres_in_name(&texture_key) || hints_doubleres;
+        let has_doubleres = is_doubleres_in_name(texture_key) || hints_doubleres;
         let (base_tex_w, base_tex_h) =
-            parse_base_res_from_filename(&texture_key).unwrap_or((tex_dims.0, tex_dims.1));
+            parse_base_res_from_filename(texture_key).unwrap_or((tex_dims.0, tex_dims.1));
 
         // authored metrics parity w/ StepMania
         let mut authored_tex_w = base_tex_w;
@@ -2712,14 +2757,18 @@ pub fn parse_with_texture_context(
             .get(texture_key.as_str())
             .map(|key| Arc::<str>::from(key.as_str()));
 
+        let default_width = if settings.default_width != -1 {
+            settings.default_width
+        } else {
+            frame_w_i
+        };
         let glyph_for_frame = |i: usize| {
-            let base_w_ini = if let Some(&w) = settings.glyph_widths.get(&i) {
-                w
-            } else if settings.default_width != -1 {
-                settings.default_width
-            } else {
-                frame_w_i
-            };
+            let base_w_ini = settings
+                .glyph_widths
+                .iter()
+                .rev()
+                .find_map(|widths| widths.get(i))
+                .unwrap_or(default_width);
             let base_w_scaled = round_half_to_even_i32(
                 (base_w_ini + settings.add_to_all_widths) as f32 * settings.scale_all_widths_by,
             );
@@ -3074,6 +3123,22 @@ mod tests {
         let source_end = source_start + source.len();
         let value_start = raw_line.as_ptr() as usize;
         assert!(value_start >= source_start && value_start < source_end);
+    }
+
+    #[test]
+    fn parsed_ini_stores_frame_widths_as_dense_numbers() {
+        let ini = parse_font_ini("[main]\n0=12\n3=27\n0=14\n5=invalid\n65536=31\n");
+        let section = ini.get("main").expect("main section");
+
+        assert!(
+            section.values.is_empty(),
+            "widths must not remain text settings"
+        );
+        assert_eq!(
+            section.glyph_widths.dense,
+            [Some(14), None, None, Some(27), None, None]
+        );
+        assert_eq!(section.glyph_widths.sparse.get(&65_536), Some(&31));
     }
 
     #[test]
