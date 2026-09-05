@@ -3311,3 +3311,66 @@ fn starred_modifier_normalization_ignores_existing_options() {
         "*1 no dark, *2 80% stealth"
     );
 }
+
+#[test]
+fn queued_startup_preserves_initial_overlay_state() {
+    let temp = tempfile::tempdir().expect("create song directory");
+    let song_dir = temp.path();
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local bg, white, black
+return Def.ActorFrame{
+    OnCommand=function(self) self:queuecommand("Ready") end,
+    ReadyCommand=function()
+        bg:xy(427, 240):zoomto(2562, 1440)
+        white:diffusealpha(0)
+        black:diffusealpha(0)
+    end,
+    Def.Quad{
+        Name="BG",
+        InitCommand=function(self) bg = self end,
+        OnCommand=function(self) self:x(7):queuecommand("ChildReady") end,
+        ChildReadyCommand=function(self) self:x(450) end,
+    },
+    Def.Quad{Name="White", InitCommand=function(self) white = self end},
+    Def.Quad{Name="Black", InitCommand=function(self) black = self end},
+}
+"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Queued Startup");
+    context.song_display_bpms = [120.0, 120.0];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    let event = compiled
+        .messages
+        .first()
+        .expect("queued setup must be scheduled");
+    assert_eq!(compiled.messages.len(), 1);
+    assert!((event.beat - 1.0 / 30.0).abs() < 0.000_001);
+    for name in ["BG", "White", "Black"] {
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some(name))
+            .unwrap();
+        assert_eq!(actor.initial_state.diffuse[3], 1.0);
+        assert_eq!(actor.initial_state.size, None);
+        let command = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == event.message)
+            .unwrap();
+        let ready = overlay_state_after_blocks(actor.initial_state, &command.blocks, 0.0);
+        if name == "BG" {
+            assert_eq!(actor.initial_state.x, 7.0);
+            assert_eq!([ready.x, ready.y], [450.0, 240.0]);
+            assert_eq!(ready.size, Some([2562.0, 1440.0]));
+        } else {
+            assert_eq!(ready.diffuse[3], 0.0);
+        }
+    }
+}

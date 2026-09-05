@@ -23,6 +23,65 @@ use crate::{
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
 const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
+
+pub(crate) fn apply_startup_states<Kind>(
+    context: &SongLuaCompileContext,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    states: &std::collections::HashMap<usize, SongLuaOverlayState>,
+    tracks: &mut [SongLuaOverlayUpdateTrack],
+    messages: &mut Vec<SongLuaMessageEvent>,
+) {
+    const MESSAGE: &str = "__songlua_queued_startup";
+    let beat = song_beat_at_elapsed_seconds(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS, context);
+    let mut changed = false;
+    for (index, overlay) in overlays.iter_mut().enumerate() {
+        let Some(&initial) = states.get(&(overlay.table.to_pointer() as usize)) else {
+            continue;
+        };
+        let ready = overlay.actor.initial_state;
+        let Some((_, delta)) = overlay_delta_pair_from_states(initial, ready, ready) else {
+            continue;
+        };
+        overlay.actor.initial_state = initial;
+        overlay
+            .actor
+            .message_commands
+            .push(crate::SongLuaOverlayMessageCommand {
+                message: MESSAGE.to_string(),
+                aux: None,
+                blocks: vec![crate::SongLuaOverlayCommandBlock {
+                    start: 0.0,
+                    duration: 0.0,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                    delta,
+                }],
+            });
+        for track in tracks
+            .iter_mut()
+            .filter(|track| track.overlay_index == index)
+        {
+            // A zero-time update runs after queued setup during compilation.
+            // Its samples must not overwrite the state before that setup.
+            for sample in track
+                .samples
+                .iter_mut()
+                .take_while(|sample| sample.beat < beat)
+            {
+                sample.beat = beat;
+            }
+        }
+        changed = true;
+    }
+    if changed {
+        messages.push(SongLuaMessageEvent {
+            beat,
+            message: MESSAGE.to_string(),
+            persists: true,
+        });
+    }
+}
 const PLAYER_TRANSFORM_CAPTURE_KEYS: [&str; 11] = [
     "x",
     "y",

@@ -325,7 +325,7 @@ where
         .map_err(|err| err.to_string())?;
     compile_timer.push_stage("execute_init");
     let root = Value::Table(roots);
-    run_actor_startup_commands(&lua, &root).map_err(|err| {
+    let startup_states = run_actor_startup_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor startup commands for song lua session '{}': {err}",
             trace_entry_path.display()
@@ -798,6 +798,13 @@ where
     out.column_offsets.extend(update_column_transforms);
     compile_timer.push_stage("update_overlays");
     resolve_late_proxy_targets(&mut overlays, &mut hidden_players)?;
+    crate::perframe::apply_startup_states(
+        context,
+        &mut overlays,
+        &startup_states,
+        &mut out.overlay_updates,
+        &mut out.messages,
+    );
     push_startup_message_if_listened(
         &mut out.messages,
         overlays

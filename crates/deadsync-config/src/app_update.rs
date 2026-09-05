@@ -578,7 +578,13 @@ pub fn set_vsync(cfg: &mut Config, enabled: bool) -> bool {
 }
 
 pub fn set_max_fps(cfg: &mut Config, max_fps: u16) -> bool {
-    set_if_changed(&mut cfg.max_fps, clamped_max_fps(max_fps))
+    // Zero disables the cap; only enabled caps use the numeric choice limits.
+    let max_fps = if max_fps == 0 {
+        0
+    } else {
+        clamped_max_fps(max_fps)
+    };
+    set_if_changed(&mut cfg.max_fps, max_fps)
 }
 
 pub fn set_frame_stats_overlay_anchor(cfg: &mut Config, key: &'static str) -> bool {
@@ -897,6 +903,28 @@ pub fn set_f64_if_changed(slot: &mut f64, value: f64) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn max_fps_keeps_off() {
+        use crate::options::{MAX_FPS_MAX, MAX_FPS_MIN};
+
+        for (requested, expected) in [
+            (0, 0),
+            (1, MAX_FPS_MIN),
+            (MAX_FPS_MIN, MAX_FPS_MIN),
+            (144, 144),
+            (MAX_FPS_MAX, MAX_FPS_MAX),
+            (u16::MAX, MAX_FPS_MAX),
+        ] {
+            let mut cfg = Config {
+                max_fps: 60,
+                ..Config::default()
+            };
+            assert!(set_max_fps(&mut cfg, requested));
+            assert_eq!(cfg.max_fps, expected, "requested MaxFps={requested}");
+            assert!(!set_max_fps(&mut cfg, requested));
+        }
+    }
 
     #[test]
     fn last_sort_changes_only_when_last_used_is_enabled() {

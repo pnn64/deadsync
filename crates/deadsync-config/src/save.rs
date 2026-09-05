@@ -678,6 +678,44 @@ mod tests {
     use crate::ini::SimpleIni;
 
     #[test]
+    fn max_fps_off_round_trips() {
+        for &(video_renderer, _) in deadlib_render_core::BACKEND_TYPE_CHOICES {
+            for max_fps in [0, 5, 144] {
+                let mut cfg = Config {
+                    video_renderer,
+                    vsync: false,
+                    max_fps,
+                    ..Config::default()
+                };
+                crate::app_update::set_max_fps(&mut cfg, 0);
+                let content = build_saved_app_config_file(
+                    &cfg,
+                    &Keymap::default(),
+                    "",
+                    &[],
+                    &[],
+                    "",
+                    "",
+                    "",
+                    "",
+                );
+                let mut conf = SimpleIni::new();
+                conf.load_str(&content);
+                assert_eq!(conf.get("Options", "MaxFps"), Some("0"));
+
+                let loaded = crate::load::load_app_config(&conf, Config::default());
+                assert_eq!(loaded.video_renderer, video_renderer);
+                assert!(!loaded.vsync);
+                assert_eq!(loaded.max_fps, 0);
+                assert_eq!(
+                    crate::frame_pacing::frame_interval_for_max_fps(loaded.max_fps),
+                    None
+                );
+            }
+        }
+    }
+
+    #[test]
     fn saved_content_round_trips_smx_underglow_options() {
         let mut cfg = Config::default();
         cfg.smx_underglow_theme = true;
