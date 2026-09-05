@@ -513,40 +513,14 @@ mod tests {
             Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
                 actor_tree_has_text(children, expected)
             }
-            Actor::SharedFrame { children, .. }
-            | Actor::SharedTransform { children, .. }
-            | Actor::RenderTarget { children, .. } => actor_tree_has_text(children, expected),
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+                actor_tree_has_text(children, expected)
+            }
             Actor::RetainedFrame { frame, .. } => actor_tree_has_text(frame.children(), expected),
             Actor::Shadow { child, .. } => {
                 actor_tree_has_text(std::slice::from_ref(child.as_ref()), expected)
             }
             Actor::Sprite { .. }
-            | Actor::Mesh { .. }
-            | Actor::ReusableMesh { .. }
-            | Actor::TexturedMesh { .. }
-            | Actor::ReusableTexturedMesh { .. }
-            | Actor::CameraPush { .. }
-            | Actor::CameraPop => false,
-        })
-    }
-
-    fn render_target_has_text(actors: &[Actor], expected: &str) -> bool {
-        actors.iter().any(|actor| match actor {
-            Actor::RenderTarget { children, .. } => actor_tree_has_text(children, expected),
-            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
-                render_target_has_text(children, expected)
-            }
-            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
-                render_target_has_text(children, expected)
-            }
-            Actor::RetainedFrame { frame, .. } => {
-                render_target_has_text(frame.children(), expected)
-            }
-            Actor::Shadow { child, .. } => {
-                render_target_has_text(std::slice::from_ref(child.as_ref()), expected)
-            }
-            Actor::Sprite { .. }
-            | Actor::Text { .. }
             | Actor::Mesh { .. }
             | Actor::ReusableMesh { .. }
             | Actor::TexturedMesh { .. }
@@ -610,7 +584,6 @@ mod tests {
             | Actor::TexturedMesh { .. }
             | Actor::ReusableTexturedMesh { .. }
             | Actor::RetainedFrame { .. }
-            | Actor::RenderTarget { .. }
             | Actor::CameraPush { .. }
             | Actor::CameraPop => None,
         })
@@ -650,7 +623,6 @@ mod tests {
                 | Actor::TexturedMesh { .. }
                 | Actor::ReusableTexturedMesh { .. }
                 | Actor::RetainedFrame { .. }
-                | Actor::RenderTarget { .. }
                 | Actor::CameraPush { .. }
                 | Actor::CameraPop => None,
             })
@@ -832,8 +804,9 @@ mod tests {
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let actor_segments = segments.segments(state, actors);
-        compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+        compose::build_passes(
             actor_segments,
+            state.render_targets(),
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -841,7 +814,7 @@ mod tests {
             text_cache,
             scratch,
             texture_ctx,
-            state.actor_resources(),
+            Some(state.actor_resources()),
         )
     }
 
@@ -881,8 +854,9 @@ mod tests {
             crate::views::SimplyLoveVisualPolicyView::default(),
         );
         let actor_segments = segments.segments(&state.gameplay, actors);
-        compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+        compose::build_passes(
             actor_segments,
+            state.gameplay.render_targets(),
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
@@ -890,7 +864,7 @@ mod tests {
             text_cache,
             scratch,
             &FIXTURE_TEXTURES,
-            state.gameplay.actor_resources(),
+            Some(state.gameplay.actor_resources()),
         )
     }
 
@@ -1593,17 +1567,18 @@ L000
 
         compose_scratch.begin_frame_stats(collect_sort_timing);
         let build_started = Instant::now();
-        let mut render = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
-                actor_segments,
-                [0.0, 0.0, 0.0, 1.0],
-                metrics,
-                assets.fonts(),
-                10.0,
-                text_cache,
-                compose_scratch,
-                &deadsync_assets::PRESENT_TEXTURE_CONTEXT,
-                state.actor_resources(),
-            );
+        let mut render = compose::build_passes(
+            actor_segments,
+            state.render_targets(),
+            [0.0, 0.0, 0.0, 1.0],
+            metrics,
+            assets.fonts(),
+            10.0,
+            text_cache,
+            compose_scratch,
+            &deadsync_assets::PRESENT_TEXTURE_CONTEXT,
+            Some(state.actor_resources()),
+        );
         let build_us = gpu_elapsed_us(build_started);
         let compose_frame = compose_scratch.frame_stats();
 
@@ -3016,9 +2991,24 @@ return Def.ActorFrame{
                 assert!(actor_tree_has_text(&actors, "EVENT"));
                 assert!(actor_tree_has_text(&actors, "PixelSafePlayer"));
                 assert!(actor_tree_has_text(&actors, "AutoPlay"));
-                assert!(!render_target_has_text(&actors, "EVENT"));
-                assert!(!render_target_has_text(&actors, "PixelSafePlayer"));
-                assert!(!render_target_has_text(&actors, "AutoPlay"));
+                assert!(
+                    !state
+                        .render_targets()
+                        .iter()
+                        .any(|target| actor_tree_has_text(&target.children, "EVENT"))
+                );
+                assert!(
+                    !state
+                        .render_targets()
+                        .iter()
+                        .any(|target| actor_tree_has_text(&target.children, "PixelSafePlayer"))
+                );
+                assert!(
+                    !state
+                        .render_targets()
+                        .iter()
+                        .any(|target| actor_tree_has_text(&target.children, "AutoPlay"))
+                );
 
                 let aft_z = max_render_target_sprite_z(&actors, 0)
                     .expect("fixture should draw an AFT output sprite");
@@ -3301,8 +3291,9 @@ return Def.ActorFrame{
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                let mut warm = compose::build_passes(
                     actor_segments,
+                    state.render_targets(),
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -3310,7 +3301,7 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                     &FIXTURE_TEXTURES,
-                    state.actor_resources(),
+                    Some(state.actor_resources()),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);
@@ -3358,11 +3349,7 @@ return Def.ActorFrame{
                     crate::views::SimplyLoveVisualPolicyView::default(),
                 );
                 assert!(!plain_edit_segments.has_direct_field_proxy(&state));
-                assert!(
-                    !plain_edit_actors
-                        .iter()
-                        .any(|actor| matches!(actor, Actor::RenderTarget { .. }))
-                );
+                assert!(state.render_targets().is_empty());
             },
         );
     }
@@ -3409,8 +3396,9 @@ return Def.ActorFrame{
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                let mut warm = compose::build_passes(
                     actor_segments,
+                    state.render_targets(),
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -3418,7 +3406,7 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                     &FIXTURE_TEXTURES,
-                    state.actor_resources(),
+                    Some(state.actor_resources()),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);
@@ -3474,8 +3462,9 @@ return Def.ActorFrame{
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                let mut warm = compose::build_passes(
                     actor_segments,
+                    state.render_targets(),
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -3483,7 +3472,7 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                     &FIXTURE_TEXTURES,
-                    state.actor_resources(),
+                    Some(state.actor_resources()),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 assert_eq!(warm.render_targets.len(), 1);
@@ -3548,8 +3537,9 @@ return Def.ActorFrame{
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                let mut warm = compose::build_passes(
                     actor_segments,
+                    state.render_targets(),
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -3557,7 +3547,7 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                     &FIXTURE_TEXTURES,
-                    state.actor_resources(),
+                    Some(state.actor_resources()),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 assert_eq!(warm.render_targets.len(), 1);
@@ -3628,8 +3618,9 @@ return Def.ActorFrame{
                 let actor_segments = segments.segments(&state, &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
-                let mut warm = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                let mut warm = compose::build_passes(
                     actor_segments,
+                    state.render_targets(),
                     [0.0, 0.0, 0.0, 1.0],
                     &metrics,
                     assets.fonts(),
@@ -3637,7 +3628,7 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                     &FIXTURE_TEXTURES,
-                    state.actor_resources(),
+                    Some(state.actor_resources()),
                 );
                 assert!(warm.ops.iter().any(|op| matches!(op, DrawOp::Sprite(_))));
                 compose_scratch.recycle_frame(&mut warm);

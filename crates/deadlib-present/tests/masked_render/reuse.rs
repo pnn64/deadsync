@@ -2,7 +2,7 @@
 use super::*;
 
 #[test]
-fn target_passes_keep_postorder_and_reuse_capacity() {
+fn target_passes_keep_order_and_reuse_capacity() {
     let metrics = Metrics {
         left: -50.0,
         right: 50.0,
@@ -12,9 +12,10 @@ fn target_passes_keep_postorder_and_reuse_capacity() {
     let fonts = font::FontMap::default();
     let mut scratch = ComposeScratch::default();
     let mut text = TextLayoutCache::default();
-    let actors = target_scene(16, true);
+    let actors = target_scene(16);
     for _ in 0..3 {
-        let mut frame = build_screen_cached_with_scratch_and_texture_context(
+        let mut frame = build_passes(
+            std::iter::empty(),
             &actors,
             [0.0; 4],
             &metrics,
@@ -23,6 +24,7 @@ fn target_passes_keep_postorder_and_reuse_capacity() {
             &mut text,
             &mut scratch,
             &Textures,
+            None,
         );
         assert!(frame.ops.is_empty());
         assert_eq!(frame.render_targets.len(), 16);
@@ -46,7 +48,8 @@ fn target_passes_keep_postorder_and_reuse_capacity() {
     }
     crate::HEAP.with(|c| c.set(Some(crate::HeapStats::default())));
     for _ in 0..32 {
-        let mut frame = build_screen_cached_with_scratch_and_texture_context(
+        let mut frame = build_passes(
+            std::iter::empty(),
             &actors,
             [0.0; 4],
             &metrics,
@@ -55,6 +58,7 @@ fn target_passes_keep_postorder_and_reuse_capacity() {
             &mut text,
             &mut scratch,
             &Textures,
+            None,
         );
         scratch.recycle_frame(&mut frame);
     }
@@ -127,18 +131,15 @@ fn geometry_scene(
     (geometries, cache)
 }
 
-fn target_scene(count: usize, nested: bool) -> Vec<actors::Actor> {
+fn target_scene(count: usize) -> Vec<actors::RenderTarget> {
     let mut actors = Vec::with_capacity(count);
     for i in 0..count {
         let mut child = sprite_actor(0.0, false);
         if let actors::Actor::Sprite { mask_dest, .. } = &mut child {
             *mask_dest = false;
         }
-        let mut children = vec![child];
-        if nested && let Some(prior) = actors.pop() {
-            children.push(prior);
-        }
-        actors.push(actors::Actor::RenderTarget {
+        let children = vec![child];
+        actors.push(actors::RenderTarget {
             texture_handle: renderer::render_target_texture_handle((i + 1) as u64),
             size: [64 + i as u32, 32 + i as u32],
             logical_size: [100.0; 2],
@@ -215,22 +216,23 @@ fn render_reuse_bench() {
         bottom: 0.0,
     };
     let fonts = font::FontMap::default();
-    for (name, units, actors) in [
-        ("compose_targets_16", 16, target_scene(16, false)),
-        ("compose_targets_nested", 16, target_scene(16, true)),
-        ("compose_targets_control", 2, target_scene(2, false)),
-        ("compose_no_fade", 512, fade_scene([0.0; 4])),
+    for (name, units, actors, targets) in [
+        ("compose_targets_16", 16, Vec::new(), target_scene(16)),
+        ("compose_targets_control", 2, Vec::new(), target_scene(2)),
+        ("compose_no_fade", 512, fade_scene([0.0; 4]), Vec::new()),
         (
             "compose_fade_control",
             512,
             fade_scene([0.2, 0.4, 0.1, 0.3]),
+            Vec::new(),
         ),
     ] {
         let mut scratch = ComposeScratch::default();
         let mut text = TextLayoutCache::default();
         measure(name, units, || {
-            let mut frame = build_screen_cached_with_scratch_and_texture_context(
-                black_box(&actors),
+            let mut frame = build_passes(
+                std::iter::once(ActorSegment::new(black_box(&actors))),
+                black_box(&targets),
                 [0.1, 0.2, 0.3, 1.0],
                 &metrics,
                 &fonts,
@@ -238,6 +240,7 @@ fn render_reuse_bench() {
                 &mut text,
                 &mut scratch,
                 &Textures,
+                None,
             );
             black_box(&frame);
             scratch.recycle_frame(&mut frame);
@@ -309,9 +312,10 @@ fn render_reuse_snapshot() {
     let mut scratch = ComposeScratch::default();
     let mut text = TextLayoutCache::default();
     for count in [0, 1, 4, 5, 16, 2, 0, 16] {
-        for nested in [false, true] {
-            let actors = target_scene(count, nested);
-            let mut frame = build_screen_cached_with_scratch_and_texture_context(
+        {
+            let actors = target_scene(count);
+            let mut frame = build_passes(
+                std::iter::empty(),
                 &actors,
                 [0.1, 0.2, 0.3, 1.0],
                 &metrics,
@@ -320,6 +324,7 @@ fn render_reuse_snapshot() {
                 &mut text,
                 &mut scratch,
                 &Textures,
+                None,
             );
             record_frame(&mut out, &frame);
             scratch.recycle_frame(&mut frame);

@@ -505,21 +505,6 @@ pub enum Actor {
         visible: bool,
     },
 
-    /// Draws `children` into a texture before the main presentation pass.
-    /// Placement transforms do not cross this boundary, matching
-    /// StepMania/ITGmania `ActorFrameTexture` semantics.
-    RenderTarget {
-        texture_handle: TextureHandle,
-        /// Backing texture dimensions in render pixels.
-        size: [u32; 2],
-        /// Coordinate-space dimensions used while composing the children.
-        logical_size: [f32; 2],
-        alpha: bool,
-        depth: bool,
-        preserve: bool,
-        children: Arc<[Self]>,
-    },
-
     /// Camera wrapper: renders all child actors using the provided view-projection matrix.
     /// The matrix is expected to map world coordinates to clip space.
     Camera {
@@ -540,6 +525,24 @@ pub enum Actor {
         color: [f32; 4],  // shadow color; alpha multiplies the child's alpha
         child: Box<Self>, // wrapped actor
     },
+}
+
+/// An explicit offscreen presentation pass in producer-defined dependency order.
+///
+/// Each pass executes before the main actors and may sample earlier targets.
+/// Main-actor placement, tint, and camera scopes do not cross this boundary.
+#[derive(Clone, Debug)]
+pub struct RenderTarget {
+    pub texture_handle: TextureHandle,
+    /// Backing texture dimensions in render pixels.
+    pub size: [u32; 2],
+    /// Coordinate-space dimensions used while composing the children.
+    pub logical_size: [f32; 2],
+    pub alpha: bool,
+    pub depth: bool,
+    pub preserve: bool,
+    /// Retained capture actors shared with the producer's song-lifetime storage.
+    pub children: Arc<[Actor]>,
 }
 
 /// Compact actor-free payload for dynamic sprite draws whose layout is already
@@ -790,7 +793,6 @@ impl Actor {
             Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. } => {
                 children.iter().all(Self::retained_static)
             }
-            Self::RenderTarget { .. } => false,
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
             | Self::ReusableMesh { .. }
@@ -851,7 +853,6 @@ impl Actor {
             }
             Self::RetainedFrame { tint, .. } => tint[3] *= alpha,
             Self::SharedTransform { tint, .. } => tint[3] *= alpha,
-            Self::RenderTarget { .. } => {}
             Self::Camera { children, .. } => {
                 for child in children {
                     child.mul_alpha(alpha);
@@ -929,12 +930,6 @@ pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
             Actor::SharedTransform { children, .. } => {
                 stats.frames = stats.frames.saturating_add(1);
                 stats.cameras = stats.cameras.saturating_add(1);
-                for child in children.iter() {
-                    visit(stats, child);
-                }
-            }
-            Actor::RenderTarget { children, .. } => {
-                stats.frames = stats.frames.saturating_add(1);
                 for child in children.iter() {
                     visit(stats, child);
                 }

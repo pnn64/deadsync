@@ -1835,6 +1835,7 @@ impl SongLuaLayerActivity {
 /// Steady-state work is bounded to one pointer take and restore.
 #[derive(Default)]
 struct GameplayFrameScratch {
+    render_targets: Vec<deadlib_present::actors::RenderTarget>,
     lobby_hud_cache: lobby_hud::LobbyHudCache,
     lobby_hud_status_scratch: String,
     /// Stable frames compare one compact key and copy its inline payload; a
@@ -2566,7 +2567,13 @@ impl State {
             !step_stats_profiles[0].step_statistics.is_empty(),
             !step_stats_profiles[1].step_statistics.is_empty(),
         );
+        let target_capacity = std::iter::once(&song_lua_aft_capture_scratch)
+            .chain(&song_lua_background_aft_capture_scratch)
+            .chain(&song_lua_foreground_aft_capture_scratch)
+            .map(|scratch| scratch.slots.iter().filter(|slot| slot.is_some()).count())
+            .sum();
         let frame_scratch = GameplayFrameScratch {
+            render_targets: Vec::with_capacity(target_capacity),
             lobby_hud_cache: lobby_hud::LobbyHudCache::default(),
             lobby_hud_status_scratch: String::with_capacity(128),
             bpm_text,
@@ -2752,6 +2759,13 @@ impl State {
         player_idx: usize,
     ) -> &notefield::GameplayNotefieldPlan {
         &self.notefield_plans[player_idx]
+    }
+
+    /// Borrows this frame's offscreen passes in song-layer dependency order.
+    pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
+        self.frame_scratch
+            .as_ref()
+            .map_or(&[], |scratch| &scratch.render_targets)
     }
 
     #[inline(always)]
@@ -10027,7 +10041,7 @@ fn song_lua_proxy_actor_has_z(actor: &Actor) -> bool {
         }
         Actor::Camera { children, .. } => children.iter().any(song_lua_proxy_actor_has_z),
         Actor::Shadow { child, .. } => song_lua_proxy_actor_has_z(child),
-        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => false,
+        Actor::CameraPush { .. } | Actor::CameraPop => false,
     }
 }
 
@@ -10044,10 +10058,7 @@ fn song_lua_proxy_actor_z(actor: &Actor) -> i16 {
         | Actor::SharedTransform { z, .. }
         | Actor::RetainedFrame { z, .. } => *z,
         Actor::Shadow { child, .. } => song_lua_proxy_actor_z(child),
-        Actor::RenderTarget { .. }
-        | Actor::Camera { .. }
-        | Actor::CameraPush { .. }
-        | Actor::CameraPop => 0,
+        Actor::Camera { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
     }
 }
 
@@ -10160,7 +10171,7 @@ fn song_lua_proxy_zero_local_z(actor: &mut Actor) {
         }
         Actor::Camera { children, .. } => song_lua_proxy_local_children_in_place(children),
         Actor::Shadow { child, .. } => song_lua_proxy_zero_local_z(child),
-        Actor::RenderTarget { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -11901,7 +11912,6 @@ fn song_lua_style_capture_actor(
             blend: blend.or(actor_blend),
             visible,
         },
-        actor @ Actor::RenderTarget { .. } => actor,
         Actor::Camera {
             view_proj,
             children,
@@ -16517,6 +16527,7 @@ fn prepare_active_song_lua_layer(
 
 fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
+    targets: &mut Vec<deadlib_present::actors::RenderTarget>,
     overlays: &[SongLuaOverlayActor],
     order_cache: &mut SongLuaOverlayOrderCache,
     topology_index: &SongLuaOverlayTopologyIndex,
@@ -16665,7 +16676,7 @@ fn push_song_lua_layer_actors(
                 }) else {
                     continue;
                 };
-                out.push(Actor::RenderTarget {
+                targets.push(deadlib_present::actors::RenderTarget {
                     texture_handle,
                     size: target_size,
                     logical_size: size,
@@ -16759,6 +16770,7 @@ pub fn push_actors(
         .take()
         .expect("gameplay frame scratch is restored after every actor build");
     let GameplayFrameScratch {
+        render_targets,
         lobby_hud_cache,
         lobby_hud_status_scratch,
         bpm_text,
@@ -16806,6 +16818,7 @@ pub fn push_actors(
         player_field_camera_cache,
         presentation_skeleton,
     } = frame_scratch.as_mut();
+    render_targets.clear();
     presentation_skeleton.prepare();
     if let Some(scratch) = song_lua_proxy_actor_scratch.as_mut() {
         scratch.begin_frame();
@@ -17025,6 +17038,7 @@ pub fn push_actors(
         );
         push_song_lua_layer_actors(
             actors,
+            render_targets,
             &layer.overlays,
             order_cache,
             topology_index,
@@ -18802,6 +18816,7 @@ pub fn push_actors(
     if show_song_visuals {
         push_song_lua_layer_actors(
             actors,
+            render_targets,
             &song_lua_visuals.overlays,
             song_lua_overlay_order,
             &mut song_lua_proxy_request_index.topology,
@@ -18861,6 +18876,7 @@ pub fn push_actors(
         );
         push_song_lua_layer_actors(
             actors,
+            render_targets,
             &layer.overlays,
             order_cache,
             &mut topology_index.topology,
@@ -22295,8 +22311,10 @@ mod tests {
         let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
         let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
+        let mut targets = Vec::new();
         push_song_lua_layer_actors(
             &mut out,
+            &mut targets,
             &overlays,
             &mut order_cache,
             &mut topology_index,
@@ -23734,6 +23752,67 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_aft_passes_keep_capture_dependencies_ordered() {
+        let overlays = test_nested_alpha_covering_aft_overlays(2.0);
+        let states: Vec<_> = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect();
+        let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut captures = SongLuaAftCaptureScratch::new(&overlays, &topology);
+        let mut projected = song_lua_projected_mesh_scratch_for(&overlays);
+        let mut actors = Vec::new();
+        let mut targets = Vec::with_capacity(2);
+        push_song_lua_layer_actors(
+            &mut actors,
+            &mut targets,
+            &overlays,
+            &mut order,
+            &topology,
+            &states,
+            &states,
+            SongLuaOverlayState::default(),
+            &SongLuaScreenProxySources::default(),
+            None,
+            None,
+            &AssetManager::new(),
+            854.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut captures,
+            &mut projected,
+            SONG_LUA_FOREGROUND_DEPTH,
+        );
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].texture_handle, topology.aft_texture_handles[0]);
+        assert_eq!(targets[1].texture_handle, topology.aft_texture_handles[5]);
+        let frame = deadlib_present::compose::build_passes(
+            std::iter::once(ActorSegment::new(&actors)),
+            &targets,
+            [0.0; 4],
+            &deadlib_present::space::metrics_for_window(854, 480),
+            &deadlib_present::font::FontMap::default(),
+            0.0,
+            &mut deadlib_present::compose::TextLayoutCache::default(),
+            &mut deadlib_present::compose::ComposeScratch::default(),
+            &deadlib_present::texture::NullTextureContext,
+            None,
+        );
+        assert!(frame.render_targets[1].ops.iter().any(|op| matches!(op,
+            deadlib_render_core::DrawOp::Sprite(run) if
+                deadlib_render_core::render_target_base_handle(run.texture_handle) == targets[0].texture_handle)));
+        assert!(frame.ops.iter().any(|op| matches!(op,
+            deadlib_render_core::DrawOp::Sprite(run) if
+                deadlib_render_core::render_target_base_handle(run.texture_handle) == targets[1].texture_handle)));
+    }
+
+    #[test]
     fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
         deadlib_present::space::set_current_window_px(1600, 900);
         let mut overlays = vec![
@@ -23768,8 +23847,10 @@ mod tests {
         let mut aft_capture_scratch = SongLuaAftCaptureScratch::new(&overlays, &topology_index);
         let mut projected_mesh_scratch = song_lua_projected_mesh_scratch_for(&overlays);
 
+        let mut targets = Vec::new();
         push_song_lua_layer_actors(
             &mut out,
+            &mut targets,
             &overlays,
             &mut order_cache,
             &mut topology_index,
@@ -23793,18 +23874,16 @@ mod tests {
             SONG_LUA_FOREGROUND_DEPTH,
         );
 
-        assert_eq!(out.len(), 4);
-        let Actor::RenderTarget {
+        assert_eq!(out.len(), 3);
+        assert_eq!(targets.len(), 1);
+        let deadlib_present::actors::RenderTarget {
             texture_handle,
             size,
             logical_size,
             alpha,
             children,
             ..
-        } = &out[0]
-        else {
-            panic!("expected one offscreen AFT capture");
-        };
+        } = &targets[0];
         assert_eq!(*size, [854, 480]);
         assert_eq!(*logical_size, [854.0, 480.0]);
         assert!(!alpha);
@@ -23816,7 +23895,7 @@ mod tests {
         };
         assert_eq!(*blend, Some(BlendMode::Alpha));
         assert_eq!(*tint, [1.0; 4]);
-        for (index, actor) in out[1..].iter().enumerate() {
+        for (index, actor) in out.iter().enumerate() {
             let Actor::Sprite {
                 source: SpriteSource::RenderTarget { handle, .. },
                 ..

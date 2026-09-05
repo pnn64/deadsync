@@ -640,47 +640,9 @@ pub fn build_screen_segments_cached_with_scratch_and_texture_context_and_actor_r
     texture_ctx: &T,
     actor_resources: &actors::ActorResourceArena,
 ) -> RenderFrame {
-    build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+    build_passes(
         actor_segments.iter().copied(),
-        clear_color,
-        m,
-        fonts,
-        total_elapsed,
-        text_cache,
-        scratch,
-        texture_ctx,
-        actor_resources,
-    )
-}
-
-#[inline(always)]
-#[allow(clippy::too_many_arguments)]
-/// Composes a repeatable stream of ordered borrowed actor segments.
-///
-/// The iterator is cloned once to derive the exact working-set floor before
-/// the original stream is consumed. This avoids materializing a variable
-/// segment list when its owner can generate the ordered stream directly.
-pub fn build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources<
-    'a,
-    T,
-    I,
->(
-    actor_segments: I,
-    clear_color: [f32; 4],
-    m: &Metrics,
-    fonts: &font::FontMap,
-    total_elapsed: f32,
-    text_cache: &mut TextLayoutCache,
-    scratch: &mut ComposeScratch,
-    texture_ctx: &T,
-    actor_resources: &actors::ActorResourceArena,
-) -> RenderFrame
-where
-    T: TextureContext + ?Sized,
-    I: Clone + Iterator<Item = ActorSegment<'a>>,
-{
-    build_screen_segment_iter_cached_with_scratch_and_texture_context_impl(
-        actor_segments,
+        &[],
         clear_color,
         m,
         fonts,
@@ -1068,8 +1030,9 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     texture_ctx: &T,
     actor_resources: Option<&actors::ActorResourceArena>,
 ) -> RenderFrame {
-    build_screen_segments_cached_with_scratch_and_texture_context_impl(
-        &[ActorSegment::new(actors)],
+    build_passes(
+        std::iter::once(ActorSegment::new(actors)),
+        &[],
         clear_color,
         m,
         fonts,
@@ -1081,36 +1044,18 @@ fn build_screen_cached_with_scratch_and_texture_context_impl<T: TextureContext +
     )
 }
 
-#[allow(clippy::too_many_arguments)]
-fn build_screen_segments_cached_with_scratch_and_texture_context_impl<
-    T: TextureContext + ?Sized,
->(
-    actor_segments: &[ActorSegment<'_>],
-    clear_color: [f32; 4],
-    m: &Metrics,
-    fonts: &font::FontMap,
-    total_elapsed: f32,
-    text_cache: &mut TextLayoutCache,
-    scratch: &mut ComposeScratch,
-    texture_ctx: &T,
-    actor_resources: Option<&actors::ActorResourceArena>,
-) -> RenderFrame {
-    build_screen_segment_iter_cached_with_scratch_and_texture_context_impl(
-        actor_segments.iter().copied(),
-        clear_color,
-        m,
-        fonts,
-        total_elapsed,
-        text_cache,
-        scratch,
-        texture_ctx,
-        actor_resources,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn build_screen_segment_iter_cached_with_scratch_and_texture_context_impl<'a, T, I>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "composition receives explicit frame resources and retained scratch"
+)]
+/// Composes main actors and explicit offscreen passes in dependency order.
+///
+/// Targets execute in slice order before the main pass. Each target has its own
+/// coordinate system; main placement and camera scopes do not affect captures.
+/// The repeatable main iterator is cloned to size reusable composition storage.
+pub fn build_passes<'a, T, I>(
     actor_segments: I,
+    render_targets: &[actors::RenderTarget],
     clear_color: [f32; 4],
     m: &Metrics,
     fonts: &font::FontMap,
@@ -1125,7 +1070,7 @@ where
     I: Clone + Iterator<Item = ActorSegment<'a>>,
 {
     let mut render = build_single_pass_cached_with_scratch_and_texture_context_impl(
-        actor_segments.clone(),
+        actor_segments,
         clear_color,
         m,
         fonts,
@@ -1139,115 +1084,52 @@ where
 
     let mut target_frames = std::mem::take(&mut scratch.render_target_frames);
     target_frames.clear();
-    for segment in actor_segments {
-        let actors = match segment.source {
-            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
-                actors
-            }
-            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
+    for target in render_targets {
+        let index = target_frames.len();
+        if index == scratch.render_target_scratches.len() {
+            scratch
+                .render_target_scratches
+                .push(ComposeScratch::default());
+        }
+        let width = target.size[0].max(1);
+        let height = target.size[1].max(1);
+        let metrics = Metrics {
+            left: -0.5 * target.logical_size[0],
+            right: 0.5 * target.logical_size[0],
+            bottom: -0.5 * target.logical_size[1],
+            top: 0.5 * target.logical_size[1],
         };
-        visit_render_targets(actors, &mut |target| {
-            let index = target_frames.len();
-            if index == scratch.render_target_scratches.len() {
-                scratch
-                    .render_target_scratches
-                    .push(ComposeScratch::default());
-            }
-            let width = target.size[0].max(1);
-            let height = target.size[1].max(1);
-            let metrics = Metrics {
-                left: -0.5 * target.logical_size[0],
-                right: 0.5 * target.logical_size[0],
-                bottom: -0.5 * target.logical_size[1],
-                top: 0.5 * target.logical_size[1],
-            };
-            let target_scratch = &mut scratch.render_target_scratches[index];
-            let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
-                std::iter::once(ActorSegment::new(target.children)),
-                [0.0, 0.0, 0.0, 0.0],
-                &metrics,
-                fonts,
-                total_elapsed,
-                text_cache,
-                target_scratch,
-                texture_ctx,
-                actor_resources,
-                false,
-            );
-            debug_assert!(target_render.render_targets.is_empty());
-            target_frames.push(renderer::RenderTargetFrame {
-                texture_handle: target.texture_handle,
-                width,
-                height,
-                alpha: target.alpha,
-                depth: target.depth,
-                preserve: target.preserve,
-                cameras: target_render.cameras,
-                sprite_instances: target_render.sprite_instances,
-                mesh_vertices: target_render.mesh_vertices,
-                tmesh_instances: target_render.tmesh_instances,
-                tmesh_geometries: target_render.tmesh_geometries,
-                ops: target_render.ops,
-            });
+        let target_scratch = &mut scratch.render_target_scratches[index];
+        let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
+            std::iter::once(ActorSegment::new(&target.children)),
+            [0.0, 0.0, 0.0, 0.0],
+            &metrics,
+            fonts,
+            total_elapsed,
+            text_cache,
+            target_scratch,
+            texture_ctx,
+            actor_resources,
+            false,
+        );
+        debug_assert!(target_render.render_targets.is_empty());
+        target_frames.push(renderer::RenderTargetFrame {
+            texture_handle: target.texture_handle,
+            width,
+            height,
+            alpha: target.alpha,
+            depth: target.depth,
+            preserve: target.preserve,
+            cameras: target_render.cameras,
+            sprite_instances: target_render.sprite_instances,
+            mesh_vertices: target_render.mesh_vertices,
+            tmesh_instances: target_render.tmesh_instances,
+            tmesh_geometries: target_render.tmesh_geometries,
+            ops: target_render.ops,
         });
     }
     render.render_targets = target_frames;
     render
-}
-
-#[derive(Clone, Copy)]
-struct RenderTargetSpec<'a> {
-    texture_handle: renderer::TextureHandle,
-    size: [u32; 2],
-    logical_size: [f32; 2],
-    alpha: bool,
-    depth: bool,
-    preserve: bool,
-    children: &'a [actors::Actor],
-}
-
-fn visit_render_targets<'a>(
-    actors: &'a [actors::Actor],
-    visit: &mut impl FnMut(RenderTargetSpec<'a>),
-) {
-    for actor in actors {
-        match actor {
-            actors::Actor::RenderTarget {
-                texture_handle,
-                size,
-                logical_size,
-                alpha,
-                depth,
-                preserve,
-                children,
-            } => {
-                visit_render_targets(children, visit);
-                visit(RenderTargetSpec {
-                    texture_handle: *texture_handle,
-                    size: *size,
-                    logical_size: *logical_size,
-                    alpha: *alpha,
-                    depth: *depth,
-                    preserve: *preserve,
-                    children,
-                });
-            }
-            actors::Actor::Frame { children, .. } | actors::Actor::Camera { children, .. } => {
-                visit_render_targets(children, visit);
-            }
-            actors::Actor::SharedFrame { children, .. }
-            | actors::Actor::SharedTransform { children, .. } => {
-                visit_render_targets(children, visit);
-            }
-            actors::Actor::RetainedFrame { frame, .. } => {
-                visit_render_targets(frame.children(), visit);
-            }
-            actors::Actor::Shadow { child, .. } => {
-                visit_render_targets(std::slice::from_ref(child.as_ref()), visit);
-            }
-            _ => {}
-        }
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -7191,8 +7073,6 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
 
         actors::Actor::CameraPush { .. } | actors::Actor::CameraPop => {}
 
-        actors::Actor::RenderTarget { .. } => {}
-
         actors::Actor::Text {
             align,
             offset,
@@ -9980,8 +9860,8 @@ mod tests {
                 size: [64.0, 32.0],
             })
         };
-        let actors = vec![
-            Actor::RenderTarget {
+        let targets = vec![
+            crate::actors::RenderTarget {
                 texture_handle: screen,
                 size: [128, 64],
                 logical_size: [64.0, 32.0],
@@ -9990,7 +9870,7 @@ mod tests {
                 preserve: false,
                 children: Arc::from([test_sprite(SpriteSource::Solid)]),
             },
-            Actor::RenderTarget {
+            crate::actors::RenderTarget {
                 texture_handle: strips,
                 size: [128, 64],
                 logical_size: [64.0, 32.0],
@@ -9999,7 +9879,6 @@ mod tests {
                 preserve: false,
                 children: Arc::from([target_sprite(screen)]),
             },
-            target_sprite(strips),
         ];
         let metrics = Metrics {
             left: -32.0,
@@ -10011,14 +9890,18 @@ mod tests {
         let fonts = font::FontMap::default();
         let mut text_cache = TextLayoutCache::default();
         let mut scratch = ComposeScratch::default();
-        let frame = build_screen_cached_with_scratch(
-            &actors,
+        let actors = [target_sprite(strips)];
+        let frame = super::build_passes(
+            std::iter::once(super::ActorSegment::new(&actors)),
+            &targets,
             [0.0, 0.0, 0.0, 1.0],
             &metrics,
             &fonts,
             0.0,
             &mut text_cache,
             &mut scratch,
+            &super::NULL_TEXTURE_CONTEXT,
+            None,
         );
 
         assert_eq!(frame.render_targets.len(), 2);

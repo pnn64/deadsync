@@ -439,6 +439,11 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     uploads: TexturedMeshUploads,
+    // Render-thread, session-owned staging for the ordered offscreen workload.
+    // Retains peak capacity; no eviction or destruction until backend shutdown.
+    // Each frame resolves at most its geometry count and uploads its transient
+    // vertices once. Cache misses use the bounded GPU cache or transient storage.
+    offscreen_uploads: TexturedMeshUploads,
     offscreen_targets: Vec<OffscreenTarget>,
     cached_tmesh: DenseSlotMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
@@ -807,6 +812,7 @@ fn init(
         instance_buffer,
         instance_capacity,
         uploads: TexturedMeshUploads::with_capacity(tmesh_vertex_capacity, 64),
+        offscreen_uploads: TexturedMeshUploads::default(),
         offscreen_targets: Vec::with_capacity(4),
         cached_tmesh: DenseSlotMap::with_capacity(256),
         cached_tmesh_bytes: 0,
@@ -1439,6 +1445,8 @@ struct PassDrawData<'a> {
     ops: &'a [DrawOp],
     sprite_buffer_offset: u64,
     mesh_buffer_offset: u64,
+    tmesh_instance_offset: u64,
+    geometry_sources: &'a [deadlib_render_core::TexturedMeshSource],
     camera_binding: CameraBinding,
 }
 
@@ -1459,7 +1467,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     pass: &mut wgpu::RenderPass<'pass>,
     state: &'pass State,
     data: PassDrawData<'pass>,
-    uploads: &'pass TexturedMeshUploads,
     textures: &'pass T,
     write_alpha: bool,
 ) -> u32 {
@@ -1523,6 +1530,8 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     last_kind = Some(0);
                     last_blend = None;
                     if matches!(state.proj, ProjState::Immediates) {
+                        // Pipeline layout changes clear wgpu's immediate storage;
+                        // uniform projection bindings remain valid.
                         bindings.reset_camera();
                     }
                     tmesh_buffer_cache.reset();
@@ -1608,7 +1617,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 vertices_drawn += u64::from(run.vertex_count);
             }
             DrawOp::TexturedMesh(run) => {
-                let Some(source) = uploads.source(run.geometry) else {
+                let Some(source) = data.geometry_sources.get(run.geometry as usize).copied() else {
                     continue;
                 };
                 if source.vertex_count() == 0 || run.instance_count == 0 {
@@ -1619,7 +1628,12 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 };
                 if last_kind != Some(2) {
                     if bindings.instance_required(InstanceBinding::TexturedMesh) {
-                        pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
+                        pass.set_vertex_buffer(
+                            1,
+                            state
+                                .tmesh_instance_buffer
+                                .slice(data.tmesh_instance_offset..),
+                        );
                     }
                     last_kind = Some(2);
                     last_blend = None;
@@ -1868,6 +1882,13 @@ pub fn draw(
             )
         });
         stats.storage = draw_storage_stats(frame, Some(uploads));
+        // Report both retained staging stores; neither shrinks on live frames.
+        stats.storage.capacities[1] = stats.storage.capacities[1].saturating_add(
+            clamp_vertex_count(state.offscreen_uploads.vertices.capacity() as u64),
+        );
+        stats.storage.capacities[4] = stats.storage.capacities[4].saturating_add(
+            clamp_vertex_count(state.offscreen_uploads.sources.capacity() as u64),
+        );
     }
     stats.backend_prepare_us = stats
         .backend_prepare_us
@@ -1947,7 +1968,7 @@ pub fn draw(
         .saturating_add(elapsed_us_since(backend_setup_started));
 
     let backend_record_started = Instant::now();
-    let mut vertices_drawn = 0u64;
+    let vertices_drawn;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
@@ -1978,198 +1999,21 @@ pub fn draw(
             multiview_mask: None,
         });
 
-        let camera_count = frame.cameras.len();
-        let texture_group = match state.proj {
-            ProjState::Immediates => 0,
-            ProjState::Uniform { .. } => 1,
-        };
-
-        let mut last_kind: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
-        let mut last_blend: Option<BlendMode> = None;
-        let mut last_sprite_yuv = None;
-        let mut bindings = DrawBindingCache::default();
-        let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-        let mut last_tmesh_depth_test: Option<bool> = None;
-        for op in &frame.ops {
-            match op {
-                DrawOp::Sprite(run) => {
-                    let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
-                        continue;
-                    };
-                    if last_kind != Some(0) {
-                        pass.set_vertex_buffer(0, state.vertex_buffer.slice(..));
-                        if bindings.instance_required(InstanceBinding::Sprite) {
-                            pass.set_vertex_buffer(1, state.instance_buffer.slice(..));
-                        }
-                        if bindings.index_required() {
-                            pass.set_index_buffer(
-                                state.index_buffer.slice(..),
-                                wgpu::IndexFormat::Uint16,
-                            );
-                        }
-                        last_kind = Some(0);
-                        last_blend = None;
-                        if matches!(state.proj, ProjState::Immediates) {
-                            // wgpu clears immediate storage when the pipeline
-                            // layout changes; uniform bind groups remain valid.
-                            bindings.reset_camera();
-                        }
-                        tmesh_buffer_cache.reset();
-                        last_tmesh_depth_test = None;
-                    }
-                    let yuv = tex.images.is_yuv420();
-                    if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
-                        pass.set_pipeline(if yuv {
-                            state.yuv_pipelines.get(run.blend)
-                        } else {
-                            state.pipelines.get(run.blend)
-                        });
-                        if last_sprite_yuv.is_some_and(|last| last != yuv)
-                            && matches!(state.proj, ProjState::Immediates)
-                        {
-                            bindings.reset_camera();
-                        }
-                        last_blend = Some(run.blend);
-                        last_sprite_yuv = Some(yuv);
-                    }
-                    if bindings.camera_required(run.camera) {
-                        set_camera(
-                            &mut pass,
-                            &state.proj,
-                            run.camera,
-                            camera_count,
-                            &frame.cameras,
-                            state.projection,
-                            CameraBinding::MAIN,
-                        );
-                    }
-                    if bindings.texture_required(texture_binding_id(tex, run.texture_handle), false)
-                    {
-                        pass.set_bind_group(
-                            texture_group,
-                            Some(texture_bind_group(tex, run.texture_handle, false)),
-                            &[],
-                        );
-                    }
-                    pass.draw_indexed(
-                        0..state.index_count,
-                        0,
-                        run.instance_start..(run.instance_start + run.instance_count),
-                    );
-                    vertices_drawn += 4 * u64::from(run.instance_count);
-                }
-                DrawOp::Mesh(run) => {
-                    if run.vertex_count == 0 {
-                        continue;
-                    }
-                    if last_kind != Some(1) {
-                        pass.set_vertex_buffer(0, state.mesh_vertex_buffer.slice(..));
-                        last_kind = Some(1);
-                        last_blend = None;
-                        last_sprite_yuv = None;
-                        if matches!(state.proj, ProjState::Immediates) {
-                            bindings.reset_camera();
-                        }
-                        tmesh_buffer_cache.reset();
-                        last_tmesh_depth_test = None;
-                    }
-                    if last_blend != Some(run.blend) {
-                        pass.set_pipeline(state.mesh_pipelines.get(run.blend));
-                        last_blend = Some(run.blend);
-                    }
-                    if bindings.camera_required(run.camera) {
-                        set_camera(
-                            &mut pass,
-                            &state.proj,
-                            run.camera,
-                            camera_count,
-                            &frame.cameras,
-                            state.projection,
-                            CameraBinding::MAIN,
-                        );
-                    }
-                    pass.draw(
-                        run.vertex_start..(run.vertex_start + run.vertex_count),
-                        0..1,
-                    );
-                    vertices_drawn += u64::from(run.vertex_count);
-                }
-                DrawOp::TexturedMesh(run) => {
-                    let Some(source) = state.uploads.source(run.geometry) else {
-                        continue;
-                    };
-                    if source.vertex_count() == 0 || run.instance_count == 0 {
-                        continue;
-                    }
-                    let Some(tex) = resolved_texture(state, textures, run.texture_handle) else {
-                        continue;
-                    };
-                    if last_kind != Some(2) {
-                        if bindings.instance_required(InstanceBinding::TexturedMesh) {
-                            pass.set_vertex_buffer(1, state.tmesh_instance_buffer.slice(..));
-                        }
-                        last_kind = Some(2);
-                        last_blend = None;
-                        last_sprite_yuv = None;
-                        if matches!(state.proj, ProjState::Immediates) {
-                            bindings.reset_camera();
-                        }
-                        tmesh_buffer_cache.reset();
-                        last_tmesh_depth_test = None;
-                    }
-                    if last_blend != Some(run.blend)
-                        || last_tmesh_depth_test != Some(run.depth_test)
-                    {
-                        pass.set_pipeline(if run.depth_test {
-                            state.tmesh_depth_pipelines.get(run.blend)
-                        } else {
-                            state.tmesh_pipelines.get(run.blend)
-                        });
-                        last_blend = Some(run.blend);
-                        last_tmesh_depth_test = Some(run.depth_test);
-                    }
-                    if bindings.camera_required(run.camera) {
-                        set_camera(
-                            &mut pass,
-                            &state.proj,
-                            run.camera,
-                            camera_count,
-                            &frame.cameras,
-                            state.projection,
-                            CameraBinding::MAIN,
-                        );
-                    }
-                    if bindings.texture_required(texture_binding_id(tex, run.texture_handle), true)
-                    {
-                        pass.set_bind_group(
-                            texture_group,
-                            Some(texture_bind_group(tex, run.texture_handle, true)),
-                            &[],
-                        );
-                    }
-                    if tmesh_buffer_cache.update_required(source) {
-                        if let Some(buffer_key) = source.buffer_key() {
-                            let Some(entry) = state.cached_tmesh.get_slot(buffer_key) else {
-                                tmesh_buffer_cache.reset();
-                                continue;
-                            };
-                            pass.set_vertex_buffer(0, entry.buffer.slice(..));
-                        } else {
-                            pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
-                        }
-                    }
-                    let draw_start = source.vertex_start();
-                    let draw_end = draw_start + source.vertex_count();
-                    pass.draw(
-                        draw_start..draw_end,
-                        run.instance_start..(run.instance_start + run.instance_count),
-                    );
-                    let tri_count = source.vertex_count() / 3;
-                    vertices_drawn += u64::from(tri_count) * u64::from(run.instance_count);
-                }
-            }
-        }
-        drop(pass);
+        vertices_drawn = record_draw_ops(
+            &mut pass,
+            state,
+            PassDrawData {
+                cameras: &frame.cameras,
+                ops: &frame.ops,
+                sprite_buffer_offset: 0,
+                mesh_buffer_offset: 0,
+                tmesh_instance_offset: 0,
+                geometry_sources: &state.uploads.sources,
+                camera_binding: CameraBinding::MAIN,
+            },
+            textures,
+            false,
+        );
     }
 
     let screenshot_readback = if state.screenshot_requested {
@@ -2357,77 +2201,49 @@ pub fn draw(
         reconfigure_surface(state);
     }
 
-    stats.vertices = stats
-        .vertices
-        .saturating_add(clamp_vertex_count(vertices_drawn));
+    stats.vertices = stats.vertices.saturating_add(vertices_drawn);
     Ok(stats)
 }
 
-fn upload_pass_data(
-    state: &mut State,
-    cameras: &[Matrix4],
-    sprite_instances: &[deadlib_render_core::SpriteInstanceRaw],
-    mesh_vertices: &[deadlib_render_core::MeshVertex],
-    tmesh_instances: &[deadlib_render_core::TexturedMeshInstanceRaw],
-) {
-    ensure_instance_capacity(state, sprite_instances.len());
-    if !sprite_instances.is_empty() {
-        state
-            .queue
-            .write_buffer(&state.instance_buffer, 0, cast_slice(sprite_instances));
-    }
-    ensure_mesh_vertex_capacity(state, mesh_vertices.len());
-    if !mesh_vertices.is_empty() {
-        state
-            .queue
-            .write_buffer(&state.mesh_vertex_buffer, 0, cast_slice(mesh_vertices));
-    }
-    let tmesh_len = state.uploads.vertices.len();
-    ensure_tmesh_vertex_capacity(state, tmesh_len);
-    if tmesh_len > 0 {
-        state.queue.write_buffer(
-            &state.tmesh_vertex_buffer,
-            0,
-            cast_slice(state.uploads.vertices.as_slice()),
-        );
-    }
-    ensure_tmesh_instance_capacity(state, tmesh_instances.len());
-    if !tmesh_instances.is_empty() {
-        state
-            .queue
-            .write_buffer(&state.tmesh_instance_buffer, 0, cast_slice(tmesh_instances));
-    }
-    upload_projections(state, cameras);
-}
-
+/// Record the complete AFT workload in one command buffer. Disjoint slices
+/// of the retained vertex and projection buffers let dependent targets execute
+/// in order without a queue submission between every target. The buffers are
+/// session-owned and grow only when a larger graph first appears; steady
+/// gameplay performs bounded writes over the current frame and one submit.
 fn draw_offscreen_targets(
     state: &mut State,
     frame: &RenderFrame,
     textures: &impl TextureLookup,
     stats: &mut DrawStats,
 ) -> u32 {
-    if frame.render_targets.len() > 1
-        && frame
+    if frame.render_targets.is_empty() {
+        return 0;
+    }
+    let prepare_started = Instant::now();
+    resolve_textured_mesh_geometries(
+        frame
             .render_targets
             .iter()
-            .all(|target| target.tmesh_geometries.is_empty() && target.tmesh_instances.is_empty())
-    {
-        return draw_offscreen_targets_batched(state, frame, textures, stats);
-    }
-    draw_offscreen_targets_serial(state, frame, textures, stats)
-}
-
-/// Record a sprite/mesh-only AFT graph in one command buffer. Disjoint slices
-/// of the retained vertex and projection buffers let dependent targets execute
-/// in order without a queue submission between every target. The buffers are
-/// session-owned and grow only when a larger graph first appears; steady
-/// gameplay performs bounded writes over the current frame and one submit.
-fn draw_offscreen_targets_batched(
-    state: &mut State,
-    frame: &RenderFrame,
-    textures: &impl TextureLookup,
-    stats: &mut DrawStats,
-) -> u32 {
+            .flat_map(|target| &target.tmesh_geometries),
+        &mut state.offscreen_uploads,
+        |key, vertices| {
+            ensure_cached_tmesh(
+                &state.device,
+                &mut state.cached_tmesh,
+                &mut state.cached_tmesh_bytes,
+                key,
+                vertices,
+            )
+        },
+    );
+    stats.backend_prepare_us = stats
+        .backend_prepare_us
+        .saturating_add(elapsed_us(prepare_started.elapsed()));
+    let total_tmesh_instances = frame
+        .render_targets
+        .iter()
+        .map(|target| target.tmesh_instances.len())
+        .sum();
     let total_instances = frame
         .render_targets
         .iter()
@@ -2442,9 +2258,19 @@ fn draw_offscreen_targets_batched(
     let upload_started = Instant::now();
     ensure_instance_capacity(state, total_instances);
     ensure_mesh_vertex_capacity(state, total_mesh_vertices);
+    ensure_tmesh_instance_capacity(state, total_tmesh_instances);
+    ensure_tmesh_vertex_capacity(state, state.offscreen_uploads.vertices.len());
+    if !state.offscreen_uploads.vertices.is_empty() {
+        state.queue.write_buffer(
+            &state.tmesh_vertex_buffer,
+            0,
+            cast_slice(&state.offscreen_uploads.vertices),
+        );
+    }
     upload_offscreen_projections(state, frame);
     let mut instance_start = 0usize;
     let mut mesh_start = 0usize;
+    let mut tmesh_instance_start = 0usize;
     for target in &frame.render_targets {
         if !target.sprite_instances.is_empty() {
             state.queue.write_buffer(
@@ -2460,6 +2286,14 @@ fn draw_offscreen_targets_batched(
                 cast_slice(target.mesh_vertices.as_slice()),
             );
         }
+        if !target.tmesh_instances.is_empty() {
+            state.queue.write_buffer(
+                &state.tmesh_instance_buffer,
+                (tmesh_instance_start * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
+                cast_slice(&target.tmesh_instances),
+            );
+        }
+        tmesh_instance_start += target.tmesh_instances.len();
         instance_start += target.sprite_instances.len();
         mesh_start += target.mesh_vertices.len();
     }
@@ -2481,7 +2315,9 @@ fn draw_offscreen_targets_batched(
     let mut vertices = 0u32;
     let mut instance_start = 0usize;
     let mut mesh_start = 0usize;
+    let mut tmesh_instance_start = 0usize;
     let mut camera_start = 0usize;
+    let mut geometry_start = 0usize;
     for (index, target_frame) in frame.render_targets.iter().enumerate() {
         let target = &state.offscreen_targets[index];
         let color_view = target
@@ -2530,15 +2366,23 @@ fn draw_offscreen_targets_batched(
                 sprite_buffer_offset: (instance_start * mem::size_of::<InstanceRaw>()) as u64,
                 mesh_buffer_offset: (mesh_start * mem::size_of::<deadlib_render_core::MeshVertex>())
                     as u64,
+                tmesh_instance_offset: (tmesh_instance_start
+                    * mem::size_of::<TexturedMeshInstanceRaw>())
+                    as u64,
+                // Transient sources already address the combined vertex upload;
+                // cached sources keep their own buffer and start at zero.
+                geometry_sources: &state.offscreen_uploads.sources
+                    [geometry_start..geometry_start + target_frame.tmesh_geometries.len()],
                 camera_binding: CameraBinding {
                     buffer_start: camera_start,
                     use_offscreen_proj: true,
                 },
             },
-            &state.uploads,
             textures,
             target_frame.alpha,
         ));
+        geometry_start += target_frame.tmesh_geometries.len();
+        tmesh_instance_start += target_frame.tmesh_instances.len();
         instance_start += target_frame.sprite_instances.len();
         mesh_start += target_frame.mesh_vertices.len();
         camera_start += target_frame.cameras.len() + 1;
@@ -2558,128 +2402,6 @@ fn draw_offscreen_targets_batched(
         .take(frame.render_targets.len())
     {
         target.initialized = true;
-    }
-    vertices
-}
-
-fn draw_offscreen_targets_serial(
-    state: &mut State,
-    frame: &RenderFrame,
-    textures: &impl TextureLookup,
-    stats: &mut DrawStats,
-) -> u32 {
-    let mut vertices = 0u32;
-    for (index, target_frame) in frame.render_targets.iter().enumerate() {
-        let prepare_started = Instant::now();
-        {
-            let uploads = &mut state.uploads;
-            let device = &state.device;
-            let cached_tmesh = &mut state.cached_tmesh;
-            let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-            resolve_textured_mesh_geometries(
-                &target_frame.tmesh_geometries,
-                uploads,
-                |cache_key, geometry| {
-                    ensure_cached_tmesh(
-                        device,
-                        cached_tmesh,
-                        cached_tmesh_bytes,
-                        cache_key,
-                        geometry,
-                    )
-                },
-            );
-        }
-        stats.backend_prepare_us = stats
-            .backend_prepare_us
-            .saturating_add(elapsed_us(prepare_started.elapsed()));
-
-        let upload_started = Instant::now();
-        upload_pass_data(
-            state,
-            &target_frame.cameras,
-            &target_frame.sprite_instances,
-            &target_frame.mesh_vertices,
-            &target_frame.tmesh_instances,
-        );
-        stats.backend_upload_us = stats
-            .backend_upload_us
-            .saturating_add(elapsed_us(upload_started.elapsed()));
-
-        let setup_started = Instant::now();
-        let mut encoder = state
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("wgpu actor-frame texture encoder"),
-            });
-        stats.backend_setup_us = stats
-            .backend_setup_us
-            .saturating_add(elapsed_us(setup_started.elapsed()));
-
-        let record_started = Instant::now();
-        {
-            let target = &state.offscreen_targets[index];
-            let color_view = target
-                .texture
-                .rgba_view()
-                .expect("offscreen targets are RGBA textures");
-            let color_load = if target_frame.preserve && target.initialized {
-                wgpu::LoadOp::Load
-            } else {
-                wgpu::LoadOp::Clear(wgpu::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: if target_frame.alpha { 0.0 } else { 1.0 },
-                })
-            };
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("wgpu actor-frame texture pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: color_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: color_load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &target.depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-            vertices = vertices.saturating_add(record_draw_ops(
-                &mut pass,
-                state,
-                PassDrawData {
-                    cameras: &target_frame.cameras,
-                    ops: &target_frame.ops,
-                    sprite_buffer_offset: 0,
-                    mesh_buffer_offset: 0,
-                    camera_binding: CameraBinding::MAIN,
-                },
-                &state.uploads,
-                textures,
-                target_frame.alpha,
-            ));
-        }
-        stats.backend_record_us = stats
-            .backend_record_us
-            .saturating_add(elapsed_us(record_started.elapsed()));
-        let submit_started = Instant::now();
-        state.queue.submit(Some(encoder.finish()));
-        stats.submit_us = stats
-            .submit_us
-            .saturating_add(elapsed_us(submit_started.elapsed()));
-        state.offscreen_targets[index].initialized = true;
     }
     vertices
 }

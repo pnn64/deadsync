@@ -926,17 +926,18 @@ fn prewarm_gameplay_text_layout_cache(
         simply_love_visual_policy(config),
     );
     let actor_segments = segments.segments(state, actor_scratch);
-    let mut render = compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
-            actor_segments,
-            [0.0, 0.0, 0.0, 1.0],
-            metrics,
-            fonts,
-            0.0,
-            cache,
-            compose_scratch,
-            &PRESENT_TEXTURE_CONTEXT,
-            state.actor_resources(),
-        );
+    let mut render = compose::build_passes(
+        actor_segments,
+        state.render_targets(),
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        fonts,
+        0.0,
+        cache,
+        compose_scratch,
+        &PRESENT_TEXTURE_CONTEXT,
+        Some(state.actor_resources()),
+    );
     compose_scratch.recycle_frame(&mut render);
     actor_scratch.clear();
     gameplay::prewarm_text_layout(cache, compose_scratch, fonts, state);
@@ -4094,45 +4095,24 @@ impl App {
                     target: "deadsync_shell::frame_pacing_trace",
                     log::Level::Trace
                 ));
-        let actor_resources = match self.state.screens.current_screen {
-            CurrentScreen::Gameplay => self
-                .state
-                .screens
-                .gameplay_state
-                .as_ref()
-                .map(gameplay::State::actor_resources),
+        let gameplay_state = match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
             CurrentScreen::Practice => self
                 .state
                 .screens
                 .practice_state
                 .as_ref()
-                .map(|state| state.gameplay.actor_resources()),
+                .map(|state| &state.gameplay),
             _ => None,
         };
-        let segmented_actors =
-            gameplay_segments
-                .as_ref()
-                .map(|segments| match self.state.screens.current_screen {
-                    CurrentScreen::Gameplay => segments.segments(
-                        self.state
-                            .screens
-                            .gameplay_state
-                            .as_ref()
-                            .expect("gameplay segments require gameplay state"),
-                        &actors,
-                    ),
-                    CurrentScreen::Practice => segments.segments(
-                        &self
-                            .state
-                            .screens
-                            .practice_state
-                            .as_ref()
-                            .expect("gameplay segments require practice state")
-                            .gameplay,
-                        &actors,
-                    ),
-                    _ => unreachable!("only gameplay screens produce actor segments"),
-                });
+        let actor_resources = gameplay_state.map(gameplay::State::actor_resources);
+        let render_targets = gameplay_state.map_or(&[][..], gameplay::State::render_targets);
+        let segmented_actors = gameplay_segments.as_ref().map(|segments| {
+            segments.segments(
+                gameplay_state.expect("gameplay segments require gameplay state"),
+                &actors,
+            )
+        });
         let (mut screen, text_layout, compose_frame) = if uses_gameplay_present {
             let text_layout_cache = &mut self.gameplay_text_layout_cache;
             let compose_scratch = &mut self.gameplay_compose_scratch;
@@ -4141,8 +4121,9 @@ impl App {
             let screen = if let (Some(actor_segments), Some(actor_resources)) =
                 (segmented_actors.as_ref(), actor_resources)
             {
-                compose::build_screen_segment_iter_cached_with_scratch_and_texture_context_and_actor_resources(
+                compose::build_passes(
                     (*actor_segments).clone(),
+                    render_targets,
                     clear_color,
                     &self.state.shell.metrics,
                     fonts,
@@ -4150,11 +4131,12 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                    actor_resources,
+                    Some(actor_resources),
                 )
             } else if let Some(actor_resources) = actor_resources {
-                compose::build_screen_cached_with_scratch_and_texture_context_and_actor_resources(
-                    &actors,
+                compose::build_passes(
+                    std::iter::once(compose::ActorSegment::new(&actors)),
+                    render_targets,
                     clear_color,
                     &self.state.shell.metrics,
                     fonts,
@@ -4162,7 +4144,7 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                    actor_resources,
+                    Some(actor_resources),
                 )
             } else {
                 compose::build_screen_cached_with_scratch_and_texture_context(

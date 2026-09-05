@@ -27,8 +27,8 @@ pub struct RenderFrame {
 /// One backend-neutral offscreen render pass.
 ///
 /// The render thread owns backend resources for `texture_handle`; the screen
-/// owns the logical target for its lifetime. Capacity is bounded by the actor
-/// tree's render-target count and warmed during screen composition. A backend
+/// owns the logical target for its lifetime. Capacity is bounded by the
+/// producer's render-target count and warmed during screen composition. A backend
 /// miss creates or resizes one target, while steady-state frames reuse it.
 /// Targets are never scan-pruned during gameplay and are destroyed with the
 /// backend/session cache.
@@ -230,19 +230,25 @@ pub fn resolve_textured_meshes<EnsureCached>(
     resolve_textured_mesh_geometries(&frame.tmesh_geometries, uploads, ensure_cached);
 }
 
-pub fn resolve_textured_mesh_geometries<EnsureCached>(
-    geometries: &[TexturedMeshGeometry],
+/// Resolves ordered geometry, including concatenated passes, into disjoint upload ranges.
+///
+/// Transient vertex offsets and source indices refer to the complete input stream.
+pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
+    geometries: I,
     uploads: &mut TexturedMeshUploads,
     mut ensure_cached: EnsureCached,
 ) where
+    I: IntoIterator<Item = &'a TexturedMeshGeometry>,
+    I::IntoIter: Clone,
     EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> Option<u64>,
 {
-    let geometry_count = geometries.len();
+    let geometries = geometries.into_iter();
+    let geometry_count = geometries.clone().count();
     if uploads.all_cached
         && uploads.sources.len() == geometry_count
         && uploads.cache_keys.len() == geometry_count
         && geometries
-            .iter()
+            .clone()
             .zip(&uploads.cache_keys)
             .zip(&uploads.sources)
             .all(|((geometry, cache_key), source)| {
@@ -265,7 +271,6 @@ pub fn resolve_textured_mesh_geometries<EnsureCached>(
         .resize(geometry_count, TexturedMeshSource::transient(0, 0));
     uploads.all_cached = true;
     for ((geometry, cache_key), source) in geometries
-        .iter()
         .zip(&mut uploads.cache_keys)
         .zip(&mut uploads.sources)
     {
