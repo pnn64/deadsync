@@ -8,7 +8,7 @@
 //! crossfading from the previous window into the new one.
 //!
 //! Architecture: the decoder pushes interleaved `i16` source frames in via
-//! [`SolaStretcher::push_interleaved_i16`]; the resampler pulls planar `f32`
+//! [`SolaStretcher::push_interleaved_i16`]; the next stage pulls planar `f32`
 //! stretched frames out via [`SolaStretcher::pull`]. Source frames stay buffered
 //! until the SOLA algorithm has slid past them.
 //!
@@ -280,8 +280,7 @@ impl SolaStretcher {
     /// Signal that no more source will be pushed. The next [`pull`] calls drain
     /// the final partial window instead of stalling for a full search window,
     /// mirroring upstream's EOF branch in `RageSoundReader_SpeedChange::Step`.
-    /// Cleared by [`reset`]; only meaningful when the stretcher is being torn
-    /// down (a looping decoder keeps feeding and never calls this).
+    /// Cleared by [`reset`] before decoding another loop iteration.
     pub(super) const fn finish(&mut self) {
         self.finishing = true;
     }

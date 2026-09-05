@@ -3,6 +3,7 @@
 mod clock;
 mod mix;
 mod music_map;
+mod processing;
 mod runtime;
 mod sfx_cache;
 mod stream_runtime;
@@ -22,7 +23,7 @@ use deadsync_audio_decode::resample::{
 use log::{debug, error, warn};
 use rubato::audioadapter::Adapter;
 use rubato::audioadapter_buffers::direct::{SequentialSliceOfSlices, SequentialSliceOfVecs};
-use rubato::{Adjustable, Async, FixedAsync, ResampleError, Resampler, ResamplerConstructionError};
+use rubato::{Async, FixedAsync, ResampleError, Resampler, ResamplerConstructionError};
 use smallvec::SmallVec;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,6 +35,7 @@ use std::time::Duration;
 pub use clock::timing_diag_enabled;
 pub use mix::{AudioMixLevels, audio_mix_levels, set_audio_mix_levels};
 pub use music_map::MusicClock;
+use processing::MusicStages;
 #[cfg(target_os = "linux")]
 pub use runtime::available_linux_backends;
 pub use runtime::{
@@ -43,7 +45,6 @@ pub use runtime::{
 };
 pub use sfx_cache::SfxId;
 pub use stream_runtime::{MusicStreamRuntime, StreamCommand};
-use stretch::SolaStretcher;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Cut {
@@ -597,14 +598,7 @@ fn music_decoder_thread_loop(
         }
     }
 
-    let mut resampler: Option<Async<f32>> = None;
-    let mut resampler_lead_frames: usize;
-    let mut resampler_rate = f32::NAN;
-    let mut resampler_pp = false;
-    let mut resample_out: Option<Vec<Vec<f32>>> = None;
-    let mut resample_in: Option<Vec<Vec<f32>>> = None;
-    let mut in_planar: Option<PlanarAccum> = None;
-    let mut sola: Option<SolaStretcher> = None;
+    let mut stages = MusicStages::new(in_ch, in_hz, out_hz);
     let mut out_tmp = Vec::with_capacity(OUT_FRAMES_PER_CALL * out_ch);
     let mut pkt_buf = Vec::new();
 
@@ -620,58 +614,18 @@ fn music_decoder_thread_loop(
         } else {
             current_rate_f32 = current_rate_f32.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
         }
-        let mut current_pp =
-            preserve_pitch.load(Ordering::Acquire) && (current_rate_f32 - 1.0).abs() > RATE_EPS;
-        let direct_audio = in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= RATE_EPS;
-        let mut ratio = if current_pp {
-            f64::from(out_hz) / f64::from(in_hz)
-        } else {
-            (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32)
-        };
-        if direct_audio {
-            resampler = None;
-            resampler_rate = f32::NAN;
-            resampler_pp = false;
-            resample_in = None;
-            resample_out = None;
-            in_planar = None;
-            sola = None;
-        } else if resampler.is_some()
-            && resample_in.is_some()
-            && resample_out.is_some()
-            && in_planar.is_some()
-            && resampler_rate == current_rate_f32
-            && resampler_pp == current_pp
-        {
-            let resampler = resampler.as_mut().expect("resampler exists");
-            resampler.reset();
-            resampler.set_resample_ratio(ratio, false)?;
-            in_planar.as_mut().expect("planar input exists").clear();
-            if let Some(s) = sola.as_mut() {
-                s.set_speed_ratio(current_rate_f32);
-                s.reset();
-            }
-        } else {
-            let new_resampler = new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, in_ch)?;
-            resample_in = Some(vec![vec![0.0; new_resampler.input_frames_max()]; in_ch]);
-            resample_out = Some(vec![vec![0.0; new_resampler.output_frames_max()]; in_ch]);
-            in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
-            resampler = Some(new_resampler);
-            resampler_rate = current_rate_f32;
-            resampler_pp = current_pp;
-            sola = if current_pp {
-                let mut s = SolaStretcher::new(in_ch, in_hz);
-                s.set_speed_ratio(current_rate_f32);
-                Some(s)
+        let mut current_pp = preserve_pitch.load(Ordering::Acquire);
+        stages.set_rate(current_rate_f32, current_pp)?;
+        stages.reset();
+        // SOLA emits its initial window at source spacing, so seek preroll
+        // only scales with sample-rate conversion while stretching is active.
+        let output_ratio = f64::from(out_hz)
+            / f64::from(in_hz)
+            / if current_pp && (current_rate_f32 - 1.0).abs() > RATE_EPS {
+                1.0
             } else {
-                None
+                f64::from(current_rate_f32)
             };
-        }
-        resampler_lead_frames = if direct_audio {
-            0
-        } else {
-            compat_lead_frames(ratio)
-        };
 
         let start_frame_f = (cut.start_sec * f64::from(in_hz)).max(0.0);
         let start_floor = start_frame_f.floor() as u64;
@@ -703,7 +657,7 @@ fn music_decoder_thread_loop(
 
         let preroll_in_frames = seek_preroll_in_frames(seek_ok, start_floor, seek_start_frame);
         let mut preroll_out_frames: u64 = if preroll_in_frames > 0 {
-            (preroll_in_frames as f64 * ratio).ceil() as u64
+            (preroll_in_frames as f64 * output_ratio).ceil() as u64
         } else {
             0
         };
@@ -767,14 +721,15 @@ fn music_decoder_thread_loop(
             if stop.load(Ordering::Acquire) {
                 break 'main_loop;
             }
-            if !reader.read_dec_packet_into(&mut pkt_buf)? {
-                break;
-            }
-            if pkt_buf.is_empty() {
+            let eof = !reader.read_dec_packet_into(&mut pkt_buf)?;
+            if eof {
+                pkt_buf.clear();
+                stages.finish();
+            } else if pkt_buf.is_empty() {
                 continue;
             }
             let mut slice = &pkt_buf[..];
-            if to_drop_in > 0 {
+            if !eof && to_drop_in > 0 {
                 let pkt_frames = (pkt_buf.len() / in_ch) as u64;
                 if to_drop_in >= pkt_frames {
                     to_drop_in -= pkt_frames;
@@ -784,74 +739,27 @@ fn music_decoder_thread_loop(
                 slice = &pkt_buf[drop_samples..];
                 to_drop_in = 0;
             }
-            // Load the generation before the settings it tags — see note above.
-            output_generation = generation.load(Ordering::Acquire);
-            let desired_rate = f32::from_bits(rate_bits.load(Ordering::Acquire));
-            let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
-                desired_rate
-            } else {
-                1.0
-            };
-            let desired_pp_raw = preserve_pitch.load(Ordering::Acquire);
-            let desired_pp_active = desired_pp_raw && (desired_rate - 1.0).abs() > RATE_EPS;
-            let rate_changed = (desired_rate - current_rate_f32).abs() > RATE_EPS;
-            let pp_changed = desired_pp_active != current_pp;
-            if rate_changed || pp_changed {
-                desired_rate = desired_rate.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
-                current_rate_f32 = desired_rate;
-                current_pp = desired_pp_raw && (desired_rate - 1.0).abs() > RATE_EPS;
-                ratio = if current_pp {
-                    f64::from(out_hz) / f64::from(in_hz)
+            if !eof {
+                // Load the generation before the settings it tags — see note above.
+                output_generation = generation.load(Ordering::Acquire);
+                let desired_rate = f32::from_bits(rate_bits.load(Ordering::Acquire));
+                let mut desired_rate = if desired_rate.is_finite() && desired_rate > 0.0 {
+                    desired_rate
                 } else {
-                    (f64::from(out_hz) / f64::from(in_hz)) / f64::from(current_rate_f32)
+                    1.0
                 };
-                if in_hz == out_hz && (current_rate_f32 - 1.0).abs() <= RATE_EPS {
-                    resampler = None;
-                    resampler_rate = f32::NAN;
-                    resampler_pp = false;
-                    resample_in = None;
-                    resample_out = None;
-                    in_planar = None;
-                    sola = None;
-                    resampler_lead_frames = 0;
-                } else {
-                    let need_rebuild = pp_changed || resampler.is_none();
-                    let mut reuse_resampler = false;
-                    if !need_rebuild && let Some(existing) = &mut resampler {
-                        existing.reset();
-                        reuse_resampler = existing.set_resample_ratio(ratio, false).is_ok();
-                    }
-                    if !reuse_resampler {
-                        let new_resampler =
-                            new_resampler(ratio, RESAMPLE_MAX_RELATIVE_RATIO, in_ch)?;
-                        resample_in =
-                            Some(vec![vec![0.0; new_resampler.input_frames_max()]; in_ch]);
-                        resample_out =
-                            Some(vec![vec![0.0; new_resampler.output_frames_max()]; in_ch]);
-                        resampler = Some(new_resampler);
-                    }
-                    resampler_rate = current_rate_f32;
-                    resampler_pp = current_pp;
-                    match in_planar.as_mut() {
-                        None => {
-                            in_planar = Some(PlanarAccum::new(in_ch, PLANAR_INPUT_CAP_FRAMES));
-                        }
-                        Some(p) if pp_changed => p.clear(),
-                        _ => {}
-                    }
-                    if current_pp {
-                        let s = sola.get_or_insert_with(|| SolaStretcher::new(in_ch, in_hz));
-                        s.set_speed_ratio(current_rate_f32);
-                        if pp_changed {
-                            s.reset();
-                        }
-                    } else {
-                        sola = None;
-                    }
-                    resampler_lead_frames = compat_lead_frames(ratio);
+                desired_rate = desired_rate.clamp(MIN_MUSIC_RATE, MAX_MUSIC_RATE);
+                let desired_pp = preserve_pitch.load(Ordering::Acquire);
+                if (desired_rate - current_rate_f32).abs() > RATE_EPS || desired_pp != current_pp {
+                    current_rate_f32 = desired_rate;
+                    current_pp = desired_pp;
+                    stages.set_rate(current_rate_f32, current_pp)?;
                 }
             }
-            if resampler.is_none() {
+            if stages.is_direct() {
+                if eof {
+                    break;
+                }
                 let music_sec_per_frame = 1.0 / f64::from(out_hz.max(1));
                 let mut direct = slice;
                 if preroll_out_frames > 0 {
@@ -925,54 +833,11 @@ fn music_decoder_thread_loop(
                 }
                 continue;
             }
-            let in_planar = in_planar
-                .as_mut()
-                .expect("resampler mode must keep planar input");
-            let resampler = resampler
-                .as_mut()
-                .expect("resampler mode must keep a resampler");
-            let resample_out = resample_out
-                .as_mut()
-                .expect("resampler mode must keep output buffer");
-            if let Some(sola) = sola.as_mut() {
-                sola.push_interleaved_i16(slice);
-                loop {
-                    let pull_cap =
-                        PLANAR_INPUT_CAP_FRAMES.saturating_sub(in_planar.available_frames());
-                    if pull_cap == 0 {
-                        break;
-                    }
-                    // `pull` appends planar f32 directly into in_planar's backing
-                    // buffers, so the stretched audio is written once (no scratch copy).
-                    if sola.pull(&mut in_planar.channels, pull_cap.min(2048)) == 0 {
-                        break;
-                    }
-                }
-            } else {
-                in_planar.push_i16_interleaved(slice, in_ch);
+            if !eof {
+                stages.push(slice);
             }
-            loop {
-                let need = resampler.input_frames_next();
-                if in_planar.available_frames() < need {
-                    break;
-                }
-                let produced_frames = {
-                    let input_slices = planar_window(in_planar, need);
-                    let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
-                        .expect("planar accumulator exposes every requested input frame");
-                    process_resampler(resampler, &input, resample_out)?.1
-                };
-                in_planar.consume_frames(need);
-                write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
-                trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
-                if produced_frames == 0 {
-                    break;
-                }
-                let music_sec_per_frame = if current_pp {
-                    f64::from(current_rate_f32) / f64::from(out_hz.max(1))
-                } else {
-                    (need as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
-                };
+            while let Some(music_sec_per_frame) = stages.pull(&mut out_tmp, out_ch)? {
+                let produced_frames = out_tmp.len() / out_ch;
                 if preroll_out_frames > 0 {
                     let drop_frames = (preroll_out_frames as usize).min(produced_frames);
                     let drop_samples = drop_frames * out_ch;
@@ -1007,128 +872,8 @@ fn music_decoder_thread_loop(
                     break;
                 }
             }
-            if matches!(frames_left_out, Some(0)) {
+            if eof || matches!(frames_left_out, Some(0)) {
                 break;
-            }
-        }
-
-        if let Some(resampler) = &mut resampler {
-            let in_planar = in_planar
-                .as_mut()
-                .expect("resampler mode must keep planar input");
-            let resample_in = resample_in
-                .as_mut()
-                .expect("resampler mode must keep input buffer");
-            let resample_out = resample_out
-                .as_mut()
-                .expect("resampler mode must keep output buffer");
-            // Drain any residual stretched output from SOLA into in_planar.
-            if let Some(sola) = sola.as_mut() {
-                // On the final pass (no loop restart coming) tell SOLA to flush
-                // its last partial window instead of holding it back for a
-                // search that will never have enough lookahead. A looping
-                // decoder keeps feeding across the seam, so it must NOT flush.
-                if !looping || stop.load(Ordering::Acquire) {
-                    sola.finish();
-                }
-                loop {
-                    let pull_cap =
-                        PLANAR_INPUT_CAP_FRAMES.saturating_sub(in_planar.available_frames());
-                    if pull_cap == 0 {
-                        break;
-                    }
-                    if sola.pull(&mut in_planar.channels, pull_cap.min(2048)) == 0 {
-                        break;
-                    }
-                }
-            }
-            if !in_planar.is_empty() {
-                let remain = in_planar.available_frames();
-                let need = resampler.input_frames_next();
-                let copy_frames = remain.min(need);
-                let start = in_planar.start_frame;
-                let end = start + copy_frames;
-                for (dst, channel) in resample_in.iter_mut().zip(&in_planar.channels) {
-                    dst[..need].fill(0.0);
-                    dst[..copy_frames].copy_from_slice(&channel[start..end]);
-                }
-                let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
-                    .expect("resampler input allocation holds the padded final chunk");
-                let produced_frames = process_resampler(resampler, &input, resample_out)?.1;
-                in_planar.clear();
-                if produced_frames > 0 {
-                    let produced_frames =
-                        write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
-                    trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
-                    let music_sec_per_frame = if produced_frames == 0 {
-                        0.0
-                    } else if current_pp {
-                        f64::from(current_rate_f32) / f64::from(out_hz.max(1))
-                    } else {
-                        (remain as f64 / f64::from(in_hz.max(1))) / produced_frames as f64
-                    };
-                    if preroll_out_frames > 0 {
-                        let drop_frames = (preroll_out_frames as usize).min(produced_frames);
-                        let drop_samples = drop_frames * out_ch;
-                        if drop_samples > 0 {
-                            drop_front_samples(&mut out_tmp, drop_samples);
-                            next_music_output_sec = (drop_frames as f64)
-                                .mul_add(music_sec_per_frame, next_music_output_sec);
-                        }
-                    }
-                    let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
-                    if !out_tmp.is_empty() {
-                        if let Some(fade) = fade_spec {
-                            apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
-                        }
-                        frames_emitted_total =
-                            frames_emitted_total.saturating_add((out_tmp.len() / out_ch) as u64);
-                        next_music_output_sec = push_music_block(
-                            writer,
-                            &out_tmp,
-                            out_ch,
-                            MusicBlockTiming {
-                                generation: output_generation,
-                                music_start_sec: next_music_output_sec,
-                                music_sec_per_frame,
-                            },
-                            control,
-                            &mut backpressure,
-                        )?;
-                    }
-                }
-            }
-
-            let need = resampler.input_frames_next();
-            for dst in resample_in.iter_mut() {
-                dst[..need].fill(0.0);
-            }
-            let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
-                .expect("resampler input allocation holds a zero drain chunk");
-            let produced_frames = process_resampler(resampler, &input, resample_out)?.1;
-            if produced_frames > 0 {
-                let _produced_frames =
-                    write_resampler_output(resample_out, produced_frames, out_ch, &mut out_tmp);
-                trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
-                let music_sec_per_frame = f64::from(current_rate_f32) / f64::from(out_hz.max(1));
-                let _ = cap_out_frames(&mut out_tmp, out_ch, &mut frames_left_out);
-                if !out_tmp.is_empty() {
-                    if let Some(fade) = fade_spec {
-                        apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
-                    }
-                    let _ = push_music_block(
-                        writer,
-                        &out_tmp,
-                        out_ch,
-                        MusicBlockTiming {
-                            generation: output_generation,
-                            music_start_sec: next_music_output_sec,
-                            music_sec_per_frame,
-                        },
-                        control,
-                        &mut backpressure,
-                    )?;
-                }
             }
         }
 
