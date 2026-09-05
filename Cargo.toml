@@ -7,6 +7,7 @@ description = "A competitive SM/ITG engine focused on perfect sync and performan
 license = "GPL-3.0"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan"]
+rust-version = "1.97"
 
 [workspace]
 members = [
