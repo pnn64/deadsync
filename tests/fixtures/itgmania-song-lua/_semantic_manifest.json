@@ -238,7 +238,13 @@
       "fixture": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc.semantic.json",
       "title": "[1115] [07] Spooky (Medium)",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      }
     },
     {
       "simfile": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc",
@@ -252,21 +258,39 @@
       "fixture": "[10] media offline (SM) [Snap]/media offline.ssc.semantic.json",
       "title": "[4252] [10] media offline (Medium)",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      }
     },
     {
       "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
       "fixture": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc.semantic.json",
       "title": "[5800] [11] KENPO SAITO",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      }
     },
     {
       "simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
       "fixture": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc.semantic.json",
       "title": "[6804] [12] Godspeed",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      }
     },
     {
       "simfile": "[CRYSTAL_ACCESS]/[CRYSTAL_ACCESS].sm",

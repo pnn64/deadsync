@@ -337,9 +337,17 @@ fn compose_entire_song(
             }
         }
     }
+    // Modifier-only songs can have no drawable overlays. Require draw output
+    // only when the reference actually sampled a visible primitive.
+    let native_draws = trace.projected_vertex_tracks.iter().any(|track| {
+        track.samples.iter().any(|sample| {
+            sample.get(2).and_then(Value::as_bool) == Some(true)
+                && value_f32(sample.get(3)).is_some_and(|alpha| alpha > 0.000_001)
+        })
+    });
     assert!(
-        actor_samples > 0,
-        "whole-song composition emitted no actors"
+        !native_draws || actor_samples > 0,
+        "whole-song composition emitted no actors despite visible reference geometry"
     );
 }
 

@@ -2,6 +2,51 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[test]
+fn asset_catalog_policy_stays_above_the_engine() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
+    {
+        let path = entry.expect("asset source").path();
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+        let source = fs::read_to_string(&path).expect("read engine asset source");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        for policy in [
+            "deadsync_",
+            "judgements",
+            "hold_judgements",
+            "held_miss",
+            "step_stats_gifs",
+            "noteskins/",
+            "love_first",
+        ] {
+            assert!(
+                !production.contains(policy),
+                "{} owns game asset policy: {policy}",
+                path.display()
+            );
+        }
+    }
+    let engine =
+        fs::read_to_string(root.join("crates/deadlib-assets/Cargo.toml")).expect("engine manifest");
+    assert!(engine.contains("deadlib-render ="));
+    assert!(!engine.contains("deadsync-"));
+    let game =
+        fs::read_to_string(root.join("crates/deadsync-assets/src/lib.rs")).expect("game assets");
+    assert!(!game.contains("pub use manager::AssetManager"));
+    assert!(!root.join("crates/deadsync-assets/src/manager.rs").exists());
+    assert!(
+        !root
+            .join("crates/deadlib-assets/src/asset_store.rs")
+            .exists()
+    );
+}
+
 const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[];
 
 const LOGICAL_INPUT_SYMBOLS: &[&str] = &[
@@ -7177,6 +7222,53 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
 }
 
 #[test]
+fn presentation_color_and_mesh_are_theme_neutral() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (dir, forbidden) in [
+        (
+            "crates/deadlib-present",
+            &[
+                "JudgmentColorRole",
+                "JudgmentPalette",
+                "DifficultyColorScheme",
+                "SIMPLY_LOVE_RGBA",
+                "JUDGMENT_RGBA",
+                "ITG_DIFFICULTY_RGBA",
+                "DDR_DIFFICULTY_RGBA",
+                "menu_selected_rgba",
+                "difficulty_display_name",
+                "measure_nps",
+                "DensityHistCache",
+                "deadsync_theme",
+                "deadsync-theme",
+            ][..],
+        ),
+        (
+            "crates/deadsync-config",
+            &[
+                "deadsync_theme_simply_love",
+                "deadsync-theme-simply-love",
+                "SIMPLY_LOVE_JUDGMENT_PALETTE",
+            ][..],
+        ),
+    ] {
+        let crate_dir = root.join(dir);
+        let mut files = rust_files(&crate_dir.join("src"));
+        files.push(crate_dir.join("Cargo.toml"));
+        for file in files {
+            let text = fs::read_to_string(&file).expect("crate source should be readable");
+            for token in forbidden {
+                assert!(
+                    !text.contains(token),
+                    "{} contains theme policy {token}",
+                    rel_path(&root, &file)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn present_model_lives_in_present_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -7243,8 +7335,8 @@ fn present_model_lives_in_present_crate() {
     if let Ok(text) = fs::read_to_string(&assets_lib) {
         for token in [
             "pub mod present_dsl",
-            "PRESENT_TEXTURE_CONTEXT",
-            "pub use manager::",
+            "METADATA_TEXTURE_CONTEXT",
+            "pub fn load_initial_assets",
             "pub use textures::",
         ] {
             if !text.contains(token) {
@@ -7260,8 +7352,9 @@ fn present_model_lives_in_present_crate() {
 
     let deadlib_assets_lib = root.join("crates/deadlib-assets/src/lib.rs");
     if let Ok(text) = fs::read_to_string(&deadlib_assets_lib)
-        && (!text.contains("ASSET_TEXTURE_CONTEXT")
-            || !text.contains("AssetTextureContext")
+        && (!text.contains("METADATA_TEXTURE_CONTEXT")
+            || !text.contains("MetadataTextureContext")
+            || !text.contains("pub use manager::AssetManager")
             || !text.contains("pub use present_dsl::SpriteBuilder"))
     {
         failures.push(format!(
@@ -7287,7 +7380,7 @@ fn present_model_lives_in_present_crate() {
     let asset_textures = root.join("crates/deadsync-assets/src/textures.rs");
     if let Ok(text) = fs::read_to_string(&asset_textures)
         && (!text.contains("GraphicTextureChoiceCache")
-            || !text.contains("load_initial_textures")
+            || !text.contains("initial_texture_jobs")
             || !text.contains("load_texture_key"))
     {
         failures.push(format!(

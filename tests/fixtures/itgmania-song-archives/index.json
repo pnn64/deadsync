@@ -215,9 +215,9 @@
     {
       "title": "[1115] [07] Spooky (Medium)",
       "source_simfile": "[07] Spooky (SM) [Scrypts]/Spooky-chart.ssc",
-      "archive": "f3ecdcf8b14692da52c41f9e1a4ca65a16b0f6390e757573788dac4c70df966f.tar.zst",
-      "sha256": "f3ecdcf8b14692da52c41f9e1a4ca65a16b0f6390e757573788dac4c70df966f",
-      "compressed_bytes": 118578
+      "archive": "a9c211f75c490cad17d4d83cd020c6610aa5ad234e1f67f9326218d520e19ff9.tar.zst",
+      "sha256": "a9c211f75c490cad17d4d83cd020c6610aa5ad234e1f67f9326218d520e19ff9",
+      "compressed_bytes": 120217
     },
     {
       "title": "[3752] [09] Who the Hell Is Edgar?",
@@ -229,23 +229,23 @@
     {
       "title": "[4252] [10] media offline (Medium)",
       "source_simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
-      "archive": "b73f7daabc17b7c1d6cb9611b3be0810169a873fe84431512726242faa6d3b9c.tar.zst",
-      "sha256": "b73f7daabc17b7c1d6cb9611b3be0810169a873fe84431512726242faa6d3b9c",
-      "compressed_bytes": 43572
+      "archive": "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd.tar.zst",
+      "sha256": "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd",
+      "compressed_bytes": 45299
     },
     {
       "title": "[5800] [11] KENPO SAITO",
       "source_simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",
-      "archive": "6eebb25d8dba0e8b628f37fb4aa3c0b814598b41fe4fefa8b60899322f0195f3.tar.zst",
-      "sha256": "6eebb25d8dba0e8b628f37fb4aa3c0b814598b41fe4fefa8b60899322f0195f3",
-      "compressed_bytes": 24744
+      "archive": "76c0cbd6277e55cee63451b1b79fe6472f96af8dc383c9158eb2b1fee6a733d1.tar.zst",
+      "sha256": "76c0cbd6277e55cee63451b1b79fe6472f96af8dc383c9158eb2b1fee6a733d1",
+      "compressed_bytes": 33134
     },
     {
       "title": "[6804] [12] Godspeed",
       "source_simfile": "[12] Godspeed (SX) [G. Rosewood]/godspeed.ssc",
-      "archive": "2ae1be1d0af84723458c1222505cfbd38b8730d271e76820938d06a2d3f3d1ea.tar.zst",
-      "sha256": "2ae1be1d0af84723458c1222505cfbd38b8730d271e76820938d06a2d3f3d1ea",
-      "compressed_bytes": 40951
+      "archive": "2c9cb03ef65817b74fe2691c4977d046551d30692fb40bba98ea58ea1f3df785.tar.zst",
+      "sha256": "2c9cb03ef65817b74fe2691c4977d046551d30692fb40bba98ea58ea1f3df785",
+      "compressed_bytes": 44270
     },
     {
       "title": "[CRYSTAL_ACCESS]",

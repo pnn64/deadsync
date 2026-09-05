@@ -535,31 +535,43 @@ fn native_final_render_state(
         .filter(|track| track.actor == actor)
         .flat_map(|track| &track.segments)
         .flat_map(|segment| &segment.operations)
+        .map(|operation| (operation.seq, operation.operation.as_str(), &operation.args))
+        .chain(
+            trace
+                .operation_tracks
+                .iter()
+                .filter(|track| track.actor == actor)
+                .flat_map(|track| {
+                    track
+                        .samples
+                        .iter()
+                        .map(|(seq, _, _, args)| (*seq, track.operation.as_str(), args))
+                }),
+        )
         .collect::<Vec<_>>();
-    operations.sort_by_key(|operation| operation.seq);
+    operations.sort_by_key(|(seq, _, _)| *seq);
     let mut state = NativeFinalRenderState::default();
-    for operation in operations {
+    for (_, operation, args) in operations {
         let method = operation
-            .operation
             .rsplit('.')
             .next()
-            .unwrap_or(&operation.operation)
+            .unwrap_or(operation)
             .to_ascii_lowercase();
         match method.as_str() {
             "diffusealpha" => {
-                if let Some(alpha) = value_f32(operation.args.first()) {
+                if let Some(alpha) = value_f32(args.first()) {
                     state.alpha = alpha;
                     state.wrote_alpha = true;
                 }
             }
             "diffuse" => {
-                if let Some(alpha) = native_color_alpha(&operation.args) {
+                if let Some(alpha) = native_color_alpha(args) {
                     state.alpha = alpha;
                     state.wrote_alpha = true;
                 }
             }
             "visible" => {
-                if let Some(visible) = operation.args.first().and_then(Value::as_bool) {
+                if let Some(visible) = args.first().and_then(Value::as_bool) {
                     state.visible = visible;
                     state.wrote_visible = true;
                 }
