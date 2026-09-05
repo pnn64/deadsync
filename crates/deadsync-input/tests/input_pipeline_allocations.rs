@@ -1,8 +1,7 @@
+use deadsync_input::keymap::InputState;
 use deadsync_input::{
     GamepadCodeBinding, InputBinding, KeyCode, Keymap, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent,
-    PadId, RawKeyboardEvent, VirtualAction, clear_debounce_state,
-    drain_debounced_input_events_with, map_keycode_event_with, map_pad_event_with,
-    map_raw_key_event_with, set_input_debounce_seconds, set_keymap,
+    PadId, RawKeyboardEvent, VirtualAction,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
@@ -119,8 +118,7 @@ fn configured_input_pipeline_is_allocation_free() {
             dir: PadDir::Up,
         }],
     );
-    set_input_debounce_seconds(0.2);
-    set_keymap(keymap);
+    let mut input = InputState::new(&keymap, 0.2);
 
     let timestamp = Instant::now();
     let key_press = RawKeyboardEvent {
@@ -196,42 +194,83 @@ fn configured_input_pipeline_is_allocation_free() {
 
     let before = ALLOC.begin();
     let mut emitted = 0u64;
-    map_keycode_event_with(KeyCode::ArrowLeft, true, timestamp, |_| emitted += 1);
-    map_raw_key_event_with(&key_press, |_| emitted += 1);
-    map_pad_event_with(&pad_press, |_| emitted += 1);
-    map_pad_event_with(&dir_press, |_| emitted += 1);
+    input
+        .map_key(input.key_event(key_press), || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&pad_press, || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&dir_press, || timestamp)
+        .for_each(|_| emitted += 1);
     for _ in 0..10_000 {
-        map_raw_key_event_with(black_box(&key_release), |_| emitted += 1);
-        map_raw_key_event_with(black_box(&key_press), |_| emitted += 1);
-        map_pad_event_with(black_box(&pad_release), |_| emitted += 1);
-        map_pad_event_with(black_box(&pad_press), |_| emitted += 1);
-        map_pad_event_with(black_box(&dir_release), |_| emitted += 1);
-        map_pad_event_with(black_box(&dir_press), |_| emitted += 1);
+        input
+            .map_key(input.key_event(black_box(key_release)), || timestamp)
+            .for_each(|_| emitted += 1);
+        input
+            .map_key(input.key_event(black_box(key_press)), || timestamp)
+            .for_each(|_| emitted += 1);
+        input
+            .map_pad(black_box(&pad_release), || timestamp)
+            .for_each(|_| emitted += 1);
+        input
+            .map_pad(black_box(&pad_press), || timestamp)
+            .for_each(|_| emitted += 1);
+        input
+            .map_pad(black_box(&dir_release), || timestamp)
+            .for_each(|_| emitted += 1);
+        input
+            .map_pad(black_box(&dir_press), || timestamp)
+            .for_each(|_| emitted += 1);
     }
-    map_raw_key_event_with(&key_release, |_| emitted += 1);
-    map_raw_key_event_with(&key_unmapped, |_| emitted += 1);
-    map_raw_key_event_with(&key_repeat, |_| emitted += 1);
-    map_pad_event_with(&pad_release, |_| emitted += 1);
-    map_pad_event_with(&dir_release, |_| emitted += 1);
-    map_pad_event_with(&pad_unmapped, |_| emitted += 1);
-    map_pad_event_with(&pad_axis, |_| emitted += 1);
-    drain_debounced_input_events_with(|_| emitted += 1);
-    clear_debounce_state();
+    input
+        .map_key(input.key_event(key_release), || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_key(input.key_event(key_unmapped), || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_key(input.key_event(key_repeat), || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&pad_release, || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&dir_release, || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&pad_unmapped, || timestamp)
+        .for_each(|_| emitted += 1);
+    input
+        .map_pad(&pad_axis, || timestamp)
+        .for_each(|_| emitted += 1);
+    while let Some(events) = input.next_due(timestamp) {
+        emitted += events.count() as u64;
+    }
+    input.clear();
     let allocated = ALLOC.finish(before);
 
     assert!(emitted >= 3, "the measured paths must emit mapped input");
     assert_eq!(allocated.0, 0, "allocation operations in input hot paths");
     assert_eq!(allocated.1, 0, "allocated bytes in input hot paths");
 
-    map_raw_key_event_with(&key_press, |_| {});
-    map_raw_key_event_with(&key_release, |_| {});
-    map_pad_event_with(&pad_press, |_| {});
-    map_pad_event_with(&pad_release, |_| {});
-    std::thread::sleep(std::time::Duration::from_millis(210));
+    input
+        .map_key(input.key_event(key_press), || timestamp)
+        .for_each(|_| {});
+    input
+        .map_key(input.key_event(key_release), || timestamp)
+        .for_each(|_| {});
+    input.map_pad(&pad_press, || timestamp).for_each(|_| {});
+    input.map_pad(&pad_release, || timestamp).for_each(|_| {});
+    let now = timestamp + std::time::Duration::from_millis(210);
     let before = ALLOC.begin();
-    let flushed = black_box(drain_debounced_input_events_with(|event| {
-        black_box(event);
-    }));
+    let mut flushed = false;
+    while let Some(events) = input.next_due(now) {
+        flushed = true;
+        events.for_each(|event| {
+            black_box(event);
+        });
+    }
     let allocated = ALLOC.finish(before);
     assert!(flushed, "the measured drain path must flush due edges");
     assert_eq!(allocated.0, 0, "allocation operations while draining input");

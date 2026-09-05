@@ -508,7 +508,7 @@ pub fn queued_input_flush_plan(
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct QueuedInputBatchState {
     pub flushed: bool,
-    pub discard_gameplay_batch: bool,
+    pub discard_batch: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -533,22 +533,8 @@ pub struct GameplayRawKeyRoutePlan {
 
 impl QueuedInputFlushPlan {
     #[inline(always)]
-    pub const fn route_drained_event(
-        self,
-        batch: &mut QueuedInputBatchState,
-        error_pending: bool,
-    ) -> QueuedInputEventRoute {
-        batch.note_event();
-        self.route_mapped_event(batch, error_pending)
-    }
-
-    #[inline(always)]
-    pub const fn route_mapped_event(
-        self,
-        batch: &QueuedInputBatchState,
-        error_pending: bool,
-    ) -> QueuedInputEventRoute {
-        if batch.should_skip_event(error_pending) {
+    pub const fn route_mapped_event(self, batch: &QueuedInputBatchState) -> QueuedInputEventRoute {
+        if batch.discard_batch {
             QueuedInputEventRoute::Skip
         } else if self.gameplay_screen {
             QueuedInputEventRoute::Gameplay
@@ -564,8 +550,8 @@ impl QueuedInputFlushPlan {
         current_screen: Screen,
         transition: &TransitionState,
     ) {
-        if self.gameplay_screen {
-            batch.note_gameplay_dispatch(self.start_screen, current_screen, transition);
+        if !gameplay_dispatch_continues(self.start_screen, current_screen, transition) {
+            batch.discard_batch = true;
         }
     }
 }
@@ -575,30 +561,13 @@ impl QueuedInputBatchState {
     pub const fn new() -> Self {
         Self {
             flushed: false,
-            discard_gameplay_batch: false,
+            discard_batch: false,
         }
     }
 
     #[inline(always)]
     pub const fn note_event(&mut self) {
         self.flushed = true;
-    }
-
-    #[inline(always)]
-    pub const fn should_skip_event(self, error_pending: bool) -> bool {
-        self.discard_gameplay_batch || error_pending
-    }
-
-    #[inline(always)]
-    pub fn note_gameplay_dispatch(
-        &mut self,
-        start_screen: Screen,
-        current_screen: Screen,
-        transition: &TransitionState,
-    ) {
-        if !gameplay_dispatch_continues(start_screen, current_screen, transition) {
-            self.discard_gameplay_batch = true;
-        }
     }
 }
 
@@ -849,31 +818,14 @@ mod tests {
     fn queued_input_batch_discards_after_gameplay_route_leaves_screen() {
         let mut batch = QueuedInputBatchState::new();
         batch.note_event();
-        assert!(!batch.should_skip_event(false));
+        assert!(!batch.discard_batch);
 
-        batch.note_gameplay_dispatch(Screen::Gameplay, Screen::Evaluation, &TransitionState::Idle);
+        queued_input_flush_plan(Screen::Gameplay, &TransitionState::Idle)
+            .unwrap()
+            .note_dispatched_event(&mut batch, Screen::Evaluation, &TransitionState::Idle);
 
         assert!(batch.flushed);
-        assert!(batch.should_skip_event(false));
-    }
-
-    #[test]
-    fn queued_input_plan_routes_drained_events_and_marks_flush() {
-        let plan = QueuedInputFlushPlan {
-            gameplay_screen: false,
-            start_screen: Screen::SelectMusic,
-        };
-        let mut batch = QueuedInputBatchState::new();
-
-        assert_eq!(
-            plan.route_drained_event(&mut batch, false),
-            QueuedInputEventRoute::Screen
-        );
-        assert!(batch.flushed);
-        assert_eq!(
-            plan.route_drained_event(&mut batch, true),
-            QueuedInputEventRoute::Skip
-        );
+        assert!(batch.discard_batch);
     }
 
     #[test]
@@ -885,14 +837,67 @@ mod tests {
         let mut batch = QueuedInputBatchState::new();
 
         assert_eq!(
-            plan.route_mapped_event(&batch, false),
+            plan.route_mapped_event(&batch),
             QueuedInputEventRoute::Gameplay
         );
         plan.note_dispatched_event(&mut batch, Screen::Evaluation, &TransitionState::Idle);
-        assert_eq!(
-            plan.route_mapped_event(&batch, false),
-            QueuedInputEventRoute::Skip
+        assert_eq!(plan.route_mapped_event(&batch), QueuedInputEventRoute::Skip);
+    }
+
+    #[test]
+    fn mapped_press_stops_after_menu_navigation_or_fade() {
+        use deadsync_input::keymap::InputState;
+        use deadsync_input::{InputBinding, Keymap, RawKeyboardEvent};
+
+        let mut km = Keymap::default();
+        km.bind(
+            VirtualAction::p1_start,
+            &[InputBinding::Key(KeyCode::Enter)],
         );
+        km.bind(
+            VirtualAction::p2_start,
+            &[InputBinding::Key(KeyCode::Enter)],
+        );
+        let timestamp = Instant::now();
+        let raw = RawKeyboardEvent {
+            code: KeyCode::Enter,
+            pressed: true,
+            repeat: false,
+            timestamp,
+            host_nanos: 123,
+        };
+        for (screen, transition) in [
+            (Screen::SelectMusic, TransitionState::Idle),
+            (
+                Screen::Menu,
+                TransitionState::FadingOut {
+                    elapsed: 0.0,
+                    duration: 0.4,
+                    target: Screen::SelectMusic,
+                },
+            ),
+            (
+                Screen::Menu,
+                TransitionState::ActorsFadeOut {
+                    elapsed: 0.0,
+                    duration: 0.4,
+                    target: Screen::SelectMusic,
+                },
+            ),
+        ] {
+            let mut input = InputState::new(&km, 0.02);
+            let plan = queued_input_flush_plan(Screen::Menu, &TransitionState::Idle).unwrap();
+            let mut batch = QueuedInputBatchState::new();
+            let mut events = input.map_key(input.key_event(raw), || timestamp);
+            assert_eq!(events.next().unwrap().action, VirtualAction::p1_start);
+            assert_eq!(
+                plan.route_mapped_event(&batch),
+                QueuedInputEventRoute::Screen
+            );
+            plan.note_dispatched_event(&mut batch, screen, &transition);
+            assert_eq!(events.next().unwrap().action, VirtualAction::p2_start);
+            assert_eq!(plan.route_mapped_event(&batch), QueuedInputEventRoute::Skip);
+        }
     }
 
     #[test]

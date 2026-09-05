@@ -1,9 +1,9 @@
 use super::App;
 use crate::input::{
     GameplayQueuedEvent, GameplayRawKeyEvent, GameplayRawKeyRouteContext, PreScreenInputContext,
-    PreScreenInputRoute, QueuedInputBatchState, QueuedInputEventRoute, allowed_gameplay_raw_action,
-    gameplay_raw_key_route_plan, pre_screen_input_route, queued_input_flush_plan,
-    raw_keyboard_capture_enabled,
+    PreScreenInputRoute, QueuedInputBatchState, QueuedInputEventRoute, QueuedInputFlushPlan,
+    allowed_gameplay_raw_action, gameplay_raw_key_route_plan, pre_screen_input_route,
+    queued_input_flush_plan, raw_keyboard_capture_enabled,
 };
 use deadsync_config::prelude as config;
 use deadsync_gameplay::RawKeyAction;
@@ -23,39 +23,46 @@ impl App {
             self.state.screens.current_screen,
             &self.state.shell.transition,
         ) else {
-            logical_input::clear_debounce_state();
+            self.input.clear();
             self.lights.clear_button_pressed();
             return Ok(false);
         };
-        let mut err: Option<Box<dyn Error>> = None;
+        if !self.input.has_pending() {
+            return Ok(false);
+        }
         let mut batch = QueuedInputBatchState::new();
-        logical_input::drain_debounced_input_events_with(|ev| {
-            match plan.route_drained_event(&mut batch, err.is_some()) {
-                QueuedInputEventRoute::Skip => {}
-                QueuedInputEventRoute::Gameplay => {
-                    if let Err(e) =
-                        self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
-                    {
-                        err = Some(e);
-                        return;
-                    }
-                    plan.note_dispatched_event(
-                        &mut batch,
-                        self.state.screens.current_screen,
-                        &self.state.shell.transition,
-                    );
-                }
-                QueuedInputEventRoute::Screen => {
-                    if let Err(e) = self.route_input_event(event_loop, ev) {
-                        err = Some(e);
-                    }
-                }
-            }
-        });
-        if let Some(e) = err {
-            return Err(e);
+        let now = std::time::Instant::now();
+        while let Some(events) = self.input.next_due(now) {
+            self.dispatch_input_batch(event_loop, plan, &mut batch, events)?;
         }
         Ok(batch.flushed)
+    }
+
+    pub(super) fn dispatch_input_batch(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        plan: QueuedInputFlushPlan,
+        batch: &mut QueuedInputBatchState,
+        events: impl IntoIterator<Item = InputEvent>,
+    ) -> Result<(), Box<dyn Error>> {
+        for ev in events {
+            batch.note_event();
+            match plan.route_mapped_event(batch) {
+                QueuedInputEventRoute::Skip => break,
+                QueuedInputEventRoute::Gameplay => {
+                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))?;
+                }
+                QueuedInputEventRoute::Screen => self.route_input_event(event_loop, ev)?,
+            }
+            // One physical press must not act on two screens, including when
+            // its first action starts a fade before the current screen changes.
+            plan.note_dispatched_event(
+                batch,
+                self.state.screens.current_screen,
+                &self.state.shell.transition,
+            );
+        }
+        Ok(())
     }
 
     #[inline(always)]
@@ -245,25 +252,26 @@ impl App {
             }
         }
         let input_policy = self.input_route_policy(current_screen);
-        let mut menu_ev = ev;
-        menu_ev.action = screens::input::menu_action(
-            ev.action,
-            config::get().game_flag,
-            input_policy.only_dedicated_menu_buttons,
-        );
-        if self.try_handle_late_join(&menu_ev) {
-            return self.drain_theme_effects(event_loop);
-        }
         let mut ev = ev;
         if !matches!(
             current_screen,
             CurrentScreen::Gameplay
                 | CurrentScreen::Practice
-                | CurrentScreen::SelectMusic
                 | CurrentScreen::Input
                 | CurrentScreen::ConfigurePads
         ) {
-            ev.action = menu_ev.action;
+            let mut menu_ev = ev;
+            menu_ev.action = screens::input::menu_action(
+                ev.action,
+                config::get().game_flag,
+                input_policy.only_dedicated_menu_buttons,
+            );
+            if self.try_handle_late_join(&menu_ev) {
+                return self.drain_theme_effects(event_loop);
+            }
+            if current_screen != CurrentScreen::SelectMusic {
+                ev = menu_ev;
+            }
         }
         let evaluation_test_input_active = current_screen == CurrentScreen::Evaluation
             && screens::evaluation::test_input_pane_active(&self.state.screens.evaluation_state);

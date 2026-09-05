@@ -38,12 +38,11 @@ use crate::gameplay_entry::{gameplay_chart_entry_plan, gameplay_last_played_comm
 use crate::gameplay_prewarm::{GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx};
 pub use crate::input::UserEvent;
 use crate::input::{
-    AppRawKeyShortcut, EvaluationRawKeyShortcut, GameplayQueuedEvent, QueuedInputBatchState,
-    QueuedInputEventRoute, RawKeyScreenRoute, RawKeyTextRoute, RawPadScreenRoute,
-    app_raw_key_shortcut, evaluation_raw_key_shortcut, gamepad_system_event_plan,
-    gamepad_system_view, gameplay_dispatch_continues, gameplay_raw_key_event,
-    practice_reload_shortcut, queued_input_flush_plan, raw_key_alt_f4_quit, raw_key_screen_route,
-    raw_key_text_route, raw_pad_screen_route, smx_panel_press_feedback_plan,
+    AppRawKeyShortcut, EvaluationRawKeyShortcut, QueuedInputBatchState, RawKeyScreenRoute,
+    RawKeyTextRoute, RawPadScreenRoute, app_raw_key_shortcut, evaluation_raw_key_shortcut,
+    gamepad_system_event_plan, gamepad_system_view, gameplay_dispatch_continues,
+    gameplay_raw_key_event, practice_reload_shortcut, queued_input_flush_plan, raw_key_alt_f4_quit,
+    raw_key_screen_route, raw_key_text_route, raw_pad_screen_route, smx_panel_press_feedback_plan,
 };
 use crate::input_backend::{InputBackendConfig, launch_input_backends};
 use crate::interaction::ProcessExitRequest;
@@ -1481,6 +1480,7 @@ impl AppState {
 }
 
 pub struct App {
+    input: logical_input::keymap::InputState,
     window: Option<Arc<Window>>,
     backend: Option<renderer_backend::Backend>,
     backend_type: BackendType,
@@ -2414,7 +2414,7 @@ impl App {
         );
         if plan.clear_live_input {
             self.state.shell.interaction.controls_mut().clear();
-            logical_input::clear_debounce_state();
+            self.input.clear();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
         } else if let (Some(reason), Some(w)) = (plan.redraw_reason, window) {
@@ -4447,6 +4447,9 @@ impl App {
             audio_options,
         );
         Self {
+            input: logical_input::with_keymap(|km| {
+                logical_input::keymap::InputState::new(km, config.input_debounce_seconds)
+            }),
             window: None,
             backend: None,
             backend_type,
@@ -5217,6 +5220,7 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Mappings(request)) => {
                     crate::mappings::execute(request);
+                    logical_input::with_keymap(|km| self.input.set_keymap(km));
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
@@ -5228,7 +5232,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Options(request)) => {
-                    config_requests::execute_options(request);
+                    config_requests::execute_options(request, &mut self.input);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::SelectMusic(request)) => {
@@ -7579,29 +7583,6 @@ impl App {
             .controls_mut()
             .update_modifier(raw_key.code, raw_key.pressed);
 
-        if logical_input::with_keymap(|km| {
-            km.raw_key_event_has_action(&raw_key, |action| {
-                action == VirtualAction::system_fast_forward
-            })
-        }) {
-            self.state
-                .shell
-                .interaction
-                .controls_mut()
-                .set_fast_forward(raw_key.pressed);
-        }
-        if logical_input::with_keymap(|km| {
-            km.raw_key_event_has_action(&raw_key, |action| {
-                action == VirtualAction::system_slow_down
-            })
-        }) {
-            self.state
-                .shell
-                .interaction
-                .controls_mut()
-                .set_slow_down(raw_key.pressed);
-        }
-
         let ctrl_held = self.state.shell.interaction.controls().ctrl();
         let shift_held = self.state.shell.interaction.controls().shift();
         let alt_held = self.state.shell.interaction.controls().alt();
@@ -7918,37 +7899,10 @@ impl App {
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
-        let Some(plan) = queued_input_plan else {
-            logical_input::clear_debounce_state();
+        if queued_input_plan.is_none() {
+            self.input.clear();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
-            return true;
-        };
-
-        if plan.gameplay_screen {
-            return false;
-        }
-
-        let mut input_err: Option<Box<dyn Error>> = None;
-        let mut batch = QueuedInputBatchState::new();
-        logical_input::map_raw_key_event_with(&raw_key, |ev| {
-            match plan.route_mapped_event(&batch, input_err.is_some()) {
-                QueuedInputEventRoute::Skip | QueuedInputEventRoute::Gameplay => {}
-                QueuedInputEventRoute::Screen => {
-                    if let Err(e) = self.route_input_event(event_loop, ev) {
-                        input_err = Some(e);
-                    }
-                    plan.note_dispatched_event(
-                        &mut batch,
-                        self.state.screens.current_screen,
-                        &self.state.shell.transition,
-                    );
-                }
-            }
-        });
-        if let Some(e) = input_err {
-            log::error!("Failed to handle input: {e}");
-            event_loop.exit();
             return true;
         }
         false
@@ -7963,7 +7917,18 @@ impl App {
             .gameplay_input_trace
             .handler_started(gameplay_screen);
 
-        if !self.handle_raw_key_event(event_loop, raw_key) {
+        let key = self.input.key_event(raw_key);
+        let controls = self.state.shell.interaction.controls_mut();
+        if key.system_mask & VirtualAction::system_fast_forward.bit() != 0 {
+            controls.set_fast_forward(raw_key.pressed);
+        }
+        if key.system_mask & VirtualAction::system_slow_down.bit() != 0 {
+            controls.set_slow_down(raw_key.pressed);
+        }
+        let start_screen = self.state.screens.current_screen;
+        if !self.handle_raw_key_event(event_loop, raw_key)
+            && start_screen == self.state.screens.current_screen
+        {
             if gameplay_screen {
                 let start_screen = self.state.screens.current_screen;
                 if let Some(gameplay_ev) = gameplay_raw_key_event(&raw_key)
@@ -7982,37 +7947,13 @@ impl App {
                 }
             }
 
-            let mut input_err: Option<Box<dyn Error>> = None;
-            let start_screen = self.state.screens.current_screen;
+            let Some(plan) = queued_input_flush_plan(start_screen, &self.state.shell.transition)
+            else {
+                return;
+            };
             let mut batch = QueuedInputBatchState::new();
-            let plan = queued_input_flush_plan(start_screen, &self.state.shell.transition);
-            logical_input::map_raw_key_event_with(&raw_key, |ev| {
-                let Some(plan) = plan else {
-                    return;
-                };
-                match plan.route_mapped_event(&batch, input_err.is_some()) {
-                    QueuedInputEventRoute::Skip => {}
-                    QueuedInputEventRoute::Gameplay => {
-                        if let Err(e) =
-                            self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
-                        {
-                            input_err = Some(e);
-                            return;
-                        }
-                        plan.note_dispatched_event(
-                            &mut batch,
-                            self.state.screens.current_screen,
-                            &self.state.shell.transition,
-                        );
-                    }
-                    QueuedInputEventRoute::Screen => {
-                        if let Err(e) = self.route_input_event(event_loop, ev) {
-                            input_err = Some(e);
-                        }
-                    }
-                }
-            });
-            if let Some(e) = input_err {
+            let events = self.input.map_key(key, Instant::now);
+            if let Err(e) = self.dispatch_input_batch(event_loop, plan, &mut batch, events) {
                 log::error!("Failed to handle input: {e}");
                 event_loop.exit();
                 return;
@@ -8081,37 +8022,14 @@ impl App {
 
         let Some(plan) = queued_input_flush_plan(current_screen, &self.state.shell.transition)
         else {
-            logical_input::clear_debounce_state();
+            self.input.clear();
             self.lights.clear_button_pressed();
             self.clear_gameplay_input_events();
             return;
         };
-        let mut input_err: Option<Box<dyn Error>> = None;
         let mut batch = QueuedInputBatchState::new();
-        logical_input::map_pad_event_with(&ev, |iev| {
-            match plan.route_mapped_event(&batch, input_err.is_some()) {
-                QueuedInputEventRoute::Skip => {}
-                QueuedInputEventRoute::Gameplay => {
-                    if let Err(e) =
-                        self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(iev))
-                    {
-                        input_err = Some(e);
-                        return;
-                    }
-                    plan.note_dispatched_event(
-                        &mut batch,
-                        self.state.screens.current_screen,
-                        &self.state.shell.transition,
-                    );
-                }
-                QueuedInputEventRoute::Screen => {
-                    if let Err(e) = self.route_input_event(event_loop, iev) {
-                        input_err = Some(e);
-                    }
-                }
-            }
-        });
-        if let Some(e) = input_err {
+        let events = self.input.map_pad(&ev, Instant::now);
+        if let Err(e) = self.dispatch_input_batch(event_loop, plan, &mut batch, events) {
             error!("Failed to handle pad input: {e}");
             event_loop.exit();
         }

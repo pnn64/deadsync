@@ -11,7 +11,10 @@ use deadsync_theme_simply_love::{
 };
 use null_or_die::{BiasKernel, KernelTarget};
 
-pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
+pub(super) fn execute_options(
+    request: SimplyLoveOptionsConfigRequest,
+    input: &mut deadsync_input::keymap::InputState,
+) {
     use SimplyLoveOptionsConfigRequest as Request;
 
     match request {
@@ -49,7 +52,9 @@ pub(super) fn execute_options(request: SimplyLoveOptionsConfigRequest) {
             config::update_visual_delay_seconds(millis as f32 / 1000.0);
         }
         Request::InputDebounceMillis(millis) => {
-            config::update_input_debounce_seconds(millis as f32 / 1000.0);
+            let seconds = millis as f32 / 1000.0;
+            config::update_input_debounce_seconds(seconds);
+            input.set_debounce_seconds(seconds);
         }
     }
 }

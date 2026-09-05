@@ -295,8 +295,10 @@ fn dedicated_menu_buttons_supported(three_key_navigation: bool) -> bool {
 }
 
 pub fn update_input_debounce_seconds(seconds: f32) {
-    if let Some(seconds) = RUNTIME_CONFIG.update_input_debounce_seconds(seconds) {
-        deadsync_input::set_input_debounce_seconds(seconds);
+    if RUNTIME_CONFIG
+        .update_input_debounce_seconds(seconds)
+        .is_some()
+    {
         save_without_keymaps();
     }
 }

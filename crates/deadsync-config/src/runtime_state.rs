@@ -80,7 +80,6 @@ pub struct PublishedConfigEffects {
 pub struct InputRuntimeState {
     pub dedicated: DedicatedMenuNavigation,
     pub three_key_navigation: bool,
-    pub input_debounce_seconds: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -608,7 +607,6 @@ impl RuntimeConfigStore {
         InputRuntimeState {
             dedicated,
             three_key_navigation: cfg.three_key_navigation,
-            input_debounce_seconds: cfg.input_debounce_seconds,
         }
     }
 }
@@ -1293,14 +1291,12 @@ SmxP1Serial= pad-1\n"),
             let mut cfg = store.lock_config();
             cfg.only_dedicated_menu_buttons = true;
             cfg.three_key_navigation = true;
-            cfg.input_debounce_seconds = 0.05;
         }
 
         let state = store.apply_input_runtime_state(false);
         assert!(state.dedicated.disabled_by_missing_bindings);
         assert!(!state.dedicated.enabled);
         assert!(state.three_key_navigation);
-        assert_eq!(state.input_debounce_seconds, 0.05);
         assert!(!store.config().only_dedicated_menu_buttons);
     }
 

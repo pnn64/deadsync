@@ -84,7 +84,6 @@ impl DebounceStore {
         }
     }
 
-    #[inline(always)]
     pub(crate) const fn has_scheduled_work(&self) -> bool {
         !self.due_slots.is_empty()
     }
@@ -487,9 +486,14 @@ fn debounce_input_edge_in_store(
         timestamp,
         timestamp_host_nanos,
         windows,
+        || timestamp,
     )
 }
 
+/// Debounces a physical edge, reading receipt time only when its state can change.
+///
+/// `now` is called at most once; raw timestamps are preserved independently.
+///
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -502,32 +506,31 @@ pub fn debounce_input_edge_in_store_mut(
     timestamp: Instant,
     timestamp_host_nanos: u64,
     windows: DebounceWindows,
+    now: impl FnOnce() -> Instant,
 ) -> DebounceEdges {
     states.ensure_slot(slot);
     // Native backends can repeat a held value (IOHID deliberately does). Once
     // raw and reported state agree, another identical value cannot emit,
-    // reschedule, or update timestamps, so avoid the platform clock entirely.
+    // reschedule, or update timestamps.
     if states.slots[slot]
         .state
         .is_some_and(|state| state.held_raw == pressed && state.held_reported == pressed)
     {
         return DebounceEdges::default();
     }
-    let pending_now = states.slots[slot].state.and_then(|state| {
-        (state.held_raw == pressed && state.held_reported != pressed).then(Instant::now)
-    });
-    if pending_now.is_some_and(|now| {
-        let state = states.slots[slot].state.expect("pending state exists");
-        now.duration_since(state.last_report_time) < windows.window
-    }) {
-        return DebounceEdges::default();
-    }
-    let input_slot = slot.min(u32::MAX as usize) as u32;
     let debug_log = log::log_enabled!(log::Level::Debug);
     if states.slots[slot].state.is_none() && !pressed && !debug_log {
         return DebounceEdges::default();
     }
-    let now = pending_now.unwrap_or_else(Instant::now);
+    let now = now();
+    if states.slots[slot].state.is_some_and(|state| {
+        state.held_raw == pressed
+            && state.held_reported != pressed
+            && now.duration_since(state.last_report_time) < windows.window
+    }) {
+        return DebounceEdges::default();
+    }
+    let input_slot = slot.min(u32::MAX as usize) as u32;
     let was_empty = states.slots[slot].state.is_none();
     let old_due_at = states.slots[slot].due_at;
     let before_state = if debug_log {
@@ -603,19 +606,23 @@ fn emit_due_debounce_edges_from(
     mut emit: impl FnMut(DebouncedEdge),
 ) -> bool {
     let mut states = states.lock().unwrap();
-    emit_due_debounce_edges_from_mut(&mut states, now, windows, &mut emit)
+    let mut flushed = false;
+    while let Some(edge) = next_due_edge(&mut states, now, windows) {
+        flushed = true;
+        emit(edge);
+    }
+    flushed
 }
 
-pub fn emit_due_debounce_edges_from_mut(
+/// Removes one due edge, preserving its physical timestamp.
+///
+/// Maintenance of expired slots precedes the next edge and uses the per-slot
+/// due heap; no live-slot scan is required.
+pub(crate) fn next_due_edge(
     states: &mut DebounceStore,
     now: Instant,
     windows: DebounceWindows,
-    mut emit: impl FnMut(DebouncedEdge),
-) -> bool {
-    // ITGmania Update() parity: delayed edges are surfaced later, but they still
-    // carry the original raw timestamp that caused the debounce holdoff.
-    let mut flushed = false;
-
+) -> Option<DebouncedEdge> {
     while let Some(next_slot) = states.take_next_due_slot(now) {
         let (edge, remove, new_due_at, after_state) = {
             let slot_state = &mut states.slots[next_slot];
@@ -624,10 +631,6 @@ pub fn emit_due_debounce_edges_from_mut(
             (edge, remove, new_due_at, slot_state.state)
         };
 
-        if let Some(edge) = edge {
-            flushed = true;
-            emit(edge);
-        }
         if remove {
             states.active_len = states.active_len.saturating_sub(1);
         }
@@ -644,8 +647,11 @@ pub fn emit_due_debounce_edges_from_mut(
                 now,
             );
         }
+        if edge.is_some() {
+            return edge;
+        }
     }
-    flushed
+    None
 }
 
 #[cfg(test)]
@@ -717,6 +723,7 @@ mod tests {
             timestamp,
             10,
             windows,
+            || timestamp,
         );
         assert!(released.first.is_none());
         assert!(released.second.is_none());
@@ -734,6 +741,7 @@ mod tests {
             timestamp,
             11,
             windows,
+            || timestamp,
         );
         let edge = pressed.second.expect("first press emits immediately");
         assert!(pressed.first.is_none());
@@ -886,6 +894,7 @@ mod tests {
             timestamp,
             100,
             windows,
+            || timestamp,
         );
         assert!(press.second.is_some());
         let before = store.slots[0];
@@ -899,6 +908,7 @@ mod tests {
             timestamp + Duration::from_secs(1),
             999,
             windows,
+            || timestamp,
         );
 
         assert!(duplicate.first.is_none());
@@ -931,6 +941,7 @@ mod tests {
             timestamp,
             100,
             DebounceWindows::uniform(long_window),
+            || timestamp,
         );
         assert!(press.second.is_some());
         let release = debounce_input_edge_in_store_mut(
@@ -942,6 +953,7 @@ mod tests {
             timestamp,
             101,
             DebounceWindows::uniform(long_window),
+            || timestamp,
         );
         assert!(release.first.is_none());
         assert!(release.second.is_none());
@@ -956,15 +968,12 @@ mod tests {
             timestamp + Duration::from_secs(1),
             999,
             DebounceWindows::uniform(long_window),
+            || timestamp,
         );
         assert!(duplicate.first.is_none());
         assert!(duplicate.second.is_none());
         assert_eq!(store.slots[0], before);
 
-        let state = store.slots[0].state.as_mut().expect("pending release");
-        state.last_report_time = Instant::now()
-            .checked_sub(Duration::from_millis(20))
-            .expect("test time supports subtraction");
         let shortened = debounce_input_edge_in_store_mut(
             &mut store,
             0,
@@ -974,6 +983,7 @@ mod tests {
             timestamp + Duration::from_secs(2),
             1_000,
             DebounceWindows::uniform(Duration::from_millis(10)),
+            || timestamp + Duration::from_millis(20),
         );
         assert!(shortened.first.is_some_and(|edge| !edge.pressed));
         assert!(shortened.second.is_none());

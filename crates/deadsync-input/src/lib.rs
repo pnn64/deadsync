@@ -21,10 +21,8 @@ pub use bindings::{
 };
 pub use keymap::{
     InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,
-    any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons,
-    clear_debounce_state, drain_debounced_input_events_with, get_keymap, map_keycode_event_with,
-    map_keycode_event_with_host, map_pad_event_with, map_raw_key_event_with,
-    set_input_debounce_seconds, set_keymap, with_keymap,
+    any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
+    set_keymap, with_keymap,
 };
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
@@ -490,9 +488,7 @@ pub const ALL_VIRTUAL_ACTIONS: [VirtualAction; VirtualAction::COUNT] = [
     VirtualAction::p2_coin,
 ];
 
-/// Bitmask of all `System`-tier actions. Used to strip system actions from the
-/// compiled keymap masks so they never enter the normalized input-event
-/// pipeline (they are read directly via keymap lookups instead).
+/// Raw system actions, compiled separately from debounced logical actions.
 pub const SYSTEM_ACTION_MASK: u32 =
     VirtualAction::system_fast_forward.bit() | VirtualAction::system_slow_down.bit();
 
@@ -602,17 +598,6 @@ pub const fn action_to_ini_key(action: VirtualAction) -> &'static str {
     }
 }
 
-#[inline(always)]
-pub fn for_each_action(mut mask: u32, mut f: impl FnMut(VirtualAction)) {
-    while mask != 0 {
-        let ix = mask.trailing_zeros() as usize;
-        if let Some(action) = VirtualAction::from_ix(ix) {
-            f(action);
-        }
-        mask &= mask - 1;
-    }
-}
-
 const SECONDARY_MENU_SOURCE_MASK: u32 = VirtualAction::p1_up.bit()
     | VirtualAction::p1_down.bit()
     | VirtualAction::p1_left.bit()
@@ -628,22 +613,23 @@ pub const fn secondary_menu_mask(mask: u32) -> u32 {
     (mask & SECONDARY_MENU_SOURCE_MASK) << 6
 }
 
-#[inline(always)]
-pub fn emit_normalized_actions(
-    direct_mask: u32,
-    pressed: bool,
-    mut emit: impl FnMut(VirtualAction, bool),
-) {
-    if direct_mask == 0 {
-        return;
-    }
+fn normalized_actions(direct_mask: u32, pressed: bool) -> impl Iterator<Item = VirtualAction> {
     let secondary_mask = secondary_menu_mask(direct_mask);
-    if pressed {
-        for_each_action(direct_mask & !secondary_mask, |action| emit(action, true));
-        return;
-    }
-    for_each_action(direct_mask, |action| emit(action, false));
-    for_each_action(secondary_mask & !direct_mask, |action| emit(action, false));
+    let masks = if pressed {
+        [direct_mask & !secondary_mask, 0]
+    } else {
+        [direct_mask, secondary_mask & !direct_mask]
+    };
+    masks.into_iter().flat_map(|mut mask| {
+        std::iter::from_fn(move || {
+            if mask == 0 {
+                return None;
+            }
+            let action = VirtualAction::from_ix(mask.trailing_zeros() as usize);
+            mask &= mask - 1;
+            action
+        })
+    })
 }
 
 #[inline(always)]
@@ -742,18 +728,16 @@ mod tests {
     use super::{
         ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
         VirtualAction, action_from_ini_key, action_to_ini_key, clamp_input_debounce_seconds,
-        emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
+        gamepad_code_binding_to_token, lane_from_action, lane_from_column, normalized_actions,
         pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
         parse_pad_dir, raw_button_label, secondary_menu_mask, set_button_labeler,
     };
     use std::time::Instant;
 
     fn normalized(mask: u32, pressed: bool) -> Vec<(VirtualAction, bool)> {
-        let mut out = Vec::new();
-        emit_normalized_actions(mask, pressed, |action, pressed| {
-            out.push((action, pressed));
-        });
-        out
+        normalized_actions(mask, pressed)
+            .map(|action| (action, pressed))
+            .collect()
     }
 
     #[test]
