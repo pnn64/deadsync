@@ -1477,13 +1477,14 @@ pub struct ComposeScratch {
     sparse_z_bucket_by_key: Vec<u8>,
     texture_cache: TextureLookupCache,
     transient_text_mesh_builders: Vec<TextMeshBatchBuilder>,
+    text_attr_scratch: TextAttrScratch,
     recycled_text_mesh_vertices: Vec<Vec<renderer::TexturedMeshVertex>>,
     retained_frames: RetainedFrameCache,
     collect_frame_stats: bool,
     frame_stats: ComposeFrameStats,
 }
 
-pub const COMPOSE_STORAGE_SLOTS: usize = 21;
+pub const COMPOSE_STORAGE_SLOTS: usize = 22;
 pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
     "draw_items",
     "mesh_payloads",
@@ -1506,6 +1507,7 @@ pub const COMPOSE_STORAGE_NAMES: [&str; COMPOSE_STORAGE_SLOTS] = [
     "text_recycle",
     "text_vertices",
     "retained_frames",
+    "text_attributes",
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1663,6 +1665,16 @@ impl ComposeScratch {
             .fold(0usize, |sum, vertices| {
                 sum.saturating_add(vertices.capacity())
             });
+        let attr_capacity = [
+            &self.text_attr_scratch.start_order,
+            &self.text_attr_scratch.end_order,
+            &self.text_attr_scratch.active,
+        ]
+        .into_iter()
+        .filter(|indices| indices.spilled())
+        .fold(0usize, |sum, indices| {
+            sum.saturating_add(indices.capacity())
+        });
         ComposeStorageStats {
             capacities: [
                 saturating_u32(self.frame_builder.items.capacity()),
@@ -1686,6 +1698,7 @@ impl ComposeScratch {
                 saturating_u32(self.recycled_text_mesh_vertices.capacity()),
                 saturating_u32(text_vertex_capacity),
                 saturating_u32(self.retained_frames.entries.capacity()),
+                saturating_u32(attr_capacity),
             ],
         }
     }
@@ -1696,10 +1709,12 @@ impl ComposeScratch {
     ) -> (
         &mut Vec<TextMeshBatchBuilder>,
         &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+        &mut TextAttrScratch,
     ) {
         (
             &mut self.transient_text_mesh_builders,
             &mut self.recycled_text_mesh_vertices,
+            &mut self.text_attr_scratch,
         )
     }
 }
@@ -2053,7 +2068,6 @@ fn append_mesh_vertices(
     tint: [f32; 4],
     vertices: &[renderer::MeshVertex],
 ) {
-    out.reserve(vertices.len());
     if transform.x_axis == Vector4::X
         && transform.y_axis == -Vector4::Y
         && transform.z_axis == Vector4::Z
@@ -2070,9 +2084,9 @@ fn append_mesh_vertices(
         return;
     }
 
-    for vertex in vertices {
+    out.extend(vertices.iter().map(|vertex| {
         let pos = *transform * Vector4::new(vertex.pos[0], vertex.pos[1], 0.0, 1.0);
-        out.push(renderer::MeshVertex {
+        renderer::MeshVertex {
             pos: [pos.x, pos.y],
             color: [
                 vertex.color[0] * tint[0],
@@ -2080,8 +2094,8 @@ fn append_mesh_vertices(
                 vertex.color[2] * tint[2],
                 vertex.color[3] * tint[3],
             ],
-        });
-    }
+        }
+    }));
 }
 
 // Actor composition preserves draw order within each z layer. Discover, count,
@@ -2759,7 +2773,6 @@ impl CachedTextLayout {
 }
 
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
-type AttrIndices = SmallVec<[usize; 8]>;
 type ClipPolygon = SmallVec<[ClipVertex; 8]>;
 
 const MISSING_BYTE_INDEX: u8 = u8::MAX;
@@ -4361,37 +4374,56 @@ const fn attr_end(attr: &actors::TextAttribute) -> usize {
     attr.start.saturating_add(attr.length)
 }
 
+/// Compose-thread scratch shared by sequential text draws within one pass.
+/// The screen/session owner retains the largest observed attribute working set,
+/// with eight inline indices per buffer for small first-use lists. Larger sets
+/// are warmed during representative screen/song composition. Growing inputs may
+/// allocate; steady-state rebuilds only clear/refill the indices, sort start/end
+/// events, and sweep active attributes. Nothing is cached or pruned. Buffers are
+/// freed with ComposeScratch; storage_stats reports their heap index capacity.
+#[derive(Default)]
+struct TextAttrScratch {
+    start_order: SmallVec<[usize; 8]>,
+    end_order: SmallVec<[usize; 8]>,
+    active: SmallVec<[usize; 8]>,
+}
+
 struct TextAttrCursor<'a> {
     attributes: &'a [actors::TextAttribute],
-    start_order: AttrIndices,
-    end_order: AttrIndices,
-    active: AttrIndices,
+    scratch: &'a mut TextAttrScratch,
     active_max: Option<usize>,
     next_start: usize,
     next_end: usize,
 }
 
 impl<'a> TextAttrCursor<'a> {
-    fn new(attributes: &'a [actors::TextAttribute]) -> Option<Self> {
+    fn new(
+        attributes: &'a [actors::TextAttribute],
+        scratch: &'a mut TextAttrScratch,
+    ) -> Option<Self> {
         if attributes.is_empty() {
             return None;
         }
 
-        let mut start_order = AttrIndices::with_capacity(attributes.len());
-        let mut end_order = AttrIndices::with_capacity(attributes.len());
-        for index in 0..attributes.len() {
-            start_order.push(index);
-            end_order.push(index);
-        }
+        let TextAttrScratch {
+            start_order,
+            end_order,
+            active,
+        } = scratch;
+        start_order.clear();
+        end_order.clear();
+        active.clear();
+        // Moving ranges can increase overlap without increasing their count.
+        active.reserve(attributes.len());
+        start_order.extend(0..attributes.len());
+        end_order.extend(0..attributes.len());
 
         start_order.sort_unstable_by_key(|&index| (attributes[index].start, index));
         end_order.sort_unstable_by_key(|&index| (attr_end(&attributes[index]), index));
 
         Some(Self {
             attributes,
-            start_order,
-            end_order,
-            active: AttrIndices::new(),
+            scratch,
             active_max: None,
             next_start: 0,
             next_end: 0,
@@ -4400,7 +4432,7 @@ impl<'a> TextAttrCursor<'a> {
 
     #[inline(always)]
     fn push_active(&mut self, attr_index: usize) {
-        self.active.push(attr_index);
+        self.scratch.active.push(attr_index);
         self.active_max = Some(
             self.active_max
                 .map_or(attr_index, |max| max.max(attr_index)),
@@ -4409,29 +4441,34 @@ impl<'a> TextAttrCursor<'a> {
 
     #[inline(always)]
     fn remove_active(&mut self, attr_index: usize) {
-        let Some(index) = self.active.iter().position(|&index| index == attr_index) else {
+        let Some(index) = self
+            .scratch
+            .active
+            .iter()
+            .position(|&index| index == attr_index)
+        else {
             return;
         };
-        self.active.swap_remove(index);
+        self.scratch.active.swap_remove(index);
         if self.active_max == Some(attr_index) {
-            self.active_max = self.active.iter().copied().max();
+            self.active_max = self.scratch.active.iter().copied().max();
         }
     }
 
     #[inline(always)]
     fn colors_for(&mut self, char_index: usize) -> [[f32; 4]; 4] {
-        while self.next_end < self.end_order.len()
-            && attr_end(&self.attributes[self.end_order[self.next_end]]) <= char_index
+        while self.next_end < self.scratch.end_order.len()
+            && attr_end(&self.attributes[self.scratch.end_order[self.next_end]]) <= char_index
         {
-            let attr_index = self.end_order[self.next_end];
+            let attr_index = self.scratch.end_order[self.next_end];
             self.remove_active(attr_index);
             self.next_end += 1;
         }
 
-        while self.next_start < self.start_order.len()
-            && self.attributes[self.start_order[self.next_start]].start <= char_index
+        while self.next_start < self.scratch.start_order.len()
+            && self.attributes[self.scratch.start_order[self.next_start]].start <= char_index
         {
-            let attr_index = self.start_order[self.next_start];
+            let attr_index = self.scratch.start_order[self.next_start];
             let attr = &self.attributes[attr_index];
             if char_index < attr_end(attr) {
                 self.push_active(attr_index);
@@ -4821,28 +4858,29 @@ fn push_transient_text_mesh_quad(
     let v0 = uv_offset[1];
     let u1 = uv_offset[0] + uv_scale[0];
     let v1 = uv_offset[1] + uv_scale[1];
-    let positions = [[x0, y0, 0.0], [x1, y0, 0.0], [x0, y1, 0.0], [x1, y1, 0.0]];
+    let mut positions = [[x0, y0, 0.0], [x1, y0, 0.0], [x0, y1, 0.0], [x1, y1, 0.0]];
     let uvs = [[u0, v0], [u1, v0], [u0, v1], [u1, v1]];
-    let tex_matrix_scale = [1.0, 1.0];
-    out.reserve(6);
-    for corner in CORNERS {
-        let mut pos = positions[corner];
-        if distortion.abs() > 1e-6 {
+    // The two triangles share corners 0 and 3. Deform each corner only once.
+    if distortion.abs() > 1e-6 {
+        for (corner, pos) in positions.iter_mut().enumerate() {
             let [dx, dy] = text_distortion_offset(distortion, char_index, corner, size[0], size[1]);
             pos[0] += dx;
             pos[1] += dy;
         }
-        if let Some([dx, dy]) = jitter_offset {
+    }
+    if let Some([dx, dy]) = jitter_offset {
+        for pos in &mut positions {
             pos[0] += dx;
             pos[1] += dy;
         }
-        out.push(renderer::TexturedMeshVertex {
-            pos,
-            uv: uvs[corner],
-            tex_matrix_scale,
-            color: corner_colors[corner],
-        });
     }
+    let corners: [_; 4] = std::array::from_fn(|corner| renderer::TexturedMeshVertex {
+        pos: positions[corner],
+        uv: uvs[corner],
+        tex_matrix_scale: [1.0, 1.0],
+        color: corner_colors[corner],
+    });
+    out.extend(CORNERS.map(|corner| corners[corner]));
 }
 
 fn build_transient_text_mesh_builders(
@@ -4854,6 +4892,7 @@ fn build_transient_text_mesh_builders(
     stroke: bool,
     builders: &mut Vec<TextMeshBatchBuilder>,
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+    attr_scratch: &mut TextAttrScratch,
 ) {
     builders.clear();
     if layout.lines.is_empty() || layout.glyphs.is_empty() {
@@ -4868,7 +4907,9 @@ fn build_transient_text_mesh_builders(
     };
     let mut pen_y_logical = lrint_ties_even(-(block_h_logical_i as f32) * 0.5) as i32;
     let line_padding = layout.line_spacing - layout.font_height;
-    let mut attr_cursor = (!stroke).then(|| TextAttrCursor::new(attributes)).flatten();
+    let mut attr_cursor = (!stroke)
+        .then(|| TextAttrCursor::new(attributes, attr_scratch))
+        .flatten();
 
     for line in &layout.lines {
         pen_y_logical += layout.font_height;
@@ -6270,7 +6311,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
             .is_none();
 
     if transient_frame_inline {
-        let (builders, recycled_vertices) = scratch.transient_text_mesh_scratch();
+        let (builders, recycled_vertices, attr_scratch) = scratch.transient_text_mesh_scratch();
         build_transient_text_mesh_builders(
             layout,
             text.align_text,
@@ -6280,6 +6321,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
             false,
             builders,
             recycled_vertices,
+            attr_scratch,
         );
         push_transient_text_mesh_builders(
             out,
@@ -6303,6 +6345,7 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
                 true,
                 builders,
                 recycled_vertices,
+                attr_scratch,
             );
             push_transient_text_mesh_builders(
                 out,
@@ -7260,7 +7303,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             }
                         }
                     } else {
-                        let (builders, recycled_vertices) = scratch.transient_text_mesh_scratch();
+                        let (builders, recycled_vertices, attr_scratch) =
+                            scratch.transient_text_mesh_scratch();
                         build_transient_text_mesh_builders(
                             layout,
                             *align_text,
@@ -7270,6 +7314,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             false,
                             builders,
                             recycled_vertices,
+                            attr_scratch,
                         );
                         push_transient_text_mesh_builders(
                             out,
@@ -7305,6 +7350,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     true,
                                     builders,
                                     recycled_vertices,
+                                    attr_scratch,
                                 );
                                 push_transient_text_mesh_builders(
                                     out,
@@ -9451,9 +9497,9 @@ mod tests {
     use super::{
         ActorSegment, ActorXFold, ByteIndex, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
-        EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextLayoutCache,
-        TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry, TextureContext,
-        TextureLookupCache, TextureMeta, WorldRect, build_cached_text_layout,
+        EditablePayload, FrameBuilder, MeshPayload, MeshVertices, TextAttrCursor, TextAttrScratch,
+        TextLayoutCache, TextLayoutKey, TextMeshBatchBuilder, TextPageId, TextureCacheEntry,
+        TextureContext, TextureLookupCache, TextureMeta, WorldRect, build_cached_text_layout,
         build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_actor_resources,
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
@@ -11327,6 +11373,7 @@ mod tests {
             false,
             &mut builders,
             &mut recycled,
+            &mut TextAttrScratch::default(),
         );
         assert_eq!(builders.len(), fill.len());
         for (builder, batch) in builders.iter().zip(fill) {
@@ -11353,6 +11400,7 @@ mod tests {
             true,
             &mut builders,
             &mut recycled,
+            &mut TextAttrScratch::default(),
         );
         assert_eq!(builders.len(), stroke.len());
         for (builder, batch) in builders.iter().zip(stroke) {
@@ -11498,7 +11546,9 @@ mod tests {
                 glow: None,
             },
         ];
-        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+        let mut scratch = TextAttrScratch::default();
+        let mut cursor =
+            TextAttrCursor::new(&attrs, &mut scratch).expect("attributes should build a cursor");
 
         assert_eq!(cursor.tint_for(0), [1.0; 4]);
         assert_eq!(cursor.tint_for(2), [0.0, 0.0, 1.0, 1.0]);
@@ -11525,7 +11575,9 @@ mod tests {
                 glow: None,
             },
         ];
-        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+        let mut scratch = TextAttrScratch::default();
+        let mut cursor =
+            TextAttrCursor::new(&attrs, &mut scratch).expect("attributes should build a cursor");
 
         assert_eq!(cursor.tint_for(5), [1.0, 0.0, 0.0, 1.0]);
     }
@@ -11555,11 +11607,57 @@ mod tests {
                 glow: None,
             },
         ];
-        let mut cursor = TextAttrCursor::new(&attrs).expect("attributes should build a cursor");
+        let mut scratch = TextAttrScratch::default();
+        let mut cursor =
+            TextAttrCursor::new(&attrs, &mut scratch).expect("attributes should build a cursor");
 
         assert_eq!(cursor.tint_for(0), [1.0; 4]);
         assert_eq!(cursor.tint_for(3), [0.0, 1.0, 0.0, 1.0]);
         assert_eq!(cursor.tint_for(6), [0.0, 0.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn reused_attribute_cursor_matches_slice_precedence() {
+        let mut scratch = TextAttrScratch::default();
+        for count in [1, 8, 9, 32, 128, 257, 3, 0] {
+            let mut attrs: Vec<_> = (0..count)
+                .map(|i| TextAttribute {
+                    start: (i * 37) % 90,
+                    length: (i * 17) % 70,
+                    color: [i as f32, 0.25, 0.5, 0.75],
+                    vertex_colors: (i % 3 == 0).then_some([[i as f32; 4]; 4]),
+                    glow: None,
+                })
+                .collect();
+            for step in 0..3 {
+                if let Some(attr) = attrs.last_mut() {
+                    attr.start = usize::MAX - 3;
+                    attr.length = if step == 0 { 0 } else { 10 };
+                }
+                let Some(mut cursor) = TextAttrCursor::new(&attrs, &mut scratch) else {
+                    assert!(attrs.is_empty());
+                    continue;
+                };
+                for index in (0..180)
+                    .step_by(3)
+                    .chain([usize::MAX - 2, usize::MAX - 1, usize::MAX])
+                {
+                    let expected = attrs
+                        .iter()
+                        .rev()
+                        .find(|attr| {
+                            attr.start <= index && index < attr.start.saturating_add(attr.length)
+                        })
+                        .map_or([[1.0; 4]; 4], |attr| attr.colors());
+                    assert_eq!(
+                        cursor.colors_for(index),
+                        expected,
+                        "count={count}, step={step}, index={index}"
+                    );
+                }
+                attrs.reverse();
+            }
+        }
     }
 
     #[test]

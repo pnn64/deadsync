@@ -3,6 +3,7 @@ use std::fmt::Write;
 use std::hint::black_box;
 
 mod reuse;
+mod text_mesh;
 
 fn quad() -> Vec<renderer::TexturedMeshVertex> {
     [

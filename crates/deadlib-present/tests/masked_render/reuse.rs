@@ -245,7 +245,7 @@ fn render_reuse_bench() {
     }
 }
 
-fn record_frame(out: &mut String, frame: &RenderFrame) {
+pub(super) fn record_frame(out: &mut String, frame: &RenderFrame) {
     writeln!(
         out,
         "frame {:?} {:?} {:?} {:?} {:?} {:?}",
