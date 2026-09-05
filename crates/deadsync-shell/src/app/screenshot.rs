@@ -93,7 +93,8 @@ impl App {
             }
         };
 
-        self.audio.play_sfx("assets/sounds/screenshot.ogg");
+        self.ui_sfx
+            .play(&mut self.audio, "assets/sounds/screenshot.ogg");
         info!("Saved screenshot to {}", saved_path.display());
     }
 

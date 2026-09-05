@@ -103,6 +103,20 @@ use std::time::Instant;
 #[cfg(feature = "test-support")]
 pub mod actor_conformance;
 
+/// Selects the entry cue during song preparation, including indexed restarts.
+#[must_use]
+pub fn start_sfx(restart_count: u32) -> Option<PathBuf> {
+    if restart_count == 0 {
+        crate::assets::audio_folder::random_sfx("assets/sounds/song_start")
+    } else {
+        crate::assets::audio_folder::indexed_sfx(
+            "assets/sounds/song_start/restart",
+            restart_count,
+            "restart.ogg",
+        )
+    }
+}
+
 pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
     deadsync_profile_gameplay::GameplayProfile,
     deadsync_assets::song_lua::SongLuaOverlayActor,

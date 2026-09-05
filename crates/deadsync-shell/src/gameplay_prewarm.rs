@@ -238,8 +238,8 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     song_lua_visuals: &SongLuaRuntimeVisuals<SongLuaOverlayActor, CapturedActor, StateDelta>,
     song_lua_sound_paths: &[PathBuf],
 ) -> GameplaySfx {
-    let boom = audio.preload_sfx(BOOM_SFX_PATH);
-    let assist_tick = audio.preload_sfx(deadsync_gameplay::ASSIST_TICK_SFX_PATH);
+    let boom = audio.prepare_sfx(BOOM_SFX_PATH);
+    let assist_tick = audio.prepare_sfx(deadsync_gameplay::ASSIST_TICK_SFX_PATH);
 
     let mut sound_paths = Vec::<PathBuf>::with_capacity(song_lua_sound_paths.len());
     let mut seen = HashSet::<String>::with_capacity(song_lua_sound_paths.len());
@@ -261,7 +261,7 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     let mut song_lua = HashMap::with_capacity(sound_paths.len());
     for sound_path in sound_paths {
         let key = sound_path.to_string_lossy();
-        if let Some(sound) = audio.preload_sfx(key.as_ref()) {
+        if let Some(sound) = audio.prepare_sfx(key.as_ref()) {
             song_lua.insert(key.into_owned(), sound);
         }
     }

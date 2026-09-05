@@ -546,7 +546,7 @@ pub(crate) fn drain_core(
             } => audio.play_music(path, audio_cut(cut), looping, rate),
             GameplayAudioCommand::PlayPreloadedSfx(path) => {
                 if let Some(sound) = sounds.resolve(path) {
-                    audio.play_resolved_sfx(sound);
+                    audio.play_sfx(sound);
                 }
             }
             GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
@@ -645,7 +645,7 @@ pub(crate) fn update(
         current_song_lua_time,
         |path: &Path| {
             if let Some(sound) = sounds.resolve_path(path) {
-                audio.play_resolved_sfx(sound);
+                audio.play_sfx(sound);
             }
         },
     );

@@ -551,6 +551,26 @@ pub const SRPG10_ASSETS: Assets = Assets {
     shared_background_size: [2581, 1452],
 };
 
+/// Fixed UI cues prepared before the first screen accepts input.
+pub const SFX_PATHS: &[&str] = &[
+    "assets/sounds/boom.ogg",
+    "assets/sounds/change.ogg",
+    "assets/sounds/change_value.ogg",
+    "assets/sounds/common_invalid.ogg",
+    "assets/sounds/easier.ogg",
+    "assets/sounds/expand.ogg",
+    "assets/sounds/harder.ogg",
+    "assets/sounds/next_row.ogg",
+    "assets/sounds/prev_row.ogg",
+    "assets/sounds/screen_edit_marker.ogg",
+    "assets/sounds/screen_edit_snap.ogg",
+    "assets/sounds/screenshot.ogg",
+    SRPG10_EVAL_FAILED_SFX,
+    SRPG10_EVAL_PASSED_SFX,
+    "assets/sounds/start.ogg",
+    "assets/sounds/unjoin.ogg",
+];
+
 pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
 pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
 pub const SRPG10_EVAL_PASSED_SFX: &str = "assets/sounds/srpg10_eval_passed.ogg";

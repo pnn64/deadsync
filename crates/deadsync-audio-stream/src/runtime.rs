@@ -130,31 +130,26 @@ impl AudioControl {
             .map_or(&[], |engine| engine.startup_output_devices.as_slice())
     }
 
-    pub fn play_sfx(&mut self, path: &str) {
-        self.play_sfx_on_bus(path, EFFECT_BUS);
-    }
-
-    pub fn play_screen_sfx(&mut self, path: &str) {
-        self.play_sfx_on_bus(path, SCREEN_BUS);
-    }
-
-    fn play_sfx_on_bus(&mut self, path: &str, bus: deadlib_audio_core::MixBus) {
-        let Some(engine) = self.engine.as_mut() else {
-            return;
-        };
-        let output = output_format(engine);
-        engine.sfx_cache.play(path, bus, output, resolve_asset_path);
-    }
-
-    pub fn preload_sfx(&mut self, path: &str) -> Option<SfxId> {
+    /// Loads a sound for later playback; call during startup or screen/song preparation.
+    ///
+    /// Returns `None` when audio is unavailable or the sound cannot be loaded.
+    pub fn prepare_sfx(&mut self, path: &str) -> Option<SfxId> {
         let engine = self.engine.as_mut()?;
         let output = output_format(engine);
-        engine.sfx_cache.preload(path, output, resolve_asset_path)
+        engine.sfx_cache.prepare(path, output, resolve_asset_path)
     }
 
-    pub fn play_resolved_sfx(&mut self, sound: &SfxId) {
+    /// Enqueues a prepared effect without filesystem access or decoding.
+    pub fn play_sfx(&mut self, sound: &SfxId) {
         if let Some(engine) = self.engine.as_mut() {
-            engine.sfx_cache.play_resolved(sound, EFFECT_BUS, 0);
+            engine.sfx_cache.play(sound, EFFECT_BUS, 0);
+        }
+    }
+
+    /// Enqueues a prepared effect that stops when the owning screen exits.
+    pub fn play_screen_sfx(&mut self, sound: &SfxId) {
+        if let Some(engine) = self.engine.as_mut() {
+            engine.sfx_cache.play(sound, SCREEN_BUS, 0);
         }
     }
 

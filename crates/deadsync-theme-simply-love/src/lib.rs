@@ -7,6 +7,8 @@ pub mod i18n;
 mod i18n_runtime;
 pub mod notefield_style;
 mod resources;
+#[doc(inline)]
+pub use resources::SFX_PATHS;
 pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;

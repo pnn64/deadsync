@@ -2702,6 +2702,7 @@ pub struct State {
     event_overlay_pending: bool,
     result_dialog_visible: bool,
     result_dialogs: [Option<ResultDialog>; MAX_PLAYERS],
+    pub sfx_paths: SfxPaths,
     submit_record_sfx_played: bool,
     nice_sfx_played: bool,
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
@@ -2795,6 +2796,7 @@ impl Clone for State {
             event_overlay_pending: self.event_overlay_pending,
             result_dialog_visible: self.result_dialog_visible,
             result_dialogs: self.result_dialogs.clone(),
+            sfx_paths: self.sfx_paths.clone(),
             submit_record_sfx_played: self.submit_record_sfx_played,
             nice_sfx_played: self.nice_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
@@ -3520,6 +3522,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         event_overlay_pending: false,
         result_dialog_visible: false,
         result_dialogs: std::array::from_fn(|_| None),
+        sfx_paths: SfxPaths::default(),
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
@@ -3835,6 +3838,7 @@ pub fn init_from_score_info(
         event_overlay_pending: false,
         result_dialog_visible: false,
         result_dialogs: std::array::from_fn(|_| None),
+        sfx_paths: SfxPaths::default(),
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
@@ -3980,6 +3984,62 @@ fn sync_submit_event_progress(state: &mut State) {
     }
 }
 
+/// Content cues selected once on evaluation entry and prepared by the shell.
+#[derive(Clone, Debug, Default)]
+pub struct SfxPaths {
+    pub personal_best: Option<std::path::PathBuf>,
+    pub world_record: Option<std::path::PathBuf>,
+    pub nice: Option<std::path::PathBuf>,
+}
+
+impl SfxPaths {
+    /// Chooses the optional content cues for the upcoming evaluation visit.
+    #[must_use]
+    pub fn choose() -> Self {
+        Self {
+            personal_best: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_pb"),
+            world_record: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_wr"),
+            nice: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_nice"),
+        }
+    }
+
+    /// Iterates selected files for preparation before evaluation updates begin.
+    pub fn iter(&self) -> impl Iterator<Item = &std::path::Path> {
+        [
+            self.personal_best.as_deref(),
+            self.world_record.as_deref(),
+            self.nice.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+    }
+}
+
+/// Selects the pass/fail entry cue before the shell prepares and plays it.
+#[must_use]
+pub fn entry_sfx(
+    failed: bool,
+    visual_style: deadsync_config::prelude::VisualStyle,
+    srpg_variant: deadsync_config::prelude::SrpgVariant,
+) -> Option<std::path::PathBuf> {
+    if visual_styles::srpg10_active(visual_style, srpg_variant) {
+        Some(
+            if failed {
+                visual_styles::SRPG10_EVAL_FAILED_SFX
+            } else {
+                visual_styles::SRPG10_EVAL_PASSED_SFX
+            }
+            .into(),
+        )
+    } else {
+        crate::assets::audio_folder::random_sfx(if failed {
+            "assets/sounds/evaluation_fail"
+        } else {
+            "assets/sounds/evaluation_pass"
+        })
+    }
+}
+
 /// Fires a one-shot PB / WR sound effect (zmod parity, issue #375) when the
 /// `GrooveStats` submit response first lands with a record banner. Triggers
 /// once per evaluation visit; subsequent retries or repeated banners do not
@@ -4008,12 +4068,12 @@ fn sync_submit_record_sfx(state: &mut State) -> ThemeEffect {
     let Some(banner) = best else {
         return ThemeEffect::None;
     };
-    let folder = match banner {
+    let path = match banner {
         score_data::GrooveStatsSubmitRecordBanner::WorldRecord
-        | score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx => "assets/sounds/evaluation_wr",
-        score_data::GrooveStatsSubmitRecordBanner::PersonalBest => "assets/sounds/evaluation_pb",
-    };
-    let path = crate::assets::audio_folder::random_sfx(folder);
+        | score_data::GrooveStatsSubmitRecordBanner::WorldRecordEx => &state.sfx_paths.world_record,
+        score_data::GrooveStatsSubmitRecordBanner::PersonalBest => &state.sfx_paths.personal_best,
+    }
+    .clone();
     state.submit_record_sfx_played = true;
     path.map_or(ThemeEffect::None, |path| {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
@@ -4125,7 +4185,7 @@ fn sync_nice_sfx(state: &mut State) -> ThemeEffect {
     if !state.nice_scores.contains(&true) {
         return ThemeEffect::None;
     }
-    let path = crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_nice");
+    let path = state.sfx_paths.nice.clone();
     state.nice_sfx_played = true;
     path.map_or(ThemeEffect::None, |path| {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
@@ -5135,6 +5195,45 @@ mod input_audio_effect_tests {
             )) if *path == expected_path
         ));
         assert!(matches!(effects[1], ThemeEffect::Navigate(screen) if screen == expected_next));
+    }
+
+    #[test]
+    fn nice_sfx_uses_entry_selection_once() {
+        let mut state = super::init(None, super::EvaluationInitView::default());
+        state.nice_scores = [true, false];
+        state.sfx_paths.nice = Some("selected/nice.ogg".into());
+        state.context.policy.machine_nice_sound = false;
+        assert!(matches!(
+            super::sync_nice_sfx(&mut state),
+            ThemeEffect::None
+        ));
+        state.context.policy.machine_nice_sound = true;
+        assert!(matches!(
+            super::sync_nice_sfx(&mut state),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlayScreenSfxPath(path)
+            )) if path == std::path::Path::new("selected/nice.ogg")
+        ));
+        assert!(matches!(
+            super::sync_nice_sfx(&mut state),
+            ThemeEffect::None
+        ));
+    }
+
+    #[test]
+    fn missing_nice_sfx_does_not_pick_a_late_replacement() {
+        let mut state = super::init(None, super::EvaluationInitView::default());
+        state.nice_scores = [true, true];
+        state.context.policy.machine_nice_sound = true;
+        assert!(matches!(
+            super::sync_nice_sfx(&mut state),
+            ThemeEffect::None
+        ));
+        state.sfx_paths.nice = Some("late/nice.ogg".into());
+        assert!(matches!(
+            super::sync_nice_sfx(&mut state),
+            ThemeEffect::None
+        ));
     }
 
     #[test]

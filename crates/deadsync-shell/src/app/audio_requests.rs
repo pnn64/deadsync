@@ -1,6 +1,54 @@
+use deadsync_audio_stream::{AudioControl, SfxId};
 use deadsync_config::prelude as config;
 use deadsync_theme::views::{AudioOptionsView, AudioOutputDeviceView};
 use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+/// Application-thread handles: fixed cues live for the session; content cues
+/// live for the screen. Preparation sizes the maps before input/update runs.
+/// Each map is bounded by its preparation path list, with no runtime insertions.
+/// Playback only borrows handles; missing/failed sounds are silent. Clearing
+/// screen handles happens on exit; the audio cache retains the sample data.
+pub(super) struct UiSfx {
+    fixed: HashMap<&'static str, SfxId>,
+    pub(super) screen: HashMap<PathBuf, SfxId>,
+}
+
+impl UiSfx {
+    pub fn prepare(audio: &mut AudioControl, paths: &[&'static str]) -> Self {
+        let mut fixed = HashMap::with_capacity(paths.len());
+        for &path in paths {
+            if let Some(sound) = audio.prepare_sfx(path) {
+                fixed.insert(path, sound);
+            }
+        }
+        Self {
+            fixed,
+            screen: HashMap::new(),
+        }
+    }
+
+    pub fn prepare_screen<'a>(
+        &mut self,
+        audio: &mut AudioControl,
+        paths: impl Iterator<Item = &'a Path>,
+    ) {
+        self.screen = paths
+            .filter_map(|path| {
+                audio
+                    .prepare_sfx(path.to_string_lossy().as_ref())
+                    .map(|sound| (path.to_owned(), sound))
+            })
+            .collect();
+    }
+
+    pub fn play(&self, audio: &mut AudioControl, path: &str) {
+        if let Some(sound) = self.fixed.get(path) {
+            audio.play_sfx(sound);
+        }
+    }
+}
 
 pub(super) fn options_view(audio: &deadsync_audio_stream::AudioControl) -> AudioOptionsView {
     let cfg = config::get();
@@ -67,12 +115,13 @@ fn linux_backend(name: &str) -> config::LinuxAudioBackend {
     }
 }
 
-pub(super) fn execute(audio: &mut deadsync_audio_stream::AudioControl, request: AudioRequest) {
+pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRequest) {
     match request {
-        AudioRequest::PlaySfx(path) => audio.play_sfx(path),
-        AudioRequest::PlaySfxPath(path) => audio.play_sfx(path.to_string_lossy().as_ref()),
+        AudioRequest::PlaySfx(path) => sounds.play(audio, path),
         AudioRequest::PlayScreenSfxPath(path) => {
-            audio.play_screen_sfx(path.to_string_lossy().as_ref());
+            if let Some(sound) = sounds.screen.get(&path) {
+                audio.play_screen_sfx(sound);
+            }
         }
         AudioRequest::PlayMusic {
             path,

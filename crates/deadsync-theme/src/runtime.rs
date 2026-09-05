@@ -23,10 +23,9 @@ impl Default for AudioCut {
 /// Audio work requested by a concrete theme and executed by the shell.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AudioRequest {
+    /// Plays a cue from the theme's prepared fixed sound catalogue.
     PlaySfx(&'static str),
-    /// Cold filesystem-selected effect resolved by the shell's audio owner.
-    PlaySfxPath(PathBuf),
-    /// Cold filesystem-selected effect stopped with its owning screen.
+    /// Plays a prepared filesystem-selected effect, stopped with its owning screen.
     PlayScreenSfxPath(PathBuf),
     PlayMusic {
         path: PathBuf,

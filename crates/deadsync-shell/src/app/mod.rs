@@ -1551,6 +1551,7 @@ pub struct App {
     /// Resolved song-lifetime gameplay sounds; replaced at Gameplay/Practice
     /// prewarm and borrowed by hot command submission.
     gameplay_sfx: GameplaySfx,
+    ui_sfx: audio_requests::UiSfx,
     /// At most one CPU-only Gameplay construction job. Song Lua charts build
     /// their deterministic 60 Hz timeline here so the application thread can
     /// continue pumping the window and rendering the loading frame. The job is
@@ -2325,6 +2326,8 @@ impl App {
         // Reconcile chart timing and any video fallback once after the deferred
         // command installs the initial media.
         gs.background_path_dirty = true;
+        let song_start_sfx = gameplay::start_sfx(self.state.session.gameplay_restart_count)
+            .and_then(|path| self.audio.prepare_sfx(path.to_string_lossy().as_ref()));
         self.state.screens.gameplay_state = Some(gs);
         if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
             crate::gameplay_runtime::enter(
@@ -2335,18 +2338,8 @@ impl App {
                 &mut self.music_clock,
             );
         }
-        let restart_count = self.state.session.gameplay_restart_count;
-        let song_start_sfx = if restart_count == 0 {
-            deadsync_assets::audio_folder::random_sfx("assets/sounds/song_start")
-        } else {
-            deadsync_assets::audio_folder::indexed_sfx(
-                "assets/sounds/song_start/restart",
-                restart_count,
-                "restart.ogg",
-            )
-        };
-        if let Some(path) = song_start_sfx {
-            self.audio.play_sfx(path.to_string_lossy().as_ref());
+        if let Some(sound) = song_start_sfx {
+            self.audio.play_sfx(&sound);
         }
         if let Some(course) = self.state.session.course_run.as_mut() {
             course.next_stage_index = course.next_stage_index.saturating_add(1);
@@ -4408,7 +4401,7 @@ impl App {
         config_generation: u64,
         config: config::Config,
         profile_data: profile_data::Profile,
-        audio: deadsync_audio_stream::AudioControl,
+        mut audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
         live_case: Option<crate::live_case::LiveCase>,
     ) -> Self {
@@ -4420,6 +4413,8 @@ impl App {
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let select_course_policy = SelectCourseFramePolicy::from_config(&config);
         let evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
+        let ui_sfx =
+            audio_requests::UiSfx::prepare(&mut audio, deadsync_theme_simply_love::SFX_PATHS);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
             config,
@@ -4465,6 +4460,7 @@ impl App {
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
             audio,
             gameplay_sfx: GameplaySfx::default(),
+            ui_sfx,
             pending_gameplay_init: None,
             gameplay_preload: None,
             music_clock,
@@ -5049,7 +5045,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Audio(request) => {
-                    audio_requests::execute(&mut self.audio, request);
+                    audio_requests::execute(&mut self.audio, &self.ui_sfx, request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::SongSearch(request) => {
@@ -5091,6 +5087,7 @@ impl App {
                                     );
                                     audio_requests::execute(
                                         &mut self.audio,
+                                        &self.ui_sfx,
                                         AudioRequest::PlaySfx("assets/sounds/change.ogg"),
                                     );
                                     debug!(
@@ -5738,10 +5735,11 @@ impl App {
         match input {
             OffsetPromptInput::Consumed => {}
             OffsetPromptInput::ChoiceChanged => {
-                self.audio.play_sfx("assets/sounds/change.ogg");
+                self.ui_sfx
+                    .play(&mut self.audio, "assets/sounds/change.ogg");
             }
             OffsetPromptInput::Decide(save_changes) => {
-                self.audio.play_sfx("assets/sounds/start.ogg");
+                self.ui_sfx.play(&mut self.audio, "assets/sounds/start.ogg");
                 self.finalize_gameplay_offset_prompt(save_changes, event_loop);
             }
         }
@@ -6217,6 +6215,10 @@ impl App {
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
         }
 
+        let sfx_paths = evaluation::SfxPaths::choose();
+        self.ui_sfx
+            .prepare_screen(&mut self.audio, sfx_paths.iter());
+        self.state.screens.evaluation_state.sfx_paths = sfx_paths.clone();
         let color_idx = self.state.screens.evaluation_state.active_color_index;
         let eval_snapshot = self.state.screens.evaluation_state.clone();
         let in_course_run = self.state.session.course_run.is_some();
@@ -6248,22 +6250,10 @@ impl App {
         // is immediately replaced by a course summary, this is the cue tied to
         // the player's actual exit from gameplay.
         let failed = screens::evaluation::all_joined_players_failed(&eval_snapshot);
-        if visual_styles::srpg10_active(config.visual_style, config.srpg_variant) {
-            let sfx = if failed {
-                visual_styles::SRPG10_EVAL_FAILED_SFX
-            } else {
-                visual_styles::SRPG10_EVAL_PASSED_SFX
-            };
-            self.audio.play_screen_sfx(sfx);
-        } else {
-            let folder = if failed {
-                "assets/sounds/evaluation_fail"
-            } else {
-                "assets/sounds/evaluation_pass"
-            };
-            if let Some(path) = deadsync_assets::audio_folder::random_sfx(folder) {
-                self.audio.play_screen_sfx(path.to_string_lossy().as_ref());
-            }
+        let entry_sfx = evaluation::entry_sfx(failed, config.visual_style, config.srpg_variant)
+            .and_then(|path| self.audio.prepare_sfx(path.to_string_lossy().as_ref()));
+        if let Some(sound) = entry_sfx {
+            self.audio.play_screen_sfx(&sound);
         }
 
         if let Some((course_run, per_song_pages)) = self.state.session.take_final_course(failed) {
@@ -6304,11 +6294,13 @@ impl App {
                 );
                 apply_course_summary_column_judgments(&mut course_page, &per_song_pages);
                 course_page.screen_elapsed = screen_elapsed;
+                course_page.sfx_paths = sfx_paths.clone();
                 self.state.screens.evaluation_state = course_page.clone();
 
                 let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
                 pages.push(course_page);
                 for mut page in per_song_pages {
+                    page.sfx_paths = sfx_paths.clone();
                     page.return_to_course = true;
                     page.auto_advance_seconds = None;
                     page.screen_elapsed = screen_elapsed;
@@ -6401,7 +6393,8 @@ impl App {
         self.state.screens.evaluation_state = page;
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
-        self.audio.play_sfx("assets/sounds/change.ogg");
+        self.ui_sfx
+            .play(&mut self.audio, "assets/sounds/change.ogg");
     }
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
@@ -7877,7 +7870,8 @@ impl App {
             let new_value = !config::get().translated_titles;
             config::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
-            self.audio.play_sfx("assets/sounds/change.ogg");
+            self.ui_sfx
+                .play(&mut self.audio, "assets/sounds/change.ogg");
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
@@ -8070,6 +8064,7 @@ impl App {
         });
         if plan.stop_screen_sfx {
             self.audio.stop_screen_sfx();
+            self.ui_sfx.screen.clear();
         }
         if plan.clear_play_background
             && let Some(backend) = self.backend.as_mut()
