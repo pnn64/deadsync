@@ -9850,8 +9850,12 @@ impl ApplicationHandler<UserEvent> for App {
             .gameplay_input_trace
             .finish_batch_if_enabled(self.state.screens.current_screen);
         match self.flush_due_input_events(event_loop) {
-            Ok(true) => self.request_redraw(&window, "input_debounce"),
-            Ok(false) => {}
+            // Capped modes draw at the scheduler's deadline. Input is already
+            // dispatched with its original timestamp and must not add an early frame.
+            Ok(true) if self.redraw_interval_state(&window).interval.is_none() => {
+                self.request_redraw(&window, "input_debounce");
+            }
+            Ok(_) => {}
             Err(e) => {
                 error!("Failed to handle debounced input before wait: {e}");
                 event_loop.exit();
