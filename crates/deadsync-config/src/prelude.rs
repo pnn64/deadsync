@@ -1,6 +1,6 @@
 pub use deadlib_audio_core::AudioOutputMode;
 pub use deadlib_platform::display::FullscreenType;
-pub use deadlib_present::color::{Color, DifficultyColorScheme};
+pub use deadlib_present::color::Color;
 pub use deadsync_audio_stream::AudioMixLevels;
 pub use deadsync_audio_stream::LinuxAudioBackend;
 pub use deadsync_input_native::PadOrderBackend;
@@ -10,6 +10,7 @@ pub use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };
 pub use deadsync_smx::SmxPadPreset;
+pub use deadsync_theme::color::DifficultyColorScheme;
 
 pub use crate::app_config::{Config, DisplayMode};
 pub use crate::audio::NoteScrollClock;

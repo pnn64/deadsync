@@ -1,4 +1,3 @@
-use deadlib_present::density;
 use deadlib_render_core::MeshVertex;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
@@ -6,6 +5,7 @@ use deadsync_profile::{PlayStyle, PlayerSide};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::views::DensityGraphView as DensityGraphSource;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme_simply_love::screens::components::shared::density;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use log::{debug, warn};
 use std::path::PathBuf;

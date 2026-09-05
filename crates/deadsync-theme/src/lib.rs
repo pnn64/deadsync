@@ -1,3 +1,4 @@
+pub mod color;
 mod effect;
 mod runtime;
 mod screen;

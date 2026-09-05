@@ -6,8 +6,10 @@ use deadsync_theme_simply_love::views::{PostSongPlayerView, PostSongRuntimeView}
 
 fn player_view(side: PlayerSide) -> PostSongPlayerView {
     let player = profile::get_for_side(side);
-    let judgment_palette = deadsync_config::judgment_palettes::runtime_catalog()
-        .resolve(player.judgment_palette_id.as_deref());
+    let judgment_palette = deadsync_config::judgment_palettes::runtime_catalog(
+        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+    )
+    .resolve(player.judgment_palette_id.as_deref());
     PostSongPlayerView {
         joined: profile::is_session_side_joined(side),
         guest: profile::is_session_side_guest(side),

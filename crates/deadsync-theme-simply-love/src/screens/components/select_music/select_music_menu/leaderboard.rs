@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
@@ -8,7 +9,6 @@ use crate::views::{
     SelectMusicLeaderboardView,
 };
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
@@ -24,7 +24,7 @@ const GS_LEADERBOARD_PANE_SIDE_OFFSET: f32 = 160.0;
 const GS_LEADERBOARD_PANE_CENTER_Y: f32 = -15.0;
 const GS_LEADERBOARD_DIM_ALPHA: f32 = 0.875;
 const GS_LEADERBOARD_Z: i16 = 1480;
-const GS_LEADERBOARD_HEADER_BG: [f32; 4] = color::rgba_hex("#00AEEF");
+const GS_LEADERBOARD_HEADER_BG: [f32; 4] = deadlib_present::color::rgba_hex("#00AEEF");
 const GS_LEADERBOARD_TEXT_ZOOM: f32 = 1.0;
 const GS_LEADERBOARD_ERROR_TIMEOUT: &str = "Timed Out";
 const GS_LEADERBOARD_ERROR_FAILED: &str = "Failed to Load 😞";
@@ -34,8 +34,8 @@ const GS_LEADERBOARD_LOADING_TEXT: &str = "Loading ...";
 const GS_LEADERBOARD_MACHINE_BEST: &str = "Machine's  Best";
 const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
 const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
-const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
-const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
+const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#BD94FF");
+const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
 
 #[derive(Clone, Debug, Default)]
 pub struct LeaderboardSideState {

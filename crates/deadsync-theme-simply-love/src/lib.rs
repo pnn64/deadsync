@@ -1,5 +1,6 @@
 pub(crate) use deadlib_present::rgba_const;
 
+pub mod color;
 pub mod effects;
 pub mod fonts;
 pub mod i18n;

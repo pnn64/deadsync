@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
 // Screen navigation is handled in app
+use crate::color;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
@@ -11,7 +12,6 @@ use crate::views::{
     MainMenuRuntimeView,
 };
 use deadlib_present::actors::{Actor, TextAlign};
-use deadlib_present::color;
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -748,7 +748,7 @@ pub fn push_actors(
     } else {
         (
             color::menu_selected_rgba(state.active_color_index),
-            color::rgba_hex(NORMAL_COLOR_HEX),
+            deadlib_present::color::rgba_hex(NORMAL_COLOR_HEX),
         )
     };
 

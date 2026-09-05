@@ -1,15 +1,11 @@
 use crate::ini::SimpleIni;
 use deadlib_platform::dirs::app_dirs;
-use deadlib_present::color::{
-    Color, JudgmentColorRole, JudgmentPalette, SIMPLY_LOVE_JUDGMENT_PALETTE,
-};
+use deadlib_present::color::Color;
+use deadsync_theme::color::{JudgmentColorRole, JudgmentPalette, JudgmentPalettePreset};
 use std::fmt::Write as _;
 use std::path::Path;
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 use uuid::Uuid;
-
-pub const SIMPLY_LOVE_PALETTE_ID: &str = "simply-love";
-pub const SIMPLY_LOVE_PALETTE_NAME: &str = "Simply Love";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JudgmentPaletteDefinition {
@@ -21,21 +17,28 @@ pub struct JudgmentPaletteDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JudgmentPaletteCatalog {
+    built_in: JudgmentPalettePreset,
     pub default_palette_id: String,
     pub palettes: Vec<JudgmentPaletteDefinition>,
 }
 
-impl Default for JudgmentPaletteCatalog {
-    fn default() -> Self {
+impl JudgmentPaletteCatalog {
+    /// Start a catalog with the theme's immutable built-in palette.
+    #[must_use]
+    pub fn new(built_in: JudgmentPalettePreset) -> Self {
         Self {
-            default_palette_id: SIMPLY_LOVE_PALETTE_ID.to_owned(),
-            palettes: vec![built_in_definition()],
+            built_in,
+            default_palette_id: built_in.id.to_owned(),
+            palettes: vec![JudgmentPaletteDefinition {
+                id: built_in.id.to_owned(),
+                name: built_in.name.to_owned(),
+                palette: built_in.palette,
+                built_in: true,
+            }],
         }
     }
-}
 
-impl JudgmentPaletteCatalog {
-    pub fn from_ini(content: &str) -> Self {
+    pub fn from_ini(content: &str, built_in: JudgmentPalettePreset) -> Self {
         let mut ini = SimpleIni::new();
         ini.load_str(content);
 
@@ -45,7 +48,7 @@ impl JudgmentPaletteCatalog {
                 continue;
             };
             let id = id.trim();
-            if id.is_empty() || id.eq_ignore_ascii_case(SIMPLY_LOVE_PALETTE_ID) {
+            if id.is_empty() || id.eq_ignore_ascii_case(built_in.id) {
                 continue;
             }
             let name = properties
@@ -54,7 +57,7 @@ impl JudgmentPaletteCatalog {
                 .and_then(valid_name)
                 .unwrap_or("Custom Palette")
                 .to_owned();
-            let mut colors = SIMPLY_LOVE_JUDGMENT_PALETTE.colors;
+            let mut colors = built_in.palette.colors;
             for role in JudgmentColorRole::ALL {
                 if let Some(color) = properties
                     .get(role.config_key())
@@ -72,7 +75,7 @@ impl JudgmentPaletteCatalog {
                 JudgmentPaletteDefinition {
                     id: id.to_owned(),
                     name,
-                    palette: JudgmentPalette::from_base_colors(colors),
+                    palette: JudgmentPalette::from_base_colors(colors, built_in.dim_peaks),
                     built_in: false,
                 },
             ));
@@ -84,7 +87,7 @@ impl JudgmentPaletteCatalog {
                 .then_with(|| left.id.cmp(&right.id))
         });
 
-        let mut catalog = Self::default();
+        let mut catalog = Self::new(built_in);
         for (_, definition) in custom {
             if catalog.palette(&definition.id).is_none() {
                 catalog.palettes.push(definition);
@@ -128,16 +131,16 @@ impl JudgmentPaletteCatalog {
     }
 
     #[must_use]
-    pub fn load(path: &Path) -> Self {
+    pub fn load(path: &Path, built_in: JudgmentPalettePreset) -> Self {
         match std::fs::read_to_string(path) {
-            Ok(content) => Self::from_ini(&content),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::default(),
+            Ok(content) => Self::from_ini(&content, built_in),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Self::new(built_in),
             Err(error) => {
                 log::warn!(
                     "failed to load judgment palettes from '{}': {error}",
                     path.display()
                 );
-                Self::default()
+                Self::new(built_in)
             }
         }
     }
@@ -169,7 +172,7 @@ impl JudgmentPaletteCatalog {
         if self.palette(&self.default_palette_id).is_some() {
             &self.default_palette_id
         } else {
-            SIMPLY_LOVE_PALETTE_ID
+            self.built_in.id
         }
     }
 
@@ -178,7 +181,7 @@ impl JudgmentPaletteCatalog {
         selection
             .and_then(|id| self.palette(id))
             .or_else(|| self.palette(self.resolved_default_id()))
-            .map_or(SIMPLY_LOVE_JUDGMENT_PALETTE, |entry| entry.palette)
+            .map_or(self.built_in.palette, |entry| entry.palette)
     }
 
     pub fn create_palette(&mut self, name: &str, source_id: &str) -> Result<String, String> {
@@ -220,7 +223,10 @@ impl JudgmentPaletteCatalog {
         if definition.built_in {
             return Err("Built-in judgment palettes cannot be edited.".to_owned());
         }
-        definition.palette = definition.palette.with_color(role, color.to_rgba());
+        definition.palette =
+            definition
+                .palette
+                .with_color(role, color.to_rgba(), self.built_in.dim_peaks);
         Ok(())
     }
 
@@ -233,7 +239,7 @@ impl JudgmentPaletteCatalog {
         }
         self.palettes.remove(index);
         if self.default_palette_id == id {
-            SIMPLY_LOVE_PALETTE_ID.clone_into(&mut self.default_palette_id);
+            self.built_in.id.clone_into(&mut self.default_palette_id);
         }
         Ok(())
     }
@@ -259,43 +265,41 @@ impl JudgmentPaletteCatalog {
     }
 }
 
-fn built_in_definition() -> JudgmentPaletteDefinition {
-    JudgmentPaletteDefinition {
-        id: SIMPLY_LOVE_PALETTE_ID.to_owned(),
-        name: SIMPLY_LOVE_PALETTE_NAME.to_owned(),
-        palette: SIMPLY_LOVE_JUDGMENT_PALETTE,
-        built_in: true,
-    }
-}
-
 fn valid_name(raw: &str) -> Option<&str> {
     let name = raw.trim();
     (!name.is_empty() && name.chars().count() <= 32 && !name.contains(['\n', '\r', '[', ']', '=']))
         .then_some(name)
 }
 
-static RUNTIME_CATALOG: LazyLock<RwLock<Arc<JudgmentPaletteCatalog>>> = LazyLock::new(|| {
-    RwLock::new(Arc::new(JudgmentPaletteCatalog::load(
-        &app_dirs().judgment_palettes_path(),
-    )))
-});
+// Initialized for the session's theme; catalogs are loaded/updated on menu transitions.
+static RUNTIME_CATALOG: OnceLock<RwLock<Arc<JudgmentPaletteCatalog>>> = OnceLock::new();
 
-pub fn runtime_catalog() -> Arc<JudgmentPaletteCatalog> {
+/// Load the session catalog on first use with the supplied theme defaults.
+pub fn runtime_catalog(built_in: JudgmentPalettePreset) -> Arc<JudgmentPaletteCatalog> {
     RUNTIME_CATALOG
+        .get_or_init(|| {
+            RwLock::new(Arc::new(JudgmentPaletteCatalog::load(
+                &app_dirs().judgment_palettes_path(),
+                built_in,
+            )))
+        })
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone()
 }
 
 pub fn update_runtime_catalog(
+    built_in: JudgmentPalettePreset,
     update: impl FnOnce(&mut JudgmentPaletteCatalog) -> Result<(), String>,
 ) -> Result<Arc<JudgmentPaletteCatalog>, String> {
-    let current = runtime_catalog();
+    let current = runtime_catalog(built_in);
     let mut next = (*current).clone();
     update(&mut next)?;
     next.save(&app_dirs().judgment_palettes_path())?;
     let next = Arc::new(next);
     *RUNTIME_CATALOG
+        .get()
+        .expect("runtime_catalog initialized the session catalog")
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::clone(&next);
     Ok(next)
@@ -305,22 +309,51 @@ pub fn update_runtime_catalog(
 mod tests {
     use super::*;
 
+    const PRESET: JudgmentPalettePreset = JudgmentPalettePreset {
+        id: "test-theme",
+        name: "Test Theme",
+        palette: JudgmentPalette::new([[0.5, 0.25, 1.0, 1.0]; 7], [[0.1; 4]; 7], [[0.2; 4]; 7]),
+        dim_peaks: [96, 64],
+    };
+
     #[test]
-    fn empty_catalog_resolves_to_exact_historical_palette() {
-        let catalog = JudgmentPaletteCatalog::default();
-        assert_eq!(catalog.resolve(None), SIMPLY_LOVE_JUDGMENT_PALETTE);
+    fn empty_catalog_resolves_to_supplied_theme_palette() {
+        let catalog = JudgmentPaletteCatalog::new(PRESET);
+        assert_eq!(catalog.resolve(None), PRESET.palette);
+        assert_eq!(catalog.resolve(Some("missing")), PRESET.palette);
+    }
+
+    #[test]
+    fn ini_uses_supplied_defaults_and_protects_the_builtin() {
+        let catalog = JudgmentPaletteCatalog::from_ini(
+            "[General]\nDefaultPalette=missing\n\n[Palette TEST-THEME]\nMiss=#FF0000\n\n[Palette custom]\nGreat=#80000000\nExcellent=invalid\n",
+            PRESET,
+        );
+        assert_eq!(catalog.palettes.len(), 2);
+        assert_eq!(catalog.resolve(None), PRESET.palette);
+        let custom = catalog.resolve(Some("custom"));
         assert_eq!(
-            catalog.resolve(Some("missing")),
-            SIMPLY_LOVE_JUDGMENT_PALETTE
+            custom.color(JudgmentColorRole::Excellent),
+            PRESET.palette.color(JudgmentColorRole::Excellent)
+        );
+        assert_eq!(
+            custom.gameplay_dim_color(JudgmentColorRole::Great),
+            [0.0, 0.0, 0.0, 128.0 / 255.0]
+        );
+        assert_eq!(
+            custom.gameplay_dim_color(JudgmentColorRole::Excellent)[2],
+            96.0 / 255.0
+        );
+        assert_eq!(
+            custom.evaluation_dim_color(JudgmentColorRole::Excellent)[2],
+            64.0 / 255.0
         );
     }
 
     #[test]
     fn catalog_round_trip_preserves_custom_colors_and_order() {
-        let mut catalog = JudgmentPaletteCatalog::default();
-        let first = catalog
-            .create_palette("Warm", SIMPLY_LOVE_PALETTE_ID)
-            .unwrap();
+        let mut catalog = JudgmentPaletteCatalog::new(PRESET);
+        let first = catalog.create_palette("Warm", PRESET.id).unwrap();
         catalog
             .set_color(
                 &first,
@@ -328,12 +361,10 @@ mod tests {
                 Color::from_hex("#123456").unwrap(),
             )
             .unwrap();
-        let second = catalog
-            .create_palette("Cool", SIMPLY_LOVE_PALETTE_ID)
-            .unwrap();
+        let second = catalog.create_palette("Cool", PRESET.id).unwrap();
         catalog.set_default_palette(&second).unwrap();
 
-        let loaded = JudgmentPaletteCatalog::from_ini(&catalog.to_ini());
+        let loaded = JudgmentPaletteCatalog::from_ini(&catalog.to_ini(), PRESET);
         assert_eq!(loaded.default_palette_id, second);
         assert_eq!(loaded.palettes[1].name, "Warm");
         assert_eq!(loaded.palettes[2].name, "Cool");
@@ -352,32 +383,22 @@ mod tests {
 
     #[test]
     fn built_in_palette_cannot_be_changed_or_removed() {
-        let mut catalog = JudgmentPaletteCatalog::default();
+        let mut catalog = JudgmentPaletteCatalog::new(PRESET);
+        assert!(catalog.rename_palette(PRESET.id, "Other").is_err());
+        assert!(catalog.delete_palette(PRESET.id).is_err());
         assert!(
             catalog
-                .rename_palette(SIMPLY_LOVE_PALETTE_ID, "Other")
-                .is_err()
-        );
-        assert!(catalog.delete_palette(SIMPLY_LOVE_PALETTE_ID).is_err());
-        assert!(
-            catalog
-                .set_color(
-                    SIMPLY_LOVE_PALETTE_ID,
-                    JudgmentColorRole::Miss,
-                    Color::BLACK
-                )
+                .set_color(PRESET.id, JudgmentColorRole::Miss, Color::BLACK)
                 .is_err()
         );
     }
 
     #[test]
-    fn deleting_machine_default_falls_back_to_simply_love() {
-        let mut catalog = JudgmentPaletteCatalog::default();
-        let id = catalog
-            .create_palette("Temporary", SIMPLY_LOVE_PALETTE_ID)
-            .unwrap();
+    fn deleting_machine_default_falls_back_to_theme_palette() {
+        let mut catalog = JudgmentPaletteCatalog::new(PRESET);
+        let id = catalog.create_palette("Temporary", PRESET.id).unwrap();
         catalog.set_default_palette(&id).unwrap();
         catalog.delete_palette(&id).unwrap();
-        assert_eq!(catalog.resolved_default_id(), SIMPLY_LOVE_PALETTE_ID);
+        assert_eq!(catalog.resolved_default_id(), PRESET.id);
     }
 }

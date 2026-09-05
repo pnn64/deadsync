@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;

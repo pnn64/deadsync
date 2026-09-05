@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt, tr_fmt_into};
 use crate::assets::{FontRole, machine_font_key, visual_styles};
+use crate::color;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
     score_leader_alphas,
@@ -11,6 +12,7 @@ use crate::screens::components::gameplay::{
     step_stats_gifs,
 };
 use crate::screens::components::shared::banner as shared_banner;
+use crate::screens::components::shared::density::{self, DensityHistCache};
 use crate::screens::components::shared::heart_rate;
 pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
@@ -24,12 +26,10 @@ use deadlib_present::actors::{
 };
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
-use deadlib_present::color;
 use deadlib_present::compose::{
     ActorSegment, ActorXFold, ComposeScratch, FlatProxyStyle, TextLayoutCache,
     prewarm_prepared_inline_text_slot,
 };
-use deadlib_present::density::{self, DensityHistCache};
 use deadlib_present::font;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{
@@ -2060,7 +2060,7 @@ fn smooth_life_p(value: f32) -> f32 {
 
 pub struct State {
     pub gameplay: GameplayCoreState,
-    judgment_palettes: [deadlib_present::color::JudgmentPalette; MAX_PLAYERS],
+    judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
     /// screen; there are no misses, eviction, synchronization, allocations, or
@@ -2256,7 +2256,7 @@ impl State {
     }
 
     #[inline(always)]
-    pub fn judgment_palette(&self, player: usize) -> deadlib_present::color::JudgmentPalette {
+    pub fn judgment_palette(&self, player: usize) -> deadsync_theme::color::JudgmentPalette {
         self.judgment_palettes[player.min(MAX_PLAYERS - 1)]
     }
 
@@ -2315,7 +2315,7 @@ impl State {
         rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
         runtime_view: GameplayRuntimeView,
         hud_snapshot: profile_data::GameplayHudSnapshot,
-        judgment_palettes: [deadlib_present::color::JudgmentPalette; MAX_PLAYERS],
+        judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
@@ -17790,7 +17790,7 @@ pub fn push_actors(
                         ex_percent.max(0.0),
                         state
                             .judgment_palette(player_idx)
-                            .color(deadlib_present::color::JudgmentColorRole::FantasticBlue),
+                            .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue),
                     )
                 } else {
                     let score_percent = state.display_gameplay_itg_score_percent(

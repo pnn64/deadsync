@@ -1,7 +1,7 @@
+use crate::color;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;

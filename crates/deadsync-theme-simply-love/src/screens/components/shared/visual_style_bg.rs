@@ -1,8 +1,8 @@
 use super::technique_bg;
 use crate::act;
+use crate::color;
 use crate::views::{SimplyLoveVisualPolicyView, VisualBackgroundView};
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, OnceLock};

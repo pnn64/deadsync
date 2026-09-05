@@ -1,4 +1,4 @@
-use deadlib_present::{color, space::screen_center_x};
+use deadlib_present::space::screen_center_x;
 use deadsync_profile as profile_data;
 
 const ARROW_BREAKDOWN_RGBA: [[f32; 4]; 8] = [
@@ -6,9 +6,9 @@ const ARROW_BREAKDOWN_RGBA: [[f32; 4]; 8] = [
     [0.0, 0.0, 1.0, 1.0],
     [0.0, 1.0, 0.0, 1.0],
     [1.0, 1.0, 0.0, 1.0],
-    color::rgba_hex("#B54DFF"),
-    color::rgba_hex("#FF8A00"),
-    color::rgba_hex("#00D7FF"),
+    deadlib_present::color::rgba_hex("#B54DFF"),
+    deadlib_present::color::rgba_hex("#FF8A00"),
+    deadlib_present::color::rgba_hex("#00D7FF"),
     [1.0, 1.0, 1.0, 1.0],
 ];
 

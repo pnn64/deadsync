@@ -12,12 +12,12 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{AssetManager, FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::fuzzy;
 use crate::screens::select_music::MusicWheelEntry;
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::SongData;
 use deadsync_simfile::song_search::{
@@ -809,9 +809,9 @@ fn push_song_search_overlay_unreserved(
     let top = panel_h.mul_add(-0.5, cy);
 
     let theme = color::simply_love_rgba(active_color_index);
-    const PANEL_BG: [f32; 4] = color::rgba_hex("#071016");
-    const FOCUS_BG: [f32; 4] = color::rgba_hex("#333333");
-    const GRAY: [f32; 4] = color::rgba_hex("#808080");
+    const PANEL_BG: [f32; 4] = deadlib_present::color::rgba_hex("#071016");
+    const FOCUS_BG: [f32; 4] = deadlib_present::color::rgba_hex("#333333");
+    const GRAY: [f32; 4] = deadlib_present::color::rgba_hex("#808080");
     const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     // Dim behind the modal.

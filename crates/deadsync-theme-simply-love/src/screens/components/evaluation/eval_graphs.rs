@@ -1,7 +1,7 @@
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
+use crate::color;
 use deadlib_render_core::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 
 use super::utils::arrow_code_rgba;
 
@@ -226,7 +226,7 @@ pub fn build_scatter_background_mesh(
         graph_height,
         worst_window_ms,
         scale,
-        JudgmentPalette::default(),
+        crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     )
 }
 
@@ -338,7 +338,7 @@ pub fn build_scatter_mesh(
         graph_height,
         worst_window_ms,
         scale,
-        JudgmentPalette::default(),
+        crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     )
 }
 
@@ -497,7 +497,7 @@ pub fn build_offset_histogram_mesh(
         pane_height,
         scale,
         use_smoothing,
-        JudgmentPalette::default(),
+        crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     )
 }
 
@@ -635,9 +635,10 @@ mod tests {
 
     #[test]
     fn judgment_scatter_uses_the_selected_custom_palette() {
-        let custom = JudgmentPalette::default().with_color(
+        let custom = crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE.with_color(
             Role::Decent,
             deadlib_present::color::Color::rgb(0.1, 0.2, 0.3).to_rgba(),
+            crate::color::JUDGMENT_PRESET.dim_peaks,
         );
         let verts = build_scatter_mesh_with_palette(
             &[scatter_point(120.0)],
@@ -695,7 +696,7 @@ mod tests {
         );
 
         assert_eq!(verts.len(), 6);
-        let purple = color::rgba_hex("#B54DFF");
+        let purple = deadlib_present::color::rgba_hex("#B54DFF");
         assert!(
             verts
                 .iter()

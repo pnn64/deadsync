@@ -51,12 +51,12 @@ use crate::theme::{
     auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
-use deadlib_present::color::DifficultyColorScheme;
 #[cfg(windows)]
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };
+use deadsync_theme::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 

@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use crate::act;
 use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::cell::RefCell;
 
 use super::utils::{eval_style_alpha, pane_origin_x};
@@ -267,7 +267,7 @@ fn timing_pane_actor(
     let frame_y = deadlib_present::space::screen_center_y() - 56.0;
 
     let mut children = Vec::with_capacity(child_capacity);
-    const BAR_BG_COLOR: [f32; 4] = color::rgba_hex("#101519");
+    const BAR_BG_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#101519");
     let topbar_alpha = eval_style_alpha(transparent, 1.0, 0.5);
     let early_alpha = eval_style_alpha(transparent, 1.0, 0.5);
 

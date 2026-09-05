@@ -1809,7 +1809,7 @@ pub(super) mod tests {
             .push(crate::views::JudgmentPaletteChoiceView {
                 id: "warm-colors".to_owned(),
                 name: "Warm Colors".to_owned(),
-                palette: deadlib_present::color::JudgmentPalette::default(),
+                palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
             });
         let (mut state, _) = setup_state_with(view);
         assert!(

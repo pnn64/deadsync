@@ -2,16 +2,16 @@ use std::cell::OnceCell;
 use std::sync::Arc;
 
 use crate::act;
+use crate::color;
 use crate::screens::components::shared::gs_scorebox::{
     entries_with_local_self_state, srpg_logo_texture_key,
 };
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_config::prelude::SrpgVariant;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 
 use super::utils::pane_origin_x;
 
@@ -25,8 +25,8 @@ const GS_ROW_PLACEHOLDER_RANK: &str = "---";
 const GS_ROW_PLACEHOLDER_NAME: &str = "----";
 const GS_ROW_PLACEHOLDER_SCORE: &str = "------";
 const GS_ROW_PLACEHOLDER_DATE: &str = "----------";
-const GS_RIVAL_COLOR: [f32; 4] = color::rgba_hex("#BD94FF");
-const GS_SELF_COLOR: [f32; 4] = color::rgba_hex("#A1FF94");
+const GS_RIVAL_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#BD94FF");
+const GS_SELF_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RecordsPaneKind {
@@ -263,7 +263,7 @@ pub(crate) struct OnlineRecordsPresentation {
 
 impl OnlineRecordsPresentation {
     pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
-        Self::new_with_palette(runtime, JudgmentPalette::default())
+        Self::new_with_palette(runtime, crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE)
     }
 
     pub(crate) fn new_with_palette(runtime: &ScoreboxSideView, palette: JudgmentPalette) -> Self {

@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_profile as profile_data;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -148,7 +148,7 @@ fn pane_percentage_actor(
     };
     let cy = deadlib_present::space::screen_center_y();
 
-    let score_bg_color = color::rgba_hex("#101519");
+    let score_bg_color = deadlib_present::color::rgba_hex("#101519");
     let score_bg_alpha = eval_style_alpha(transparent, 1.0, 0.5);
     let score_zoom = choose_score_zoom(machine_font, SCORE_ZOOM_WENDY, SCORE_ZOOM_MEGA);
     let small_score_zoom =

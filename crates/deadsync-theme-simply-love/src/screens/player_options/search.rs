@@ -348,9 +348,9 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
 
     // Theme-native palette, matching the options screen and option rows.
     let theme = color::simply_love_rgba(state.active_color_index);
-    const PANEL_BG: [f32; 4] = color::rgba_hex("#071016");
-    const FOCUS_BG: [f32; 4] = color::rgba_hex("#333333");
-    const GRAY: [f32; 4] = color::rgba_hex("#808080");
+    const PANEL_BG: [f32; 4] = deadlib_present::color::rgba_hex("#071016");
+    const FOCUS_BG: [f32; 4] = deadlib_present::color::rgba_hex("#333333");
+    const GRAY: [f32; 4] = deadlib_present::color::rgba_hex("#808080");
     const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     actors.reserve(32);

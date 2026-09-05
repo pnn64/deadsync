@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::effects::{
     SimplyLoveConfigRequest, SimplyLoveMappingsConfigRequest, SimplyLoveRuntimeRequest,
 };
@@ -10,7 +11,6 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::MappingsRuntimeView;
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
 use deadsync_config::prelude::GameFlag;
@@ -1286,11 +1286,11 @@ pub fn push_actors(
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
     // Colors
-    let col_active_bg = color::rgba_hex("#333333");
-    let base_inactive = color::rgba_hex("#071016");
+    let col_active_bg = deadlib_present::color::rgba_hex("#333333");
+    let base_inactive = deadlib_present::color::rgba_hex("#071016");
     let col_inactive_bg: [f32; 4] = [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
     let col_white = [1.0, 1.0, 1.0, 1.0];
-    let col_gray = color::rgba_hex("#808080");
+    let col_gray = deadlib_present::color::rgba_hex("#808080");
 
     // Compute available content area between top/bottom bars and side margins.
     let sw = screen_width();

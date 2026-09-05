@@ -1,7 +1,7 @@
 use crate::assets;
+use crate::color;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
-use deadlib_present::color;
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::MAX_PLAYERS;
@@ -436,7 +436,7 @@ pub(crate) fn gameplay_notefield_plan(
     profile: &profile_data::Profile,
     judgment_assets: &ResolvedJudgmentAssets,
     blue_fantastic_window_s: f32,
-    judgment_palette: deadlib_present::color::JudgmentPalette,
+    judgment_palette: deadsync_theme::color::JudgmentPalette,
 ) -> GameplayNotefieldPlan {
     let style = crate::notefield_style::notefield_style_with_palette(judgment_palette);
     let measure_line_mode = match profile.measure_lines {

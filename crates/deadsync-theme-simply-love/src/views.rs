@@ -210,7 +210,7 @@ pub struct GameplayInitView {
     pub runtime: GameplayRuntimeView,
     pub video_renderer: BackendType,
     pub hud: deadsync_profile::GameplayHudSnapshot,
-    pub judgment_palettes: [deadlib_present::color::JudgmentPalette; 2],
+    pub judgment_palettes: [deadsync_theme::color::JudgmentPalette; 2],
     pub scores: GameplayScoreInitView,
     pub background_changes: Vec<deadsync_chart::SongBackgroundChange>,
 }
@@ -230,7 +230,7 @@ impl Default for GameplayInitView {
                 },
                 p2: deadsync_profile::GameplayHudPlayerSnapshot::default(),
             },
-            judgment_palettes: [deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE; 2],
+            judgment_palettes: [crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE; 2],
             scores: GameplayScoreInitView::default(),
             background_changes: Vec::new(),
         }
@@ -326,7 +326,7 @@ pub struct PlayerOptionsInitView {
 pub struct JudgmentPaletteChoiceView {
     pub id: String,
     pub name: String,
-    pub palette: deadlib_present::color::JudgmentPalette,
+    pub palette: deadsync_theme::color::JudgmentPalette,
 }
 
 impl Default for PlayerOptionsInitView {
@@ -339,9 +339,9 @@ impl Default for PlayerOptionsInitView {
             music_rate: 1.0,
             players: std::array::from_fn(|_| PlayerOptionsPlayerView::default()),
             judgment_palettes: vec![JudgmentPaletteChoiceView {
-                id: deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_ID.to_owned(),
-                name: deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_NAME.to_owned(),
-                palette: deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+                id: crate::color::JUDGMENT_PRESET.id.to_owned(),
+                name: crate::color::JUDGMENT_PRESET.name.to_owned(),
+                palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
             }],
         }
     }
@@ -390,7 +390,7 @@ pub struct SelectFlowRuntimeView {
 }
 
 /// Shell-prepared profile and score data shared by the post-song screens.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct PostSongPlayerView {
     pub joined: bool,
     pub guest: bool,
@@ -400,7 +400,23 @@ pub struct PostSongPlayerView {
     pub calories_burned_today: f32,
     pub ignore_step_count_calories: bool,
     pub total_songs_played: u32,
-    pub judgment_palette: deadlib_present::color::JudgmentPalette,
+    pub judgment_palette: deadsync_theme::color::JudgmentPalette,
+}
+
+impl Default for PostSongPlayerView {
+    fn default() -> Self {
+        Self {
+            joined: false,
+            guest: false,
+            display_name: String::new(),
+            player_initials: String::new(),
+            avatar_texture_key: None,
+            calories_burned_today: 0.0,
+            ignore_step_count_calories: false,
+            total_songs_played: 0,
+            judgment_palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -486,7 +502,7 @@ impl Default for EvaluationPolicyView {
 }
 
 /// One Evaluation footer/online-availability player prepared by the shell.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct EvaluationPlayerView {
     pub joined: bool,
     pub guest: bool,
@@ -494,7 +510,21 @@ pub struct EvaluationPlayerView {
     pub display_name: String,
     pub groovestats_linked: bool,
     pub arrowcloud_linked: bool,
-    pub judgment_palette: deadlib_present::color::JudgmentPalette,
+    pub judgment_palette: deadsync_theme::color::JudgmentPalette,
+}
+
+impl Default for EvaluationPlayerView {
+    fn default() -> Self {
+        Self {
+            joined: false,
+            guest: false,
+            avatar_texture_key: None,
+            display_name: String::new(),
+            groovestats_linked: false,
+            arrowcloud_linked: false,
+            judgment_palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+        }
+    }
 }
 
 /// Session and machine context needed by Evaluation's pure screen logic.

@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::config::{
     DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -12,7 +13,6 @@ use deadlib_present::cache::{
     SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
     text_cache_with_capacity,
 };
-use deadlib_present::color;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::song::resolve_sync_pref;
@@ -31,11 +31,11 @@ use std::sync::Arc;
 
 // --- Colors ---
 const fn col_music_wheel_box() -> [f32; 4] {
-    const C: [f32; 4] = color::rgba_hex("#0a141b");
+    const C: [f32; 4] = deadlib_present::color::rgba_hex("#0a141b");
     C
 }
 const fn col_pack_header_box() -> [f32; 4] {
-    const C: [f32; 4] = color::rgba_hex("#4c565d");
+    const C: [f32; 4] = deadlib_present::color::rgba_hex("#4c565d");
     C
 }
 
@@ -62,14 +62,14 @@ const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const SERIES_FOLDER_COLLAPSED: [[f32; 4]; 3] = [
-    color::rgba_hex("#5c6972"),
-    color::rgba_hex("#74818b"),
-    color::rgba_hex("#8495a1"),
+    deadlib_present::color::rgba_hex("#5c6972"),
+    deadlib_present::color::rgba_hex("#74818b"),
+    deadlib_present::color::rgba_hex("#8495a1"),
 ];
 const SERIES_FOLDER_EXPANDED: [[f32; 4]; 3] = [
-    color::rgba_hex("#516777"),
-    color::rgba_hex("#677f91"),
-    color::rgba_hex("#7793a7"),
+    deadlib_present::color::rgba_hex("#516777"),
+    deadlib_present::color::rgba_hex("#677f91"),
+    deadlib_present::color::rgba_hex("#7793a7"),
 ];
 const FOLDER_NATIVE_WIDTH: f32 = 128.0;
 const FOLDER_ZOOM: f32 = 0.175;
@@ -336,12 +336,12 @@ const fn col_quint_lamp() -> [f32; 4] {
 }
 const fn col_clear_lamp() -> [f32; 4] {
     // zmod clear lamp
-    const C: [f32; 4] = color::rgba_hex("#0000CC");
+    const C: [f32; 4] = deadlib_present::color::rgba_hex("#0000CC");
     C
 }
 const fn col_fail_lamp() -> [f32; 4] {
     // zmod fail lamp
-    const C: [f32; 4] = color::rgba_hex("#990000");
+    const C: [f32; 4] = deadlib_present::color::rgba_hex("#990000");
     C
 }
 
@@ -1666,12 +1666,12 @@ mod tests {
         runtime_slot_requests, song_select_bg_path, srpg_rate_color, visible_song_select_bg_paths,
         visible_song_select_bg_paths_match, wheel_bg_layout, wheel_song_meta,
     };
+    use crate::color;
     use crate::config::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
     };
     use crate::screens::select_music::MusicWheelEntry;
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
-    use deadlib_present::color;
     use deadlib_present::space::{metrics_for_window, set_current_metrics};
     use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
     use deadsync_profile as profile_data;

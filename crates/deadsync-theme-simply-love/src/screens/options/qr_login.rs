@@ -12,10 +12,10 @@ use std::sync::Arc;
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::color;
 use crate::screens::components::shared::qr_code;
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
 use smallvec::SmallVec;

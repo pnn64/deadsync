@@ -334,8 +334,8 @@ pub fn push_actors(
             .pane()
             .row_map
             .row(state.pane().row_map.id_at(item_idx));
-        let active_bg = color::rgba_hex("#333333");
-        let inactive_bg_base = color::rgba_hex("#071016");
+        let active_bg = deadlib_present::color::rgba_hex("#333333");
+        let inactive_bg_base = deadlib_present::color::rgba_hex("#071016");
         let bg_color = if is_active {
             active_bg
         } else {
@@ -407,7 +407,7 @@ pub fn push_actors(
             }
         }
         // Inactive option text color should be #808080 (alpha 1.0)
-        let mut sl_gray = color::rgba_hex("#808080");
+        let mut sl_gray = deadlib_present::color::rgba_hex("#808080");
         sl_gray[3] *= a;
         // Some rows should display all choices inline
         let show_all_choices_inline = row_shows_all_choices_inline(row.id);

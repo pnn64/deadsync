@@ -1,6 +1,5 @@
 use crate::act;
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_width, widescale};
 use std::sync::Arc;
 
@@ -43,7 +42,7 @@ pub fn push(actors: &mut Vec<Actor>, params: Params) {
 fn push_with_content(actors: &mut Vec<Actor>, salt: u64, content: TextContent) {
     actors.reserve(2);
 
-    let bg_color = color::rgba_hex("#000000");
+    let bg_color = deadlib_present::color::rgba_hex("#000000");
 
     // The Lua code scales the background height based on the text height, which in turn
     // is scaled by the aspect ratio. We will replicate this.

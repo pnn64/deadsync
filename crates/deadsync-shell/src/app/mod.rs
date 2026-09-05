@@ -97,7 +97,6 @@ use crate::window_state::{
 use deadlib_platform::dirs;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
-use deadlib_present::color;
 use deadlib_present::compose;
 use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer_backend;
@@ -116,6 +115,7 @@ use deadsync_profile_gameplay::{
     gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
+use deadsync_theme_simply_love::color;
 use deadsync_theme_simply_love::views::{
     BookkeepingView, OptionsInitView, OptionsPackSyncView, OptionsSongPackView,
     SelectMusicInitView, TimingHealth,
@@ -696,7 +696,9 @@ fn evaluation_context_view(
     profile: &profile_data::MusicProfileSnapshot,
 ) -> EvaluationContextView {
     let profiles = &profile.scorebox;
-    let judgment_palettes = deadsync_config::judgment_palettes::runtime_catalog();
+    let judgment_palettes = deadsync_config::judgment_palettes::runtime_catalog(
+        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+    );
     EvaluationContextView {
         policy,
         play_style: profiles.play_style,
@@ -1066,7 +1068,10 @@ fn options_init_view(
 ) -> OptionsInitView {
     OptionsInitView {
         config: config::get(),
-        judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog()).clone(),
+        judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
+            deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+        ))
+        .clone(),
         updater_capabilities: updater::capabilities(),
         app_paths: app_paths_view(),
         audio,
@@ -3492,7 +3497,7 @@ impl App {
         {
             return cached_anim.clone();
         }
-        let target_rgba = deadlib_present::color::difficulty_rgba_with_scheme(
+        let target_rgba = deadsync_theme_simply_love::color::difficulty_rgba_with_scheme(
             difficulty,
             theme_index,
             difficulty_color_scheme,
@@ -5224,12 +5229,13 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
-                    if let Err(error) =
-                        deadsync_config::judgment_palettes::update_runtime_catalog(|current| {
+                    if let Err(error) = deadsync_config::judgment_palettes::update_runtime_catalog(
+                        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+                        |current| {
                             *current = catalog;
                             Ok(())
-                        })
-                    {
+                        },
+                    ) {
                         warn!("Failed to save judgment palettes: {error}");
                     }
                     Vec::new()

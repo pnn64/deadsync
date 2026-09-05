@@ -10,8 +10,8 @@ use crate::screens::{Screen, ThemeEffect};
 use crate::views::ProfilePickerView;
 use deadsync_assets::noteskin::{self, Noteskin};
 
+use crate::color;
 use deadlib_present::actors::{self, Actor};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render_core::BlendMode;
 use deadsync_config::prelude::GameFlag;
@@ -1511,7 +1511,7 @@ fn push_scroller_frame(
         let is_guest = matches!(&choice.kind, profile_data::ActiveProfile::Guest);
         let show_fallback = is_guest || choice.avatar_key.is_none();
         if show_fallback {
-            let bg = color::rgba_hex(AVATAR_BG_HEX);
+            let bg = deadlib_present::color::rgba_hex(AVATAR_BG_HEX);
             out.push(act!(quad:
                 align(0.0, 0.0):
                 xy(avatar_x, avatar_y):

@@ -3,7 +3,6 @@ use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::views::{ScreenBarBackgroundView, SimplyLoveVisualPolicyView};
 use deadlib_present::actors::{self, Actor, Background, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
-use deadlib_present::color;
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use std::cell::RefCell;
@@ -159,7 +158,9 @@ const fn bar_background(
 
     match policy.screen_bar {
         ScreenBarBackgroundView::Default if transparent => None,
-        ScreenBarBackgroundView::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
+        ScreenBarBackgroundView::Default => Some(Background::Color(
+            deadlib_present::color::rgba_hex("#a6a6a6"),
+        )),
         ScreenBarBackgroundView::Colored(rgba) => Some(Background::Color(rgba)),
         ScreenBarBackgroundView::Transparent
             if matches!(context, ScreenBarContext::SelectMusic) =>

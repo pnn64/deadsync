@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -11,7 +12,6 @@ use crate::screens::select_style_flow::{
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_config::prelude::GameFlag;
 use deadsync_input::InputEvent;

@@ -33,7 +33,7 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
         &profile,
         &judgment_assets,
         0.012_345,
-        deadlib_present::color::JudgmentPalette::default(),
+        crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     );
 
     assert_eq!(plan.style, notefield_style());

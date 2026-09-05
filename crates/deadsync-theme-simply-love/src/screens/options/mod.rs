@@ -1,6 +1,7 @@
 use crate::act;
 use crate::assets::{AssetManager, visual_styles};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::{
     self, arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
     breakdown_style_from_choice, default_fail_type_choice_index, default_fail_type_from_choice,
@@ -63,7 +64,6 @@ use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBa
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use deadlib_present::actors;
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::font;
 
 // Submodules — wildcard re-exports let sibling modules reach every item via

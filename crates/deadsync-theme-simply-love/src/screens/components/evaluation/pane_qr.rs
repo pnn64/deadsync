@@ -7,7 +7,6 @@ use crate::config::MachineFont;
 use crate::screens::components::shared::qr_code;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
 use deadsync_profile as profile_data;
 
 use super::utils::pane_origin_x;
@@ -119,7 +118,7 @@ fn build_qr_children(presentation: &QrPanePresentation, machine_font: MachineFon
     let top_y = MACHINE_RECORD_DEFAULT_ROW_HEIGHT * 0.8;
     let score_w = 70.0;
     let score_h = 28.0;
-    let score_bg = color::rgba_hex("#101519");
+    let score_bg = deadlib_present::color::rgba_hex("#101519");
 
     // SL Pane7: keep a fixed left text column and dedicate the right side to the QR.
     let qr_size = GS_QR_SIZE;

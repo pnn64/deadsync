@@ -239,11 +239,11 @@ pub const fn notefield_style() -> NotefieldStyle {
 
 #[must_use]
 pub fn notefield_style_with_palette(
-    palette: deadlib_present::color::JudgmentPalette,
+    palette: deadsync_theme::color::JudgmentPalette,
 ) -> NotefieldStyle {
-    use deadlib_present::color::JudgmentColorRole as Role;
+    use deadsync_theme::color::JudgmentColorRole as Role;
 
-    if palette == deadlib_present::color::SIMPLY_LOVE_JUDGMENT_PALETTE {
+    if palette == crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE {
         return SIMPLY_LOVE_NOTEFIELD_STYLE;
     }
     let mut style = SIMPLY_LOVE_NOTEFIELD_STYLE;
@@ -269,7 +269,8 @@ pub fn notefield_style_with_palette(
 #[cfg(test)]
 mod tests {
     use super::{notefield_style, notefield_style_with_palette};
-    use deadlib_present::color::{Color, JudgmentColorRole, JudgmentPalette};
+    use deadlib_present::color::Color;
+    use deadsync_theme::color::JudgmentColorRole;
 
     #[test]
     fn factory_keeps_simply_love_gameplay_metrics() {
@@ -336,8 +337,11 @@ mod tests {
     #[test]
     fn custom_palette_recolors_judgment_feedback_without_changing_geometry() {
         let baseline = notefield_style();
-        let custom = JudgmentPalette::default()
-            .with_color(JudgmentColorRole::Miss, Color::rgb(0.2, 0.4, 0.6).to_rgba());
+        let custom = crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE.with_color(
+            JudgmentColorRole::Miss,
+            Color::rgb(0.2, 0.4, 0.6).to_rgba(),
+            crate::color::JUDGMENT_PRESET.dim_peaks,
+        );
         let styled = notefield_style_with_palette(custom);
 
         assert_eq!(styled.receptor_normal_y, baseline.receptor_normal_y);

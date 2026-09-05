@@ -43,7 +43,9 @@ fn init_with_config(config: config::Config) -> State {
 fn init_with_config_and_audio(config: config::Config, audio_options: AudioOptionsView) -> State {
     super::init(OptionsInitView {
         config,
-        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
+            crate::color::JUDGMENT_PRESET,
+        ),
         updater_capabilities: SimplyLoveUpdaterCapabilities {
             app_update: true,
             ffmpeg_install: true,
@@ -363,7 +365,9 @@ fn pack_sync_policy_comes_from_prepared_profile_and_current_options() {
 fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(OptionsInitView {
         config: config::Config::default(),
-        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
+            crate::color::JUDGMENT_PRESET,
+        ),
         updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
         app_paths: test_app_paths(),
         audio: AudioOptionsView::default(),
@@ -892,7 +896,9 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
             note_scroll_clock: config::NoteScrollClock::FrameStable,
             ..config::Config::default()
         },
-        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::default(),
+        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
+            crate::color::JUDGMENT_PRESET,
+        ),
         updater_capabilities: SimplyLoveUpdaterCapabilities::default(),
         app_paths: test_app_paths(),
         audio: AudioOptionsView::default(),
@@ -945,10 +951,7 @@ fn judgment_palette_default_row_uses_catalog_and_emits_full_catalog_request() {
     let mut state = init();
     let custom_id = state
         .judgment_palettes
-        .create_palette(
-            "Warm",
-            deadsync_config::judgment_palettes::SIMPLY_LOVE_PALETTE_ID,
-        )
+        .create_palette("Warm", crate::color::JUDGMENT_PRESET.id)
         .unwrap();
     state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
     let row = select_visible_row(
@@ -1073,11 +1076,11 @@ fn judgment_palette_overlay_copies_builtin_and_edits_rgb_from_pad_input() {
     press(&mut state, &asset_manager, VirtualAction::p1_start);
     let before = state.judgment_palettes.palettes[1]
         .palette
-        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+        .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue);
     let edit_effects = press(&mut state, &asset_manager, VirtualAction::p1_right);
     let after = state.judgment_palettes.palettes[1]
         .palette
-        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+        .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue);
 
     let before_red = (before[0] * 255.0).round() as u8;
     let after_red = (after[0] * 255.0).round() as u8;
@@ -1097,7 +1100,7 @@ fn judgment_palette_overlay_copies_builtin_and_edits_rgb_from_pad_input() {
     );
     let repeated = state.judgment_palettes.palettes[1]
         .palette
-        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+        .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue);
     assert_eq!((repeated[0] * 255.0).round() as u8, after_red + 1);
     assert!(repeat_effects.iter().any(|effect| matches!(
         effect,
@@ -1120,7 +1123,7 @@ fn judgment_palette_overlay_copies_builtin_and_edits_rgb_from_pad_input() {
     );
     let released = state.judgment_palettes.palettes[1]
         .palette
-        .color(deadlib_present::color::JudgmentColorRole::FantasticBlue);
+        .color(deadsync_theme::color::JudgmentColorRole::FantasticBlue);
     assert_eq!((released[0] * 255.0).round() as u8, after_red + 1);
 }
 

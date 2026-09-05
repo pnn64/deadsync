@@ -2,16 +2,16 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::timing::WindowCounts;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 
@@ -505,8 +505,8 @@ fn push_stats_actors(
         let radar_categories = &radar_categories[radar_start_index..];
         let radar_row_offset = radar_row_offset(show_hands_row);
 
-        const GRAY_POSSIBLE: [f32; 4] = color::rgba_hex("#5A6166");
-        const GRAY_ACHIEVED: [f32; 4] = color::rgba_hex("#444444");
+        const GRAY_POSSIBLE: [f32; 4] = deadlib_present::color::rgba_hex("#5A6166");
+        const GRAY_ACHIEVED: [f32; 4] = deadlib_present::color::rgba_hex("#444444");
         let white_color = [1.0, 1.0, 1.0, 1.0];
 
         for (i, (label_idx, achieved, possible)) in radar_categories.iter().copied().enumerate() {

@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -12,7 +13,6 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
@@ -2906,9 +2906,9 @@ fn push_profile_menu_overlay(ui: &mut Vec<Actor>, state: &State, s: f32, list_x:
         let row_y = (i as f32).mul_add(item_h, inner_y + header_h);
         let selected = i == menu.selected_action;
         let row_bg = if selected {
-            color::rgba_hex("#293238")
+            deadlib_present::color::rgba_hex("#293238")
         } else {
-            color::rgba_hex("#071016")
+            deadlib_present::color::rgba_hex("#071016")
         };
         ui.push(act!(quad:
             align(0.0, 0.5):
@@ -2976,8 +2976,8 @@ pub fn push_actors(
         fg_color: [1.0, 1.0, 1.0, 1.0],
     }));
 
-    let col_active_bg = color::rgba_hex("#333333");
-    let base_inactive = color::rgba_hex("#071016");
+    let col_active_bg = deadlib_present::color::rgba_hex("#333333");
+    let base_inactive = deadlib_present::color::rgba_hex("#071016");
     let col_inactive_bg: [f32; 4] = [base_inactive[0], base_inactive[1], base_inactive[2], 0.8];
 
     let (s, list_x, list_y) = scaled_block_origin_with_margins();

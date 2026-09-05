@@ -23,7 +23,7 @@ pub struct State {
 #[must_use]
 pub const fn init() -> State {
     State {
-        active_color_index: deadlib_present::color::DEFAULT_COLOR_INDEX,
+        active_color_index: crate::color::DEFAULT_COLOR_INDEX,
         elapsed: 0.0,
         ready: false,
         next_screen: Screen::SelectMusic,

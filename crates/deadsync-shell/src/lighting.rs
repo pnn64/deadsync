@@ -173,7 +173,7 @@ pub fn smx_result_context(screen: Screen, score_info: &[Option<ScoreInfo>; 2]) -
         .flatten()
         .map(|score| SmxResultContext {
             grade: Some(score.grade),
-            difficulty: Some(deadlib_present::color::difficulty_gif_tag(
+            difficulty: Some(deadsync_theme_simply_love::color::difficulty_gif_tag(
                 &score.chart.difficulty,
             )),
         })

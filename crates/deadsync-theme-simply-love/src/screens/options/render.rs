@@ -693,10 +693,10 @@ pub fn push_actors(
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
     // --- global colors ---
-    const COL_ACTIVE_BG: [f32; 4] = color::rgba_hex("#333333"); // active bg for normal rows
+    const COL_ACTIVE_BG: [f32; 4] = deadlib_present::color::rgba_hex("#333333"); // active bg for normal rows
 
     // inactive bg = #071016 @ 0.8 alpha
-    const BASE_INACTIVE: [f32; 4] = color::rgba_hex("#071016");
+    const BASE_INACTIVE: [f32; 4] = deadlib_present::color::rgba_hex("#071016");
     const COL_INACTIVE_BG: [f32; 4] = [BASE_INACTIVE[0], BASE_INACTIVE[1], BASE_INACTIVE[2], 0.8];
     let col_active_bg = COL_ACTIVE_BG;
     let col_inactive_bg = COL_INACTIVE_BG;
@@ -963,7 +963,7 @@ pub fn push_actors(
                 // Active text color for submenu rows.
                 let col_active_text = color::simply_love_rgba(state.active_color_index);
                 // Inactive option text color should be #808080 (alpha 1.0), match player options.
-                const SL_GRAY: [f32; 4] = color::rgba_hex("#808080");
+                const SL_GRAY: [f32; 4] = deadlib_present::color::rgba_hex("#808080");
                 let sl_gray = SL_GRAY;
 
                 let total_rows = visible_rows.len() + 1; // + Exit row

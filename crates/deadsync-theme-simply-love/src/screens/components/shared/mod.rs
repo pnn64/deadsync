@@ -1,4 +1,5 @@
 pub mod banner;
+pub mod density;
 pub mod ffmpeg_overlay;
 pub mod frame_stats_overlay;
 pub mod fuzzy;

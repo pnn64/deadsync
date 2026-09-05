@@ -1,4 +1,5 @@
 use crate::act;
+use crate::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -15,7 +16,6 @@ use deadlib_present::cache::{
     SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
     text_cache_with_capacity,
 };
-use deadlib_present::color;
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render_core::{BlendMode, MeshVertex};
@@ -929,7 +929,7 @@ fn build_course_density_graph_mesh(
 
         let first = stage.chart.first_second;
         let last = stage_seconds.max(first + 0.001);
-        let mut verts = deadlib_present::density::build_density_histogram_mesh(
+        let mut verts = crate::screens::components::shared::density::build_density_histogram_mesh(
             &stage.chart.measure_nps_vec,
             peak_nps,
             &stage.chart.measure_seconds_vec,
@@ -967,7 +967,7 @@ fn build_eval_density_graph_mesh(
     }
 
     let last_second = si.graph_last_second.max(si.graph_first_second + 0.001);
-    let verts = deadlib_present::density::build_density_histogram_mesh(
+    let verts = crate::screens::components::shared::density::build_density_histogram_mesh(
         &si.chart.measure_nps_vec,
         si.chart.max_nps,
         &si.chart.measure_seconds_vec,
@@ -987,7 +987,7 @@ fn build_eval_scatter_mesh(
     si: &ScoreInfo,
     graph_width: f32,
     scale: eval_graphs::ScatterPlotScale,
-    palette: deadlib_present::color::JudgmentPalette,
+    palette: deadsync_theme::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
     const GRAPH_H: f32 = 64.0;
     let verts = eval_graphs::build_scatter_mesh_with_palette(
@@ -1009,7 +1009,7 @@ fn build_eval_scatter_bg_mesh(
     si: &ScoreInfo,
     graph_width: f32,
     pane: EvalGraphPane,
-    palette: deadlib_present::color::JudgmentPalette,
+    palette: deadsync_theme::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
     use eval_graphs::{ScatterPlotScale, build_scatter_background_mesh_with_palette};
     let scale = match pane {
@@ -1033,7 +1033,7 @@ fn build_eval_timing_hist_mesh(
     si: &ScoreInfo,
     scale: eval_graphs::TimingHistogramScale,
     smooth: bool,
-    palette: deadlib_present::color::JudgmentPalette,
+    palette: deadsync_theme::color::JudgmentPalette,
 ) -> Option<Arc<[MeshVertex]>> {
     const PANE_W: f32 = 300.0;
     const PANE_H: f32 = 180.0;
@@ -5106,7 +5106,7 @@ fn build_eval_life_graph_mesh(
         graph_width,
         graph_height,
     )?;
-    let mesh = deadlib_present::density::build_graph_line_mesh(&points, 2.0, [1.0, 1.0, 1.0, 1.0]);
+    let mesh = deadlib_present::line::build_graph_line_mesh(&points, 2.0, [1.0, 1.0, 1.0, 1.0]);
     (!mesh.is_empty()).then_some(mesh)
 }
 
@@ -5831,7 +5831,7 @@ pub fn push_actors(
     {
         let pane_height = 180.0;
         let pane_y_top = screen_center_y() + 34.0 - pane_height * 0.5;
-        let pane_bg_color = color::rgba_hex("#1E282F");
+        let pane_bg_color = deadlib_present::color::rgba_hex("#1E282F");
 
         let pane_x_left = screen_center_x() - 305.0;
         if play_style.is_versus() {

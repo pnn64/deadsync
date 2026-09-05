@@ -17,12 +17,12 @@
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::color;
 use crate::effects::SimplyLoveUpdaterRequest;
 use crate::views::{
     SimplyLoveUpdateErrorKind as ActionErrorKind, SimplyLoveUpdatePhase as ActionPhase,
 };
 use deadlib_present::actors::{Actor, TextAlign, TextContent};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use std::sync::Arc;
@@ -129,7 +129,7 @@ pub(super) fn push_panel(actors: &mut Vec<Actor>, content: &PanelContent, active
     actors.reserve(8);
 
     // 1) full-screen dim
-    let mut dim = color::rgba_hex("#000000");
+    let mut dim = deadlib_present::color::rgba_hex("#000000");
     dim[3] = 0.7;
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -141,8 +141,8 @@ pub(super) fn push_panel(actors: &mut Vec<Actor>, content: &PanelContent, active
     // 2) panel background + border (drawn as two centred quads).
     let cx = screen_center_x();
     let cy = screen_center_y();
-    let bg = color::rgba_hex(PANEL_BG_HEX);
-    let border = color::rgba_hex(PANEL_BORDER_HEX);
+    let bg = deadlib_present::color::rgba_hex(PANEL_BG_HEX);
+    let border = deadlib_present::color::rgba_hex(PANEL_BORDER_HEX);
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx, cy):
         zoomto(PANEL_W + 4.0, PANEL_H + 4.0):

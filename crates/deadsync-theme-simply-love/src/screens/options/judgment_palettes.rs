@@ -1,6 +1,7 @@
 use super::*;
-use deadlib_present::color::{Color, JudgmentColorRole};
+use deadlib_present::color::Color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadsync_theme::color::JudgmentColorRole;
 
 const Z: i16 = 1490;
 const PANEL_W: f32 = 620.0;

@@ -9,7 +9,9 @@ use deadsync_theme_simply_love::views::{
 pub(crate) fn init_view() -> PlayerOptionsInitView {
     let config = deadsync_config::prelude::get();
     let session = profile::get_session_snapshot();
-    let palette_catalog = deadsync_config::judgment_palettes::runtime_catalog();
+    let palette_catalog = deadsync_config::judgment_palettes::runtime_catalog(
+        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+    );
     PlayerOptionsInitView {
         policy: PlayerOptionsPolicyView {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,

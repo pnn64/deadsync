@@ -348,10 +348,6 @@ impl RuntimeConfigStore {
         })
     }
 
-    pub fn smx_underglow_colors(&self, lone_pad: bool) -> Option<SmxUnderglowColors> {
-        smx_underglow_colors_from_config(&self.config(), lone_pad)
-    }
-
     pub fn null_or_die_bias_cfg(&self) -> BiasCfg {
         null_or_die_bias_cfg(null_or_die_options_from_config(self.config()))
     }
@@ -642,33 +638,23 @@ pub const fn audio_mix_levels_from_config(cfg: &Config) -> AudioMixLevels {
 #[must_use]
 pub fn smx_underglow_colors_from_config(
     cfg: &Config,
-    lone_pad: bool,
+    theme_colors: [[f32; 4]; 2],
 ) -> Option<SmxUnderglowColors> {
     if !cfg.smx_input || !cfg.smx_underglow_theme {
         return None;
     }
 
-    let p1_rgb = decorative_rgb(cfg.simply_love_color);
-    let p2_rgb = if lone_pad {
-        p1_rgb
-    } else {
-        decorative_rgb(cfg.simply_love_color - 2)
-    };
     Some(SmxUnderglowColors {
         grb: cfg.smx_underglow_grb,
-        colors: [Some(p1_rgb), Some(p2_rgb)],
+        colors: theme_colors.map(|rgba| {
+            // Screen colors are sRGB; expand gamma for the linear LED strips.
+            Some(deadsync_smx::gifs::saturate_for_leds([
+                color_component_to_u8(rgba[0]),
+                color_component_to_u8(rgba[1]),
+                color_component_to_u8(rgba[2]),
+            ]))
+        }),
     })
-}
-
-fn decorative_rgb(index: i32) -> [u8; 3] {
-    let rgba = deadlib_present::color::decorative_rgba(index);
-    // The palette is sRGB for screen use; the LED strips are linear, so the
-    // colours wash toward white without the gamma expansion.
-    deadsync_smx::gifs::saturate_for_leds([
-        color_component_to_u8(rgba[0]),
-        color_component_to_u8(rgba[1]),
-        color_component_to_u8(rgba[2]),
-    ])
 }
 
 fn color_component_to_u8(c: f32) -> u8 {
@@ -1139,7 +1125,11 @@ SmxP1Serial= pad-1\n"),
     #[test]
     fn runtime_config_store_plans_smx_underglow_colors() {
         let store = RuntimeConfigStore::new();
-        assert_eq!(store.smx_underglow_colors(false), None);
+        let colors = [[1.0, 0.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]];
+        assert_eq!(
+            smx_underglow_colors_from_config(&store.config(), colors),
+            None
+        );
 
         store.update_config(|cfg| {
             cfg.smx_input = true;
@@ -1149,15 +1139,13 @@ SmxP1Serial= pad-1\n"),
             true
         });
 
-        let plan = store
-            .smx_underglow_colors(false)
+        let plan = smx_underglow_colors_from_config(&store.config(), colors)
             .expect("enabled underglow should produce colors");
         assert!(plan.grb);
-        assert_eq!(plan.colors[0], Some(decorative_rgb(4)));
-        assert_eq!(plan.colors[1], Some(decorative_rgb(2)));
+        assert_eq!(plan.colors[0], Some([255, 0, 0]));
+        assert_eq!(plan.colors[1], Some([0, 0, 255]));
 
-        let lone_plan = store
-            .smx_underglow_colors(true)
+        let lone_plan = smx_underglow_colors_from_config(&store.config(), [colors[0]; 2])
             .expect("enabled underglow should produce colors");
         assert_eq!(lone_plan.colors[0], lone_plan.colors[1]);
 

@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::act;
+use crate::color;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::{anim, color};
+use deadlib_present::anim;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 

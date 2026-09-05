@@ -2,10 +2,12 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
 use crate::screens::components::gameplay::step_stats_gifs;
+use crate::screens::components::shared::density;
 use crate::screens::components::shared::heart_rate;
 use crate::screens::gameplay::{self as gameplay_screen, GameplayCoreState, State};
 use crate::step_stats as step_stats_theme;
@@ -14,12 +16,9 @@ use crate::step_stats::{
     StepStatsPaneParams,
 };
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole, JudgmentPalette};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,
 };
-use deadlib_present::density;
 use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render_core::BlendMode;
@@ -28,6 +27,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
+use deadsync_theme::color::{JudgmentColorRole, JudgmentPalette};
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
 
@@ -700,7 +700,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     let (pixel_width, pixel_height) = current_window_px();
     let edge_feather =
         density_life_edge_feather(pixel_width, pixel_height, screen_width(), screen_height());
-    density::update_density_life_mesh_reusable(
+    deadlib_present::line::update_line_mesh_reusable(
         &mut render.life_mesh[player_idx],
         points,
         offset,
@@ -2651,7 +2651,7 @@ fn push_holds_mines_rolls_pane_at(
         asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |metrics_font| {
             let value_zoom = 0.4 * frame_zoom;
             let label_zoom = 0.833 * frame_zoom;
-            const GRAY: [f32; 4] = color::rgba_hex("#5A6166");
+            const GRAY: [f32; 4] = deadlib_present::color::rgba_hex("#5A6166");
             let white = [1.0, 1.0, 1.0, 1.0];
 
             let digit_width = glyph_width_scaled(metrics_font, all_fonts, '0', value_zoom);
@@ -2767,7 +2767,7 @@ fn build_holds_mines_rolls_pane(
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font(gameplay_font_key(state, FontRole::ScreenEval), |metrics_font| {
         let value_zoom = 0.4 * frame.zoom;
         let label_zoom = 0.833 * frame.zoom;
-        let gray = color::rgba_hex("#5A6166");
+        let gray = deadlib_present::color::rgba_hex("#5A6166");
         let white = [1.0, 1.0, 1.0, 1.0];
 
         // --- HYBRID LAYOUT LOGIC ---
@@ -3295,7 +3295,7 @@ fn build_side_pane(
                 asset_manager,
             ) * time_value_zoom;
 
-            let red_color = color::rgba_hex("#ff3030");
+            let red_color = deadlib_present::color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
             let remaining_color = if state.players()[player_idx].is_failing {
                 red_color

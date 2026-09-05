@@ -1,7 +1,6 @@
 use crate::act;
 use crate::screens::evaluation::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::color;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -131,7 +130,7 @@ fn push_modifiers_pane_with_text(
     let text_x = bar_width.mul_add(-0.5, bar_center_x) + 10.0;
     let text_y = frame_center_y - 5.0;
 
-    let bg = color::rgba_hex("#1E282F");
+    let bg = deadlib_present::color::rgba_hex("#1E282F");
     let bg_alpha = eval_style_alpha(transparent, 1.0, 0.75);
     out.reserve(2);
     out.push(act!(quad:

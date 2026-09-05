@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -10,7 +11,6 @@ use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
 use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
-use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadsync_config::prelude::GameFlag;
@@ -464,7 +464,7 @@ pub fn push_actors(
     // Choice labels (SL: Graphics/ScreenSelectPlayMode Icon.lua).
     let label_alpha = fade_after(exit_t, 0.0, 0.2);
     let label_selected = color::simply_love_rgba(state.active_color_index);
-    let label_unselected = color::rgba_hex("#888888");
+    let label_unselected = deadlib_present::color::rgba_hex("#888888");
     let zoom_den =
         (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
     for (i, label) in labels.iter().take(state.flow.choice_count()).enumerate() {

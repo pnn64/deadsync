@@ -323,7 +323,9 @@ pub(crate) fn init_view(
         video_renderer: config.video_renderer,
         hud: profile::gameplay_hud_snapshot(),
         judgment_palettes: {
-            let catalog = deadsync_config::judgment_palettes::runtime_catalog();
+            let catalog = deadsync_config::judgment_palettes::runtime_catalog(
+                deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+            );
             std::array::from_fn(|player| {
                 catalog.resolve(profiles[player].judgment_palette_id.as_deref())
             })

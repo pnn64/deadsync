@@ -7,6 +7,7 @@ use crate::config::{
     SelectMusicSeriesSource, SelectMusicSort, SyncGraphMode,
 };
 
+use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
@@ -37,7 +38,6 @@ use deadlib_present::cache::{
     SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
     text_cache_with_capacity,
 };
-use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{
     current_window_px, is_wide, screen_center_x, screen_center_y, screen_height, screen_width,

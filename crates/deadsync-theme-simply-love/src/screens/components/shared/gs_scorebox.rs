@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets;
+use crate::color;
 use crate::scorebox as scorebox_theme;
 use crate::scorebox::{
     SCOREBOX_BORDER, SCOREBOX_H, SCOREBOX_W, ScoreboxCycleState, color_with_alpha, lerp_color,
@@ -8,20 +9,19 @@ use crate::scorebox::{
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadsync_config::prelude::SrpgVariant;
 use deadsync_score as score_data;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 
 pub(crate) const SCOREBOX_NUM_ENTRIES: usize = 5;
-const SCOREBOX_GS_BLUE: [f32; 4] = color::rgba_hex("#007b85");
+const SCOREBOX_GS_BLUE: [f32; 4] = deadlib_present::color::rgba_hex("#007b85");
 const SCOREBOX_SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const SCOREBOX_ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
-const SCOREBOX_SELF: [f32; 4] = color::rgba_hex("#A1FF94");
-const SCOREBOX_RIVAL: [f32; 4] = color::rgba_hex("#C29CFF");
+const SCOREBOX_SELF: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
+const SCOREBOX_RIVAL: [f32; 4] = deadlib_present::color::rgba_hex("#C29CFF");
 const SCOREBOX_MODE_ALPHA: f32 = 0.35;
 const SCOREBOX_GS_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_EX_TEXT_ALPHA: f32 = 0.3;
@@ -685,7 +685,7 @@ fn select_music_panes_from_snapshot(
         panes.push(gameplay_pane_from_leaderboard(
             pane,
             entries.as_ref(),
-            JudgmentPalette::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         ));
     }
     panes
@@ -1280,7 +1280,7 @@ mod tests {
         let rows = scorebox_rows_for_kind(
             entries.as_slice(),
             PaneKind::Itl,
-            JudgmentPalette::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );
         let ranks = rows
             .iter()
@@ -1312,7 +1312,7 @@ mod tests {
         let rows = scorebox_rows_for_kind(
             entries.as_slice(),
             PaneKind::Itl,
-            JudgmentPalette::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );
         let ranks = rows
             .iter()
@@ -1334,7 +1334,7 @@ mod tests {
         let rows = scorebox_rows_for_kind(
             entries.as_slice(),
             PaneKind::Itl,
-            JudgmentPalette::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );
 
         for row in rows.iter().take(3) {
@@ -1476,7 +1476,7 @@ mod tests {
                 hard_ex: true,
                 tournaments: false,
             },
-            JudgmentPalette::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );
 
         assert_eq!(panes.len(), 1);

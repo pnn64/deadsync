@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
+use crate::color;
 use crate::screens::components::evaluation::{FooterClock, eval_grades};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -13,8 +14,6 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongRuntimeView};
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::space::{screen_center_x, screen_height, screen_width, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
@@ -22,6 +21,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */

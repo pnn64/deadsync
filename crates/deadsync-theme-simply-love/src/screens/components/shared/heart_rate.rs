@@ -1,18 +1,18 @@
 use crate::act;
+use crate::color;
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadsync_core::input::MAX_PLAYERS;
 
 /// Color zones keyed by percentage of the player's maximum heart rate:
 /// 0 grey (<50%), 1 white (50-59%), 2 blue (60-69%), 3 green (70-79%),
 /// 4 yellow (80-89%), 5 red (90%+).
 const ZONE_RGBA: [[f32; 4]; 6] = [
-    color::rgba_hex("#9AA0A6"),
-    color::rgba_hex("#FFFFFF"),
-    color::rgba_hex("#4EA3FF"),
-    color::rgba_hex("#5CE087"),
-    color::rgba_hex("#FFD23F"),
-    color::rgba_hex("#FF3030"),
+    deadlib_present::color::rgba_hex("#9AA0A6"),
+    deadlib_present::color::rgba_hex("#FFFFFF"),
+    deadlib_present::color::rgba_hex("#4EA3FF"),
+    deadlib_present::color::rgba_hex("#5CE087"),
+    deadlib_present::color::rgba_hex("#FFD23F"),
+    deadlib_present::color::rgba_hex("#FF3030"),
 ];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

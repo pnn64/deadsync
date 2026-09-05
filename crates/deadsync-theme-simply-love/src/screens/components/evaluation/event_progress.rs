@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::color::JUDGMENT_RGBA;
 use crate::config::MachineFont;
 use crate::screens::components::shared::banner as shared_banner;
 use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
-use deadlib_present::color::{self, JUDGMENT_RGBA};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_chart::SongData;
@@ -28,13 +28,13 @@ const MORE_INFO_TEXT: &str = "More Information";
 const OVERLAY_PANE_NAV_WIDTH: f32 = 230.0;
 const OVERLAY_LB_ROWS: usize = 13;
 const OVERLAY_LB_GRID_W: f32 = 230.0;
-const OVERLAY_LB_RIVAL: [f32; 4] = color::rgba_hex("#BD94FF");
-const OVERLAY_LB_SELF: [f32; 4] = color::rgba_hex("#A1FF94");
+const OVERLAY_LB_RIVAL: [f32; 4] = deadlib_present::color::rgba_hex("#BD94FF");
+const OVERLAY_LB_SELF: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
 const OVERLAY_LB_TEXT_ZOOM: f32 = 1.0;
-const TIER_BRONZE: [f32; 4] = color::rgba_hex("#966832");
-const TIER_SILVER: [f32; 4] = color::rgba_hex("#A1AEC1");
-const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
-const TIER_PRISMATIC: [f32; 4] = color::rgba_hex("#8731D2");
+const TIER_BRONZE: [f32; 4] = deadlib_present::color::rgba_hex("#966832");
+const TIER_SILVER: [f32; 4] = deadlib_present::color::rgba_hex("#A1AEC1");
+const TIER_GOLD: [f32; 4] = deadlib_present::color::rgba_hex("#F6AB2D");
+const TIER_PRISMATIC: [f32; 4] = deadlib_present::color::rgba_hex("#8731D2");
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct EventFontKey {

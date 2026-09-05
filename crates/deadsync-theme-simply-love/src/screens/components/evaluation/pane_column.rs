@@ -1,11 +1,10 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
+use crate::color;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use deadlib_present::actors::{
     Actor, InlineU32Text, SharedActorFrameScratch, SizeSpec, TextContent,
 };
-use deadlib_present::color;
-use deadlib_present::color::{JudgmentColorRole as Role, JudgmentPalette};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadlib_render_core::{BlendMode, SamplerDesc};
@@ -13,6 +12,7 @@ use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
+use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use image::{Rgba, RgbaImage};
 use std::cell::RefCell;
 use std::hash::Hasher;
@@ -381,7 +381,7 @@ pub fn build_column_judgments_pane(
         asset_manager,
         preview_elapsed,
         arrow_glow_active,
-        JudgmentPalette::default(),
+        crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     )
 }
 
@@ -1209,7 +1209,6 @@ mod tests {
     };
     use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::actors::Actor;
-    use deadlib_present::color;
     use deadsync_assets::noteskin::load_itg_default;
     use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
@@ -1352,9 +1351,18 @@ mod tests {
         assert_eq!(arrow_breakdown_rgba(1), [0.0, 0.0, 1.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(2), [0.0, 1.0, 0.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(3), [1.0, 1.0, 0.0, 1.0]);
-        assert_eq!(arrow_breakdown_rgba(4), color::rgba_hex("#B54DFF"));
-        assert_eq!(arrow_breakdown_rgba(5), color::rgba_hex("#FF8A00"));
-        assert_eq!(arrow_breakdown_rgba(6), color::rgba_hex("#00D7FF"));
+        assert_eq!(
+            arrow_breakdown_rgba(4),
+            deadlib_present::color::rgba_hex("#B54DFF")
+        );
+        assert_eq!(
+            arrow_breakdown_rgba(5),
+            deadlib_present::color::rgba_hex("#FF8A00")
+        );
+        assert_eq!(
+            arrow_breakdown_rgba(6),
+            deadlib_present::color::rgba_hex("#00D7FF")
+        );
         assert_eq!(arrow_breakdown_rgba(7), [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(8), [1.0, 1.0, 1.0, 1.0]);
     }

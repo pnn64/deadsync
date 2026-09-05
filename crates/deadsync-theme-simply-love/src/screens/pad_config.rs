@@ -14,10 +14,10 @@
 //!   pad-level controls (auto-recalibration, panel debounce).
 
 use crate::act;
+use crate::color;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
