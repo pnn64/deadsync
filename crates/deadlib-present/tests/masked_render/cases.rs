@@ -2,6 +2,7 @@ use super::*;
 use std::fmt::Write;
 use std::hint::black_box;
 
+mod clipping;
 mod reuse;
 mod text_mesh;
 

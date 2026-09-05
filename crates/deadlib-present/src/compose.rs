@@ -293,17 +293,63 @@ impl FrameBuilder {
             camera,
             object_type,
         } = object;
-        let item_index = self.items.len();
-        self.push(EditableDraw {
+        // Clipping takes the old payload before replacing it. Reuse that slot
+        // when the kind is unchanged, including across nested clipping passes.
+        let old = self.items[index];
+        let (kind, payload_index) = match object_type {
+            EditablePayload::Sprite(index) => (DrawKind::Sprite, index),
+            EditablePayload::Mesh {
+                transform,
+                tint,
+                vertices,
+            } => {
+                let slot = if old.kind == DrawKind::Mesh {
+                    debug_assert!(self.meshes[old.payload_index as usize].is_none());
+                    old.payload_index
+                } else {
+                    let slot = saturating_u32(self.meshes.len());
+                    self.meshes.push(None);
+                    slot
+                };
+                self.meshes[slot as usize] = Some(MeshPayload {
+                    transform,
+                    tint,
+                    vertices,
+                });
+                (DrawKind::Mesh, slot)
+            }
+            EditablePayload::TexturedMesh {
+                instance,
+                vertices,
+                geom_cache_key,
+                depth_test,
+            } => {
+                let slot = if old.kind == DrawKind::TexturedMesh {
+                    debug_assert!(self.textured_meshes[old.payload_index as usize].is_none());
+                    old.payload_index
+                } else {
+                    let slot = saturating_u32(self.textured_meshes.len());
+                    self.textured_meshes.push(None);
+                    slot
+                };
+                self.textured_meshes[slot as usize] = Some(TexturedMeshPayload {
+                    instance,
+                    vertices,
+                    geom_cache_key,
+                    depth_test,
+                });
+                (DrawKind::TexturedMesh, slot)
+            }
+        };
+        self.items[index] = DrawItem {
             texture_handle,
             order,
             z,
             blend,
             camera,
-            object_type,
-        });
-        self.items.swap(index, item_index);
-        self.items.pop();
+            kind,
+            payload_index,
+        };
     }
 
     fn clone_retained_object(&self, index: usize) -> Option<EditableDraw> {
@@ -8600,15 +8646,11 @@ struct ClippedSpriteObject {
     sprite: Option<renderer::SpriteInstanceRaw>,
 }
 
-#[inline(always)]
 fn object_world_area(
-    clipped: &ClippedSpriteObject,
+    object_type: &EditablePayload,
     sprite_instances: &[renderer::SpriteInstanceRaw],
 ) -> f32 {
-    if let Some(sprite) = clipped.sprite {
-        return (sprite.size[0] * sprite.size[1]).abs();
-    }
-    match &clipped.object_type {
+    match object_type {
         EditablePayload::Sprite(index) => {
             let sprite = sprite_instances[*index as usize];
             (sprite.size[0] * sprite.size[1]).abs()
@@ -8658,7 +8700,41 @@ fn clip_object_to_world_masks(
     };
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
+    let mut best_is_source = false;
+    let mut source_area = None;
     for &mask in masks {
+        if mask.left >= mask.right || mask.bottom >= mask.top {
+            continue;
+        }
+        let unchanged = if let Some(bounds) = textured_mesh_bounds {
+            if bounds.right < mask.left
+                || bounds.left > mask.right
+                || bounds.top < mask.bottom
+                || bounds.bottom > mask.top
+            {
+                continue;
+            }
+            bounds.left >= mask.left
+                && bounds.right <= mask.right
+                && bounds.bottom >= mask.bottom
+                && bounds.top <= mask.top
+        } else {
+            matches!(obj.object_type, EditablePayload::Mesh { .. })
+        };
+        if unchanged {
+            // A contained candidate borrows the source. Preserve strict area
+            // comparisons and mask order: rounding can still favor a later clip.
+            let area = *source_area
+                .get_or_insert_with(|| object_world_area(&obj.object_type, sprite_instances));
+            if area > best_area {
+                best_area = area;
+                best_is_source = true;
+                if let Some(previous) = best_obj.take() {
+                    recycle_transient_object_vertices(previous.object_type, recycled_vertices);
+                }
+            }
+            continue;
+        }
         let Some(candidate) = clipped_sprite_object_to_world_rect(
             obj,
             sprite_instances,
@@ -8668,9 +8744,13 @@ fn clip_object_to_world_masks(
         ) else {
             continue;
         };
-        let area = object_world_area(&candidate, sprite_instances);
+        let area = candidate.sprite.map_or_else(
+            || object_world_area(&candidate.object_type, sprite_instances),
+            |sprite| (sprite.size[0] * sprite.size[1]).abs(),
+        );
         if area > best_area {
             best_area = area;
+            best_is_source = false;
             if let Some(previous) = best_obj.replace(candidate) {
                 recycle_transient_object_vertices(previous.object_type, recycled_vertices);
             }
@@ -8678,7 +8758,9 @@ fn clip_object_to_world_masks(
             recycle_transient_object_vertices(candidate.object_type, recycled_vertices);
         }
     }
-    if let Some(chosen) = best_obj {
+    if best_is_source {
+        true
+    } else if let Some(chosen) = best_obj {
         if let Some(sprite) = chosen.sprite
             && let EditablePayload::Sprite(index) = &chosen.object_type
         {
@@ -8848,28 +8930,13 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     true
 }
 
+// Callers keep unchanged mesh payloads themselves; only partial textured
+// meshes and sprites reach this geometry-producing path.
 fn clipped_sprite_object_to_world_rect(
     obj: &EditableDraw,
     sprite_instances: &[renderer::SpriteInstanceRaw],
     clip: WorldRect,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
-    textured_mesh_bounds: Option<WorldRect>,
-) -> Option<ClippedSpriteObject> {
-    clipped_sprite_object_to_world_rect_impl::<true>(
-        obj,
-        sprite_instances,
-        clip,
-        recycled_vertices,
-        textured_mesh_bounds,
-    )
-}
-
-#[inline(always)]
-fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>(
-    obj: &EditableDraw,
-    sprite_instances: &[renderer::SpriteInstanceRaw],
-    clip: WorldRect,
-    mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
     textured_mesh_bounds: Option<WorldRect>,
 ) -> Option<ClippedSpriteObject> {
     if clip.left >= clip.right || clip.bottom >= clip.top {
@@ -8922,11 +8989,7 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
             let bottom = world_center[1] - half_h;
             let top = world_center[1] + half_h;
 
-            if ACCEPT_CONTAINED_SPRITE
-                && left >= clip.left
-                && right <= clip.right
-                && bottom >= clip.bottom
-                && top <= clip.top
+            if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top
             {
                 return Some(ClippedSpriteObject {
                     object_type: EditablePayload::Sprite(*index),
@@ -8986,8 +9049,7 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
         EditablePayload::TexturedMesh {
             instance,
             vertices: mesh_vertices,
-            geom_cache_key,
-            depth_test,
+            ..
         } => {
             let vertices = mesh_vertices.as_ref();
             let transform = instance.transform();
@@ -9002,38 +9064,6 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
             {
                 return None;
             }
-            if bounds.left >= clip.left
-                && bounds.right <= clip.right
-                && bounds.bottom >= clip.bottom
-                && bounds.top <= clip.top
-            {
-                let vertices = match mesh_vertices {
-                    renderer::TexturedMeshVertices::Shared(vertices) => {
-                        renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
-                    }
-                    renderer::TexturedMeshVertices::Reusable(vertices) => {
-                        renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
-                    }
-                    renderer::TexturedMeshVertices::Transient(vertices) => {
-                        let mut cloned = recycled_vertices
-                            .as_mut()
-                            .map(|pool| take_recycled_text_mesh_vertices(pool))
-                            .unwrap_or_default();
-                        cloned.clear();
-                        cloned.extend_from_slice(vertices);
-                        renderer::TexturedMeshVertices::Transient(cloned)
-                    }
-                };
-                return Some(ClippedSpriteObject {
-                    object_type: EditablePayload::TexturedMesh {
-                        instance: *instance,
-                        vertices,
-                        geom_cache_key: *geom_cache_key,
-                        depth_test: *depth_test,
-                    },
-                    sprite: None,
-                });
-            }
             clip_textured_mesh_to_world_rect(
                 instance.tint,
                 vertices,
@@ -9046,10 +9076,7 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
                 recycled_vertices,
             )
         }
-        EditablePayload::Mesh { .. } => Some(ClippedSpriteObject {
-            object_type: obj.object_type.clone(),
-            sprite: None,
-        }),
+        EditablePayload::Mesh { .. } => unreachable!("callers keep colored meshes unchanged"),
     }
 }
 
@@ -9172,10 +9199,11 @@ fn clip_poly_edge_into(
     axis: usize,
     bound: f32,
     keep_greater: bool,
-) -> ClipPolygon {
-    let mut out = ClipPolygon::new();
+    out: &mut ClipPolygon,
+) {
+    out.clear();
     if poly.is_empty() {
-        return out;
+        return;
     }
     let mut prev = poly[poly.len() - 1];
     let mut prev_in = if keep_greater {
@@ -9209,14 +9237,16 @@ fn clip_poly_edge_into(
         prev = curr;
         prev_in = curr_in;
     }
-    out
 }
 
 fn clip_polygon_to_world_rect(poly: &[ClipVertex], clip: WorldRect) -> ClipPolygon {
-    let mut p = clip_poly_edge_into(poly, 0, clip.left, true);
-    p = clip_poly_edge_into(&p, 0, clip.right, false);
-    p = clip_poly_edge_into(&p, 1, clip.bottom, true);
-    clip_poly_edge_into(&p, 1, clip.top, false)
+    let mut a = ClipPolygon::new();
+    let mut b = ClipPolygon::new();
+    clip_poly_edge_into(poly, 0, clip.left, true, &mut a);
+    clip_poly_edge_into(&a, 0, clip.right, false, &mut b);
+    clip_poly_edge_into(&b, 1, clip.bottom, true, &mut a);
+    clip_poly_edge_into(&a, 1, clip.top, false, &mut b);
+    b
 }
 
 #[inline(always)]
@@ -11714,8 +11744,9 @@ mod tests {
     }
 
     #[test]
-    fn multi_mask_transient_mesh_reuses_candidate_buffers() {
+    fn contained_masks_keep_buf() {
         let source = vec![TexturedMeshVertex::default(); 3];
+        let source_ptr = source.as_ptr();
         let mut obj = EditableDraw {
             object_type: EditablePayload::TexturedMesh {
                 instance: TexturedMeshInstanceRaw::new(
@@ -11737,9 +11768,9 @@ mod tests {
             camera: 0,
         };
         let first = Vec::with_capacity(3);
-        let chosen = Vec::with_capacity(3);
-        let chosen_ptr = chosen.as_ptr();
-        let mut recycled_vertices = vec![first, chosen];
+        let second = Vec::with_capacity(3);
+        let pool_ptrs = [first.as_ptr(), second.as_ptr()];
+        let mut recycled_vertices = vec![first, second];
 
         assert!(clip_object_to_world_masks(
             &mut obj,
@@ -11767,8 +11798,12 @@ mod tests {
         let deadlib_render_core::TexturedMeshVertices::Transient(vertices) = vertices else {
             panic!("clipped transient geometry should remain recyclable");
         };
-        assert_eq!(vertices.as_ptr(), chosen_ptr);
+        assert_eq!(vertices.as_ptr(), source_ptr);
         assert_eq!(recycled_vertices.len(), 2);
+        assert_eq!(
+            [recycled_vertices[0].as_ptr(), recycled_vertices[1].as_ptr()],
+            pool_ptrs
+        );
     }
 
     #[test]
