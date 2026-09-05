@@ -1,4 +1,5 @@
-#![forbid(unsafe_code)]
+// Test instrumentation delegates to System and reads OS cycle counters.
+#![cfg_attr(not(test), forbid(unsafe_code))]
 
 mod clock;
 mod mix;
@@ -21,10 +22,8 @@ use deadsync_audio_decode::resample::{
     write_channel_mapped_i16, write_resampler_output,
 };
 use log::{debug, error, warn};
-use rubato::audioadapter::Adapter;
-use rubato::audioadapter_buffers::direct::{SequentialSliceOfSlices, SequentialSliceOfVecs};
-use rubato::{Async, FixedAsync, ResampleError, Resampler, ResamplerConstructionError};
-use smallvec::SmallVec;
+use rubato::audioadapter_buffers::direct::SequentialSliceOfVecs;
+use rubato::{Async, FixedAsync, Indexing, ResampleError, Resampler, ResamplerConstructionError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -70,9 +69,6 @@ const MIN_MUSIC_RATE: f32 = 0.05;
 const MAX_MUSIC_RATE: f32 = 8.0;
 const MAX_PACKET_START_SNAP_SEC: f64 = 0.25;
 const RESAMPLE_MAX_RELATIVE_RATIO: f64 = 64.0;
-// Mono through 7.1 layouts keep the resampler's borrowed channel views on the
-// decoder worker stack. Unusual wider layouts retain SmallVec's heap fallback.
-const INLINE_RESAMPLE_CHANNELS: usize = 8;
 // Ignore implausibly large untrusted metadata instead of making one enormous
 // speculative allocation. Eight million i16 samples cover more than a minute
 // of stereo SFX at 48 kHz while keeping preload spikes bounded.
@@ -100,28 +96,24 @@ fn new_resampler(
     )
 }
 
+// Both packet data and EOF padding already own planar vectors. The adapter
+// borrows them directly; Indexing selects the live prefix without allocating
+// per-channel slice handles, including for layouts wider than 7.1.
 fn process_resampler(
     resampler: &mut Async<f32>,
-    input: &impl Adapter<f32>,
+    input: &[Vec<f32>],
+    input_offset: usize,
     output: &mut [Vec<f32>],
 ) -> Result<(usize, usize), ResampleError> {
     let channels = resampler.nbr_channels();
+    let input_frames = input_offset + resampler.input_frames_next();
+    let input = SequentialSliceOfVecs::new(input, channels, input_frames)
+        .expect("planar input holds every requested frame after the offset");
     let output_frames = resampler.output_frames_max();
     let mut output = SequentialSliceOfVecs::new_mut(output, channels, output_frames)
         .expect("resampler output allocation matches its channel and frame counts");
-    resampler.process_into_buffer(input, &mut output, None)
-}
-
-type ResampleSlices<'a> = SmallVec<[&'a [f32]; INLINE_RESAMPLE_CHANNELS]>;
-
-#[inline]
-fn planar_window(planar: &PlanarAccum, frames: usize) -> ResampleSlices<'_> {
-    debug_assert!(planar.available_frames() >= frames);
-    let start = planar.start_frame;
-    let end = start + frames;
-    let mut slices = ResampleSlices::with_capacity(planar.channels.len());
-    slices.extend(planar.channels.iter().map(|channel| &channel[start..end]));
-    slices
+    let indexing = Indexing::new().input_offset(input_offset);
+    resampler.process_into_buffer(&input, &mut output, Some(&indexing))
 }
 
 fn compat_lead_frames(ratio: f64) -> usize {
@@ -949,12 +941,13 @@ pub fn load_and_resample_sfx(
             if in_planar.available_frames() < need {
                 break;
             }
-            let produced_frames = {
-                let input_slices = planar_window(&in_planar, need);
-                let input = SequentialSliceOfSlices::new(input_slices.as_slice(), in_ch, need)
-                    .expect("planar accumulator exposes every requested input frame");
-                process_resampler(&mut resampler, &input, &mut resample_out)?.1
-            };
+            let produced_frames = process_resampler(
+                &mut resampler,
+                &in_planar.channels,
+                in_planar.start_frame,
+                &mut resample_out,
+            )?
+            .1;
             in_planar.consume_frames(need);
             if produced_frames == 0 {
                 break;
@@ -975,9 +968,8 @@ pub fn load_and_resample_sfx(
             dst[..need].fill(0.0);
             dst[..copy_frames].copy_from_slice(&channel[start..end]);
         }
-        let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
-            .expect("resampler input allocation holds the padded final chunk");
-        let produced_frames = process_resampler(&mut resampler, &input, &mut resample_out)?.1;
+        let produced_frames =
+            process_resampler(&mut resampler, &resample_in, 0, &mut resample_out)?.1;
         if produced_frames > 0 {
             write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
             trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
@@ -990,9 +982,7 @@ pub fn load_and_resample_sfx(
     for dst in &mut resample_in {
         dst[..need].fill(0.0);
     }
-    let input = SequentialSliceOfVecs::new(resample_in.as_slice(), in_ch, need)
-        .expect("resampler input allocation holds a zero drain chunk");
-    let produced_frames = process_resampler(&mut resampler, &input, &mut resample_out)?.1;
+    let produced_frames = process_resampler(&mut resampler, &resample_in, 0, &mut resample_out)?.1;
     if produced_frames > 0 {
         write_resampler_output(&resample_out, produced_frames, out_ch, &mut out_tmp);
         trim_resampler_lead(&mut out_tmp, out_ch, &mut resampler_lead_frames);
@@ -1005,11 +995,10 @@ pub fn load_and_resample_sfx(
 mod tests {
     use super::{
         DecoderWake, MAX_SFX_PREALLOC_SAMPLES, MusicBackpressure, MusicControl, OutputFormat,
-        lead_in_silence_timing, music_output_start_sec, planar_window, push_music_block,
-        seek_preroll_in_frames, sfx_output_capacity,
+        lead_in_silence_timing, music_output_start_sec, push_music_block, seek_preroll_in_frames,
+        sfx_output_capacity,
     };
     use deadlib_audio_core::{MusicBlockTiming, music_transport};
-    use deadsync_audio_decode::resample::PlanarAccum;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
     use std::time::{Duration, Instant};
@@ -1023,31 +1012,6 @@ mod tests {
             preserve_pitch: AtomicBool::new(false),
             generation: AtomicU64::new(generation),
             wake: DecoderWake::new(),
-        }
-    }
-
-    #[test]
-    fn surround_resampler_views_stay_inline_and_keep_window_bounds() {
-        let planar = PlanarAccum {
-            channels: (0..8)
-                .map(|channel| (0..7).map(|frame| (channel * 100 + frame) as f32).collect())
-                .collect(),
-            start_frame: 2,
-        };
-
-        let slices = planar_window(&planar, 3);
-
-        assert!(!slices.spilled());
-        assert_eq!(slices.len(), 8);
-        for (channel, slice) in slices.iter().enumerate() {
-            assert_eq!(
-                *slice,
-                [
-                    (channel as f32).mul_add(100.0, 2.0),
-                    (channel as f32).mul_add(100.0, 3.0),
-                    (channel as f32).mul_add(100.0, 4.0)
-                ]
-            );
         }
     }
 
@@ -1306,3 +1270,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;

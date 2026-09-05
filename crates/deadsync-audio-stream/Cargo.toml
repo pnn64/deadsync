@@ -12,7 +12,6 @@ deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.34"
 rubato = "5.0.0"
-smallvec = "1.16.0"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

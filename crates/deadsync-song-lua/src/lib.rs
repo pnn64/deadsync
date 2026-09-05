@@ -2851,24 +2851,14 @@ pub fn overlay_state_after_blocks(
             apply_overlay_delta(&mut state, &block.delta);
             continue;
         }
-        let target = overlay_state_with_delta(state, &block.delta);
         let t = overlay_command_ease_factor(
             block.easing.as_deref(),
             (elapsed - block.start) / block.duration,
             block.opt1,
         );
-        return overlay_state_lerp(state, target, t, &block.delta);
+        overlay_state_lerp(&mut state, &block.delta, t);
+        return state;
     }
-    state
-}
-
-/// Returns `state` with the properties written by `delta` replaced.
-#[must_use]
-pub const fn overlay_state_with_delta(
-    mut state: SongLuaOverlayState,
-    delta: &SongLuaOverlayStateDelta,
-) -> SongLuaOverlayState {
-    apply_overlay_delta(&mut state, delta);
     state
 }
 
@@ -3113,86 +3103,88 @@ pub const fn apply_overlay_delta(
     }
 }
 
-/// Interpolates the properties selected by `delta` between two overlay states.
+/// Interpolates written properties in place, retaining implicit baselines and unwritten state.
 ///
 /// The factor is not clamped, allowing easing curves to overshoot. Discrete
-/// properties switch at `t >= 1.0 - f32::EPSILON`; unwritten properties retain
-/// `from`. Optional continuous properties interpolate when both ends exist.
-#[must_use]
+/// properties switch at `t >= 1.0 - f32::EPSILON`. Optional continuous
+/// properties interpolate only when their current value exists. Callers apply
+/// any explicit starting delta before interpolation; this operation does not
+/// change animation-clock bookkeeping or schedule playback events.
 pub fn overlay_state_lerp(
-    mut from: SongLuaOverlayState,
-    to: SongLuaOverlayState,
-    t: f32,
+    from: &mut SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
-) -> SongLuaOverlayState {
-    if delta.x.is_some() {
-        from.x = (to.x - from.x).mul_add(t, from.x);
+    t: f32,
+) {
+    if let Some(to) = delta.x {
+        from.x = (to - from.x).mul_add(t, from.x);
     }
-    if delta.y.is_some() {
-        from.y = (to.y - from.y).mul_add(t, from.y);
+    if let Some(to) = delta.y {
+        from.y = (to - from.y).mul_add(t, from.y);
     }
-    if delta.z.is_some() {
-        from.z = (to.z - from.z).mul_add(t, from.z);
+    if let Some(to) = delta.z {
+        from.z = (to - from.z).mul_add(t, from.z);
     }
-    if delta.z_bias.is_some() {
-        from.z_bias = (to.z_bias - from.z_bias).mul_add(t, from.z_bias);
+    if let Some(to) = delta.z_bias {
+        from.z_bias = (to - from.z_bias).mul_add(t, from.z_bias);
     }
-    if delta.draw_order.is_some() && t >= 1.0 - f32::EPSILON {
-        from.draw_order = to.draw_order;
+    if let Some(to) = delta.draw_order
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.draw_order = to;
     }
-    if delta.draw_by_z_position.is_some() && t >= 1.0 - f32::EPSILON {
-        from.draw_by_z_position = to.draw_by_z_position;
+    if let Some(to) = delta.draw_by_z_position
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.draw_by_z_position = to;
     }
-    if delta.halign.is_some() {
-        from.halign = (to.halign - from.halign).mul_add(t, from.halign);
+    if let Some(to) = delta.halign {
+        from.halign = (to - from.halign).mul_add(t, from.halign);
     }
-    if delta.valign.is_some() {
-        from.valign = (to.valign - from.valign).mul_add(t, from.valign);
+    if let Some(to) = delta.valign {
+        from.valign = (to - from.valign).mul_add(t, from.valign);
     }
-    if delta.text_align.is_some() && t >= 1.0 - f32::EPSILON {
-        from.text_align = to.text_align;
+    if let Some(to) = delta.text_align
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.text_align = to;
     }
-    if delta.uppercase.is_some() && t >= 1.0 - f32::EPSILON {
-        from.uppercase = to.uppercase;
+    if let Some(to) = delta.uppercase
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.uppercase = to;
     }
-    if delta.shadow_len.is_some() {
+    if let Some(to) = delta.shadow_len {
         from.shadow_len = [
-            (to.shadow_len[0] - from.shadow_len[0]).mul_add(t, from.shadow_len[0]),
-            (to.shadow_len[1] - from.shadow_len[1]).mul_add(t, from.shadow_len[1]),
+            (to[0] - from.shadow_len[0]).mul_add(t, from.shadow_len[0]),
+            (to[1] - from.shadow_len[1]).mul_add(t, from.shadow_len[1]),
         ];
     }
-    if delta.shadow_color.is_some() {
-        for i in 0..4 {
-            from.shadow_color[i] =
-                (to.shadow_color[i] - from.shadow_color[i]).mul_add(t, from.shadow_color[i]);
+    if let Some(to) = delta.shadow_color {
+        for (value, to) in from.shadow_color.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
         }
     }
-    if delta.glow.is_some() {
-        for i in 0..4 {
-            from.glow[i] = (to.glow[i] - from.glow[i]).mul_add(t, from.glow[i]);
+    if let Some(to) = delta.glow {
+        for (value, to) in from.glow.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
         }
     }
-    if delta.fov.is_some()
-        && let (Some(from_fov), Some(to_fov)) = (from.fov, to.fov)
-    {
+    if let (Some(from_fov), Some(to_fov)) = (from.fov, delta.fov) {
         from.fov = Some((to_fov - from_fov).mul_add(t, from_fov));
     }
-    if delta.vanishpoint.is_some()
-        && let (Some(from_vanish), Some(to_vanish)) = (from.vanishpoint, to.vanishpoint)
-    {
+    if let (Some(from_vanish), Some(to_vanish)) = (from.vanishpoint, delta.vanishpoint) {
         from.vanishpoint = Some([
             (to_vanish[0] - from_vanish[0]).mul_add(t, from_vanish[0]),
             (to_vanish[1] - from_vanish[1]).mul_add(t, from_vanish[1]),
         ]);
     }
-    if delta.diffuse.is_some() {
-        for i in 0..4 {
-            from.diffuse[i] = (to.diffuse[i] - from.diffuse[i]).mul_add(t, from.diffuse[i]);
+    if let Some(to) = delta.diffuse {
+        for (value, to) in from.diffuse.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
         }
     }
-    if delta.vertex_colors.is_some() {
+    if let Some(to_colors) = delta.vertex_colors {
         let mut from_colors = from.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
-        let to_colors = to.vertex_colors.unwrap_or([[1.0, 1.0, 1.0, 1.0]; 4]);
         for corner in 0..4 {
             for channel in 0..4 {
                 from_colors[corner][channel] = (to_colors[corner][channel]
@@ -3202,102 +3194,101 @@ pub fn overlay_state_lerp(
         }
         from.vertex_colors = Some(from_colors);
     }
-    if delta.cropleft.is_some() {
-        from.cropleft = (to.cropleft - from.cropleft).mul_add(t, from.cropleft);
+    if let Some(to) = delta.cropleft {
+        from.cropleft = (to - from.cropleft).mul_add(t, from.cropleft);
     }
-    if delta.cropright.is_some() {
-        from.cropright = (to.cropright - from.cropright).mul_add(t, from.cropright);
+    if let Some(to) = delta.cropright {
+        from.cropright = (to - from.cropright).mul_add(t, from.cropright);
     }
-    if delta.croptop.is_some() {
-        from.croptop = (to.croptop - from.croptop).mul_add(t, from.croptop);
+    if let Some(to) = delta.croptop {
+        from.croptop = (to - from.croptop).mul_add(t, from.croptop);
     }
-    if delta.cropbottom.is_some() {
-        from.cropbottom = (to.cropbottom - from.cropbottom).mul_add(t, from.cropbottom);
+    if let Some(to) = delta.cropbottom {
+        from.cropbottom = (to - from.cropbottom).mul_add(t, from.cropbottom);
     }
-    if delta.fadeleft.is_some() {
-        from.fadeleft = (to.fadeleft - from.fadeleft).mul_add(t, from.fadeleft);
+    if let Some(to) = delta.fadeleft {
+        from.fadeleft = (to - from.fadeleft).mul_add(t, from.fadeleft);
     }
-    if delta.faderight.is_some() {
-        from.faderight = (to.faderight - from.faderight).mul_add(t, from.faderight);
+    if let Some(to) = delta.faderight {
+        from.faderight = (to - from.faderight).mul_add(t, from.faderight);
     }
-    if delta.fadetop.is_some() {
-        from.fadetop = (to.fadetop - from.fadetop).mul_add(t, from.fadetop);
+    if let Some(to) = delta.fadetop {
+        from.fadetop = (to - from.fadetop).mul_add(t, from.fadetop);
     }
-    if delta.fadebottom.is_some() {
-        from.fadebottom = (to.fadebottom - from.fadebottom).mul_add(t, from.fadebottom);
+    if let Some(to) = delta.fadebottom {
+        from.fadebottom = (to - from.fadebottom).mul_add(t, from.fadebottom);
     }
-    if delta.mask_source.is_some() && t >= 1.0 - f32::EPSILON {
-        from.mask_source = to.mask_source;
-    }
-    if delta.mask_dest.is_some() && t >= 1.0 - f32::EPSILON {
-        from.mask_dest = to.mask_dest;
-    }
-    if delta.zoom.is_some() {
-        from.zoom = (to.zoom - from.zoom).mul_add(t, from.zoom);
-    }
-    if delta.zoom_x.is_some() {
-        from.zoom_x = (to.zoom_x - from.zoom_x).mul_add(t, from.zoom_x);
-    }
-    if delta.zoom_y.is_some() {
-        from.zoom_y = (to.zoom_y - from.zoom_y).mul_add(t, from.zoom_y);
-    }
-    if delta.zoom_z.is_some() {
-        from.zoom_z = (to.zoom_z - from.zoom_z).mul_add(t, from.zoom_z);
-    }
-    if delta.basezoom.is_some() {
-        from.basezoom = (to.basezoom - from.basezoom).mul_add(t, from.basezoom);
-    }
-    if delta.basezoom_x.is_some() {
-        from.basezoom_x = (to.basezoom_x - from.basezoom_x).mul_add(t, from.basezoom_x);
-    }
-    if delta.basezoom_y.is_some() {
-        from.basezoom_y = (to.basezoom_y - from.basezoom_y).mul_add(t, from.basezoom_y);
-    }
-    if delta.basezoom_z.is_some() {
-        from.basezoom_z = (to.basezoom_z - from.basezoom_z).mul_add(t, from.basezoom_z);
-    }
-    if delta.rot_x_deg.is_some() {
-        from.rot_x_deg = (to.rot_x_deg - from.rot_x_deg).mul_add(t, from.rot_x_deg);
-    }
-    if delta.rot_y_deg.is_some() {
-        from.rot_y_deg = (to.rot_y_deg - from.rot_y_deg).mul_add(t, from.rot_y_deg);
-    }
-    if delta.rot_z_deg.is_some() {
-        from.rot_z_deg = (to.rot_z_deg - from.rot_z_deg).mul_add(t, from.rot_z_deg);
-    }
-    if delta.skew_x.is_some() {
-        from.skew_x = (to.skew_x - from.skew_x).mul_add(t, from.skew_x);
-    }
-    if delta.skew_y.is_some() {
-        from.skew_y = (to.skew_y - from.skew_y).mul_add(t, from.skew_y);
-    }
-    if delta.effect_magnitude.is_some() {
-        for i in 0..3 {
-            from.effect_magnitude[i] = (to.effect_magnitude[i] - from.effect_magnitude[i])
-                .mul_add(t, from.effect_magnitude[i]);
-        }
-    }
-    if delta.effect_color1.is_some() {
-        for i in 0..4 {
-            from.effect_color1[i] =
-                (to.effect_color1[i] - from.effect_color1[i]).mul_add(t, from.effect_color1[i]);
-        }
-    }
-    if delta.effect_color2.is_some() {
-        for i in 0..4 {
-            from.effect_color2[i] =
-                (to.effect_color2[i] - from.effect_color2[i]).mul_add(t, from.effect_color2[i]);
-        }
-    }
-    if delta.effect_period.is_some() {
-        from.effect_period = (to.effect_period - from.effect_period).mul_add(t, from.effect_period);
-    }
-    if delta.effect_offset.is_some() {
-        from.effect_offset = (to.effect_offset - from.effect_offset).mul_add(t, from.effect_offset);
-    }
-    if delta.effect_timing.is_some()
-        && let (Some(from_timing), Some(to_timing)) = (from.effect_timing, to.effect_timing)
+    if let Some(to) = delta.mask_source
+        && t >= 1.0 - f32::EPSILON
     {
+        from.mask_source = to;
+    }
+    if let Some(to) = delta.mask_dest
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.mask_dest = to;
+    }
+    if let Some(to) = delta.zoom {
+        from.zoom = (to - from.zoom).mul_add(t, from.zoom);
+    }
+    if let Some(to) = delta.zoom_x {
+        from.zoom_x = (to - from.zoom_x).mul_add(t, from.zoom_x);
+    }
+    if let Some(to) = delta.zoom_y {
+        from.zoom_y = (to - from.zoom_y).mul_add(t, from.zoom_y);
+    }
+    if let Some(to) = delta.zoom_z {
+        from.zoom_z = (to - from.zoom_z).mul_add(t, from.zoom_z);
+    }
+    if let Some(to) = delta.basezoom {
+        from.basezoom = (to - from.basezoom).mul_add(t, from.basezoom);
+    }
+    if let Some(to) = delta.basezoom_x {
+        from.basezoom_x = (to - from.basezoom_x).mul_add(t, from.basezoom_x);
+    }
+    if let Some(to) = delta.basezoom_y {
+        from.basezoom_y = (to - from.basezoom_y).mul_add(t, from.basezoom_y);
+    }
+    if let Some(to) = delta.basezoom_z {
+        from.basezoom_z = (to - from.basezoom_z).mul_add(t, from.basezoom_z);
+    }
+    if let Some(to) = delta.rot_x_deg {
+        from.rot_x_deg = (to - from.rot_x_deg).mul_add(t, from.rot_x_deg);
+    }
+    if let Some(to) = delta.rot_y_deg {
+        from.rot_y_deg = (to - from.rot_y_deg).mul_add(t, from.rot_y_deg);
+    }
+    if let Some(to) = delta.rot_z_deg {
+        from.rot_z_deg = (to - from.rot_z_deg).mul_add(t, from.rot_z_deg);
+    }
+    if let Some(to) = delta.skew_x {
+        from.skew_x = (to - from.skew_x).mul_add(t, from.skew_x);
+    }
+    if let Some(to) = delta.skew_y {
+        from.skew_y = (to - from.skew_y).mul_add(t, from.skew_y);
+    }
+    if let Some(to) = delta.effect_magnitude {
+        for (value, to) in from.effect_magnitude.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
+        }
+    }
+    if let Some(to) = delta.effect_color1 {
+        for (value, to) in from.effect_color1.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
+        }
+    }
+    if let Some(to) = delta.effect_color2 {
+        for (value, to) in from.effect_color2.iter_mut().zip(to) {
+            *value = (to - *value).mul_add(t, *value);
+        }
+    }
+    if let Some(to) = delta.effect_period {
+        from.effect_period = (to - from.effect_period).mul_add(t, from.effect_period);
+    }
+    if let Some(to) = delta.effect_offset {
+        from.effect_offset = (to - from.effect_offset).mul_add(t, from.effect_offset);
+    }
+    if let (Some(from_timing), Some(to_timing)) = (from.effect_timing, delta.effect_timing) {
         from.effect_timing = Some([
             (to_timing[0] - from_timing[0]).mul_add(t, from_timing[0]),
             (to_timing[1] - from_timing[1]).mul_add(t, from_timing[1]),
@@ -3306,52 +3297,57 @@ pub fn overlay_state_lerp(
             (to_timing[4] - from_timing[4]).mul_add(t, from_timing[4]),
         ]);
     }
-    if delta.sprite_playback_rate.is_some() {
-        from.sprite_playback_rate = (to.sprite_playback_rate - from.sprite_playback_rate)
-            .mul_add(t, from.sprite_playback_rate);
+    if let Some(to) = delta.sprite_playback_rate {
+        from.sprite_playback_rate =
+            (to - from.sprite_playback_rate).mul_add(t, from.sprite_playback_rate);
     }
-    if delta.sprite_state_delay.is_some() {
+    if let Some(to) = delta.sprite_state_delay {
         from.sprite_state_delay =
-            (to.sprite_state_delay - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
+            (to - from.sprite_state_delay).mul_add(t, from.sprite_state_delay);
     }
-    if delta.sprite_state_index.is_some() && t >= 1.0 - f32::EPSILON {
-        from.sprite_state_index = to.sprite_state_index;
-    }
-    if delta.vert_spacing.is_some() && t >= 1.0 - f32::EPSILON {
-        from.vert_spacing = to.vert_spacing;
-    }
-    if delta.wrap_width_pixels.is_some() && t >= 1.0 - f32::EPSILON {
-        from.wrap_width_pixels = to.wrap_width_pixels;
-    }
-    if delta.max_width.is_some()
-        && let (Some(from_width), Some(to_width)) = (from.max_width, to.max_width)
+    if let Some(to) = delta.sprite_state_index
+        && t >= 1.0 - f32::EPSILON
     {
+        from.sprite_state_index = Some(to);
+    }
+    if let Some(to) = delta.vert_spacing
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.vert_spacing = Some(to);
+    }
+    if let Some(to) = delta.wrap_width_pixels
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.wrap_width_pixels = Some(to);
+    }
+    if let (Some(from_width), Some(to_width)) = (from.max_width, delta.max_width) {
         from.max_width = Some((to_width - from_width).mul_add(t, from_width));
     }
-    if delta.max_height.is_some()
-        && let (Some(from_height), Some(to_height)) = (from.max_height, to.max_height)
-    {
+    if let (Some(from_height), Some(to_height)) = (from.max_height, delta.max_height) {
         from.max_height = Some((to_height - from_height).mul_add(t, from_height));
     }
-    if delta.max_w_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
-        from.max_w_pre_zoom = to.max_w_pre_zoom;
-    }
-    if delta.max_h_pre_zoom.is_some() && t >= 1.0 - f32::EPSILON {
-        from.max_h_pre_zoom = to.max_h_pre_zoom;
-    }
-    if delta.max_dimension_uses_zoom.is_some() && t >= 1.0 - f32::EPSILON {
-        from.max_dimension_uses_zoom = to.max_dimension_uses_zoom;
-    }
-    if delta.texcoord_offset.is_some()
-        && let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, to.texcoord_offset)
+    if let Some(to) = delta.max_w_pre_zoom
+        && t >= 1.0 - f32::EPSILON
     {
+        from.max_w_pre_zoom = to;
+    }
+    if let Some(to) = delta.max_h_pre_zoom
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.max_h_pre_zoom = to;
+    }
+    if let Some(to) = delta.max_dimension_uses_zoom
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.max_dimension_uses_zoom = to;
+    }
+    if let (Some(from_offset), Some(to_offset)) = (from.texcoord_offset, delta.texcoord_offset) {
         from.texcoord_offset = Some([
             (to_offset[0] - from_offset[0]).mul_add(t, from_offset[0]),
             (to_offset[1] - from_offset[1]).mul_add(t, from_offset[1]),
         ]);
     }
-    if delta.custom_texture_rect.is_some()
-        && let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, to.custom_texture_rect)
+    if let (Some(from_rect), Some(to_rect)) = (from.custom_texture_rect, delta.custom_texture_rect)
     {
         from.custom_texture_rect = Some([
             (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
@@ -3360,25 +3356,19 @@ pub fn overlay_state_lerp(
             (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
         ]);
     }
-    if delta.texcoord_velocity.is_some()
-        && let (Some(from_vel), Some(to_vel)) = (from.texcoord_velocity, to.texcoord_velocity)
-    {
+    if let (Some(from_vel), Some(to_vel)) = (from.texcoord_velocity, delta.texcoord_velocity) {
         from.texcoord_velocity = Some([
             (to_vel[0] - from_vel[0]).mul_add(t, from_vel[0]),
             (to_vel[1] - from_vel[1]).mul_add(t, from_vel[1]),
         ]);
     }
-    if delta.size.is_some()
-        && let (Some(from_size), Some(to_size)) = (from.size, to.size)
-    {
+    if let (Some(from_size), Some(to_size)) = (from.size, delta.size) {
         from.size = Some([
             (to_size[0] - from_size[0]).mul_add(t, from_size[0]),
             (to_size[1] - from_size[1]).mul_add(t, from_size[1]),
         ]);
     }
-    if delta.stretch_rect.is_some()
-        && let (Some(from_rect), Some(to_rect)) = (from.stretch_rect, to.stretch_rect)
-    {
+    if let (Some(from_rect), Some(to_rect)) = (from.stretch_rect, delta.stretch_rect) {
         from.stretch_rect = Some([
             (to_rect[0] - from_rect[0]).mul_add(t, from_rect[0]),
             (to_rect[1] - from_rect[1]).mul_add(t, from_rect[1]),
@@ -3386,56 +3376,84 @@ pub fn overlay_state_lerp(
             (to_rect[3] - from_rect[3]).mul_add(t, from_rect[3]),
         ]);
     }
-    if delta.visible.is_some() && t >= 1.0 - f32::EPSILON {
-        from.visible = to.visible;
+    if let Some(to) = delta.visible
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.visible = to;
     }
-    if delta.blend.is_some() && t >= 1.0 - f32::EPSILON {
-        from.blend = to.blend;
+    if let Some(to) = delta.blend
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.blend = to;
     }
-    if delta.vibrate.is_some() && t >= 1.0 - f32::EPSILON {
-        from.vibrate = to.vibrate;
+    if let Some(to) = delta.vibrate
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.vibrate = to;
     }
-    if delta.effect_clock.is_some() && t >= 1.0 - f32::EPSILON {
-        from.effect_clock = to.effect_clock;
+    if let Some(to) = delta.effect_clock
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.effect_clock = to;
     }
-    if delta.effect_mode.is_some() && t >= 1.0 - f32::EPSILON {
-        from.effect_mode = to.effect_mode;
+    if let Some(to) = delta.effect_mode
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.effect_mode = to;
     }
-    if delta.rainbow.is_some() && t >= 1.0 - f32::EPSILON {
-        from.rainbow = to.rainbow;
+    if let Some(to) = delta.rainbow
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.rainbow = to;
     }
-    if delta.rainbow_scroll.is_some() && t >= 1.0 - f32::EPSILON {
-        from.rainbow_scroll = to.rainbow_scroll;
+    if let Some(to) = delta.rainbow_scroll
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.rainbow_scroll = to;
     }
-    if delta.text_jitter.is_some() && t >= 1.0 - f32::EPSILON {
-        from.text_jitter = to.text_jitter;
+    if let Some(to) = delta.text_jitter
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.text_jitter = to;
     }
-    if delta.text_distortion.is_some() {
-        from.text_distortion =
-            (to.text_distortion - from.text_distortion).mul_add(t, from.text_distortion);
+    if let Some(to) = delta.text_distortion {
+        from.text_distortion = (to - from.text_distortion).mul_add(t, from.text_distortion);
     }
-    if delta.text_glow_mode.is_some() && t >= 1.0 - f32::EPSILON {
-        from.text_glow_mode = to.text_glow_mode;
+    if let Some(to) = delta.text_glow_mode
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.text_glow_mode = to;
     }
-    if delta.mult_attrs_with_diffuse.is_some() && t >= 1.0 - f32::EPSILON {
-        from.mult_attrs_with_diffuse = to.mult_attrs_with_diffuse;
+    if let Some(to) = delta.mult_attrs_with_diffuse
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.mult_attrs_with_diffuse = to;
     }
-    if delta.sprite_animate.is_some() && t >= 1.0 - f32::EPSILON {
-        from.sprite_animate = to.sprite_animate;
+    if let Some(to) = delta.sprite_animate
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.sprite_animate = to;
     }
-    if delta.sprite_loop.is_some() && t >= 1.0 - f32::EPSILON {
-        from.sprite_loop = to.sprite_loop;
+    if let Some(to) = delta.sprite_loop
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.sprite_loop = to;
     }
-    if delta.texture_wrapping.is_some() && t >= 1.0 - f32::EPSILON {
-        from.texture_wrapping = to.texture_wrapping;
+    if let Some(to) = delta.texture_wrapping
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.texture_wrapping = to;
     }
-    if delta.texture_filtering.is_some() && t >= 1.0 - f32::EPSILON {
-        from.texture_filtering = to.texture_filtering;
+    if let Some(to) = delta.texture_filtering
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.texture_filtering = to;
     }
-    if delta.depth_test.is_some() && t >= 1.0 - f32::EPSILON {
-        from.depth_test = to.depth_test;
+    if let Some(to) = delta.depth_test
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.depth_test = to;
     }
-    from
 }
 
 const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
@@ -20882,3 +20900,11 @@ end
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/state_perf.rs"]
+mod state_perf;

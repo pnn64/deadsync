@@ -1,7 +1,7 @@
 //! Exercise the production implementation, including private parsing paths.
 pub use deadsync_noteskin::{TweenType, actor, bright_tap_explosion_key, script};
-#[path = "../../../tests/support/safe_parsing.rs"]
-mod perf;
+#[path = "../../../tests/support/perf.rs"]
+pub mod perf;
 
 // This test-only copy omits runtime.rs, which uses the other crate-private paths.
 #[expect(

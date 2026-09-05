@@ -1,5 +1,5 @@
-#[path = "../../../tests/support/safe_parsing.rs"]
-mod perf;
+#[path = "../../../tests/support/perf.rs"]
+pub mod perf;
 #[path = "../src/xml.rs"]
 mod xml;
 

@@ -305,8 +305,12 @@ impl<T> TextureStore<T> {
         image: Arc<RgbaImage>,
         sampler: SamplerDesc,
     ) {
-        let (width, height) = (image.width(), image.height());
-        let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
+        let handle = self.upload_handle(key, image.width(), image.height());
+        self.pending_texture_uploads.push(handle, image, sampler);
+    }
+
+    fn upload_handle(&mut self, key: String, width: u32, height: u32) -> TextureHandle {
+        if let Some(&handle) = self.texture_handles.get(key.as_str()) {
             if !self.upload_dims_match(handle, width, height) {
                 self.revision.set(next_texture_revision());
                 register_texture_dims(&key, width, height);
@@ -316,8 +320,7 @@ impl<T> TextureStore<T> {
             let key: Arc<str> = Arc::from(key);
             register_texture_dims_shared(Arc::clone(&key), width, height);
             self.reserve_new_texture_handle(key)
-        };
-        self.pending_texture_uploads.push(handle, image, sampler);
+        }
     }
 
     #[inline(always)]
@@ -380,7 +383,9 @@ impl<T> TextureStore<T> {
         image: RgbaImage,
         sampler: SamplerDesc,
     ) {
-        self.queue_texture_upload_shared(key, Arc::new(image), sampler);
+        let handle = self.upload_handle(key, image.width(), image.height());
+        self.pending_texture_uploads
+            .push_owned(handle, image, sampler);
     }
 
     pub fn queue_pending_generated_textures(&mut self) {

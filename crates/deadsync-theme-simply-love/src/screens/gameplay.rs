@@ -88,7 +88,7 @@ use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
-use deadsync_song_lua::{apply_overlay_delta, overlay_state_lerp, overlay_state_with_delta};
+use deadsync_song_lua::{apply_overlay_delta, overlay_state_lerp};
 use glam::{Mat2 as Matrix2, Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::{Cell, RefCell};
@@ -10353,14 +10353,14 @@ fn song_lua_overlay_apply_blocks(
             apply_overlay_delta(&mut current, &block.delta);
             continue;
         }
-        let target = overlay_state_with_delta(current, &block.delta);
         let t = song_lua_ease_factor(
             block.easing.as_deref(),
             ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
             block.opt1,
             block.opt2,
         );
-        return overlay_state_lerp(current, target, t, &block.delta);
+        overlay_state_lerp(&mut current, &block.delta, t);
+        return current;
     }
     current
 }
@@ -10393,7 +10393,6 @@ fn song_lua_overlay_apply_blocks_cached(
             *next_block += 1;
             continue;
         }
-        let target = overlay_state_with_delta(*block_state, &block.delta);
         let easing = match *active_easing {
             Some((index, easing)) if index == *next_block => easing,
             _ => {
@@ -10407,7 +10406,9 @@ fn song_lua_overlay_apply_blocks_cached(
             block.opt1,
             block.opt2,
         );
-        return overlay_state_lerp(*block_state, target, t, &block.delta);
+        let mut current = *block_state;
+        overlay_state_lerp(&mut current, &block.delta, t);
+        return current;
     }
     *block_state
 }
@@ -10692,9 +10693,8 @@ fn apply_song_lua_overlay_runtime_eases_for(
             ease.opt1,
             ease.opt2,
         );
-        let from_state = overlay_state_with_delta(current, &ease.from.delta);
-        let to_state = overlay_state_with_delta(current, &ease.to.delta);
-        current = overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
+        apply_overlay_delta(&mut current, &ease.from.delta);
+        overlay_state_lerp(&mut current, &ease.to.delta, t);
         if ease.from.delta.sprite_state_index.is_some() {
             current.sprite_animation_epoch = Some(ease.start_second);
         }
@@ -10732,9 +10732,8 @@ fn reapply_active_song_lua_overlay_runtime_eases_for(
             ease.opt1,
             ease.opt2,
         );
-        let from_state = overlay_state_with_delta(*current, &ease.from.delta);
-        let to_state = overlay_state_with_delta(*current, &ease.to.delta);
-        *current = overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
+        apply_overlay_delta(current, &ease.from.delta);
+        overlay_state_lerp(current, &ease.to.delta, t);
         if ease.from.delta.sprite_state_index.is_some() {
             current.sprite_animation_epoch = Some(ease.start_second);
         }

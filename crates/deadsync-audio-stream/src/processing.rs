@@ -3,10 +3,9 @@
 use super::stretch::SolaStretcher;
 use super::{
     OUT_FRAMES_PER_CALL, PLANAR_INPUT_CAP_FRAMES, PlanarAccum, RATE_EPS,
-    RESAMPLE_MAX_RELATIVE_RATIO, compat_lead_frames, new_resampler, planar_window,
-    process_resampler, trim_resampler_lead, write_resampler_output,
+    RESAMPLE_MAX_RELATIVE_RATIO, compat_lead_frames, new_resampler, process_resampler,
+    trim_resampler_lead, write_resampler_output,
 };
-use rubato::audioadapter_buffers::direct::{SequentialSliceOfSlices, SequentialSliceOfVecs};
 use rubato::{Adjustable, Async, ResampleError, Resampler, ResamplerConstructionError};
 
 struct RateConverter {
@@ -186,21 +185,27 @@ impl MusicStages {
         }
         let consumed = available.min(need);
         let frames = if consumed == need {
-            let slices = planar_window(&converter.input, need);
-            let input = SequentialSliceOfSlices::new(slices.as_slice(), self.channels, need)
-                .expect("planar accumulator exposes every requested input frame");
-            process_resampler(&mut converter.resampler, &input, &mut converter.output)?.1
+            process_resampler(
+                &mut converter.resampler,
+                &converter.input.channels,
+                converter.input.start_frame,
+                &mut converter.output,
+            )?
+            .1
         } else {
             let start = converter.input.start_frame;
             for (dst, source) in converter.padded.iter_mut().zip(&converter.input.channels) {
                 dst[..need].fill(0.0);
                 dst[..consumed].copy_from_slice(&source[start..start + consumed]);
             }
-            let input =
-                SequentialSliceOfVecs::new(converter.padded.as_slice(), self.channels, need)
-                    .expect("resampler padding holds the final input chunk");
             converter.drained = consumed == 0;
-            process_resampler(&mut converter.resampler, &input, &mut converter.output)?.1
+            process_resampler(
+                &mut converter.resampler,
+                &converter.padded,
+                0,
+                &mut converter.output,
+            )?
+            .1
         };
         converter.input.consume_frames(consumed);
         write_resampler_output(&converter.output, frames, channels, output);
@@ -411,3 +416,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/processing_perf.rs"]
+mod processing_perf;

@@ -23,7 +23,7 @@ pub struct PendingTextureUpload {
 
 enum UploadImage {
     Shared(Arc<RgbaImage>),
-    Recyclable(RgbaImage),
+    Owned(RgbaImage),
     RecyclableYuv420(Yuv420Image),
 }
 
@@ -31,7 +31,7 @@ impl UploadImage {
     fn as_image(&self) -> TextureUploadImage<'_> {
         match self {
             Self::Shared(image) => TextureUploadImage::Rgba(image),
-            Self::Recyclable(image) => TextureUploadImage::Rgba(image),
+            Self::Owned(image) => TextureUploadImage::Rgba(image),
             Self::RecyclableYuv420(image) => TextureUploadImage::Yuv420(image),
         }
     }
@@ -91,7 +91,7 @@ impl Drop for PendingTextureUpload {
             return;
         };
         let raw = match image {
-            UploadImage::Recyclable(image) => image.into_raw(),
+            UploadImage::Owned(image) => image.into_raw(),
             UploadImage::RecyclableYuv420(image) => image.into_raw(),
             UploadImage::Shared(_) => return,
         };
@@ -123,6 +123,11 @@ impl TextureUploadQueue {
         self.push_inner(handle, UploadImage::Shared(image), sampler, None);
     }
 
+    /// Queues uniquely owned pixels without allocating a shared ownership handle.
+    pub fn push_owned(&mut self, handle: TextureHandle, image: RgbaImage, sampler: SamplerDesc) {
+        self.push_inner(handle, UploadImage::Owned(image), sampler, None);
+    }
+
     pub fn push_recyclable(
         &mut self,
         handle: TextureHandle,
@@ -130,12 +135,7 @@ impl TextureUploadQueue {
         sampler: SamplerDesc,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        self.push_inner(
-            handle,
-            UploadImage::Recyclable(image),
-            sampler,
-            Some(recycle_tx),
-        );
+        self.push_inner(handle, UploadImage::Owned(image), sampler, Some(recycle_tx));
     }
 
     pub fn push_recyclable_yuv420(
@@ -344,3 +344,7 @@ mod tests {
         assert_eq!(queued, 42);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/upload_perf.rs"]
+mod upload_perf;

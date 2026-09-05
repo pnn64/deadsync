@@ -1,6 +1,5 @@
 use deadsync_song_lua::{
     SongLuaOverlayState, SongLuaOverlayStateDelta, apply_overlay_delta, overlay_state_lerp,
-    overlay_state_with_delta,
 };
 
 #[test]
@@ -19,8 +18,8 @@ fn partial_deltas_preserve_baselines_and_animation_epoch() {
         depth_test: Some(true),
         ..SongLuaOverlayStateDelta::default()
     };
-    let target = overlay_state_with_delta(initial, &delta);
-    let middle = overlay_state_lerp(initial, target, 0.5, &delta);
+    let mut middle = initial;
+    overlay_state_lerp(&mut middle, &delta, 0.5);
     assert_eq!(middle.x, 60.0);
     assert_eq!(middle.y, 30.0);
     assert_eq!(middle.size, Some([40.0, 60.0]));
@@ -49,15 +48,6 @@ fn interpolation_keeps_overshoot_and_switches_terminal_flags() {
         size: Some([40.0, 60.0]),
         ..SongLuaOverlayState::default()
     };
-    let to = SongLuaOverlayState {
-        x: 100.0,
-        y: 999.0,
-        size: Some([80.0, 100.0]),
-        fov: Some(60.0),
-        texture_filtering: false,
-        depth_test: true,
-        ..from
-    };
     let delta = SongLuaOverlayStateDelta {
         x: Some(100.0),
         size: Some([80.0, 100.0]),
@@ -66,19 +56,22 @@ fn interpolation_keeps_overshoot_and_switches_terminal_flags() {
         depth_test: Some(true),
         ..SongLuaOverlayStateDelta::default()
     };
-    let middle = overlay_state_lerp(from, to, 0.5, &delta);
+    let mut middle = from;
+    overlay_state_lerp(&mut middle, &delta, 0.5);
     assert_eq!(middle.size, Some([60.0, 80.0]));
     assert_eq!(middle.fov, None);
     assert_eq!(middle.y, 30.0);
     assert!(middle.texture_filtering);
     assert!(!middle.depth_test);
     for t in [1.0 - f32::EPSILON, 1.0, 1.25] {
-        let state = overlay_state_lerp(from, to, t, &delta);
+        let mut state = from;
+        overlay_state_lerp(&mut state, &delta, t);
         assert!(!state.texture_filtering, "t={t}");
         assert!(state.depth_test, "t={t}");
         assert_eq!(state.y, 30.0);
     }
-    let overshoot = overlay_state_lerp(from, to, 1.25, &delta);
+    let mut overshoot = from;
+    overlay_state_lerp(&mut overshoot, &delta, 1.25);
     assert_eq!(overshoot.x, 120.0);
     assert_eq!(overshoot.size, Some([90.0, 110.0]));
 }
