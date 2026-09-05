@@ -8,7 +8,6 @@ pub mod course;
 pub mod event_intro;
 pub mod matrix;
 pub mod media;
-pub mod notes;
 pub mod playlist;
 pub mod runtime;
 pub mod runtime_cache;

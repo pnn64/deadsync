@@ -7807,7 +7807,7 @@ fn parsing_notes_imports_do_not_use_game_facade() {
 
     if facade_path.exists() {
         failures.push(format!(
-            "{} still exists; import deadsync_chart::notes or deadsync_simfile::notes directly",
+            "{} still exists; import deadsync_chart::notes directly",
             rel_path(&root, &facade_path)
         ));
     }

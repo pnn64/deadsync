@@ -1,11 +1,11 @@
 use deadsync_chart::notes::ParsedNote;
+use deadsync_chart::notes::parse_chart_notes;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_rules::judgment::{self, JudgeGrade, TimingWindow};
 use deadsync_rules::timing::{
     TimingProfile, TimingProfileNs, classify_offset_ns_with_disabled_windows,
 };
-use deadsync_simfile::notes::parse_chart_notes;
 
 #[test]
 fn timing_window_edges_stay_stable() {
