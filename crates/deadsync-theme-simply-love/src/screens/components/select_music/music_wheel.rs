@@ -23,6 +23,7 @@ use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::event_intro::is_srpg_event_song;
 use rustc_hash::{FxHashMap, FxHashSet};
+use smallvec::SmallVec;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -566,10 +567,17 @@ const EDIT_DIFFICULTY_SLOT: usize = STANDARD_DIFFICULTY_COUNT;
 const WHEEL_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_COUNT + 1;
 
 type WheelChartIndices = [usize; WHEEL_DIFFICULTY_COUNT];
+type WheelMeterIndices = SmallVec<[(u32, usize); WHEEL_DIFFICULTY_COUNT]>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Select Music's logic thread owns this immutable, per-screen song cache.
+/// It is populated during screen initialization, keeps six meter entries inline
+/// before spilling for songs with many edits, and is dropped with the screen.
+/// Runtime misses do no I/O or allocation and show no score for that level;
+/// there is no eviction or instrumentation. Meter lookup is O(log charts).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct WheelSongMeta {
     chart_indices: WheelChartIndices,
+    meter_indices: WheelMeterIndices,
     pub has_edit: bool,
     pub is_srpg_event: bool,
     pub is_itl_unlock_pack: bool,
@@ -583,8 +591,10 @@ pub(crate) fn wheel_song_meta(
     is_itl_unlock_pack: bool,
     sync_pref: SyncPref,
 ) -> WheelSongMeta {
+    let chart_indices = chart_indices(song, chart_type);
     WheelSongMeta {
-        chart_indices: chart_indices(song, chart_type),
+        meter_indices: meter_indices(song, chart_type, &chart_indices),
+        chart_indices,
         has_edit,
         is_srpg_event: is_srpg_event_song(song),
         is_itl_unlock_pack,
@@ -617,11 +627,50 @@ fn chart_indices(song: &SongData, chart_type: &str) -> WheelChartIndices {
     indices
 }
 
+fn meter_indices(
+    song: &SongData,
+    chart_type: &str,
+    chart_indices: &WheelChartIndices,
+) -> WheelMeterIndices {
+    let mut indices = WheelMeterIndices::new();
+    let mut insert = |chart_index: usize| {
+        let meter = song.charts[chart_index].meter;
+        if let Some((_, existing)) = indices.iter_mut().find(|(value, _)| *value == meter) {
+            *existing = chart_index;
+        } else {
+            indices.push((meter, chart_index));
+        }
+    };
+
+    for &chart_index in &chart_indices[..STANDARD_DIFFICULTY_COUNT] {
+        if chart_index != NO_CHART_INDEX {
+            insert(chart_index);
+        }
+    }
+    for chart_index in song.edit_chart_indices_sorted(chart_type) {
+        insert(chart_index);
+    }
+    indices.sort_unstable_by_key(|&(meter, _)| meter);
+    indices
+}
+
+fn chart_for_meter<'a>(
+    song: &'a SongData,
+    meter: u32,
+    meter_indices: &WheelMeterIndices,
+) -> Option<&'a ChartData> {
+    let index = meter_indices
+        .binary_search_by_key(&meter, |&(value, _)| value)
+        .ok()?;
+    song.charts.get(meter_indices[index].1)
+}
+
 /// Build the fixed borrowed slot request shared by Select Music and Select
 /// Course. Slot-to-entry and side-to-chart mapping intentionally mirrors the
 /// composer so shell-prepared data stays aligned while the wheel animates.
-/// Non-center song scores use each player's current difficulty exactly, as
-/// ITGmania does; the preferred difficulty is used only when no chart is current.
+/// Outside meter sort, non-center song scores use each player's current
+/// difficulty exactly, as ITGmania does. During meter sort, they instead use
+/// each song's chart at the open level so every row reports that level's score.
 pub(crate) fn runtime_slot_requests<'a>(
     entries: &'a [MusicWheelEntry],
     selected_index: usize,
@@ -629,6 +678,7 @@ pub(crate) fn runtime_slot_requests<'a>(
     preferred_difficulty_index: [usize; profile_data::PLAYER_SLOTS],
     play_style: profile_data::PlayStyle,
     cached_meta: Option<&FxHashMap<usize, WheelSongMeta>>,
+    sort_meter: Option<u32>,
 ) -> [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT] {
     if entries.is_empty() {
         return [MusicWheelSlotRuntimeRequest::Empty; MUSIC_WHEEL_SLOT_COUNT];
@@ -663,6 +713,10 @@ pub(crate) fn runtime_slot_requests<'a>(
                     cached_meta.and_then(|cache| cache.get(&(Arc::as_ptr(song) as usize)));
                 let charts = if slot == CENTER_WHEEL_SLOT_INDEX {
                     selected_charts
+                } else if let Some(meter) = sort_meter {
+                    let chart = song_meta
+                        .and_then(|meta| chart_for_meter(song, meter, &meta.meter_indices));
+                    [chart, chart]
                 } else {
                     let cached_indices = song_meta.map(|meta| &meta.chart_indices);
                     if current_difficulties[0].eq_ignore_ascii_case(current_difficulties[1]) {
@@ -1926,6 +1980,7 @@ mod tests {
             [4, 4],
             profile_data::PlayStyle::Single,
             Some(&cached),
+            None,
         );
         let center = MUSIC_WHEEL_SLOT_COUNT / 2;
 
@@ -1940,6 +1995,55 @@ mod tests {
             slots[center + 2],
             MusicWheelSlotRuntimeRequest::Song {
                 chart_hashes: [None, None],
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn wheel_scores_follow_meter_sort_level() {
+        let mut selected = (*song_with_art(None, None)).clone();
+        let mut selected_easy =
+            chart_with_difficulty("dance-single", "Easy", "selected-easy-12", true);
+        selected_easy.meter = 12;
+        selected.charts = vec![selected_easy];
+        let selected = Arc::new(selected);
+
+        let mut neighbor = (*song_with_art(None, None)).clone();
+        let mut neighbor_easy =
+            chart_with_difficulty("dance-single", "Easy", "neighbor-easy-8", true);
+        neighbor_easy.meter = 8;
+        let mut neighbor_hard =
+            chart_with_difficulty("dance-single", "Hard", "neighbor-hard-12", true);
+        neighbor_hard.meter = 12;
+        neighbor.charts = vec![neighbor_easy, neighbor_hard];
+        let neighbor = Arc::new(neighbor);
+
+        let entries = vec![
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(Arc::clone(&neighbor)),
+        ];
+        let mut cached = rustc_hash::FxHashMap::default();
+        for song in [&selected, &neighbor] {
+            cached.insert(
+                Arc::as_ptr(song) as usize,
+                wheel_song_meta(song, "dance-single", false, false, SyncPref::Itg),
+            );
+        }
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [Some(&selected.charts[0]), Some(&selected.charts[0])],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+            Some(&cached),
+            Some(12),
+        );
+
+        assert!(matches!(
+            slots[MUSIC_WHEEL_SLOT_COUNT / 2 + 1],
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes: [Some("neighbor-hard-12"), Some("neighbor-hard-12")],
                 ..
             }
         ));
@@ -1986,6 +2090,7 @@ mod tests {
             [2, 2],
             profile_data::PlayStyle::Versus,
             Some(&cached),
+            None,
         );
 
         assert!(matches!(
@@ -2025,6 +2130,7 @@ mod tests {
             [None, None],
             [0, 0],
             profile_data::PlayStyle::Single,
+            None,
             None,
         );
 
@@ -2067,6 +2173,7 @@ mod tests {
             [None, None],
             [0, 0],
             profile_data::PlayStyle::Single,
+            None,
             None,
         );
 

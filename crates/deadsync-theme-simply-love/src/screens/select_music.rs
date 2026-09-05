@@ -2175,6 +2175,13 @@ fn meter_steps_index(song: &SongData, chart_type: &str, meter: u32) -> Option<us
     })
 }
 
+fn meter_sort_section_meter(sort_mode: WheelSortMode, section: Option<&str>) -> Option<u32> {
+    if sort_mode != WheelSortMode::Meter {
+        return None;
+    }
+    section?.parse().ok()
+}
+
 fn wheel_steps_index(
     song: &SongData,
     chart_type: &str,
@@ -2182,8 +2189,7 @@ fn wheel_steps_index(
     section: Option<&str>,
     preferred: usize,
 ) -> Option<usize> {
-    if sort_mode == WheelSortMode::Meter
-        && let Some(meter) = section.and_then(|value| value.parse().ok())
+    if let Some(meter) = meter_sort_section_meter(sort_mode, section)
         && let Some(index) = meter_steps_index(song, chart_type, meter)
     {
         return Some(index);
@@ -13071,6 +13077,7 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
         ],
         play_style,
         Some(&state.wheel_song_meta),
+        meter_sort_section_meter(state.sort_mode, state.expanded_pack_name.as_deref()),
     );
     let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
         MusicWheelSlotRuntimeRequest::Song {
