@@ -992,6 +992,7 @@ name = "deadlib-assets"
 version = "0.1.0"
 dependencies = [
  "deadlib-present",
+ "deadlib-render",
  "deadlib-render-core",
  "deadlib-video",
  "image",
@@ -999,6 +1000,7 @@ dependencies = [
  "memchr",
  "rustc-hash 2.1.3",
  "twox-hash",
+ "winit",
 ]
 
 [[package]]
@@ -1263,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1097"
+version = "0.5.1098"
 dependencies = [
  "deadlib-assets",
  "deadlib-platform",
@@ -1730,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1097"
+version = "0.5.1098"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1792,7 +1794,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1097"
+version = "0.5.1098"
 dependencies = [
  "log",
  "semver",

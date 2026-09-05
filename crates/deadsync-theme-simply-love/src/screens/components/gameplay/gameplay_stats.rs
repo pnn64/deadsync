@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
@@ -15,6 +14,7 @@ use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
     StepStatsPaneParams,
 };
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
 use deadlib_present::compose::{
     ComposeScratch, TextLayoutCache, prewarm_prepared_inline_text_slot,

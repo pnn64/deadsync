@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
-use crate::assets::{self, AssetManager};
+use crate::assets::{self};
 use crate::color;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -9,6 +9,7 @@ use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,

@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt, tr_fmt_into};
 use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::color;
@@ -20,6 +19,7 @@ use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
     Actor, ActorResourceArena, FlatDraw, InlineText, RetainedActorFrame, SharedActorFrameScratch,
     SizeSpec, SpriteSource, TextAlign, TextAttribute, TextAttributes, TextContent,

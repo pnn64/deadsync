@@ -1,11 +1,12 @@
 use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
-use crate::assets::{self, AssetManager};
+use crate::assets::{self};
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::{
     BreakdownStyle, GraphOrientation, GraphOrigin, NewPackMode, SelectMusicPatternInfoMode,
     SelectMusicSeriesSource, SelectMusicSort, SyncGraphMode,
 };
+use deadlib_assets::AssetManager;
 
 use crate::color;
 use crate::rgba_const;
@@ -15430,7 +15431,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let stale_actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let stale_actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
         assert!(
             !stale_actors
                 .iter()
@@ -15452,7 +15453,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let matched_actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let matched_actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
         assert!(
             matched_actors
                 .iter()
@@ -16190,7 +16191,7 @@ mod tests {
         super::push_folder_stats_overlay(
             &mut actors,
             &state,
-            &deadsync_assets::AssetManager::new(),
+            &deadlib_assets::AssetManager::new(),
             profile_data::PlayerSide::P1,
             "Rairly",
             "dance-single",
@@ -16594,7 +16595,7 @@ mod tests {
         set_current_window_px(3_686, 2_560);
         set_current_metrics(metrics_for_window(3_686, 2_560));
         let logical_width = screen_width();
-        let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
         let gs_logo = actors
             .iter()
             .find_map(|actor| texture_offset(actor, "GrooveStats.png"));
@@ -16623,7 +16624,7 @@ mod tests {
                 let side_idx = profile_data::player_side_index(gs_side);
                 let state = versus_scorebox_state(incumbent, [side_idx == 0, side_idx == 1]);
 
-                let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+                let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
                 let [x, _] = actors
                     .iter()
                     .find_map(|actor| texture_offset(actor, "GrooveStats.png"))
@@ -16646,7 +16647,7 @@ mod tests {
         set_current_metrics(metrics_for_window(854, 480));
         let center_x = screen_center_x();
         let state = versus_scorebox_state(profile_data::PlayerSide::P1, [true, true]);
-        let actors = super::get_actors(&state, &crate::assets::AssetManager::new(), 1);
+        let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
         let mut logo_xs: Vec<_> = actors
             .iter()
             .filter_map(|actor| texture_offset(actor, "GrooveStats.png"))
@@ -18027,7 +18028,7 @@ mod tests {
             joined_lobby: Some(joined),
             last_status: None,
         });
-        let assets = crate::assets::AssetManager::new();
+        let assets = deadlib_assets::AssetManager::new();
 
         let _ = super::get_actors(&state, &assets, 1);
         let _ = super::get_actors(&state, &assets, 1);

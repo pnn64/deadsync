@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-render = { path = "../deadlib-render" }
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-video = { path = "../deadlib-video" }
@@ -13,6 +14,9 @@ log = "0.4.34"
 memchr = "2.8.3"
 rustc-hash = "2.1.3"
 twox-hash = "2.1.4"
+
+[dev-dependencies]
+winit = "0.30.13"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

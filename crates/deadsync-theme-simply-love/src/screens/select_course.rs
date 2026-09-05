@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
@@ -17,6 +16,7 @@ use crate::views::{
     SelectCourseContextView, SelectCourseInitView, SelectCourseRuntimeView,
     SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
 };
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{

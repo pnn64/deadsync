@@ -4,14 +4,15 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use deadlib_assets::AssetManager;
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
+use deadsync_assets::register_texture_dims;
 use deadsync_assets::screenshot::{
     self as screenshot_data, ScreenshotPreviewTarget, ScreenshotRuntimeState, ScreenshotSaveError,
 };
-use deadsync_assets::{AssetManager, register_texture_dims};
 use deadsync_profile::PlayerSide;
 use deadsync_score::Grade;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;

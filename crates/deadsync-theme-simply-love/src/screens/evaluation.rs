@@ -22,12 +22,12 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::prelude::GameFlag;
 use deadsync_score as score_data;
 
-use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key, machine_font_key_for_text, visual_styles};
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
+use deadlib_assets::AssetManager;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::build_crossover_rows;

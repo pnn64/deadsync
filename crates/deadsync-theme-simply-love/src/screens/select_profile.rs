@@ -1,7 +1,7 @@
-use crate::assets::AssetManager;
 use crate::screens::ThemeEffect;
 use crate::screens::components::shared::profile_boxes;
 use crate::views::ProfilePickerView;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;

@@ -94,6 +94,7 @@ use crate::window_state::{WindowMinimizePlan, exclusive_fullscreen_focus_plan};
 use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
 };
+use deadlib_assets::AssetManager;
 use deadlib_platform::dirs;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
@@ -102,7 +103,7 @@ use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_assets::{AssetManager, TextureUploadBudget, media_cache};
+use deadsync_assets::{TextureUploadBudget, media_cache};
 use deadsync_config::prelude::{
     self as config, FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since,
     stutter_severity,

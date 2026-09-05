@@ -1,9 +1,9 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::color::JUDGMENT_RGBA;
 use crate::config::MachineFont;
 use crate::screens::components::shared::banner as shared_banner;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};

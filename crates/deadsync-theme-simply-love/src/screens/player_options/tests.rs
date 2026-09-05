@@ -18,9 +18,9 @@ pub(super) mod tests {
         repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
         sync_speed_mod_type_row, update,
     };
-    use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::screens::{Screen, ThemeEffect};
+    use deadlib_assets::AssetManager;
     use deadlib_present::actors::TextContent;
     use deadlib_present::font::{Font, Glyph, GlyphMap};
     use deadsync_chart::{ChartData, SongData};

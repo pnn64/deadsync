@@ -1,8 +1,8 @@
+use deadlib_assets::AssetManager;
 use deadlib_assets::dynamic;
 use deadlib_render::{Backend, Texture as RendererTexture};
 use deadlib_render_core::TextureHandle;
 use deadlib_video as video;
-use deadsync_assets::AssetManager;
 use deadsync_assets::dynamic_media::{
     BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
     DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,

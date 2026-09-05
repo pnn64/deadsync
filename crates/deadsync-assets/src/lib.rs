@@ -1,7 +1,7 @@
 pub mod audio_folder;
 pub mod dynamic_media;
+pub mod fonts;
 pub mod language;
-pub mod manager;
 pub mod media_cache;
 pub mod noteskin;
 pub mod present_dsl;
@@ -13,15 +13,14 @@ pub use deadlib_assets::upload::TextureUploadBudget;
 pub use deadlib_assets::{
     AssetError, METADATA_TEXTURE_CONTEXT, TexMeta, TextureChoice, TextureHints,
     generated_texture_shared_key, media_path_key, open_image_fallback, parse_sprite_sheet_dims,
-    parse_texture_hints, register_generated_texture, register_texture_dims,
-    resolve_texture_choice_entry, resolve_texture_choice_key as resolve_texture_choice,
-    sprite_sheet_dims, strip_sprite_hints, texture_dims, texture_registry_generation,
-    texture_source_dims_from_real, texture_source_frame_dims_from_real,
+    parse_texture_hints, register_generated_texture, register_texture_dims, sprite_sheet_dims,
+    strip_sprite_hints, texture_dims, texture_registry_generation, texture_source_dims_from_real,
+    texture_source_frame_dims_from_real,
 };
-pub use manager::AssetManager;
 pub use textures::{
     canonical_texture_key, graphic_texture_roots, held_miss_texture_choices,
-    hold_judgment_texture_choices, judgment_texture_choices,
+    hold_judgment_texture_choices, judgment_texture_choices, resolve_texture_choice_entry,
+    resolve_texture_choice_key as resolve_texture_choice,
 };
 
 /// Resolve a bundled or data-overlay asset without exposing platform paths to
@@ -35,4 +34,22 @@ pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
 /// paths to the presentation consumer.
 pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage> {
     open_image_fallback(&resolve_asset_path(path))
+}
+
+/// Resolve the game's catalog before passing decode/upload work to the engine.
+pub fn load_initial_assets<T>(
+    assets: &mut deadlib_assets::AssetManager,
+    backend: &mut deadlib_render::Backend,
+    manifest: deadsync_theme::ThemeAssetManifest<T>,
+) -> Result<(), deadlib_assets::AssetError>
+where
+    T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,
+{
+    let jobs = textures::initial_texture_jobs(
+        manifest.textures,
+        deadlib_platform::dirs::app_dirs(),
+        manifest.texture_needs_repeat_sampler,
+    );
+    assets.load_textures(backend, jobs)?;
+    fonts::load_initial_fonts(assets, backend, manifest.fonts)
 }

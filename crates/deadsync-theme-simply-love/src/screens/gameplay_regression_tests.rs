@@ -629,8 +629,8 @@ mod tests {
             .max()
     }
 
-    fn fixture_assets() -> crate::assets::AssetManager {
-        let mut assets = crate::assets::AssetManager::new();
+    fn fixture_assets() -> deadlib_assets::AssetManager {
+        let mut assets = deadlib_assets::AssetManager::new();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
         for spec in crate::resources::FONT_ASSETS {
@@ -761,7 +761,7 @@ mod tests {
 
     fn compose_fixture_frame_with_textures<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -786,7 +786,7 @@ mod tests {
     )]
     fn compose_fixture_frame_with_view<T: TextureContext + ?Sized>(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -820,7 +820,7 @@ mod tests {
 
     fn compose_fixture_frame(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -839,7 +839,7 @@ mod tests {
 
     fn compose_practice_fixture_frame(
         state: &mut crate::screens::practice::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -870,7 +870,7 @@ mod tests {
 
     fn prepare_fixture_frame(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -905,7 +905,7 @@ mod tests {
 
     fn assert_repeatable_frame(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
         text_cache: &mut compose::TextLayoutCache,
@@ -1023,7 +1023,7 @@ L000
         simfile: &Path,
     ) -> (
         screen_gameplay::State,
-        crate::assets::AssetManager,
+        deadlib_assets::AssetManager,
         space::Metrics,
     ) {
         let metrics = space::metrics_for_window(640, 480);
@@ -1262,7 +1262,7 @@ L000
 
     #[cfg(target_os = "windows")]
     struct CaptureTextureContext<'a> {
-        assets: &'a deadsync_assets::AssetManager,
+        assets: &'a deadlib_assets::AssetManager,
         keys: std::cell::RefCell<std::collections::HashSet<String>>,
     }
 
@@ -1288,20 +1288,20 @@ L000
 
     #[cfg(target_os = "windows")]
     fn load_gpu_capture_assets(
-        assets: &mut deadsync_assets::AssetManager,
+        assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let texture_assets = crate::resources::initial_texture_assets().collect::<Vec<_>>();
-        assets
-            .load_initial_assets(
-                backend,
-                deadsync_theme::ThemeAssetManifest {
-                    fonts: &[],
-                    textures: texture_assets.iter().copied(),
-                    texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
-                },
-            )
-            .map_err(|error| format!("failed to load capture textures: {error}"))?;
+        deadsync_assets::load_initial_assets(
+            assets,
+            backend,
+            deadsync_theme::ThemeAssetManifest {
+                fonts: &[],
+                textures: texture_assets.iter().copied(),
+                texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+            },
+        )
+        .map_err(|error| format!("failed to load capture textures: {error}"))?;
 
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
@@ -1350,23 +1350,31 @@ L000
 
     #[cfg(target_os = "windows")]
     fn ensure_gpu_capture_texture(
-        assets: &mut deadsync_assets::AssetManager,
+        assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
         key: &str,
         sampler: Option<deadlib_render_core::SamplerDesc>,
     ) -> Result<(), String> {
         if let Some(sampler) = sampler {
-            assets.ensure_texture_for_key_with_sampler(backend, key, sampler);
+            deadsync_assets::textures::ensure_texture_for_key_with_sampler(
+                assets, backend, key, sampler,
+            );
         } else {
-            assets.ensure_texture_for_key(backend, key);
+            deadsync_assets::textures::ensure_texture_for_key(
+                assets,
+                backend,
+                key,
+                crate::resources::texture_needs_repeat_sampler,
+            );
         }
         if assets.has_uploaded_texture_key(key) {
             return Ok(());
         }
 
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let path =
-            deadlib_assets::texture_key_source_path(key, key, |path| project_root.join(path));
+        let path = deadsync_assets::textures::texture_key_source_path(key, key, |path| {
+            project_root.join(path)
+        });
         if !path.is_file() {
             return Err(format!(
                 "capture texture '{key}' was not found at '{}'",
@@ -1403,7 +1411,7 @@ L000
     #[cfg(target_os = "windows")]
     fn prewarm_gpu_noteskins(
         state: &screen_gameplay::State,
-        assets: &mut deadsync_assets::AssetManager,
+        assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
         let mut seen = std::collections::HashSet::<String>::with_capacity(128);
@@ -1540,7 +1548,7 @@ L000
     )]
     fn run_gpu_timing_frame(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
@@ -1616,7 +1624,7 @@ L000
     )]
     fn capture_gpu_timing(
         state: &mut screen_gameplay::State,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
         backend_type: deadlib_render_core::BackendType,
         metrics: &space::Metrics,
@@ -1706,7 +1714,7 @@ L000
     #[cfg(target_os = "windows")]
     fn missing_capture_texture_keys(
         texture_ctx: &CaptureTextureContext,
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
     ) -> Vec<String> {
         texture_ctx
             .keys
@@ -1723,7 +1731,7 @@ L000
     #[cfg(target_os = "windows")]
     fn missing_capture_texture_report(
         missing_keys: &[String],
-        assets: &crate::assets::AssetManager,
+        assets: &deadlib_assets::AssetManager,
     ) -> String {
         missing_keys
             .iter()
@@ -1749,7 +1757,7 @@ L000
     fn capture_gpu_frame(
         name: &str,
         state: &mut screen_gameplay::State,
-        assets: &mut crate::assets::AssetManager,
+        assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
@@ -1907,7 +1915,7 @@ L000
             true,
         )
         .map_err(|error| format!("failed to create {backend_type} backend: {error}"))?;
-        let mut assets = deadsync_assets::AssetManager::new();
+        let mut assets = deadlib_assets::AssetManager::new();
         let result = (|| {
             load_gpu_capture_assets(&mut assets, &mut backend)?;
             let (mut state, _, metrics) = sprite_core_fixture(simfile);
@@ -4275,7 +4283,7 @@ return Def.ActorFrame{}
                         times.sort_by(f32::total_cmp);
                         times.dedup_by(|a, b| (*a - *b).abs() <= 0.001);
 
-                        let assets = crate::assets::AssetManager::new();
+                        let assets = deadlib_assets::AssetManager::new();
                         for time in times {
                             state.clock.song_position.current_music_time_display = time;
                             state.clock.visible_timing.current_music_time = [time; MAX_PLAYERS];

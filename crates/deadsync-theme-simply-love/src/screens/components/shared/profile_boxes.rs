@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{self, AssetManager};
+use crate::assets::{self};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -8,6 +8,7 @@ use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::ProfilePickerView;
+use deadlib_assets::AssetManager;
 use deadsync_assets::noteskin::{self, Noteskin};
 
 use crate::color;

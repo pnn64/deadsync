@@ -11,12 +11,13 @@
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{AssetManager, FontRole, machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::config::MachineFont;
 use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::fuzzy;
 use crate::screens::select_music::MusicWheelEntry;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::SongData;

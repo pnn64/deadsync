@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
@@ -12,6 +11,7 @@ use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_input::KeyCode;

@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{self, tr};
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
@@ -10,6 +9,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
 use crate::views::SelectFlowRuntimeView;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};

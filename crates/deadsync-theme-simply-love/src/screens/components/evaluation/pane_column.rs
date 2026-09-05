@@ -1,7 +1,8 @@
 use crate::act;
-use crate::assets::{self, AssetManager};
+use crate::assets::{self};
 use crate::color;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
     Actor, InlineU32Text, SharedActorFrameScratch, SizeSpec, TextContent,
 };

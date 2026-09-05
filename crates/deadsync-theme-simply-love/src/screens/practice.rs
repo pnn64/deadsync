@@ -1,11 +1,12 @@
 use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
-use crate::assets::{AssetManager, FontRole, machine_font_key};
+use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::screens::components::shared::density;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec};
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,

@@ -1,39 +1,24 @@
-pub mod asset_store;
 pub mod builtin;
+mod choice;
 pub mod context;
 pub mod decode;
-pub mod discover;
 pub mod dynamic;
 pub mod error;
 pub mod font;
 pub mod font_store;
+mod manager;
 pub mod present_dsl;
 pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
-pub use asset_store::{
-    AssetStore, InitialTextureLoad, TextureKeyStoreLoad, TextureUploadAction,
-    TextureUploadDrainError,
-};
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
+pub use choice::TextureChoice;
 pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
-pub use decode::{
-    GraphicTextureDiscovery, TextureAssetSpec, TextureDecodeJob, TextureDecodeResult,
-    TextureKeyLoad, decode_texture_image, initial_texture_decode_jobs, prepare_texture_key_load,
-    texture_asset,
-};
-pub use discover::{
-    DiscoveredTexture, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES,
-    NONE_TEXTURE_CHOICE_KEY, TextureChoice, TextureChoiceLike,
-    canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
-    graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
-    resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,
-    texture_key_source_path,
-};
+pub use decode::{TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset};
 pub use error::AssetError;
 pub use font::{
     FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_asset_roots,
@@ -42,6 +27,7 @@ pub use font::{
     set_font_fallback,
 };
 pub use font_store::FontStore;
+pub use manager::AssetManager;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{
     GeneratedTexture, TexMeta, generated_texture, generated_texture_shared_key,
@@ -604,25 +590,20 @@ pub fn texture_hint_doubleres(raw: &str) -> bool {
     has_ascii_case_insensitive_substr(raw.trim().as_bytes(), b"doubleres")
 }
 
-#[inline(always)]
-#[must_use]
-pub fn is_noteskin_texture_key(key: &str) -> bool {
-    key.starts_with("noteskins/")
-}
-
-#[inline(always)]
-#[must_use]
-pub fn initial_texture_sampler(key: &str, needs_repeat: bool) -> SamplerDesc {
-    if needs_repeat {
-        SamplerDesc {
-            wrap: SamplerWrap::Repeat,
-            ..SamplerDesc::default()
+pub fn canonical_texture_key_with_asset_roots<P>(
+    path: &Path,
+    asset_roots: impl IntoIterator<Item = P>,
+) -> String
+where
+    P: AsRef<Path>,
+{
+    for root in asset_roots {
+        if let Ok(rel) = path.strip_prefix(root.as_ref()) {
+            return rel.to_string_lossy().replace('\\', "/");
         }
-    } else if is_noteskin_texture_key(key) {
-        parse_texture_hints(key).sampler_desc()
-    } else {
-        SamplerDesc::default()
     }
+    let rel = path.strip_prefix(Path::new("assets")).unwrap_or(path);
+    rel.to_string_lossy().replace('\\', "/")
 }
 
 #[inline(always)]
@@ -958,18 +939,6 @@ mod tests {
     fn ascii_hash_is_case_insensitive() {
         assert_eq!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture.png"));
         assert_ne!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture2.png"));
-    }
-
-    #[test]
-    fn initial_texture_sampler_uses_noteskin_hints_only_for_noteskins() {
-        assert_eq!(
-            initial_texture_sampler("noteskins/foo (nearest).png", false).filter,
-            SamplerFilter::Nearest
-        );
-        assert_eq!(
-            initial_texture_sampler("graphics/foo (nearest).png", false).filter,
-            SamplerFilter::Linear
-        );
     }
 
     #[test]

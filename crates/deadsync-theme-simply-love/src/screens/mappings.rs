@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::effects::{
@@ -10,6 +9,7 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::MappingsRuntimeView;
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};

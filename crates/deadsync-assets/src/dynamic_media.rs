@@ -1,4 +1,5 @@
-use crate::{AssetManager, media_cache, open_image_fallback, register_texture_dims};
+use crate::{media_cache, open_image_fallback, register_texture_dims};
+use deadlib_assets::AssetManager;
 use deadlib_assets::dynamic;
 use deadlib_render::Backend;
 use deadlib_render_core::{SamplerDesc, TextureHandle};

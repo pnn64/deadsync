@@ -1,5 +1,5 @@
 use crate::act;
-use crate::assets::{AssetManager, visual_styles};
+use crate::assets::visual_styles;
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::config::{
@@ -42,6 +42,7 @@ use crate::views::{
     OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
     SimplyLoveUpdaterView,
 };
+use deadlib_assets::AssetManager;
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use deadsync_input::{InputEvent, KeyCode, RawKeyboardEvent, VirtualAction};
 use deadsync_score as score_data;

@@ -1,8 +1,9 @@
+use deadlib_assets::AssetManager;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
+use deadsync_assets::media_cache;
 use deadsync_assets::noteskin::Noteskin;
 use deadsync_assets::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind};
-use deadsync_assets::{AssetManager, media_cache};
 use deadsync_chart::{SongBackgroundChange, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::SongLuaRuntimeVisuals;
@@ -30,7 +31,8 @@ fn prewarm_model_texture_key(
     if !seen_model_textures.insert(key.clone()) {
         return;
     }
-    assets.ensure_texture_for_key_with_sampler(
+    deadsync_assets::textures::ensure_texture_for_key_with_sampler(
+        assets,
         backend,
         &key,
         deadsync_assets::textures::model_texture_sampler(&key),
@@ -48,7 +50,12 @@ fn prewarm_noteskin_textures(
     noteskin.for_each_slot(|slot| {
         let key = slot.texture_key();
         if insert_texture_key(seen, key) {
-            assets.ensure_texture_for_key(backend, key);
+            deadsync_assets::textures::ensure_texture_for_key(
+                assets,
+                backend,
+                key,
+                deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
+            );
         }
     });
     noteskin.for_each_slot(|slot| {
@@ -105,8 +112,9 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                 } => {
                     if seen_song_lua_fonts.insert(*font_name)
                         && assets.with_font(font_name, |_| ()).is_none()
-                        && let Err(err) =
-                            assets.load_font_from_ini_path(backend, font_name, font_path)
+                        && let Err(err) = deadsync_assets::fonts::load_font_from_ini_path(
+                            assets, backend, font_name, font_path,
+                        )
                     {
                         warn!(
                             "Failed to load song lua bitmap font '{}': {}",
@@ -171,7 +179,13 @@ pub fn prewarm_gameplay_assets<CapturedActor, StateDelta>(
                                 slot.texture_key(),
                             );
                         } else if insert_texture_key(&mut seen, slot.texture_key()) {
-                            assets.ensure_texture_for_key(backend, slot.texture_key());
+                            deadsync_assets::textures::ensure_texture_for_key(
+                                assets,
+                                backend,
+                                slot.texture_key(),
+                                deadsync_theme_simply_love::asset_manifest()
+                                    .texture_needs_repeat_sampler,
+                            );
                         }
                     }
                 }

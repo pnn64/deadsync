@@ -1,10 +1,10 @@
 use crate::act;
-use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key};
 use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::config::MachineFont;
 use crate::screens::evaluation::{EvalPane, ScoreInfo};
+use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;

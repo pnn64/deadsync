@@ -1,4 +1,5 @@
-use crate::{AssetManager, open_image_fallback};
+use crate::open_image_fallback;
+use deadlib_assets::AssetManager;
 use deadlib_assets::dynamic;
 use deadlib_platform::dirs;
 use deadlib_render::Backend;

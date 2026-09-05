@@ -2,11 +2,11 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
+use deadlib_assets::AssetManager;
 use deadlib_platform::display::{self, FullscreenType, MonitorSpec};
 use deadlib_present::space::{self, Metrics};
 use deadlib_render::{Backend, create_backend, render_size_for_physical, render_size_for_window};
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_assets::AssetManager;
 use deadsync_config::app_config::DisplayMode;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -169,7 +169,11 @@ pub fn initialize_renderer(
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));
     }
-    assets.load_initial_assets(&mut backend, deadsync_theme_simply_love::asset_manifest())?;
+    deadsync_assets::load_initial_assets(
+        assets,
+        &mut backend,
+        deadsync_theme_simply_love::asset_manifest(),
+    )?;
     dynamic_media.preload_profile_avatars(assets, &mut backend);
 
     Ok(RendererInitResult {
