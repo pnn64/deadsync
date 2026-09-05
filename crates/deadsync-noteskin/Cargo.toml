@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+arrayvec = "0.7.8"
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 hashbrown = "0.17.1"
 image = "0.25.10"

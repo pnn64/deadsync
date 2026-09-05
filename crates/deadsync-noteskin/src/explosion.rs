@@ -5,8 +5,8 @@ use crate::script::{
     parse_script_number, parse_script_sleep, parse_script_tween, split_script_token,
     tween_type_from_script_tween,
 };
+use arrayvec::ArrayString;
 use log::warn;
-use smallvec::SmallVec;
 use std::collections::HashMap;
 
 pub const ITG_TAP_EXPLOSION_WINDOWS: [&str; 7] = ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"];
@@ -1086,15 +1086,51 @@ fn for_each_direct_tap_explosion_element(
         visit(base_element);
     }
 
-    let mut element = SmallVec::<[u8; 64]>::from_slice(base_element.as_bytes());
-    element.extend_from_slice(b" W1");
-    let digit_index = element.len() - 1;
-    for digit in b'1'..=b'5' {
-        element[digit_index] = digit;
-        // SAFETY: `base_element` is valid UTF-8 and only an ASCII suffix is appended.
-        let element = unsafe { str::from_utf8_unchecked(&element) };
+    // The runtime requests these two names; custom names retain the same API.
+    let fixed = match base_element {
+        "Tap Explosion Dim" => Some([
+            "Tap Explosion Dim W1",
+            "Tap Explosion Dim W2",
+            "Tap Explosion Dim W3",
+            "Tap Explosion Dim W4",
+            "Tap Explosion Dim W5",
+        ]),
+        "Tap Explosion Bright" => Some([
+            "Tap Explosion Bright W1",
+            "Tap Explosion Bright W2",
+            "Tap Explosion Bright W3",
+            "Tap Explosion Bright W4",
+            "Tap Explosion Bright W5",
+        ]),
+        _ => None,
+    };
+    let mut visit = |element: &str| {
         if !is_blank(element) {
             visit(element);
+        }
+    };
+    if let Some(fixed) = fixed {
+        for element in fixed {
+            visit(element);
+        }
+    } else if base_element.len() <= 61 {
+        // Leave three of the 64 stack bytes for the " W1" suffix.
+        let mut element = ArrayString::<64>::from(base_element)
+            .expect("base and three-byte suffix fit the stack string");
+        element.push_str(" W");
+        for digit in '1'..='5' {
+            element.push(digit);
+            visit(&element);
+            element.pop();
+        }
+    } else {
+        let mut element = String::with_capacity(base_element.len() + 3);
+        element.push_str(base_element);
+        element.push_str(" W");
+        for digit in '1'..='5' {
+            element.push(digit);
+            visit(&element);
+            element.pop();
         }
     }
 }

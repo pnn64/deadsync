@@ -76,27 +76,27 @@ impl std::error::Error for XmlError {}
 
 /// Parses an XML document and returns its single root element.
 pub fn parse(input: &str) -> Result<XmlNode, XmlError> {
-    let bytes = input.as_bytes();
-    let mut p = Parser { b: bytes, i: 0 };
+    let mut p = Parser { input, i: 0 };
     p.skip_prolog()?;
     let root = p.parse_element()?;
     Ok(root)
 }
 
 struct Parser<'a> {
-    b: &'a [u8],
+    // ASCII XML delimiters bound spans in this already-validated UTF-8 input.
+    input: &'a str,
     i: usize,
 }
 
 impl Parser<'_> {
     #[inline]
     fn peek(&self) -> Option<u8> {
-        self.b.get(self.i).copied()
+        self.input.as_bytes().get(self.i).copied()
     }
 
     #[inline]
     fn starts_with(&self, s: &str) -> bool {
-        self.b[self.i..].starts_with(s.as_bytes())
+        self.input[self.i..].starts_with(s)
     }
 
     fn skip_ws(&mut self) {
@@ -128,7 +128,7 @@ impl Parser<'_> {
     }
 
     fn skip_until(&mut self, end: &str, what: &'static str) -> Result<(), XmlError> {
-        if let Some(pos) = find_sub(&self.b[self.i..], end.as_bytes()) {
+        if let Some(pos) = self.input[self.i..].find(end) {
             self.i += pos + end.len();
             Ok(())
         } else {
@@ -200,8 +200,8 @@ impl Parser<'_> {
                     } else if self.starts_with("<![CDATA[") {
                         self.i += "<![CDATA[".len();
                         let start = self.i;
-                        if let Some(pos) = find_sub(&self.b[self.i..], b"]]>") {
-                            text.push_str(&String::from_utf8_lossy(&self.b[start..start + pos]));
+                        if let Some(pos) = self.input[self.i..].find("]]>") {
+                            text.push_str(&self.input[start..start + pos]);
                             self.i += pos + 3;
                         } else {
                             return Err(XmlError::Unterminated("CDATA"));
@@ -226,14 +226,10 @@ impl Parser<'_> {
                 Some(_) => {
                     // Text run up to the next '<'.
                     let start = self.i;
-                    while let Some(c) = self.peek() {
-                        if c == b'<' {
-                            break;
-                        }
-                        self.i += 1;
-                    }
-                    let raw = &self.b[start..self.i];
-                    append_decoded_entities(&mut text, utf8_subslice(raw));
+                    self.i += self.input[start..]
+                        .find('<')
+                        .unwrap_or(self.input.len() - start);
+                    append_decoded_entities(&mut text, &self.input[start..self.i]);
                 }
             }
         }
@@ -247,7 +243,7 @@ impl Parser<'_> {
             }
             self.i += 1;
         }
-        String::from_utf8_lossy(&self.b[start..self.i]).into_owned()
+        self.input[start..self.i].to_owned()
     }
 
     fn skip_name(&mut self) {
@@ -266,23 +262,12 @@ impl Parser<'_> {
         };
         self.i += 1;
         let start = self.i;
-        while let Some(c) = self.peek() {
-            if c == quote {
-                let raw = &self.b[start..self.i];
-                self.i += 1; // closing quote
-                return Ok(decode_entities(&String::from_utf8_lossy(raw)));
-            }
-            self.i += 1;
-        }
-        Err(XmlError::Unterminated("attribute value"))
+        let Some(len) = self.input[start..].find(char::from(quote)) else {
+            return Err(XmlError::Unterminated("attribute value"));
+        };
+        self.i = start + len + 1; // closing quote
+        Ok(decode_entities(&self.input[start..start + len]))
     }
-}
-
-#[inline]
-fn utf8_subslice(bytes: &[u8]) -> &str {
-    // Parser spans begin and end at ASCII XML delimiters inside the original
-    // valid `&str`, so both indices are UTF-8 character boundaries.
-    unsafe { std::str::from_utf8_unchecked(bytes) }
 }
 
 fn trim_string_in_place(text: &mut String) {
@@ -293,13 +278,6 @@ fn trim_string_in_place(text: &mut String) {
     if start != 0 {
         drop(text.drain(..start));
     }
-}
-
-fn find_sub(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 /// Decodes the five predefined XML entities and numeric character references.

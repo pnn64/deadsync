@@ -1263,7 +1263,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1085"
+version = "0.5.1087"
 dependencies = [
  "deadlib-assets",
  "deadlib-platform",
@@ -1516,6 +1516,7 @@ dependencies = [
 name = "deadsync-noteskin"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "deadlib-bincode",
  "hashbrown 0.17.1",
  "image",
@@ -1729,7 +1730,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1085"
+version = "0.5.1087"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1791,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1085"
+version = "0.5.1087"
 dependencies = [
  "log",
  "semver",
