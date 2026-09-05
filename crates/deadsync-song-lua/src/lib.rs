@@ -2862,7 +2862,9 @@ pub fn overlay_state_after_blocks(
     state
 }
 
-const fn overlay_state_with_delta(
+/// Returns `state` with the properties written by `delta` replaced.
+#[must_use]
+pub const fn overlay_state_with_delta(
     mut state: SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) -> SongLuaOverlayState {
@@ -2870,7 +2872,14 @@ const fn overlay_state_with_delta(
     state
 }
 
-const fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
+/// Applies only the properties written by `delta`, preserving all other state.
+///
+/// Optional state fields become `Some` when written. Sound playback is a
+/// separate event; `sound_play` does not modify visual state.
+pub const fn apply_overlay_delta(
+    state: &mut SongLuaOverlayState,
+    delta: &SongLuaOverlayStateDelta,
+) {
     if let Some(value) = delta.x {
         state.x = value;
     }
@@ -3104,7 +3113,13 @@ const fn apply_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOve
     }
 }
 
-fn overlay_state_lerp(
+/// Interpolates the properties selected by `delta` between two overlay states.
+///
+/// The factor is not clamped, allowing easing curves to overshoot. Discrete
+/// properties switch at `t >= 1.0 - f32::EPSILON`; unwritten properties retain
+/// `from`. Optional continuous properties interpolate when both ends exist.
+#[must_use]
+pub fn overlay_state_lerp(
     mut from: SongLuaOverlayState,
     to: SongLuaOverlayState,
     t: f32,
