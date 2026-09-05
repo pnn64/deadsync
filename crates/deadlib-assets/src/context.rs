@@ -1,10 +1,12 @@
-use crate::{sprite_sheet_dims, texture_dims, texture_handle, texture_registry_generation};
+use crate::{sprite_sheet_dims, texture_dims, texture_registry_generation};
 use deadlib_present::texture::{TextureContext, TextureMeta};
-use deadlib_render_core::TextureHandle;
+use deadlib_render_core::{INVALID_TEXTURE_HANDLE, TextureHandle};
 
-pub struct AssetTextureContext;
+/// CPU metadata for asset construction before a texture store is available.
+/// Rendering uses a borrowed `TextureStore` instead.
+pub struct MetadataTextureContext;
 
-impl TextureContext for AssetTextureContext {
+impl TextureContext for MetadataTextureContext {
     #[inline(always)]
     fn texture_registry_generation(&self) -> u64 {
         texture_registry_generation()
@@ -24,12 +26,12 @@ impl TextureContext for AssetTextureContext {
     }
 
     #[inline(always)]
-    fn texture_handle(&self, key: &str) -> TextureHandle {
-        texture_handle(key)
+    fn texture_handle(&self, _key: &str) -> TextureHandle {
+        INVALID_TEXTURE_HANDLE
     }
 }
 
-pub const ASSET_TEXTURE_CONTEXT: AssetTextureContext = AssetTextureContext;
+pub const METADATA_TEXTURE_CONTEXT: MetadataTextureContext = MetadataTextureContext;
 
 #[cfg(test)]
 mod tests {
@@ -38,9 +40,9 @@ mod tests {
 
     #[test]
     fn asset_texture_context_falls_back_to_registry_defaults() {
-        assert_eq!(ASSET_TEXTURE_CONTEXT.texture_handle("__missing"), 0);
+        assert_eq!(METADATA_TEXTURE_CONTEXT.texture_handle("__missing"), 0);
         assert_eq!(
-            ASSET_TEXTURE_CONTEXT.sprite_sheet_dims("sheet 2x4.png"),
+            METADATA_TEXTURE_CONTEXT.sprite_sheet_dims("sheet 2x4.png"),
             (2, 4)
         );
     }

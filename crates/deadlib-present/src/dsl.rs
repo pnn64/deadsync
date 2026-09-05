@@ -1,10 +1,9 @@
 use crate::actors::{Actor, IntoTextureKey, SizeSpec, SpriteSource, TextAlign, TextContent};
-use crate::texture::{TextureContext, cached_static_texture_source};
+use crate::texture::TextureContext;
 use crate::{anim, font, runtime};
 use deadlib_render_core::BlendMode;
 use glam::Mat4 as Matrix4;
 use smallvec::SmallVec;
-use std::sync::atomic::AtomicU64;
 
 #[doc(hidden)]
 pub type TweenSteps = SmallVec<[anim::Step; 4]>;
@@ -732,9 +731,7 @@ pub fn sprite_native_dims<T: TextureContext + ?Sized>(
 ) -> [f32; 2] {
     match source {
         SpriteSource::Solid => [1.0, 1.0],
-        SpriteSource::TextureStatic(key) | SpriteSource::TextureStaticHandle { key, .. } => {
-            texture_native_dims(key, uv, cell, grid, texture_ctx)
-        }
+        SpriteSource::TextureStatic(key) => texture_native_dims(key, uv, cell, grid, texture_ctx),
         SpriteSource::Texture(key) | SpriteSource::TextureHandle { key, .. } => {
             texture_native_dims(key.as_ref(), uv, cell, grid, texture_ctx)
         }
@@ -889,21 +886,6 @@ impl SpriteBuilder {
     #[must_use]
     pub fn static_texture(tex: &'static str) -> Self {
         Self::with_source(SpriteSource::TextureStatic(tex))
-    }
-
-    #[inline(always)]
-    pub fn static_texture_cached_with_texture_context<T: TextureContext + ?Sized>(
-        tex: &'static str,
-        cached_handle: &AtomicU64,
-        cached_generation: &AtomicU64,
-        texture_ctx: &T,
-    ) -> Self {
-        Self::with_source(cached_static_texture_source(
-            tex,
-            cached_handle,
-            cached_generation,
-            texture_ctx,
-        ))
     }
 
     #[inline(always)]
@@ -1945,7 +1927,6 @@ mod tests {
     use crate::texture::{TextureContext, TextureMeta};
     use std::cell::Cell;
     use std::mem::size_of;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
     struct TestTextureContext;
 
@@ -2233,34 +2214,6 @@ mod tests {
         };
 
         assert_eq!(scale, [0.5, 0.25]);
-    }
-
-    #[test]
-    fn static_texture_cached_with_texture_context_builds_cached_source() {
-        let cached_handle = AtomicU64::new(0);
-        let cached_generation = AtomicU64::new(u64::MAX);
-        let sprite = SpriteBuilder::static_texture_cached_with_texture_context(
-            "banner",
-            &cached_handle,
-            &cached_generation,
-            &TestTextureContext,
-        );
-
-        let actor = sprite.build(0);
-        let Actor::Sprite { source, .. } = actor else {
-            panic!("sprite builder should produce a sprite actor");
-        };
-
-        assert!(matches!(
-            source,
-            SpriteSource::TextureStaticHandle {
-                key: "banner",
-                handle: 99,
-                generation: 7
-            }
-        ));
-        assert_eq!(cached_handle.load(Ordering::Relaxed), 99);
-        assert_eq!(cached_generation.load(Ordering::Relaxed), 7);
     }
 
     #[test]

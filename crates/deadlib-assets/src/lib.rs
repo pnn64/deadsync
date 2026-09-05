@@ -20,7 +20,7 @@ pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
-pub use context::{ASSET_TEXTURE_CONTEXT, AssetTextureContext};
+pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
 pub use decode::{
     GraphicTextureDiscovery, TextureAssetSpec, TextureDecodeJob, TextureDecodeResult,
     TextureKeyLoad, decode_texture_image, initial_texture_decode_jobs, prepare_texture_key_load,
@@ -44,12 +44,11 @@ pub use font::{
 pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{
-    GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
-    generated_texture_shared_key, register_generated_texture, register_texture_dims,
-    register_texture_handle, remove_texture_handle, sprite_sheet_dims, texture_dims,
-    texture_handle, texture_registry_generation,
+    GeneratedTexture, TexMeta, generated_texture, generated_texture_shared_key,
+    register_generated_texture, register_texture_dims, sprite_sheet_dims, texture_dims,
+    texture_registry_generation,
 };
-pub use texture_store::TextureStore;
+pub use texture_store::{BoundTexture, TextureStore};
 pub use upload::TextureUploadImage;
 
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};

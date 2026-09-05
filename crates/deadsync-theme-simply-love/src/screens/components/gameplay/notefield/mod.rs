@@ -604,6 +604,7 @@ pub(crate) fn compose_frame(
     noteskin_assets: &GameplayNoteskinAssets,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
+    textures: &impl deadlib_present::texture::TextureContext,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
     capture_scratch: &[RefCell<CapturedActorScratch>; MAX_PLAYERS],
@@ -880,7 +881,8 @@ pub(crate) fn compose_frame(
     let mc_font_name = notefield_plan.small_combo_font;
     let blind_active = prepared.blind_active;
 
-    let noteskin_sprite_source = |slot: &SpriteSlot| slot.actor_texture_source(actor_resources);
+    let noteskin_sprite_source =
+        |slot: &SpriteSlot| slot.actor_texture_source(actor_resources, textures);
     let feedback_frame = NotefieldFeedbackFrameView {
         column_cues: options
             .frame_features
@@ -1065,7 +1067,7 @@ pub(crate) fn compose_frame(
         Some(TapJudgmentHudFrame {
             render,
             sprite: TapJudgmentSprite {
-                source: texture.actor_texture_source(actor_resources),
+                source: texture.actor_texture_source(actor_resources, textures),
                 frame_size: sprite.frame_size,
                 frame_cols: sprite.frame_cols,
                 frame_rows: sprite.frame_rows,
@@ -1090,7 +1092,7 @@ pub(crate) fn compose_frame(
         .any(Option::is_some)
         .then(|| {
             held_miss_texture.map(|((texture, scale), sprite)| IndicatorSprite {
-                source: texture.actor_texture_source(actor_resources),
+                source: texture.actor_texture_source(actor_resources, textures),
                 frame_size: sprite.frame_size,
                 frame_cols: sprite.frame_cols,
                 frame_rows: sprite.frame_rows,
@@ -1103,7 +1105,7 @@ pub(crate) fn compose_frame(
         .any(Option::is_some)
         .then(|| {
             hold_judgment_texture.map(|(texture, sprite)| IndicatorSprite {
-                source: texture.actor_texture_source(actor_resources),
+                source: texture.actor_texture_source(actor_resources, textures),
                 frame_size: sprite.frame_size,
                 frame_cols: sprite.frame_cols,
                 frame_rows: sprite.frame_rows,
@@ -1162,7 +1164,7 @@ pub(crate) fn prewarm_actor_resources(
     ] {
         for noteskin in noteskins.iter().take(num_players).flatten() {
             noteskin.for_each_slot(|slot| {
-                let _ = slot.actor_texture_source(arena);
+                let _ = slot.actor_texture_source(arena, &assets::METADATA_TEXTURE_CONTEXT);
             });
         }
     }
@@ -1176,7 +1178,7 @@ pub(crate) fn prewarm_actor_resources(
         .into_iter()
         .flatten()
         {
-            let _ = texture.actor_texture_source(arena);
+            let _ = texture.actor_texture_source(arena, &assets::METADATA_TEXTURE_CONTEXT);
         }
     }
     arena.lock_growth();

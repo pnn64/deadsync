@@ -1,8 +1,7 @@
 use crate as assets;
 use deadlib_platform::dirs;
-use deadlib_present::actors::{
-    ActorResourceArena, SpriteSource as ActorSpriteSource, TextureKeyHandle,
-};
+use deadlib_present::actors::{ActorResourceArena, SpriteSource as ActorSpriteSource};
+use deadlib_present::texture::TextureContext;
 use deadlib_render_core::{SamplerDesc, TexturedMeshVertex};
 use deadsync_noteskin::ModelVertex;
 use deadsync_noteskin::mine::{
@@ -82,45 +81,11 @@ impl SpriteSource {
     }
 
     #[inline(always)]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        let (texture_key, cached_handle, cached_generation) = match self {
-            Self::Atlas {
-                texture_key,
-                cached_handle,
-                cached_generation,
-                ..
-            }
-            | Self::Animated {
-                texture_key,
-                cached_handle,
-                cached_generation,
-                ..
-            } => (texture_key, cached_handle, cached_generation),
-        };
-        let generation = assets::texture_registry_generation();
-        let handle = cached_handle.load(Ordering::Relaxed);
-        if handle != deadlib_render_core::INVALID_TEXTURE_HANDLE
-            && cached_generation.load(Ordering::Relaxed) == generation
-        {
-            return TextureKeyHandle {
-                key: texture_key.clone(),
-                handle,
-                generation,
-            };
-        }
-
-        let handle = assets::texture_handle(texture_key.as_ref());
-        cached_handle.store(handle, Ordering::Relaxed);
-        cached_generation.store(generation, Ordering::Relaxed);
-        TextureKeyHandle {
-            key: texture_key.clone(),
-            handle,
-            generation,
-        }
-    }
-
-    #[inline(always)]
-    pub fn actor_texture_source(&self, arena: &ActorResourceArena) -> ActorSpriteSource {
+    pub fn actor_texture_source(
+        &self,
+        arena: &ActorResourceArena,
+        textures: &impl TextureContext,
+    ) -> ActorSpriteSource {
         let (texture_key, cached_handle, cached_generation, cached_actor_texture) = match self {
             Self::Atlas {
                 texture_key,
@@ -142,12 +107,10 @@ impl SpriteSource {
                 cached_actor_texture,
             ),
         };
-        let generation = assets::texture_registry_generation();
+        let generation = textures.texture_registry_generation();
         let mut handle = cached_handle.load(Ordering::Relaxed);
-        if handle == deadlib_render_core::INVALID_TEXTURE_HANDLE
-            || cached_generation.load(Ordering::Relaxed) != generation
-        {
-            handle = assets::texture_handle(texture_key.as_ref());
+        if cached_generation.load(Ordering::Relaxed) != generation {
+            handle = textures.texture_handle(texture_key.as_ref());
             cached_handle.store(handle, Ordering::Relaxed);
             cached_generation.store(generation, Ordering::Relaxed);
         }
@@ -260,14 +223,12 @@ impl SpriteSlot {
     }
 
     #[inline(always)]
-    #[must_use]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        self.source.texture_key_handle()
-    }
-
-    #[inline(always)]
-    pub fn actor_texture_source(&self, arena: &ActorResourceArena) -> ActorSpriteSource {
-        self.source.actor_texture_source(arena)
+    pub fn actor_texture_source(
+        &self,
+        arena: &ActorResourceArena,
+        textures: &impl TextureContext,
+    ) -> ActorSpriteSource {
+        self.source.actor_texture_source(arena, textures)
     }
 
     #[must_use]
@@ -1147,8 +1108,8 @@ mod contract_tests {
         let arena = ActorResourceArena::new(1);
         arena.begin_hit_stats(true);
 
-        let first = slot.actor_texture_source(&arena);
-        let second = slot.actor_texture_source(&arena);
+        let first = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
+        let second = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
 
         assert!(matches!(
             first,

@@ -103,7 +103,7 @@ use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, media_cache};
+use deadsync_assets::{AssetManager, TextureUploadBudget, media_cache};
 use deadsync_config::prelude::{
     self as config, FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since,
     stutter_severity,
@@ -910,6 +910,7 @@ fn prewarm_gameplay_text_layout_cache(
     cache.begin_frame_stats(true);
     compose_scratch.clear_retained_frames();
 
+    gameplay::prewarm_texture_bindings(state, assets);
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     // Build the representative opening frame in the App-owned actor buffer.
@@ -935,7 +936,7 @@ fn prewarm_gameplay_text_layout_cache(
         0.0,
         cache,
         compose_scratch,
-        &PRESENT_TEXTURE_CONTEXT,
+        assets.texture_context(),
         Some(state.actor_resources()),
     );
     compose_scratch.recycle_frame(&mut render);
@@ -4123,7 +4124,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
+                    self.asset_manager.texture_context(),
                     Some(actor_resources),
                 )
             } else if let Some(actor_resources) = actor_resources {
@@ -4136,7 +4137,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
+                    self.asset_manager.texture_context(),
                     Some(actor_resources),
                 )
             } else {
@@ -4148,7 +4149,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
+                    self.asset_manager.texture_context(),
                 )
             };
             (
@@ -4170,7 +4171,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
+                    self.asset_manager.texture_context(),
                     actor_resources,
                 )
             } else {
@@ -4182,7 +4183,7 @@ impl App {
                     total_elapsed,
                     text_layout_cache,
                     compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
+                    self.asset_manager.texture_context(),
                 )
             };
             (

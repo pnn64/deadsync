@@ -5395,12 +5395,7 @@ const fn sprite_source_handle(
     generation: u64,
 ) -> Option<renderer::TextureHandle> {
     match source {
-        actors::SpriteSource::TextureStaticHandle {
-            handle,
-            generation: handle_generation,
-            ..
-        }
-        | actors::SpriteSource::TextureHandle {
+        actors::SpriteSource::TextureHandle {
             handle,
             generation: handle_generation,
             ..
@@ -5758,7 +5753,6 @@ fn resolved_sprite_source<'a>(
     };
     Some(match source {
         actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
-        actors::SpriteSource::TextureStaticHandle { key, .. } => (false, *key, str_ptr(key)),
         actors::SpriteSource::Texture(name) => {
             let name = name.as_ref();
             (false, name, str_ptr(name))

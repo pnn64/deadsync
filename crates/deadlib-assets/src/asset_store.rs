@@ -59,6 +59,11 @@ impl<T> AssetStore<T> {
         }
     }
 
+    /// Borrows this store's texture identities and dimensions for presentation.
+    pub fn texture_context(&self) -> &TextureStore<T> {
+        &self.texture_store
+    }
+
     pub fn register_font(&mut self, name: &'static str, font: Font) {
         self.font_store.register_font(name, font);
     }

@@ -1261,31 +1261,28 @@ L000
     }
 
     #[cfg(target_os = "windows")]
-    #[derive(Default)]
-    struct CaptureTextureContext {
+    struct CaptureTextureContext<'a> {
+        assets: &'a deadsync_assets::AssetManager,
         keys: std::cell::RefCell<std::collections::HashSet<String>>,
     }
 
     #[cfg(target_os = "windows")]
-    impl TextureContext for CaptureTextureContext {
+    impl TextureContext for CaptureTextureContext<'_> {
         fn texture_registry_generation(&self) -> u64 {
-            deadsync_assets::texture_registry_generation()
+            self.assets.texture_context().revision()
         }
 
         fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
-            deadsync_assets::texture_dims(key).map(|meta| TextureMeta {
-                w: meta.w,
-                h: meta.h,
-            })
+            self.assets.texture_context().texture_dims(key)
         }
 
         fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-            deadsync_assets::sprite_sheet_dims(key)
+            self.assets.texture_context().sprite_sheet_dims(key)
         }
 
         fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
             self.keys.borrow_mut().insert(key.to_owned());
-            deadsync_assets::texture_handle(key)
+            self.assets.texture_context().texture_handle(key)
         }
     }
 
@@ -1576,7 +1573,7 @@ L000
             10.0,
             text_cache,
             compose_scratch,
-            &deadsync_assets::PRESENT_TEXTURE_CONTEXT,
+            assets.texture_context(),
             Some(state.actor_resources()),
         );
         let build_us = gpu_elapsed_us(build_started);
@@ -1716,7 +1713,7 @@ L000
             .borrow()
             .iter()
             .filter(|key| {
-                let handle = deadsync_assets::texture_handle(key);
+                let handle = assets.texture_context().texture_handle(key);
                 !assets.textures().contains_key(&handle)
             })
             .cloned()
@@ -1732,8 +1729,8 @@ L000
             .iter()
             .map(|key| {
                 let canonical = deadsync_assets::canonical_texture_key(key);
-                let handle = deadsync_assets::texture_handle(key);
-                let canonical_handle = deadsync_assets::texture_handle(&canonical);
+                let handle = assets.texture_context().texture_handle(key);
+                let canonical_handle = assets.texture_context().texture_handle(&canonical);
                 format!(
                     "{key} [canonical={canonical}, local={}, uploaded={}, handle={handle}, canonical_handle={canonical_handle}]",
                     assets.has_texture_key(key),
@@ -1760,7 +1757,10 @@ L000
         compose_scratch: &mut compose::ComposeScratch,
         output_dir: &Path,
     ) -> Result<(PathBuf, GpuFrameStats), String> {
-        let texture_ctx = CaptureTextureContext::default();
+        let texture_ctx = CaptureTextureContext {
+            assets,
+            keys: Default::default(),
+        };
         let mut render = compose_fixture_frame_with_textures(
             state,
             assets,
@@ -1773,10 +1773,14 @@ L000
         let missing_keys = missing_capture_texture_keys(&texture_ctx, assets);
         if !missing_keys.is_empty() {
             compose_scratch.recycle_frame(&mut render);
+            drop(texture_ctx);
             for key in &missing_keys {
                 ensure_gpu_capture_texture(assets, backend, key, None)?;
             }
-            texture_ctx.keys.borrow_mut().clear();
+            let texture_ctx = CaptureTextureContext {
+                assets,
+                keys: Default::default(),
+            };
             render = compose_fixture_frame_with_textures(
                 state,
                 assets,
@@ -1806,7 +1810,7 @@ L000
         .flat_map(|set| set.iter().flatten())
         {
             noteskin.for_each_slot(|slot| {
-                let handle = deadsync_assets::texture_handle(slot.texture_key());
+                let handle = assets.texture_context().texture_handle(slot.texture_key());
                 if handle != deadlib_render_core::INVALID_TEXTURE_HANDLE
                     && assets.textures().contains_key(&handle)
                 {

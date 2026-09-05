@@ -1,23 +1,53 @@
 use crate::registry::{
-    drain_pending_generated_textures, register_texture_dims_shared, register_texture_handle_shared,
-    reserve_texture_registries,
+    drain_pending_generated_textures, next_texture_revision, register_texture_dims_shared,
+    reserve_texture_metadata,
 };
 use crate::{
-    GeneratedTexture, TexMeta, clear_texture_handles, register_texture_dims, remove_texture_handle,
+    GeneratedTexture, TexMeta, ascii_ci_hash, parse_sprite_sheet_dims, register_texture_dims,
+    texture_dims, texture_registry_generation,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
-use deadlib_render_core::{SamplerDesc, TextureHandle, TextureHandleMap};
+use deadlib_present::texture::{TextureContext, TextureMeta};
+use deadlib_render_core::{
+    FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle, TextureHandleMap,
+};
 use deadlib_video::Yuv420Image;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
+use std::cell::Cell;
 use std::sync::{Arc, mpsc::SyncSender};
 
+/// Resolved sprite identity and sizing, retained until the store revision changes.
+#[derive(Clone, Copy, Debug)]
+pub struct BoundTexture {
+    pub handle: TextureHandle,
+    /// None while a reserved name has neither decoded metadata nor an upload.
+    pub dimensions: Option<TexMeta>,
+    pub sheet: (u32, u32),
+}
+
+/// Application-owned GPU identities and pending uploads, borrowed by presentation.
+///
+/// The render/asset owner mutates this store at load, upload, and release boundaries;
+/// borrowed views do no I/O. Names, sheet grids, and aliases have one entry per live
+/// asset (at most one alias per folded name), reserved during initial loading.
+/// They live with the store and are removed explicitly with their textures; no
+/// draw-time insertion or eviction occurs. Exact and unique alias lookups are O(1),
+/// missing names return an invalid handle. Ambiguous aliases can scan the live set
+/// and rebuild on removal. Metadata-only sizing remains available before upload.
+/// Revision checks use an atomic metadata stamp and local cells, never a registry
+/// lock. Same-size uploads preserve bindings; identity and sizing changes invalidate
+/// them. There are no live counters; binding/lifecycle tests cover invalidation.
 pub struct TextureStore<T> {
     textures: TextureHandleMap<T>,
     uploaded_texture_dims: TextureHandleMap<TexMeta>,
     texture_handles: FxHashMap<Arc<str>, TextureHandle>,
     texture_keys: TextureHandleMap<Arc<str>>,
     next_texture_handle: TextureHandle,
+    texture_aliases: FastU64Map<TextureHandle>,
+    sheets: TextureHandleMap<(u32, u32)>,
+    revision: Cell<u64>,
+    metadata_revision: Cell<u64>,
     pending_texture_uploads: TextureUploadQueue,
 }
 
@@ -30,8 +60,67 @@ impl<T> TextureStore<T> {
             texture_handles: FxHashMap::default(),
             texture_keys: TextureHandleMap::default(),
             next_texture_handle: 1,
+            texture_aliases: FastU64Map::default(),
+            sheets: TextureHandleMap::default(),
+            revision: Cell::new(next_texture_revision()),
+            metadata_revision: Cell::new(texture_registry_generation()),
             pending_texture_uploads: TextureUploadQueue::default(),
         }
+    }
+
+    /// Revision for cached bindings; independent stores always have distinct stamps.
+    pub fn revision(&self) -> u64 {
+        let metadata = texture_registry_generation();
+        if self.metadata_revision.replace(metadata) != metadata {
+            self.revision.set(next_texture_revision());
+        }
+        self.revision.get()
+    }
+
+    /// Resolves an exact name, with the existing ASCII-insensitive fallback.
+    pub fn texture_handle(&self, key: &str) -> TextureHandle {
+        if let Some(&handle) = self.texture_handles.get(key) {
+            return handle;
+        }
+        let Some(&alias) = self.texture_aliases.get(&ascii_ci_hash(key)) else {
+            return INVALID_TEXTURE_HANDLE;
+        };
+        if alias != INVALID_TEXTURE_HANDLE {
+            return if self.texture_key(alias).eq_ignore_ascii_case(key) {
+                alias
+            } else {
+                INVALID_TEXTURE_HANDLE
+            };
+        }
+        self.texture_handles
+            .iter()
+            .find_map(|(candidate, &handle)| candidate.eq_ignore_ascii_case(key).then_some(handle))
+            .unwrap_or(INVALID_TEXTURE_HANDLE)
+    }
+
+    fn dimensions(&self, handle: TextureHandle) -> Option<TexMeta> {
+        self.pending_texture_uploads
+            .dimensions(handle)
+            .map(|(w, h)| TexMeta { w, h })
+            .or_else(|| self.uploaded_texture_dims.get(&handle).copied())
+    }
+
+    /// Binds a reserved identity; metadata alone never invents a GPU handle.
+    ///
+    /// A queued upload can already supply native dimensions. Rendering may use
+    /// that handle once the application's upload drain installs the texture.
+    pub fn bind_texture(&self, key: &str) -> Option<BoundTexture> {
+        let handle = self.texture_handle(key);
+        if handle == INVALID_TEXTURE_HANDLE {
+            return None;
+        }
+        Some(BoundTexture {
+            handle,
+            dimensions: self
+                .dimensions(handle)
+                .or_else(|| texture_dims(self.texture_key(handle))),
+            sheet: *self.sheets.get(&handle)?,
+        })
     }
 
     #[inline(always)]
@@ -71,7 +160,10 @@ impl<T> TextureStore<T> {
     pub fn take_textures(&mut self) -> TextureHandleMap<T> {
         self.texture_handles.clear();
         self.texture_keys.clear();
-        clear_texture_handles();
+        self.texture_aliases.clear();
+        self.sheets.clear();
+        self.pending_texture_uploads = TextureUploadQueue::default();
+        self.revision.set(next_texture_revision());
         self.uploaded_texture_dims.clear();
         std::mem::take(&mut self.textures)
     }
@@ -82,7 +174,9 @@ impl<T> TextureStore<T> {
         self.uploaded_texture_dims.reserve(dense_additional);
         self.texture_handles.reserve(additional);
         self.texture_keys.reserve(dense_additional);
-        reserve_texture_registries(additional);
+        self.texture_aliases.reserve(additional);
+        self.sheets.reserve(dense_additional);
+        reserve_texture_metadata(additional);
     }
 
     pub fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
@@ -95,7 +189,9 @@ impl<T> TextureStore<T> {
     fn reserve_new_texture_handle(&mut self, key: Arc<str>) -> TextureHandle {
         let handle = self.next_texture_handle;
         self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
-        register_texture_handle_shared(Arc::clone(&key), handle);
+        note_texture_handle_alias(&mut self.texture_aliases, &key, handle);
+        self.sheets.insert(handle, parse_sprite_sheet_dims(&key));
+        self.revision.set(next_texture_revision());
         self.texture_keys.insert(handle, Arc::clone(&key));
         self.texture_handles.insert(key, handle);
         handle
@@ -109,6 +205,13 @@ impl<T> TextureStore<T> {
         height: u32,
     ) -> Option<T> {
         let handle = self.reserve_texture_handle(key);
+        if !self
+            .uploaded_texture_dims
+            .get(&handle)
+            .is_some_and(|meta| meta.w == width && meta.h == height)
+        {
+            self.revision.set(next_texture_revision());
+        }
         self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
@@ -123,7 +226,9 @@ impl<T> TextureStore<T> {
         let handle = self.texture_handles.remove(key)?;
         self.pending_texture_uploads.remove(handle);
         self.texture_keys.remove(&handle);
-        remove_texture_handle(key);
+        remove_texture_handle_alias(&self.texture_handles, &mut self.texture_aliases, key);
+        self.sheets.remove(&handle);
+        self.revision.set(next_texture_revision());
         self.uploaded_texture_dims.remove(&handle);
         self.textures
             .remove(&handle)
@@ -138,7 +243,9 @@ impl<T> TextureStore<T> {
         height: u32,
     ) -> (TextureHandle, Option<T>) {
         let handle = self.reserve_texture_handle(key);
-        self.pending_texture_uploads.remove(handle);
+        if !self.upload_dims_match(handle, width, height) {
+            self.revision.set(next_texture_revision());
+        }
         self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
@@ -146,6 +253,7 @@ impl<T> TextureStore<T> {
                 h: height,
             },
         );
+        self.pending_texture_uploads.remove(handle);
         let old = self.textures.insert(handle, texture);
         (handle, old)
     }
@@ -200,6 +308,7 @@ impl<T> TextureStore<T> {
         let (width, height) = (image.width(), image.height());
         let handle = if let Some(&handle) = self.texture_handles.get(key.as_str()) {
             if !self.upload_dims_match(handle, width, height) {
+                self.revision.set(next_texture_revision());
                 register_texture_dims(&key, width, height);
             }
             handle
@@ -233,11 +342,9 @@ impl<T> TextureStore<T> {
         image: RgbaImage,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        let dimensions_match = self
-            .uploaded_texture_dims
-            .get(&handle)
-            .is_some_and(|meta| meta.w == image.width() && meta.h == image.height());
+        let dimensions_match = self.upload_dims_match(handle, image.width(), image.height());
         if !dimensions_match {
+            self.revision.set(next_texture_revision());
             register_texture_dims(self.texture_key(handle), image.width(), image.height());
         }
         self.pending_texture_uploads.push_recyclable(
@@ -254,11 +361,9 @@ impl<T> TextureStore<T> {
         image: Yuv420Image,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        let dimensions_match = self
-            .uploaded_texture_dims
-            .get(&handle)
-            .is_some_and(|meta| meta.w == image.width() && meta.h == image.height());
+        let dimensions_match = self.upload_dims_match(handle, image.width(), image.height());
         if !dimensions_match {
+            self.revision.set(next_texture_revision());
             register_texture_dims(self.texture_key(handle), image.width(), image.height());
         }
         self.pending_texture_uploads.push_recyclable_yuv420(
@@ -283,6 +388,7 @@ impl<T> TextureStore<T> {
             let (width, height) = (image.width(), image.height());
             let handle = if let Some(&handle) = self.texture_handles.get(key.as_ref()) {
                 if !self.upload_dims_match(handle, width, height) {
+                    self.revision.set(next_texture_revision());
                     register_texture_dims(&key, width, height);
                 }
                 handle
@@ -300,8 +406,15 @@ impl<T> TextureStore<T> {
         drained_uploads: usize,
         drained_bytes: usize,
     ) -> Option<(TextureHandle, PendingTextureUpload)> {
-        self.pending_texture_uploads
-            .pop_next(budget, drained_uploads, drained_bytes)
+        let next = self
+            .pending_texture_uploads
+            .pop_next(budget, drained_uploads, drained_bytes)?;
+        let (handle, upload) = &next;
+        let (width, height) = (upload.image().width(), upload.image().height());
+        if !self.upload_dims_match(*handle, width, height) {
+            self.revision.set(next_texture_revision());
+        }
+        Some(next)
     }
 
     pub fn apply_upload_update(
@@ -320,6 +433,13 @@ impl<T> TextureStore<T> {
         width: u32,
         height: u32,
     ) -> Option<T> {
+        if !self
+            .uploaded_texture_dims
+            .get(&handle)
+            .is_some_and(|meta| meta.w == width && meta.h == height)
+        {
+            self.revision.set(next_texture_revision());
+        }
         self.uploaded_texture_dims.insert(
             handle,
             TexMeta {
@@ -328,6 +448,77 @@ impl<T> TextureStore<T> {
             },
         );
         self.textures.insert(handle, texture)
+    }
+}
+
+impl<T> TextureContext for TextureStore<T> {
+    fn texture_registry_generation(&self) -> u64 {
+        self.revision()
+    }
+
+    fn texture_handle(&self, key: &str) -> TextureHandle {
+        self.texture_handle(key)
+    }
+
+    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+        let handle = self.texture_handle(key);
+        self.dimensions(handle)
+            .or_else(|| {
+                texture_dims(if handle == INVALID_TEXTURE_HANDLE {
+                    key
+                } else {
+                    self.texture_key(handle)
+                })
+            })
+            .map(|meta| TextureMeta {
+                w: meta.w,
+                h: meta.h,
+            })
+    }
+
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        self.sheets
+            .get(&self.texture_handle(key))
+            .copied()
+            .unwrap_or_else(|| crate::sprite_sheet_dims(key))
+    }
+}
+
+fn note_texture_handle_alias(
+    aliases: &mut FastU64Map<TextureHandle>,
+    key: &str,
+    handle: TextureHandle,
+) {
+    // Each local key has its own handle, so a second folded key is ambiguous.
+    aliases
+        .entry(ascii_ci_hash(key))
+        .and_modify(|alias| *alias = INVALID_TEXTURE_HANDLE)
+        .or_insert(handle);
+}
+
+fn rebuild_texture_handle_aliases(
+    handles: &FxHashMap<Arc<str>, TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandle>,
+) {
+    aliases.clear();
+    aliases.reserve(handles.len());
+    for (key, &handle) in handles {
+        note_texture_handle_alias(aliases, key, handle);
+    }
+}
+
+/// Remove a common unique alias in O(1). An already-colliding alias takes the
+/// rare rebuild path so deleting one collision restores exact fallback lookup.
+fn remove_texture_handle_alias(
+    handles: &FxHashMap<Arc<str>, TextureHandle>,
+    aliases: &mut FastU64Map<TextureHandle>,
+    key: &str,
+) {
+    let folded = ascii_ci_hash(key);
+    if aliases.get(&folded) == Some(&INVALID_TEXTURE_HANDLE) {
+        rebuild_texture_handle_aliases(handles, aliases);
+    } else {
+        aliases.remove(&folded);
     }
 }
 
@@ -380,7 +571,7 @@ mod tests {
         assert_eq!(first_handle, second_handle);
         assert!(!textures.upload_dims_match(second_handle, 2, 2));
         assert!(textures.upload_dims_match(second_handle, 4, 2));
-        assert_eq!(crate::texture_handle(key), first_handle);
+        assert_eq!(textures.texture_handle(key), first_handle);
         let dims = crate::texture_dims(key).unwrap();
         assert_eq!((dims.w, dims.h), (4, 2));
     }

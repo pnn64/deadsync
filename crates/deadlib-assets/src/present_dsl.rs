@@ -1,9 +1,8 @@
-use crate::ASSET_TEXTURE_CONTEXT;
+use crate::METADATA_TEXTURE_CONTEXT;
 use deadlib_present::{
     actors::{Actor, IntoTextureKey},
     dsl as present_dsl,
 };
-use std::sync::atomic::AtomicU64;
 
 #[doc(hidden)]
 pub struct SpriteBuilder {
@@ -27,22 +26,6 @@ impl SpriteBuilder {
     }
 
     #[inline(always)]
-    pub fn static_texture_cached(
-        tex: &'static str,
-        cached_handle: &'static AtomicU64,
-        cached_generation: &'static AtomicU64,
-    ) -> Self {
-        Self {
-            inner: present_dsl::SpriteBuilder::static_texture_cached_with_texture_context(
-                tex,
-                cached_handle,
-                cached_generation,
-                &ASSET_TEXTURE_CONTEXT,
-            ),
-        }
-    }
-
-    #[inline(always)]
     #[must_use]
     pub fn solid() -> Self {
         Self {
@@ -53,7 +36,7 @@ impl SpriteBuilder {
     #[inline(always)]
     pub fn zoomto(&mut self, w: f32, h: f32) {
         self.inner
-            .zoomto_with_texture_context(w, h, &ASSET_TEXTURE_CONTEXT);
+            .zoomto_with_texture_context(w, h, &METADATA_TEXTURE_CONTEXT);
     }
 
     #[inline(always)]
@@ -70,7 +53,7 @@ impl SpriteBuilder {
     ) -> Actor {
         self.inner.build_tweened_with_texture_context(
             site_base,
-            &ASSET_TEXTURE_CONTEXT,
+            &METADATA_TEXTURE_CONTEXT,
             build_steps,
         )
     }

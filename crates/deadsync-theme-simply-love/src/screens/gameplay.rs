@@ -893,6 +893,9 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// that do not provide screen scratch.
 #[derive(Default)]
 struct SongLuaProjectedMeshScratch {
+    sprite_key: Option<Arc<str>>,
+    sprite_revision: u64,
+    sprite_binding: Option<deadlib_assets::BoundTexture>,
     textured_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
     textured_glow_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
     mesh_vertices: Option<Arc<Vec<MeshVertex>>>,
@@ -915,8 +918,35 @@ struct SongLuaProjectedMeshScratch {
 }
 
 impl SongLuaProjectedMeshScratch {
+    // One binding per overlay, owned by the screen's existing scratch. Prewarmed
+    // for all sprites at entry, including hidden layers. No eviction or growth:
+    // a steady draw only checks the revision and Arc identity. A changed key or
+    // store revision performs one local lookup (and metadata fallback if needed).
+    // Missing assets stay missing until that revision changes; no draw-time I/O.
+    fn bind_sprite<T>(
+        &mut self,
+        key: &Arc<str>,
+        textures: &deadlib_assets::TextureStore<T>,
+    ) -> Option<deadlib_assets::BoundTexture> {
+        let revision = textures.revision();
+        if self.sprite_revision != revision
+            || !self
+                .sprite_key
+                .as_ref()
+                .is_some_and(|previous| Arc::ptr_eq(previous, key))
+        {
+            self.sprite_binding = textures.bind_texture(key);
+            self.sprite_key = Some(Arc::clone(key));
+            self.sprite_revision = revision;
+        }
+        self.sprite_binding
+    }
+
     fn textured(capacity: usize) -> Self {
         Self {
+            sprite_key: None,
+            sprite_revision: 0,
+            sprite_binding: None,
             textured_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             textured_glow_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             mesh_vertices: None,
@@ -941,6 +971,9 @@ impl SongLuaProjectedMeshScratch {
 
     fn mesh(capacity: usize) -> Self {
         Self {
+            sprite_key: None,
+            sprite_revision: 0,
+            sprite_binding: None,
             textured_vertices: None,
             textured_glow_vertices: None,
             mesh_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
@@ -5958,6 +5991,47 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
     })
 }
 
+/// Bind every Lua sprite before playback, including currently hidden visual layers.
+pub fn prewarm_texture_bindings(state: &mut State, assets: &AssetManager) {
+    let visuals = state.gameplay.song_lua_visuals();
+    let Some(scratch) = state.frame_scratch.as_mut() else {
+        return;
+    };
+    let layers = std::iter::once((
+        visuals.overlays.as_slice(),
+        scratch.song_lua_projected_mesh_scratch.as_mut_slice(),
+    ))
+    .chain(
+        visuals
+            .background_visual_layers
+            .iter()
+            .zip(
+                scratch
+                    .song_lua_background_projected_mesh_scratch
+                    .iter_mut(),
+            )
+            .map(|(layer, scratch)| (layer.overlays.as_slice(), scratch.as_mut_slice())),
+    )
+    .chain(
+        visuals
+            .foreground_visual_layers
+            .iter()
+            .zip(
+                scratch
+                    .song_lua_foreground_projected_mesh_scratch
+                    .iter_mut(),
+            )
+            .map(|(layer, scratch)| (layer.overlays.as_slice(), scratch.as_mut_slice())),
+    );
+    for (overlays, scratch) in layers {
+        for (overlay, scratch) in overlays.iter().zip(scratch) {
+            if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlay.kind {
+                scratch.bind_sprite(texture_key, assets.texture_context());
+            }
+        }
+    }
+}
+
 pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
@@ -7351,12 +7425,12 @@ fn song_lua_valid_sprite_state_index(state: SongLuaOverlayState) -> Option<u32> 
 #[inline(always)]
 fn song_lua_sprite_sheet_index(
     state: SongLuaOverlayState,
-    texture_key: &str,
+    sheet: (u32, u32),
     states: &[deadsync_song_lua::SongLuaSpriteState],
     total_elapsed: f32,
 ) -> Option<u32> {
     let start = song_lua_valid_sprite_state_index(state).unwrap_or(0);
-    let (cols, rows) = deadsync_song_lua::parse_sprite_sheet_dims(texture_key);
+    let (cols, rows) = sheet;
     let total = cols.saturating_mul(rows).max(1);
     let logical_state = if state.sprite_animate && states.len() > 1 {
         deadsync_song_lua::sprite_custom_animation_state_from(
@@ -7389,16 +7463,19 @@ fn song_lua_sprite_sheet_index(
     )
 }
 
-fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -> Option<[f32; 2]> {
+fn song_lua_overlay_sprite_size(
+    state: SongLuaOverlayState,
+    binding: deadlib_assets::BoundTexture,
+) -> Option<[f32; 2]> {
     if let Some(size) = state.size {
         return Some(size);
     }
-    let tex = crate::assets::texture_dims(texture_key)?;
+    let tex = binding.dimensions?;
     let (width, height) = deadsync_song_lua::sprite_image_frame_size(
         Some((tex.w as f32, tex.h as f32)),
         state.sprite_animate,
         state.sprite_state_index,
-        Some(deadsync_song_lua::parse_sprite_sheet_dims(texture_key)),
+        Some(binding.sheet),
     )?;
     Some([width, height])
 }
@@ -7434,14 +7511,12 @@ fn song_lua_overlay_sprite_offscreen(
 
 fn song_lua_overlay_uv_rect(
     state: SongLuaOverlayState,
-    texture_key: Option<&str>,
+    sheet_dims: Option<(u32, u32)>,
     states: &[deadsync_song_lua::SongLuaSpriteState],
     total_elapsed: f32,
 ) -> Option<[f32; 4]> {
-    let state_index = texture_key.and_then(|texture_key| {
-        song_lua_sprite_sheet_index(state, texture_key, states, total_elapsed)
-    });
-    let sheet_dims = texture_key.map(deadsync_song_lua::parse_sprite_sheet_dims);
+    let state_index = sheet_dims
+        .and_then(|sheet| song_lua_sprite_sheet_index(state, sheet, states, total_elapsed));
     deadsync_song_lua::sprite_texture_rect_with_offset(
         state.custom_texture_rect,
         state_index,
@@ -13426,7 +13501,7 @@ fn song_lua_overlay_rect(
 
 fn song_lua_overlay_uvs(
     state: SongLuaOverlayState,
-    texture_key: Option<&str>,
+    sheet_dims: Option<(u32, u32)>,
     states: &[deadsync_song_lua::SongLuaSpriteState],
     flip_x: bool,
     flip_y: bool,
@@ -13443,7 +13518,7 @@ fn song_lua_overlay_uvs(
         mut uv_offset_x,
         mut uv_offset_y,
     ] = if let Some([u0, v0, u1, v1]) =
-        song_lua_overlay_uv_rect(state, texture_key, states, animation_elapsed)
+        song_lua_overlay_uv_rect(state, sheet_dims, states, animation_elapsed)
     {
         [
             (u1 - u0).abs().max(1e-6),
@@ -14196,14 +14271,15 @@ fn build_song_lua_overlay_actor_with_scratch(
             states,
             ..
         } => {
-            let key = texture_key.as_ref();
+            let textures = asset_manager.texture_context();
+            let binding = match projected_mesh_scratch.as_deref_mut() {
+                Some(scratch) => scratch.bind_sprite(texture_key, textures),
+                None => textures.bind_texture(texture_key),
+            }?;
             let animation_elapsed = state
                 .sprite_animation_epoch
                 .map_or(total_elapsed, |epoch| (effect_time - epoch).max(0.0));
-            if !asset_manager.has_texture_key(key) {
-                return None;
-            }
-            let source_size = song_lua_overlay_sprite_size(state, key)?;
+            let source_size = song_lua_overlay_sprite_size(state, binding)?;
             if camera_state.is_none()
                 && state.stretch_rect.is_none()
                 && song_lua_overlay_sprite_offscreen(
@@ -14255,7 +14331,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     rot_deg,
                     song_lua_overlay_uvs(
                         state,
-                        Some(key),
+                        Some(binding.sheet),
                         states,
                         flip_x,
                         flip_y,
@@ -14318,7 +14394,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     rot_deg,
                     song_lua_overlay_uvs(
                         state,
-                        Some(key),
+                        Some(binding.sheet),
                         states,
                         flip_x,
                         flip_y,
@@ -14337,8 +14413,13 @@ fn build_song_lua_overlay_actor_with_scratch(
                     projected_mesh_scratch.as_deref_mut(),
                 ));
             }
+            let source = deadlib_present::actors::TextureKeyHandle {
+                key: Arc::clone(texture_key),
+                handle: binding.handle,
+                generation: textures.revision(),
+            };
             let mut actor = if let Some([left, top, right, bottom]) = state.stretch_rect {
-                act!(sprite(Arc::clone(texture_key)):
+                act!(sprite(source):
                     align(0.0, 0.0):
                     xy(left * x_scale, top * y_scale):
                     setsize(
@@ -14348,7 +14429,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     z(z)
                 )
             } else {
-                act!(sprite(Arc::clone(texture_key)):
+                act!(sprite(source):
                     align(state.halign, state.valign):
                     xy(state.x * x_scale, state.y * y_scale):
                     setsize(
@@ -14425,7 +14506,8 @@ fn build_song_lua_overlay_actor_with_scratch(
                 *world_z += song_lua_biased_world_z(state, effect_offset[2]);
                 scale[0] *= effect_scale[0];
                 scale[1] *= effect_scale[1];
-                *uv_rect = song_lua_overlay_uv_rect(state, Some(key), states, animation_elapsed);
+                *uv_rect =
+                    song_lua_overlay_uv_rect(state, Some(binding.sheet), states, animation_elapsed);
                 *texcoordvelocity = state.texcoord_velocity;
                 *actor_effect = deadlib_present::anim::EffectState::default();
                 *actor_flip_x ^= flip_x;
@@ -17303,6 +17385,7 @@ pub fn push_actors(
                 &state.noteskin_assets,
                 &visual_policy.assets.effects,
                 state.actor_resources(),
+                asset_manager.texture_context(),
                 &state.notefield_model_cache,
                 &state.notefield_hold_mesh_scratch,
                 &state.notefield_capture_scratch,
@@ -19646,7 +19729,13 @@ mod tests {
             image::RgbaImage::new(1_152, 1_056),
         );
         assert_eq!(
-            song_lua_overlay_sprite_size(composed[idle], idle_texture_key.as_ref()),
+            song_lua_overlay_sprite_size(
+                composed[idle],
+                asset_manager
+                    .texture_context()
+                    .bind_texture(&idle_texture_key)
+                    .unwrap()
+            ),
             Some([288.0, 352.0]),
             "Cagney culling must use one 4x3 sheet cell, not the whole texture"
         );
@@ -26184,6 +26273,217 @@ mod tests {
         };
         assert_eq!(Arc::as_ptr(attributes), first_ptr);
         assert_eq!(scratch[0].replacements, 0);
+    }
+
+    #[test]
+    fn song_lua_sprite_binding_tracks_availability_key_changes_and_reload() {
+        let mut textures = deadlib_assets::TextureStore::<()>::new();
+        let key: Arc<str> = Arc::from("lua-binding 4x2.png");
+        let other: Arc<str> = Arc::from("lua-binding-other 2x1.png");
+        let mut scratch = SongLuaProjectedMeshScratch::default();
+        let state = SongLuaOverlayState {
+            sprite_state_index: Some(5),
+            ..Default::default()
+        };
+        assert!(scratch.bind_sprite(&key, &textures).is_none());
+        let original = textures.reserve_texture_handle(key.to_string());
+        let unmeasured = scratch.bind_sprite(&key, &textures).unwrap();
+        assert_eq!(song_lua_overlay_sprite_size(state, unmeasured), None);
+        assert_eq!(
+            song_lua_overlay_sprite_size(
+                SongLuaOverlayState {
+                    size: Some([7.0, 9.0]),
+                    ..state
+                },
+                unmeasured,
+            ),
+            Some([7.0, 9.0])
+        );
+        textures.queue_texture_upload(key.to_string(), image::RgbaImage::new(40, 20));
+        let bound = scratch.bind_sprite(&key, &textures).unwrap();
+        assert_eq!(bound.handle, original);
+        assert_eq!(
+            song_lua_overlay_sprite_size(state, bound),
+            Some([10.0, 10.0])
+        );
+        assert_eq!(
+            song_lua_overlay_uv_rect(state, Some(bound.sheet), &[], 0.0),
+            Some([0.25, 0.5, 0.5, 1.0])
+        );
+        textures.queue_texture_upload(key.to_string(), image::RgbaImage::new(80, 40));
+        let resized = scratch.bind_sprite(&key, &textures).unwrap();
+        assert_eq!(resized.handle, original);
+        assert_eq!(
+            song_lua_overlay_sprite_size(state, resized),
+            Some([20.0, 20.0])
+        );
+        textures.insert_texture(other.to_string(), (), 60, 10);
+        let other_bound = scratch.bind_sprite(&other, &textures).unwrap();
+        assert_eq!(other_bound.sheet, (2, 1));
+        assert_ne!(other_bound.handle, original);
+        assert_eq!(
+            scratch.bind_sprite(&key, &textures).unwrap().handle,
+            original
+        );
+        textures.take_textures();
+        assert!(scratch.bind_sprite(&key, &textures).is_none());
+        textures.insert_texture(key.to_string(), (), 120, 60);
+        let reloaded = scratch.bind_sprite(&key, &textures).unwrap();
+        assert_ne!(reloaded.handle, original);
+        assert_eq!(
+            song_lua_overlay_sprite_size(state, reloaded),
+            Some([30.0, 30.0])
+        );
+    }
+
+    #[test]
+    fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
+        let key = "lua-bound-draw 4x2.png";
+        let mut assets = AssetManager::new();
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let mut scratch = SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY);
+        let mut draw = |assets: &AssetManager| {
+            build_song_lua_overlay_actor_with_scratch(
+                &overlay,
+                SongLuaOverlayState {
+                    x: 320.0,
+                    y: 240.0,
+                    sprite_state_index: Some(5),
+                    ..Default::default()
+                },
+                None,
+                assets,
+                1,
+                screen_width(),
+                screen_height(),
+                0.0,
+                0.0,
+                0.0,
+                Some(&mut scratch),
+            )
+        };
+        assert!(draw(&assets).is_none());
+        for width in [40, 80] {
+            assets.queue_texture_upload(key.into(), image::RgbaImage::new(width, 20));
+            for _ in 0..3 {
+                match draw(&assets).expect_actor("prepared sprite must render") {
+                    Actor::Sprite {
+                        source:
+                            SpriteSource::TextureHandle {
+                                handle, generation, ..
+                            },
+                        size,
+                        uv_rect,
+                        ..
+                    } => {
+                        assert_eq!(handle, assets.texture_context().texture_handle(key));
+                        assert_eq!(generation, assets.texture_context().revision());
+                        assert!(
+                            matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if w == width as f32 / 4.0 && h == 10.0)
+                        );
+                        assert_eq!(uv_rect, Some([0.25, 0.5, 0.5, 1.0]));
+                    }
+                    actor => panic!("expected bound sprite, got {actor:?}"),
+                }
+            }
+        }
+        assets.remove_texture(key);
+        assert!(draw(&assets).is_none());
+    }
+
+    #[test]
+    #[ignore = "manual Lua sprite binding benchmark; run in release mode"]
+    fn song_lua_sprite_binding_hot_paths() {
+        use std::{hint::black_box, time::Instant};
+        let key: Arc<str> = Arc::from("benchmark-lua-native-sprite 4x2.png");
+        let missing: Arc<str> = Arc::from("benchmark-lua-missing.png");
+        let mut assets = AssetManager::new();
+        assets.queue_texture_upload(key.to_string(), image::RgbaImage::new(40, 20));
+        let textures = assets.texture_context();
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(&key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let state = SongLuaOverlayState {
+            x: 320.0,
+            y: 240.0,
+            sprite_state_index: Some(5),
+            ..Default::default()
+        };
+        let mut scratch = SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY);
+        let bound = scratch.bind_sprite(&key, textures).unwrap();
+        let width = screen_width();
+        let height = screen_height();
+        const REPEATS: usize = 100_000;
+        for mode in ["bound", "size", "uv", "draw", "resolve", "missing"] {
+            let mut samples = [0.0_f64; 7];
+            if mode == "missing" {
+                scratch.bind_sprite(&missing, textures);
+            }
+            for sample in &mut samples {
+                let started = Instant::now();
+                for _ in 0..REPEATS {
+                    match mode {
+                        "bound" => {
+                            black_box(scratch.bind_sprite(black_box(&key), black_box(textures)));
+                        }
+                        "size" => {
+                            black_box(song_lua_overlay_sprite_size(
+                                black_box(state),
+                                black_box(bound),
+                            ));
+                        }
+                        "uv" => {
+                            black_box(song_lua_overlay_uv_rect(
+                                black_box(state),
+                                Some(black_box(bound.sheet)),
+                                &[],
+                                0.0,
+                            ));
+                        }
+                        "draw" => {
+                            black_box(build_song_lua_overlay_actor_with_scratch(
+                                black_box(&overlay),
+                                state,
+                                None,
+                                &assets,
+                                1,
+                                width,
+                                height,
+                                0.0,
+                                0.0,
+                                0.0,
+                                Some(&mut scratch),
+                            ));
+                        }
+                        "resolve" => {
+                            black_box(textures.bind_texture(black_box(&key)));
+                        }
+                        "missing" => {
+                            black_box(
+                                scratch.bind_sprite(black_box(&missing), black_box(textures)),
+                            );
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                *sample = started.elapsed().as_nanos() as f64 / REPEATS as f64;
+            }
+            samples.sort_by(f64::total_cmp);
+            eprintln!(
+                "lua sprite {mode}: median {:.1} ns, worst batch {:.1} ns/op",
+                samples[3], samples[6]
+            );
+        }
     }
 
     #[test]

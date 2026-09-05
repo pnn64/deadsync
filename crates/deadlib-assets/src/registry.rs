@@ -1,5 +1,5 @@
-use crate::{ascii_ci_hash, parse_sprite_sheet_dims};
-use deadlib_render_core::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, TextureHandle};
+use crate::parse_sprite_sheet_dims;
+use deadlib_render_core::SamplerDesc;
 use image::RgbaImage;
 use rustc_hash::FxHashMap;
 use std::sync::{
@@ -185,40 +185,24 @@ impl<T> GeneratedTextureRegistry<T> {
 static TEXTURE_METADATA: LazyLock<RwLock<TextureMetadataRegistry>> =
     LazyLock::new(|| RwLock::new(TextureMetadataRegistry::default()));
 
-static TEXTURE_HANDLES: LazyLock<RwLock<FxHashMap<Arc<str>, TextureHandle>>> =
-    LazyLock::new(|| RwLock::new(FxHashMap::default()));
-
-#[derive(Clone, Copy)]
-struct TextureHandleAlias {
-    handle: TextureHandle,
-    refs: usize,
-}
-
-/// Process-lifetime case-insensitive texture alias index.
-///
-/// Ownership/threading: all asset/render users share it behind this `RwLock`.
-/// Capacity/lifetime: at most one entry per folded registered key, grown during
-/// load/prewarm and cleared with the texture registry. Lookup misses fall back
-/// to the exact registry scan and never perform I/O. Unique removals are O(1);
-/// the deliberately rare ambiguous-hash removal rebuilds the bounded registry
-/// to recover the surviving exact handle. Destruction remains on the caller's
-/// render/transition path. `texture_identity_hot_paths` reports removal cost;
-/// no live counter exists yet. Worst-case work is one full registry scan only
-/// after removing an alias already marked ambiguous.
-static TEXTURE_HANDLE_ALIASES: LazyLock<RwLock<FastU64Map<TextureHandleAlias>>> =
-    LazyLock::new(|| RwLock::new(FastU64Map::default()));
-
 static GENERATED_TEXTURES: LazyLock<RwLock<GeneratedTextureRegistry<GeneratedTexture>>> =
     LazyLock::new(|| RwLock::new(GeneratedTextureRegistry::default()));
 // Producers publish after inserting under the registry write lock. The render
 // thread uses this as an idle fast gate, then takes that same lock to drain;
 // a concurrent late publish can only cause one harmless extra poll.
 static GENERATED_TEXTURES_PENDING: AtomicBool = AtomicBool::new(false);
+// Unique stamps let presentation distinguish independent stores as well as
+// metadata revisions. This counter contains no GPU identities or mappings.
+static NEXT_TEXTURE_REVISION: AtomicU64 = AtomicU64::new(2);
 static TEXTURE_REGISTRY_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+pub(crate) fn next_texture_revision() -> u64 {
+    NEXT_TEXTURE_REVISION.fetch_add(1, Ordering::Relaxed)
+}
 
 #[inline(always)]
 fn touch_texture_registry() {
-    TEXTURE_REGISTRY_GENERATION.fetch_add(1, Ordering::Relaxed);
+    TEXTURE_REGISTRY_GENERATION.store(next_texture_revision(), Ordering::Relaxed);
 }
 
 #[inline(always)]
@@ -226,119 +210,8 @@ pub fn texture_registry_generation() -> u64 {
     TEXTURE_REGISTRY_GENERATION.load(Ordering::Relaxed)
 }
 
-fn note_texture_handle_alias(
-    aliases: &mut FastU64Map<TextureHandleAlias>,
-    key: &str,
-    handle: TextureHandle,
-) {
-    let folded = ascii_ci_hash(key);
-    match aliases.get_mut(&folded) {
-        Some(existing) => {
-            if existing.handle != handle {
-                existing.handle = INVALID_TEXTURE_HANDLE;
-            }
-            existing.refs = existing.refs.saturating_add(1);
-        }
-        None => {
-            aliases.insert(folded, TextureHandleAlias { handle, refs: 1 });
-        }
-    }
-}
-
-fn rebuild_texture_handle_aliases(
-    handles: &FxHashMap<Arc<str>, TextureHandle>,
-    aliases: &mut FastU64Map<TextureHandleAlias>,
-) {
-    aliases.clear();
-    aliases.reserve(handles.len());
-    for (key, &handle) in handles {
-        note_texture_handle_alias(aliases, key, handle);
-    }
-}
-
-/// Remove a common unique alias in O(1). An already-colliding alias takes the
-/// rare rebuild path so deleting one collision restores exact fallback lookup.
-fn remove_texture_handle_alias(
-    handles: &FxHashMap<Arc<str>, TextureHandle>,
-    aliases: &mut FastU64Map<TextureHandleAlias>,
-    key: &str,
-) {
-    let folded = ascii_ci_hash(key);
-    let Some(alias) = aliases.get_mut(&folded) else {
-        return;
-    };
-    if alias.handle == INVALID_TEXTURE_HANDLE {
-        rebuild_texture_handle_aliases(handles, aliases);
-    } else if alias.refs > 1 {
-        alias.refs -= 1;
-    } else {
-        aliases.remove(&folded);
-    }
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-fn register_texture_handle_inner(key: impl AsRef<str> + Into<Arc<str>>, handle: TextureHandle) {
-    let mut handles = TEXTURE_HANDLES.write().unwrap();
-    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    let lookup = key.as_ref();
-    if let Some((owned_key, old)) = handles.remove_entry(lookup) {
-        if old == handle {
-            handles.insert(owned_key, old);
-            return;
-        }
-        remove_texture_handle_alias(&handles, &mut aliases, lookup);
-        handles.insert(owned_key, handle);
-        note_texture_handle_alias(&mut aliases, lookup, handle);
-        touch_texture_registry();
-    } else {
-        note_texture_handle_alias(&mut aliases, lookup, handle);
-        handles.insert(key.into(), handle);
-        touch_texture_registry();
-    }
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-pub fn register_texture_handle(key: &str, handle: TextureHandle) {
-    register_texture_handle_inner(key, handle);
-}
-
-pub(crate) fn register_texture_handle_shared(key: Arc<str>, handle: TextureHandle) {
-    register_texture_handle_inner(key, handle);
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-pub(crate) fn reserve_texture_registries(additional: usize) {
+pub(crate) fn reserve_texture_metadata(additional: usize) {
     TEXTURE_METADATA.write().unwrap().reserve(additional);
-    TEXTURE_HANDLES.write().unwrap().reserve(additional);
-    TEXTURE_HANDLE_ALIASES.write().unwrap().reserve(additional);
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-pub fn remove_texture_handle(key: &str) {
-    let mut handles = TEXTURE_HANDLES.write().unwrap();
-    if handles.remove(key).is_none() {
-        return;
-    }
-    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    remove_texture_handle_alias(&handles, &mut aliases, key);
-    touch_texture_registry();
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
-pub fn clear_texture_handles() {
-    TEXTURE_HANDLES.write().unwrap().clear();
-    TEXTURE_HANDLE_ALIASES.write().unwrap().clear();
-    touch_texture_registry();
 }
 
 /// # Panics
@@ -390,30 +263,6 @@ pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
 /// # Panics
 ///
 /// Panics if an internal synchronization lock is poisoned.
-pub fn texture_handle(key: &str) -> TextureHandle {
-    if let Some(handle) = TEXTURE_HANDLES.read().unwrap().get(key).copied() {
-        return handle;
-    }
-    if let Some(handle) = TEXTURE_HANDLE_ALIASES
-        .read()
-        .unwrap()
-        .get(&ascii_ci_hash(key))
-        .map(|alias| alias.handle)
-        && handle != INVALID_TEXTURE_HANDLE
-    {
-        return handle;
-    }
-    TEXTURE_HANDLES
-        .read()
-        .unwrap()
-        .iter()
-        .find_map(|(candidate, handle)| candidate.eq_ignore_ascii_case(key).then_some(*handle))
-        .unwrap_or(INVALID_TEXTURE_HANDLE)
-}
-
-/// # Panics
-///
-/// Panics if an internal synchronization lock is poisoned.
 pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
     let (w, h) = (image.width(), image.height());
     GENERATED_TEXTURES.write().unwrap().register(
@@ -458,65 +307,6 @@ pub(crate) fn drain_pending_generated_textures(mut visit: impl FnMut(Arc<str>, G
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn unique_alias_removal_updates_reference_count_without_rebuild() {
-        let mut handles = FxHashMap::default();
-        handles.insert(Arc::from("Banner.png"), 17);
-        handles.insert(Arc::from("banner.PNG"), 17);
-        let mut aliases = FastU64Map::default();
-        note_texture_handle_alias(&mut aliases, "Banner.png", 17);
-        note_texture_handle_alias(&mut aliases, "banner.PNG", 17);
-
-        handles.remove("Banner.png");
-        remove_texture_handle_alias(&handles, &mut aliases, "Banner.png");
-
-        let alias = aliases.get(&ascii_ci_hash("banner.png")).unwrap();
-        assert_eq!(alias.handle, 17);
-        assert_eq!(alias.refs, 1);
-    }
-
-    #[test]
-    fn colliding_alias_removal_rebuilds_the_surviving_handle() {
-        let mut handles = FxHashMap::default();
-        handles.insert(Arc::from("Banner.png"), 17);
-        handles.insert(Arc::from("banner.PNG"), 23);
-        let mut aliases = FastU64Map::default();
-        rebuild_texture_handle_aliases(&handles, &mut aliases);
-        assert_eq!(
-            aliases.get(&ascii_ci_hash("banner.png")).unwrap().handle,
-            INVALID_TEXTURE_HANDLE
-        );
-
-        handles.remove("Banner.png");
-        remove_texture_handle_alias(&handles, &mut aliases, "Banner.png");
-
-        let alias = aliases.get(&ascii_ci_hash("banner.png")).unwrap();
-        assert_eq!(alias.handle, 23);
-        assert_eq!(alias.refs, 1);
-    }
-
-    #[test]
-    fn texture_handle_lookup_tracks_registry_lifecycle() {
-        clear_texture_handles();
-
-        register_texture_handle("Graphics/Banner.png", 17);
-        assert_eq!(texture_handle("Graphics/Banner.png"), 17);
-        assert_eq!(texture_handle("graphics/banner.png"), 17);
-
-        remove_texture_handle("Graphics/Banner.png");
-        assert_eq!(
-            texture_handle("graphics/banner.png"),
-            deadlib_render_core::INVALID_TEXTURE_HANDLE
-        );
-
-        register_texture_handle("Other.png", 23);
-        clear_texture_handles();
-        assert_eq!(
-            texture_handle("other.png"),
-            deadlib_render_core::INVALID_TEXTURE_HANDLE
-        );
-    }
 
     #[test]
     fn combined_metadata_registry_preserves_cached_sheet_and_texture_dimensions() {

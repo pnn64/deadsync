@@ -1,5 +1,4 @@
 pub(crate) use deadlib_present::rgba_const;
-pub(crate) use deadlib_render_core as render;
 
 pub mod effects;
 pub mod fonts;
@@ -68,17 +67,9 @@ pub(crate) mod config {
 mod act_macro {
     macro_rules! act {
         (sprite($tex:literal): $($tail:tt)+) => {{
-            static __TEXTURE_HANDLE: ::std::sync::atomic::AtomicU64 =
-                ::std::sync::atomic::AtomicU64::new($crate::render::INVALID_TEXTURE_HANDLE);
-            static __TEXTURE_GENERATION: ::std::sync::atomic::AtomicU64 =
-                ::std::sync::atomic::AtomicU64::new(u64::MAX);
             ::deadlib_present::__act_from_builder!(
                 ($($tail)+)
-                ::deadsync_assets::present_dsl::SpriteBuilder::static_texture_cached(
-                    $tex,
-                    &__TEXTURE_HANDLE,
-                    &__TEXTURE_GENERATION,
-                )
+                ::deadsync_assets::present_dsl::SpriteBuilder::static_texture($tex)
             )
         }};
         (sprite($tex:expr): $($tail:tt)+) => {{

@@ -26,6 +26,11 @@ impl AssetManager {
         }
     }
 
+    /// Borrows the local texture store for binding and composition.
+    pub fn texture_context(&self) -> &deadlib_assets::TextureStore<RendererTexture> {
+        self.store.texture_context()
+    }
+
     pub fn register_font(&mut self, name: &'static str, font: Font) {
         self.store.register_font(name, font);
     }

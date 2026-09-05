@@ -1,9 +1,6 @@
-use crate::{
-    ASSET_TEXTURE_CONTEXT, GraphicTextureDiscovery, strip_sprite_hints,
-    texture_filename_has_multiframe_hint,
-};
-use deadlib_present::actors::{ActorResourceArena, SpriteSource, TextureKeyHandle};
-use deadlib_present::texture as present_texture;
+use crate::{GraphicTextureDiscovery, strip_sprite_hints, texture_filename_has_multiframe_hint};
+use deadlib_present::actors::{ActorResourceArena, SpriteSource};
+use deadlib_present::texture::TextureContext;
 use deadlib_render_core::INVALID_TEXTURE_HANDLE;
 use std::{
     collections::HashSet,
@@ -137,23 +134,15 @@ impl TextureChoice {
     }
 
     #[inline(always)]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        present_texture::cached_texture_key_handle(
-            &self.key,
-            &self.cached_handle,
-            &self.cached_generation,
-            &ASSET_TEXTURE_CONTEXT,
-        )
-    }
-
-    #[inline(always)]
-    pub fn actor_texture_source(&self, arena: &ActorResourceArena) -> SpriteSource {
-        let generation = crate::texture_registry_generation();
+    pub fn actor_texture_source(
+        &self,
+        arena: &ActorResourceArena,
+        textures: &impl TextureContext,
+    ) -> SpriteSource {
+        let generation = textures.texture_registry_generation();
         let mut handle = self.cached_handle.load(Ordering::Relaxed);
-        if handle == INVALID_TEXTURE_HANDLE
-            || self.cached_generation.load(Ordering::Relaxed) != generation
-        {
-            handle = crate::texture_handle(self.key.as_ref());
+        if self.cached_generation.load(Ordering::Relaxed) != generation {
+            handle = textures.texture_handle(self.key.as_ref());
             self.cached_handle.store(handle, Ordering::Relaxed);
             self.cached_generation.store(generation, Ordering::Relaxed);
         }
@@ -526,8 +515,8 @@ mod tests {
         let arena = ActorResourceArena::new(1);
         arena.begin_hit_stats(true);
 
-        let first = choice.actor_texture_source(&arena);
-        let second = choice.actor_texture_source(&arena);
+        let first = choice.actor_texture_source(&arena, &crate::METADATA_TEXTURE_CONTEXT);
+        let second = choice.actor_texture_source(&arena, &crate::METADATA_TEXTURE_CONTEXT);
 
         assert!(matches!(first, SpriteSource::ArenaTextureHandle { .. }));
         assert!(matches!(second, SpriteSource::ArenaTextureHandle { .. }));

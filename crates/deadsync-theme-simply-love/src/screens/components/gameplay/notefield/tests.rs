@@ -178,7 +178,7 @@ fn actor_resource_prewarm_covers_every_noteskin_slot() {
     prewarm_actor_resources(&arena, &assets, &profiles, 1);
     let warmed = arena.stats();
     noteskin.for_each_slot(|slot| {
-        let _ = slot.actor_texture_source(&arena);
+        let _ = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
     });
 
     assert!(warmed.textures > 0);
