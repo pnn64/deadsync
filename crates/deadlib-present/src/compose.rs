@@ -31,15 +31,6 @@ fn reserve_map_headroom<K: Eq + Hash, V, S: BuildHasher>(
     values.reserve(target.saturating_sub(values.len()));
 }
 
-fn ensure_render_target_scratch_count(scratches: &mut Vec<ComposeScratch>, target_count: usize) {
-    if scratches.capacity() < target_count {
-        scratches.reserve_exact(target_count.saturating_sub(scratches.len()));
-    }
-    while scratches.len() < target_count {
-        scratches.push(ComposeScratch::default());
-    }
-}
-
 /// Detached draw used only while clipping or copying a retained fragment.
 /// Live frame composition stays in `FrameBuilder`'s typed arrays.
 #[repr(C)]
@@ -1087,19 +1078,8 @@ where
     T: TextureContext + ?Sized,
     I: Clone + Iterator<Item = ActorSegment<'a>>,
 {
-    let mut target_specs = SmallVec::<[RenderTargetSpec<'a>; 4]>::new();
-    for segment in actor_segments.clone() {
-        let actors = match segment.source {
-            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
-                actors
-            }
-            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
-        };
-        collect_render_targets(actors, &mut target_specs);
-    }
-
     let mut render = build_single_pass_cached_with_scratch_and_texture_context_impl(
-        actor_segments,
+        actor_segments.clone(),
         clear_color,
         m,
         fonts,
@@ -1113,44 +1093,56 @@ where
 
     let mut target_frames = std::mem::take(&mut scratch.render_target_frames);
     target_frames.clear();
-    target_frames.reserve(target_specs.len().saturating_sub(target_frames.capacity()));
-    ensure_render_target_scratch_count(&mut scratch.render_target_scratches, target_specs.len());
-    for (index, target) in target_specs.into_iter().enumerate() {
-        let width = target.size[0].max(1);
-        let height = target.size[1].max(1);
-        let metrics = Metrics {
-            left: -0.5 * target.logical_size[0],
-            right: 0.5 * target.logical_size[0],
-            bottom: -0.5 * target.logical_size[1],
-            top: 0.5 * target.logical_size[1],
+    for segment in actor_segments {
+        let actors = match segment.source {
+            ActorSegmentSource::Actors(actors) | ActorSegmentSource::ActorsFlat { actors, .. } => {
+                actors
+            }
+            ActorSegmentSource::Flat(_) | ActorSegmentSource::FlatPair { .. } => &[],
         };
-        let target_scratch = &mut scratch.render_target_scratches[index];
-        let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
-            std::iter::once(ActorSegment::new(target.children)),
-            [0.0, 0.0, 0.0, 0.0],
-            &metrics,
-            fonts,
-            total_elapsed,
-            text_cache,
-            target_scratch,
-            texture_ctx,
-            actor_resources,
-            false,
-        );
-        debug_assert!(target_render.render_targets.is_empty());
-        target_frames.push(renderer::RenderTargetFrame {
-            texture_handle: target.texture_handle,
-            width,
-            height,
-            alpha: target.alpha,
-            depth: target.depth,
-            preserve: target.preserve,
-            cameras: target_render.cameras,
-            sprite_instances: target_render.sprite_instances,
-            mesh_vertices: target_render.mesh_vertices,
-            tmesh_instances: target_render.tmesh_instances,
-            tmesh_geometries: target_render.tmesh_geometries,
-            ops: target_render.ops,
+        visit_render_targets(actors, &mut |target| {
+            let index = target_frames.len();
+            if index == scratch.render_target_scratches.len() {
+                scratch
+                    .render_target_scratches
+                    .push(ComposeScratch::default());
+            }
+            let width = target.size[0].max(1);
+            let height = target.size[1].max(1);
+            let metrics = Metrics {
+                left: -0.5 * target.logical_size[0],
+                right: 0.5 * target.logical_size[0],
+                bottom: -0.5 * target.logical_size[1],
+                top: 0.5 * target.logical_size[1],
+            };
+            let target_scratch = &mut scratch.render_target_scratches[index];
+            let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
+                std::iter::once(ActorSegment::new(target.children)),
+                [0.0, 0.0, 0.0, 0.0],
+                &metrics,
+                fonts,
+                total_elapsed,
+                text_cache,
+                target_scratch,
+                texture_ctx,
+                actor_resources,
+                false,
+            );
+            debug_assert!(target_render.render_targets.is_empty());
+            target_frames.push(renderer::RenderTargetFrame {
+                texture_handle: target.texture_handle,
+                width,
+                height,
+                alpha: target.alpha,
+                depth: target.depth,
+                preserve: target.preserve,
+                cameras: target_render.cameras,
+                sprite_instances: target_render.sprite_instances,
+                mesh_vertices: target_render.mesh_vertices,
+                tmesh_instances: target_render.tmesh_instances,
+                tmesh_geometries: target_render.tmesh_geometries,
+                ops: target_render.ops,
+            });
         });
     }
     render.render_targets = target_frames;
@@ -1168,9 +1160,9 @@ struct RenderTargetSpec<'a> {
     children: &'a [actors::Actor],
 }
 
-fn collect_render_targets<'a>(
+fn visit_render_targets<'a>(
     actors: &'a [actors::Actor],
-    out: &mut SmallVec<[RenderTargetSpec<'a>; 4]>,
+    visit: &mut impl FnMut(RenderTargetSpec<'a>),
 ) {
     for actor in actors {
         match actor {
@@ -1183,8 +1175,8 @@ fn collect_render_targets<'a>(
                 preserve,
                 children,
             } => {
-                collect_render_targets(children, out);
-                out.push(RenderTargetSpec {
+                visit_render_targets(children, visit);
+                visit(RenderTargetSpec {
                     texture_handle: *texture_handle,
                     size: *size,
                     logical_size: *logical_size,
@@ -1195,17 +1187,17 @@ fn collect_render_targets<'a>(
                 });
             }
             actors::Actor::Frame { children, .. } | actors::Actor::Camera { children, .. } => {
-                collect_render_targets(children, out);
+                visit_render_targets(children, visit);
             }
             actors::Actor::SharedFrame { children, .. }
             | actors::Actor::SharedTransform { children, .. } => {
-                collect_render_targets(children, out);
+                visit_render_targets(children, visit);
             }
             actors::Actor::RetainedFrame { frame, .. } => {
-                collect_render_targets(frame.children(), out);
+                visit_render_targets(frame.children(), visit);
             }
             actors::Actor::Shadow { child, .. } => {
-                collect_render_targets(std::slice::from_ref(child.as_ref()), out);
+                visit_render_targets(std::slice::from_ref(child.as_ref()), visit);
             }
             _ => {}
         }
@@ -2769,7 +2761,6 @@ impl CachedTextLayout {
 type WordGlyphs = SmallVec<[CachedGlyph; 16]>;
 type AttrIndices = SmallVec<[usize; 8]>;
 type ClipPolygon = SmallVec<[ClipVertex; 8]>;
-type ClippedMesh = SmallVec<[renderer::TexturedMeshVertex; 18]>;
 
 const MISSING_BYTE_INDEX: u8 = u8::MAX;
 
@@ -8059,45 +8050,51 @@ fn push_sprite<T: TextureContext + ?Sized>(
         rot_z_deg.to_radians().sin_cos()
     };
 
-    let fl = fadeleft.clamp(0.0, 1.0);
-    let fr = faderight.clamp(0.0, 1.0);
-    let ft = fadetop.clamp(0.0, 1.0);
-    let fb = fadebottom.clamp(0.0, 1.0);
+    // Crop and flips cannot make a zero fade nonzero.
+    let edge_fade = if fadeleft <= 0.0 && faderight <= 0.0 && fadetop <= 0.0 && fadebottom <= 0.0 {
+        [0.0; 4]
+    } else {
+        let fl = fadeleft.clamp(0.0, 1.0);
+        let fr = faderight.clamp(0.0, 1.0);
+        let ft = fadetop.clamp(0.0, 1.0);
+        let fb = fadebottom.clamp(0.0, 1.0);
 
-    // StepMania parity (Sprite::DrawPrimitives edge-fade behavior):
-    // - Fade distances are specified in the *pre-crop* [0..1] space.
-    // - Visible (post-crop) fraction is `(1 - crop_a - crop_b)`.
-    // - Negative crop values can "cancel" fade (used by Simply Love transitions).
-    let mut fl_size = (fl + cropleft.min(0.0)).max(0.0);
-    let mut fr_size = (fr + cropright.min(0.0)).max(0.0);
-    let mut ft_size = (ft + croptop.min(0.0)).max(0.0);
-    let mut fb_size = (fb + cropbottom.min(0.0)).max(0.0);
+        // StepMania parity (Sprite::DrawPrimitives edge-fade behavior):
+        // - Fade distances are specified in the *pre-crop* [0..1] space.
+        // - Visible (post-crop) fraction is `(1 - crop_a - crop_b)`.
+        // - Negative crop values can "cancel" fade (used by Simply Love transitions).
+        let mut fl_size = (fl + cropleft.min(0.0)).max(0.0);
+        let mut fr_size = (fr + cropright.min(0.0)).max(0.0);
+        let mut ft_size = (ft + croptop.min(0.0)).max(0.0);
+        let mut fb_size = (fb + cropbottom.min(0.0)).max(0.0);
 
-    let sum_x = fl_size + fr_size;
-    if sum_x > 0.0 && sx_crop < sum_x {
-        let s = sx_crop / sum_x;
-        fl_size *= s;
-        fr_size *= s;
-    }
+        let sum_x = fl_size + fr_size;
+        if sum_x > 0.0 && sx_crop < sum_x {
+            let s = sx_crop / sum_x;
+            fl_size *= s;
+            fr_size *= s;
+        }
 
-    let sum_y = ft_size + fb_size;
-    if sum_y > 0.0 && sy_crop < sum_y {
-        let s = sy_crop / sum_y;
-        ft_size *= s;
-        fb_size *= s;
-    }
+        let sum_y = ft_size + fb_size;
+        if sum_y > 0.0 && sy_crop < sum_y {
+            let s = sy_crop / sum_y;
+            ft_size *= s;
+            fb_size *= s;
+        }
 
-    let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
-    let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
-    let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
-    let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
+        let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
+        let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
+        let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
+        let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
 
-    if flip_x {
-        std::mem::swap(&mut fl_eff, &mut fr_eff);
-    }
-    if flip_y {
-        std::mem::swap(&mut ft_eff, &mut fb_eff);
-    }
+        if flip_x {
+            std::mem::swap(&mut fl_eff, &mut fr_eff);
+        }
+        if flip_y {
+            std::mem::swap(&mut ft_eff, &mut fb_eff);
+        }
+        [fl_eff, fr_eff, ft_eff, fb_eff]
+    };
 
     let texture_handle = match texture_handle {
         Some(handle) => handle,
@@ -8165,7 +8162,7 @@ fn push_sprite<T: TextureContext + ?Sized>(
         uv_offset,
         local_offset,
         local_offset_rot_sin_cos,
-        edge_fade: [fl_eff, fr_eff, ft_eff, fb_eff],
+        edge_fade,
         texture_mask: f32::from(u8::from(texture_mask)),
     });
 
@@ -8600,6 +8597,19 @@ fn clip_object_to_world_masks(
     masks: &[WorldRect],
     recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
 ) -> bool {
+    // Every candidate clips the same source in the same world transform.
+    // Bounds cost one vertex traversal regardless of the number of masks.
+    let textured_mesh_bounds = match &obj.object_type {
+        EditablePayload::TexturedMesh {
+            instance, vertices, ..
+        } => {
+            let Some(bounds) = textured_mesh_world_bounds(vertices, instance.transform()) else {
+                return false;
+            };
+            Some(bounds)
+        }
+        _ => None,
+    };
     let mut best_obj: Option<ClippedSpriteObject> = None;
     let mut best_area = -1.0_f32;
     for &mask in masks {
@@ -8608,7 +8618,7 @@ fn clip_object_to_world_masks(
             sprite_instances,
             mask,
             Some(&mut *recycled_vertices),
-            None,
+            textured_mesh_bounds,
         ) else {
             continue;
         };
@@ -8735,7 +8745,7 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     obj: &mut EditableDraw,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     clip: WorldRect,
-    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+    mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> bool {
     if clip.left >= clip.right || clip.bottom >= clip.top {
         return false;
@@ -8773,7 +8783,7 @@ fn clip_sprite_object_to_world_rect_with_recycled(
         obj,
         sprite_instances,
         clip,
-        recycled_vertices,
+        recycled_vertices.as_deref_mut(),
         textured_mesh_bounds,
     ) else {
         return false;
@@ -8783,7 +8793,12 @@ fn clip_sprite_object_to_world_rect_with_recycled(
     {
         sprite_instances[*index as usize] = sprite;
     }
-    obj.object_type = clipped.object_type;
+    let source = std::mem::replace(&mut obj.object_type, clipped.object_type);
+    if let Some(pool) = recycled_vertices {
+        // Transient text is rebuilt from this pool on the next frame. Keep
+        // both the source and clipped output alive instead of losing a buffer.
+        recycle_transient_object_vertices(source, pool);
+    }
     true
 }
 
@@ -8843,6 +8858,7 @@ fn clipped_sprite_object_to_world_rect_impl<const ACCEPT_CONTAINED_SPRITE: bool>
                     offset_world,
                     clip,
                     sprite.texture_mask != 0.0,
+                    recycled_vertices,
                 );
             }
 
@@ -9357,6 +9373,7 @@ fn clip_rotated_sprite_to_world_rect(
     offset_world: [f32; 2],
     clip: WorldRect,
     texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
     let poly = [
         ClipVertex {
@@ -9391,7 +9408,12 @@ fn clip_rotated_sprite_to_world_rect(
         return None;
     }
 
-    let mut out = ClippedMesh::new();
+    // A clipped quad emits at most 18 vertices. Borrow the existing bounded
+    // composition pool only after clipping succeeds, then recycle with the frame.
+    let mut out = recycled_vertices
+        .map(take_recycled_text_mesh_vertices)
+        .unwrap_or_default();
+    out.reserve((clipped.len() - 2) * 3);
     let base = clipped[0];
     let mut i = 1usize;
     while i + 1 < clipped.len() {
@@ -9416,7 +9438,7 @@ fn clip_rotated_sprite_to_world_rect(
                 [0.0, 0.0],
                 texture_mask,
             ),
-            vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
+            vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
         },
