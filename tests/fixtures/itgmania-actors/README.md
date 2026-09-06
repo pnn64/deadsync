@@ -64,3 +64,13 @@ cargo run -- actor-conformance fixtures/actors/note-zoom-spline.json `
 The production `SongLuaNoteHideWindows` evaluator is compared in
 `itgmania_actor_conformance/effects.rs`; change the baseline only with an
 intentional native spline or fixture-input change.
+
+## KENPO SAITO offscreen capture regression
+
+`kenpo-capture.json` records native orthographic projection of a rotated,
+wagging note and a judgment through six phases. The theme's
+`song_lua_kenpo_capture_keeps_rotated_notes_and_rgb_split` test compares the
+production AFT draw vertices, including clip depth, and verifies independent
+RGB vibration. See `docs/song-lua-kenpo-rendering-2026-09-06.md` for regeneration
+and the native source contracts. The fixture does not contain random vibration;
+the renderer's independent RGB offsets are tested separately from golden data.

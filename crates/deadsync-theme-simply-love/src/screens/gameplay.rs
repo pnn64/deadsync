@@ -318,10 +318,11 @@ impl Default for ActorViewOverride {
 const fn hidden_gameplay_hud_layers(
     hide_gameplay_hud: bool,
     song_lua_hidden_layers: [bool; 2],
+    captured_layers: [bool; 2],
 ) -> [bool; 2] {
     [
-        hide_gameplay_hud || song_lua_hidden_layers[0],
-        hide_gameplay_hud || song_lua_hidden_layers[1],
+        hide_gameplay_hud || (song_lua_hidden_layers[0] && !captured_layers[0]),
+        hide_gameplay_hud || (song_lua_hidden_layers[1] && !captured_layers[1]),
     ]
 }
 
@@ -8316,7 +8317,7 @@ fn song_lua_aft_capture_capacity(
                 .and_then(SongLuaOverlayIndex::get)
                 == Some(capture_index)
         })
-        .fold(2usize, |capacity, (_, overlay)| {
+        .fold(4usize, |capacity, (_, overlay)| {
             capacity.saturating_add(song_lua_aft_actor_capacity(&overlay.kind))
         })
 }
@@ -10299,6 +10300,8 @@ fn song_lua_capture_children_into(
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
                 let z = draw_idx.min(i16::MAX as usize) as i16;
+                let overlay_state =
+                    song_lua_proxy_effect(overlay_state, effect_time, effect_beat, idx as u32);
                 let actor = match target {
                     SongLuaProxyTarget::Actor { overlay_index } => {
                         song_lua_build_local_proxy_actor(
@@ -11113,12 +11116,13 @@ fn song_lua_captured_actor_state_from(
     )
 }
 
-fn song_lua_captured_child_state_from(
+fn song_lua_child_visible(
     now: f32,
     actor: &SongLuaCapturedChildActor,
     events: &[SongLuaOverlayMessageRuntime],
     message_cache: &mut SongLuaMessageStateCache,
-) -> SongLuaOverlayState {
+    captured: bool,
+) -> bool {
     song_lua_captured_state_from(
         now,
         actor.initial_state,
@@ -11126,6 +11130,8 @@ fn song_lua_captured_child_state_from(
         Some(events),
         message_cache,
     )
+    .visible
+        || captured
 }
 
 fn song_lua_captured_state_from(
@@ -11618,6 +11624,38 @@ fn song_lua_effect_lerp(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)
 }
 
+fn song_lua_proxy_effect(
+    mut state: SongLuaOverlayState,
+    effect_time: f32,
+    effect_beat: f32,
+    actor_seed: u32,
+) -> SongLuaOverlayState {
+    let mut offset = [0.0; 3];
+    let mut scale = [1.0; 3];
+    let mut rotation = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+    song_lua_apply_overlay_effect(
+        song_lua_overlay_effect_state(state),
+        state.rainbow,
+        song_lua_overlay_vibrate_magnitude(state),
+        effect_time,
+        effect_beat,
+        actor_seed,
+        &mut state.diffuse,
+        &mut state.glow,
+        &mut offset,
+        &mut scale,
+        &mut rotation,
+    );
+    state.x += offset[0];
+    state.y += offset[1];
+    state.z += offset[2];
+    state.zoom_x *= scale[0];
+    state.zoom_y *= scale[1];
+    state.zoom_z *= scale[2];
+    [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = rotation;
+    state
+}
+
 #[inline(always)]
 fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     // Actor::BeginDraw multiplies glow effects by the original diffuse alpha.
@@ -11631,6 +11669,7 @@ fn song_lua_apply_overlay_effect(
     vibrate_magnitude: [f32; 3],
     effect_time: f32,
     effect_beat: f32,
+    actor_seed: u32,
     tint: &mut [f32; 4],
     glow: &mut [f32; 4],
     offset: &mut [f32; 3],
@@ -11641,12 +11680,14 @@ fn song_lua_apply_overlay_effect(
         .iter()
         .any(|value| value.abs() > f32::EPSILON)
     {
-        // ITGmania chooses a fresh random offset once per rendered frame. Use
+        // ITGmania chooses independent random offsets for each actor. Use
         // a stable 60 Hz frame clock so high-refresh rendering keeps the same
         // rapid shake cadence instead of becoming a several-hundred-Hz blur.
         let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
         let jitter = std::array::from_fn(|axis| {
-            let mut hash = frame ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
+            let mut hash = frame
+                ^ actor_seed.wrapping_mul(0x85eb_ca6b)
+                ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
             hash ^= hash >> 16;
             hash = hash.wrapping_mul(0x7feb_352d);
             hash ^= hash >> 15;
@@ -13591,6 +13632,7 @@ fn build_song_lua_aft_sprite_actor(
         song_lua_overlay_vibrate_magnitude(state),
         effect_time,
         effect_beat,
+        z as u32,
         &mut tint,
         &mut glow,
         &mut effect_offset,
@@ -13602,7 +13644,9 @@ fn build_song_lua_aft_sprite_actor(
     let actor = Actor::Sprite {
         align,
         offset,
-        world_z: song_lua_biased_world_z(state, effect_offset[2]),
+        // This sprite uses the main pass's normalized depth. ITG's menu
+        // camera spans ±1000, so a ten-pixel RGB vibration must not clip it.
+        world_z: song_lua_biased_world_z(state, effect_offset[2] / 1000.0),
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
         source: SpriteSource::RenderTarget {
             handle: render_target_sample_handle(texture_handle, !state.texture_filtering),
@@ -13705,6 +13749,7 @@ fn append_song_lua_multi_actor_overlay(
         song_lua_overlay_vibrate_magnitude(state),
         effect_time,
         effect_beat,
+        z as u32,
         &mut tint,
         &mut glow,
         &mut effect_offset,
@@ -13864,6 +13909,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut tint,
                     &mut glow,
                     &mut effect_offset,
@@ -13928,6 +13974,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut tint,
                     &mut glow,
                     &mut effect_offset,
@@ -14032,6 +14079,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut effect_tint,
                     &mut effect_glow,
                     &mut effect_offset,
@@ -14112,6 +14160,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
+                z as u32,
                 &mut color,
                 &mut glow,
                 &mut effect_offset,
@@ -14199,6 +14248,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
+                z as u32,
                 &mut tint,
                 &mut glow,
                 &mut effect_offset,
@@ -14354,6 +14404,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
+                z as u32,
                 &mut tint,
                 &mut glow,
                 &mut effect_offset,
@@ -14403,6 +14454,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                 song_lua_overlay_vibrate_magnitude(state),
                 effect_time,
                 effect_beat,
+                z as u32,
                 &mut tint,
                 &mut glow,
                 &mut effect_offset,
@@ -14508,6 +14560,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut tint,
                     &mut glow,
                     &mut effect_offset,
@@ -14572,6 +14625,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut tint,
                     &mut glow,
                     &mut effect_offset,
@@ -14672,6 +14726,7 @@ fn build_song_lua_overlay_actor_with_scratch(
                     song_lua_overlay_vibrate_magnitude(state),
                     effect_time,
                     effect_beat,
+                    z as u32,
                     &mut effect_tint,
                     &mut effect_glow,
                     &mut effect_offset,
@@ -16231,6 +16286,8 @@ fn push_song_lua_layer_actors(
         let z = song_lua_depth.draw_z(draw_idx);
         match &overlay.kind {
             SongLuaOverlayKind::ActorProxy { target } => {
+                let overlay_state =
+                    song_lua_proxy_effect(overlay_state, effect_time, effect_beat, idx as u32);
                 if let Some((player_index, sources)) =
                     song_lua_direct_player_proxy_source(target, proxy_sources)
                 {
@@ -16302,6 +16359,19 @@ fn push_song_lua_layer_actors(
                     continue;
                 };
                 let Some(children) = capture_scratch.refill([0.0, 0.0], |source| {
+                    // RageTextureRenderTarget::BeginRenderingTo resets the
+                    // camera to LoadMenuPerspective(0), whose depth is ±1000.
+                    // The default presentation camera clips at ±1 instead.
+                    source.push(Actor::CameraPush {
+                        view_proj: glam::camera::rh::proj::opengl::orthographic(
+                            -size[0] * 0.5,
+                            size[0] * 0.5,
+                            -size[1] * 0.5,
+                            size[1] * 0.5,
+                            -1000.0,
+                            1000.0,
+                        ),
+                    });
                     song_lua_capture_children_into(
                         source,
                         overlays,
@@ -16322,6 +16392,7 @@ fn push_song_lua_layer_actors(
                         capture_order_scratch,
                         projected_mesh_scratch,
                     );
+                    source.push(Actor::CameraPop);
                 }) else {
                     continue;
                 };
@@ -16494,8 +16565,6 @@ pub fn push_actors(
     } else {
         [false; 2]
     };
-    let [hide_underlay_hud, hide_overlay_hud] =
-        hidden_gameplay_hud_layers(hide_gameplay_hud, hidden_song_layers);
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
     let player_color = color::decorative_rgba(state.player_color_index());
@@ -16619,6 +16688,13 @@ pub fn push_actors(
         );
     }
     let proxy_requests = proxy_analysis.all;
+    // ActorProxy::DrawPrimitives temporarily makes its target visible. Hidden
+    // originals still need populated HUD sources when a proxy draws them.
+    let [hide_underlay_hud, hide_overlay_hud] = hidden_gameplay_hud_layers(
+        hide_gameplay_hud,
+        hidden_song_layers,
+        [proxy_requests.underlay, proxy_requests.overlay],
+    );
     let mut covering_proxy_requests = if show_song_visuals {
         song_lua_covering_capture_requests(
             &song_lua_visuals.overlays,
@@ -16935,19 +17011,21 @@ pub fn push_actors(
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let song_lua_now = state.current_music_time_display();
             let (judgment_visible, combo_visible) = if show_song_visuals {
-                let judgment_state = song_lua_captured_child_state_from(
+                let judgment_visible = song_lua_child_visible(
                     song_lua_now,
                     &player_actor.judgment,
                     &song_lua_visuals.player_judgment_events[player_idx],
                     &mut song_lua_player_judgment_message_state_cache[player_idx],
+                    requests.judgment,
                 );
-                let combo_state = song_lua_captured_child_state_from(
+                let combo_visible = song_lua_child_visible(
                     song_lua_now,
                     &player_actor.combo,
                     &song_lua_visuals.player_combo_events[player_idx],
                     &mut song_lua_player_combo_message_state_cache[player_idx],
+                    requests.combo,
                 );
-                (judgment_state.visible, combo_state.visible)
+                (judgment_visible, combo_visible)
             } else {
                 (true, true)
             };
@@ -19522,21 +19600,57 @@ mod tests {
     #[test]
     fn song_lua_screen_layers_hide_matching_native_hud() {
         assert_eq!(
-            hidden_gameplay_hud_layers(false, [false, false]),
+            hidden_gameplay_hud_layers(false, [false, false], [false; 2]),
             [false, false]
         );
         assert_eq!(
-            hidden_gameplay_hud_layers(false, [true, false]),
+            hidden_gameplay_hud_layers(false, [true, false], [false; 2]),
             [true, false]
         );
         assert_eq!(
-            hidden_gameplay_hud_layers(false, [false, true]),
+            hidden_gameplay_hud_layers(false, [false, true], [false; 2]),
             [false, true]
         );
         assert_eq!(
-            hidden_gameplay_hud_layers(true, [false, false]),
+            hidden_gameplay_hud_layers(true, [false, false], [false; 2]),
             [true, true]
         );
+        assert_eq!(
+            hidden_gameplay_hud_layers(false, [true, true], [true, true]),
+            [false, false],
+            "hidden targets must still populate the Underlay/Overlay proxies"
+        );
+        assert_eq!(
+            hidden_gameplay_hud_layers(false, [true, true], [true, false]),
+            [false, true]
+        );
+        assert_eq!(
+            hidden_gameplay_hud_layers(true, [true, true], [true, true]),
+            [true, true],
+            "the explicit HUD override still applies"
+        );
+    }
+
+    #[test]
+    fn song_lua_hidden_judgment_and_combo_remain_capturable() {
+        let child = SongLuaCapturedChildActor {
+            initial_state: SongLuaOverlayState {
+                visible: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut cache = SongLuaMessageStateCache::default();
+        for captured in [false, true, false, true] {
+            assert_eq!(
+                song_lua_child_visible(18.0, &child, &[], &mut cache, captured),
+                captured
+            );
+            assert!(
+                !child.initial_state.visible,
+                "proxy capture must not unhide the original"
+            );
+        }
     }
 
     #[test]
@@ -23541,8 +23655,8 @@ mod tests {
         let scratch = SongLuaAftCaptureScratch::new(&overlays, &topology);
         let banks = scratch.slots[0].as_ref().expect("AFT scratch banks");
 
-        assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 0), 3);
-        assert!(banks.iter().all(|bank| bank.capacity() >= 3));
+        assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 0), 5);
+        assert!(banks.iter().all(|bank| bank.capacity() >= 5));
         assert!(banks.iter().all(|bank| bank.stats().growths == 0));
     }
 
@@ -23685,7 +23799,12 @@ mod tests {
         let [Actor::Frame { children, .. }] = children.as_ref() else {
             panic!("expected reusable capture frame");
         };
-        let [Actor::SharedFrame { blend, tint, .. }] = children.as_slice() else {
+        let [
+            Actor::CameraPush { .. },
+            Actor::SharedFrame { blend, tint, .. },
+            Actor::CameraPop,
+        ] = children.as_slice()
+        else {
             panic!("expected direct captured source frame");
         };
         assert_eq!(*blend, Some(BlendMode::Alpha));
@@ -23702,6 +23821,184 @@ mod tests {
                 *handle,
                 render_target_sample_handle(*texture_handle, index == 2)
             );
+        }
+    }
+
+    #[test]
+    fn song_lua_kenpo_capture_keeps_rotated_notes_and_rgb_split() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-actors/kenpo-capture.json"
+        )))
+        .expect("native capture fixture");
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let mut overlays = vec![
+            test_capture_overlay("CaptureAFT"),
+            test_capture_proxy_child(0, SongLuaProxyTarget::NoteField { player_index: 0 }),
+            test_capture_proxy_child(0, SongLuaProxyTarget::Judgment { player_index: 0 }),
+            test_rgb_aft_overlay("R", "CaptureAFT", [1.0, 0.0, 0.0, 1.0]),
+            test_rgb_aft_overlay("G", "CaptureAFT", [0.0, 1.0, 0.0, 1.0]),
+            test_rgb_aft_overlay("B", "CaptureAFT", [0.0, 0.0, 1.0, 1.0]),
+        ];
+        overlays[1].initial_state = SongLuaOverlayState {
+            x: 427.0,
+            y: 240.0,
+            rot_x_deg: 20.0,
+            effect_mode: deadlib_present::anim::EffectMode::Wag,
+            effect_magnitude: [0.0, 20.0, 0.0],
+            effect_period: 1.0,
+            ..Default::default()
+        };
+        overlays[2].initial_state.x = 427.0;
+        overlays[2].initial_state.y = 240.0;
+        for overlay in &mut overlays[3..] {
+            overlay.initial_state.vibrate = true;
+            overlay.initial_state.effect_magnitude = [10.0; 3];
+        }
+        let note = [Arc::<[Actor]>::from([act!(quad:
+            align(0.5, 0.5): xy(650.0, 115.0): zoomto(64.0, 64.0): diffuse(1.0, 1.0, 1.0, 1.0)
+        )])];
+        let judgment = [Arc::<[Actor]>::from([act!(quad:
+            align(0.5, 0.5): xy(427.0, 220.0): zoomto(120.0, 24.0): diffuse(1.0, 1.0, 1.0, 1.0)
+        )])];
+        let sources = SongLuaScreenProxySources {
+            players: [
+                SongLuaPlayerProxySources {
+                    note_field: Some(SongLuaProxySource::offset(&note, [-427.0, -240.0])),
+                    judgment: Some(SongLuaProxySource::offset(&judgment, [-427.0, -240.0])),
+                    ..Default::default()
+                },
+                SongLuaPlayerProxySources::default(),
+            ],
+            ..Default::default()
+        };
+        let states: Vec<_> = overlays
+            .iter()
+            .map(|overlay| overlay.initial_state)
+            .collect();
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut captures = SongLuaAftCaptureScratch::new(&overlays, &topology);
+        let mut projected = song_lua_projected_mesh_scratch_for(&overlays);
+        let assets = AssetManager::new();
+        let mut text = TextLayoutCache::default();
+        let mut compose = ComposeScratch::default();
+        // Sample both directions of the final sway, its zero crossings, and
+        // multiple RGB vibration frames. ±1 depth clipped this entire note.
+        for (sample_index, time) in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25].into_iter().enumerate() {
+            let mut actors = Vec::new();
+            let mut targets = Vec::new();
+            push_song_lua_layer_actors(
+                &mut actors,
+                &mut targets,
+                &overlays,
+                &mut order,
+                &topology,
+                &states,
+                &states,
+                SongLuaOverlayState::default(),
+                &sources,
+                None,
+                None,
+                &assets,
+                854.0,
+                480.0,
+                time,
+                time,
+                time,
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut Vec::new(),
+                &mut captures,
+                &mut projected,
+                SONG_LUA_FOREGROUND_DEPTH,
+            );
+            let frame = deadlib_present::compose::build_passes(
+                std::iter::once(ActorSegment::new(&actors)),
+                &targets,
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                time,
+                &mut text,
+                &mut compose,
+                &NullTextureContext,
+                None,
+            );
+            assert_eq!(frame.render_targets.len(), 1);
+            let target = &frame.render_targets[0];
+            assert_eq!(
+                target.sprite_instances.len(),
+                2,
+                "note and judgment are captured"
+            );
+            for op in &target.ops {
+                let deadlib_render_core::DrawOp::Sprite(run) = op else {
+                    continue;
+                };
+                let camera = target.cameras[run.camera as usize];
+                for sprite in &target.sprite_instances[run.instance_start as usize..]
+                    [..run.instance_count as usize]
+                {
+                    for [x, y] in [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] {
+                        let clip = camera
+                            * Vector4::new(
+                                sprite.center[0] + x * sprite.size[0],
+                                sprite.center[1] + y * sprite.size[1],
+                                sprite.center[2],
+                                1.0,
+                            );
+                        assert!(
+                            clip.z.abs() <= clip.w,
+                            "capture clipped at {time}: {clip:?}"
+                        );
+                        assert!(clip.x.abs() < clip.w && clip.y.abs() < clip.w);
+                        let name = if sprite.size[0] == 64.0 {
+                            "note"
+                        } else {
+                            "judgment"
+                        };
+                        let native_actor = native["samples"][sample_index]["actors"]
+                            .as_array()
+                            .expect("native actors")
+                            .iter()
+                            .find(|actor| actor["name"] == name)
+                            .expect("native note or judgment");
+                        let vertices = native_actor["draws"][0]["vertices"]
+                            .as_array()
+                            .expect("native vertices");
+                        assert!(
+                            vertices.iter().any(|vertex| (0..4).all(|axis| {
+                                (vertex["clip"][axis].as_f64().expect("clip coordinate") as f32
+                                    - clip[axis])
+                                    .abs()
+                                    < 0.000_002
+                            })),
+                            "{name} clip differs from native at {time}: {clip:?}"
+                        );
+                    }
+                }
+            }
+            assert_eq!(frame.sprite_instances.len(), 3);
+            let rgb = &frame.sprite_instances;
+            assert_ne!(rgb[0].center[..2], rgb[1].center[..2]);
+            assert_ne!(rgb[1].center[..2], rgb[2].center[..2]);
+            assert_ne!(rgb[0].center[..2], rgb[2].center[..2]);
+            for (channel, sprite) in rgb.iter().enumerate() {
+                assert_eq!(sprite.tint[channel], 1.0);
+                assert!(
+                    sprite.center[2].abs() <= 0.01,
+                    "RGB sprite escaped the main depth range"
+                );
+            }
+            if time == 0.25 {
+                let effected = song_lua_proxy_effect(states[1], time, time, 1);
+                assert!(
+                    (effected.rot_y_deg - 20.0).abs() < 0.0001,
+                    "proxy wag must execute"
+                );
+            }
         }
     }
 
@@ -25486,6 +25783,7 @@ mod tests {
             [0.0; 3],
             0.5,
             0.0,
+            0,
             &mut tint,
             &mut glow,
             &mut still,
@@ -25501,6 +25799,7 @@ mod tests {
             effect.magnitude,
             0.5,
             0.0,
+            0,
             &mut tint,
             &mut glow,
             &mut shaken,
@@ -25519,6 +25818,7 @@ mod tests {
             effect.magnitude,
             0.51,
             0.0,
+            0,
             &mut tint,
             &mut glow,
             &mut same_frame,
@@ -25534,6 +25834,7 @@ mod tests {
             effect.magnitude,
             0.52,
             0.0,
+            0,
             &mut tint,
             &mut glow,
             &mut next_frame,

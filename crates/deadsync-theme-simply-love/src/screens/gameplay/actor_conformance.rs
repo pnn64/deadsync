@@ -40,6 +40,7 @@ pub fn effect_sample(state: SongLuaOverlayState, time: f32, beat: f32) -> Effect
         song_lua_overlay_vibrate_magnitude(state),
         time,
         beat,
+        0,
         &mut sample.tint,
         &mut sample.glow,
         &mut sample.position,
