@@ -24,8 +24,8 @@ pub(super) fn compare_multitap(
             let Some(name) = definition.name.as_deref() else {
                 continue;
             };
-            // The field wrapper is relocated into screen coordinates by the
-            // compiler. Its transform is checked by projected geometry instead.
+            // Compare the complete Player/NoteField wrapper composition through
+            // projected geometry, since those coordinate spaces are distinct.
             if !name.starts_with("Multitap") || name.starts_with("MultitapFrame") {
                 continue;
             }
@@ -48,15 +48,20 @@ pub(super) fn compare_multitap(
             }
             if name.starts_with("MultitapExplosion") {
                 let actor = &compiled.overlays[index];
+                let descendants = deadsync_song_lua::overlay_descendants_by_parent(
+                    compiled.overlays.len(),
+                    index,
+                    |child| compiled.overlays[child].parent_index,
+                );
                 eprintln!(
-                    "{name}: kind={}, children={}, message commands={}",
+                    "{name}: kind={}, descendants={}, tree commands={}",
                     kind_name(&actor.kind),
-                    compiled
-                        .overlays
-                        .iter()
-                        .filter(|child| child.parent_index == Some(index))
-                        .count(),
+                    descendants.len(),
                     actor.message_commands.len()
+                        + descendants
+                            .iter()
+                            .map(|&child| compiled.overlays[child].message_commands.len())
+                            .sum::<usize>()
                 );
             }
         }
@@ -122,6 +127,18 @@ pub(super) fn compare_multitap(
 fn perspective_geometry_survives_noteskin_kind_change() {
     use deadsync_assets::song_lua::SongLuaOverlayActor;
     let mut trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FLIP69_TRACE));
+    let decoration = trace
+        .actor_definitions
+        .iter()
+        .find(|actor| actor.name.as_deref() == Some("MultitapDeco1_1"))
+        .expect("first multitap decoration")
+        .children[0]
+        .definition_id
+        .clone();
+    trace
+        .projected_vertex_tracks
+        .retain(|track| track.definition_id.as_ref() == Some(&decoration));
+    assert_eq!(trace.projected_vertex_tracks.len(), 1);
     trace.roots = vec!["root".into()];
     trace.draw_orders.clear();
     trace.actor_definitions = serde_json::from_value(serde_json::json!([
@@ -131,7 +148,6 @@ fn perspective_geometry_survives_noteskin_kind_change() {
         {"id":"explosion", "class":"Sprite", "name":"Explosion"},
         {"id":"deco", "class":"Sprite", "name":"Decoration"}
     ])).expect("native actor tree");
-    trace.projected_vertex_tracks.truncate(1);
     let track = &mut trace.projected_vertex_tracks[0];
     track.definition_id = Some("deco".into());
     track.camera_actor = "camera".into();
@@ -358,4 +374,168 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
     eprintln!(
         "multitap zoom audit: {checked} final spline points in {columns} columns checked ({hidden} hidden)"
     );
+}
+
+#[test]
+fn multitap_boundaries_and_noteskin_commands_match() {
+    let song = tempfile::tempdir().expect("song directory");
+    let entry = song.path().join("default.lua");
+    fs::write(&entry, r#"
+local skin = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Current"):NoteSkin()
+multitaps = {Challenge = {{lane=1, taps={8,12}, peak=6}}}
+MYSTERIOUS_VERSION_DEPENDENT_RADIAN_POLTERGEIST = -180 / math.pi
+return Def.ActorFrame{
+    Def.ActorFrame{
+        InitCommand=function(self) self:xy(427,240):fov(45):vanishpoint(427,240) end,
+        Def.ActorFrame{
+            Name="MultitapFrameP1", InitCommand=function(self) self:y(10) end,
+            NOTESKIN:LoadActorForNoteSkin("Down", "Explosion", skin)..{Name="MultitapExplosionP1_1"},
+            Def.ActorFrame{
+                Name="MultitapP1_1", OnCommand=function(self) self:visible(false) end,
+                NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", skin)..{Name="MultitapArrowP1_1"},
+                Def.ActorFrame{
+                    Name="MultitapDeco1_1", OnCommand=function(self) self:visible(false):z(10) end,
+                    Def.Quad{Name="Decoration", InitCommand=function(self) self:zoomto(128,128):zoom(0.3) end},
+                },
+            },
+        },
+    },
+}
+"#).expect("write multitap chart");
+    let mut context = SongLuaCompileContext::new(song.path(), "multitap boundaries");
+    context.players[1].enabled = false;
+    context.players[0].difficulty = SongLuaDifficulty::Challenge;
+    context.players[0].speedmod = SongLuaSpeedMod::X(1.0);
+    context.song_timing_bpms = vec![(0.0, 137.0)];
+    for skin in ["cyber", "cel"] {
+        context.players[0].noteskin_name = skin.into();
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .expect("compile multitap")
+            .remove(0);
+        let named = |name: &str| {
+            compiled
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some(name))
+                .expect(name)
+        };
+        let frame = named("MultitapP1_1");
+        let arrow = named("MultitapArrowP1_1");
+        let deco = named("Decoration");
+        let explosion = named("MultitapExplosionP1_1");
+        let explosion_sprites = deadsync_song_lua::overlay_descendants_by_parent(
+            compiled.overlays.len(),
+            explosion,
+            |index| compiled.overlays[index].parent_index,
+        )
+        .into_iter()
+        .filter(|&index| {
+            matches!(
+                compiled.overlays[index].kind,
+                SongLuaOverlayKind::Sprite { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+        for (beat, visible, y, zoom_y) in [
+            (0.0, false, 0.0, 1.0),
+            (0.001, true, 386.936, 1.0),
+            (8.0, true, -125.0, 1.0),
+            (9.0, true, -53.0, 1.05),
+            (10.0, true, -29.0, 0.9),
+            (11.0, true, -53.0, 1.05),
+            (12.001, false, 0.0, 1.0),
+        ] {
+            let local = compiled_local_states_at(
+                &compiled,
+                &context,
+                beat,
+                song_elapsed_seconds_at(beat, &context),
+            );
+            assert_eq!(local[frame].visible, visible, "beat {beat}");
+            let composed = compose_overlay_states(&compiled.overlays, &local, [854.0, 480.0]);
+            for &index in &explosion_sprites {
+                if !composed[index].visible {
+                    continue;
+                }
+                let rendered =
+                    deadsync_theme_simply_love::screens::gameplay::actor_conformance::effect_sample(
+                        composed[index],
+                        song_elapsed_seconds_at(beat, &context),
+                        beat,
+                    );
+                assert_eq!(
+                    rendered.tint[3], 0.0,
+                    "{skin}: no tap judgment at beat {beat}"
+                );
+                assert_eq!(rendered.glow[3], 0.0, "{skin}: no tap glow at beat {beat}");
+            }
+            if visible {
+                assert!(
+                    (local[frame].y - y).abs() < 0.003,
+                    "beat {beat}: y={}",
+                    local[frame].y
+                );
+                assert!(
+                    (local[frame].zoom_y - zoom_y).abs() < 0.001,
+                    "beat {beat}: zoom={}",
+                    local[frame].zoom_y
+                );
+                assert!(
+                    local[arrow].rot_x_deg.abs() < 0.001,
+                    "legacy rotation workaround must cancel the binding's one-radian alias"
+                );
+                assert_eq!(composed[deco].z, 10.0, "inherit decoration depth");
+                assert!(
+                    (composed[deco].y - (250.0 + y)).abs() < 0.003,
+                    "preserve NoteField offset"
+                );
+            }
+        }
+        assert!(
+            compiled.messages.is_empty(),
+            "tap effects must wait for judgments"
+        );
+        let commands = compiled
+            .overlays
+            .iter()
+            .flat_map(|actor| &actor.message_commands)
+            .filter(|command| command.message == "__songlua_tap_1_1_W1")
+            .collect::<Vec<_>>();
+        assert!(!commands.is_empty(), "capture noteskin grade commands");
+        assert!(
+            commands.iter().any(|command| {
+                let lit = deadsync_song_lua::overlay_state_after_blocks(
+                    SongLuaOverlayState {
+                        diffuse: [1.0, 1.0, 1.0, 0.0],
+                        ..Default::default()
+                    },
+                    &command.blocks,
+                    0.0,
+                );
+                lit.diffuse[3] > 0.99 && lit.zoom > 1.0
+            }),
+            "native Cyber W1 command lights and scales the sprite"
+        );
+
+        for actor in &compiled.overlays {
+            for command in actor
+                .message_commands
+                .iter()
+                .filter(|command| command.message == "__songlua_tap_1_1_W1")
+            {
+                for elapsed in [0.151, 0.175, 0.2, 0.5, 1.0, 10.0] {
+                    let state = deadsync_song_lua::overlay_state_after_blocks(
+                        actor.initial_state,
+                        &command.blocks,
+                        elapsed,
+                    );
+                    let rendered = deadsync_theme_simply_love::screens::gameplay::actor_conformance::effect_sample(state, elapsed, elapsed * 137.0 / 60.0);
+                    assert_eq!(
+                        rendered.glow[3], 0.0,
+                        "{skin}: expired tap glow at {elapsed}"
+                    );
+                }
+            }
+        }
+    }
 }

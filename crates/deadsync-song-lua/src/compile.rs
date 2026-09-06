@@ -750,7 +750,6 @@ where
         &lua,
         context,
         &mut overlays,
-        &mut out.messages,
         noteskin_resolver,
         |overlays, arrow_index, noteskin| {
             ensure_overlay_arrow_visual(

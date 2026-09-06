@@ -33,3 +33,18 @@ and draw-order sorting each have separate named tests.
   sampled position through the same DeadSync magnitude-application primitive.
   DeadSync's live renderer chooses jitter from its deterministic frame clock,
   so an unseeded live run is not expected to share ITGmania's random positions.
+
+## Glow fading regression
+
+`glow-alpha.json` records native `Actor::BeginDraw` and Sprite draw output for
+transparent, partially faded, opaque, and expiring `glowshift` actors. It includes
+later effect cycles after a tap explosion reaches zero alpha. Regenerate from
+`itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/glow-alpha.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/glow-alpha.json
+```
+
+Update this baseline only after checking the native alpha multiplication and
+its production-render comparison in `itgmania_actor_conformance/effects.rs`.

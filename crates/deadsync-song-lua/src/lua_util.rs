@@ -530,7 +530,7 @@ pub fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result
     load_script_file_with_env(lua, path, song_dir, None)
 }
 
-fn load_script_file_with_env(
+pub(crate) fn load_script_file_with_env(
     lua: &Lua,
     path: &Path,
     song_dir: &Path,

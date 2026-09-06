@@ -178,6 +178,45 @@ fn glow_ramp_timing_and_colors_match_itgmania() {
 }
 
 #[test]
+fn glow_shift_fades_with_native_actor_alpha() {
+    let oracle = fixture("glow-alpha");
+    let mut checked = 0;
+    for sample in samples(&oracle) {
+        for native in sample["actors"].as_array().expect("actors").iter().skip(1) {
+            let mode = match native["effect"]["type"].as_str().expect("effect") {
+                "glow_shift" => EffectMode::GlowShift,
+                mode => panic!("unexpected effect {mode}"),
+            };
+            let state = SongLuaOverlayState {
+                diffuse: f32_array(&native["current"]["diffuse"][0]),
+                effect_mode: mode,
+                effect_period: 0.05,
+                effect_color1: [1.0, 1.0, 1.0, 0.0],
+                effect_color2: [1.0, 1.0, 1.0, 0.5],
+                ..Default::default()
+            };
+            let actual = effect_sample(state, f32_at(&native["effect"], "seconds"), 0.0);
+            if native["drawn"] == false {
+                assert_eq!(
+                    actual.glow[3], 0.0,
+                    "{} must stay dark at {}",
+                    native["name"], sample["time"]
+                );
+            } else {
+                assert_array_ulp(
+                    actual.glow,
+                    f32_array(&native["effected"]["glow"]),
+                    32,
+                    &format!("{} at {}", native["name"], sample["time"]),
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 40);
+}
+
+#[test]
 fn vibration_magnitude_includes_actor_and_inherited_frame_values() {
     let state = SongLuaOverlayState {
         vibrate: true,

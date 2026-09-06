@@ -926,7 +926,10 @@ pub fn create_arrow_effects_table(
     )?;
     table.set(
         "GetRotationX",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, args: MultiValue| {
+            let column = args.get(2).cloned().and_then(read_f32).unwrap_or(1.0) as i32;
+            Ok(arrow_effects_rotation_x(column))
+        })?,
     )?;
     table.set(
         "GetRotationY",
@@ -949,6 +952,19 @@ pub fn create_arrow_effects_table(
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
     Ok(table)
+}
+
+pub(crate) const fn arrow_effects_rotation_x(column: i32) -> f32 {
+    // ITGmania's Lua binding reads the third argument as a one-based column.
+    // Legacy multitap passes (ps, offset, 0, lane), so its column is zero.
+    // PlayerOptions places m_SpeedfMovesZ[15] (default 1) immediately before
+    // m_fConfusionX. Safely reproduce that legacy alias, not an out-of-bounds
+    // read. ReceptorGetRotationX converts this one radian to degrees.
+    if column == 0 {
+        180.0 / std::f32::consts::PI
+    } else {
+        0.0
+    }
 }
 
 fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {

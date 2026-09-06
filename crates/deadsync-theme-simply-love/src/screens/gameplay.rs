@@ -84,6 +84,7 @@ use deadsync_profile_gameplay::{
     scroll_effects_from_option, song_lua_compile_context, song_lua_runtime_column_offset_windows,
     song_lua_runtime_ease_windows, song_lua_runtime_mod_windows,
 };
+use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
@@ -655,6 +656,9 @@ const SONG_LUA_CHILD_ORDER_Z: u8 = 2;
 struct SongLuaOverlayOrderCache {
     child_lists: Vec<Vec<usize>>,
     dynamic_draw_order: Vec<bool>,
+    // Built once at song load; at most one entry per captured grade command.
+    // The frame loop only reads this bounded plan and existing judgment slots.
+    tap_commands: Vec<SongLuaTapCommand>,
     // Song-lifetime execution plan: only these actors can change local state,
     // and only these composed states depend on changing local/ancestor state.
     dynamic_local_indices: Box<[usize]>,
@@ -675,6 +679,14 @@ struct SongLuaOverlayOrderCache {
     // those keys so we only pay O(n log n) when their effective order changes.
     last_draw_orders: Vec<i32>,
     last_z_keys: Vec<u32>,
+}
+
+struct SongLuaTapCommand {
+    overlay: usize,
+    command: usize,
+    player: usize,
+    column: usize,
+    grade: JudgeGrade,
 }
 
 // Built once per song or visual layer so frame rendering does not repeatedly
@@ -1501,6 +1513,40 @@ fn song_lua_overlay_order_cache_from(
     for children in &mut child_lists {
         song_lua_sort_static_children(overlays, children);
     }
+    let mut tap_commands = Vec::new();
+    for (overlay, actor) in overlays.iter().enumerate() {
+        for (command, callback) in actor.message_commands.iter().enumerate() {
+            let Some(key) = callback.message.strip_prefix("__songlua_tap_") else {
+                continue;
+            };
+            let mut parts = key.split('_');
+            let player = parts
+                .next()
+                .and_then(|part| part.parse::<usize>().ok())
+                .and_then(|value| value.checked_sub(1));
+            let column = parts
+                .next()
+                .and_then(|part| part.parse::<usize>().ok())
+                .and_then(|value| value.checked_sub(1));
+            let grade = match parts.next() {
+                Some("W1") => JudgeGrade::Fantastic,
+                Some("W2") => JudgeGrade::Excellent,
+                Some("W3") => JudgeGrade::Great,
+                Some("W4") => JudgeGrade::Decent,
+                Some("W5") => JudgeGrade::WayOff,
+                _ => continue,
+            };
+            if let (Some(player), Some(column)) = (player, column) {
+                tap_commands.push(SongLuaTapCommand {
+                    overlay,
+                    command,
+                    player,
+                    column,
+                    grade,
+                });
+            }
+        }
+    }
     let mut dynamic_actor_draw_order = vec![false; overlays.len()];
     let mut dynamic_local = vec![false; overlays.len()];
     let mut has_dynamic_z_order = overlays
@@ -1616,6 +1662,7 @@ fn song_lua_overlay_order_cache_from(
     SongLuaOverlayOrderCache {
         child_lists,
         dynamic_draw_order,
+        tap_commands,
         dynamic_local_indices,
         dynamic_composed_indices: dynamic_composed_indices.into_boxed_slice(),
         static_root_order,
@@ -7045,6 +7092,7 @@ fn song_lua_overlay_compose_state(
     overlay_space_height: f32,
 ) -> SongLuaOverlayState {
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
+    child.z = parent.z + child.z * song_lua_overlay_z_scale(parent);
     let epsilon = 0.01;
     let raw_local_x = if matches!(
         parent_kind,
@@ -7085,7 +7133,9 @@ fn song_lua_overlay_compose_state(
         && (parent.skew_x.abs() > f32::EPSILON
             || parent.skew_y.abs() > f32::EPSILON
             || child.skew_x.abs() > f32::EPSILON
-            || child.skew_y.abs() > f32::EPSILON);
+            || child.skew_y.abs() > f32::EPSILON
+            || ((parent_scale_x - parent_scale_y).abs() > f32::EPSILON
+                && child.rot_z_deg.abs() > f32::EPSILON));
     if affine_2d {
         let parent_linear = song_lua_overlay_linear_2d(parent);
         let child_linear = song_lua_overlay_linear_2d(child);
@@ -7411,6 +7461,53 @@ fn song_lua_overlay_state_sets_active_into(
         );
     }
 }
+fn apply_song_lua_taps(
+    feedback: &deadsync_gameplay::GameplayVisualFeedbackState,
+    cols_per_player: usize,
+    now: f32,
+    overlays: &[SongLuaOverlayActor],
+    order: &SongLuaOverlayOrderCache,
+    local: &mut [SongLuaOverlayState],
+    composed: &mut Vec<SongLuaOverlayState>,
+    screen: [f32; 2],
+) {
+    let mut changed = false;
+    for tap in &order.tap_commands {
+        if tap.player >= MAX_PLAYERS || tap.column >= cols_per_player {
+            continue;
+        }
+        let Some(judgment) = feedback.last_tap_judgment(tap.player * cols_per_player + tap.column)
+        else {
+            continue;
+        };
+        if judgment.grade != tap.grade {
+            continue;
+        }
+        let elapsed = now - judgment.at_screen_s;
+        if elapsed < 0.0 {
+            continue;
+        }
+        let current = local[tap.overlay];
+        let next = deadsync_song_lua::overlay_state_after_blocks(
+            current,
+            &overlays[tap.overlay].message_commands[tap.command].blocks,
+            elapsed,
+        );
+        changed |= next != current;
+        local[tap.overlay] = next;
+    }
+    if changed {
+        song_lua_overlay_states_from_local_into(
+            overlays,
+            local,
+            &order.dynamic_composed_indices,
+            screen[0],
+            screen[1],
+            composed,
+        );
+    }
+}
+
 fn song_lua_proxy_target_has_source(
     target: &SongLuaProxyTarget,
     proxy_sources: &[SongLuaPlayerProxySources<'_>; 2],
@@ -11506,15 +11603,9 @@ fn song_lua_effect_lerp(a: f32, b: f32, t: f32) -> f32 {
 
 #[inline(always)]
 fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
-    if state.diffuse[3] > f32::EPSILON || state.glow[3] > f32::EPSILON {
-        return true;
-    }
-    matches!(
-        state.effect_mode,
-        deadlib_present::anim::EffectMode::GlowBlink
-            | deadlib_present::anim::EffectMode::GlowRamp
-            | deadlib_present::anim::EffectMode::GlowShift
-    ) && (state.effect_color1[3] > f32::EPSILON || state.effect_color2[3] > f32::EPSILON)
+    // Actor::BeginDraw multiplies glow effects by the original diffuse alpha.
+    // Only an explicit, non-effect glow can outlive a transparent actor.
+    state.diffuse[3] > f32::EPSILON || state.glow[3] > f32::EPSILON
 }
 
 fn song_lua_apply_overlay_effect(
@@ -11595,6 +11686,7 @@ fn song_lua_apply_overlay_effect(
                     *out = song_lua_effect_lerp(effect.color2[idx], effect.color1[idx], between)
                         .clamp(0.0, 1.0);
                 }
+                glow[3] *= tint[3];
             }
             deadlib_present::anim::EffectMode::GlowBlink => {
                 let alpha = tint[3];
@@ -16402,6 +16494,19 @@ pub fn push_actors(
         song_lua_local_state_scratch,
         song_lua_overlay_state_scratch,
     );
+    apply_song_lua_taps(
+        &state.gameplay.display.visual_feedback,
+        state.cols_per_player(),
+        state.total_elapsed_in_screen(),
+        &song_lua_visuals.overlays,
+        song_lua_overlay_order,
+        song_lua_local_state_scratch,
+        song_lua_overlay_state_scratch,
+        [
+            song_lua_visuals.screen_width,
+            song_lua_visuals.screen_height,
+        ],
+    );
     let song_lua_background_active_layers: &[usize] = if show_song_visuals {
         song_lua_background_layer_activity.sync(song_lua_now)
     } else {
@@ -16430,6 +16535,16 @@ pub fn push_actors(
             local_states,
             layer_states,
         );
+        apply_song_lua_taps(
+            &state.gameplay.display.visual_feedback,
+            state.cols_per_player(),
+            state.total_elapsed_in_screen(),
+            &layer.overlays,
+            &song_lua_background_visual_layer_orders[layer_idx],
+            local_states,
+            layer_states,
+            [layer.screen_width, layer.screen_height],
+        );
     }
     for &layer_idx in song_lua_foreground_active_layers {
         let layer = &song_lua_visuals.foreground_visual_layers[layer_idx];
@@ -16448,6 +16563,16 @@ pub fn push_actors(
             message_caches,
             local_states,
             layer_states,
+        );
+        apply_song_lua_taps(
+            &state.gameplay.display.visual_feedback,
+            state.cols_per_player(),
+            state.total_elapsed_in_screen(),
+            &layer.overlays,
+            &song_lua_foreground_visual_layer_orders[layer_idx],
+            local_states,
+            layer_states,
+            [layer.screen_width, layer.screen_height],
         );
     }
     let mut proxy_analysis = if show_song_visuals {
@@ -19029,6 +19154,70 @@ mod tests {
     use deadlib_present::dsl::TextBuilder;
     use deadlib_render_core::frame_compare::compare_render_frames_semantic;
     use deadsync_song_lua::SongLuaOverlayStateDelta;
+
+    #[test]
+    fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
+        let initial = SongLuaOverlayState {
+            diffuse: [1.0, 1.0, 1.0, 0.0],
+            ..Default::default()
+        };
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: initial,
+            message_commands: vec![SongLuaOverlayMessageCommand {
+                message: "__songlua_tap_2_1_W1".into(),
+                aux: None,
+                blocks: [(0.0, 1.0), (0.5, 0.0)]
+                    .into_iter()
+                    .map(|(duration, alpha)| SongLuaOverlayCommandBlock {
+                        start: 0.0,
+                        duration,
+                        easing: Some("linear".into()),
+                        opt1: None,
+                        opt2: None,
+                        delta: SongLuaOverlayStateDelta {
+                            diffuse: Some([1.0, 1.0, 1.0, alpha]),
+                            ..Default::default()
+                        },
+                    })
+                    .collect(),
+            }],
+        }];
+        let order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut feedback = deadsync_gameplay::GameplayVisualFeedbackState::default();
+        for (column, grade, at, now, alpha) in [
+            (0, JudgeGrade::Fantastic, 1.0, 1.0, 0.0),
+            (4, JudgeGrade::Excellent, 1.0, 1.0, 0.0),
+            (4, JudgeGrade::Fantastic, 1.0, 0.9, 0.0),
+            (4, JudgeGrade::Fantastic, 1.0, 1.0, 1.0),
+            (4, JudgeGrade::Fantastic, 1.0, 1.25, 0.5),
+            (4, JudgeGrade::Fantastic, 1.0, 1.5, 0.0),
+            (4, JudgeGrade::Fantastic, 1.3, 1.3, 1.0),
+        ] {
+            feedback.last_tap_judgments.fill(None);
+            feedback.last_tap_judgments[column] = Some(deadsync_gameplay::ColumnTapJudgment {
+                grade,
+                blue_fantastic: false,
+                at_screen_s: at,
+            });
+            let mut local = vec![initial];
+            let mut composed = vec![initial];
+            apply_song_lua_taps(
+                &feedback,
+                4,
+                now,
+                &overlays,
+                &order,
+                &mut local,
+                &mut composed,
+                [854.0, 480.0],
+            );
+            assert_eq!(local[0].diffuse[3], alpha);
+            assert_eq!(composed[0].diffuse[3], alpha);
+        }
+    }
 
     #[test]
     #[ignore = "requires the sibling lua-songs corpus"]
@@ -26951,16 +27140,8 @@ mod tests {
             0.0,
             0.0,
             0.0,
-        )
-        .expect_actors("glowshift quad should render even with zero diffuse alpha");
-
-        match quad_actors.as_slice() {
-            [_, Actor::Sprite { tint, blend, .. }] => {
-                assert_eq!(tint, &[0.3, 0.4, 0.5, 0.6]);
-                assert_eq!(blend, &BlendMode::Add);
-            }
-            other => panic!("expected base quad plus glowshift sprite actors, got {other:?}"),
-        }
+        );
+        assert!(quad_actors.is_none(), "transparent glowshift must not emit a glow pass");
     }
 
     #[test]

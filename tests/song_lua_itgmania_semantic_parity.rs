@@ -47,6 +47,8 @@ struct NativeTrace {
     style: String,
     #[serde(default)]
     enabled_players: Option<[bool; 2]>,
+    #[serde(default)]
+    noteskin_reference: Option<NativeNoteskin>,
     simfile: String,
     source_simfile: Option<PathBuf>,
     roots: Vec<String>,
@@ -68,6 +70,19 @@ struct NativeTrace {
     display: NativeDisplay,
     fixture_context: NativeFixtureContext,
     trace_until_beat: f32,
+}
+
+#[derive(Deserialize)]
+struct NativeNoteskin {
+    skin: String,
+    #[serde(default)]
+    files: Vec<NativeNoteskinFile>,
+}
+
+#[derive(Deserialize)]
+struct NativeNoteskinFile {
+    path: PathBuf,
+    sha256: String,
 }
 
 #[derive(Deserialize)]
@@ -405,6 +420,26 @@ fn compile_trace_song_at(
         },
     ];
 
+    if let Some(noteskin) = &trace.noteskin_reference {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins");
+        for file in &noteskin.files {
+            assert!(
+                file.path
+                    .components()
+                    .all(|part| matches!(part, std::path::Component::Normal(_)))
+            );
+            assert_eq!(
+                whole_song_archives::hash_file(&root.join(&file.path)),
+                file.sha256,
+                "noteskin dependency changed: {}",
+                file.path.display()
+            );
+        }
+        for player in &mut context.players {
+            player.noteskin_name = noteskin.skin.clone();
+        }
+    }
+
     let compiled =
         compile_song_lua_layers(&paths, primary_index, &context).unwrap_or_else(|error| {
             panic!("DeadSync could not compile {}: {error}", simfile.display())
@@ -428,6 +463,12 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::BitmapText { .. } => "BitmapText",
         SongLuaOverlayKind::ActorMultiVertex { .. } => "ActorMultiVertex",
         SongLuaOverlayKind::Model { .. } => "Model",
+        // A compiled noteskin model uses cached slots for rendering.
+        SongLuaOverlayKind::NoteskinActor { slots }
+            if !slots.is_empty() && slots.iter().all(|slot| slot.model.is_some()) =>
+        {
+            "Model"
+        }
         SongLuaOverlayKind::NoteskinActor { .. } => "NoteskinActor",
         SongLuaOverlayKind::SongMeterDisplay { .. } => "SongMeterDisplay",
         SongLuaOverlayKind::GraphDisplay { .. } => "GraphDisplay",

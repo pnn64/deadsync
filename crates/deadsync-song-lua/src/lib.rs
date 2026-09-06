@@ -185,12 +185,11 @@ pub use lua_util::{
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
-    MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    MultitapPhase, apply_multitap_field_state, calc_multitap_phase,
+    MULTITAP_PREVISIBLE_BEATS, MultitapDesc, MultitapPhase, calc_multitap_phase,
     compile_multitap_update_overlays_for_actors, multitap_deco_child_state, multitap_deco_state,
-    multitap_explosion_command_blocks, multitap_explosion_state, multitap_frame_state,
-    overlay_delta_pair_from_states, push_multitap_actor_eases, push_multitap_arrow_sample,
-    push_multitap_explosion_eases, push_overlay_sample_eases, read_multitap_descs,
+    multitap_explosion_state, multitap_frame_state, overlay_delta_pair_from_states,
+    push_multitap_actor_eases, push_multitap_arrow_sample, push_multitap_explosion_eases,
+    push_overlay_sample_eases, read_multitap_descs,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use noteskin::{SongLuaActorFactory, create_noteskin_table};

@@ -368,7 +368,7 @@ fn assert_complete_parity(
     );
 }
 
-fn hash_file(path: &Path) -> String {
+pub(super) fn hash_file(path: &Path) -> String {
     let mut file = File::open(path).expect("open archive for hashing");
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
