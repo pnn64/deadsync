@@ -755,6 +755,14 @@ fn frames_to_hns(frames: u32, sample_rate_hz: u32) -> i64 {
 }
 
 #[inline(always)]
+fn hns_to_frames(hns: i64, sample_rate_hz: u32) -> u32 {
+    if hns <= 0 || sample_rate_hz == 0 {
+        return 0;
+    }
+    ((hns as u64).saturating_mul(sample_rate_hz as u64) / 10_000_000).min(u32::MAX as u64) as u32
+}
+
+#[inline(always)]
 fn query_stream_latency_ns(audio_client: &Audio::IAudioClient) -> Result<u64, String> {
     // SAFETY: `audio_client` is a live initialized WASAPI client, and
     // `GetStreamLatency` returns a plain scalar value through the windows bindings.
@@ -814,8 +822,8 @@ fn query_device_periods_hns(audio_client: &Audio::IAudioClient) -> Result<(i64, 
 #[inline(always)]
 fn selected_device_period_hns(mode: WasapiBackendMode, default_hns: i64, min_hns: i64) -> i64 {
     match mode {
-        WasapiBackendMode::Shared | WasapiBackendMode::SharedLowLatency => default_hns.max(0),
-        WasapiBackendMode::Exclusive => {
+        WasapiBackendMode::Shared => default_hns.max(0),
+        WasapiBackendMode::SharedLowLatency | WasapiBackendMode::Exclusive => {
             let preferred = if min_hns > 0 { min_hns } else { default_hns };
             preferred.max(0)
         }
@@ -1039,7 +1047,7 @@ fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{FramesToNanos, estimated_output_delay_ns, samples_for_frames};
+    use super::{FramesToNanos, estimated_output_delay_ns, hns_to_frames, samples_for_frames};
 
     #[test]
     fn queued_delay_conversion_handles_common_rates() {
@@ -1062,5 +1070,13 @@ mod tests {
         assert_eq!(samples_for_frames(0, 2), 0);
         assert_eq!(samples_for_frames(480, 2), 960);
         assert_eq!(samples_for_frames(127, 6), 762);
+    }
+
+    #[test]
+    fn reference_time_to_frames_handles_common_rates() {
+        assert_eq!(hns_to_frames(10_000_000, 44_100), 44_100);
+        assert_eq!(hns_to_frames(10_000_000, 48_000), 48_000);
+        assert_eq!(hns_to_frames(0, 48_000), 0);
+        assert_eq!(hns_to_frames(-1, 48_000), 0);
     }
 }
