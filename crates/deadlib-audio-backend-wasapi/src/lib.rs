@@ -1,8 +1,8 @@
 #![cfg(windows)]
 
-mod shared_low_latency;
-mod shared;
 mod exclusive;
+mod shared;
+mod shared_low_latency;
 
 use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
@@ -52,6 +52,15 @@ impl WasapiBackendMode {
             Self::Exclusive => AudioOutputMode::Exclusive,
         }
     }
+
+    #[inline(always)]
+    const fn display_name(self) -> &'static str {
+        match self {
+            Self::Shared => "Shared",
+            Self::SharedLowLatency => "Shared low-latency",
+            Self::Exclusive => "Exclusive",
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -66,6 +75,14 @@ impl WasapiSampleFormat {
         match self {
             Self::I16 => std::mem::size_of::<i16>(),
             Self::F32 => std::mem::size_of::<f32>(),
+        }
+    }
+
+    #[inline(always)]
+    const fn display_name(self) -> &'static str {
+        match self {
+            Self::I16 => "Int16",
+            Self::F32 => "Float",
         }
     }
 }
@@ -251,6 +268,47 @@ pub fn enumerate_output_devices() -> Result<Vec<WasapiOutputDevice>, String> {
     Ok(devices)
 }
 
+fn resolve_format_for_mode(
+    audio_client: &Audio::IAudioClient,
+    device_name: &str,
+    requested_rate_hz: Option<u32>,
+    preferred_buffer_frames: Option<u32>,
+    mode: WasapiBackendMode,
+    mix_format: &[u8],
+) -> Result<Vec<u8>, String> {
+    let mut chosen_format = mix_format.to_vec();
+
+    let resolve = |candidate: &[u8]| -> Result<Vec<u8>, String> {
+        match mode {
+            WasapiBackendMode::Shared => {
+                shared::validate(audio_client, candidate, preferred_buffer_frames)
+            }
+            WasapiBackendMode::SharedLowLatency => {
+                shared_low_latency::validate(audio_client, candidate, preferred_buffer_frames)
+            }
+            WasapiBackendMode::Exclusive => {
+                exclusive::validate(audio_client, candidate, device_name)
+            }
+        }
+    };
+
+    // Attempt to override sample rate if requested.
+    if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
+        set_waveformat_sample_rate(&mut chosen_format, rate_hz);
+        match resolve(&chosen_format) {
+            Ok(format) => return Ok(format),
+            Err(err) => {
+                warn!(
+                    "WASAPI {mode:?} sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
+                );
+                return Ok(mix_format.to_vec());
+            }
+        }
+    }
+
+    resolve(&chosen_format)
+}
+
 pub fn prepare(
     device_id: Option<String>,
     device_name: String,
@@ -262,59 +320,14 @@ pub fn prepare(
     let device = open_output_device(device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
     let mix_format = get_mix_format_bytes(&audio_client)?;
-    let mut chosen_format = mix_format.clone();
-    if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
-        set_waveformat_sample_rate(&mut chosen_format, rate_hz);
-        match mode {
-            WasapiBackendMode::Shared => {
-                if let Err(err) =
-                    shared::validate(&audio_client, &chosen_format, preferred_buffer_frames)
-                {
-                    warn!(
-                        "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
-                    );
-                    chosen_format = mix_format;
-                }
-            }
-            WasapiBackendMode::SharedLowLatency => {
-                if let Err(err) = shared_low_latency::validate(
-                    &audio_client,
-                    &chosen_format,
-                    preferred_buffer_frames,
-                ) {
-                    warn!(
-                        "WASAPI shared low-latency sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
-                    );
-                    chosen_format = mix_format;
-                }
-            }
-            WasapiBackendMode::Exclusive => {
-                chosen_format = exclusive::select_format(
-                    &audio_client,
-                    &chosen_format,
-                    &device_name,
-                )?;
-            }
-        }
-    } else {
-        match mode {
-            WasapiBackendMode::Shared => {
-                shared::validate(&audio_client, &chosen_format, preferred_buffer_frames)?
-            }
-            WasapiBackendMode::SharedLowLatency => shared_low_latency::validate(
-                &audio_client,
-                &chosen_format,
-                preferred_buffer_frames,
-            )?,
-            WasapiBackendMode::Exclusive => {
-                chosen_format = exclusive::select_format(
-                    &audio_client,
-                    &chosen_format,
-                    &device_name,
-                )?;
-            }
-        }
-    }
+    let chosen_format = resolve_format_for_mode(
+        &audio_client,
+        &device_name,
+        requested_rate_hz,
+        preferred_buffer_frames,
+        mode,
+        &mix_format,
+    )?;
 
     let sample_format = sample_format_from_waveformat(&chosen_format)
         .ok_or_else(|| format!("unsupported WASAPI mix format for '{device_name}'"))?;
@@ -524,6 +537,14 @@ fn render_thread_inner(
             .GetBufferSize()
             .map_err(|e| format!("failed to query WASAPI buffer size: {e}"))?
     };
+    info!(
+        "WASAPI: {} mode, {} channels, {} Hz, {}, buffer size {} frames",
+        prep.mode.display_name(),
+        prep.channels,
+        prep.sample_rate_hz,
+        prep.sample_format.display_name(),
+        max_frames_in_buffer,
+    );
 
     let playback_delay_ns = prep.frame_time.convert(max_frames_in_buffer);
     write_frames(
@@ -749,21 +770,15 @@ fn initialize_client(
     prep: &WasapiOutputPrep,
 ) -> Result<(), String> {
     match prep.mode {
-        WasapiBackendMode::SharedLowLatency => shared_low_latency::initialize(
-            audio_client,
-            &prep.format,
-            prep.preferred_buffer_frames,
-        ),
-        WasapiBackendMode::Shared => shared::initialize(
-            audio_client,
-            &prep.format,
-            prep.preferred_buffer_frames,
-        ),
-        WasapiBackendMode::Exclusive => exclusive::initialize(
-            audio_client,
-            &prep.format,
-            prep.preferred_buffer_frames,
-        ),
+        WasapiBackendMode::SharedLowLatency => {
+            shared_low_latency::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+        }
+        WasapiBackendMode::Shared => {
+            shared::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+        }
+        WasapiBackendMode::Exclusive => {
+            exclusive::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+        }
     }
 }
 

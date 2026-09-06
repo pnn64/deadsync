@@ -4,8 +4,9 @@ pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     preferred_buffer_frames: Option<u32>,
-) -> Result<(), String> {
-    initialize(audio_client, format, preferred_buffer_frames)
+) -> Result<Vec<u8>, String> {
+    initialize(audio_client, format, preferred_buffer_frames)?;
+    Ok(format.to_vec())
 }
 
 pub(super) fn initialize(

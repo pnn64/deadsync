@@ -5,8 +5,9 @@ pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     preferred_buffer_frames: Option<u32>,
-) -> Result<(), String> {
-    initialize(audio_client, format, preferred_buffer_frames)
+) -> Result<Vec<u8>, String> {
+    initialize(audio_client, format, preferred_buffer_frames)?;
+    Ok(format.to_vec())
 }
 
 pub(super) fn initialize(
@@ -35,20 +36,27 @@ pub(super) fn initialize(
             .map_err(|e| format!("IAudioClient3::GetSharedModeEnginePeriod failed: {e}"))?;
     }
 
+    log::info!(
+        "WASAPI shared low-latency periods: \
+        min {min_period_frames}, \
+        default {default_period_frames}, \
+        max {max_period_frames}, \
+        fundamental {fundamental_period_frames} frames"
+    );
+
     let mut period_frames = preferred_buffer_frames
         .filter(|frames| *frames > 0)
         .unwrap_or(default_period_frames)
         .clamp(min_period_frames, max_period_frames);
+
+    // Ensure the period frames align with the fundamental period.
     if fundamental_period_frames > 0 {
-        let remainder = period_frames % fundamental_period_frames;
-        if remainder != 0 {
-            period_frames = period_frames
-                .saturating_add(fundamental_period_frames - remainder)
-                .min(max_period_frames);
-        }
+        period_frames = period_frames
+            .next_multiple_of(fundamental_period_frames)
+            .min(max_period_frames);
     }
 
-    // SAFETY: `client3` is live and `format` points to a valid waveform buffer.
+    // SAFETY: `client3` is live and `pformat` points to a valid waveform buffer.
     unsafe {
         client3
             .InitializeSharedAudioStream(

@@ -3,7 +3,7 @@ use super::{
     waveformat, waveformat_mut,
 };
 
-pub(super) fn select_format(
+pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     device_name: &str,
@@ -23,7 +23,9 @@ pub(super) fn select_format(
     wave.cbSize = 0;
     wave.wBitsPerSample = 16;
     wave.nBlockAlign = wave.nChannels.saturating_mul(2);
-    wave.nAvgBytesPerSec = wave.nSamplesPerSec.saturating_mul(u32::from(wave.nBlockAlign));
+    wave.nAvgBytesPerSec = wave
+        .nSamplesPerSec
+        .saturating_mul(u32::from(wave.nBlockAlign));
 
     if is_format_supported(audio_client, &fallback)? {
         return Ok(fallback);
@@ -31,25 +33,20 @@ pub(super) fn select_format(
     Err(unsupported_format_error(format, device_name))
 }
 
-fn is_format_supported(
-    audio_client: &Audio::IAudioClient,
-    format: &[u8],
-) -> Result<bool, String> {
+fn is_format_supported(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<bool, String> {
     // SAFETY: `audio_client` is live and `format` points to a valid waveform
     // buffer owned by the caller.
     let status = unsafe {
-        audio_client.IsFormatSupported(
-            Audio::AUDCLNT_SHAREMODE_EXCLUSIVE,
-            waveformat(format),
-            None,
-        )
+        audio_client.IsFormatSupported(Audio::AUDCLNT_SHAREMODE_EXCLUSIVE, waveformat(format), None)
     };
     if status.is_ok() {
         Ok(true)
     } else if status == Audio::AUDCLNT_E_UNSUPPORTED_FORMAT {
         Ok(false)
     } else {
-        Err(format!("WASAPI exclusive IsFormatSupported failed: {status:?}"))
+        Err(format!(
+            "WASAPI exclusive IsFormatSupported failed: {status:?}"
+        ))
     }
 }
 
@@ -97,4 +94,3 @@ pub(super) fn initialize(
             .map_err(|e| format!("failed to initialize WASAPI exclusive stream: {e}"))
     }
 }
-

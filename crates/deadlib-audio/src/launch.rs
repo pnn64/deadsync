@@ -701,9 +701,9 @@ fn start_linux_alsa_backend(
 > {
     let access_mode = match alsa.output_mode {
         AudioOutputMode::Exclusive => linux_alsa::AlsaAccessMode::Exclusive,
-        AudioOutputMode::Auto
-        | AudioOutputMode::Shared
-        | AudioOutputMode::SharedLowLatency => linux_alsa::AlsaAccessMode::Shared,
+        AudioOutputMode::Auto | AudioOutputMode::Shared | AudioOutputMode::SharedLowLatency => {
+            linux_alsa::AlsaAccessMode::Shared
+        }
     };
     let prep = linux_alsa::prepare(
         alsa.pcm_id.clone(),
@@ -1139,7 +1139,9 @@ fn start_wasapi_backend(
     String,
 > {
     let backend_mode = match wasapi.output_mode {
-        AudioOutputMode::Auto | AudioOutputMode::Shared => windows_wasapi::WasapiBackendMode::Shared,
+        AudioOutputMode::Auto | AudioOutputMode::Shared => {
+            windows_wasapi::WasapiBackendMode::Shared
+        }
         AudioOutputMode::SharedLowLatency => windows_wasapi::WasapiBackendMode::SharedLowLatency,
         AudioOutputMode::Exclusive => windows_wasapi::WasapiBackendMode::Exclusive,
     };
