@@ -6,6 +6,7 @@ use crate::telemetry::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimin
 pub enum AudioOutputMode {
     Auto,
     Shared,
+    SharedLowLatency,
     Exclusive,
 }
 
@@ -15,6 +16,7 @@ impl AudioOutputMode {
         match self {
             Self::Auto => "Auto",
             Self::Shared => "Shared",
+            Self::SharedLowLatency => "SharedLowLatency",
             Self::Exclusive => "Exclusive",
         }
     }
@@ -25,6 +27,7 @@ impl AudioOutputMode {
         match bits {
             2 => Self::Shared,
             3 => Self::Exclusive,
+            4 => Self::SharedLowLatency,
             _ => Self::Auto,
         }
     }
@@ -35,6 +38,7 @@ impl AudioOutputMode {
         match self {
             Self::Auto => 1,
             Self::Shared => 2,
+            Self::SharedLowLatency => 4,
             Self::Exclusive => 3,
         }
     }
@@ -47,6 +51,7 @@ impl FromStr for AudioOutputMode {
         match s.trim().to_ascii_lowercase().as_str() {
             "auto" => Ok(Self::Auto),
             "shared" => Ok(Self::Shared),
+            "sharedlowlatency" | "shared-low-latency" => Ok(Self::SharedLowLatency),
             "exclusive" => Ok(Self::Exclusive),
             _ => Err(()),
         }

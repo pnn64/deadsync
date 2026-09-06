@@ -92,6 +92,7 @@ const fn output_mode_choice(mode: config::AudioOutputMode) -> AudioOutputModeCho
     match mode {
         config::AudioOutputMode::Auto => AudioOutputModeChoice::Auto,
         config::AudioOutputMode::Shared => AudioOutputModeChoice::Shared,
+        config::AudioOutputMode::SharedLowLatency => AudioOutputModeChoice::SharedLowLatency,
         config::AudioOutputMode::Exclusive => AudioOutputModeChoice::Exclusive,
     }
 }
@@ -100,6 +101,7 @@ const fn output_mode(choice: AudioOutputModeChoice) -> config::AudioOutputMode {
     match choice {
         AudioOutputModeChoice::Auto => config::AudioOutputMode::Auto,
         AudioOutputModeChoice::Shared => config::AudioOutputMode::Shared,
+        AudioOutputModeChoice::SharedLowLatency => config::AudioOutputMode::SharedLowLatency,
         AudioOutputModeChoice::Exclusive => config::AudioOutputMode::Exclusive,
     }
 }
@@ -184,6 +186,7 @@ mod tests {
         for choice in [
             AudioOutputModeChoice::Auto,
             AudioOutputModeChoice::Shared,
+            AudioOutputModeChoice::SharedLowLatency,
             AudioOutputModeChoice::Exclusive,
         ] {
             assert_eq!(output_mode_choice(output_mode(choice)), choice);

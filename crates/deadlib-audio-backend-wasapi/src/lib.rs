@@ -19,7 +19,7 @@ use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
 use windows::Win32::Media::{Audio, KernelStreaming, Multimedia};
 use windows::Win32::System::Com::StructuredStorage;
 use windows::Win32::System::{Com, LibraryLoader, Threading, Variant};
-use windows::core::{PCWSTR, PWSTR, s, w};
+use windows::core::{Interface, PCWSTR, PWSTR, s, w};
 
 const DEVICE_HEALTH_CHECK_MS: u32 = 1_000;
 const DEVICE_RECOVERY_RETRY_MS: u32 = 1_000;
@@ -894,7 +894,8 @@ fn initialize_shared_low_latency(
     // This is only available on Windows 10 (build 14393) and later.
     // SAFETY: `audio_client` is a live COM interface. If the interface is not
     // supported (Windows 7, 8, 8.1), we get an error.
-    let client3 = unsafe { audio_client.cast::<Audio::IAudioClient3>() }
+    let client3 = audio_client
+        .cast::<Audio::IAudioClient3>()
         .map_err(|e| format!("IAudioClient3 interface not available: {e}"))?;
 
     // Query the engine's period parameters BEFORE initialization.
@@ -931,6 +932,7 @@ fn initialize_shared_low_latency(
                 Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
                 period_frames,
                 waveformat(format),
+                None,
             )
             .map_err(|e| format!("IAudioClient3::InitializeSharedAudioStream failed: {e}"))?;
     }

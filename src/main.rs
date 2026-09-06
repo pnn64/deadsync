@@ -251,8 +251,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(target_os = "linux")]
             linux_backend: cfg.linux_audio_backend,
             sample_rate_hz: cfg.audio_sample_rate_hz,
-            #[cfg(windows)]
-            wasapi_backend_mode: cfg.wasapi_backend_mode,
         }) {
             Ok((audio, clock)) => {
                 logging::write_report_block(

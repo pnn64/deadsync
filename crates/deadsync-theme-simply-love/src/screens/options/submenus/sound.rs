@@ -1,5 +1,19 @@
 use super::super::*;
 
+#[cfg(windows)]
+const SOUND_OUTPUT_MODE_CHOICES: &[Choice] = &[
+    localized_choice("OptionsSound", "OutputModeAuto"),
+    localized_choice("OptionsSound", "OutputModeShared"),
+    localized_choice("OptionsSound", "OutputModeSharedLowLatency"),
+    localized_choice("OptionsSound", "OutputModeExclusive"),
+];
+
+#[cfg(not(windows))]
+const SOUND_OUTPUT_MODE_CHOICES: &[Choice] = &[
+    localized_choice("OptionsSound", "OutputModeAuto"),
+    localized_choice("OptionsSound", "OutputModeShared"),
+];
+
 pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::SoundDevice,
@@ -10,10 +24,7 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::AudioOutputMode,
         label: lookup_key("OptionsSound", "AudioOutputMode"),
-        choices: &[
-            localized_choice("OptionsSound", "OutputModeAuto"),
-            localized_choice("OptionsSound", "OutputModeShared"),
-        ],
+        choices: SOUND_OUTPUT_MODE_CHOICES,
         inline: false,
     },
     #[cfg(target_os = "linux")]
