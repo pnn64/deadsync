@@ -7649,6 +7649,15 @@ impl App {
                     return true;
                 }
             }
+            RawKeyScreenRoute::ConfigurePads => {
+                // `0` tares the focused threshold to the live reading.
+                if screens::pad_config::handle_raw_key_event(
+                    &mut self.state.screens.pad_config_state,
+                    &raw_key,
+                ) {
+                    return true;
+                }
+            }
             RawKeyScreenRoute::Options => {
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = screens::options::handle_raw_key_event(

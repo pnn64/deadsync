@@ -21,7 +21,7 @@ use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::{InputEvent, KeyCode, RawKeyboardEvent, VirtualAction};
 use smallvec::SmallVec;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1623,6 +1623,141 @@ fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
     }
 }
 
+/// Keyboard `0` (main row or numpad) tares: sets the focused threshold to the
+/// live reading. Returns whether the key was consumed.
+pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> bool {
+    key.pressed
+        && !key.repeat
+        && matches!(key.code, KeyCode::Digit0 | KeyCode::Numpad0)
+        && set_focused_to_reading(state)
+}
+
+/// Set the focused threshold to the current reading, so "rest the weight you
+/// want to trigger on the panel, press 0" replaces stepping. Simple view: the
+/// cursor button's peak (a load-cell stop moves its own side of the pair and
+/// drags the partner to keep the lock gap); Advanced view: the focused sensor's
+/// own reading. Readings are clamped to the editable range. Returns whether the
+/// key applied (a focused threshold existed), even if it was already equal.
+pub fn set_focused_to_reading(state: &mut State) -> bool {
+    if !state.fsr_enabled || state.saving.is_some() || state.profiles_mode {
+        return false;
+    }
+    if let Some(dev) = state.advanced {
+        let targets = advanced_targets(state);
+        let Some(&AdvTarget::Sensor {
+            button,
+            sensor: disp,
+        }) = targets.get(state.adv_sel.min(targets.len().saturating_sub(1)))
+        else {
+            return false;
+        };
+        let Some(bar) = pad_by_device(state, dev).and_then(|pad| pad.buttons.get(button)) else {
+            return false;
+        };
+        let Some(sv) = bar.sensors.get(disp) else {
+            return false;
+        };
+        let value = sv
+            .raw_value
+            .clamp(bar.min_raw_threshold, bar.max_raw_threshold);
+        let (fw, live) = (sv.firmware_index, sv.raw_threshold);
+        let current = current_sensor_threshold(state, dev, button, fw).unwrap_or(live);
+        if value != current {
+            queue_unique(
+                state,
+                PadCommand::Threshold {
+                    device: dev,
+                    button,
+                    sensor: Some(fw),
+                    value,
+                },
+            );
+        }
+        return true;
+    }
+
+    let Some(slot) = selected_slot(state) else {
+        return false;
+    };
+    let Some(pad) = state.pads.get(slot.pad) else {
+        return false;
+    };
+    let button = slot.button;
+    let bar = &pad.buttons[button];
+    let device = pad.device_id;
+    let (min, max) = (bar.min_raw_threshold, bar.max_raw_threshold);
+    let reading = bar.aggregate_value.clamp(min, max);
+
+    let Some(live_release) = bar.release_threshold else {
+        let current =
+            pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
+        if reading != current {
+            queue_unique(
+                state,
+                PadCommand::Threshold {
+                    device,
+                    button,
+                    sensor: None,
+                    value: reading,
+                },
+            );
+        }
+        return true;
+    };
+
+    let (press, release) = pending_threshold_pair(state, device, button)
+        .unwrap_or((bar.aggregate_threshold, live_release));
+    if let Some((press, release)) = set_threshold_pair_to(
+        slot.kind,
+        press,
+        release,
+        reading,
+        threshold_gap(state),
+        min,
+        max,
+    ) {
+        queue_unique(
+            state,
+            PadCommand::ThresholdPair {
+                device,
+                button,
+                press,
+                release,
+            },
+        );
+    }
+    true
+}
+
+/// Move one side of a press/release pair to `target`, dragging the partner so
+/// they stay `gap` apart inside `min..=max`. `None` when nothing changes (or
+/// the range can't hold the gap).
+fn set_threshold_pair_to(
+    kind: ThresholdKind,
+    press: u16,
+    release: u16,
+    target: u16,
+    gap: u16,
+    min: u16,
+    max: u16,
+) -> Option<(u16, u16)> {
+    let lowest_press = min.saturating_add(gap);
+    if lowest_press > max {
+        return None;
+    }
+    let pair = match kind {
+        ThresholdKind::Press => {
+            let p = target.clamp(lowest_press, max);
+            (p, release.min(p - gap))
+        }
+        ThresholdKind::Release => {
+            let r = target.clamp(min, max - gap);
+            (press.max(r + gap), r)
+        }
+    };
+    (pair != (press, release)).then_some(pair)
+}
+
 fn adjust_simple_threshold(state: &mut State, delta: i32) {
     let Some(slot) = selected_slot(state) else {
         return;
@@ -2133,12 +2268,16 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             save_available,
             threshold_lock,
         } => {
-            line(actors, "Left/Right - Select Panel", bottom - 94.0);
             // Kept static for the frame path; the regression test below binds
             // the embedded numbers to the edit constants.
             line(
                 actors,
-                "Up/Down - Threshold +/- 5 (Shift +/- 1)",
+                "Left/Right - Select Panel    Up/Down - Threshold +/- 5 (Shift +/- 1)",
+                bottom - 94.0,
+            );
+            line(
+                actors,
+                "0 - Set threshold to the current reading",
                 bottom - 70.0,
             );
             // Combine the Start action (Advanced, or the press/release lock on
@@ -2176,6 +2315,11 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             supports_toggle,
             save_available,
         } => {
+            line(
+                actors,
+                "0 - Set the selected sensor to its current reading",
+                bottom - 94.0,
+            );
             line(
                 actors,
                 "Left/Right - Select   Up/Down - Adjust (Shift = fine)",
@@ -3134,11 +3278,149 @@ mod tests {
         assert_eq!(threshold_norm, curve.normalize(raw));
     }
 
+    // ── Tare: 0 sets the focused threshold to the live reading ──
+
+    fn zero_key(repeat: bool) -> RawKeyboardEvent {
+        RawKeyboardEvent {
+            code: KeyCode::Digit0,
+            pressed: true,
+            repeat,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        }
+    }
+
+    fn tare_state(pads: Vec<PadView>) -> State {
+        let mut s = init();
+        set_fsr_enabled(&mut s, true);
+        set_pads(&mut s, pads);
+        s
+    }
+
+    /// A Simple-only load-cell pad: L/D/U/R with press/release pairs over 20-200.
+    fn loadcell_pad() -> PadView {
+        let mut pad = smx_pad(0, false);
+        pad.buttons = ["L", "D", "U", "R"]
+            .into_iter()
+            .map(|label| mk_loadcell_button(label, 80, 70))
+            .collect();
+        pad.supports_advanced = false;
+        pad.simple_per_sensor_bars = true;
+        pad.supports_sensor_toggle = false;
+        pad
+    }
+
+    #[test]
+    fn zero_sets_the_simple_button_threshold_to_its_peak_reading() {
+        let mut pad = smx_pad(0, false);
+        pad.buttons[0].aggregate_value = 123;
+        let mut s = tare_state(vec![pad]);
+        assert!(handle_raw_key_event(&mut s, &zero_key(false)));
+        assert_eq!(
+            s.pending,
+            vec![PadCommand::Threshold {
+                device: s.pads[0].device_id,
+                button: 0,
+                sensor: None,
+                value: 123,
+            }]
+        );
+        // Key repeat and other keys are ignored.
+        assert!(!handle_raw_key_event(&mut s, &zero_key(true)));
+        let mut other = zero_key(false);
+        other.code = KeyCode::Digit1;
+        assert!(!handle_raw_key_event(&mut s, &other));
+    }
+
+    #[test]
+    fn zero_clamps_the_reading_to_the_editable_range() {
+        let mut pad = smx_pad(0, false);
+        pad.buttons[0].aggregate_value = 900; // past max_raw_threshold (250)
+        let mut s = tare_state(vec![pad]);
+        assert!(set_focused_to_reading(&mut s));
+        assert!(matches!(
+            s.pending.as_slice(),
+            [PadCommand::Threshold { value: 250, .. }]
+        ));
+    }
+
+    #[test]
+    fn zero_moves_a_load_cell_stop_and_drags_its_partner() {
+        // Cursor stop 0 = L release, stop 1 = L press (pair starts at 80/70).
+        let mut pad = loadcell_pad();
+        pad.buttons[0].aggregate_value = 150;
+        let mut s = tare_state(vec![pad]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // onto L press
+        assert!(set_focused_to_reading(&mut s));
+        assert!(matches!(
+            s.pending.as_slice(),
+            [PadCommand::ThresholdPair {
+                press: 150,
+                release: 70,
+                ..
+            }]
+        ));
+
+        // Release stop: the reading becomes the release and press is pushed up
+        // to keep the 10-apart lock.
+        let mut pad = loadcell_pad();
+        pad.buttons[0].aggregate_value = 90;
+        let mut s = tare_state(vec![pad]);
+        assert!(set_focused_to_reading(&mut s));
+        assert!(matches!(
+            s.pending.as_slice(),
+            [PadCommand::ThresholdPair {
+                press: 100,
+                release: 90,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn zero_in_advanced_uses_the_focused_sensors_own_reading() {
+        let mut pad = smx_pad(0, false);
+        pad.buttons[0].aggregate_value = 200;
+        pad.buttons[0].sensors[1].raw_value = 42;
+        let mut s = tare_state(vec![pad]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // Advanced
+        apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // sensor 1
+        assert!(set_focused_to_reading(&mut s));
+        assert_eq!(
+            s.pending,
+            vec![PadCommand::Threshold {
+                device: s.pads[0].device_id,
+                button: 0,
+                sensor: Some(1),
+                value: 42,
+            }]
+        );
+    }
+
+    #[test]
+    fn zero_is_ignored_while_saving_or_with_fsrs_off() {
+        let mut pad = smx_pad(0, false);
+        pad.buttons[0].aggregate_value = 123;
+        let mut s = tare_state(vec![pad.clone()]);
+        set_save_available(&mut s, true);
+        begin_save(&mut s);
+        assert!(is_saving(&s));
+        assert!(!set_focused_to_reading(&mut s));
+        assert!(s.pending.is_empty());
+
+        let mut s = tare_state(vec![pad]);
+        set_fsr_enabled(&mut s, false);
+        assert!(!set_focused_to_reading(&mut s));
+        assert!(s.pending.is_empty());
+    }
+
     #[test]
     fn static_footer_numbers_match_edit_constants() {
         assert_eq!(
-            "Up/Down - Threshold +/- 5 (Shift +/- 1)",
-            format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)")
+            "Left/Right - Select Panel    Up/Down - Threshold +/- 5 (Shift +/- 1)",
+            format!(
+                "Left/Right - Select Panel    Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)"
+            )
         );
         assert_eq!(
             "&START; Press/Release lock: ON (keeps them 10 apart)",

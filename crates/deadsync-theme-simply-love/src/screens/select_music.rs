@@ -11317,6 +11317,12 @@ fn handle_raw_key_event_impl(
             // re-processed (which would leak Enter/Back through to the pad UI).
             return ThemeInputResult::consumed(ThemeEffect::None);
         }
+        // `0` tares: sets the focused threshold to the live reading.
+        if let Some(k) = key
+            && pad_config::handle_raw_key_event(&mut state.pad_config_overlay, k)
+        {
+            return ThemeInputResult::consumed(ThemeEffect::None);
+        }
         // Profiles management list: navigation / apply / set-default come through
         // virtual actions (handled in apply_edit); rename and delete are
         // keyboard-only (no spare gamepad buttons) and handled here.

@@ -126,6 +126,7 @@ pub enum RawKeyScreenRoute {
     PlayerOptions,
     Practice,
     Evaluation,
+    ConfigurePads,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -339,6 +340,7 @@ pub const fn raw_key_screen_route(screen: Screen) -> RawKeyScreenRoute {
         Screen::PlayerOptions => RawKeyScreenRoute::PlayerOptions,
         Screen::Practice => RawKeyScreenRoute::Practice,
         Screen::Evaluation => RawKeyScreenRoute::Evaluation,
+        Screen::ConfigurePads => RawKeyScreenRoute::ConfigurePads,
         _ => RawKeyScreenRoute::None,
     }
 }
@@ -1026,6 +1028,10 @@ mod tests {
         assert_eq!(
             raw_key_screen_route(Screen::PlayerOptions),
             RawKeyScreenRoute::PlayerOptions
+        );
+        assert_eq!(
+            raw_key_screen_route(Screen::ConfigurePads),
+            RawKeyScreenRoute::ConfigurePads
         );
         assert_eq!(
             raw_key_screen_route(Screen::Gameplay),
