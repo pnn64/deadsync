@@ -23,6 +23,8 @@ const STEP_YOUR_GAME_UP_TRACE: &str = "tests/fixtures/itgmania-song-lua/Step You
 const CUPHEAD_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Cuphead [TaroNuke]/botanic.sm.semantic.json";
 const BROGAMER_TRACE: &str = "tests/fixtures/itgmania-song-lua/BroGamer/BroGamer.ssc.semantic.json";
+const COSMIC_TRACE: &str = "tests/fixtures/itgmania-song-lua/[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json";
+const RIDDLE_DOUBLE_TRACE: &str = "tests/fixtures/itgmania-song-lua/[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
 const PROJECTED_BEAT_EPSILON: f32 = 0.005;
@@ -30,10 +32,16 @@ const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
 mod whole_song_archives;
 
+#[path = "song_lua_itgmania_semantic_parity/runtime_modifiers.rs"]
+mod runtime_modifiers;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     oracle: String,
     title: String,
+    style: String,
+    #[serde(default)]
+    enabled_players: Option<[bool; 2]>,
     simfile: String,
     source_simfile: Option<PathBuf>,
     roots: Vec<String>,
@@ -358,6 +366,7 @@ fn compile_trace_song_at(
         context.song_timing_bpms = timing_bpms;
     }
     context.music_length_seconds = trace.end_position.seconds;
+    context.style_name = trace.style.clone();
     context.screen_width = trace.display.logical_width;
     context.screen_height = trace.display.logical_height;
     context.display_width = trace.display.width;
@@ -366,9 +375,15 @@ fn compile_trace_song_at(
         ((0.85 / 3.0) * context.screen_width).floor(),
         ((2.15 / 3.0) * context.screen_width).floor(),
     ];
+    let player_x = if trace.style == "double" {
+        [context.screen_width * 0.5; 2]
+    } else {
+        player_x
+    };
+    let enabled_players = trace.enabled_players.unwrap_or([true; 2]);
     context.players = [
         SongLuaPlayerContext {
-            enabled: true,
+            enabled: enabled_players[0],
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[0],
@@ -376,7 +391,7 @@ fn compile_trace_song_at(
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
-            enabled: true,
+            enabled: enabled_players[1],
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[1],
@@ -2045,6 +2060,25 @@ fn compiled_player_range(
     default: f32,
 ) -> (f32, f32) {
     let mut range = (default, default);
+    for layer in compiled {
+        let state = layer.player_actors[usize::from(player - 1)].initial_state;
+        let value = match target {
+            SongLuaEaseTarget::PlayerX => state.x,
+            SongLuaEaseTarget::PlayerY => state.y,
+            SongLuaEaseTarget::PlayerZ => state.z,
+            SongLuaEaseTarget::PlayerRotationX => state.rot_x_deg,
+            SongLuaEaseTarget::PlayerRotationY => state.rot_y_deg,
+            SongLuaEaseTarget::PlayerRotationZ => state.rot_z_deg,
+            SongLuaEaseTarget::PlayerSkewX => state.skew_x,
+            SongLuaEaseTarget::PlayerSkewY => state.skew_y,
+            SongLuaEaseTarget::PlayerZoom => state.zoom,
+            SongLuaEaseTarget::PlayerZoomX => state.zoom_x,
+            SongLuaEaseTarget::PlayerZoomY => state.zoom_y,
+            SongLuaEaseTarget::PlayerZoomZ => state.zoom_z,
+            _ => default,
+        };
+        range = (range.0.min(value), range.1.max(value));
+    }
     for ease in compiled
         .iter()
         .flat_map(|layer| &layer.eases)
@@ -2165,7 +2199,127 @@ fn compiled_message_state_at(
     if let Some((blocks, base, start_seconds)) = active {
         current = overlay_state_after_blocks(base, blocks, seconds - start_seconds);
     }
+    for ease in compiled
+        .overlay_eases
+        .iter()
+        .filter(|ease| ease.overlay_index == overlay_index)
+    {
+        let end = match ease.span_mode {
+            SongLuaSpanMode::Len => ease.start + ease.limit,
+            SongLuaSpanMode::End => ease.limit,
+        };
+        let (start, end) = match ease.unit {
+            SongLuaTimeUnit::Beat => (
+                song_elapsed_seconds_at(ease.start, context),
+                song_elapsed_seconds_at(end, context),
+            ),
+            SongLuaTimeUnit::Second => (ease.start, end),
+        };
+        if seconds < start {
+            continue;
+        }
+        if seconds >= end {
+            deadsync_song_lua::apply_overlay_delta(&mut current, &ease.to);
+        } else {
+            let factor = deadsync_gameplay::song_lua_ease_factor(
+                ease.easing.as_deref(),
+                (seconds - start) / (end - start),
+                ease.opt1,
+                ease.opt2,
+            );
+            deadsync_song_lua::apply_overlay_delta(&mut current, &ease.from);
+            deadsync_song_lua::overlay_state_lerp(&mut current, &ease.to, factor);
+        }
+    }
     current
+}
+
+fn compare_column_splines(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    gaps: &mut Vec<String>,
+) {
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            ..Default::default()
+        },
+        &[],
+    );
+    for player in 0..2 {
+        let windows = compiled
+            .iter()
+            .flat_map(|layer| {
+                deadsync_profile_gameplay::build_song_lua_column_offset_windows_for_player(
+                    layer, &timing, player, 0.0,
+                )
+            })
+            .collect::<Vec<_>>();
+        let prefix = format!("ScreenGameplay/PlayerP{}/NoteField/Column", player + 1);
+        let mut writes = Vec::new();
+        for actor in &trace.external_actors {
+            let Some((column, handler)) = actor
+                .path
+                .strip_prefix(&prefix)
+                .and_then(|path| path.split_once('/'))
+            else {
+                continue;
+            };
+            if !matches!(handler, "GetPosHandler" | "GetPosHandler/GetSpline") {
+                continue;
+            }
+            let Some(column) = column
+                .parse::<usize>()
+                .ok()
+                .and_then(|column| column.checked_sub(1))
+            else {
+                continue;
+            };
+            for track in trace
+                .operation_tracks
+                .iter()
+                .filter(|track| track.actor == actor.id)
+            {
+                for (sequence, beat, seconds, args) in &track.samples {
+                    let expected = match track.operation.as_str() {
+                        "Spline.SetSplineMode"
+                            if args.first().and_then(Value::as_str)
+                                == Some("NoteColumnSplineMode_Disabled") =>
+                        {
+                            Some(0.0)
+                        }
+                        "Spline.SetPoint" if value_f32(args.first()) == Some(1.0) => {
+                            args.get(1).and_then(|point| value_f32(point.get(1)))
+                        }
+                        _ => None,
+                    };
+                    if let Some(expected) = expected {
+                        writes.push((column, *seconds, *sequence, *beat, expected));
+                    }
+                }
+            }
+        }
+        writes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
+        let mut reported = HashSet::new();
+        for (index, &(column, seconds, _, beat, expected)) in writes.iter().enumerate() {
+            // Compare state after the update. A later Disable can override a
+            // SetPoint in the same frame; both cannot equal the rendered value.
+            if writes
+                .get(index + 1)
+                .is_some_and(|next| next.0 == column && next.1 == seconds)
+            {
+                continue;
+            }
+            let actual = deadsync_gameplay::song_lua_column_y_offset(&windows, column, seconds);
+            if (!actual.is_finite() || (actual - expected).abs() > 0.03) && reported.insert(column)
+            {
+                gaps.push(format!("P{} column {} final spline y differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1));
+            }
+        }
+    }
 }
 
 fn apply_runtime_updates(
@@ -2364,6 +2518,7 @@ fn compare_projected_geometry(
         };
         let mut reported_visibility = false;
         let mut reported_alpha = false;
+        let mut reported_nonfinite = false;
         let mut reported_bounds = false;
         let mut reported_center = false;
         for sample in &track.samples {
@@ -2379,10 +2534,13 @@ fn compare_projected_geometry(
             let Some(native_visible) = sample.get(2).and_then(Value::as_bool) else {
                 continue;
             };
-            let native_alpha = sample
-                .get(3)
-                .and_then(|value| value_f32(Some(value)))
-                .unwrap_or(1.0);
+            let Some(native_alpha) = sample.get(3).and_then(|value| value_f32(Some(value))) else {
+                if !reported_nonfinite {
+                    gaps.push(format!("reference projected alpha is non-finite for {definition_id} at beat {beat:.3}"));
+                    reported_nonfinite = true;
+                }
+                continue;
+            };
             let states = state_cache
                 .entry((layer, beat.to_bits(), seconds.to_bits()))
                 .or_insert_with(|| {
@@ -2605,7 +2763,7 @@ fn native_song_lua_semantics_match_deadsync() {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let (compiled, primary_index, context) = compile_trace_song(&trace);
     eprintln!(
-        "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
+        "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} player eases, {} column offsets, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
         compiled.len(),
         compiled
             .iter()
@@ -2622,6 +2780,14 @@ fn native_song_lua_semantics_match_deadsync() {
         compiled
             .iter()
             .map(|layer| layer.beat_mods.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.eases.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.column_offsets.len())
             .sum::<usize>(),
         compiled
             .iter()
@@ -2651,6 +2817,7 @@ fn native_song_lua_semantics_match_deadsync() {
     compare_update_render_persistence(&trace, &compiled, &mut gaps);
     compare_update_render_values(&trace, &compiled, &context, &mut gaps);
     compare_player_operation_ranges(&trace, &compiled, &mut gaps);
+    compare_column_splines(&trace, &compiled, &context, &mut gaps);
     compare_projected_geometry(&trace, &compiled, &context, &mut gaps);
     compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);
@@ -2847,7 +3014,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 
     assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
     assert!(!manifest.itgmania.launches_executable);
-    assert_eq!(manifest.simfiles.len(), 43);
+    assert_eq!(manifest.simfiles.len(), 45);
     for entry in manifest.simfiles {
         assert_eq!(
             entry.status, "ok",
@@ -2883,6 +3050,58 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
             "SCREEN_WIDTH"
         );
     }
+}
+
+#[test]
+fn itl_unlock_fixture_contexts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let riddle = read_trace_file(&root.join(RIDDLE_DOUBLE_TRACE));
+    assert_eq!(riddle.style, "double");
+    assert_eq!(riddle.enabled_players, Some([true, false]));
+    assert_eq!(riddle.trace_until_beat, 300.5);
+    assert_eq!(
+        native_player_option_value_at(&riddle, 1, "PlayerOptions.Flip", 0.6),
+        Some(1.0),
+        "Riddle must execute its double-specific flip branch"
+    );
+    let handler = riddle
+        .external_actors
+        .iter()
+        .find(|actor| actor.path == "ScreenGameplay/PlayerP1/NoteField/Column8/GetPosHandler")
+        .expect("Riddle must exercise the eighth column");
+    assert!(riddle.operation_tracks.iter().any(|track| {
+        track.actor == handler.id
+            && track.operation == "Spline.SetSplineMode"
+            && track.samples.iter().any(|sample| {
+                sample.3.first().and_then(Value::as_str) == Some("NoteColumnSplineMode_Disabled")
+            })
+    }));
+
+    let cosmic = read_trace_file(&root.join(COSMIC_TRACE));
+    assert_eq!(cosmic.style, "single");
+    assert_eq!(cosmic.enabled_players, Some([true, true]));
+    assert_eq!(cosmic.trace_until_beat, 348.0);
+    let sprite = cosmic
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with("_static 4x1.png"))
+        .expect("CO5M1C static sprite trace");
+    assert_eq!(
+        sprite.texture_size,
+        [480.0, 480.0],
+        "use a frame, not the full sprite sheet"
+    );
+    let visible = sprite
+        .samples
+        .iter()
+        .find(|sample| {
+            value_f32(sample.get(0)).is_some_and(|beat| (71.2..71.3).contains(&beat))
+                && value_f32(sample.get(3)) == Some(0.3)
+        })
+        .expect("CO5M1C static burst");
+    let vertices = native_screen_vertices(visible.as_array().expect("projected sample"))
+        .expect("static sprite corners");
+    assert_eq!(vertex_bounds(&vertices), [0.0, -187.0, 854.0, 667.0]);
 }
 
 #[test]

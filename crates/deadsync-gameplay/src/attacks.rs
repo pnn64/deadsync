@@ -4196,8 +4196,7 @@ pub fn apply_active_attack_mask_window(
         } else {
             profile_mini_percent
         };
-        values.mini_percent =
-            Some(attack_mini_target_percent(mini, window.mini_mode, base).clamp(-100.0, 150.0));
+        values.mini_percent = Some(attack_mini_target_percent(mini, window.mini_mode, base));
         values.mini_speed = window.mini_speed;
     }
 }
@@ -4406,9 +4405,6 @@ fn refresh_active_attack_player_full(
         input.now,
         base_mini_percent,
     );
-    if let Some(mini) = attack.mini_percent.filter(|v| v.is_finite()) {
-        attack.mini_percent = Some(mini.clamp(-100.0, 150.0));
-    }
 
     ActiveAttackRefreshOutput {
         attack_target_appearance: attack.appearance_target,

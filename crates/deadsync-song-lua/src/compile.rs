@@ -479,10 +479,12 @@ where
             &mut sound_events,
             &mut overlay_trigger_counter,
             &mut out.info,
+            false,
         )?;
         compile_timer.push_stage("prefix_actions");
     }
 
+    let global_mod_start = out.beat_mods.len();
     let global_mods = globals
         .get::<Option<Table>>("mods")
         .map_err(|err| err.to_string())?;
@@ -490,14 +492,6 @@ where
         global_mods.clone(),
         SongLuaTimeUnit::Beat,
     )?);
-    let (runtime_eases, runtime_overlay_eases) = read_runtime_mod_eases(
-        global_mods.clone(),
-        &host.easing_names,
-        runtime_static_overlay_index_for_actors(&overlays),
-        context,
-    )?;
-    out.eases.extend(runtime_eases);
-    out.overlay_eases.extend(runtime_overlay_eases);
     let runtime_mod_tables = read_update_function_tables(&lua, &root, &["mods"])?;
     let update_reads_global_mods =
         update_tree_reads_global(&lua, &root, "mods").map_err(|err| err.to_string())?;
@@ -507,6 +501,18 @@ where
             .any(|runtime| runtime.to_pointer() == global.to_pointer())
             || (update_reads_global_mods && initialized_global_mods.is_some())
     });
+    // Recurring Lua owns stateful starts and the easing function body. Capture
+    // its actual writes instead of duplicating them with endpoint-based eases.
+    if !global_mods_are_runtime {
+        let (runtime_eases, runtime_overlay_eases) = read_runtime_mod_eases(
+            global_mods.clone(),
+            &host.easing_names,
+            runtime_static_overlay_index_for_actors(&overlays),
+            context,
+        )?;
+        out.eases.extend(runtime_eases);
+        out.overlay_eases.extend(runtime_overlay_eases);
+    }
     let mut runtime_exact_tables = Vec::new();
     if global_mods_are_runtime
         && let Some(global) = global_mods.as_ref()
@@ -525,14 +531,6 @@ where
             Some(table.clone()),
             SongLuaTimeUnit::Beat,
         )?);
-        let (runtime_eases, runtime_overlay_eases) = read_runtime_mod_eases(
-            Some(table.clone()),
-            &host.easing_names,
-            runtime_static_overlay_index_for_actors(&overlays),
-            context,
-        )?;
-        out.eases.extend(runtime_eases);
-        out.overlay_eases.extend(runtime_overlay_eases);
         if table_entries_are_strings_at(table, 3)? {
             push_unique_table(&mut runtime_exact_tables, table.clone());
         }
@@ -559,10 +557,8 @@ where
             &host.easing_names,
             &mut overlays,
         )?;
-    out.eases.extend(global_eases);
-    let global_function_eases_need_sampling = !global_overlay_eases.is_empty();
-    out.overlay_eases.extend(global_overlay_eases);
-    out.column_offsets.extend(global_column_offsets);
+    let global_function_eases_need_sampling =
+        !global_overlay_eases.is_empty() || !global_column_offsets.is_empty();
     let global_mod_eases_are_exact = global_info.unsupported_function_eases == 0
         && !global_function_eases_need_sampling
         && match global_mod_eases.as_ref() {
@@ -579,6 +575,16 @@ where
             .any(|runtime| runtime.to_pointer() == global.to_pointer())
             || (update_reads_global_mod_eases && initialized_global_mod_eases.is_some())
     });
+    if global_mod_eases_are_runtime && !global_column_offsets.is_empty() {
+        // Column callbacks and later actions share mutable spline state. Replay
+        // their mod tables together so the final write in each update wins.
+        out.beat_mods.truncate(global_mod_start);
+        runtime_exact_tables.clear();
+    } else {
+        out.eases.extend(global_eases);
+        out.overlay_eases.extend(global_overlay_eases);
+        out.column_offsets.extend(global_column_offsets);
+    }
     if global_mod_eases_are_runtime
         && let Some(global) = global_mod_eases.as_ref()
         && global_mod_eases_are_exact
@@ -662,6 +668,7 @@ where
         &mut sound_events,
         &mut overlay_trigger_counter,
         &mut out.info,
+        global_actions_are_runtime,
     )?;
     compile_timer.push_stage("global_actions");
     if global_actions_are_runtime {

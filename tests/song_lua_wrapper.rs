@@ -1,6 +1,6 @@
 use deadsync_assets::song_lua::{
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayBlendMode, SongLuaOverlayKind,
-    SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
+    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
+    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -10,6 +10,75 @@ fn test_dir(name: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+#[test]
+fn recurring_commands_use_song_easing_and_continuous_clock() {
+    let song_dir = test_dir("recurring-song-easing");
+    fs::write(
+        song_dir.join("easing.lua"),
+        "return function(t) return t * t * t end",
+    )
+    .unwrap();
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local curve = loadfile(GAMESTATE:GetCurrentSong():GetSongDir() .. 'easing.lua')()
+assert(curve(0.5) == 0.125, 'song easing file must execute')
+local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local previous = 0
+return Def.Actor {
+    OnCommand=function(self) self:queuecommand('Loop') end,
+    LoopCommand=function(self)
+        local beat = GAMESTATE:GetSongBeat()
+        local seconds = GAMESTATE:GetCurMusicSeconds()
+        assert(math.abs(beat - seconds * 155 / 60) < 1e-12, 'Lua clock lost precision')
+        if beat < 1 then previous = curve(beat) end
+        options:Mini(previous)
+        if beat > 1 then options:FromString('*10000 inf beat') end
+        self:sleep(1/60):queuecommand('Loop')
+    end
+}
+"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Recurring Song Easing");
+    context.song_display_bpms = [155.0; 2];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.info.unsupported_perframes, 0);
+    for beat in [0.4, 0.8] {
+        let samples = compiled
+            .eases
+            .iter()
+            .filter(|ease| {
+                ease.target == SongLuaEaseTarget::Mod("mini".into())
+                    && ease.start >= beat
+                    && ease.start < beat + 0.1
+            })
+            .collect::<Vec<_>>();
+        // Finishing a sleep on an exact frame boundary can leave the queued
+        // command for the next frame; inspect a range containing an actual run.
+        assert!(
+            samples
+                .iter()
+                .any(|sample| { (sample.from - sample.start.powi(3) * 100.0).abs() < 0.001 }),
+            "LoopCommand must sample the authored curve near {beat}: {samples:?}"
+        );
+    }
+    let held = compiled
+        .eases
+        .iter()
+        .find(|ease| ease.target == SongLuaEaseTarget::Mod("mini".into()) && ease.start > 1.1)
+        .expect("last sampled value should persist");
+    assert!(held.from > 70.0 && held.from < 100.0);
+    assert_eq!(held.from, held.to);
+    assert!(
+        compiled.eases.iter().any(|ease| {
+            ease.target == SongLuaEaseTarget::Mod("beat".into()) && ease.to == 100.0
+        })
+    );
 }
 
 #[test]

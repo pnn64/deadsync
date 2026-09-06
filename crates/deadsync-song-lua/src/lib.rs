@@ -1400,22 +1400,36 @@ pub fn song_elapsed_seconds_at(beat: f32, context: &SongLuaCompileContext) -> f3
 
 #[must_use]
 pub fn song_beat_at_elapsed_seconds(seconds: f32, context: &SongLuaCompileContext) -> f32 {
-    let target = seconds * song_music_rate(context);
+    song_beat_at_seconds64(f64::from(seconds), context) as f32
+}
+
+// Lua numbers and the reference update clock are doubles. Narrow only when
+// storing runtime windows, after the chart's strict boundary predicates run.
+fn song_beat_at_seconds64(seconds: f64, context: &SongLuaCompileContext) -> f64 {
+    let target = seconds * f64::from(song_music_rate(context));
     let mut cursor_beat = 0.0;
     let mut cursor_seconds = 0.0;
     let mut bpm = context
         .song_timing_bpms
         .first()
         .filter(|(segment_beat, segment_bpm)| *segment_beat <= 0.0 && *segment_bpm > 0.0)
-        .map_or_else(|| song_display_bps(context) * 60.0, |segment| segment.1);
+        .map_or_else(
+            || {
+                f64::from(context.song_display_bpms[0].max(context.song_display_bpms[1]))
+                    .max(f64::from(f32::EPSILON) * 60.0)
+            },
+            |segment| f64::from(segment.1),
+        );
     for &(segment_beat, segment_bpm) in &context.song_timing_bpms {
+        let segment_beat = f64::from(segment_beat);
+        let segment_bpm = f64::from(segment_bpm);
         let next_seconds = cursor_seconds + (segment_beat - cursor_beat) * 60.0 / bpm;
         if next_seconds > target {
             break;
         }
         cursor_beat = segment_beat;
         cursor_seconds = next_seconds;
-        bpm = segment_bpm.max(f32::EPSILON);
+        bpm = segment_bpm.max(f64::EPSILON);
     }
     cursor_beat + (target - cursor_seconds) * bpm / 60.0
 }

@@ -227,11 +227,25 @@
       "compressed_bytes": 977884
     },
     {
+      "title": "[4914] [10] Riddle",
+      "source_simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+      "archive": "e5ec56322ae79eb14986343406aa2d682abbd121612706c6b5ebadcbf91abef1.tar.zst",
+      "sha256": "e5ec56322ae79eb14986343406aa2d682abbd121612706c6b5ebadcbf91abef1",
+      "compressed_bytes": 85579
+    },
+    {
       "title": "[4252] [10] media offline (Medium)",
       "source_simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
       "archive": "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd.tar.zst",
       "sha256": "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd",
       "compressed_bytes": 45299
+    },
+    {
+      "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
+      "source_simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+      "archive": "7d36336e7e91c23183bb6355b8dcc8d23f570617f33316c672b4980fe177513c.tar.zst",
+      "sha256": "7d36336e7e91c23183bb6355b8dcc8d23f570617f33316c672b4980fe177513c",
+      "compressed_bytes": 1770433
     },
     {
       "title": "[5800] [11] KENPO SAITO",

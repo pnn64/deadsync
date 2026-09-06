@@ -200,10 +200,30 @@
       "lua_entries": 1
     },
     {
+      "simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+      "fixture": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.json",
+      "title": "[4914] [10] Riddle",
+      "lua_entries": 1,
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false"
+      }
+    },
+    {
       "simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
       "fixture": "[10] media offline (SM) [Snap]/media offline.ssc.json",
       "title": "[4252] [10] media offline (Medium)",
       "lua_entries": 1
+    },
+    {
+      "simfile": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc",
+      "fixture": "[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.json",
+      "title": "[6005] [11] CO5M1C R4ILR0AD (Hard)",
+      "lua_entries": 1,
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false"
+      }
     },
     {
       "simfile": "[11] KENPO SAITO (DX) [Scrypts]/KENPO SAITO-chart.ssc",

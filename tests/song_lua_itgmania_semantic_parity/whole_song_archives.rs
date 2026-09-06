@@ -364,6 +364,7 @@ fn assert_complete_parity(
     compare_update_render_persistence(trace, compiled, &mut gaps);
     compare_update_render_values(trace, compiled, context, &mut gaps);
     compare_player_operation_ranges(trace, compiled, &mut gaps);
+    compare_column_splines(trace, compiled, context, &mut gaps);
     compare_projected_geometry(trace, compiled, context, &mut gaps);
     compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
     compare_timeline(trace, &compiled[primary_index], &mut gaps);
@@ -408,7 +409,7 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
     let index = archive_index();
     assert_eq!(index.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert_eq!(index.hash, "sha256-compressed-archive");
-    assert_eq!(index.archives.len(), 43);
+    assert_eq!(index.archives.len(), 45);
     for entry in selected_archives(&index) {
         let archive = extract_archive(entry);
         validate_archive(entry, &archive);

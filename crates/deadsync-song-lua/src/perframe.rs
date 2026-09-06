@@ -499,10 +499,10 @@ fn update_function_replay_beats(
     context: &SongLuaCompileContext,
     start: f32,
     end: f32,
-) -> Vec<(f32, f64)> {
+) -> Vec<(f64, f64)> {
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     let end_seconds = f64::from(song_elapsed_seconds_at(end, context));
-    let mut out = vec![(start, 0.0)];
+    let mut out = vec![(f64::from(start), 0.0)];
     let frame_count = ((end_seconds - start_seconds) * f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
         .ceil()
         .max(0.0) as usize;
@@ -511,7 +511,7 @@ fn update_function_replay_beats(
         let seconds = (start_seconds + frame as f64 / f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
             .min(end_seconds);
         out.push((
-            song_beat_at_elapsed_seconds(seconds as f32, context),
+            crate::song_beat_at_seconds64(seconds, context),
             seconds - previous_seconds,
         ));
         previous_seconds = seconds;
@@ -1529,14 +1529,25 @@ fn merge_scheduled_overlay_samples(
 pub fn call_update_functions_at(
     lua: &Lua,
     root: &Value,
-    beat: f32,
+    beat: f64,
+    seconds: f64,
     delta_beats: f32,
     delta_seconds: f64,
 ) -> Result<(), String> {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let previous_delta = compile_song_runtime_delta_values(lua).map_err(|err| err.to_string())?;
-    set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_beat(lua, beat as f32).map_err(|err| err.to_string())?;
     set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds as f32)
+        .map_err(|err| err.to_string())?;
+    let runtime = lua
+        .globals()
+        .get::<Table>(crate::SONG_LUA_RUNTIME_KEY)
+        .map_err(|err| err.to_string())?;
+    runtime
+        .set(crate::SONG_LUA_RUNTIME_BEAT_KEY, beat)
+        .map_err(|err| err.to_string())?;
+    runtime
+        .set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, seconds)
         .map_err(|err| err.to_string())?;
     let result =
         crate::lua_util::run_actor_compile_update_functions_with_delta(lua, root, delta_seconds)
@@ -1646,7 +1657,8 @@ pub fn compile_update_functions<Kind>(
     let mut scheduled_states = baseline_overlays.clone();
     let mut transform_masks = player_transform_masks(&player_tables)?;
     let mut frame_count = 0;
-    for (next_beat, delta_seconds) in replay.into_iter().skip(1) {
+    for (exact_beat, delta_seconds) in replay.into_iter().skip(1) {
+        let next_beat = exact_beat as f32;
         frame_count += 1;
         let delta_beats = next_beat - beat;
         seconds += delta_seconds;
@@ -1666,7 +1678,7 @@ pub fn compile_update_functions<Kind>(
             &scheduled_overlay_samples,
             seconds,
         )?;
-        call_update_functions_at(lua, root, next_beat, delta_beats, delta_seconds)?;
+        call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, &started)?;

@@ -1542,12 +1542,12 @@ mod tests {
     }
 
     #[test]
-    fn mini_value_uses_fallback_big_adjustment_and_clamps() {
+    fn mini_value_preserves_authored_range() {
         assert_near(mini_value_for_percent(50.0, 0.0, false), 0.5);
         assert_near(mini_value_for_percent(f32::NAN, 25.0, false), 0.25);
         assert_near(mini_value_for_percent(50.0, 0.0, true), -0.5);
-        assert_near(mini_value_for_percent(-250.0, 0.0, false), -1.0);
-        assert_near(mini_value_for_percent(250.0, 0.0, false), 1.5);
+        assert_near(mini_value_for_percent(-250.0, 0.0, false), -2.5);
+        assert_near(mini_value_for_percent(250.0, 0.0, false), 2.5);
     }
 
     #[test]
@@ -1567,14 +1567,12 @@ mod tests {
 
     #[test]
     fn effective_mini_percent_uses_active_fallback_and_clear_all() {
-        assert_eq!(MINI_PERCENT_MIN, -100.0);
-        assert_eq!(MINI_PERCENT_MAX, 150.0);
         assert_near(effective_mini_percent(Some(25.0), 50.0, false), 25.0);
         assert_near(effective_mini_percent(Some(f32::NAN), 50.0, false), 50.0);
         assert_near(effective_mini_percent(None, 50.0, true), 0.0);
         assert_near(effective_mini_percent(None, 50.0, false), 50.0);
-        assert_near(effective_mini_percent(Some(250.0), 0.0, false), 150.0);
-        assert_near(effective_mini_percent(Some(-250.0), 0.0, false), -100.0);
+        assert_near(effective_mini_percent(Some(250.0), 0.0, false), 250.0);
+        assert_near(effective_mini_percent(Some(-250.0), 0.0, false), -250.0);
     }
 
     #[test]
@@ -1826,7 +1824,7 @@ mod tests {
     }
 
     #[test]
-    fn attack_mini_approach_uses_base_and_clamps() {
+    fn attack_mini_preserves_authored_range() {
         let mut current = None;
         approach_attack_mini_percent_to_target(&mut current, Some(100.0), 0.0, Some(1.0), 0.5);
         assert_near(current.unwrap(), 50.0);
@@ -1843,11 +1841,11 @@ mod tests {
 
         let mut high = None;
         approach_attack_mini_percent_to_target(&mut high, Some(250.0), 0.0, None, 1.0);
-        assert_near(high.unwrap(), 150.0);
+        assert_near(high.unwrap(), 250.0);
 
         let mut low = None;
         approach_attack_mini_percent_to_target(&mut low, Some(-250.0), 0.0, None, 1.0);
-        assert_near(low.unwrap(), -100.0);
+        assert_near(low.unwrap(), -250.0);
     }
 
     #[test]

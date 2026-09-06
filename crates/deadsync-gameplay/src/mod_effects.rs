@@ -1,6 +1,3 @@
-﻿pub const MINI_PERCENT_MIN: f32 = -100.0;
-pub const MINI_PERCENT_MAX: f32 = 150.0;
-
 #[inline(always)]
 #[must_use]
 pub fn effective_mini_percent(
@@ -8,14 +5,13 @@ pub fn effective_mini_percent(
     fallback_mini_percent: f32,
     base_cleared: bool,
 ) -> f32 {
-    let mini = active_mini_percent
+    active_mini_percent
         .filter(|v| v.is_finite())
         .unwrap_or(if base_cleared {
             0.0
         } else {
             fallback_mini_percent
-        });
-    mini.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX)
+        })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,9 +68,6 @@ pub fn approach_attack_mini_percent_to_target(
     delta_time: f32,
 ) {
     approach_attack_value(current, target, base, speed, delta_time, 100.0);
-    if let Some(value) = current.as_mut() {
-        *value = value.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX);
-    }
 }
 
 #[inline(always)]
@@ -93,7 +86,7 @@ pub fn mini_value_for_percent(
         // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
         mini -= 100.0;
     }
-    mini.clamp(MINI_PERCENT_MIN, MINI_PERCENT_MAX) / 100.0
+    mini / 100.0
 }
 
 #[inline(always)]
@@ -448,7 +441,9 @@ impl VisualEffects {
         if Self::signed_active(self.tipsy) {
             mask |= VISUAL_MASK_BIT_TIPSY;
         }
-        if Self::signed_active(self.bumpy) || self.bumpy_cols.iter().any(|v| Self::signed_active(*v)) {
+        if Self::signed_active(self.bumpy)
+            || self.bumpy_cols.iter().any(|v| Self::signed_active(*v))
+        {
             mask |= VISUAL_MASK_BIT_BUMPY;
         }
         if Self::signed_active(self.beat) {
@@ -862,4 +857,3 @@ impl ChartAttackEffects {
         self.insert_mask != 0 || self.remove_mask != 0 || self.holds_mask != 0
     }
 }
-

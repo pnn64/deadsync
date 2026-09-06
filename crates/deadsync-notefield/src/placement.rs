@@ -370,7 +370,7 @@ pub(crate) fn effective_mini_value(
     if big_effect > f32::EPSILON {
         mini_percent -= 100.0;
     }
-    mini_percent.clamp(-100.0, 150.0) / 100.0
+    mini_percent / 100.0
 }
 
 pub(crate) fn average_error_bar_mini_scale(mini: f32) -> f32 {

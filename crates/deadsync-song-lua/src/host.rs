@@ -1121,7 +1121,7 @@ pub fn install_game_state_globals(
         "currentTimeSongOrCourse",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _args: MultiValue| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let current_sort_order = lua.create_table()?;
@@ -1364,7 +1364,7 @@ pub fn install_game_state_globals(
         "GetSongBeat",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
     let song_bps = song_display_bps(context);
@@ -1376,7 +1376,7 @@ pub fn install_game_state_globals(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;

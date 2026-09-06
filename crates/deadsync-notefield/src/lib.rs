@@ -2501,13 +2501,13 @@ mod tests {
     }
 
     #[test]
-    fn effective_mini_value_applies_fallback_big_and_clamp() {
+    fn effective_mini_value_preserves_authored_range() {
         assert_eq!(effective_mini_value(80.0, 25.0, 0.0), 0.8);
         assert_eq!(effective_mini_value(f32::NAN, 25.0, 0.0), 0.25);
         assert_eq!(effective_mini_value(80.0, 25.0, 1.0), -0.2);
         assert_eq!(effective_mini_value(80.0, 25.0, 0.25), -0.2);
-        assert_eq!(effective_mini_value(-200.0, 25.0, 0.0), -1.0);
-        assert_eq!(effective_mini_value(200.0, 25.0, 0.0), 1.5);
+        assert_eq!(effective_mini_value(-200.0, 25.0, 0.0), -2.0);
+        assert_eq!(effective_mini_value(200.0, 25.0, 0.0), 2.0);
     }
 
     #[test]

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",
+  "song_dir": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]",
+  "title": "[4914] [10] Riddle",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "lua",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/lua/default.lua"
+    }
+  ]
+}
