@@ -318,6 +318,8 @@ pub struct Config {
     pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    // None = auto (use the backend/device period); otherwise the preferred output buffer size in frames.
+    pub audio_buffer_size_frames: Option<u32>,
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     /// Allows the in-app updater to download and install updates.
@@ -549,6 +551,7 @@ impl Default for Config {
             audio_output_mode: AudioOutputMode::Auto,
             linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: audio.sample_rate_hz,
+            audio_buffer_size_frames: audio.buffer_size_frames,
             auto_download_unlocks: system.auto_download_unlocks,
             auto_populate_gs_scores: system.auto_populate_gs_scores,
             updater_install_enabled: system.updater_install_enabled,

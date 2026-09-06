@@ -28,6 +28,7 @@ pub struct InitConfig {
     #[cfg(target_os = "linux")]
     pub linux_backend: LinuxAudioBackend,
     pub sample_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +98,7 @@ struct WasapiBackendHint {
     pub device_id: Option<String>,
     pub device_name: String,
     pub requested_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
     pub output_mode: AudioOutputMode,
 }
 
@@ -677,6 +679,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
                 device_id,
                 device_name,
                 requested_rate_hz,
+                buffer_size_frames: cfg.buffer_size_frames,
                 output_mode,
             }),
         },
@@ -1144,6 +1147,7 @@ fn start_wasapi_backend(
         wasapi.device_id.clone(),
         wasapi.device_name.clone(),
         wasapi.requested_rate_hz,
+        wasapi.buffer_size_frames,
         backend_mode,
     )
     .map_err(|err| {

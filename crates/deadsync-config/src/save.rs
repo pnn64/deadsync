@@ -394,6 +394,7 @@ const fn audio_options(cfg: &Config) -> AudioOptions {
         assist_tick_volume: cfg.assist_tick_volume,
         output_device_index: cfg.audio_output_device_index,
         sample_rate_hz: cfg.audio_sample_rate_hz,
+        buffer_size_frames: cfg.audio_buffer_size_frames,
         rate_mod_preserves_pitch: cfg.rate_mod_preserves_pitch,
         enable_replaygain: cfg.enable_replaygain,
         write_current_screen: cfg.write_current_screen,
@@ -406,6 +407,7 @@ const fn audio_device_options<'a>(cfg: &Config, output_mode: &'a str) -> AudioDe
         output_device_index: cfg.audio_output_device_index,
         output_mode,
         sample_rate_hz: cfg.audio_sample_rate_hz,
+        buffer_size_frames: cfg.audio_buffer_size_frames,
     }
 }
 
