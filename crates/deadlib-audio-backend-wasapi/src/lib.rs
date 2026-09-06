@@ -527,6 +527,10 @@ fn render_thread_inner(
             .GetService::<Audio::IAudioClock>()
             .map_err(|e| format!("failed to acquire WASAPI audio clock: {e}"))?
     };
+
+    // This is only used for estimating stream lag, but does not correlate
+    // to the actual HNS that we used to initialize the client.
+    // It is used as a fallback only.
     let device_period_ns = match query_device_periods_hns(&audio_client) {
         Ok((default_period_hns, min_period_hns)) => reference_time_to_nanos(
             selected_device_period_hns(prep.mode, default_period_hns, min_period_hns),
