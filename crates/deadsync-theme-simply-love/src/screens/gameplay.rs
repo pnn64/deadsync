@@ -7693,6 +7693,7 @@ struct SongLuaProxySource<'a> {
     segments: &'a [Arc<[Actor]>],
     offset: [f32; 2],
     pool_class: usize,
+    source_view_proj: Option<Matrix4>,
 }
 
 impl<'a> SongLuaProxySource<'a> {
@@ -7701,6 +7702,7 @@ impl<'a> SongLuaProxySource<'a> {
         Self {
             segments,
             offset: [0.0, 0.0],
+            source_view_proj: None,
             pool_class: if segments.len() == 1 {
                 SONG_LUA_SMALL_PROXY_CLASS
             } else {
@@ -7714,6 +7716,7 @@ impl<'a> SongLuaProxySource<'a> {
         Self {
             segments,
             offset,
+            source_view_proj: None,
             pool_class: if segments.len() == 1 {
                 SONG_LUA_SMALL_PROXY_CLASS
             } else {
@@ -7882,7 +7885,9 @@ type SongLuaActorSegments = SmallVec<[Arc<[Actor]>; 5]>;
 
 struct PreparedProxySource {
     segments: SongLuaSingleSource,
+    // Remove the source origin after its own transform, before the proxy's.
     offset: [f32; 2],
+    root_camera: bool,
 }
 
 impl PreparedProxySource {
@@ -7891,12 +7896,19 @@ impl PreparedProxySource {
         Self {
             segments,
             offset: [0.0, 0.0],
+            root_camera: false,
         }
     }
 
-    #[inline(always)]
-    const fn view(&self) -> SongLuaProxySource<'_> {
-        SongLuaProxySource::offset(&self.segments, self.offset)
+    fn view(&self) -> SongLuaProxySource<'_> {
+        // Prepared Player/child transforms use the Player root camera. Decode
+        // that same depth range before an outer proxy rotates the source.
+        SongLuaProxySource {
+            source_view_proj: self
+                .root_camera
+                .then(|| song_lua_player_root_camera(Matrix4::IDENTITY)),
+            ..SongLuaProxySource::offset(&self.segments, self.offset)
+        }
     }
 }
 
@@ -8440,7 +8452,7 @@ fn song_lua_render_captured_source(
         .flat_map(|source| source.iter())
         .flat_map(|segment| song_lua_captured_segment_actors(segment).iter().cloned());
     scratch
-        .refill([-transform.target_x, -transform.target_y], |out| {
+        .refill([0.0, 0.0], |out| {
             append_song_lua_player_transform(
                 field_actors,
                 hud_actors,
@@ -8490,11 +8502,13 @@ fn prepare_proxy_source(
             return Some(PreparedProxySource {
                 segments,
                 offset: [-transform.target_x, -transform.target_y],
+                root_camera: false,
             });
         }
         return Some(PreparedProxySource {
             segments: source,
             offset: [-transform.target_x, -transform.target_y],
+            root_camera: false,
         });
     }
     let segments = match part {
@@ -8505,7 +8519,11 @@ fn prepare_proxy_source(
             song_lua_render_captured_source(None, Some(&source), transform, scratch)
         }
     }?;
-    Some(PreparedProxySource::new(segments))
+    Some(PreparedProxySource {
+        segments,
+        offset: [-transform.target_x, -transform.target_y],
+        root_camera: true,
+    })
 }
 
 fn prepare_flat_proxy_source(
@@ -8525,11 +8543,12 @@ fn prepare_flat_proxy_source(
         return Some(PreparedProxySource {
             segments,
             offset: [-transform.target_x, -transform.target_y],
+            root_camera: false,
         });
     }
 
     let segments = scratch
-        .refill([-transform.target_x, -transform.target_y], |out| {
+        .refill([0.0, 0.0], |out| {
             append_song_lua_player_transform(
                 std::iter::empty(),
                 draws.iter().cloned().map(actor_from_flat_draw),
@@ -8554,7 +8573,11 @@ fn prepare_flat_proxy_source(
             );
         })
         .map(|source| [source])?;
-    Some(PreparedProxySource::new(segments))
+    Some(PreparedProxySource {
+        segments,
+        offset: [-transform.target_x, -transform.target_y],
+        root_camera: true,
+    })
 }
 
 fn prepare_field_proxy_source(
@@ -8583,10 +8606,11 @@ fn prepare_field_proxy_source(
         return Some(PreparedProxySource {
             segments,
             offset: [-transform.target_x, -transform.target_y],
+            root_camera: false,
         });
     }
     let segments = scratch
-        .refill([-transform.target_x, -transform.target_y], |out| {
+        .refill([0.0, 0.0], |out| {
             append_song_lua_player_transform(
                 field_actors(),
                 std::iter::empty(),
@@ -8611,7 +8635,11 @@ fn prepare_field_proxy_source(
             );
         })
         .map(|source| [source])?;
-    Some(PreparedProxySource::new(segments))
+    Some(PreparedProxySource {
+        segments,
+        offset: [-transform.target_x, -transform.target_y],
+        root_camera: true,
+    })
 }
 
 fn capture_player_source(
@@ -9325,6 +9353,7 @@ fn song_lua_build_proxy_actor_in_space_with_scratch(
             children,
             offset,
             transform,
+            source.source_view_proj,
             z,
             state.diffuse,
             blend,
@@ -9364,6 +9393,7 @@ fn song_lua_proxy_wrapper(
     children: Arc<[Actor]>,
     offset: [f32; 2],
     transform: Option<Matrix4>,
+    source_view_proj: Option<Matrix4>,
     z: i16,
     tint: [f32; 4],
     blend: Option<BlendMode>,
@@ -9371,7 +9401,7 @@ fn song_lua_proxy_wrapper(
     if let Some(transform) = transform {
         return Actor::SharedTransform {
             transform,
-            source_view_proj: song_lua_proxy_source_view_proj(),
+            source_view_proj: source_view_proj.unwrap_or_else(song_lua_proxy_source_view_proj),
             children,
             z,
             tint,
@@ -9414,14 +9444,16 @@ fn song_lua_proxy_transform(
     let x = state.x * screen_width() / overlay_space_width.max(1.0);
     let y = state.y * screen_height() / overlay_space_height.max(1.0);
     let [scale_x, scale_y] = song_lua_overlay_axis_scale(state);
+    // Proxy sources are already in Y-up world coordinates. Conjugate the
+    // screen-space actor rotation/skew across Y before applying it to them.
     Matrix4::from_translation(Vector3::new(
         (-0.5f32).mul_add(render_width, x),
         0.5f32.mul_add(render_height, -y),
         state.z,
     )) * song_lua_overlay_local_transform(
-        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
-        state.skew_x,
-        state.skew_y,
+        [-state.rot_x_deg, state.rot_y_deg, -state.rot_z_deg],
+        -state.skew_x,
+        -state.skew_y,
     ) * Matrix4::from_scale(Vector3::new(
         scale_x,
         scale_y,
@@ -9595,7 +9627,13 @@ fn song_lua_build_proxy_frame_actor_in_space_with_scratch(
             .expect("reserved proxy group requires scratch")
             .join_proxy_segments(group, source.segments, state.diffuse, blend);
         return Some(song_lua_proxy_wrapper(
-            children, offset, transform, z, [1.0; 4], None,
+            children,
+            offset,
+            transform,
+            source.source_view_proj,
+            z,
+            [1.0; 4],
+            None,
         ));
     }
 
@@ -9616,6 +9654,7 @@ fn song_lua_build_proxy_frame_actor_in_space_with_scratch(
         Arc::from(children),
         offset,
         transform,
+        source.source_view_proj,
         z,
         [1.0; 4],
         None,
@@ -23856,11 +23895,13 @@ mod tests {
             overlay.initial_state.vibrate = true;
             overlay.initial_state.effect_magnitude = [10.0; 3];
         }
-        let note = [Arc::<[Actor]>::from([act!(quad:
-            align(0.5, 0.5): xy(650.0, 115.0): zoomto(64.0, 64.0): diffuse(1.0, 1.0, 1.0, 1.0)
+        let note = [Arc::<[Actor]>::from([test_capture_quad(
+            [650.0, 115.0],
+            [64.0; 2],
         )])];
-        let judgment = [Arc::<[Actor]>::from([act!(quad:
-            align(0.5, 0.5): xy(427.0, 220.0): zoomto(120.0, 24.0): diffuse(1.0, 1.0, 1.0, 1.0)
+        let judgment = [Arc::<[Actor]>::from([test_capture_quad(
+            [427.0, 220.0],
+            [120.0, 24.0],
         )])];
         let sources = SongLuaScreenProxySources {
             players: [
@@ -23923,7 +23964,7 @@ mod tests {
                 time,
                 &mut text,
                 &mut compose,
-                &NullTextureContext,
+                &CaptureTextureContext,
                 None,
             );
             assert_eq!(frame.render_targets.len(), 1);
@@ -23933,6 +23974,7 @@ mod tests {
                 2,
                 "note and judgment are captured"
             );
+            let mut corners = 0;
             for op in &target.ops {
                 let deadlib_render_core::DrawOp::Sprite(run) = op else {
                     continue;
@@ -23942,6 +23984,7 @@ mod tests {
                     [..run.instance_count as usize]
                 {
                     for [x, y] in [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] {
+                        corners += 1;
                         let clip = camera
                             * Vector4::new(
                                 sprite.center[0] + x * sprite.size[0],
@@ -23980,6 +24023,7 @@ mod tests {
                     }
                 }
             }
+            assert_eq!(corners, 8, "both native capture sources must be drawn");
             assert_eq!(frame.sprite_instances.len(), 3);
             let rgb = &frame.sprite_instances;
             assert_ne!(rgb[0].center[..2], rgb[1].center[..2]);
@@ -23999,6 +24043,161 @@ mod tests {
                     "proxy wag must execute"
                 );
             }
+        }
+    }
+
+    struct CaptureTextureContext;
+
+    fn test_capture_quad(position: [f32; 2], size: [f32; 2]) -> Actor {
+        let mut actor = deadlib_present::dsl::SpriteBuilder::solid();
+        actor.align(0.5, 0.5);
+        actor.xy(position[0], position[1]);
+        actor.size(size[0], size[1]);
+        actor.build(0)
+    }
+
+    impl deadlib_present::texture::TextureContext for CaptureTextureContext {
+        fn texture_registry_generation(&self) -> u64 {
+            1
+        }
+        fn texture_dims(&self, _: &str) -> Option<deadlib_present::texture::TextureMeta> {
+            Some(deadlib_present::texture::TextureMeta { w: 1, h: 1 })
+        }
+        fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+            (1, 1)
+        }
+        fn texture_handle(&self, _: &str) -> u64 {
+            1
+        }
+    }
+
+    #[test]
+    fn song_lua_kenpo_nested_rotation_matches_native_motion() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-actors/kenpo-motion.json"
+        )))
+        .expect("native nested rotation fixture");
+        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        deadlib_present::space::set_current_metrics(metrics);
+        let notes =
+            [Arc::<[Actor]>::from([-224.0, 32.0, 224.0].map(|x| {
+                test_capture_quad([427.0 + x, 115.0], [64.0; 2])
+            }))];
+        let mut scratch = SharedActorFrameScratch::with_capacity(16);
+        for sample in native["samples"].as_array().expect("native samples") {
+            let seconds = sample["time"].as_f64().expect("sample time") as f32;
+            let beat = sample["beat"].as_f64().expect("sample beat") as f32;
+            // KENPO's wrapper X rotation alternates linearly every half beat;
+            // the outer proxy wags around Y on the BGM beat clock at 77 BPM.
+            let phase = beat.rem_euclid(1.0);
+            let rotation_x = if phase < 0.5 {
+                20.0 - 80.0 * phase
+            } else {
+                -60.0 + 80.0 * phase
+            };
+            let source = prepare_proxy_source(
+                notes.clone(),
+                ProxyCapturePart::Field,
+                SongLuaCaptureTransform {
+                    z_shift: 0,
+                    tint: [1.0; 4],
+                    blend: None,
+                    playfield_center_x: 427.0,
+                    target_x: 427.0,
+                    target_y: 240.0,
+                    rotation_x,
+                    rotation_y: 0.0,
+                    rotation_z: 0.0,
+                    skew_x: 0.0,
+                    skew_y: 0.0,
+                    zoom_x: 1.0,
+                    zoom_y: 1.0,
+                    zoom_z: 1.0,
+                },
+                &mut scratch,
+            )
+            .expect("captured field");
+            let state = song_lua_proxy_effect(
+                SongLuaOverlayState {
+                    x: 427.0,
+                    y: 240.0,
+                    zoom_z: 854.0 / 640.0,
+                    effect_mode: deadlib_present::anim::EffectMode::Wag,
+                    effect_clock: deadlib_present::anim::EffectClock::Beat,
+                    effect_magnitude: [0.0, 20.0, 0.0],
+                    effect_period: 1.0,
+                    ..Default::default()
+                },
+                seconds,
+                beat,
+                0,
+            );
+            let proxy = song_lua_build_proxy_actor_with_scratch(
+                state,
+                0,
+                source.view(),
+                854.0,
+                480.0,
+                None,
+            )
+            .expect("rotating proxy");
+            let frame = deadlib_present::compose::build_screen_with_texture_context(
+                &[
+                    Actor::CameraPush {
+                        view_proj: glam::camera::rh::proj::opengl::orthographic(
+                            -427.0, 427.0, -240.0, 240.0, -1000.0, 1000.0,
+                        ),
+                    },
+                    proxy,
+                    Actor::CameraPop,
+                ],
+                [0.0; 4],
+                &metrics,
+                &font::FontMap::default(),
+                seconds,
+                &CaptureTextureContext,
+            );
+            let mut column = 0;
+            for op in &frame.ops {
+                let deadlib_render_core::DrawOp::Sprite(run) = op else {
+                    continue;
+                };
+                let camera = frame.cameras[run.camera as usize];
+                for sprite in &frame.sprite_instances[run.instance_start as usize..]
+                    [..run.instance_count as usize]
+                {
+                    let name = ["left", "middle", "right"][column];
+                    let actor = sample["actors"]
+                        .as_array()
+                        .expect("native actors")
+                        .iter()
+                        .find(|actor| actor["name"] == name)
+                        .expect("native note");
+                    let vertices = actor["draws"][0]["vertices"]
+                        .as_array()
+                        .expect("native vertices");
+                    for [x, y] in [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] {
+                        let clip = camera
+                            * Vector4::new(
+                                sprite.center[0] + x * sprite.size[0],
+                                sprite.center[1] + y * sprite.size[1],
+                                sprite.center[2],
+                                1.0,
+                            );
+                        assert!(
+                            vertices.iter().any(|v| (0..4).all(|axis| {
+                                (v["clip"][axis].as_f64().expect("native clip") as f32 - clip[axis])
+                                    .abs()
+                                    < 0.000_02
+                            })),
+                            "{name} at beat {beat}: {clip:?}, native={vertices:?}"
+                        );
+                    }
+                    column += 1;
+                }
+            }
+            assert_eq!(column, 3, "all native columns must be drawn");
         }
     }
 
@@ -24161,7 +24360,7 @@ mod tests {
         let captured_actor = song_lua_build_proxy_actor_with_scratch(
             proxy_state,
             321,
-            SongLuaProxySource::new(&captured),
+            SongLuaProxySource::offset(&captured, [-transform.target_x, -transform.target_y]),
             screen_width(),
             screen_height(),
             Some(&mut captured_proxy_scratch),

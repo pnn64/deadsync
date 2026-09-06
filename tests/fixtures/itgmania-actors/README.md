@@ -74,3 +74,11 @@ production AFT draw vertices, including clip depth, and verifies independent
 RGB vibration. See `docs/song-lua-kenpo-rendering-2026-09-06.md` for regeneration
 and the native source contracts. The fixture does not contain random vibration;
 the renderer's independent RGB offsets are tested separately from golden data.
+
+`kenpo-motion.json` adds the nested NoteField X rotation and outer proxy Y wag,
+with the song's 77 BPM beat clock and Z scale. Seventeen samples cover three
+columns through two complete cycles. The theme's
+`song_lua_kenpo_nested_rotation_matches_native_motion` regression checks all 204
+projected corners and requires all three columns to produce draw commands.
+Both KENPO tests use a valid test texture registry so an empty draw stream cannot
+silently pass. Regeneration details are in the same rendering follow-up document.
