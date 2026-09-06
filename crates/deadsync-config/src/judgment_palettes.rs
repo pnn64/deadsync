@@ -154,12 +154,14 @@ impl JudgmentPaletteCatalog {
                 )
             })?;
         }
-        std::fs::write(path, self.to_ini()).map_err(|error| {
-            format!(
-                "failed to save judgment palettes to '{}': {error}",
-                path.display()
-            )
-        })
+        deadlib_platform::atomic_write::write_atomic(path, self.to_ini().as_bytes()).map_err(
+            |error| {
+                format!(
+                    "failed to save judgment palettes to '{}': {error}",
+                    path.display()
+                )
+            },
+        )
     }
 
     #[must_use]

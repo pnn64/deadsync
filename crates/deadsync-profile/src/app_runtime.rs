@@ -1107,7 +1107,9 @@ fn read_machine_player_defaults(
                     "Failed to create default player options directory '{}': {error}",
                     parent.display()
                 );
-            } else if let Err(error) = fs::write(path, content) {
+            } else if let Err(error) =
+                deadlib_platform::atomic_write::write_atomic(path, content.as_bytes())
+            {
                 warn!(
                     "Failed to create default player options file '{}': {error}",
                     path.display()
@@ -1168,7 +1170,7 @@ fn update_common_machine_player_default(key: &str, value: &str) {
         );
         return;
     }
-    if let Err(error) = fs::write(&path, &content) {
+    if let Err(error) = deadlib_platform::atomic_write::write_atomic(&path, content.as_bytes()) {
         warn!(
             "Failed to update default player options file '{}': {error}",
             path.display()
