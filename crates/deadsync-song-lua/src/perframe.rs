@@ -1,5 +1,5 @@
 use mlua::{Function, Lua, Table, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use crate::{
@@ -400,6 +400,24 @@ pub fn current_update_mod_states(
     ])
 }
 
+fn current_update_mod_speeds(
+    tables: &[Table; LUA_PLAYERS],
+) -> Result<[SongLuaUpdateModState; LUA_PLAYERS], String> {
+    let mut speeds = std::array::from_fn(|_| SongLuaUpdateModState::new());
+    for (out, table) in speeds.iter_mut().zip(tables) {
+        if let Some(table) = table
+            .raw_get::<Option<Table>>("__songlua_player_option_speeds")
+            .map_err(|err| err.to_string())?
+        {
+            for pair in table.pairs::<String, f32>() {
+                let (key, speed) = pair.map_err(|err| err.to_string())?;
+                out.insert(key, speed);
+            }
+        }
+    }
+    Ok(speeds)
+}
+
 fn current_update_mod_states_with_note_columns(
     lua: &Lua,
     tables: &[Table; LUA_PLAYERS],
@@ -654,6 +672,7 @@ pub fn push_perframe_player_target(
         return;
     }
     out.push(SongLuaEaseWindow {
+        approach_speed: None,
         unit: SongLuaTimeUnit::Beat,
         start,
         limit: end - start,
@@ -818,20 +837,51 @@ pub fn push_update_mod_targets(
     from_players: &[SongLuaUpdateModState; LUA_PLAYERS],
     to_players: &[SongLuaUpdateModState; LUA_PLAYERS],
     baseline_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    speeds: &[SongLuaUpdateModState; LUA_PLAYERS],
+    last_windows: &mut BTreeMap<(usize, String), usize>,
 ) {
     for player in 0..LUA_PLAYERS {
-        let keys = from_players[player]
-            .keys()
-            .chain(to_players[player].keys())
-            .map(String::as_str)
-            .collect::<BTreeSet<_>>();
-        for key in keys {
+        for (key, &from) in &from_players[player] {
+            let key = key.as_str();
             let baseline = baseline_players[player].get(key).copied().unwrap_or(0.0);
-            let from = from_players[player].get(key).copied().unwrap_or(baseline);
             let to = to_players[player].get(key).copied().unwrap_or(baseline);
             let Some(target) = runtime_player_option_ease_target(key, key) else {
                 continue;
             };
+            if let Some(speed) = speeds[player].get(key).copied() {
+                if !from.is_finite() || !speed.is_finite() {
+                    continue;
+                }
+                let value = update_mod_runtime_value(key, from);
+                let key = (player, key.to_string());
+                if let Some(index) = last_windows.get(&key)
+                    && let Some(window) = out.get_mut(*index)
+                    && window.to == value
+                    && window.approach_speed == Some(speed)
+                {
+                    window.limit = end - window.start;
+                    continue;
+                }
+                last_windows.insert(key, out.len());
+                // Song-level writes are step targets; Current approaches them
+                // at the authored speed. Never tween toward a future write.
+                out.push(SongLuaEaseWindow {
+                    approach_speed: Some(speed),
+                    unit: SongLuaTimeUnit::Beat,
+                    start,
+                    limit: end - start,
+                    span_mode: SongLuaSpanMode::Len,
+                    from: value,
+                    to: value,
+                    target,
+                    easing: None,
+                    player: Some(player as u8 + 1),
+                    sustain: None,
+                    opt1: None,
+                    opt2: None,
+                });
+                continue;
+            }
             push_perframe_player_target(
                 out,
                 start,
@@ -1629,6 +1679,7 @@ pub fn compile_update_functions<Kind>(
     let mut sample_beats = vec![start];
     let mut player_samples = vec![baseline_players];
     let mut mod_samples = vec![baseline_mods.clone()];
+    let mut mod_speed_samples = vec![current_update_mod_speeds(&option_tables)?];
     let mut column_samples = vec![baseline_columns];
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
@@ -1713,6 +1764,7 @@ pub fn compile_update_functions<Kind>(
             lua,
             &option_tables,
         )?);
+        mod_speed_samples.push(current_update_mod_speeds(&option_tables)?);
         mod_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         column_samples.push(read_note_column_transform_samples(lua)?);
@@ -1747,6 +1799,7 @@ pub fn compile_update_functions<Kind>(
 
     let mut eases = Vec::new();
     let mut column_transforms = Vec::new();
+    let mut last_mod_windows = BTreeMap::new();
     for index in 0..sample_beats.len() {
         let seg_start = sample_beats[index];
         let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
@@ -1775,6 +1828,8 @@ pub fn compile_update_functions<Kind>(
             from_mods,
             to_mods,
             &baseline_mods,
+            &mod_speed_samples[index],
+            &mut last_mod_windows,
         );
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);

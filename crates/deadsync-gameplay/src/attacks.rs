@@ -607,6 +607,9 @@ pub enum SongLuaEaseMaskTarget {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaEaseMaskWindow {
+    /// Native option units per second for sampled Song-level targets.
+    /// None applies the authored ease directly to Current.
+    pub approach_speed: Option<f32>,
     pub start_second: f32,
     pub end_second: f32,
     pub sustain_end_second: f32,
@@ -1573,6 +1576,7 @@ fn push_song_lua_ease_target(
     opt2: Option<f32>,
 ) {
     out.push(SongLuaEaseMaskWindow {
+        approach_speed: None,
         start_second,
         end_second,
         sustain_end_second,
@@ -1856,6 +1860,9 @@ pub trait SongLuaEaseWindowLike {
     type Target: SongLuaRuntimeEaseTargetLike + ?Sized;
 
     fn player(&self) -> Option<u8>;
+    fn approach_speed(&self) -> Option<f32> {
+        None
+    }
     fn unit(&self) -> SongLuaRuntimeTimeUnit;
     fn start(&self) -> f32;
     fn limit(&self) -> f32;
@@ -1871,6 +1878,9 @@ pub trait SongLuaEaseWindowLike {
 
 #[derive(Clone, Debug)]
 pub struct SongLuaRuntimeEaseWindow {
+    /// Native option units per second for sampled Song-level targets.
+    /// None applies the authored ease directly to Current.
+    pub approach_speed: Option<f32>,
     pub player: Option<u8>,
     pub unit: SongLuaRuntimeTimeUnit,
     pub start: f32,
@@ -1886,6 +1896,9 @@ pub struct SongLuaRuntimeEaseWindow {
 }
 
 impl SongLuaEaseWindowLike for SongLuaRuntimeEaseWindow {
+    fn approach_speed(&self) -> Option<f32> {
+        self.approach_speed
+    }
     type Target = SongLuaRuntimeEaseTargetOwned;
 
     #[inline(always)]
@@ -1981,7 +1994,8 @@ where
     if sustain_end_second <= start_second {
         return SongLuaRuntimeEaseAppend::Ignored;
     }
-    append_song_lua_runtime_ease_window_like(
+    let first = out.len();
+    let result = append_song_lua_runtime_ease_window_like(
         out,
         start_second,
         end_second,
@@ -1992,7 +2006,11 @@ where
         window.easing(),
         window.opt1(),
         window.opt2(),
-    )
+    );
+    for compiled in &mut out[first..] {
+        compiled.approach_speed = window.approach_speed();
+    }
+    result
 }
 
 pub fn build_song_lua_ease_windows_for_player<Window>(
@@ -4174,6 +4192,7 @@ pub fn apply_song_lua_attack_eases(
         None,
         now,
         mini_base_percent,
+        false,
     );
 }
 
@@ -4185,8 +4204,12 @@ fn apply_song_lua_attack_eases_selected(
     indices: Option<&[usize]>,
     now: f32,
     mini_base_percent: f32,
+    skip_approached: bool,
 ) {
     for_each_selected(windows, indices, |window| {
+        if skip_approached && window.approach_speed.is_some() {
+            return;
+        }
         if let Some(value) = song_lua_ease_window_value(window, now) {
             let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
                 mini_base_percent + value
@@ -4206,6 +4229,116 @@ fn apply_song_lua_attack_eases_selected(
                 &mut attack.mini_percent,
                 player,
             );
+        }
+    });
+}
+
+fn apply_song_lua_approach_targets(
+    attack: &mut ActiveAttackMaskValues,
+    player: &mut SongLuaPlayerTransformValues,
+    windows: &[SongLuaEaseMaskWindow],
+    indices: Option<&[usize]>,
+    now: f32,
+    mini_base_percent: f32,
+) {
+    for_each_selected(windows, indices, |window| {
+        let Some(speed) = window.approach_speed else {
+            return;
+        };
+        let Some(value) = song_lua_ease_window_value(window, now) else {
+            return;
+        };
+        let value = if window.target == SongLuaEaseMaskTarget::MiniPercent {
+            mini_base_percent + value
+        } else {
+            value
+        };
+        song_lua_apply_eased_target(
+            window.target,
+            value,
+            &mut attack.accel,
+            &mut attack.visual,
+            &mut attack.appearance_target,
+            &mut attack.visibility,
+            &mut attack.scroll,
+            &mut attack.perspective,
+            &mut attack.scroll_speed,
+            &mut attack.mini_percent,
+            player,
+        );
+        match window.target {
+            SongLuaEaseMaskTarget::VisualDrunk => attack.visual_speed.drunk = Some(speed),
+            SongLuaEaseMaskTarget::VisualDizzy => attack.visual_speed.dizzy = Some(speed),
+            SongLuaEaseMaskTarget::VisualConfusion => attack.visual_speed.confusion = Some(speed),
+            SongLuaEaseMaskTarget::VisualConfusionOffset => {
+                attack.visual_speed.confusion_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualFlip => attack.visual_speed.flip = Some(speed),
+            SongLuaEaseMaskTarget::VisualInvert => attack.visual_speed.invert = Some(speed),
+            SongLuaEaseMaskTarget::VisualTornado => attack.visual_speed.tornado = Some(speed),
+            SongLuaEaseMaskTarget::VisualTipsy => attack.visual_speed.tipsy = Some(speed),
+            SongLuaEaseMaskTarget::VisualTiny => attack.visual_speed.tiny = Some(speed),
+            SongLuaEaseMaskTarget::VisualBumpy => attack.visual_speed.bumpy = Some(speed),
+            SongLuaEaseMaskTarget::VisualBumpyOffset => {
+                attack.visual_speed.bumpy_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBumpyPeriod => {
+                attack.visual_speed.bumpy_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualPulseInner => {
+                attack.visual_speed.pulse_inner = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualPulseOuter => {
+                attack.visual_speed.pulse_outer = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualPulsePeriod => {
+                attack.visual_speed.pulse_period = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualPulseOffset => {
+                attack.visual_speed.pulse_offset = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBeat => attack.visual_speed.beat = Some(speed),
+            SongLuaEaseMaskTarget::VisualRandomSpeed => {
+                attack.visual_speed.random_speed = Some(speed)
+            }
+            SongLuaEaseMaskTarget::AppearanceHidden => attack.appearance_speed.hidden = speed,
+            SongLuaEaseMaskTarget::AppearanceSudden => attack.appearance_speed.sudden = speed,
+            SongLuaEaseMaskTarget::AppearanceSuddenOffset => {
+                attack.appearance_speed.sudden_offset = speed
+            }
+            SongLuaEaseMaskTarget::AppearanceStealth => attack.appearance_speed.stealth = speed,
+            SongLuaEaseMaskTarget::AppearanceBlink => attack.appearance_speed.blink = speed,
+            SongLuaEaseMaskTarget::AppearanceRandomVanish => {
+                attack.appearance_speed.random_vanish = speed
+            }
+            SongLuaEaseMaskTarget::ScrollReverse => {
+                attack.scroll_approach_speed.reverse = Some(speed)
+            }
+            SongLuaEaseMaskTarget::ScrollSplit => attack.scroll_approach_speed.split = Some(speed),
+            SongLuaEaseMaskTarget::ScrollAlternate => {
+                attack.scroll_approach_speed.alternate = Some(speed)
+            }
+            SongLuaEaseMaskTarget::ScrollCross => attack.scroll_approach_speed.cross = Some(speed),
+            SongLuaEaseMaskTarget::ScrollCentered => {
+                attack.scroll_approach_speed.centered = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.confusion_offset_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualBumpyColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.bumpy_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualTinyColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.tiny_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualMoveXColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.move_x_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualMoveYColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.move_y_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::MiniPercent => attack.mini_speed = Some(speed),
+            _ => {}
         }
     });
 }
@@ -4401,6 +4534,17 @@ fn refresh_active_attack_player_full(
         }
     });
 
+    if !input.attacks_cleared_for_outro {
+        apply_song_lua_approach_targets(
+            &mut attack,
+            &mut player_transform,
+            input.song_lua_ease_windows,
+            ease_window_indices,
+            input.now,
+            input.base_mini_percent,
+        );
+    }
+
     approach_appearance_effects(
         &mut state.attack_current_appearance,
         attack.appearance_target,
@@ -4486,6 +4630,7 @@ fn refresh_active_attack_player_full(
         ease_window_indices,
         input.now,
         base_mini_percent,
+        true,
     );
 
     ActiveAttackRefreshOutput {

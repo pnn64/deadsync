@@ -1125,6 +1125,152 @@ mod tests {
     }
 
     #[test]
+    fn riddle_note_and_feedback_rotation_match_native_vertices() {
+        use deadlib_present::compose::{ActorSegment, ComposeScratch};
+        struct Textures;
+        impl deadlib_present::texture::TextureContext for Textures {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<deadlib_present::texture::TextureMeta> {
+                Some(deadlib_present::texture::TextureMeta { w: 64, h: 64 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, _: &str) -> u64 {
+                1
+            }
+        }
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-actors/riddle-rotation.json"
+        )))
+        .expect("native Riddle rotation fixture");
+        let cases = [
+            (103.125, 0.8, 0.0, 0.0),
+            (103.25, -0.4, 0.0, 0.0),
+            (200.0, std::f32::consts::FRAC_PI_2, 0.0, 0.0),
+            (3.5, 0.4, 1.5, 0.0),
+            (3.5, -0.4, -1.5, 0.0),
+            (68.0, 0.0, 0.0, -0.5),
+        ];
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let hides = SongLuaNoteHideWindows::default();
+        let hold = active_hold(0);
+        let taps = [tap(), None];
+        let mut feedback = spline_feedback(&taps);
+        feedback.lanes[0].active_hold = Some(&hold);
+        let metrics = deadlib_present::space::metrics_for_window(640, 480);
+        let mut checked = 0;
+        for (index, (beat, offset, confusion, dizzy)) in cases.into_iter().enumerate() {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.visual.current_display_beat = beat;
+            request.chart.visible_beat = beat;
+            request.visual.visual.confusion_offset = offset;
+            request.visual.visual.confusion = confusion;
+            request.visual.visual.dizzy = dizzy;
+            let prepared = prepare_notefield(&request).expect("prepared field");
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &feedback,
+                &source,
+            );
+            let find = |key| {
+                draws
+                    .iter()
+                    .find_map(|draw| match draw {
+                        FlatDraw::Sprite(sprite)
+                            if matches!(&sprite.source,
+                    SpriteSource::TextureHandle { key: name, .. } if name.as_ref() == key) =>
+                        {
+                            Some(sprite.clone())
+                        }
+                        _ => None,
+                    })
+                    .expect("rendered feedback source")
+            };
+            let receptor = find("target0");
+            let mut note = receptor.clone();
+            note.rot_z_deg = crate::visual_note_rotation_z_cached(
+                beat + 2.0,
+                crate::lane_note_transform_cache(
+                    beat,
+                    gameplay_visual_effect_params(&request.visual.visual, 0),
+                ),
+            );
+            for (role, mut sprite) in [
+                ("receptor", receptor),
+                ("hold", find("hold0")),
+                ("flash", find("tap0")),
+                ("note", note),
+            ] {
+                // Isolate the shared rotation contract from noteskin pulses and layout.
+                sprite.center = [320.0, 240.0];
+                sprite.size = [64.0; 2];
+                let draws = [FlatDraw::Sprite(sprite)];
+                let frame = deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &[ActorSegment::new(&[]).with_flat_draws(&draws, None)], [0.0; 4], &metrics,
+                    &deadlib_present::font::FontMap::default(), 0.0,
+                    &mut deadlib_present::compose::TextLayoutCache::default(), &mut ComposeScratch::default(),
+                    &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
+                );
+                assert_eq!(frame.sprite_instances.len(), 1, "{role} must draw");
+                assert_eq!(frame.ops.len(), 1, "{role} must submit geometry");
+                let deadlib_render_core::DrawOp::Sprite(run) = &frame.ops[0] else {
+                    panic!("sprite draw")
+                };
+                let sprite = &frame.sprite_instances[0];
+                let camera = frame.cameras[run.camera as usize];
+                let name = format!("case_{index}_{role}");
+                let actor = native["samples"][0]["actors"]
+                    .as_array()
+                    .expect("native actors")
+                    .iter()
+                    .find(|a| a["name"] == name)
+                    .expect("native role");
+                let vertices = actor["draws"][0]["vertices"]
+                    .as_array()
+                    .expect("native vertices");
+                for vertex in vertices {
+                    let u = vertex["uv"][0].as_f64().expect("u") as f32;
+                    let v = vertex["uv"][1].as_f64().expect("v") as f32;
+                    let x = (u - 0.5) * sprite.size[0];
+                    let y = (0.5 - v) * sprite.size[1];
+                    let [sin, cos] = sprite.rot_sin_cos;
+                    let clip = camera
+                        * glam::Vec4::new(
+                            sprite.center[0] + x * cos - y * sin,
+                            sprite.center[1] + x * sin + y * cos,
+                            sprite.center[2],
+                            1.0,
+                        );
+                    for axis in 0..4 {
+                        let expected = vertex["clip"][axis].as_f64().expect("native clip") as f32;
+                        assert!(
+                            (clip[axis] - expected).abs() < 0.000002,
+                            "{name}: {clip:?} != {}",
+                            vertex["clip"]
+                        );
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(
+            checked, 96,
+            "four textured corners for each role and rotation"
+        );
+    }
+
+    #[test]
     fn hidden_idle_receptors_emit_no_feedback_actors() {
         let noteskin = noteskin();
         let timing = TimingData::default();

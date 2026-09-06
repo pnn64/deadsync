@@ -82,3 +82,23 @@ columns through two complete cycles. The theme's
 projected corners and requires all three columns to produce draw commands.
 Both KENPO tests use a valid test texture registry so an empty draw stream cannot
 silently pass. Regeneration details are in the same rendering follow-up document.
+
+## Riddle note and feedback rotation regression
+
+`riddle-rotation.json` records native Actor/Sprite vertices for angles derived
+from the local `ArrowEffects::ReceptorGetRotationZ` and `GetRotationZ` formulas.
+It covers positive/negative confusion offsets and spin, plus note-only dizzy.
+The notefield test `riddle_note_and_feedback_rotation_match_native_vertices`
+compares 96 UV-matched corners through production note rotation and receptor,
+hold explosion, and tap explosion composition. The fixture exercises native
+Actor/Sprite projection; the harness does not execute ArrowEffects itself.
+
+Regenerate from `itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/riddle-rotation.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/riddle-rotation.json
+```
+
+See `docs/song-lua-riddle-rendering-2026-09-06.md` for the source contracts and
+the separate sampled PlayerOptions approach regression.

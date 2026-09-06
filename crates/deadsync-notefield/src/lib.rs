@@ -1643,7 +1643,7 @@ mod tests {
         };
         let hold_rotation = cached_note_rotation(6.75, 3.5, true, params);
         let tap_rotation = cached_note_rotation(6.75, 3.5, false, params);
-        let expected = -visual_confusion_rotation_deg(3.5, params);
+        let expected = visual_confusion_rotation_deg(3.5, params);
         let cached = visual_hold_head_rotation_z_cached(lane_note_transform_cache(3.5, params));
 
         assert!((hold_rotation - expected).abs() <= 1e-6);

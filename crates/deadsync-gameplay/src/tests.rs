@@ -884,6 +884,7 @@ mod tests {
         to: f32,
     ) -> SongLuaEaseMaskWindow {
         SongLuaEaseMaskWindow {
+            approach_speed: None,
             start_second,
             end_second,
             sustain_end_second,

@@ -99,6 +99,7 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
         }],
         eases: vec![
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: None,
                 unit: SongLuaTimeUnit::Second,
                 start: 1.0,
@@ -113,6 +114,7 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 4.0,
@@ -127,6 +129,7 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(2),
                 unit: SongLuaTimeUnit::Second,
                 start: 3.0,
@@ -141,6 +144,7 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Second,
                 start: 5.0,
@@ -155,6 +159,7 @@ fn runtime_window_bridge_fixture() -> TestCompiledSongLua {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: None,
                 unit: SongLuaTimeUnit::Second,
                 start: 6.0,
@@ -473,6 +478,7 @@ fn song_lua_eases_persist_until_later_override() {
     let compiled = TestCompiledSongLua {
         eases: vec![
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
@@ -487,6 +493,7 @@ fn song_lua_eases_persist_until_later_override() {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 8.0,
@@ -501,6 +508,7 @@ fn song_lua_eases_persist_until_later_override() {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 1.0,
@@ -515,6 +523,7 @@ fn song_lua_eases_persist_until_later_override() {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 4.0,
@@ -563,6 +572,7 @@ fn song_lua_constant_mod_cuts_prior_ease_tail() {
     let timing = test_timing(16 * 48);
     let compiled = TestCompiledSongLua {
         eases: vec![SongLuaEaseWindow {
+            approach_speed: None,
             player: Some(1),
             unit: SongLuaTimeUnit::Beat,
             start: 0.0,
@@ -654,6 +664,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
     let compiled = TestCompiledSongLua {
         eases: vec![
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
@@ -668,6 +679,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 1.0,
@@ -682,6 +694,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
@@ -696,6 +709,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
@@ -710,6 +724,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 4.0,
@@ -724,6 +739,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 6.0,
@@ -738,6 +754,7 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 8.0,
@@ -815,6 +832,7 @@ fn song_lua_skew_mod_eases_scale_to_player_skews() {
     let compiled = TestCompiledSongLua {
         eases: vec![
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 0.0,
@@ -829,6 +847,7 @@ fn song_lua_skew_mod_eases_scale_to_player_skews() {
                 opt2: None,
             },
             SongLuaEaseWindow {
+                approach_speed: None,
                 player: Some(1),
                 unit: SongLuaTimeUnit::Beat,
                 start: 1.0,
@@ -868,6 +887,7 @@ fn song_lua_confusion_offset_ease_scales_like_itgmania() {
     let timing = test_timing(16 * 48);
     let compiled = TestCompiledSongLua {
         eases: vec![SongLuaEaseWindow {
+            approach_speed: None,
             player: Some(1),
             unit: SongLuaTimeUnit::Beat,
             start: 0.0,
@@ -1039,4 +1059,83 @@ fn transform_ease_fixture_reaches_runtime_windows() {
             && (window.start_second - timing.get_time_for_beat(28.0)).abs() <= 0.001
             && (window.to - 1.0).abs() <= 0.000_1
     }));
+}
+
+#[test]
+fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
+    use deadsync_gameplay::{
+        AttackBaseEffects, GameplayAttackRuntimeState, SongLuaPlayerTransform,
+    };
+    let root = deadsync_root().join("tests/fixtures/song_lua");
+    let mut context = test_song_lua_double_context(&root, "Riddle approach");
+    context.song_display_bpms = [128.0; 2];
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_with_default_host(
+        &root.join("riddle-approach.lua"),
+        &context,
+        SongLuaNoteskinResolver::default(),
+        test_read_model_slots,
+        test_model_layer_from_slot,
+        |_, _| None,
+    )
+    .expect("compile recurring option writes");
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &TimingSegments {
+            bpms: vec![(0.0, 128.0)],
+            ..TimingSegments::default()
+        },
+        &test_row_to_beat(8 * 48),
+    );
+    let constants = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+    let (windows, unsupported) =
+        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+    assert_eq!(unsupported, 0);
+    let invert = windows
+        .iter()
+        .find(|w| w.target == SongLuaEaseMaskTarget::VisualInvert && w.to == 1.0)
+        .expect("fast invert target");
+    assert_eq!(invert.approach_speed, Some(1000.0));
+    let swap_at = invert.start_second;
+    let merge_at = windows
+        .iter()
+        .find(|w| w.target == SongLuaEaseMaskTarget::VisualFlip && w.to == 0.5)
+        .expect("slow merge target")
+        .start_second;
+    let mut runtime = GameplayAttackRuntimeState::new([constants, vec![]], [windows, vec![]]);
+    let mut transform = SongLuaPlayerTransform::default();
+    let mut advance = |runtime: &mut GameplayAttackRuntimeState, now, dt| {
+        if let Some(next) =
+            runtime.refresh_player(0, now, dt, AttackBaseEffects::default(), transform)
+        {
+            transform = next;
+        }
+    };
+    let dt = 1.0 / 240.0;
+    advance(&mut runtime, swap_at - dt, dt);
+    assert_eq!(
+        runtime.visual[0].invert,
+        Some(0.0),
+        "no interpolation toward a future swap"
+    );
+    advance(&mut runtime, swap_at, dt);
+    assert_eq!(
+        runtime.visual[0].invert,
+        Some(1.0),
+        "1000 units/s swaps within one frame"
+    );
+    advance(&mut runtime, merge_at - dt, 1.0);
+    for frame in 0..24 {
+        advance(&mut runtime, merge_at + frame as f32 * dt, dt);
+        // PlayerOptions::Approach uses speed * seconds, in option units.
+        let amount = 10.0 * (frame + 1) as f32 * dt;
+        assert!((runtime.visual[0].flip.expect("flip") - amount.min(0.5)).abs() < 0.00001);
+        assert!(
+            (runtime.mini_percent[0].expect("mini") + amount.min(1.0) * 100.0).abs() < 0.0001,
+            "frame {frame}: mini={:?}, amount={amount}",
+            runtime.mini_percent[0]
+        );
+        assert!((runtime.scroll[0].reverse.expect("reverse") - amount.min(0.1)).abs() < 0.00001);
+    }
 }

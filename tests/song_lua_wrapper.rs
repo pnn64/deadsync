@@ -70,7 +70,11 @@ return Def.Actor {
     let held = compiled
         .eases
         .iter()
-        .find(|ease| ease.target == SongLuaEaseTarget::Mod("mini".into()) && ease.start > 1.1)
+        .find(|ease| {
+            ease.target == SongLuaEaseTarget::Mod("mini".into())
+                && ease.start <= 1.1
+                && ease.start + ease.limit > 1.1
+        })
         .expect("last sampled value should persist");
     assert!(held.from > 70.0 && held.from < 100.0);
     assert_eq!(held.from, held.to);

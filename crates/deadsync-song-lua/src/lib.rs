@@ -1530,6 +1530,9 @@ pub struct SongLuaModWindow {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaEaseWindow {
+    /// Native option units per second for sampled Song-level targets.
+    /// None applies the authored ease directly to Current.
+    pub approach_speed: Option<f32>,
     pub unit: SongLuaTimeUnit,
     pub start: f32,
     pub limit: f32,
@@ -4949,6 +4952,7 @@ mod tests {
 
     fn ease_window(start: f32, limit: f32) -> SongLuaEaseWindow {
         SongLuaEaseWindow {
+            approach_speed: None,
             unit: SongLuaTimeUnit::Beat,
             start,
             limit,

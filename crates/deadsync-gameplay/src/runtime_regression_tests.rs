@@ -1479,6 +1479,7 @@ mod runtime_regression_tests {
         sustain: Option<f32>,
     ) -> SongLuaRuntimeEaseWindow {
         SongLuaRuntimeEaseWindow {
+            approach_speed: None,
             player: Some(1),
             unit: SongLuaRuntimeTimeUnit::Beat,
             start,

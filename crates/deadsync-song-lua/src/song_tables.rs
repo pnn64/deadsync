@@ -392,20 +392,27 @@ fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f3
 fn create_player_option_method(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<Function> {
     let owner = owner.clone();
     let name = name.to_ascii_lowercase();
-    lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-        let state = player_option_state(lua, &owner)?;
-        if let Some(value) = value {
-            state.set(
-                name.as_str(),
-                normalize_player_option_value(lua, &name, value)?,
-            )?;
-            return Ok(Value::Table(owner.clone()));
-        }
-        Ok(match state.get::<Option<Value>>(name.as_str())? {
-            Some(value) => value,
-            None => default_player_option_value(lua, &name)?,
-        })
-    })
+    lua.create_function(
+        move |lua, (_self, value, speed): (Option<Value>, Option<Value>, Option<f32>)| {
+            let state = player_option_state(lua, &owner)?;
+            if let Some(value) = value {
+                state.set(
+                    name.as_str(),
+                    normalize_player_option_value(lua, &name, value)?,
+                )?;
+                let speeds = player_option_speeds(lua, &owner)?;
+                let speed = speed
+                    .or(speeds.get::<Option<f32>>(name.as_str())?)
+                    .unwrap_or(1.0);
+                speeds.set(name.as_str(), speed.max(0.0))?;
+                return Ok(Value::Table(owner.clone()));
+            }
+            Ok(match state.get::<Option<Value>>(name.as_str())? {
+                Some(value) => value,
+                None => default_player_option_value(lua, &name)?,
+            })
+        },
+    )
 }
 
 fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
@@ -417,6 +424,15 @@ fn player_option_state(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     Ok(state)
 }
 
+fn player_option_speeds(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
+    if let Some(speeds) = owner.raw_get::<Option<Table>>("__songlua_player_option_speeds")? {
+        return Ok(speeds);
+    }
+    let speeds = lua.create_table()?;
+    owner.raw_set("__songlua_player_option_speeds", speeds.clone())?;
+    Ok(speeds)
+}
+
 fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Result<()> {
     for option in text.split(',') {
         apply_player_option_token(lua, owner, option)?;
@@ -426,6 +442,12 @@ fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Re
 
 fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Result<()> {
     let text = strip_player_option_prefix(raw);
+    let speed = raw
+        .trim_start()
+        .strip_prefix('*')
+        .and_then(|prefix| split_first_word(prefix).0.parse::<f32>().ok())
+        .unwrap_or(1.0)
+        .max(0.0);
     if text.is_empty() || apply_player_speed_option(owner, text)? {
         return Ok(());
     }
@@ -451,7 +473,8 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     } else {
         Value::Number(f64::from(amount.unwrap_or(1.0)))
     };
-    state.set(key.as_str(), value)
+    state.set(key.as_str(), value)?;
+    player_option_speeds(lua, owner)?.set(key.as_str(), speed)
 }
 
 fn apply_player_speed_option(owner: &Table, text: &str) -> mlua::Result<bool> {
