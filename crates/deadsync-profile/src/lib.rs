@@ -1,9 +1,7 @@
 use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
-use deadlib_platform::atomic_write::{
-    sync_parent_dir, tmp_sibling_path, write_atomic, write_synced,
-};
+use deadlib_platform::atomic_write::{AtomicFile, write_atomic};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
@@ -3430,12 +3428,6 @@ pub fn arrowcloud_ini_path(dir: &Path) -> PathBuf {
 #[must_use]
 pub fn profile_stats_path(dir: &Path) -> PathBuf {
     dir.join(PROFILE_STATS_FILE)
-}
-
-#[inline(always)]
-#[must_use]
-pub fn profile_stats_tmp_path(dir: &Path) -> PathBuf {
-    tmp_sibling_path(&profile_stats_path(dir))
 }
 
 #[inline(always)]
@@ -6947,27 +6939,30 @@ pub fn write_profile_stats_dir(
 ) -> Result<(), ProfileStatsWriteError> {
     let buf = encode_profile_stats(payload).ok_or(ProfileStatsWriteError::Encode)?;
     let path = profile_stats_path(dir);
-    let tmp_path = profile_stats_tmp_path(dir);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| ProfileStatsWriteError::CreateDir {
             path: parent.to_path_buf(),
             error,
         })?;
     }
-    write_synced(&tmp_path, &buf).map_err(|error| ProfileStatsWriteError::WriteTmp {
-        path: tmp_path.clone(),
+    let mut pending = AtomicFile::new(&path).map_err(|error| ProfileStatsWriteError::WriteTmp {
+        path: path.clone(),
         error,
     })?;
-    fs::rename(&tmp_path, &path).map_err(|error| {
-        let _ = fs::remove_file(&tmp_path);
-        ProfileStatsWriteError::Rename {
-            path: path.clone(),
+    let tmp_path = pending.path().to_path_buf();
+    pending
+        .write_synced(&buf)
+        .map_err(|error| ProfileStatsWriteError::WriteTmp {
+            path: tmp_path.clone(),
+            error,
+        })?;
+    pending
+        .commit()
+        .map_err(|error| ProfileStatsWriteError::Rename {
+            path,
             tmp_path,
             error,
-        }
-    })?;
-    sync_parent_dir(&path);
-    Ok(())
+        })
 }
 
 pub fn write_imported_profile_stats_dir(
