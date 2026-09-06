@@ -25,16 +25,18 @@ const DEVICE_HEALTH_CHECK_MS: u32 = 1_000;
 const DEVICE_RECOVERY_RETRY_MS: u32 = 1_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WasapiAccessMode {
+pub enum WasapiBackendMode {
     Shared,
+    SharedLowLatency,
     Exclusive,
 }
 
-impl WasapiAccessMode {
+impl WasapiBackendMode {
     #[inline(always)]
     const fn backend_name(self) -> &'static str {
         match self {
             Self::Shared => "wasapi-shared",
+            Self::SharedLowLatency => "wasapi-shared-low-latency",
             Self::Exclusive => "wasapi-exclusive",
         }
     }
@@ -65,7 +67,7 @@ pub struct WasapiOutputPrep {
     channels: usize,
     samples_per_frame: usize,
     sample_format: WasapiSampleFormat,
-    mode: WasapiAccessMode,
+    mode: WasapiBackendMode,
 }
 
 #[derive(Clone, Copy)]
@@ -113,8 +115,8 @@ impl WasapiOutputPrep {
             device_name: self.device_name.clone(),
             backend_name: self.mode.backend_name(),
             requested_output_mode: match self.mode {
-                WasapiAccessMode::Shared => AudioOutputMode::Shared,
-                WasapiAccessMode::Exclusive => AudioOutputMode::Exclusive,
+                WasapiBackendMode::Shared | WasapiBackendMode::SharedLowLatency => AudioOutputMode::Shared,
+                WasapiBackendMode::Exclusive => AudioOutputMode::Exclusive,
             },
             fallback_from_native: false,
             timing_clock: OutputTelemetryClock::DeviceQpc,
@@ -243,7 +245,7 @@ pub fn prepare(
     device_id: Option<String>,
     device_name: String,
     requested_rate_hz: Option<u32>,
-    mode: WasapiAccessMode,
+    mode: WasapiBackendMode,
 ) -> Result<WasapiOutputPrep, String> {
     let _com = ComGuard::new()?;
     let device = open_output_device(device_id.as_deref())?;
@@ -253,7 +255,7 @@ pub fn prepare(
     if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
         set_waveformat_sample_rate(&mut chosen_format, rate_hz);
         match mode {
-            WasapiAccessMode::Shared => {
+            WasapiBackendMode::Shared | WasapiBackendMode::SharedLowLatency => {
                 if let Err(err) = initialize_shared(&audio_client, &chosen_format) {
                     warn!(
                         "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
@@ -261,14 +263,14 @@ pub fn prepare(
                     chosen_format = mix_format;
                 }
             }
-            WasapiAccessMode::Exclusive => {
+            WasapiBackendMode::Exclusive => {
                 validate_exclusive_format(&audio_client, &chosen_format, &device_name)?;
             }
         }
     } else {
         match mode {
-            WasapiAccessMode::Shared => initialize_shared(&audio_client, &chosen_format)?,
-            WasapiAccessMode::Exclusive => {
+            WasapiBackendMode::Shared | WasapiBackendMode::SharedLowLatency => initialize_shared(&audio_client, &chosen_format)?,
+            WasapiBackendMode::Exclusive => {
                 validate_exclusive_format(&audio_client, &chosen_format, &device_name)?;
             }
         }
@@ -698,15 +700,16 @@ fn initialize_client(
     prep: &WasapiOutputPrep,
 ) -> Result<(), String> {
     match prep.mode {
-        WasapiAccessMode::Shared => initialize_shared(audio_client, &prep.format),
-        WasapiAccessMode::Exclusive => initialize_exclusive(audio_client, &prep.format),
+        WasapiBackendMode::SharedLowLatency => initialize_shared_low_latency(audio_client, &prep.format),
+        WasapiBackendMode::Shared => initialize_shared(audio_client, &prep.format),
+        WasapiBackendMode::Exclusive => initialize_exclusive(audio_client, &prep.format),
     }
 }
 
 fn initialize_exclusive(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<(), String> {
     let (default_period_hns, min_period_hns) = query_device_periods_hns(audio_client)?;
     let period_hns = selected_device_period_hns(
-        WasapiAccessMode::Exclusive,
+        WasapiBackendMode::Exclusive,
         default_period_hns,
         min_period_hns,
     );
@@ -768,10 +771,10 @@ fn query_device_periods_hns(audio_client: &Audio::IAudioClient) -> Result<(i64, 
 }
 
 #[inline(always)]
-fn selected_device_period_hns(mode: WasapiAccessMode, default_hns: i64, min_hns: i64) -> i64 {
+fn selected_device_period_hns(mode: WasapiBackendMode, default_hns: i64, min_hns: i64) -> i64 {
     match mode {
-        WasapiAccessMode::Shared => default_hns.max(0),
-        WasapiAccessMode::Exclusive => {
+        WasapiBackendMode::Shared | WasapiBackendMode::SharedLowLatency => default_hns.max(0),
+        WasapiBackendMode::Exclusive => {
             let preferred = if min_hns > 0 { min_hns } else { default_hns };
             preferred.max(0)
         }
@@ -883,7 +886,60 @@ fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, 
     }
 }
 
+fn initialize_shared_low_latency(
+    audio_client: &Audio::IAudioClient,
+    format: &[u8],
+) -> Result<(), String> {
+    // Try to use IAudioClient3::InitializeSharedAudioStream for low-latency mode.
+    // This is only available on Windows 10 (build 14393) and later.
+    // SAFETY: `audio_client` is a live COM interface. If the interface is not
+    // supported (Windows 7, 8, 8.1), we get an error.
+    let client3 = unsafe { audio_client.cast::<Audio::IAudioClient3>() }
+        .map_err(|e| format!("IAudioClient3 interface not available: {e}"))?;
+
+    // Query the engine's period parameters BEFORE initialization.
+    // SAFETY: `client3` is a live COM interface, and all period variables are
+    // mutable stack locals for receiving the output values.
+    let mut _default_period_frames = 0u32;
+    let mut _fundamental_period_frames = 0u32;
+    let mut min_period_frames = 0u32;
+    let mut _max_period_frames = 0u32;
+
+    unsafe {
+        client3
+            .GetSharedModeEnginePeriod(
+                waveformat(format),
+                &mut _default_period_frames,
+                &mut _fundamental_period_frames,
+                &mut min_period_frames,
+                &mut _max_period_frames,
+            )
+            .map_err(|e| format!("IAudioClient3::GetSharedModeEnginePeriod failed: {e}"))?;
+    }
+
+    // The selected period is currently fixed at the device minimum. If users
+    // can configure a frame count, restore fundamental-period alignment and
+    // min/max clamping before passing that count to InitializeSharedAudioStream.
+    let period_frames = min_period_frames;
+
+    // Initialize with the selected period in frames.
+    // SAFETY: `client3` is a live COM interface, and `format` points to a
+    // valid waveform buffer.
+    unsafe {
+        client3
+            .InitializeSharedAudioStream(
+                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                period_frames,
+                waveformat(format),
+            )
+            .map_err(|e| format!("IAudioClient3::InitializeSharedAudioStream failed: {e}"))?;
+    }
+
+    Ok(())
+}
+
 fn initialize_shared(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<(), String> {
+    // Standard shared mode initialization.
     // SAFETY: `audio_client` is a live COM interface, and `format` points to a
     // valid `WAVEFORMATEX`/`WAVEFORMATEXTENSIBLE` byte buffer owned by the caller.
     unsafe {

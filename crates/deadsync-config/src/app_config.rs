@@ -19,6 +19,8 @@ use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
+#[cfg(windows)]
+use deadsync_audio_stream::windows_wasapi;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
@@ -318,6 +320,8 @@ pub struct Config {
     pub linux_audio_backend: LinuxAudioBackend,
     // None = auto (use device default sample rate)
     pub audio_sample_rate_hz: Option<u32>,
+    #[cfg(windows)]
+    pub wasapi_backend_mode: windows_wasapi::WasapiBackendMode,
     pub auto_download_unlocks: bool,
     pub auto_populate_gs_scores: bool,
     /// Allows the in-app updater to download and install updates.
@@ -549,6 +553,8 @@ impl Default for Config {
             audio_output_mode: AudioOutputMode::Auto,
             linux_audio_backend: LinuxAudioBackend::Auto,
             audio_sample_rate_hz: audio.sample_rate_hz,
+            #[cfg(windows)]
+            wasapi_backend_mode: windows_wasapi::WasapiBackendMode::Shared,
             auto_download_unlocks: system.auto_download_unlocks,
             auto_populate_gs_scores: system.auto_populate_gs_scores,
             updater_install_enabled: system.updater_install_enabled,
