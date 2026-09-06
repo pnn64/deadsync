@@ -5069,6 +5069,26 @@ fn try_open_select_music_menu_with_select_start(
     true
 }
 
+/// Holding Select turns MenuLeft/MenuRight into difficulty steps for that
+/// player instead of wheel movement; pad Left/Right are deliberately left
+/// alone so a dance-pad player can't step difficulty by accident. Consumes
+/// the press (returns true) whenever Select is held, even with no song or no
+/// adjacent chart, so the wheel never moves while the modifier is down.
+#[inline(always)]
+fn try_change_difficulty_with_select(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    select_held: bool,
+    easier: bool,
+    pressed: bool,
+) -> bool {
+    if !pressed || !select_held {
+        return false;
+    }
+    step_difficulty_for_side(state, side, easier);
+    true
+}
+
 #[inline(always)]
 const fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
     match ev.action {
@@ -10503,6 +10523,56 @@ fn close_open_section_one_level(state: &mut State) {
     }
 }
 
+/// Steps `side`'s chart selection to the adjacent playable chart (easier =
+/// toward the top of the steps list) with the easier/harder sound, shared by
+/// the double-tap Up/Down and Select+Left/Right paths. No-op on pack headers
+/// or when no playable chart exists in that direction.
+fn step_difficulty_for_side(state: &mut State, side: profile_data::PlayerSide, easier: bool) {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return;
+    };
+    let play_style = state.session.play_style;
+    let target_chart_type = play_style.chart_type();
+    let list_len = song.steps_len(target_chart_type);
+    let cur = steps_index_for_side(
+        play_style,
+        side,
+        state.selected_steps_index,
+        state.p2_selected_steps_index,
+    )
+    .min(list_len.saturating_sub(1));
+
+    let mut new_idx = None;
+    if easier {
+        for i in (0..cur).rev() {
+            if song.chart_for_steps_index(target_chart_type, i).is_some() {
+                new_idx = Some(i);
+                break;
+            }
+        }
+    } else {
+        for i in (cur + 1)..list_len {
+            if song.chart_for_steps_index(target_chart_type, i).is_some() {
+                new_idx = Some(i);
+                break;
+            }
+        }
+    }
+
+    if let Some(new_idx) = new_idx {
+        set_steps_index_for_side(state, play_style, side, new_idx);
+        state.step_artist_cycle_base = state.session_elapsed;
+        queue_sfx(
+            state,
+            if easier {
+                "assets/sounds/easier.ogg"
+            } else {
+                "assets/sounds/harder.ogg"
+            },
+        );
+    }
+}
+
 pub fn handle_pad_dir(
     state: &mut State,
     side: profile_data::PlayerSide,
@@ -10603,7 +10673,10 @@ fn handle_pad_dir_impl(
             }
             PadDir::Up | PadDir::Down => {
                 let is_up = matches!(dir, PadDir::Up);
-                if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+                if matches!(
+                    state.entries.get(state.selected_index),
+                    Some(MusicWheelEntry::Song(_))
+                ) {
                     let now = timestamp;
 
                     if state.last_steps_nav_dir_p1 == Some(dir)
@@ -10611,43 +10684,7 @@ fn handle_pad_dir_impl(
                             .last_steps_nav_time_p1
                             .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
                     {
-                        let target_chart_type = state.session.play_style.chart_type();
-                        let list_len = song.steps_len(target_chart_type);
-                        let cur = state.selected_steps_index.min(list_len.saturating_sub(1));
-
-                        let mut new_idx = None;
-                        if is_up {
-                            for i in (0..cur).rev() {
-                                if song.chart_for_steps_index(target_chart_type, i).is_some() {
-                                    new_idx = Some(i);
-                                    break;
-                                }
-                            }
-                        } else {
-                            for i in (cur + 1)..list_len {
-                                if song.chart_for_steps_index(target_chart_type, i).is_some() {
-                                    new_idx = Some(i);
-                                    break;
-                                }
-                            }
-                        }
-
-                        if let Some(new_idx) = new_idx {
-                            state.selected_steps_index = new_idx;
-                            state.step_artist_cycle_base = state.session_elapsed;
-                            if new_idx < STANDARD_DIFFICULTY_COUNT {
-                                state.preferred_difficulty_index = new_idx;
-                            }
-                            queue_sfx(
-                                state,
-                                if is_up {
-                                    "assets/sounds/easier.ogg"
-                                } else {
-                                    "assets/sounds/harder.ogg"
-                                },
-                            );
-                        }
-
+                        step_difficulty_for_side(state, profile_data::PlayerSide::P1, is_up);
                         state.last_steps_nav_dir_p1 = None;
                         state.last_steps_nav_time_p1 = None;
                     } else {
@@ -10739,7 +10776,10 @@ fn handle_pad_dir_p2(
     }
     if pressed {
         let is_up = matches!(dir, PadDir::Up);
-        if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) {
+        if matches!(
+            state.entries.get(state.selected_index),
+            Some(MusicWheelEntry::Song(_))
+        ) {
             let now = timestamp;
 
             if state.last_steps_nav_dir_p2 == Some(dir)
@@ -10747,52 +10787,7 @@ fn handle_pad_dir_p2(
                     .last_steps_nav_time_p2
                     .is_some_and(|t| now.duration_since(t) < DOUBLE_TAP_WINDOW)
             {
-                let play_style = state.session.play_style;
-                let target_chart_type = play_style.chart_type();
-                let list_len = song.steps_len(target_chart_type);
-                let cur = steps_index_for_side(
-                    play_style,
-                    profile_data::PlayerSide::P2,
-                    state.selected_steps_index,
-                    state.p2_selected_steps_index,
-                )
-                .min(list_len.saturating_sub(1));
-
-                let mut new_idx = None;
-                if is_up {
-                    for i in (0..cur).rev() {
-                        if song.chart_for_steps_index(target_chart_type, i).is_some() {
-                            new_idx = Some(i);
-                            break;
-                        }
-                    }
-                } else {
-                    for i in (cur + 1)..list_len {
-                        if song.chart_for_steps_index(target_chart_type, i).is_some() {
-                            new_idx = Some(i);
-                            break;
-                        }
-                    }
-                }
-
-                if let Some(new_idx) = new_idx {
-                    set_steps_index_for_side(
-                        state,
-                        play_style,
-                        profile_data::PlayerSide::P2,
-                        new_idx,
-                    );
-                    state.step_artist_cycle_base = state.session_elapsed;
-                    queue_sfx(
-                        state,
-                        if is_up {
-                            "assets/sounds/easier.ogg"
-                        } else {
-                            "assets/sounds/harder.ogg"
-                        },
-                    );
-                }
-
+                step_difficulty_for_side(state, profile_data::PlayerSide::P2, is_up);
                 state.last_steps_nav_dir_p2 = None;
                 state.last_steps_nav_time_p2 = None;
             } else {
@@ -11648,11 +11643,37 @@ fn handle_input_impl(
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            VirtualAction::p1_left => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            VirtualAction::p1_menu_left => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P1,
+                    state.p1_select_held,
+                    true,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
+                }
+            }
+            VirtualAction::p1_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+            }
+            VirtualAction::p1_menu_right => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P1,
+                    state.p1_select_held,
+                    false,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+                }
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir_impl(
                 state,
@@ -11694,11 +11715,37 @@ fn handle_input_impl(
                 ThemeEffect::None
             }
 
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+            VirtualAction::p2_left => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
             }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+            VirtualAction::p2_menu_left => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P2,
+                    state.p2_select_held,
+                    true,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
+                }
+            }
+            VirtualAction::p2_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+            }
+            VirtualAction::p2_menu_right => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P2,
+                    state.p2_select_held,
+                    false,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+                }
             }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
                 handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
@@ -11738,11 +11785,37 @@ fn handle_input_impl(
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+            VirtualAction::p2_left => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
             }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+            VirtualAction::p2_menu_left => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P2,
+                    state.p2_select_held,
+                    true,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Left, ev)
+                }
+            }
+            VirtualAction::p2_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+            }
+            VirtualAction::p2_menu_right => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P2,
+                    state.p2_select_held,
+                    false,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P2, PadDir::Right, ev)
+                }
             }
             VirtualAction::p2_up | VirtualAction::p2_menu_up => {
                 handle_pad_dir_p2(state, PadDir::Up, ev.pressed, ev.timestamp)
@@ -11771,11 +11844,37 @@ fn handle_input_impl(
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ThemeEffect::None
             }
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            VirtualAction::p1_left => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
             }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            VirtualAction::p1_menu_left => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P1,
+                    state.p1_select_held,
+                    true,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Left, ev)
+                }
+            }
+            VirtualAction::p1_right => {
                 handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+            }
+            VirtualAction::p1_menu_right => {
+                if try_change_difficulty_with_select(
+                    state,
+                    profile_data::PlayerSide::P1,
+                    state.p1_select_held,
+                    false,
+                    ev.pressed,
+                ) {
+                    ThemeEffect::None
+                } else {
+                    handle_pad_dir_event(state, profile_data::PlayerSide::P1, PadDir::Right, ev)
+                }
             }
             VirtualAction::p1_up | VirtualAction::p1_menu_up => handle_pad_dir_impl(
                 state,
@@ -18323,6 +18422,253 @@ mod tests {
             state.nav_key_held_direction,
             Some(super::NavDirection::Left)
         );
+    }
+
+    fn charted_song_entries() -> Vec<super::MusicWheelEntry> {
+        vec![
+            super::MusicWheelEntry::PackHeader {
+                name: Arc::from("Pack"),
+                original_index: 0,
+                banner_path: None,
+                song_count: 1,
+                pack_key: Some(Arc::from("Pack")),
+                parent_series: None,
+            },
+            super::MusicWheelEntry::Song(super::test_folder_stats_song(0)),
+        ]
+    }
+
+    fn assert_sfx(effects: &[ThemeEffect], expected: &str) {
+        assert!(
+            effects.iter().any(|effect| matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path)
+                )) if *path == expected
+            )),
+            "expected {expected} sfx, got {effects:?}"
+        );
+    }
+
+    #[test]
+    fn select_menu_left_right_changes_difficulty_instead_of_moving_wheel() {
+        let mut state = init_placeholder();
+        state.entries = charted_song_entries();
+        state.selected_index = 1;
+        state.prev_selected_index = 1;
+        state.selected_steps_index = 2;
+        state.preferred_difficulty_index = 2;
+
+        let now = Instant::now();
+        let mut effects: Vec<ThemeEffect> = Vec::new();
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_select,
+                InputSource::Keyboard,
+                0,
+                true,
+                now,
+            ),
+            false,
+            &mut effects,
+        );
+
+        effects.clear();
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_left,
+                InputSource::Keyboard,
+                1,
+                true,
+                now + Duration::from_millis(10),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.selected_steps_index, 1);
+        assert_eq!(state.preferred_difficulty_index, 1);
+        assert_eq!(state.nav_key_held_direction, None);
+        assert_sfx(&effects, "assets/sounds/easier.ogg");
+
+        effects.clear();
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_right,
+                InputSource::Keyboard,
+                2,
+                true,
+                now + Duration::from_millis(20),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.selected_steps_index, 2);
+        assert_eq!(state.preferred_difficulty_index, 2);
+        assert_sfx(&effects, "assets/sounds/harder.ogg");
+
+        // Releasing a swallowed press must not step the wheel or start a hold.
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_left,
+                InputSource::Keyboard,
+                1,
+                false,
+                now + Duration::from_millis(30),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.nav_key_held_direction, None);
+
+        // Pad Left/Right are not remapped: with Select still held they move
+        // the wheel as usual and leave the chart alone.
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_left,
+                InputSource::Keyboard,
+                3,
+                true,
+                now + Duration::from_millis(32),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 0);
+        assert_eq!(state.selected_steps_index, 2);
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_left,
+                InputSource::Keyboard,
+                3,
+                false,
+                now + Duration::from_millis(34),
+            ),
+            false,
+            &mut effects,
+        );
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_right,
+                InputSource::Keyboard,
+                4,
+                true,
+                now + Duration::from_millis(36),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.selected_steps_index, 2);
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_right,
+                InputSource::Keyboard,
+                4,
+                false,
+                now + Duration::from_millis(38),
+            ),
+            false,
+            &mut effects,
+        );
+
+        // With Select released, MenuLeft moves the wheel again.
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_select,
+                InputSource::Keyboard,
+                0,
+                false,
+                now + Duration::from_millis(40),
+            ),
+            false,
+            &mut effects,
+        );
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_menu_left,
+                InputSource::Keyboard,
+                1,
+                true,
+                now + Duration::from_millis(50),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 0);
+        assert_eq!(state.selected_steps_index, 2);
+    }
+
+    #[test]
+    fn versus_select_menu_left_right_steps_each_side_independently() {
+        let mut state = init_placeholder();
+        state.session.play_style = profile_data::PlayStyle::Versus;
+        state.session.joined = [true, true];
+        state.entries = charted_song_entries();
+        state.selected_index = 1;
+        state.prev_selected_index = 1;
+        state.selected_steps_index = 2;
+        state.p2_selected_steps_index = 2;
+
+        let now = Instant::now();
+        let mut effects: Vec<ThemeEffect> = Vec::new();
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p2_select,
+                InputSource::Keyboard,
+                0,
+                true,
+                now,
+            ),
+            false,
+            &mut effects,
+        );
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p2_menu_right,
+                InputSource::Keyboard,
+                1,
+                true,
+                now + Duration::from_millis(10),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.selected_steps_index, 2);
+        assert_eq!(state.p2_selected_steps_index, 3);
+        assert_eq!(state.p2_preferred_difficulty_index, 3);
+
+        // P1 has no Select held, so their Right still moves the wheel.
+        super::handle_input(
+            &mut state,
+            &input_event_at(
+                VirtualAction::p1_right,
+                InputSource::Keyboard,
+                2,
+                true,
+                now + Duration::from_millis(20),
+            ),
+            false,
+            &mut effects,
+        );
+        assert_eq!(state.selected_index, 0);
+        assert_eq!(state.selected_steps_index, 2);
+        assert_eq!(state.p2_selected_steps_index, 3);
     }
 
     #[test]
