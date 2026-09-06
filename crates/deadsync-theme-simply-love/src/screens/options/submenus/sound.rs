@@ -1,6 +1,12 @@
 use super::super::*;
 
 #[cfg(windows)]
+const AUDIO_OUTPUT_MODE_HELP: &str = "AudioOutputModeWindowsHelp";
+
+#[cfg(not(windows))]
+const AUDIO_OUTPUT_MODE_HELP: &str = "AudioOutputModeHelp";
+
+#[cfg(windows)]
 const SOUND_OUTPUT_MODE_CHOICES: &[Choice] = &[
     localized_choice("OptionsSound", "OutputModeAuto"),
     localized_choice("OptionsSound", "OutputModeShared"),
@@ -129,7 +135,7 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ITEMS: &[Item] = &[
         name: lookup_key("OptionsSound", "AudioOutputMode"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSoundHelp",
-            "AudioOutputModeHelp",
+            AUDIO_OUTPUT_MODE_HELP,
         ))],
     },
     #[cfg(target_os = "linux")]
