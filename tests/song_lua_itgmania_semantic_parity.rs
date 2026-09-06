@@ -37,6 +37,9 @@ mod whole_song_archives;
 #[path = "song_lua_itgmania_semantic_parity/runtime_modifiers.rs"]
 mod runtime_modifiers;
 
+#[path = "song_lua_itgmania_semantic_parity/multitap.rs"]
+mod multitap;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     oracle: String,
@@ -2172,7 +2175,7 @@ fn compare_player_operation_ranges(
     }
 }
 
-fn compiled_message_state_at(
+fn compiled_command_state_at(
     context: &SongLuaCompileContext,
     compiled: &CompiledSongLua,
     overlay_index: usize,
@@ -2201,37 +2204,57 @@ fn compiled_message_state_at(
     if let Some((blocks, base, start_seconds)) = active {
         current = overlay_state_after_blocks(base, blocks, seconds - start_seconds);
     }
+    current
+}
+
+fn apply_compiled_ease(
+    context: &SongLuaCompileContext,
+    ease: &deadsync_song_lua::SongLuaOverlayEase,
+    seconds: f32,
+    current: &mut SongLuaOverlayState,
+) {
+    let end = match ease.span_mode {
+        SongLuaSpanMode::Len => ease.start + ease.limit,
+        SongLuaSpanMode::End => ease.limit,
+    };
+    let (start, end) = match ease.unit {
+        SongLuaTimeUnit::Beat => (
+            song_elapsed_seconds_at(ease.start, context),
+            song_elapsed_seconds_at(end, context),
+        ),
+        SongLuaTimeUnit::Second => (ease.start, end),
+    };
+    if seconds < start {
+        return;
+    }
+    if seconds >= end {
+        deadsync_song_lua::apply_overlay_delta(current, &ease.to);
+    } else {
+        let factor = deadsync_gameplay::song_lua_ease_factor(
+            ease.easing.as_deref(),
+            (seconds - start) / (end - start),
+            ease.opt1,
+            ease.opt2,
+        );
+        deadsync_song_lua::apply_overlay_delta(current, &ease.from);
+        deadsync_song_lua::overlay_state_lerp(current, &ease.to, factor);
+    }
+}
+
+fn compiled_message_state_at(
+    context: &SongLuaCompileContext,
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+    seconds: f32,
+) -> SongLuaOverlayState {
+    let mut current = compiled_command_state_at(context, compiled, overlay_index, beat, seconds);
     for ease in compiled
         .overlay_eases
         .iter()
         .filter(|ease| ease.overlay_index == overlay_index)
     {
-        let end = match ease.span_mode {
-            SongLuaSpanMode::Len => ease.start + ease.limit,
-            SongLuaSpanMode::End => ease.limit,
-        };
-        let (start, end) = match ease.unit {
-            SongLuaTimeUnit::Beat => (
-                song_elapsed_seconds_at(ease.start, context),
-                song_elapsed_seconds_at(end, context),
-            ),
-            SongLuaTimeUnit::Second => (ease.start, end),
-        };
-        if seconds < start {
-            continue;
-        }
-        if seconds >= end {
-            deadsync_song_lua::apply_overlay_delta(&mut current, &ease.to);
-        } else {
-            let factor = deadsync_gameplay::song_lua_ease_factor(
-                ease.easing.as_deref(),
-                (seconds - start) / (end - start),
-                ease.opt1,
-                ease.opt2,
-            );
-            deadsync_song_lua::apply_overlay_delta(&mut current, &ease.from);
-            deadsync_song_lua::overlay_state_lerp(&mut current, &ease.to, factor);
-        }
+        apply_compiled_ease(context, ease, seconds, &mut current);
     }
     current
 }
@@ -2416,9 +2439,51 @@ fn projected_drawable_map(
                     .zip(deadsync)
                     .map(|(definition, index)| (definition.id.clone(), (layer, index))),
             );
+        } else {
+            // A noteskin placeholder can change drawable kinds without changing
+            // the authored tree. Keep checking the other actors in that tree.
+            let mut actors = Vec::new();
+            collect_native_overlay_definitions(root, &definitions, &mut actors);
+            if actors.len() == compiled.overlays.len()
+                && actors
+                    .iter()
+                    .zip(&compiled.overlays)
+                    .all(|(native, actual)| native.name == actual.name)
+            {
+                drawable_map.extend(
+                    actors
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, definition)| (definition.id.clone(), (layer, index))),
+                );
+            }
         }
     }
     drawable_map
+}
+
+fn compiled_local_states_at(
+    compiled: &CompiledSongLua,
+    context: &SongLuaCompileContext,
+    beat: f32,
+    seconds: f32,
+) -> Vec<SongLuaOverlayState> {
+    let mut local = compiled
+        .overlays
+        .iter()
+        .enumerate()
+        .map(|(overlay_index, _)| {
+            compiled_command_state_at(context, compiled, overlay_index, beat, seconds)
+        })
+        .collect::<Vec<_>>();
+    // Visit eases once per frame, rather than once per actor per frame.
+    for ease in &compiled.overlay_eases {
+        apply_compiled_ease(context, ease, seconds, &mut local[ease.overlay_index]);
+    }
+    for (index, state) in local.iter_mut().enumerate() {
+        apply_runtime_updates(compiled, index, beat, state);
+    }
+    local
 }
 
 fn compiled_overlay_states_at(
@@ -2427,17 +2492,7 @@ fn compiled_overlay_states_at(
     beat: f32,
     seconds: f32,
 ) -> Vec<SongLuaOverlayState> {
-    let local = compiled
-        .overlays
-        .iter()
-        .enumerate()
-        .map(|(overlay_index, _)| {
-            let mut state =
-                compiled_message_state_at(context, compiled, overlay_index, beat, seconds);
-            apply_runtime_updates(compiled, overlay_index, beat, &mut state);
-            state
-        })
-        .collect::<Vec<_>>();
+    let local = compiled_local_states_at(compiled, context, beat, seconds);
     compose_overlay_states(
         &compiled.overlays,
         &local,
@@ -2481,6 +2536,59 @@ fn compiled_screen_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) 
     })
 }
 
+fn compiled_perspective_vertices(
+    compiled: &CompiledSongLua,
+    states: &[SongLuaOverlayState],
+    index: usize,
+    texture_size: [f32; 2],
+) -> Option<[[f32; 2]; 4]> {
+    use deadsync_theme_simply_love::screens::gameplay::actor_conformance as actor;
+    let state = states[index];
+    let mut parent = compiled.overlays[index].parent_index;
+    let camera = loop {
+        let index = parent?;
+        let overlay = &compiled.overlays[index];
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+        ) && states[index].fov.is_some()
+        {
+            break states[index];
+        }
+        parent = overlay.parent_index;
+    };
+    let screen = [compiled.screen_width, compiled.screen_height];
+    let projection = actor::view_projection(
+        screen.map(|axis| axis as u32),
+        camera.fov?,
+        camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
+    );
+    let size = state.size.unwrap_or(texture_size);
+    let [sx, sy] = overlay_state_axis_scale(state);
+    let matrix = actor::sprite_matrix(
+        [state.x, state.y, state.z],
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [0.0; 3],
+        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
+        [1.0; 3],
+        size,
+        [state.halign, state.valign],
+        [state.skew_x, state.skew_y],
+    );
+    let matrix = actor::multiply_matrices(projection, matrix);
+    let corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+        .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]));
+    if corners.iter().any(|corner| corner[3] <= 0.0) {
+        return None;
+    }
+    Some(corners.map(|[x, y, _, w]| {
+        [
+            (x / w + 1.0) * screen[0] * 0.5,
+            (1.0 - y / w) * screen[1] * 0.5,
+        ]
+    }))
+}
+
 fn vertex_bounds(vertices: &[[f32; 2]]) -> [f32; 4] {
     vertices.iter().fold(
         [
@@ -2516,6 +2624,9 @@ fn compare_projected_geometry(
             continue;
         };
         let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+            gaps.push(format!(
+                "projected geometry is untested for {definition_id}: no matching DeadSync actor"
+            ));
             continue;
         };
         let mut reported_visibility = false;
@@ -2594,11 +2705,7 @@ fn compare_projected_geometry(
                 ));
                 reported_alpha = true;
             }
-            if !native_visible
-                || !actual_visible
-                || track.camera_actor != "orthographic-screen"
-                || state.stretch_rect.is_some()
-            {
+            if !native_visible || !actual_visible || state.stretch_rect.is_some() {
                 continue;
             }
             let Some(native_vertices) = native_screen_vertices(sample) else {
@@ -2607,7 +2714,24 @@ fn compare_projected_geometry(
             if native_vertices.len() != 4 {
                 continue;
             }
-            let actual_vertices = compiled_screen_vertices(state, track.texture_size);
+            let actual_vertices = if track.camera_actor == "orthographic-screen" {
+                compiled_screen_vertices(state, track.texture_size)
+            } else {
+                let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
+                let Some(vertices) = compiled_perspective_vertices(
+                    &compiled[layer],
+                    states,
+                    overlay_index,
+                    track.texture_size,
+                ) else {
+                    if !reported_bounds {
+                        gaps.push(format!("projected perspective geometry is untested for {definition_id}: missing camera or near-plane clipping at beat {beat:.3}"));
+                        reported_bounds = true;
+                    }
+                    continue;
+                };
+                vertices
+            };
             let expected_bounds = vertex_bounds(&native_vertices);
             let actual_bounds = vertex_bounds(&actual_vertices);
             if expected_bounds
@@ -2820,6 +2944,7 @@ fn native_song_lua_semantics_match_deadsync() {
     compare_update_render_values(&trace, &compiled, &context, &mut gaps);
     compare_player_operation_ranges(&trace, &compiled, &mut gaps);
     compare_column_splines(&trace, &compiled, &context, &mut gaps);
+    multitap::compare_multitap(&trace, &compiled, &context, &mut gaps);
     compare_projected_geometry(&trace, &compiled, &context, &mut gaps);
     compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);

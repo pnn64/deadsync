@@ -287,17 +287,7 @@ fn compose_entire_song(
         let seconds = frame as f32 / update_hz;
         let beat = song_beat_at_elapsed_seconds(seconds, context);
         for (compiled, composer) in compiled_layers.iter().zip(&composers) {
-            let local = compiled
-                .overlays
-                .iter()
-                .enumerate()
-                .map(|(overlay_index, _)| {
-                    let mut state =
-                        compiled_message_state_at(context, compiled, overlay_index, beat, seconds);
-                    apply_runtime_updates(compiled, overlay_index, beat, &mut state);
-                    state
-                })
-                .collect::<Vec<_>>();
+            let local = compiled_local_states_at(compiled, context, beat, seconds);
             let composed = compose_overlay_states(
                 &compiled.overlays,
                 &local,
@@ -365,6 +355,7 @@ fn assert_complete_parity(
     compare_update_render_values(trace, compiled, context, &mut gaps);
     compare_player_operation_ranges(trace, compiled, &mut gaps);
     compare_column_splines(trace, compiled, context, &mut gaps);
+    multitap::compare_multitap(trace, compiled, context, &mut gaps);
     compare_projected_geometry(trace, compiled, context, &mut gaps);
     compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
     compare_timeline(trace, &compiled[primary_index], &mut gaps);
