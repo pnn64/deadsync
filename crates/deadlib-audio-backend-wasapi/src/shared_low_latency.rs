@@ -36,14 +36,6 @@ pub(super) fn initialize(
             .map_err(|e| format!("IAudioClient3::GetSharedModeEnginePeriod failed: {e}"))?;
     }
 
-    log::info!(
-        "WASAPI shared low-latency periods: \
-        min {min_period_frames}, \
-        default {default_period_frames}, \
-        max {max_period_frames}, \
-        fundamental {fundamental_period_frames} frames"
-    );
-
     let mut period_frames = preferred_buffer_frames
         .filter(|frames| *frames > 0)
         .unwrap_or(default_period_frames)
@@ -56,6 +48,16 @@ pub(super) fn initialize(
             .min(max_period_frames);
     }
 
+    log::info!(
+        "WASAPI shared low-latency periods: \
+        min {min_period_frames}, \
+        default {default_period_frames}, \
+        max {max_period_frames}, \
+        fundamental {fundamental_period_frames}, \
+        preferred {preferred_buffer_frames:?}, \
+        chosen {period_frames}"
+    );
+
     // SAFETY: `client3` is live and `pformat` points to a valid waveform buffer.
     unsafe {
         client3
@@ -67,5 +69,6 @@ pub(super) fn initialize(
             )
             .map_err(|e| format!("IAudioClient3::InitializeSharedAudioStream failed: {e}"))?;
     }
+
     Ok(())
 }
