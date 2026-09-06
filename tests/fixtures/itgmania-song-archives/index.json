@@ -234,6 +234,13 @@
       "compressed_bytes": 85579
     },
     {
+      "title": "[5604] [10] flip69",
+      "source_simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+      "archive": "7032c8a359959e2ab126d81a39d903ee4ee0b7943481244002ecc2ba7d2fb76b.tar.zst",
+      "sha256": "7032c8a359959e2ab126d81a39d903ee4ee0b7943481244002ecc2ba7d2fb76b",
+      "compressed_bytes": 1450042
+    },
+    {
       "title": "[4252] [10] media offline (Medium)",
       "source_simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
       "archive": "c25dab24573be2ab70a1577cc1b2ae30dfbc09d304b1acd196e41146815d2acd.tar.zst",

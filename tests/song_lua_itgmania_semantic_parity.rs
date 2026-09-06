@@ -25,6 +25,8 @@ const CUPHEAD_TRACE: &str =
 const BROGAMER_TRACE: &str = "tests/fixtures/itgmania-song-lua/BroGamer/BroGamer.ssc.semantic.json";
 const COSMIC_TRACE: &str = "tests/fixtures/itgmania-song-lua/[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json";
 const RIDDLE_DOUBLE_TRACE: &str = "tests/fixtures/itgmania-song-lua/[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.semantic.json";
+const FLIP69_TRACE: &str =
+    "tests/fixtures/itgmania-song-lua/[10] flip69 (DX) [Telperion]/flip69.ssc.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
 const PROJECTED_BEAT_EPSILON: f32 = 0.005;
@@ -3014,7 +3016,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 
     assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
     assert!(!manifest.itgmania.launches_executable);
-    assert_eq!(manifest.simfiles.len(), 45);
+    assert_eq!(manifest.simfiles.len(), 46);
     for entry in manifest.simfiles {
         assert_eq!(
             entry.status, "ok",
@@ -3055,6 +3057,29 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 #[test]
 fn itl_unlock_fixture_contexts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let flip69 = read_trace_file(&root.join(FLIP69_TRACE));
+    assert_eq!(flip69.style, "double");
+    assert_eq!(flip69.enabled_players, Some([true, false]));
+    assert_eq!(flip69.trace_until_beat, 288.0);
+    let zoom_spline = flip69
+        .external_actors
+        .iter()
+        .find(|actor| {
+            actor.path == "ScreenGameplay/PlayerP1/NoteField/Column8/GetZoomHandler/GetSpline"
+        })
+        .expect("flip69 must build the eighth-column multitap zoom spline");
+    assert!(
+        flip69.operation_tracks.iter().any(|track| {
+            track.actor == zoom_spline.id
+                && track.operation == "Spline.SetPoint"
+                && track
+                    .samples
+                    .iter()
+                    .any(|sample| sample.3.get(1) == Some(&serde_json::json!([-1, -1, -1])))
+        }),
+        "multitap regions must hide the original notes"
+    );
+
     let riddle = read_trace_file(&root.join(RIDDLE_DOUBLE_TRACE));
     assert_eq!(riddle.style, "double");
     assert_eq!(riddle.enabled_players, Some([true, false]));

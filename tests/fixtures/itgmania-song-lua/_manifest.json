@@ -210,6 +210,16 @@
       }
     },
     {
+      "simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+      "fixture": "[10] flip69 (DX) [Telperion]/flip69.ssc.json",
+      "title": "[5604] [10] flip69",
+      "lua_entries": 1,
+      "itgmania": {
+        "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
+        "git_dirty": "false"
+      }
+    },
+    {
       "simfile": "[10] media offline (SM) [Snap]/media offline.ssc",
       "fixture": "[10] media offline (SM) [Snap]/media offline.ssc.json",
       "title": "[4252] [10] media offline (Medium)",
