@@ -1262,8 +1262,8 @@ pub fn run_keyboard_only(
 mod tests {
     use super::{
         KEYBOARD_CAPTURE_DISABLED, KEYBOARD_CAPTURE_ENABLED, KEYBOARD_CAPTURE_UNKNOWN,
-        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed,
-        rawinput_uuid, remember_report, report_is_duplicate,
+        RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed, rawinput_uuid,
+        remember_report, report_is_duplicate,
     };
     use std::mem::size_of;
 

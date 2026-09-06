@@ -11316,6 +11316,7 @@ fn handle_raw_key_event_impl(
         if pad_config::is_profiles_mode(&state.pad_config_overlay) {
             if let Some(k) = key
                 && k.pressed
+                && !k.repeat
             {
                 match k.code {
                     KeyCode::KeyR => {
