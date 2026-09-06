@@ -46,6 +46,8 @@ fn vs_main(input: VertexIn) -> VertexOut {
 
     var out: VertexOut;
     out.pos = u_proj.proj * vec4<f32>(world, 1.0);
+    // Engine cameras use [-w, w] depth; wgpu clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.uv = input.uv * input.uv_scale + input.uv_offset;
     out.tint = input.tint;
     out.edge_fade = input.edge_fade;

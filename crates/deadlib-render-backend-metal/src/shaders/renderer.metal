@@ -53,6 +53,8 @@ vertex SpriteOut sprite_vertex(
 
     SpriteOut out;
     out.pos = proj * float4(center.xy + rotated + offset_world, center.z, 1.0);
+    // Engine cameras use [-w, w] depth; Metal clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.uv = uvs[vertex_id] * float2(inst.uv_scale) + float2(inst.uv_offset);
     out.quad_uv = uvs[vertex_id];
     out.tint = float4(inst.tint);
@@ -129,6 +131,8 @@ vertex MeshOut mesh_vertex(
     MeshVertex input = vertices[vertex_id];
     MeshOut out;
     out.pos = proj * float4(float2(input.pos), 0.0, 1.0);
+    // Engine cameras use [-w, w] depth; Metal clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.color = float4(input.color);
     return out;
 }
@@ -179,6 +183,8 @@ vertex TexturedMeshOut textured_mesh_vertex(
 
     TexturedMeshOut out;
     out.pos = proj * model * float4(float3(vertex_data.pos), 1.0);
+    // Engine cameras use [-w, w] depth; Metal clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.uv = float2(vertex_data.uv) * float2(inst.uv_scale)
         + float2(inst.uv_offset)
         + float2(inst.uv_tex_shift) * (float2(vertex_data.tex_matrix_scale) - float2(1.0));

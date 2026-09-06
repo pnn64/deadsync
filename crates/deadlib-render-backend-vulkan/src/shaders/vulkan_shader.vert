@@ -47,6 +47,8 @@ void main() {
     vec3 world = vec3(i_center.xy + rotated + offset_world, i_center.z);
 
     gl_Position = pc.proj * vec4(world, 1.0);
+    // Engine cameras use [-w, w] depth; Vulkan clips to [0, w].
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
 
     v_uv       = a_uv * i_uv_scale + i_uv_offset;
     v_tint     = i_tint;

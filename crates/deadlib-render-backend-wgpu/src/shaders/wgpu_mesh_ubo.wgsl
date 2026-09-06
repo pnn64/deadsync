@@ -18,6 +18,8 @@ struct VertexOut {
 fn vs_main(input: VertexIn) -> VertexOut {
     var out: VertexOut;
     out.pos = u_proj.proj * vec4<f32>(input.pos, 0.0, 1.0);
+    // Engine cameras use [-w, w] depth; wgpu clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.color = input.color;
     return out;
 }
@@ -26,4 +28,3 @@ fn vs_main(input: VertexIn) -> VertexOut {
 fn fs_main(input: VertexOut) -> @location(0) vec4<f32> {
     return input.color;
 }
-
