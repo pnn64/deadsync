@@ -109,6 +109,15 @@ enum ThresholdKind {
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 const THRESHOLD_STEP: u16 = 5;
+// Holding Up/Down keeps stepping the focused value: nothing repeats during the
+// initial delay, then repeats start at the opening interval and each one
+// shortens the next by the acceleration factor down to the floor.
+const HOLD_REPEAT_DELAY: f32 = 0.35;
+const HOLD_REPEAT_INTERVAL_START: f32 = 0.14;
+const HOLD_REPEAT_ACCEL: f32 = 0.88;
+const HOLD_REPEAT_INTERVAL_MIN: f32 = 0.03;
+/// Cap on repeats applied in one frame, so a long stall can't slam the value.
+const HOLD_REPEAT_MAX_PER_FRAME: u32 = 3;
 
 /// Gap the press/release lock keeps between a load-cell panel's thresholds,
 /// matching the official SMX config tool's two-thumb slider (`MinimumDistance`).
@@ -168,6 +177,31 @@ struct Theme {
 /// Max length of a saved pad-config profile name.
 const MAX_PROFILE_NAME_LEN: usize = 24;
 
+/// An Up/Down key being held: `update` keeps stepping the focused value.
+#[derive(Clone, Copy, Debug)]
+struct HeldStep {
+    raise: bool,
+    fine: bool,
+    /// Seconds the key has been held.
+    elapsed: f32,
+    /// Hold time at which the next repeat fires.
+    next_at: f32,
+    /// Interval to the repeat after that; shrinks with each repeat.
+    interval: f32,
+}
+
+impl HeldStep {
+    const fn new(raise: bool, fine: bool) -> Self {
+        Self {
+            raise,
+            fine,
+            elapsed: 0.0,
+            next_at: HOLD_REPEAT_DELAY,
+            interval: HOLD_REPEAT_INTERVAL_START,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct State {
     pub active_color_index: i32,
@@ -186,6 +220,10 @@ pub struct State {
     adv_sel: usize,
     /// Queued edits drained by the app loop each frame.
     pending: Vec<PadCommand>,
+    /// Up/Down held: `update` keeps stepping the focused value (after a delay,
+    /// then accelerating) until the key is released or another control is
+    /// pressed.
+    held: Option<HeldStep>,
     /// When set, the "save this pad as a profile" name-entry box is open.
     saving: Option<SaveDraft>,
     /// Whether the cursor pad can be saved to a profile (set by the app: true
@@ -283,8 +321,34 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
     std::mem::take(&mut state.pending)
 }
 
-pub const fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
+/// Per-frame tick: advances the Up/Down hold-repeat (the repeats only queue
+/// pad commands, so there is never an effect to return).
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
+    tick_hold(state, dt);
     None
+}
+
+fn tick_hold(state: &mut State, dt: f32) {
+    let Some(mut held) = state.held else {
+        return;
+    };
+    if !state.fsr_enabled || state.saving.is_some() || state.profiles_mode {
+        state.held = None;
+        return;
+    }
+    held.elapsed += dt.max(0.0);
+    let mut fired = 0;
+    while held.elapsed >= held.next_at && fired < HOLD_REPEAT_MAX_PER_FRAME {
+        step_focused_value(state, held.raise, held.fine);
+        held.next_at += held.interval;
+        held.interval = (held.interval * HOLD_REPEAT_ACCEL).max(HOLD_REPEAT_INTERVAL_MIN);
+        fired += 1;
+    }
+    // Past the per-frame cap: drop the backlog instead of bursting it later.
+    if held.elapsed > held.next_at {
+        held.next_at = held.elapsed;
+    }
+    state.held = Some(held);
 }
 
 #[must_use]
@@ -327,6 +391,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
 /// overlay. Returns whether Back at the top level asked to exit.
 pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult {
     if !ev.pressed {
+        // Releasing the held Up/Down ends its repeat.
+        let ends_hold = match (state.held, ui_action(ev.action)) {
+            (Some(held), Some(UiAction::Raise)) => held.raise,
+            (Some(held), Some(UiAction::Lower)) => !held.raise,
+            _ => false,
+        };
+        if ends_hold {
+            state.held = None;
+        }
         return EditResult::Handled;
     }
     // Only keyboard or dedicated menu controls drive the UI; ignore raw pad
@@ -334,6 +407,8 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     if ev.source == InputSource::Gamepad && !is_menu_control(ev.action) {
         return EditResult::Handled;
     }
+    // Any accepted press supersedes an Up/Down hold; Raise/Lower re-arm it.
+    state.held = None;
 
     // Name-entry box for saving the selected pad as a profile (text comes via
     // the raw-key path; here we handle the menu controls).
@@ -397,12 +472,11 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         }
         return EditResult::Handled;
     }
-    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
     match ui_action(ev.action) {
         Some(UiAction::PrevBar) => state.selected = (state.selected + total - 1) % total,
         Some(UiAction::NextBar) => state.selected = (state.selected + 1) % total,
-        Some(UiAction::Raise) => adjust_simple_threshold(state, step),
-        Some(UiAction::Lower) => adjust_simple_threshold(state, -step),
+        Some(UiAction::Raise) => begin_step(state, true, fine),
+        Some(UiAction::Lower) => begin_step(state, false, fine),
         None => {}
     }
     EditResult::Handled
@@ -452,6 +526,7 @@ pub const fn begin_profiles(state: &mut State) {
 /// Clear any transient modal state (profiles list / save box). Called when the
 /// overlay is (re)opened so it always lands on the Simple view.
 pub fn reset_modes(state: &mut State) {
+    state.held = None;
     state.profiles_mode = false;
     state.saving = None;
     state.delete_armed = false;
@@ -1530,8 +1605,8 @@ fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
         Some(UiAction::NextBar) => {
             state.adv_sel = (state.adv_sel + 1) % targets.len();
         }
-        Some(UiAction::Raise) => edit_focused(state, dev, targets[state.adv_sel], true, fine),
-        Some(UiAction::Lower) => edit_focused(state, dev, targets[state.adv_sel], false, fine),
+        Some(UiAction::Raise) => begin_step(state, true, fine),
+        Some(UiAction::Lower) => begin_step(state, false, fine),
         None => {}
     }
 }
@@ -1620,6 +1695,27 @@ fn toggle_focused(state: &mut State, dev: PadDeviceId, target: AdvTarget) {
             );
         }
         AdvTarget::Debounce => {}
+    }
+}
+
+/// Step the focused value once for a fresh press, then arm the hold-repeat.
+fn begin_step(state: &mut State, raise: bool, fine: bool) {
+    step_focused_value(state, raise, fine);
+    state.held = Some(HeldStep::new(raise, fine));
+}
+
+/// Step the focused value once: the Simple threshold under the cursor, or the
+/// focused Advanced target. Shared by the initial press and hold repeats.
+fn step_focused_value(state: &mut State, raise: bool, fine: bool) {
+    if let Some(dev) = state.advanced {
+        let targets = advanced_targets(state);
+        let Some(&target) = targets.get(state.adv_sel.min(targets.len().saturating_sub(1))) else {
+            return;
+        };
+        edit_focused(state, dev, target, raise, fine);
+    } else {
+        let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
+        adjust_simple_threshold(state, if raise { step } else { -step });
     }
 }
 
@@ -3132,6 +3228,93 @@ mod tests {
         let (raw, threshold_norm) = sensor_threshold_view(&sensor, curve, Some(317));
         assert_eq!(raw, 317);
         assert_eq!(threshold_norm, curve.normalize(raw));
+    }
+
+    // ── Hold-to-repeat ──
+
+    fn only_pending_threshold(s: &State) -> u16 {
+        match s.pending.as_slice() {
+            [PadCommand::Threshold { value, .. }] => *value,
+            other => panic!("expected exactly one Threshold command, got {other:?}"),
+        }
+    }
+
+    /// Run `update` in 10 ms ticks for `secs` and return how many coarse steps
+    /// the pending threshold advanced.
+    fn coarse_steps_during(s: &mut State, secs: f32) -> u16 {
+        let before = only_pending_threshold(s);
+        let mut elapsed = 0.0;
+        while elapsed < secs {
+            update(s, 0.01);
+            elapsed += 0.01;
+        }
+        (only_pending_threshold(s) - before) / THRESHOLD_STEP
+    }
+
+    #[test]
+    fn holding_raise_repeats_after_a_delay_and_accelerates() {
+        let mut s = init();
+        set_fsr_enabled(&mut s, true);
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        assert_eq!(only_pending_threshold(&s), 35);
+
+        // Nothing repeats during the initial delay.
+        update(&mut s, HOLD_REPEAT_DELAY * 0.9);
+        assert_eq!(only_pending_threshold(&s), 35);
+
+        // Same-length windows after the delay: acceleration means the later
+        // one fires more repeats.
+        update(&mut s, HOLD_REPEAT_DELAY * 0.1 + 0.001);
+        let early = coarse_steps_during(&mut s, 0.5);
+        let late = coarse_steps_during(&mut s, 0.5);
+        assert!(early >= 1, "expected repeats after the delay, got {early}");
+        assert!(
+            late > early,
+            "expected acceleration: early={early} late={late}"
+        );
+
+        // Releasing the key stops the repeats.
+        apply_edit(
+            &mut s,
+            &ev_from(VirtualAction::p1_up, InputSource::Keyboard, false),
+            false,
+        );
+        let after_release = only_pending_threshold(&s);
+        update(&mut s, 1.0);
+        assert_eq!(only_pending_threshold(&s), after_release);
+    }
+
+    #[test]
+    fn pressing_another_control_ends_the_hold() {
+        let mut s = init();
+        set_fsr_enabled(&mut s, true);
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_right), false); // move the cursor
+        let before = s.pending.clone();
+        update(&mut s, 2.0);
+        assert_eq!(s.pending, before);
+    }
+
+    #[test]
+    fn hold_repeat_drives_the_advanced_focus_with_the_press_step() {
+        let mut s = init();
+        set_fsr_enabled(&mut s, true);
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false); // Advanced
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), true); // fine: sensor 0 +1
+        update(&mut s, HOLD_REPEAT_DELAY + 0.001);
+        match s.pending.as_slice() {
+            [
+                PadCommand::Threshold {
+                    sensor: Some(_),
+                    value,
+                    ..
+                },
+            ] => assert_eq!(*value, 32),
+            other => panic!("expected one per-sensor Threshold command, got {other:?}"),
+        }
     }
 
     #[test]

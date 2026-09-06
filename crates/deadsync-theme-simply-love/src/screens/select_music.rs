@@ -11908,6 +11908,9 @@ pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView, effects: &mut
 fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
     state.smx_pads.clone_from(&smx.pads);
     process_smx_pad_profile_events(state);
+    if state.pad_config_overlay_visible {
+        let _ = pad_config::update(&mut state.pad_config_overlay, dt);
+    }
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
     if state.lobby_notice_time_left > 0.0 {
         state.lobby_notice_time_left = (state.lobby_notice_time_left - dt.max(0.0)).max(0.0);
