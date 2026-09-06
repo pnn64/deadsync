@@ -61,6 +61,13 @@ impl WasapiBackendMode {
             Self::Exclusive => "Exclusive",
         }
     }
+
+    #[inline(always)]
+    const fn assumes_zero_audio_client_padding(self) -> bool {
+        // Exclusive event callbacks occur when the complete endpoint buffer is
+        // ready. Shared-mode padding is not applicable there.
+        matches!(self, Self::Exclusive)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -278,6 +285,8 @@ fn resolve_format_for_mode(
 ) -> Result<Vec<u8>, String> {
     let mut chosen_format = mix_format.to_vec();
 
+    info!("Resolving WASAPI format for device '{device_name}' with mode '{mode:?}'");
+
     let resolve = |candidate: &[u8]| -> Result<Vec<u8>, String> {
         match mode {
             WasapiBackendMode::Shared => {
@@ -336,6 +345,16 @@ pub fn prepare(
     let channels = waveformat(&chosen_format).nChannels as usize;
     let samples_per_frame =
         usize::from(waveformat(&chosen_format).nBlockAlign) / sample_format.sample_size();
+
+    info!(
+        "WASAPI: {} mode, {} channels, {} Hz, {}, preferred buffer size {} frames",
+        mode.display_name(),
+        channels,
+        sample_rate_hz,
+        sample_format.display_name(),
+        preferred_buffer_frames.unwrap_or(0),
+    );
+
     Ok(WasapiOutputPrep {
         device_id,
         device_name,
@@ -537,14 +556,6 @@ fn render_thread_inner(
             .GetBufferSize()
             .map_err(|e| format!("failed to query WASAPI buffer size: {e}"))?
     };
-    info!(
-        "WASAPI: {} mode, {} channels, {} Hz, {}, buffer size {} frames",
-        prep.mode.display_name(),
-        prep.channels,
-        prep.sample_rate_hz,
-        prep.sample_format.display_name(),
-        max_frames_in_buffer,
-    );
 
     let playback_delay_ns = prep.frame_time.convert(max_frames_in_buffer);
     write_frames(
@@ -602,17 +613,21 @@ fn render_thread_inner(
         if wait == Foundation::WAIT_OBJECT_0 {
             return Ok(());
         }
-        // On a callback signal this is the normal render path. On the periodic
-        // timeout it is also a liveness probe: an unplugged endpoint reports
-        // AUDCLNT_E_DEVICE_INVALIDATED here even if it stopped signaling its
-        // callback event.
-        // SAFETY: `audio_client` remains alive and started while the render loop
-        // runs, so querying current padding is valid here.
-        let padding = unsafe {
-            audio_client
-                .GetCurrentPadding()
-                .map_err(|e| format!("failed to query WASAPI padding: {e}"))
-        }?;
+
+        let mut padding = 0;
+        if !prep.mode.assumes_zero_audio_client_padding() {
+            // On a callback signal this is the normal render path. On the
+            // periodic timeout it is also a liveness probe: an unplugged
+            // endpoint reports AUDCLNT_E_DEVICE_INVALIDATED here even if it
+            // stopped signaling its callback event.
+            // SAFETY: `audio_client` remains alive and started while the render
+            // loop runs, so querying current padding is valid here.
+            padding = unsafe {
+                audio_client
+                    .GetCurrentPadding()
+                    .map_err(|e| format!("failed to query WASAPI padding: {e}"))?
+            };
+        }
         let frames_available = max_frames_in_buffer.saturating_sub(padding);
         let playback_delay_ns = prep.frame_time.convert(padding);
         publish_output_timing(
