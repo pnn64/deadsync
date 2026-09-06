@@ -190,6 +190,10 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
         &mut invert[..num_cols],
         &mut tornado[..num_cols],
     );
+    // Flip mirrors against the last active lane, not the backing buffer's end.
+    let col_offsets = &col_offsets[..num_cols];
+    let invert = &invert[..num_cols];
+    let tornado = &tornado[..num_cols];
     let beat_push = beat_factor(request.current_beat);
 
     if let Some(sprite) = request.held_miss_sprite.as_ref() {
@@ -205,7 +209,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 continue;
             }
             let xy = [
-                indicator_x(request, i, beat_push, &col_offsets, &invert, &tornado),
+                indicator_x(request, i, beat_push, col_offsets, invert, tornado),
                 player_metric_y(
                     request.screen_center_y,
                     request.field_center_y,
@@ -234,7 +238,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 HoldResult::LetGo | HoldResult::Missed => 1,
             };
             let xy = [
-                indicator_x(request, i, beat_push, &col_offsets, &invert, &tornado),
+                indicator_x(request, i, beat_push, col_offsets, invert, tornado),
                 player_metric_y(
                     request.screen_center_y,
                     request.field_center_y,
@@ -569,6 +573,63 @@ mod tests {
             0.0,
             195,
         );
+    }
+
+    #[test]
+    fn hold_labels_follow_flip_using_active_columns() {
+        let holds = [Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let misses = [Some(HeldMissRenderInfo {
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let reverse = [0.0; MAX_COLS];
+        let columns = [
+            &[-96, -32, 32, 96][..],
+            &[-224, -160, -96, -32, 32, 96, 160, 224][..],
+            &[-288, -224, -160, -96, -32, 32, 96, 160, 224, 288][..],
+        ];
+        for xs in columns {
+            for flip in [-0.5, 0.0, 0.25, 0.5, 1.0] {
+                let mut request = empty_request(&misses, &holds);
+                request.noteskin_column_xs = Some(xs);
+                request.num_cols = xs.len();
+                request.column_reverse_percent = &reverse;
+                request.visual.flip = flip;
+                request.field_zoom = 1.5;
+                request.hold_sprite = Some(IndicatorSprite {
+                    source: source("hold-judgment"),
+                    frame_size: [120.0, 30.0],
+                    frame_cols: 1,
+                    frame_rows: 2,
+                    scale: 1.0,
+                });
+                request.held_miss_sprite = request.hold_sprite.clone();
+                let mut draws = Vec::new();
+                compose_judgment_feedback(&mut draws, request);
+                assert_eq!(draws.len(), xs.len() * 2);
+                for (i, draw) in draws.iter().enumerate() {
+                    let col = i % xs.len();
+                    // Player::Update uses GetXPos(col, 0). ArrowEffects mirrors
+                    // against the style's last active column, not MAX_COLS.
+                    let native_x =
+                        xs[col] as f32 + (xs[xs.len() - 1 - col] - xs[col]) as f32 * flip;
+                    let expected_x = 320.0 + native_x * 1.5;
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        panic!("expected hold label sprite");
+                    };
+                    assert_eq!(
+                        sprite.center[0],
+                        expected_x,
+                        "{col} of {} at {flip}",
+                        xs.len()
+                    );
+                    assert_eq!(sprite.center[1], if i < xs.len() { 195.0 } else { 155.0 });
+                    assert_eq!(sprite.rot_z_deg, 0.0, "labels stay upright");
+                }
+            }
+        }
     }
 
     #[test]
