@@ -5207,6 +5207,11 @@ impl App {
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Mappings(request)) => {
                     crate::mappings::execute(request);
                     logical_input::with_keymap(|km| self.input.set_keymap(km));
+                    // Rebinding a held time-control key can remove its system action,
+                    // so its release would no longer clear the old held state.
+                    let controls = self.state.shell.interaction.controls_mut();
+                    controls.set_fast_forward(false);
+                    controls.set_slow_down(false);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::NullOrDie(request)) => {
