@@ -2477,13 +2477,13 @@ impl State {
             &song_lua_visuals.overlays,
             &song_lua_proxy_request_index.topology,
         );
-        let song_lua_background_aft_capture_scratch = song_lua_visuals
+        let song_lua_background_aft_capture_scratch: Vec<_> = song_lua_visuals
             .background_visual_layers
             .iter()
             .zip(song_lua_background_overlay_topology_indices.iter())
             .map(|(layer, topology)| SongLuaAftCaptureScratch::new(&layer.overlays, topology))
             .collect();
-        let song_lua_foreground_aft_capture_scratch = song_lua_visuals
+        let song_lua_foreground_aft_capture_scratch: Vec<_> = song_lua_visuals
             .foreground_visual_layers
             .iter()
             .zip(song_lua_foreground_proxy_request_indices.iter())
