@@ -755,7 +755,13 @@ fn frames_to_hns(frames: u32, sample_rate_hz: u32) -> i64 {
     if frames == 0 || sample_rate_hz == 0 {
         return 0;
     }
-    ((frames as u64).saturating_mul(10_000_000) / sample_rate_hz as u64).min(i64::MAX as u64) as i64
+
+    // we need to round up to the nearest whole number of reference time units,
+    // otherwise our buffer might be fractionally too short and crash the IAudioClient.
+    let numerator = (frames as u64).saturating_mul(10_000_000);
+    numerator
+        .div_ceil(sample_rate_hz as u64)
+        .min(i64::MAX as u64) as i64
 }
 
 #[inline(always)]
