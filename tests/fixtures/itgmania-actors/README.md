@@ -48,3 +48,19 @@ cargo run -- actor-conformance fixtures/actors/glow-alpha.json `
 
 Update this baseline only after checking the native alpha multiplication and
 its production-render comparison in `itgmania_actor_conformance/effects.rs`.
+
+## Note-column zoom spline regression
+
+`note-zoom-spline.json` draws a native Sprite using offset zoom sampled from
+ITGmania's `CubicSpline::solve_straight`/`evaluate`, as used for receptors and
+native ghost explosions. It covers fractional entry/exit, negative overshoot,
+and the final endpoint. Regenerate from `itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/note-zoom-spline.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/note-zoom-spline.json
+```
+
+The production `SongLuaNoteHideWindows` evaluator is compared in
+`itgmania_actor_conformance/effects.rs`; change the baseline only with an
+intentional native spline or fixture-input change.

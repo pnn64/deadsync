@@ -1286,13 +1286,9 @@ where
         for &note_index in &plan.note_indices[..plan.note_count] {
             let note = &self.chart_runtime.notes[note_index];
             let column = note.column;
-            let beat = note.beat;
-            if song_lua_hides_note_visual(self, player_idx, column, beat) {
-                if let Some(window_key) = plan.receptor_window {
-                    self.trigger_receptor_score_pulse(column, window_key);
-                }
-                continue;
-            }
+            // NoteField::DidTapNote always starts the native ghost as well as
+            // the Lua callback. Its zoom is sampled at draw time, so a flash
+            // started on the final hidden tap grows back with the receptor.
             self.trigger_tap_judgment_explosion(player_idx, column, &plan.judgment);
         }
     }

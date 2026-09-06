@@ -744,6 +744,16 @@ pub struct SongLuaNoteHideWindows {
     prefix_max_ends: Box<[f32]>,
     lane_ranges: [SongLuaNoteHideRange; MAX_COLS],
     lane_has_nonfinite: [bool; MAX_COLS],
+    zoom_splines: [SongLuaZoomSpline; MAX_COLS],
+}
+
+/// Immutable song data, built at load and freed at the screen transition. Each
+/// lane has at most 65,536 cubic segments; sampling reads one segment, with no
+/// allocation, eviction, or runtime cache misses. Owned by gameplay/presentation.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct SongLuaZoomSpline {
+    beats_per_t: f32,
+    coefficients: Box<[[f32; 4]]>,
 }
 
 impl SongLuaNoteHideWindows {
@@ -799,7 +809,91 @@ impl SongLuaNoteHideWindows {
             prefix_max_ends: prefix_max_ends.into_boxed_slice(),
             lane_ranges,
             lane_has_nonfinite,
+            zoom_splines: std::array::from_fn(|_| SongLuaZoomSpline::default()),
         }
+    }
+
+    /// Restore the non-looping offset spline used to hide authored note runs.
+    /// ITGmania CubicSpline::solve_straight solves for first derivatives, with
+    /// natural end conditions (2, 1 / 1, 2), then evaluates a + bt + ct² + dt³.
+    pub fn set_zoom_spline(&mut self, column: usize, beats_per_t: f32, size: usize) {
+        if column >= MAX_COLS
+            || !(1..=65_536).contains(&size)
+            || !beats_per_t.is_finite()
+            || beats_per_t <= 0.0
+        {
+            return;
+        }
+        let mut points = vec![[0.0; 4]; size];
+        for window in self.column_windows(column) {
+            if !window.start_beat.is_finite() || !window.end_beat.is_finite() {
+                continue;
+            }
+            let start = (window.start_beat / beats_per_t).round().max(0.0) as usize;
+            let end = (window.end_beat / beats_per_t).round().max(0.0) as usize;
+            for point in points.iter_mut().take(end.saturating_add(1)).skip(start) {
+                point[0] = -1.0;
+            }
+        }
+        if size == 2 {
+            points[0][1] = points[1][0] - points[0][0];
+        } else if size > 2 {
+            let mut diagonal = vec![4.0_f32; size];
+            let mut slopes = vec![0.0; size];
+            diagonal[0] = 2.0;
+            diagonal[size - 1] = 2.0;
+            slopes[0] = 3.0 * (points[1][0] - points[0][0]);
+            for i in 1..size - 1 {
+                slopes[i] = 3.0 * (points[i + 1][0] - points[i - 1][0]);
+            }
+            slopes[size - 1] = 3.0 * (points[size - 1][0] - points[size - 2][0]);
+            for i in 1..size {
+                let multiple = 1.0 / diagonal[i - 1];
+                diagonal[i] -= multiple;
+                slopes[i] -= slopes[i - 1] * multiple;
+            }
+            for i in (1..size).rev() {
+                slopes[i - 1] -= slopes[i] * (1.0 / diagonal[i]);
+            }
+            for (slope, diagonal) in slopes.iter_mut().zip(diagonal) {
+                *slope /= diagonal;
+            }
+            for i in 0..size - 1 {
+                let diff = points[i + 1][0] - points[i][0];
+                points[i][1] = slopes[i];
+                points[i][2] = 3.0 * diff - 2.0 * slopes[i] - slopes[i + 1];
+                points[i][3] = -2.0 * diff + slopes[i] + slopes[i + 1];
+            }
+        }
+        self.zoom_splines[column] = SongLuaZoomSpline {
+            beats_per_t,
+            coefficients: points.into_boxed_slice(),
+        };
+    }
+
+    /// Offset is added to ArrowEffects zoom, before column/field scaling.
+    pub fn zoom_offset(&self, column: usize, beat: f32) -> f32 {
+        let Some(spline) = self
+            .zoom_splines
+            .get(column)
+            .filter(|spline| !spline.coefficients.is_empty() && beat.is_finite())
+        else {
+            return if self.hidden(column, beat) { -1.0 } else { 0.0 };
+        };
+        let t = beat / spline.beats_per_t;
+        let index = (t as i64).clamp(0, spline.coefficients.len() as i64 - 1) as usize;
+        let fraction = if t <= -1.0 || index == spline.coefficients.len() - 1 {
+            0.0
+        } else {
+            t - index as f32
+        };
+        let [a, b, c, d] = spline.coefficients[index];
+        let square = fraction * fraction;
+        a + b * fraction + c * square + d * (square * fraction)
+    }
+
+    pub fn has_column_hides(&self, column: usize) -> bool {
+        !self.column_windows(column).is_empty()
     }
 
     #[inline(always)]
@@ -2646,18 +2740,6 @@ fn song_lua_note_hidden_linear(
             && beat + EPS >= window.start_beat
             && beat <= window.end_beat + EPS
     })
-}
-
-#[inline(always)]
-#[must_use]
-pub fn song_lua_field_note_hidden(
-    windows: &SongLuaNoteHideWindows,
-    cols_per_player: usize,
-    column: usize,
-    beat: f32,
-) -> bool {
-    let local_col = local_column_for_field(cols_per_player, column);
-    song_lua_note_hidden(windows, local_col, beat)
 }
 
 #[inline(always)]

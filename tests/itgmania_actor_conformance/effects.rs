@@ -243,3 +243,25 @@ fn seeded_vibration_samples_match_itgmania_exactly() {
         );
     }
 }
+
+#[test]
+fn note_zoom_spline_matches_native_receptor_scale() {
+    use deadsync_gameplay::{SongLuaNoteHideWindowRuntime, SongLuaNoteHideWindows};
+    let mut hides = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
+        column: 0,
+        start_beat: 50.0 / 48.0,
+        end_beat: 97.0 / 48.0,
+    }]);
+    hides.set_zoom_spline(0, 1.0 / 48.0, 99);
+    let oracle = fixture("note-zoom-spline");
+    for sample in samples(&oracle) {
+        let beat = f32_at(sample, "beat");
+        let zoom = 1.0 + hides.zoom_offset(0, beat);
+        let expected: [f32; 3] = f32_array(&actor(sample, "receptor")["current"]["zoom"]);
+        assert!(
+            (zoom - expected[0]).abs() < 0.000_002,
+            "native spline at beat {beat}: {zoom} != {}",
+            expected[0]
+        );
+    }
+}

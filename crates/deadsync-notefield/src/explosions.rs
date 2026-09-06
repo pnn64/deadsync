@@ -49,7 +49,11 @@ pub(crate) fn compose_explosion_layers<S, F>(
             .unwrap_or(request.current_frame_beat);
         let frame = slot.frame_index(request.elapsed_s, frame_beat);
         let uv = slot.uv_for_frame_at(frame, request.uv_elapsed_s);
-        let size = scale_effect_size(slot.logical_size(), request.field_zoom, request.effect_zoom);
+        let size = scale_effect_size(
+            slot.logical_size(),
+            request.field_zoom,
+            request.effect_zoom.abs(),
+        );
         let (rotation_y_deg, rotation_z_deg) = match request.rotation {
             ExplosionRotation::Tap {
                 rotation_y_deg,
@@ -68,7 +72,7 @@ pub(crate) fn compose_explosion_layers<S, F>(
         let draw = ExplosionDraw {
             center: request.center,
             size,
-            zoom: visual.zoom,
+            zoom: visual.zoom * request.effect_zoom.signum(),
             uv,
             tint: visual.diffuse,
             rotation_y_deg,

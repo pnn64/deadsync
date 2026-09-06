@@ -167,7 +167,10 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     align: [0.5, reverse.vert_align()],
                     center,
                     size,
-                    zoom: mirrored_zoom(slot, request.bop_zoom * idle_press_zoom),
+                    zoom: mirrored_zoom(
+                        slot,
+                        request.bop_zoom * idle_press_zoom * request.effect_zoom.signum(),
+                    ),
                     tint: [
                         color[0] * draw.tint[0],
                         color[1] * draw.tint[1],
@@ -217,7 +220,10 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     align: [0.5, reverse.vert_align()],
                     center,
                     size,
-                    zoom: mirrored_zoom(slot, request.bop_zoom * idle_press_zoom),
+                    zoom: mirrored_zoom(
+                        slot,
+                        request.bop_zoom * idle_press_zoom * request.effect_zoom.signum(),
+                    ),
                     tint: [draw.tint[0], draw.tint[1], draw.tint[2], alpha],
                     rotation_y_deg: request.rotation_y_deg,
                     rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
@@ -251,7 +257,12 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             return;
         }
         let final_rotation =
-            slot.sprite_def().rotation_deg as f32 - draw.rot[2] - request.confusion_rotation_deg;
+            slot.sprite_def().rotation_deg as f32 - draw.rot[2] - request.confusion_rotation_deg
+                + if request.effect_zoom < 0.0 {
+                    180.0
+                } else {
+                    0.0
+                };
         let color = draw.tint;
         let glow = slot.model_glow_with_draw(draw, request.elapsed, request.beat, color[3]);
         let blend = if draw.blend_add {
@@ -361,7 +372,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         align: [0.5, reverse.vert_align()],
                         center,
                         size,
-                        zoom: mirrored_zoom(slot, request.bop_zoom),
+                        zoom: mirrored_zoom(slot, request.bop_zoom * request.effect_zoom.signum()),
                         tint: [
                             draw.tint[0],
                             draw.tint[1],
@@ -387,8 +398,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
 fn effect_size<S: NoteskinSlot>(slot: &S, field_zoom: f32, effect_zoom: f32) -> [f32; 2] {
     let size = slot.logical_size();
     [
-        size[0] * field_zoom * effect_zoom,
-        size[1] * field_zoom * effect_zoom,
+        (size[0] * field_zoom * effect_zoom).abs(),
+        (size[1] * field_zoom * effect_zoom).abs(),
     ]
 }
 

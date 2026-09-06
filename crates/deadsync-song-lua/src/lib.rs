@@ -4378,6 +4378,8 @@ pub struct SongLuaTrackedActor {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaNoteHideWindow {
+    pub spline_beats_per_t: f32,
+    pub spline_size: usize,
     pub player: usize,
     pub column: usize,
     pub start_beat: f32,
@@ -4401,6 +4403,8 @@ pub fn note_hide_window_from_indices(
         return None;
     }
     Some(SongLuaNoteHideWindow {
+        spline_beats_per_t: beats_per_t,
+        spline_size: end_index,
         player,
         column,
         start_beat,
@@ -4440,6 +4444,9 @@ pub fn note_hide_windows_from_flags(
             note_hide_window_from_indices(player, column, beats_per_t, start, hidden.len())
     {
         out.push(window);
+    }
+    for window in &mut out {
+        window.spline_size = hidden.len();
     }
     out
 }
@@ -20504,24 +20511,32 @@ end
     fn sort_note_hide_windows_matches_actor_host_order() {
         let mut windows = vec![
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 1,
                 column: 0,
                 start_beat: 1.0,
                 end_beat: 1.5,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 2.0,
                 end_beat: 2.5,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 1.0,
                 end_beat: 2.0,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 0,
                 start_beat: 4.0,
@@ -20665,6 +20680,8 @@ end
         assert_eq!(
             note_hide_window_from_indices(0, 1, 0.25, 1, 1),
             Some(super::SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 0.0,

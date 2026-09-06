@@ -898,8 +898,14 @@ pub fn create_arrow_effects_table(
         lua.create_function(|_, args: MultiValue| {
             let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
             let reverse = arrow_effects_reverse_percent(&args)?;
-            let receptor_y = (THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)
-                .mul_add(reverse, THEME_RECEPTOR_Y_STD);
+            // ArrowEffects is local to NoteField; Player places that actor at
+            // the midpoint of the two theme receptor metrics.
+            let reverse_offset = args
+                .get(3)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD);
+            let receptor_y = reverse_offset * (reverse - 0.5);
             Ok(receptor_y + y_offset * 2.0f32.mul_add(-reverse, 1.0))
         })?,
     )?;

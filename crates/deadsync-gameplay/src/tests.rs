@@ -7297,19 +7297,6 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_field_note_hide_maps_global_columns() {
-        let windows = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
-            column: 2,
-            start_beat: 40.0,
-            end_beat: 44.0,
-        }]);
-
-        assert!(song_lua_field_note_hidden(&windows, 4, 6, 42.0));
-        assert!(!song_lua_field_note_hidden(&windows, 4, 5, 42.0));
-        assert!(song_lua_field_note_hidden(&windows, 0, 2, 42.0));
-    }
-
-    #[test]
     fn song_lua_message_events_offset_event_times_only() {
         let mut events = [
             SongLuaOverlayMessageRuntime {
@@ -15330,7 +15317,6 @@ mod tests {
         assert_eq!(finalized.outcome.final_grade, JudgeGrade::Great);
         assert_eq!(flash_judgment.grade, JudgeGrade::Great);
         assert_eq!(plan.judgment.grade, JudgeGrade::Great);
-        assert_eq!(plan.receptor_window, Some("W3"));
         assert_eq!(&plan.note_indices[..plan.note_count], &[0, 1]);
         assert_eq!(&indices[..len], &[0, 1]);
     }

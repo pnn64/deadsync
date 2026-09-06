@@ -192,7 +192,7 @@ fn perspective_geometry_survives_noteskin_kind_change() {
                 Some(0),
                 SongLuaOverlayState {
                     x: 459.0,
-                    y: 636.16444,
+                    y: 626.16444,
                     z: 10.0,
                     zoom: 0.3,
                     ..Default::default()
@@ -296,7 +296,7 @@ fn operation_values(
 }
 
 fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
-    let hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
+    let mut hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
         compiled
             .iter()
             .flat_map(|layer| &layer.note_hides)
@@ -351,11 +351,25 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
                 }
             }
         }
+        if let Some(hide) = compiled.iter().flat_map(|layer| &layer.note_hides)
+            .find(|hide| hide.player == player - 1 && hide.column == column - 1)
+        {
+            assert_eq!(hide.spline_size, points.len(), "preserve native spline endpoint");
+            assert_eq!(hide.spline_beats_per_t, beats_per_t, "preserve native beat spacing");
+            hides[player - 1].set_zoom_spline(column - 1, hide.spline_beats_per_t, hide.spline_size);
+        }
         let mut differences = 0;
         for (index, (_, expected)) in points {
             let beat = (index - 1) as f32 * beats_per_t;
             let actual =
                 deadsync_gameplay::song_lua_note_hidden(&hides[player - 1], column - 1, beat);
+            let offset = hides[player - 1].zoom_offset(column - 1, beat);
+            let expected_offset = if expected { -1.0 } else { 0.0 };
+            // Multiplying a high row by beats_per_t and dividing again can be
+            // one float ULP off the knot; fractional samples have a separate
+            // native CubicSpline fixture with a 2e-6 absolute comparison.
+            assert!((offset - expected_offset).abs() < 0.002,
+                "P{player} column {column} spline offset at beat {beat}: {offset}");
             checked += 1;
             hidden += usize::from(expected);
             if actual != expected {
@@ -438,11 +452,11 @@ return Def.ActorFrame{
         .collect::<Vec<_>>();
         for (beat, visible, y, zoom_y) in [
             (0.0, false, 0.0, 1.0),
-            (0.001, true, 386.936, 1.0),
-            (8.0, true, -125.0, 1.0),
-            (9.0, true, -53.0, 1.05),
-            (10.0, true, -29.0, 0.9),
-            (11.0, true, -53.0, 1.05),
+            (0.001, true, 376.936, 1.0),
+            (8.0, true, -135.0, 1.0),
+            (9.0, true, -63.0, 1.05),
+            (10.0, true, -39.0, 0.9),
+            (11.0, true, -63.0, 1.05),
             (12.001, false, 0.0, 1.0),
         ] {
             let local = compiled_local_states_at(

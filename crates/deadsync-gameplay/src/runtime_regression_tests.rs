@@ -3962,8 +3962,12 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn hidden_song_lua_tap_steps_receptor_without_core_flash() {
-        let mut state = regression_state();
+    fn hidden_song_lua_tap_keeps_native_flash_running() {
+        let profile = TestProfile {
+            tap_explosion_options: all_tap_explosion_options(),
+            ..TestProfile::default()
+        };
+        let mut state = regression_state_with_profiles(std::array::from_fn(|_| profile.clone()));
         let row_index = 48usize;
         let column = 1usize;
         enable_tap_explosion_durations(&mut state);
@@ -3981,7 +3985,7 @@ mod runtime_regression_tests {
 
         state.trigger_completed_row_tap_explosions(0, 0);
 
-        assert!(state.display.visual_feedback.tap_explosions[column].is_none());
+        assert!(state.display.visual_feedback.tap_explosions[column].is_some());
         assert_eq!(state.display.receptor_feedback.bop_timers[column], 0.0);
         assert_eq!(
             state.display.receptor_feedback.bop_behaviors[column].duration,

@@ -3952,6 +3952,22 @@ fn build_song_lua_runtime_windows_for_data(
                 .map(|hide| (hide.player, hide.column, hide.start_beat, hide.end_beat)),
         );
 
+        for player in 0..params.num_players {
+            for column in 0..MAX_COLS {
+                if let Some(hide) = compiled
+                    .note_hides
+                    .iter()
+                    .find(|hide| hide.player == player && hide.column == column)
+                {
+                    note_hides[player].set_zoom_spline(
+                        column,
+                        hide.spline_beats_per_t,
+                        hide.spline_size,
+                    );
+                }
+            }
+        }
+
         let mut unsupported_targets = 0usize;
         let mut total_constant = 0usize;
         let mut total_eases = 0usize;
@@ -6220,7 +6236,7 @@ pub fn in_transition(
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
             diffuse(0.0, 0.0, 0.0, 1.0):
-            z(1100):
+            z(1200):
             linear(TRANSITION_IN_RESTART_DURATION): alpha(0.0):
             linear(0.0): visible(false)
         );
@@ -6250,7 +6266,7 @@ pub fn in_transition(
         align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
         diffuse(intro_color[0], intro_color[1], intro_color[2], 0.8):
         rotationz(-10.0): zoom(0.0):
-        z(1101):
+        z(1201):
         sleep(0.4):
         decelerate(0.6): rotationz(0.0): zoom(1.3 * splode_zoom_scale): alpha(0.0)
     );
@@ -6264,7 +6280,7 @@ pub fn in_transition(
             align(0.0, 0.0): xy(0.0, 0.0):
             zoomto(screen_width(), screen_height()):
             diffuse(0.0, 0.0, 0.0, 1.0):
-            z(1100):
+            z(1200):
             sleep(1.4):
             accelerate(0.6): alpha(0.0):
             linear(0.0): visible(false)
@@ -6273,7 +6289,7 @@ pub fn in_transition(
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             diffuse(intro_color[0], intro_color[1], intro_color[2], 0.9):
             rotationz(10.0): zoom(0.0):
-            z(1101):
+            z(1201):
             sleep(0.4):
             linear(0.6): rotationz(0.0): zoom(1.1 * splode_zoom_scale): alpha(0.0)
         ),
@@ -6282,7 +6298,7 @@ pub fn in_transition(
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             diffuse(intro_color[0], intro_color[1], intro_color[2], 1.0):
             rotationz(10.0): zoom(0.0):
-            z(1101):
+            z(1201):
             sleep(0.4):
             decelerate(0.8): rotationz(0.0): zoom(0.9 * minisplode_zoom_scale): alpha(0.0)
         ),
@@ -6291,7 +6307,7 @@ pub fn in_transition(
             align(0.5, 0.5): xy(screen_center_x(), screen_center_y()):
             shadowlength(1.0):
             diffuse(1.0, 1.0, 1.0, 0.0):
-            z(1102):
+            z(1202):
             accelerate(0.5): alpha(1.0):
             sleep(0.66):
             accelerate(0.33): zoom(0.4): xy(text_target_x, screen_height() - 30.0):
@@ -11184,7 +11200,8 @@ const SONG_LUA_BACKGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
 };
 const SONG_LUA_FOREGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
     base: SONG_LUA_OVERLAY_LAYER_Z_BASE,
-    ceiling: i16::MAX,
+    // ScreenWithMenuElements draws transitions above the entire foreground.
+    ceiling: 1199,
 };
 
 fn song_lua_rounded_z(value: f32) -> i16 {
@@ -12238,7 +12255,8 @@ fn append_song_lua_model_actors(
             } else {
                 blend
             },
-            z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16),
+            z: song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
+                .min(SONG_LUA_FOREGROUND_DEPTH.ceiling),
         };
         let glow_actor = song_lua_overlay_glow_actor_with_static_vertices(
             &actor,
@@ -12324,7 +12342,8 @@ fn append_song_lua_noteskin_actors(
         if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
             continue;
         }
-        let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16);
+        let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
+            .min(SONG_LUA_FOREGROUND_DEPTH.ceiling);
         let actor = if slot.model.is_some() {
             if let Some(cache) = model_cache.as_deref_mut() {
                 noteskin_model_actor_from_draw_cached(
@@ -27853,6 +27872,23 @@ mod tests {
             foreground_layer < TOP_SCREEN_HUD_Z,
             "foreground Lua must stay below player names and the event-mode label"
         );
+        let (transitions, _) = out_transition();
+        let Actor::Sprite {
+            z: transition_z, ..
+        } = &transitions[0]
+        else {
+            panic!("out transition is a black sprite");
+        };
+        // flip69 has more than 100 foreground actors, and its final arrow used
+        // to cross the transition's z=1200 solely because of its draw index.
+        for draw_index in [0, 100, 357, usize::MAX] {
+            assert!(
+                SONG_LUA_FOREGROUND_DEPTH
+                    .shifted(f32::MAX)
+                    .draw_z(draw_index)
+                    < *transition_z
+            );
+        }
     }
 
     #[test]

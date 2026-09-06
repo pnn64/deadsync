@@ -5,8 +5,9 @@ use crate::{
     LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_NOTE_COLUMNS, SongLuaCompileContext,
     SongLuaNoteskinResolver, SongLuaOverlayCompileActor, SongLuaOverlayEase,
     SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, named_overlay_indices_by_name,
-    overlay_delta_intersection, overlay_descendants_by_parent, read_f32, song_lua_style_column_x,
+    SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    named_overlay_indices_by_name, overlay_delta_intersection, overlay_descendants_by_parent,
+    read_f32, song_lua_style_column_x,
 };
 
 pub const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
@@ -618,7 +619,8 @@ pub fn multitap_frame_state(
     let mut state = baseline;
     state.visible = true;
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
-    state.y = THEME_RECEPTOR_Y_STD + multitap_y_offset(context, player, phase.pos);
+    state.y = (THEME_RECEPTOR_Y_STD - THEME_RECEPTOR_Y_REV) * 0.5
+        + multitap_y_offset(context, player, phase.pos);
     state.z = 0.0;
     state.zoom_x = 1.0;
     state.zoom_y = 1.0 + phase.squish;
@@ -733,7 +735,7 @@ pub fn multitap_explosion_state(
     let mut state = baseline;
     state.visible = visible;
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
-    state.y = THEME_RECEPTOR_Y_STD;
+    state.y = (THEME_RECEPTOR_Y_STD - THEME_RECEPTOR_Y_REV) * 0.5;
     state.z = 0.0;
     state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
     state
