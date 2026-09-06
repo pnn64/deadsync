@@ -251,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(target_os = "linux")]
             linux_backend: cfg.linux_audio_backend,
             sample_rate_hz: cfg.audio_sample_rate_hz,
+            buffer_size_frames: cfg.audio_buffer_size_frames,
         }) {
             Ok((audio, clock)) => {
                 logging::write_report_block(
