@@ -41,7 +41,8 @@ pub fn create_default_config_file() -> Result<(), std::io::Error> {
         "'{}' not found, creating with default values.",
         path.display()
     );
-    std::fs::write(path, build_default_app_config_file())
+    let content = build_default_app_config_file();
+    deadlib_platform::atomic_write::write_atomic(&path, content.as_bytes())
 }
 
 pub fn get() -> Config {

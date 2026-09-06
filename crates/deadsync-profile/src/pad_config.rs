@@ -338,7 +338,7 @@ pub fn load_profile_id(
 }
 
 pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
-    std::fs::write(path, serialize(profiles))
+    deadlib_platform::atomic_write::write_atomic(path, serialize(profiles).as_bytes())
 }
 
 pub fn save_dir(profile_dir: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {

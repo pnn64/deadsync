@@ -1,6 +1,9 @@
 use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
+use deadlib_platform::atomic_write::{
+    sync_parent_dir, tmp_sibling_path, write_atomic, write_synced,
+};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
@@ -3401,7 +3404,6 @@ pub const PROFILE_INI_FILE: &str = "profile.ini";
 pub const GROOVESTATS_INI_FILE: &str = "groovestats.ini";
 pub const ARROWCLOUD_INI_FILE: &str = "arrowcloud.ini";
 pub const PROFILE_STATS_FILE: &str = "stats.bin";
-pub const PROFILE_STATS_TMP_FILE: &str = "stats.bin.tmp";
 pub const FAVORITES_FILE: &str = "favorites.txt";
 pub const FAVORITED_PACKS_FILE: &str = "favorited_packs.txt";
 pub const FAVORITED_SERIES_FILE: &str = "favorited_series.txt";
@@ -3433,7 +3435,7 @@ pub fn profile_stats_path(dir: &Path) -> PathBuf {
 #[inline(always)]
 #[must_use]
 pub fn profile_stats_tmp_path(dir: &Path) -> PathBuf {
-    dir.join(PROFILE_STATS_TMP_FILE)
+    tmp_sibling_path(&profile_stats_path(dir))
 }
 
 #[inline(always)]
@@ -3469,23 +3471,14 @@ pub fn read_profile_guid_dir(dir: &Path) -> Option<String> {
     read_profile_identity_dir(dir).0
 }
 
-/// Write `contents` to `path` atomically via a temp sibling and rename.
-pub fn write_profile_file_atomic(path: &Path, contents: &str) -> std::io::Result<()> {
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let tmp = PathBuf::from(tmp);
-    fs::write(&tmp, contents)?;
-    fs::rename(&tmp, path)
-}
-
 pub fn rewrite_profile_display_name_file(
     path: &Path,
     display_name: &str,
 ) -> Result<(), std::io::Error> {
     let src = fs::read_to_string(path)?;
-    fs::write(
+    write_atomic(
         path,
-        rewrite_profile_display_name_content(&src, display_name),
+        rewrite_profile_display_name_content(&src, display_name).as_bytes(),
     )
 }
 
@@ -3601,15 +3594,9 @@ pub fn create_local_profile_dir(
     profile.calories_burned_day = Local::now().date_naive().to_string();
     profile.calories_burned_today = 0.0;
 
-    fs::write(
-        profile_ini_path(&dir),
-        render_profile_ini_content(&id, &profile),
-    )?;
-    fs::write(
-        groovestats_ini_path(&dir),
-        render_groovestats_ini_content("", false, "", ""),
-    )?;
-    fs::write(arrowcloud_ini_path(&dir), render_arrowcloud_ini_content(""))?;
+    write_profile_ini_dir(&dir, &id, &profile)?;
+    write_groovestats_ini_file(&groovestats_ini_path(&dir), "", false, "", "")?;
+    write_arrowcloud_ini_file(&arrowcloud_ini_path(&dir), "")?;
     Ok(id)
 }
 
@@ -3679,23 +3666,15 @@ pub fn create_local_profile_from_import_dir(
         ..Profile::default()
     };
 
-    fs::write(
-        profile_ini_path(&dir),
-        render_profile_ini_content(&id, &profile),
+    write_profile_ini_dir(&dir, &id, &profile)?;
+    write_groovestats_ini_file(
+        &groovestats_ini_path(&dir),
+        data.groovestats_api_key,
+        data.groovestats_is_pad_player,
+        data.groovestats_username,
+        "",
     )?;
-    fs::write(
-        groovestats_ini_path(&dir),
-        render_groovestats_ini_content(
-            data.groovestats_api_key,
-            data.groovestats_is_pad_player,
-            data.groovestats_username,
-            "",
-        ),
-    )?;
-    fs::write(
-        arrowcloud_ini_path(&dir),
-        render_arrowcloud_ini_content(data.arrowcloud_api_key),
-    )?;
+    write_arrowcloud_ini_file(&arrowcloud_ini_path(&dir), data.arrowcloud_api_key)?;
 
     let avatar_copy_error = data
         .avatar_src
@@ -3846,7 +3825,7 @@ pub fn migrate_local_profile_dirs(root: &Path) -> LocalProfilesMigrationResult {
                 None => {
                     let guid = generate_profile_guid();
                     let updated = upsert_profile_guid_content(&content, &guid);
-                    let error = write_profile_file_atomic(&ini_path, &updated).err();
+                    let error = write_atomic(&ini_path, updated.as_bytes()).err();
                     guid_backfills.push(LocalProfileGuidBackfill {
                         path: path.clone(),
                         guid: guid.clone(),
@@ -6975,18 +6954,20 @@ pub fn write_profile_stats_dir(
             error,
         })?;
     }
-    fs::write(&tmp_path, buf).map_err(|error| ProfileStatsWriteError::WriteTmp {
+    write_synced(&tmp_path, &buf).map_err(|error| ProfileStatsWriteError::WriteTmp {
         path: tmp_path.clone(),
         error,
     })?;
     fs::rename(&tmp_path, &path).map_err(|error| {
         let _ = fs::remove_file(&tmp_path);
         ProfileStatsWriteError::Rename {
-            path,
+            path: path.clone(),
             tmp_path,
             error,
         }
-    })
+    })?;
+    sync_parent_dir(&path);
+    Ok(())
 }
 
 pub fn write_imported_profile_stats_dir(
@@ -7023,10 +7004,7 @@ fn save_set_file(path: &Path, text: String) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    let tmp_path = path.with_extension("tmp");
-    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
-        let _ = fs::rename(&tmp_path, path);
-    }
+    let _ = write_atomic(path, text.as_bytes());
 }
 
 #[must_use]
@@ -8904,20 +8882,20 @@ pub fn write_groovestats_ini_file(
     username: &str,
     password: &str,
 ) -> std::io::Result<()> {
-    fs::write(
+    write_atomic(
         path,
-        render_groovestats_ini_content(api_key, is_pad_player, username, password),
+        render_groovestats_ini_content(api_key, is_pad_player, username, password).as_bytes(),
     )
 }
 
 pub fn write_arrowcloud_ini_file(path: &Path, api_key: &str) -> std::io::Result<()> {
-    fs::write(path, render_arrowcloud_ini_content(api_key))
+    write_atomic(path, render_arrowcloud_ini_content(api_key).as_bytes())
 }
 
 pub fn write_profile_ini_dir(dir: &Path, guid: &str, profile: &Profile) -> std::io::Result<()> {
-    fs::write(
-        profile_ini_path(dir),
-        render_profile_ini_content(guid, profile),
+    write_atomic(
+        &profile_ini_path(dir),
+        render_profile_ini_content(guid, profile).as_bytes(),
     )
 }
 

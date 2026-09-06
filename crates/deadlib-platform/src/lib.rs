@@ -1,3 +1,4 @@
+pub mod atomic_write;
 pub mod coalesced_write;
 pub mod console;
 pub mod dirs;

@@ -203,7 +203,7 @@ fn save_bookkeeping(path: &Path, bookkeeping: Bookkeeping) -> std::io::Result<()
     }
     let bytes = serde_json::to_vec_pretty(&bookkeeping)
         .expect("serializing fixed coin bookkeeping fields cannot fail");
-    std::fs::write(path, bytes)
+    deadlib_platform::atomic_write::write_atomic(path, &bytes)
 }
 
 #[cfg(test)]
