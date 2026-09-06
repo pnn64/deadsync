@@ -1,6 +1,8 @@
+use log::info;
+
 use super::{
-    Audio, KernelStreaming, frames_to_hns, query_device_periods_hns, selected_device_period_hns,
-    waveformat, waveformat_mut,
+    Audio, frames_to_hns, query_device_periods_hns, selected_device_period_hns, waveformat,
+    waveformat_mut,
 };
 
 pub(super) fn validate(
@@ -12,13 +14,9 @@ pub(super) fn validate(
         return Ok(format.to_vec());
     }
 
+    // fallback to PCM-16 by default
     let mut fallback = format.to_vec();
     let wave = waveformat_mut(&mut fallback);
-    if u32::from(wave.wFormatTag) != KernelStreaming::WAVE_FORMAT_EXTENSIBLE
-        || wave.wBitsPerSample == 16
-    {
-        return Err(unsupported_format_error(format, device_name));
-    }
     wave.wFormatTag = Audio::WAVE_FORMAT_PCM as u16;
     wave.cbSize = 0;
     wave.wBitsPerSample = 16;
@@ -28,6 +26,10 @@ pub(super) fn validate(
         .saturating_mul(u32::from(wave.nBlockAlign));
 
     if is_format_supported(audio_client, &fallback)? {
+        info!(
+            "WASAPI Exclusive: falling back to PCM-16 for device '{}'",
+            device_name
+        );
         return Ok(fallback);
     }
     Err(unsupported_format_error(format, device_name))
