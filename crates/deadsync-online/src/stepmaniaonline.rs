@@ -750,13 +750,13 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
     remove_temp_path(&staging)?;
 
     let result = (|| {
-        download_archive(&job.pack, &archive_path)?;
+        let archive_bytes = download_archive(&job.pack, &archive_path)?;
         set_install_phase(
             job.pack.id,
             InstallPhase::Extracting,
             Some("Verifying and extracting the pack...".to_string()),
         );
-        extract_archive(&archive_path, &staging, job.pack.size_bytes)?;
+        extract_archive(&archive_path, &staging, archive_bytes)?;
         if child_exists_case_insensitive(
             &job.songs_root,
             destination.file_name().unwrap_or_default(),
@@ -785,42 +785,46 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
     result
 }
 
-fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<(), StepManiaOnlineError> {
-    if pack.size_bytes == 0 || pack.size_bytes > MAX_ARCHIVE_BYTES {
-        return Err(StepManiaOnlineError::Archive(format!(
-            "advertised size {} is outside the supported range",
-            pack.size_bytes
-        )));
-    }
+fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepManiaOnlineError> {
     let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
     let response = network::get_streaming_agent()
         .get(url)
         .call()
         .map_err(network::error_from_ureq)?;
-    let content_length = response
-        .headers()
-        .get("Content-Length")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok());
-    if content_length.is_some_and(|length| length != pack.size_bytes) {
+    let mut body = response.into_body();
+    // Use the decoded body's length; a raw Content-Length can describe an
+    // HTTP-compressed representation instead of the ZIP we write to disk.
+    let content_length = body.content_length();
+    write_archive_download(pack, archive_path, body.as_reader(), content_length)
+}
+
+fn write_archive_download(
+    pack: &PackInfo,
+    archive_path: &Path,
+    mut reader: impl Read,
+    content_length: Option<u64>,
+) -> Result<u64, StepManiaOnlineError> {
+    if let Some(length) = content_length
+        && (length == 0 || length > MAX_ARCHIVE_BYTES)
+    {
         return Err(StepManiaOnlineError::Archive(format!(
-            "server reported {} bytes, catalog expected {}",
-            content_length.unwrap_or_default(),
-            pack.size_bytes
+            "server reported {length} bytes, outside the supported range"
         )));
     }
+    // Catalog sizes can be stale. They are only a progress estimate when the
+    // response has no known length, never an integrity check or a size limit.
+    let total_bytes = content_length.unwrap_or(pack.size_bytes.min(MAX_ARCHIVE_BYTES));
+    let download_limit = content_length.unwrap_or(MAX_ARCHIVE_BYTES);
 
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(archive_path)
         .map_err(|error| io_error("create the temporary archive", error))?;
-    let mut body = response.into_body();
-    let mut reader = body.as_reader();
     let mut buffer = [0u8; 64 * 1024];
     let mut downloaded = 0u64;
     let mut next_report = 0u64;
-    set_install_progress(pack.id, 0, pack.size_bytes);
+    set_install_progress(pack.id, 0, total_bytes);
     loop {
         let read = reader
             .read(&mut buffer)
@@ -829,29 +833,42 @@ fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<(), StepMani
             break;
         }
         let next = downloaded.saturating_add(read as u64);
-        if next > pack.size_bytes || next > MAX_ARCHIVE_BYTES {
-            return Err(StepManiaOnlineError::Archive(
-                "download exceeded its advertised size".to_string(),
-            ));
+        if next > download_limit {
+            return Err(StepManiaOnlineError::Archive(format!(
+                "download exceeds {download_limit} bytes"
+            )));
         }
         file.write_all(&buffer[..read])
             .map_err(|error| io_error("write the temporary archive", error))?;
         downloaded = next;
         if downloaded >= next_report {
-            set_install_progress(pack.id, downloaded, pack.size_bytes);
+            set_install_progress(pack.id, downloaded, total_bytes);
             next_report = downloaded.saturating_add(PROGRESS_STEP_BYTES);
         }
     }
     file.flush()
         .map_err(|error| io_error("flush the temporary archive", error))?;
-    if downloaded != pack.size_bytes {
+    if downloaded == 0 {
+        return Err(StepManiaOnlineError::Archive(
+            "download is empty".to_string(),
+        ));
+    }
+    if let Some(expected) = content_length
+        && downloaded != expected
+    {
         return Err(StepManiaOnlineError::Archive(format!(
-            "downloaded {downloaded} bytes, catalog expected {}",
-            pack.size_bytes
+            "downloaded {downloaded} bytes, server reported {expected}"
         )));
     }
-    set_install_progress(pack.id, downloaded, pack.size_bytes);
-    Ok(())
+    if downloaded != pack.size_bytes {
+        log::warn!(
+            "StepManiaOnline pack '{}' downloaded {downloaded} bytes, catalog listed {}; continuing with archive validation.",
+            pack.name,
+            pack.size_bytes
+        );
+    }
+    set_install_progress(pack.id, downloaded, downloaded);
+    Ok(downloaded)
 }
 
 #[derive(Debug)]
@@ -1290,6 +1307,105 @@ mod tests {
             "Bad_Pack_ Name [SMO 12]"
         );
         assert_eq!(sanitize_pack_name("Clean Pack", 3), "Clean Pack");
+    }
+
+    #[test]
+    fn download_accepts_stale_catalog_sizes_with_and_without_content_length() {
+        let root = temp_dir("stale-size");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let source = root.join("source.zip");
+        write_zip(&source, &[("Pack/Song/song.ssc", b"#TITLE:Song;")]);
+        let bytes = fs::read(&source).unwrap();
+        let actual_size = bytes.len() as u64;
+        let mut pack = pack(1, "Pack", None, None);
+
+        for catalog_size in [
+            0,
+            actual_size - 1,
+            actual_size,
+            actual_size + 1,
+            MAX_ARCHIVE_BYTES + 1,
+        ] {
+            pack.size_bytes = catalog_size;
+            for content_length in [Some(actual_size), None] {
+                let archive = root.join("download.zip");
+                let staging = root.join("staging");
+                let downloaded =
+                    write_archive_download(&pack, &archive, bytes.as_slice(), content_length)
+                        .expect("catalog size is only advisory");
+                assert_eq!(downloaded, actual_size);
+                assert_eq!(fs::read(&archive).unwrap(), bytes);
+                extract_archive(&archive, &staging, downloaded).expect("extract downloaded ZIP");
+                assert_eq!(
+                    fs::read(staging.join("Song/song.ssc")).unwrap(),
+                    b"#TITLE:Song;"
+                );
+                fs::remove_file(archive).unwrap();
+                fs::remove_dir_all(staging).unwrap();
+            }
+        }
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    fn download_rejects_truncated_and_overlong_response_bodies() {
+        let root = temp_dir("response-size");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let archive = root.join("download.zip");
+        let mut pack = pack(1, "Pack", None, None);
+        pack.size_bytes = 4;
+
+        let error = write_archive_download(&pack, &archive, &b"data"[..], Some(5)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("downloaded 4 bytes, server reported 5")
+        );
+        fs::remove_file(&archive).unwrap();
+
+        let error = write_archive_download(&pack, &archive, &b"data"[..], Some(3)).unwrap_err();
+        assert!(error.to_string().contains("download exceeds 3 bytes"));
+        assert_eq!(fs::metadata(&archive).unwrap().len(), 0);
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    fn download_rejects_empty_and_oversized_responses() {
+        let root = temp_dir("response-limit");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let archive = root.join("download.zip");
+        let pack = pack(1, "Pack", None, None);
+
+        for length in [0, MAX_ARCHIVE_BYTES + 1] {
+            let error = write_archive_download(&pack, &archive, std::io::empty(), Some(length))
+                .unwrap_err();
+            assert!(error.to_string().contains("outside the supported range"));
+            assert!(!archive.exists());
+        }
+        let error = write_archive_download(&pack, &archive, std::io::empty(), None).unwrap_err();
+        assert!(error.to_string().contains("download is empty"));
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    #[ignore = "downloads and extracts Bearpocalypse from StepManiaOnline"]
+    fn live_bearpocalypse_download_and_extract() {
+        let root = temp_dir("live-bearpocalypse");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let archive = root.join("download.zip");
+        let staging = root.join("staging");
+        let mut pack = pack(327, "Bearpocalypse", Some("itg"), Some("stamina"));
+        pack.size_bytes = 103_325_333;
+
+        let downloaded = download_archive(&pack, &archive).expect("download Bearpocalypse");
+        assert_eq!(downloaded, fs::metadata(&archive).unwrap().len());
+        extract_archive(&archive, &staging, downloaded).expect("extract Bearpocalypse");
+        println!("Downloaded and extracted Bearpocalypse ({downloaded} bytes)");
+
+        fs::remove_dir_all(root).expect("clean fixture root");
     }
 
     #[test]
