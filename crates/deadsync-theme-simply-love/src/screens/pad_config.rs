@@ -3424,6 +3424,51 @@ mod tests {
     }
 
     #[test]
+    fn held_delete_requires_a_fresh_press_to_confirm_profile_deletion() {
+        use crate::screens::select_music;
+        use deadsync_input::{KeyCode, RawKeyboardEvent};
+        let mut pad = with_pad();
+        set_save_available(&mut pad, true);
+        begin_profiles(&mut pad);
+        set_profiles(
+            &mut pad,
+            vec![ProfileListEntry {
+                name: "Test Config".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
+        apply_edit(&mut pad, &ev(VirtualAction::p1_down), false);
+        assert_eq!(selected_profile_name(&pad).as_deref(), Some("Test Config"));
+        let mut state = select_music::init_placeholder();
+        state.pad_config_overlay_visible = true;
+        state.pad_config_overlay = pad;
+        let mut effects = Vec::new();
+        let mut key = RawKeyboardEvent {
+            code: KeyCode::Delete,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        };
+        select_music::handle_raw_key_event(&mut state, Some(&key), None, &mut effects);
+        assert!(state.pad_config_overlay.delete_armed);
+        key.repeat = true;
+        select_music::handle_raw_key_event(&mut state, Some(&key), None, &mut effects);
+        assert!(
+            state.pad_config_overlay.delete_armed,
+            "a repeat must leave deletion awaiting a second physical press"
+        );
+        key.pressed = false;
+        key.repeat = false;
+        select_music::handle_raw_key_event(&mut state, Some(&key), None, &mut effects);
+        assert!(state.pad_config_overlay.delete_armed);
+        key.pressed = true;
+        select_music::handle_raw_key_event(&mut state, Some(&key), None, &mut effects);
+        assert!(!state.pad_config_overlay.delete_armed);
+    }
+
+    #[test]
     fn profiles_save_new_row_opens_the_save_box() {
         let mut s = with_pad();
         set_save_available(&mut s, true);

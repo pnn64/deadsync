@@ -551,6 +551,8 @@ fn handle_raw_input(
     let DownloadPacksOverlayState::Visible(data) = state else {
         return InputOutcome::None;
     };
+    // Text deletion may repeat; activation and confirmation need a fresh press.
+    let key = key.filter(|key| !key.repeat || key.code == KeyCode::Backspace);
     if data.confirm.is_some() {
         let Some(key) = key.filter(|key| key.pressed) else {
             return InputOutcome::None;
@@ -1896,6 +1898,87 @@ mod tests {
         };
         assert!(data.confirm.is_some());
         assert!(data.query.is_empty());
+    }
+
+    #[test]
+    fn held_enter_requires_a_fresh_press_to_confirm_download() {
+        let snapshot = test_snapshot(vec![test_pack(7, "Test Pack", None)]);
+        for code in [KeyCode::Enter, KeyCode::NumpadEnter] {
+            let mut state = DownloadPacksOverlayState::Hidden;
+            show_overlay(&mut state, &snapshot, &[]);
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(code, true, true)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::None,
+            );
+            assert!(!overlay_confirming(&state));
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(code, true, false)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::Activated,
+            );
+            assert!(overlay_confirming(&state));
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(code, true, true)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::None,
+                "one physical Enter press must not also confirm the download",
+            );
+            assert!(overlay_confirming(&state));
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(code, false, false)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::None,
+            );
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(code, true, false)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::Download(7),
+            );
+        }
+    }
+
+    #[test]
+    fn backspace_repeat_edits_query() {
+        let snapshot = test_snapshot(vec![]);
+        let mut state = DownloadPacksOverlayState::Hidden;
+        show_overlay(&mut state, &snapshot, &[]);
+        handle_raw_input(&mut state, None, Some("abc"), &snapshot);
+        for repeat in [false, true] {
+            assert_eq!(
+                handle_raw_input(
+                    &mut state,
+                    Some(&raw_key(KeyCode::Backspace, true, repeat)),
+                    None,
+                    &snapshot
+                ),
+                InputOutcome::Edited,
+            );
+        }
+        let DownloadPacksOverlayState::Visible(data) = state else {
+            panic!("overlay hidden")
+        };
+        assert_eq!(data.query, "a");
     }
 
     #[test]

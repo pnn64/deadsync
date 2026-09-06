@@ -964,19 +964,6 @@ where
 }
 
 #[inline(always)]
-const fn update_held_state(
-    held: &mut [bool; RAW_KEY_HELD_SLOTS],
-    slot: usize,
-    pressed: bool,
-) -> bool {
-    if held[slot] == pressed {
-        return false;
-    }
-    held[slot] = pressed;
-    true
-}
-
-#[inline(always)]
 fn handle_keyboard_input(ctx: &mut Ctx) {
     if !WINDOW_FOCUSED.load(Ordering::Relaxed) {
         return;
@@ -1004,14 +991,15 @@ fn handle_keyboard_input(ctx: &mut Ctx) {
         let Some((code, slot)) = raw_keyboard_code(keyboard) else {
             return;
         };
-        if !update_held_state(&mut ctx.held, slot, pressed) {
-            return;
-        }
+
+        let repeat = pressed && ctx.held[slot];
+        ctx.held[slot] = pressed;
+
         let (timestamp, host_nanos) = ctx.host.sample_time();
         (ctx.emit_key)(RawKeyboardEvent {
             code,
             pressed,
-            repeat: false,
+            repeat,
             timestamp,
             host_nanos,
         });
@@ -1274,8 +1262,8 @@ pub fn run_keyboard_only(
 mod tests {
     use super::{
         KEYBOARD_CAPTURE_DISABLED, KEYBOARD_CAPTURE_ENABLED, KEYBOARD_CAPTURE_UNKNOWN,
-        RAW_KEY_HELD_SLOTS, RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed,
-        rawinput_uuid, remember_report, report_is_duplicate, update_held_state,
+        RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed, rawinput_uuid,
+        remember_report, report_is_duplicate,
     };
     use std::mem::size_of;
 
@@ -1295,16 +1283,6 @@ mod tests {
         let (payload, report_size) = hid_report_payload(&mut message, message_len).unwrap();
         assert_eq!(payload, [1, 2, 3, 4, 5, 6]);
         assert_eq!(payload.chunks_exact(report_size).len(), 2);
-    }
-
-    #[test]
-    fn held_state_gate_accepts_only_keyboard_edges() {
-        let mut held = [false; RAW_KEY_HELD_SLOTS];
-
-        assert!(update_held_state(&mut held, 7, true));
-        assert!(!update_held_state(&mut held, 7, true));
-        assert!(update_held_state(&mut held, 7, false));
-        assert!(!update_held_state(&mut held, 7, false));
     }
 
     #[test]
