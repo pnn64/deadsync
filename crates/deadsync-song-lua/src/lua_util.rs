@@ -3022,6 +3022,8 @@ pub fn capture_block_set_vec2(
 }
 
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
+    capture_block_set_f32(lua, actor, "x", f32::midpoint(rect[0], rect[2]))?;
+    capture_block_set_f32(lua, actor, "y", f32::midpoint(rect[1], rect[3]))?;
     let value = lua.create_table()?;
     value.raw_set(1, rect[0])?;
     value.raw_set(2, rect[1])?;

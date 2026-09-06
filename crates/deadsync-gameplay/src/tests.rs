@@ -6451,6 +6451,41 @@ mod tests {
     }
 
     #[test]
+    fn spooky_negative_scroll_mods_preserve_native_motion() {
+        for (options, expected) in [
+            (
+                ScrollReverseOptions {
+                    cross: -0.05,
+                    ..Default::default()
+                },
+                [0.0, -0.05, -0.05, 0.0],
+            ),
+            (
+                ScrollReverseOptions {
+                    alternate: -0.05,
+                    ..Default::default()
+                },
+                [0.0, -0.05, 0.0, -0.05],
+            ),
+            (
+                ScrollReverseOptions {
+                    split: -0.05,
+                    ..Default::default()
+                },
+                [0.0, 0.0, -0.05, -0.05],
+            ),
+        ] {
+            for (col, reverse) in expected.into_iter().enumerate() {
+                assert_near(scroll_reverse_percent_for_column(options, col, 4), reverse);
+                assert_near(
+                    scroll_reverse_scale_for_column(options, col, 4),
+                    1.0 - 2.0 * reverse,
+                );
+            }
+        }
+    }
+
+    #[test]
     fn scroll_reverse_scale_maps_percent_to_direction() {
         let reverse = ScrollReverseOptions {
             reverse: 1.0,

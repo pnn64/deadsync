@@ -2878,6 +2878,21 @@ pub fn overlay_state_after_blocks(
     state
 }
 
+/// Move an overlay and its cached stretch bounds together. Actor::StretchTo
+/// sets position and scale; later x/y commands still move that geometry.
+pub const fn move_overlay(state: &mut SongLuaOverlayState, x: f32, y: f32) {
+    if let Some(rect) = &mut state.stretch_rect {
+        let dx = x - state.x;
+        let dy = y - state.y;
+        rect[0] += dx;
+        rect[2] += dx;
+        rect[1] += dy;
+        rect[3] += dy;
+    }
+    state.x = x;
+    state.y = y;
+}
+
 /// Applies only the properties written by `delta`, preserving all other state.
 ///
 /// Optional state fields become `Some` when written. Sound playback is a
@@ -2886,12 +2901,15 @@ pub const fn apply_overlay_delta(
     state: &mut SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) {
-    if let Some(value) = delta.x {
-        state.x = value;
-    }
-    if let Some(value) = delta.y {
-        state.y = value;
-    }
+    let x = match delta.x {
+        Some(x) => x,
+        None => state.x,
+    };
+    let y = match delta.y {
+        Some(y) => y,
+        None => state.y,
+    };
+    move_overlay(state, x, y);
     if let Some(value) = delta.z {
         state.z = value;
     }
@@ -3131,11 +3149,17 @@ pub fn overlay_state_lerp(
     delta: &SongLuaOverlayStateDelta,
     t: f32,
 ) {
-    if let Some(to) = delta.x {
-        from.x = (to - from.x).mul_add(t, from.x);
-    }
-    if let Some(to) = delta.y {
-        from.y = (to - from.y).mul_add(t, from.y);
+    let x = delta
+        .x
+        .map_or(from.x, |to| (to - from.x).mul_add(t, from.x));
+    let y = delta
+        .y
+        .map_or(from.y, |to| (to - from.y).mul_add(t, from.y));
+    if delta.stretch_rect.is_some() {
+        from.x = x;
+        from.y = y;
+    } else {
+        move_overlay(from, x, y);
     }
     if let Some(to) = delta.z {
         from.z = (to - from.z).mul_add(t, from.z);

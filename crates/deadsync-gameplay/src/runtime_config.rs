@@ -165,7 +165,8 @@ pub fn scroll_reverse_percent_for_column(
     if percent > 1.0 {
         return lerp(1.0, 0.0, percent - 1.0);
     }
-    percent.clamp(0.0, 1.0)
+    // ITGmania preserves negative partial Reverse/Split/Alternate/Cross.
+    percent
 }
 
 #[inline(always)]

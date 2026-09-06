@@ -390,3 +390,46 @@ fn compile_song_lua_supports_rgb_aft_fixture() {
         assert_eq!(overlay.initial_state.effect_magnitude, [0.0; 3]);
     }
 }
+
+#[test]
+fn spooky_door_slide_moves_stretched_bounds() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&root, "Spooky doors");
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua(&root.join("spooky-door.lua"), &context).unwrap();
+    let doors = compiled
+        .overlays
+        .iter()
+        .filter(|o| o.name.as_deref().is_some_and(|n| n.starts_with("door")))
+        .collect::<Vec<_>>();
+    assert_eq!(doors.len(), 2);
+    for (side, door) in doors.iter().enumerate() {
+        let initial = door.initial_state;
+        let [left, top, right, bottom] = initial.stretch_rect.expect("stretched door");
+        let width = right - left;
+        assert_eq!(initial.x, width / 2.0, "StretchTo sets actor position");
+        assert_eq!(initial.y, (top + bottom) / 2.0);
+        let command = door
+            .message_commands
+            .iter()
+            .find(|c| c.message == "SlideDoor")
+            .unwrap();
+        for frame in 0..=32 {
+            let elapsed = frame as f32 / 240.0;
+            let t = (elapsed / (60.0 / 140.0 * 0.3)).min(1.0);
+            let from = side as f32 * width;
+            let x = from + (width / 2.0 - from) * t;
+            let state =
+                deadsync_song_lua::overlay_state_after_blocks(initial, &command.blocks, elapsed);
+            let rect = state.stretch_rect.unwrap();
+            assert!((state.x - x).abs() < 0.001);
+            assert!(
+                (rect[0] - (x - width / 2.0)).abs() < 0.001,
+                "door {} frame {frame}: {rect:?}",
+                side + 1
+            );
+            assert!((rect[2] - (x + width / 2.0)).abs() < 0.001);
+            assert_eq!([rect[1], rect[3]], [top, bottom]);
+        }
+    }
+}

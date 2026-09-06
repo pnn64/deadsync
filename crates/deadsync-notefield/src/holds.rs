@@ -1061,8 +1061,8 @@ where
                     sample: bottom,
                     appearance: None,
                 });
-                let (center_xy, slice_height, rotation_z) =
-                    hold_segment_pose([top.center_x, slice_top], [bottom.center_x, slice_bottom]);
+                let (center_xy, slice_height) =
+                    hold_segment_bounds([top.center_x, slice_top], [bottom.center_x, slice_bottom]);
                 if slice_height <= f32::EPSILON {
                     slice_top = slice_bottom;
                     slice_v0 = slice_v1;
@@ -1076,7 +1076,7 @@ where
                         size: [request.target_arrow_px, slice_height],
                         uv: [u0, slice_v0, u1, slice_v1],
                         rotation_y_deg: request.rotation_y_deg,
-                        rotation_z_deg: rotation_z,
+                        rotation_z_deg: 0.0,
                         diffuse: request.diffuse,
                         alpha,
                         glow,
@@ -1144,11 +1144,9 @@ fn append_hold_body_mesh_slice<S>(
 ) {
     let (top_alpha, top_glow) = top_appearance;
     let (bottom_alpha, bottom_glow) = bottom_appearance;
-    let forward = [bottom.center_x - top.center_x, bottom_y - top_y];
     let top_row_positions = prev_row.unwrap_or_else(|| {
         let row = hold_strip_row_3d(
             [top.center_x, top_y, top.world_z],
-            forward,
             top.arrow_px * 0.5,
             u0,
             u1,
@@ -1180,7 +1178,6 @@ fn append_hold_body_mesh_slice<S>(
     }
     let bottom_row = hold_strip_row_3d(
         [bottom.center_x, bottom_y, bottom.world_z],
-        forward,
         bottom.arrow_px * 0.5,
         u0,
         u1,
@@ -1291,10 +1288,8 @@ fn compose_top_cap<S, F, P>(
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
-        let forward = [bottom.center_x - top.center_x, cap_bottom - cap_top];
         let top_row = hold_strip_row_3d(
             [top.center_x, cap_top, top.world_z],
-            forward,
             top.arrow_px * 0.5,
             u0,
             u1,
@@ -1327,7 +1322,6 @@ fn compose_top_cap<S, F, P>(
         } else {
             hold_strip_row_3d(
                 [bottom.center_x, cap_bottom, bottom.world_z],
-                forward,
                 bottom.arrow_px * 0.5,
                 u0,
                 u1,
@@ -1354,8 +1348,8 @@ fn compose_top_cap<S, F, P>(
             request,
         );
     } else {
-        let (center_xy, draw_height, path_rotation) =
-            hold_segment_pose([top.center_x, cap_top], [bottom.center_x, cap_bottom]);
+        let (center_xy, draw_height) =
+            hold_segment_bounds([top.center_x, cap_top], [bottom.center_x, cap_bottom]);
         if draw_height <= f32::EPSILON {
             return;
         }
@@ -1367,8 +1361,7 @@ fn compose_top_cap<S, F, P>(
                 size: [cap_width, draw_height],
                 uv: [u0, v0, u1, v1],
                 rotation_y_deg: request.rotation_y_deg,
-                rotation_z_deg: path_rotation
-                    + top_cap_rotation_deg(request.lane_reverse, request.body_flipped),
+                rotation_z_deg: top_cap_rotation_deg(request.lane_reverse, request.body_flipped),
                 diffuse: request.diffuse,
                 alpha,
                 glow,
@@ -1557,7 +1550,6 @@ fn compose_bottom_cap<S, F, P>(
     if use_mesh {
         let (top_alpha, top_glow) = hold_alpha_glow(request, top);
         let (bottom_alpha, bottom_glow) = hold_alpha_glow(request, bottom);
-        let forward = [bottom.center_x - top.center_x, draw_bottom - draw_top];
         let top_row = if let Some(body_tail_row) = rendered.tail_row {
             hold_strip_row_from_positions(
                 body_tail_row[0],
@@ -1575,7 +1567,6 @@ fn compose_bottom_cap<S, F, P>(
         } else {
             hold_strip_row_3d(
                 [top.center_x, draw_top, top.world_z],
-                forward,
                 top.arrow_px * 0.5,
                 u0,
                 u1,
@@ -1590,7 +1581,6 @@ fn compose_bottom_cap<S, F, P>(
         };
         let bottom_row = hold_strip_row_3d(
             [bottom.center_x, draw_bottom, bottom.world_z],
-            forward,
             bottom.arrow_px * 0.5,
             u0,
             u1,
@@ -1616,8 +1606,8 @@ fn compose_bottom_cap<S, F, P>(
             request,
         );
     } else {
-        let (center_xy, cap_draw_height, rotation_z) =
-            hold_segment_pose([top.center_x, draw_top], [bottom.center_x, draw_bottom]);
+        let (center_xy, cap_draw_height) =
+            hold_segment_bounds([top.center_x, draw_top], [bottom.center_x, draw_bottom]);
         if cap_draw_height <= f32::EPSILON {
             return;
         }
@@ -1629,7 +1619,7 @@ fn compose_bottom_cap<S, F, P>(
                 size: [cap_width, cap_draw_height],
                 uv: [u0, v0, u1, v1],
                 rotation_y_deg: request.rotation_y_deg,
-                rotation_z_deg: rotation_z,
+                rotation_z_deg: 0.0,
                 diffuse: request.diffuse,
                 alpha,
                 glow,
@@ -1804,22 +1794,17 @@ pub(crate) fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -
 
 pub(crate) fn hold_strip_row_3d(
     center: [f32; 3],
-    forward: [f32; 2],
     half_width: f32,
     u0: f32,
     u1: f32,
     v: f32,
     color: [f32; 4],
 ) -> [TexturedMeshVertex; 2] {
-    let len = (forward[0] * forward[0] + forward[1] * forward[1])
-        .sqrt()
-        .max(0.0001);
-    let width_scale = half_width / len;
-    let nx = -forward[1] * width_scale;
-    let ny = forward[0] * width_scale;
+    // NoteDisplay keeps ArrowEffects strips horizontal. Only a position
+    // spline's derivative can tilt the cross-section, not Drunk/Tornado.
     hold_strip_row_from_positions(
-        [center[0] + nx, center[1] + ny, center[2]],
-        [center[0] - nx, center[1] - ny, center[2]],
+        [center[0] - half_width, center[1], center[2]],
+        [center[0] + half_width, center[1], center[2]],
         u0,
         u1,
         v,
@@ -2040,16 +2025,14 @@ pub(crate) fn bottom_cap_uv_window(
     }
 }
 
-pub(crate) fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32) {
-    let dx = bottom[0] - top[0];
-    let dy = bottom[1] - top[1];
-    let center = [
-        f32::midpoint(top[0], bottom[0]),
-        f32::midpoint(top[1], bottom[1]),
-    ];
-    let len = (dx * dx + dy * dy).sqrt();
-    let rot = dx.atan2(dy).to_degrees();
-    (center, len, rot)
+pub(crate) fn hold_segment_bounds(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32) {
+    (
+        [
+            f32::midpoint(top[0], bottom[0]),
+            f32::midpoint(top[1], bottom[1]),
+        ],
+        bottom[1] - top[1],
+    )
 }
 
 pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
@@ -2338,6 +2321,48 @@ mod tests {
                 }) if vertices.iter().all(|vertex| vertex.pos.into_iter().all(f32::is_finite))
             )
         }));
+    }
+
+    #[test]
+    fn spooky_drunk_hold_rows_match_native_cross_sections() {
+        let body = TestSlot::sprite("body");
+        let cap = TestSlot::sprite("cap");
+        let mut request = body_cap_request(Some(&body), Some(&cap), Some(&cap));
+        request.use_legacy_sprites = false;
+        request.y_tail = 620.0;
+        request.draw_span = Some((100.0, 620.0));
+        request.screen_height = 720.0;
+        let mut scratch = HoldMeshScratch::with_columns(1);
+        scratch.begin_frame();
+        let sample = |y: f32| HoldPathSample {
+            adjusted_travel: y - 100.0,
+            center_x: 200.0 + crate::drunk_x_extra(2, y - 100.0, 65.5, 480.0, -2.0),
+            world_z: 0.0,
+            arrow_px: 64.0,
+        };
+        let mut draws = Vec::new();
+        compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+        let mut triangles = 0;
+        for draw in draws {
+            let FlatDraw::TexturedMesh(mesh) = draw else {
+                panic!("expected hold mesh")
+            };
+            let FlatMeshVertices::Reusable(vertices) = mesh.vertices else {
+                panic!("expected retained vertices")
+            };
+            for quad in vertices.chunks_exact(6) {
+                for (left, right) in [(&quad[0], &quad[1]), (&quad[5], &quad[4])] {
+                    let y = left.pos[1];
+                    let expected = sample(y);
+                    // NoteDisplay uses (0,1,0) under ArrowEffects.
+                    assert_eq!(right.pos[1], y);
+                    assert!((left.pos[0] - (expected.center_x - 32.0)).abs() < 0.001);
+                    assert!((right.pos[0] - (expected.center_x + 32.0)).abs() < 0.001);
+                }
+                triangles += 2;
+            }
+        }
+        assert!(triangles > 20, "must exercise tiled body and caps");
     }
 
     fn test_source(slot: &TestSlot) -> SpriteSource {

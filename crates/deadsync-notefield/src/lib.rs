@@ -118,7 +118,7 @@ pub(crate) use holds::{
 use holds::{
     TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
     hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
-    hold_head_part_for_roll, hold_segment_pose, hold_strip_draw, hold_strip_glow_draw,
+    hold_head_part_for_roll, hold_segment_bounds, hold_strip_draw, hold_strip_glow_draw,
     hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
     maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
     top_cap_rotation_deg,
@@ -224,7 +224,7 @@ mod tests {
         gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
         hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
         hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
-        hold_parts_for_note_type, hold_segment_pose, hold_strip_draw, hold_strip_glow_draw,
+        hold_parts_for_note_type, hold_segment_bounds, hold_strip_draw, hold_strip_glow_draw,
         hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
         itg_actor_glow_alpha, itg_actor_rotation_z, judgment_actor_zoom,
         judgment_tilt_rotation_deg, lane_note_transform_cache,
@@ -3719,23 +3719,15 @@ mod tests {
 
     #[test]
     fn hold_strip_row_3d_preserves_row_z() {
-        let row = hold_strip_row_3d(
-            [64.0, 128.0, 12.5],
-            [0.0, 16.0],
-            8.0,
-            0.0,
-            1.0,
-            0.5,
-            [1.0; 4],
-        );
+        let row = hold_strip_row_3d([64.0, 128.0, 12.5], 8.0, 0.0, 1.0, 0.5, [1.0; 4]);
         assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
         assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
     }
 
     #[test]
     fn hold_strip_quad_matches_legacy_triangle_order() {
-        let top = hold_strip_row_3d([0.0, 0.0, 0.0], [0.0, 16.0], 1.0, 0.0, 1.0, 0.0, [1.0; 4]);
-        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], [0.0, 16.0], 1.0, 0.0, 1.0, 1.0, [1.0; 4]);
+        let top = hold_strip_row_3d([0.0, 0.0, 0.0], 1.0, 0.0, 1.0, 0.0, [1.0; 4]);
+        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], 1.0, 0.0, 1.0, 1.0, [1.0; 4]);
         let quad = hold_strip_quad(top, bottom);
         assert_eq!(quad[0].pos, top[0].pos);
         assert_eq!(quad[1].pos, top[1].pos);
@@ -3945,19 +3937,17 @@ mod tests {
     }
 
     #[test]
-    fn hold_segment_pose_keeps_vertical_segments_unrotated() {
-        let (center, length, rotation) = hold_segment_pose([32.0, 100.0], [32.0, 180.0]);
+    fn hold_segment_bounds_keeps_vertical_segments_unrotated() {
+        let (center, length) = hold_segment_bounds([32.0, 100.0], [32.0, 180.0]);
         assert_eq!(center, [32.0, 140.0]);
         assert!((length - 80.0).abs() <= 1e-6);
-        assert!(rotation.abs() <= 1e-6);
     }
 
     #[test]
-    fn hold_segment_pose_uses_diagonal_length_and_rotation() {
-        let (center, length, rotation) = hold_segment_pose([0.0, 0.0], [30.0, 40.0]);
+    fn hold_segment_bounds_keeps_native_y_span_on_curves() {
+        let (center, length) = hold_segment_bounds([0.0, 0.0], [30.0, 40.0]);
         assert_eq!(center, [15.0, 20.0]);
-        assert!((length - 50.0).abs() <= 1e-6);
-        assert!((rotation - 36.869_896).abs() <= 1e-5);
+        assert_eq!(length, 40.0);
     }
 
     #[test]

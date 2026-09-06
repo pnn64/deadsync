@@ -499,7 +499,7 @@ fn field_receptor_y(
     reverse_y: f32,
     centered_y: f32,
 ) -> f32 {
-    let reverse_y = (reverse_y - normal_y).mul_add(reverse_percent.clamp(0.0, 1.0), normal_y);
+    let reverse_y = (reverse_y - normal_y).mul_add(reverse_percent, normal_y);
     (centered_y - reverse_y).mul_add(centered_percent, reverse_y)
 }
 
@@ -1069,6 +1069,17 @@ mod tests {
         wide_request.screen_center_x = 500.0;
         wide_request.placement = FieldPlacement::P2;
         assert_near(field_layout(wide_request).playfield_center_x, 713.5);
+    }
+
+    #[test]
+    fn spooky_negative_reverse_moves_receptors_above_normal() {
+        let mut request = request();
+        request.column_reverse_percent[2] = -0.05;
+        request.centered_scroll = 0.05;
+        let layout = field_layout(request);
+        // ArrowEffects::GetYPos extrapolates Reverse before applying Centered.
+        assert_near(layout.column_receptor_ys[0], 121.75);
+        assert_near(layout.column_receptor_ys[2], 108.925);
     }
 
     #[test]

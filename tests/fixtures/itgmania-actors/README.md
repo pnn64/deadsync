@@ -102,3 +102,24 @@ cargo run -- actor-conformance fixtures/actors/riddle-rotation.json `
 
 See `docs/song-lua-riddle-rendering-2026-09-06.md` for the source contracts and
 the separate sampled PlayerOptions approach regression.
+
+## Spooky door slide regression
+
+`spooky-doors.json` records native Sprite tweening and cropped vertices for both
+closing doors over 33 frames at 240 Hz. Initial position/size describe the result
+of the song's `StretchTo`, followed by its `SlideDoor` command. The harness runs
+Actor/Sprite tweening; it does not invoke Lua `stretchto` in this fixture.
+
+The portable `song_lua/spooky-door.lua` fixture exercises Lua compilation and
+movement of stretched bounds. The theme's `spooky_door_vertices_match_native_tween`
+test compares all 264 cropped corners emitted by the production overlay builder.
+Regenerate the native output from `itgmania-harness-rs/`:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/spooky-doors.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/spooky-doors.json
+```
+
+Only update the baseline for intentional native-source or fixture-input changes.
+See `docs/song-lua-spooky-rendering-2026-09-06.md` for the other source checks and
+validation limits.

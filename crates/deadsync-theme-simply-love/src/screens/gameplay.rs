@@ -10674,8 +10674,12 @@ fn apply_song_lua_overlay_update_value(
             }
         };
     }
-    set_value!(X, F32, x);
-    set_value!(Y, F32, y);
+    if let (Target::X | Target::Y, Value::F32(value)) = (target, value) {
+        let x = if target == Target::X { *value } else { state.x };
+        let y = if target == Target::Y { *value } else { state.y };
+        deadsync_song_lua::move_overlay(state, x, y);
+        return;
+    }
     set_value!(Z, F32, z);
     set_value!(ZBias, F32, z_bias);
     set_value!(DrawOrder, I32, draw_order);
@@ -26829,6 +26833,95 @@ mod tests {
         );
         assert_eq!(state.sprite_state_index, Some(2));
         assert_eq!(state.sprite_animation_epoch, Some(2.0));
+    }
+
+    #[test]
+    fn spooky_door_vertices_match_native_tween() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+        let native: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("itgmania-actors/spooky-doors.json")).unwrap(),
+        )
+        .unwrap();
+        let mut context = deadsync_assets::song_lua::SongLuaCompileContext::new(
+            &root.join("song_lua"),
+            "Spooky doors",
+        );
+        context.screen_width = 854.0;
+        context.music_length_seconds = 1.0;
+        let compiled = deadsync_assets::song_lua::compile_song_lua(
+            &root.join("song_lua/spooky-door.lua"),
+            &context,
+        )
+        .unwrap();
+        let mut assets = AssetManager::new();
+        assets.queue_texture_upload("spooky-door.png".into(), image::RgbaImage::new(854, 480));
+        let mut corners = 0;
+        for mut door in compiled
+            .overlays
+            .into_iter()
+            .filter(|o| o.name.as_deref().is_some_and(|n| n.starts_with("door")))
+        {
+            door.kind = test_sprite_kind("spooky-door.png");
+            let command = door
+                .message_commands
+                .iter()
+                .find(|c| c.message == "SlideDoor")
+                .unwrap();
+            for sample in native["samples"].as_array().unwrap() {
+                let elapsed = sample["time"].as_f64().unwrap() as f32;
+                let state = deadsync_song_lua::overlay_state_after_blocks(
+                    door.initial_state,
+                    &command.blocks,
+                    elapsed,
+                );
+                let actor = build_song_lua_overlay_actor(
+                    &door, state, None, &assets, 0, 854.0, 480.0, elapsed, 0.0, elapsed,
+                )
+                .expect_actor("door sprite");
+                let Actor::Sprite {
+                    offset,
+                    size,
+                    align,
+                    cropleft,
+                    cropright,
+                    croptop,
+                    cropbottom,
+                    ..
+                } = actor
+                else {
+                    panic!("door sprite");
+                };
+                let [SizeSpec::Px(width), SizeSpec::Px(height)] = size else {
+                    panic!("door size");
+                };
+                assert_eq!(align, [0.0, 0.0]);
+                let left = (offset[0] + width * cropleft) * 854.0 / screen_width();
+                let right = (offset[0] + width * (1.0 - cropright)) * 854.0 / screen_width();
+                let top = (offset[1] + height * croptop) * 480.0 / screen_height();
+                let bottom = (offset[1] + height * (1.0 - cropbottom)) * 480.0 / screen_height();
+                let oracle = sample["actors"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|a| a["name"].as_str() == door.name.as_deref())
+                    .unwrap();
+                for (point, vertex) in [[left, top], [left, bottom], [right, bottom], [right, top]]
+                    .iter()
+                    .zip(oracle["draws"][0]["vertices"].as_array().unwrap())
+                {
+                    for axis in 0..2 {
+                        assert!(
+                            (point[axis] - vertex["screen"][axis].as_f64().unwrap() as f32).abs()
+                                < 0.001,
+                            "{} at {elapsed}: {point:?}, native={vertex}",
+                            door.name.as_deref().unwrap()
+                        );
+                    }
+                    corners += 1;
+                }
+            }
+        }
+        assert_eq!(corners, 264);
     }
 
     #[test]
