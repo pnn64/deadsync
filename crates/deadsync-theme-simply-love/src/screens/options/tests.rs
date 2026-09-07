@@ -1,9 +1,9 @@
 use super::*;
-use crate::config::LightsDriverKind;
-use crate::config::{MAX_FPS_MAX, MAX_FPS_MIN};
 use deadlib_assets::AssetManager;
+use deadsync_config::options::{MAX_FPS_MAX, MAX_FPS_MIN};
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOutputDeviceView, GraphicsOptionsView, NoteskinCatalogView,
@@ -33,14 +33,17 @@ fn test_app_paths() -> AppPathsView {
 }
 
 fn init_with_audio(audio_options: AudioOptionsView) -> State {
-    init_with_config_and_audio(config::Config::default(), audio_options)
+    init_with_config_and_audio(config::app_config::Config::default(), audio_options)
 }
 
-fn init_with_config(config: config::Config) -> State {
+fn init_with_config(config: config::app_config::Config) -> State {
     init_with_config_and_audio(config, AudioOptionsView::default())
 }
 
-fn init_with_config_and_audio(config: config::Config, audio_options: AudioOptionsView) -> State {
+fn init_with_config_and_audio(
+    config: config::app_config::Config,
+    audio_options: AudioOptionsView,
+) -> State {
     super::init(OptionsInitView {
         config,
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
@@ -71,9 +74,9 @@ fn init_with_config_and_audio(config: config::Config, audio_options: AudioOption
 
 #[test]
 fn system_game_choice_tracks_the_saved_game() {
-    let config = config::Config {
-        game_flag: config::GameFlag::Pump,
-        ..config::Config::default()
+    let config = config::app_config::Config {
+        game_flag: config::theme::GameFlag::Pump,
+        ..config::app_config::Config::default()
     };
     let state = init_with_config(config);
     let game_row = SYSTEM_OPTIONS_ROWS
@@ -309,14 +312,14 @@ fn visual_assets_follow_local_machine_choices() {
         .position(|row| row.id == SubRowId::ThemeVariant)
         .expect("machine options should contain theme variant");
     state.sub[SubmenuKind::Machine].choice_indices[style_row] =
-        visual_style_choice_index(config::VisualStyle::Srpg9);
+        visual_style_choice_index(config::theme::VisualStyle::Srpg9);
     state.sub[SubmenuKind::Machine].choice_indices[variant_row] =
-        srpg_variant_choice_index(config::SrpgVariant::Srpg10);
+        srpg_variant_choice_index(config::theme::SrpgVariant::Srpg10);
 
     let selected = selected_visual_assets(&state);
     let expected = visual_styles::for_style_and_variant(
-        config::VisualStyle::Srpg9,
-        config::SrpgVariant::Srpg10,
+        config::theme::VisualStyle::Srpg9,
+        config::theme::SrpgVariant::Srpg10,
     );
     assert_eq!(
         selected.select_color,
@@ -364,7 +367,7 @@ fn pack_sync_policy_comes_from_prepared_profile_and_current_options() {
 #[test]
 fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(OptionsInitView {
-        config: config::Config::default(),
+        config: config::app_config::Config::default(),
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
         ),
@@ -563,7 +566,7 @@ fn difficulty_colors_choice_emits_zmod_scheme_request() {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
             crate::SimplyLoveConfigRequest::SelectMusic(
                 crate::SimplyLoveSelectMusicConfigRequest::DifficultyColors(
-                    config::DifficultyColorScheme::Itg
+                    deadsync_theme::color::DifficultyColorScheme::Itg
                 )
             )
         ))
@@ -640,16 +643,16 @@ fn machine_choice_emits_shell_config_request() {
 
 #[test]
 fn coin_options_initialize_and_follow_mode_locks() {
-    let mut state = init_with_config(config::Config {
-        coin: config::CoinOptions {
-            mode: config::CoinMode::Pay,
+    let mut state = init_with_config(config::app_config::Config {
+        coin: config::coin::CoinOptions {
+            mode: config::coin::CoinMode::Pay,
             coins_per_credit: 3,
             songs_per_play: 5,
             event_mode: true,
             premium_free_minutes: 12,
-            ..config::CoinOptions::default()
+            ..config::coin::CoinOptions::default()
         },
-        ..config::Config::default()
+        ..config::app_config::Config::default()
     });
     state.view = OptionsView::Submenu(SubmenuKind::Coin);
 
@@ -790,9 +793,9 @@ fn post_fail_pass_choice_follows_individual_autosubmit_visibility() {
 #[test]
 fn post_fail_pass_choice_emits_course_config_request() {
     let asset_manager = AssetManager::new();
-    let mut config = config::Config {
+    let mut config = config::app_config::Config {
         autosubmit_course_scores_individually: true,
-        ..config::Config::default()
+        ..config::app_config::Config::default()
     };
     config.autosubmit_course_post_fail_passes = false;
     let mut state = init_with_config(config);
@@ -845,10 +848,10 @@ fn gameplay_choice_emits_shell_config_request() {
 #[test]
 fn tournament_options_initialize_and_emit_typed_requests() {
     let asset_manager = AssetManager::new();
-    let mut config = config::Config::default();
-    config.tournament = config::TournamentModeOptions {
+    let mut config = config::app_config::Config::default();
+    config.tournament = config::theme::TournamentModeOptions {
         enabled: true,
-        scoring_system: config::TournamentScoringSystem::Itg,
+        scoring_system: config::theme::TournamentScoringSystem::Itg,
         show_step_stats: false,
         enforce_no_cmod: true,
     };
@@ -881,7 +884,7 @@ fn tournament_options_initialize_and_emit_typed_requests() {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
             crate::SimplyLoveConfigRequest::Tournament(
                 crate::SimplyLoveTournamentConfigRequest::ScoringSystem(
-                    config::TournamentScoringSystem::Ex
+                    config::theme::TournamentScoringSystem::Ex
                 )
             )
         ))
@@ -892,9 +895,9 @@ fn tournament_options_initialize_and_emit_typed_requests() {
 fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
     let asset_manager = AssetManager::new();
     let mut view = OptionsInitView {
-        config: config::Config {
-            note_scroll_clock: config::NoteScrollClock::FrameStable,
-            ..config::Config::default()
+        config: config::app_config::Config {
+            note_scroll_clock: config::audio::NoteScrollClock::FrameStable,
+            ..config::app_config::Config::default()
         },
         judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
             crate::color::JUDGMENT_PRESET,
@@ -918,7 +921,7 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
 
     assert_eq!(
         state.sub[SubmenuKind::Gameplay].cursor_indices[row],
-        config::NoteScrollClock::FrameStable.choice_index()
+        config::audio::NoteScrollClock::FrameStable.choice_index()
     );
 
     let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
@@ -929,19 +932,19 @@ fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
             crate::SimplyLoveConfigRequest::Gameplay(
                 crate::SimplyLoveGameplayConfigRequest::NoteScrollClock(
-                    config::NoteScrollClock::RawAudio
+                    config::audio::NoteScrollClock::RawAudio
                 )
             )
         ))
     ));
 
-    view.config.note_scroll_clock = config::NoteScrollClock::RawAudio;
+    view.config.note_scroll_clock = config::audio::NoteScrollClock::RawAudio;
     let raw_state = super::init(view);
     let raw_row = row_position(GAMEPLAY_OPTIONS_ROWS, SubRowId::NoteScrollClock)
         .expect("note scroll clock row");
     assert_eq!(
         raw_state.sub[SubmenuKind::Gameplay].cursor_indices[raw_row],
-        config::NoteScrollClock::RawAudio.choice_index()
+        config::audio::NoteScrollClock::RawAudio.choice_index()
     );
 }
 
@@ -987,7 +990,7 @@ fn judgment_palette_presentation_reuses_stable_browser_and_rebuilds_on_selection
         &mut first,
         &state,
         2,
-        crate::config::MachineFont::Mega,
+        config::theme::MachineFont::Mega,
     ));
     let Actor::SharedFrame {
         children: first_children,
@@ -1004,7 +1007,7 @@ fn judgment_palette_presentation_reuses_stable_browser_and_rebuilds_on_selection
         &mut blink,
         &state,
         2,
-        crate::config::MachineFont::Mega,
+        config::theme::MachineFont::Mega,
     ));
     let Actor::SharedFrame {
         children: blink_children,
@@ -1024,7 +1027,7 @@ fn judgment_palette_presentation_reuses_stable_browser_and_rebuilds_on_selection
         &mut changed,
         &state,
         2,
-        crate::config::MachineFont::Mega,
+        config::theme::MachineFont::Mega,
     ));
     let Actor::SharedFrame {
         children: changed_children,
@@ -1040,7 +1043,7 @@ fn judgment_palette_presentation_reuses_stable_browser_and_rebuilds_on_selection
         &mut immediate,
         &state,
         2,
-        crate::config::MachineFont::Mega,
+        config::theme::MachineFont::Mega,
     );
     assert_eq!(format!("{changed_children:#?}"), format!("{immediate:#?}"));
 }
@@ -1137,9 +1140,9 @@ fn gameplay_banner_choice_emits_playback_mode_request() {
     let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
         .expect("Gameplay banner choice should emit shell config work");
     let mode = match state.sub[SubmenuKind::Gameplay].cursor_indices[row] {
-        0 => config::GameplayBannerMode::Static,
-        1 => config::GameplayBannerMode::Once,
-        _ => config::GameplayBannerMode::Loop,
+        0 => config::theme::GameplayBannerMode::Static,
+        1 => config::theme::GameplayBannerMode::Once,
+        _ => config::theme::GameplayBannerMode::Loop,
     };
 
     assert!(matches!(
@@ -1618,11 +1621,11 @@ fn dedicated_press(
 }
 
 fn dedicated_three_key_arcade_state() -> State {
-    init_with_config(config::Config {
+    init_with_config(config::app_config::Config {
         three_key_navigation: true,
         only_dedicated_menu_buttons: true,
         arcade_options_navigation: true,
-        ..config::Config::default()
+        ..config::app_config::Config::default()
     })
 }
 

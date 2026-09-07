@@ -16,9 +16,9 @@
 //! footer dots and spinner select wall-clock animation frames.
 
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::color;
 use crate::effects::SimplyLoveUpdaterRequest;
+use crate::i18n::{tr, tr_fmt};
 use crate::views::{
     SimplyLoveUpdateErrorKind as ActionErrorKind, SimplyLoveUpdatePhase as ActionPhase,
 };

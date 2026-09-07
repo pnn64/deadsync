@@ -1,20 +1,22 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{self, tr};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::effects::sfx;
+use crate::fonts::machine_font_key;
+use crate::i18n;
+use crate::i18n::tr;
 use crate::rgba_const;
+use crate::screens::Screen;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
     shared::{banner as shared_banner, mode_pads, timers, transitions, visual_style_bg},
 };
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
-pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
+use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use crate::views::{
-    CourseTypeView, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
-    SelectCourseContextView, SelectCourseInitView, SelectCourseRuntimeView,
-    SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseContextView,
+    SelectCourseInitView, SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView,
+    SelectFlowPlayerView,
 };
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::PadDir;
@@ -33,6 +35,8 @@ use deadsync_simfile::course::{
     add_chart_totals, course_difficulty_from_meters, course_meter, nearest_filled_slot,
     push_song_bpm_range, resolve_course_stage, song_unique_key,
 };
+use deadsync_theme::FontRole;
+use deadsync_theme::views::CourseTypeView;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -2693,15 +2697,15 @@ pub fn push_actors(
             show_pack_sync: false,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
-            itl_rank_mode: crate::config::SelectMusicItlRankMode::None,
-            itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
-            song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
+            itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,
+            itl_wheel_mode: deadsync_config::theme::SelectMusicItlWheelMode::Off,
+            song_select_bg_mode: deadsync_config::theme::SelectMusicSongSelectBgMode::Off,
             song_select_bg_paths: &[],
             song_select_bg_texture_keys: &[],
             expanded_series_name: None,
             expanded_pack_name: None,
             new_pack_names: None,
-            default_sync_offset: crate::config::DefaultSyncOffset::Null,
+            default_sync_offset: deadsync_config::theme::DefaultSyncOffset::Null,
             runtime: &state.music_wheel,
         },
     );
@@ -2901,7 +2905,7 @@ fn push_exit_prompt_choice(
     active_rgba: [f32; 4],
     alpha: f32,
     z: i16,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     let mut rgba = [1.0; 4];
     if active {

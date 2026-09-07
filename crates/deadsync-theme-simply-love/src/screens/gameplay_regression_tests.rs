@@ -486,7 +486,7 @@ mod tests {
 
         fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
             Some(
-                crate::assets::texture_dims(key)
+                deadlib_assets::texture_dims(key)
                     .map(|meta| TextureMeta {
                         w: meta.w,
                         h: meta.h,
@@ -496,7 +496,7 @@ mod tests {
         }
 
         fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-            crate::assets::sprite_sheet_dims(key)
+            deadlib_assets::sprite_sheet_dims(key)
         }
 
         fn texture_handle(&self, key: &str) -> deadlib_render_core::TextureHandle {
@@ -1738,7 +1738,7 @@ L000
         missing_keys
             .iter()
             .map(|key| {
-                let canonical = deadsync_assets::canonical_texture_key(key);
+                let canonical = deadsync_assets::textures::canonical_texture_key(key);
                 let handle = assets.texture_context().texture_handle(key);
                 let canonical_handle = assets.texture_context().texture_handle(&canonical);
                 format!(

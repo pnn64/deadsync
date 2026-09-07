@@ -1,10 +1,12 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key};
-use crate::screens::{Screen, ThemeEffect};
+use crate::fonts::machine_font_key;
+use crate::i18n::tr;
+use crate::screens::Screen;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
+use deadsync_theme::FontRole;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
 const TWEENTIME: f32 = 0.325;

@@ -209,8 +209,8 @@ fn srpg_background_key(fallback_key: &'static str) -> Arc<str> {
 
 fn srpg_fallback_key(fallback_key: &'static str) -> Arc<str> {
     let srpg10_key = crate::visual_styles::for_style_and_variant(
-        deadsync_config::prelude::VisualStyle::Srpg9,
-        deadsync_config::prelude::SrpgVariant::Srpg10,
+        deadsync_config::theme::VisualStyle::Srpg9,
+        deadsync_config::theme::SrpgVariant::Srpg10,
     )
     .shared_background;
     let cache = if fallback_key == srpg10_key {
@@ -272,7 +272,7 @@ fn set_global_elapsed_for_test(elapsed_s: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_config::prelude::{SrpgVariant, VisualStyle};
+    use deadsync_config::theme::{SrpgVariant, VisualStyle};
 
     const EPS: f64 = 1e-3;
 

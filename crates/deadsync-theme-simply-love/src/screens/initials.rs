@@ -1,9 +1,10 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::tr;
+use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongPlayerView, PostSongRuntimeView};
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
@@ -12,6 +13,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
+use deadsync_theme::FontRole;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
@@ -174,7 +176,7 @@ impl InitialsStageTexts {
         active_color_index: i32,
         translated_titles: bool,
     ) -> bool {
-        let i18n_revision = crate::assets::i18n::revision();
+        let i18n_revision = crate::i18n::revision();
         if !self.dirty
             && self.i18n_revision == i18n_revision
             && self.active_color_index == active_color_index
@@ -194,13 +196,13 @@ impl InitialsStageTexts {
                     .song
                     .banner_path
                     .as_deref()
-                    .map(crate::assets::media_path_key)
+                    .map(deadlib_assets::media_path_key)
                     .unwrap_or_else(|| Arc::clone(&self.fallback_banner_key)),
                 title: Arc::from(stage.song.display_title(translated_titles)),
             });
         }
         self.dirty = false;
-        self.i18n_revision = crate::assets::i18n::revision();
+        self.i18n_revision = crate::i18n::revision();
         self.active_color_index = active_color_index;
         self.translated_titles = translated_titles;
         true

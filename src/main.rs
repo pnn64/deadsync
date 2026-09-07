@@ -6,14 +6,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use deadlib_platform::logging::{self, StartupBuildInfo};
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_shell::app;
 use deadsync_theme_simply_love::{i18n, visual_styles};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
-fn startup_lines(cfg: &config::Config, dirs: &deadsync_config::dirs::AppDirs) -> Vec<String> {
+fn startup_lines(
+    cfg: &config::app_config::Config,
+    dirs: &deadsync_config::dirs::AppDirs,
+) -> Vec<String> {
     vec![
         format!("Portable mode: {}", dirs.portable),
         format!("Data directory: {}", dirs.data_dir.display()),
@@ -38,23 +41,27 @@ fn startup_lines(cfg: &config::Config, dirs: &deadsync_config::dirs::AppDirs) ->
     ]
 }
 
-fn display_line(cfg: &config::Config) -> String {
+fn display_line(cfg: &config::app_config::Config) -> String {
     match cfg.display_mode() {
-        config::DisplayMode::Windowed => {
+        config::app_config::DisplayMode::Windowed => {
             format!("Windowed {}x{}", cfg.display_width, cfg.display_height)
         }
-        config::DisplayMode::Fullscreen(config::FullscreenType::Exclusive) => format!(
+        config::app_config::DisplayMode::Fullscreen(
+            deadlib_platform::display::FullscreenType::Exclusive,
+        ) => format!(
             "Fullscreen Exclusive {}x{} monitor={}",
             cfg.display_width, cfg.display_height, cfg.display_monitor
         ),
-        config::DisplayMode::Fullscreen(config::FullscreenType::Borderless) => format!(
+        config::app_config::DisplayMode::Fullscreen(
+            deadlib_platform::display::FullscreenType::Borderless,
+        ) => format!(
             "Fullscreen Borderless {}x{} monitor={}",
             cfg.display_width, cfg.display_height, cfg.display_monitor
         ),
     }
 }
 
-fn audio_request_line(cfg: &config::Config) -> String {
+fn audio_request_line(cfg: &config::app_config::Config) -> String {
     let device = cfg
         .audio_output_device_index
         .map_or_else(|| "Auto".to_string(), |idx| format!("index {idx}"));
@@ -78,7 +85,7 @@ fn audio_request_line(cfg: &config::Config) -> String {
     }
 }
 
-fn audio_device_lines(devices: &[deadsync_audio_stream::OutputDeviceInfo]) -> Vec<String> {
+fn audio_device_lines(devices: &[deadlib_audio::OutputDeviceInfo]) -> Vec<String> {
     devices
         .iter()
         .enumerate()
@@ -135,7 +142,7 @@ fn resolve_show_console() -> bool {
     if std::env::args().skip(1).any(|arg| arg == "--console") {
         return true;
     }
-    config::bootstrap_show_console()
+    config::runtime_load::bootstrap_show_console()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -163,7 +170,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     deadlib_platform::console::init(resolve_show_console());
 
     // Install logger immediately, then set runtime max level from config after loading it.
-    logging::init(config::bootstrap_log_to_file(), dirs.log_path());
+    logging::init(
+        config::runtime_load::bootstrap_log_to_file(),
+        dirs.log_path(),
+    );
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
@@ -174,8 +184,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(code);
     }
 
-    config::load();
-    let cfg = config::get();
+    config::runtime_load::load();
+    let cfg = config::runtime::get();
     if let Some(case) = live_case.as_ref() {
         case.validate_config(&cfg).map_err(std::io::Error::other)?;
         log::info!(
@@ -239,7 +249,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
     profile::load();
     let (audio, music_clock) = match deadsync_audio_stream::init(
-        deadsync_audio_stream::InitConfig {
+        deadlib_audio::InitConfig {
             output_device_index: cfg.audio_output_device_index,
             output_mode: cfg.audio_output_mode,
             #[cfg(target_os = "linux")]

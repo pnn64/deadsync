@@ -1,4 +1,4 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_theme_simply_love::views::{
@@ -147,7 +147,7 @@ pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicIni
     let songs_root = dirs.songs_dir();
     let mut playlists = machine_playlists(dirs);
     playlists.extend(profile_playlists());
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     let session = session_view();
     SelectMusicInitView {
         song_scan_roots: deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root),
@@ -211,7 +211,7 @@ fn last_played_view(session: SelectMusicSessionView) -> SelectMusicLastPlayedVie
     }
 }
 
-pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
+pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPolicyView {
     SelectMusicPolicyView {
         machine_font: config.machine_font,
         dedicated_menu_only: config.only_dedicated_menu_buttons,
@@ -247,13 +247,13 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
                 .resolve(config.select_music_last_sort),
             remember_last_sort: matches!(
                 config.select_music_default_sort,
-                config::SelectMusicDefaultSort::LastUsed
+                config::theme::SelectMusicDefaultSort::LastUsed
             ),
             series_source: config.select_music_series_source,
             new_pack_mode: config.select_music_new_pack_mode,
             show_srpg_shop: config.show_srpg_shop,
             srpg10_visuals: config.visual_style.is_srpg()
-                && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
+                && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10),
             practice_shortcut: config.music_select_shortcut_practice,
             song_search_shortcut: config.music_select_shortcut_song_search,
             reload_shortcut: config.music_select_shortcut_load_songs,
@@ -266,7 +266,7 @@ pub(crate) fn policy_view(config: &config::Config) -> SelectMusicPolicyView {
                 || config.select_music_scorebox_cycle_hard_ex
                 || config.select_music_scorebox_cycle_tournaments,
             scorebox_in_step_pane: config.select_music_scorebox_placement
-                == config::SelectMusicScoreboxPlacement::StepPane,
+                == config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_stage_display: config.show_select_music_stage_display,
             show_gameplay_timer: config.show_select_music_gameplay_timer,
             step_artist_expanded: config
@@ -335,22 +335,22 @@ mod tests {
 
     #[test]
     fn policy_view_maps_media_and_wheel_runtime_flags() {
-        let config = config::Config {
-            machine_font: config::MachineFont::Mega,
+        let config = config::app_config::Config {
+            machine_font: config::theme::MachineFont::Mega,
             show_select_music_banners: true,
             show_select_music_previews: true,
             enable_replaygain: true,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: false,
-            select_music_itl_rank_mode: config::SelectMusicItlRankMode::Overall,
-            select_music_itl_wheel_mode: config::SelectMusicItlWheelMode::PointsAndScore,
+            select_music_itl_rank_mode: config::theme::SelectMusicItlRankMode::Overall,
+            select_music_itl_wheel_mode: config::theme::SelectMusicItlWheelMode::PointsAndScore,
             music_wheel_switch_speed: 22,
-            select_music_wheel_style: config::SelectMusicWheelStyle::Iidx,
-            difficulty_color_scheme: config::DifficultyColorScheme::Ddr,
+            select_music_wheel_style: config::theme::SelectMusicWheelStyle::Iidx,
+            difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme::Ddr,
             hide_inactive_series: true,
-            select_music_default_sort: config::SelectMusicDefaultSort::LastUsed,
-            select_music_last_sort: config::SelectMusicSort::Title,
-            select_music_new_pack_mode: config::NewPackMode::OpenPack,
+            select_music_default_sort: config::theme::SelectMusicDefaultSort::LastUsed,
+            select_music_last_sort: config::theme::SelectMusicSort::Title,
+            select_music_new_pack_mode: config::theme::NewPackMode::OpenPack,
             show_srpg_shop: false,
             music_select_shortcut_practice: deadlib_platform::input::KeyCode::KeyQ,
             music_select_shortcut_song_search: deadlib_platform::input::KeyCode::KeyW,
@@ -361,28 +361,29 @@ mod tests {
             select_music_scorebox_cycle_ex: false,
             select_music_scorebox_cycle_hard_ex: false,
             select_music_scorebox_cycle_tournaments: true,
-            select_music_scorebox_placement: config::SelectMusicScoreboxPlacement::StepPane,
+            select_music_scorebox_placement: config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_select_music_stage_display: false,
             show_select_music_gameplay_timer: false,
-            select_music_step_artist_box_mode: config::SelectMusicStepArtistBoxMode::Expanded,
-            select_music_breakdown_style: config::BreakdownStyle::Sn,
-            select_music_pattern_info_mode: config::SelectMusicPatternInfoMode::Stamina,
+            select_music_step_artist_box_mode:
+                config::theme::SelectMusicStepArtistBoxMode::Expanded,
+            select_music_breakdown_style: config::theme::BreakdownStyle::Sn,
+            select_music_pattern_info_mode: config::theme::SelectMusicPatternInfoMode::Stamina,
             select_music_chart_info_peak_nps: false,
             select_music_chart_info_effective_bpm: true,
             select_music_chart_info_matrix_rating: true,
             show_select_music_breakdown: false,
             machine_pack_ini_offsets: true,
-            machine_default_sync_offset: config::DefaultSyncOffset::Itg,
+            machine_default_sync_offset: config::theme::DefaultSyncOffset::Itg,
             allow_song_deletion: true,
             ..Default::default()
         };
 
         let view = policy_view(&config);
 
-        assert_eq!(view.machine_font, config::MachineFont::Mega);
+        assert_eq!(view.machine_font, config::theme::MachineFont::Mega);
         assert_eq!(
             view.presentation.difficulty_color_scheme,
-            config::DifficultyColorScheme::Ddr
+            deadsync_theme::color::DifficultyColorScheme::Ddr
         );
         assert!(view.media.show_banners);
         assert!(view.media.show_previews);
@@ -392,26 +393,26 @@ mod tests {
         assert!(!view.wheel.show_lamps);
         assert_eq!(
             view.wheel.itl_rank_mode,
-            config::SelectMusicItlRankMode::Overall
+            config::theme::SelectMusicItlRankMode::Overall
         );
         assert_eq!(
             view.wheel.itl_score_mode,
-            config::SelectMusicItlWheelMode::PointsAndScore
+            config::theme::SelectMusicItlWheelMode::PointsAndScore
         );
         assert_eq!(view.interaction.wheel_switch_speed, 22);
         assert_eq!(
             view.interaction.wheel_style,
-            config::SelectMusicWheelStyle::Iidx
+            config::theme::SelectMusicWheelStyle::Iidx
         );
         assert!(view.interaction.hide_inactive_series);
         assert_eq!(
             view.interaction.initial_sort,
-            config::SelectMusicSort::Title
+            config::theme::SelectMusicSort::Title
         );
         assert!(view.interaction.remember_last_sort);
         assert_eq!(
             view.interaction.new_pack_mode,
-            config::NewPackMode::OpenPack
+            config::theme::NewPackMode::OpenPack
         );
         assert!(!view.interaction.show_srpg_shop);
         assert_eq!(
@@ -426,11 +427,11 @@ mod tests {
         assert!(view.presentation.step_artist_expanded);
         assert_eq!(
             view.presentation.breakdown_style,
-            config::BreakdownStyle::Sn
+            config::theme::BreakdownStyle::Sn
         );
         assert_eq!(
             view.presentation.pattern_info_mode,
-            config::SelectMusicPatternInfoMode::Stamina
+            config::theme::SelectMusicPatternInfoMode::Stamina
         );
         assert!(!view.presentation.chart_info_peak_nps);
         assert!(view.presentation.chart_info_effective_bpm);
@@ -439,7 +440,7 @@ mod tests {
         assert!(view.presentation.pack_ini_offsets);
         assert_eq!(
             view.presentation.default_sync_offset,
-            config::DefaultSyncOffset::Itg
+            config::theme::DefaultSyncOffset::Itg
         );
     }
 }

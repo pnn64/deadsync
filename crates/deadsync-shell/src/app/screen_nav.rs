@@ -14,7 +14,7 @@ use crate::navigation::{
 };
 use crate::screen_flow::navigation_route_plan;
 use deadlib_present::actors::Actor;
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
@@ -23,8 +23,8 @@ use log::{debug, info, warn};
 use winit::event_loop::ActiveEventLoop;
 
 pub(super) fn menu_music_path(
-    style: config::VisualStyle,
-    variant: config::SrpgVariant,
+    style: config::theme::VisualStyle,
+    variant: config::theme::SrpgVariant,
 ) -> std::path::PathBuf {
     visual_styles::resolve_menu_music_path(
         style,
@@ -39,7 +39,7 @@ pub(super) fn gameover_music_path() -> std::path::PathBuf {
 }
 
 pub(super) fn overscan_view() -> OverscanAdjustmentView {
-    let config = config::get();
+    let config = config::runtime::get();
     OverscanAdjustmentView {
         translate_x: config.center_image_translate_x,
         translate_y: config.center_image_translate_y,
@@ -70,7 +70,7 @@ impl App {
     }
 
     fn enter_arrowcloud_login(&mut self) {
-        let config = config::get();
+        let config = config::runtime::get();
         let color_index = self.state.screens.menu_state.active_color_index;
         let state = &mut self.state.screens.arrowcloud_login_state;
         state.active_color_index = color_index;
@@ -87,7 +87,7 @@ impl App {
     }
 
     fn enter_groovestats_login(&mut self) {
-        let config = config::get();
+        let config = config::runtime::get();
         let color_index = self.state.screens.menu_state.active_color_index;
         let state = &mut self.state.screens.groovestats_login_state;
         state.active_color_index = color_index;
@@ -169,7 +169,7 @@ impl App {
 
         self.prepare_screen_state(prev, target_screen);
 
-        let config = config::get();
+        let config = config::runtime::get();
         let commands = actor_transition_music_commands(
             prev,
             target_screen,
@@ -208,7 +208,7 @@ impl App {
 
     fn handle_navigation_action_inner(&mut self, target: CurrentScreen, allow_offset_prompt: bool) {
         let from = self.state.screens.current_screen;
-        let cfg = config::get();
+        let cfg = config::runtime::get();
         self.lights.clear_button_pressed();
         let plan = navigation_route_plan(
             &cfg,
@@ -433,7 +433,7 @@ impl App {
                 self.state.screens.gameplay_state.as_ref(),
                 &self.asset_manager,
                 self.state.session.gameplay_restart_count > 0,
-                super::simply_love_visual_policy(&config::get()),
+                super::simply_love_visual_policy(&config::runtime::get()),
             ),
             CurrentScreen::Practice => gameplay::in_transition(
                 self.state
@@ -443,7 +443,7 @@ impl App {
                     .map(|state| &state.gameplay),
                 &self.asset_manager,
                 false,
-                super::simply_love_visual_policy(&config::get()),
+                super::simply_love_visual_policy(&config::runtime::get()),
             ),
             CurrentScreen::Options => options::in_transition(),
             CurrentScreen::Credits => credits::in_transition(),

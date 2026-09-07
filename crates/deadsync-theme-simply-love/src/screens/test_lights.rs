@@ -1,8 +1,10 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::color;
+use crate::i18n;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};

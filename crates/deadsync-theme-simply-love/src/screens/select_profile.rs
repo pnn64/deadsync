@@ -1,4 +1,4 @@
-use crate::screens::ThemeEffect;
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::screens::components::shared::profile_boxes;
 use crate::views::ProfilePickerView;
 use deadlib_assets::AssetManager;

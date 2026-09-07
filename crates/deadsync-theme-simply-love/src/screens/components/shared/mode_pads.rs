@@ -1,10 +1,11 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use crate::screens::components::shared::pad_display;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_width, widescale};
+use deadsync_config::theme::MachineFont;
 use deadsync_profile::PlayStyle;
+use deadsync_theme::FontRole;
 
 pub fn build_label(text: impl Into<TextContent>, machine_font: MachineFont) -> Actor {
     let text = text.into();

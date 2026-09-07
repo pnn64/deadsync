@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-smx = { path = "../deadsync-smx" }
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 bitflags = "2.13.1"
 chrono = "0.4.45"

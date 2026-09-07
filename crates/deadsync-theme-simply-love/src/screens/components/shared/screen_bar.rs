@@ -1,10 +1,11 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key_for_text};
+use crate::fonts::machine_font_key_for_text;
 use crate::views::{ScreenBarBackgroundView, SimplyLoveVisualPolicyView};
 use deadlib_present::actors::{self, Actor, Background, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str, shared_str_cache_with_capacity};
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::sync::Arc;
 

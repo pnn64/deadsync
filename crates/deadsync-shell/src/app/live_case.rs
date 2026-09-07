@@ -148,7 +148,7 @@ impl App {
                 display.refresh_millihertz
             ));
         }
-        let cfg = config::get();
+        let cfg = config::runtime::get();
         let song = Arc::new(song_loading::parse_song_for_test(
             &spec.simfile,
             cfg.global_offset_seconds,

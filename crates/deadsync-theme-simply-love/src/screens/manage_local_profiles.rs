@@ -1,7 +1,8 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -9,8 +10,8 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::transitions;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect, ThemeInputResult};
 use crate::views::{LocalProfileView, ManageLocalProfilesView};
+use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::RawKeyboardEvent;
@@ -19,6 +20,7 @@ use deadlib_present::space::{screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayerSide;
 use deadsync_profile::favorites_view::unicode_case_insensitive_cmp;
+use deadsync_theme::FontRole;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 

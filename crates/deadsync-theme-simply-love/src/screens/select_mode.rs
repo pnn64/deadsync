@@ -1,8 +1,9 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{self, tr};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::screens::ThemeEffect;
+use crate::fonts::machine_font_key;
+use crate::i18n;
+use crate::i18n::tr;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -13,9 +14,10 @@ use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::sync::Arc;
 

@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::visual_styles;
+use crate::i18n::tr;
+use crate::visual_styles;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 // Screen navigation handled in app
 use crate::color;
@@ -11,7 +11,8 @@ use crate::screens::components::shared::{
 use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
 // Keyboard handling is centralized in app via virtual actions
-use crate::screens::{Screen, ThemeEffect};
+use crate::SimplyLoveEffect as ThemeEffect;
+use crate::screens::Screen;
 use deadsync_input::{InputEvent, VirtualAction};
 
 /* ---------------------------- transitions ---------------------------- */

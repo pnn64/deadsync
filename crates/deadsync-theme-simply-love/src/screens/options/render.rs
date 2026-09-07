@@ -533,7 +533,7 @@ pub(super) fn push_yes_no_confirm_overlay(
     prompt_text: &Arc<str>,
     active_choice: u8,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) {
     let w = screen_width();
     let h = screen_height();
@@ -1515,7 +1515,7 @@ pub fn sync_updater_panels(
     update_changed: bool,
     ffmpeg_changed: bool,
 ) {
-    let revision = crate::assets::i18n::revision();
+    let revision = crate::i18n::revision();
     let locale_changed = state.updater_i18n_revision != revision;
     if update_changed || locale_changed {
         state.update_panel =

@@ -561,7 +561,7 @@ pub fn init(view: OptionsInitView) -> State {
         graphics_prev_visible_rows: Vec::new(),
         advanced_prev_visible_rows: Vec::new(),
         select_music_prev_visible_rows: Vec::new(),
-        i18n_revision: crate::assets::i18n::revision(),
+        i18n_revision: crate::i18n::revision(),
     };
 
     sync_video_renderer(&mut state, graphics_options.renderer);
@@ -638,8 +638,8 @@ pub fn init(view: OptionsInitView) -> State {
         SYSTEM_OPTIONS_ROWS,
         SubRowId::Game,
         match cfg.game_flag {
-            deadsync_config::prelude::GameFlag::Dance => 0,
-            deadsync_config::prelude::GameFlag::Pump => 1,
+            deadsync_config::theme::GameFlag::Dance => 0,
+            deadsync_config::theme::GameFlag::Pump => 1,
         },
     );
     set_choice_by_id(
@@ -1211,9 +1211,9 @@ pub fn init(view: OptionsInitView) -> State {
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AnimatedBanners,
         match cfg.gameplay_banner_mode {
-            config::GameplayBannerMode::Static => 0,
-            config::GameplayBannerMode::Once => 1,
-            config::GameplayBannerMode::Loop => 2,
+            config::theme::GameplayBannerMode::Static => 0,
+            config::theme::GameplayBannerMode::Once => 1,
+            config::theme::GameplayBannerMode::Loop => 2,
         },
     );
     set_choice_by_id(
@@ -1232,7 +1232,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
         SubRowId::BpmPosition,
-        usize::from(cfg.gameplay_bpm_position == config::GameplayBpmPosition::NearField),
+        usize::from(cfg.gameplay_bpm_position == config::theme::GameplayBpmPosition::NearField),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
@@ -1268,7 +1268,7 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::Tournament].choice_indices,
         TOURNAMENT_OPTIONS_ROWS,
         SubRowId::TournamentScoring,
-        usize::from(cfg.tournament.scoring_system == config::TournamentScoringSystem::Itg),
+        usize::from(cfg.tournament.scoring_system == config::theme::TournamentScoringSystem::Itg),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Tournament].choice_indices,

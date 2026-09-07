@@ -9,18 +9,9 @@ pub mod screenshot;
 pub mod song_lua;
 pub mod textures;
 
-pub use deadlib_assets::upload::TextureUploadBudget;
-pub use deadlib_assets::{
-    AssetError, METADATA_TEXTURE_CONTEXT, TexMeta, TextureChoice, TextureHints,
-    generated_texture_shared_key, media_path_key, open_image_fallback, parse_sprite_sheet_dims,
-    parse_texture_hints, register_generated_texture, register_texture_dims, sprite_sheet_dims,
-    strip_sprite_hints, texture_dims, texture_registry_generation, texture_source_dims_from_real,
-    texture_source_frame_dims_from_real,
-};
-pub use textures::{
-    canonical_texture_key, graphic_texture_roots, held_miss_texture_choices,
-    hold_judgment_texture_choices, judgment_texture_choices, resolve_texture_choice_entry,
-    resolve_texture_choice_key as resolve_texture_choice,
+use deadlib_assets::{
+    open_image_fallback, register_generated_texture, register_texture_dims, sprite_sheet_dims,
+    texture_dims, texture_source_frame_dims_from_real,
 };
 
 static PATHS: std::sync::OnceLock<deadsync_config::dirs::AssetPaths> = std::sync::OnceLock::new();

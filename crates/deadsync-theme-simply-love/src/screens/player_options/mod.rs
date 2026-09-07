@@ -1,13 +1,13 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
-use crate::assets::{self};
 use crate::color;
+use crate::i18n::{LookupKey, lookup_key, tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PlayerOptionsInitView, PlayerOptionsPolicyView};
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
@@ -482,7 +482,7 @@ fn init_with_noteskin_prewarm(
     ];
     panes[OptionsPane::Main.index()].row_tweens = main_row_tweens;
     panes[OptionsPane::Main.index()].arcade_row_focus = [true; PLAYER_SLOTS];
-    let i18n_revision = crate::assets::i18n::revision();
+    let i18n_revision = crate::i18n::revision();
     let row_titles =
         std::array::from_fn(|idx| compile_row_titles(&panes[idx].row_map, i18n_revision));
     let mut state = State {

@@ -12,8 +12,10 @@ use crate::graphics::{
     restore_display_sync, runtime_display_mode_sync, start_renderer_runtime, startup_display_sync,
     sync_renderer_window_size,
 };
+use deadlib_platform::display::FullscreenType;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_config::prelude::{self as config, DisplayMode, FullscreenType};
+use deadsync_config as config;
+use deadsync_config::app_config::DisplayMode;
 use deadsync_theme::views::{GraphicsMonitorView, GraphicsOptionsView, GraphicsVideoModeView};
 use deadsync_theme::{
     DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
@@ -109,8 +111,17 @@ const fn theme_present_policy(policy: PresentModePolicy) -> PresentPolicyChoice 
     }
 }
 
+// Menu policy: Auto plus 1..=available CPUs, with the established 2..=32 limits.
+fn build_software_thread_choices() -> Vec<u8> {
+    let max_threads = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(8)
+        .clamp(2, 32);
+    (0..=max_threads as u8).collect()
+}
+
 pub(super) fn options_graphics_view() -> GraphicsOptionsView {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     GraphicsOptionsView {
         renderer: theme_renderer_choice(cfg.video_renderer),
         display_mode: theme_display_mode(cfg.display_mode()),
@@ -123,7 +134,7 @@ pub(super) fn options_graphics_view() -> GraphicsOptionsView {
         vsync: cfg.vsync,
         present_policy: theme_present_policy(cfg.present_mode_policy),
         high_dpi: cfg.high_dpi,
-        software_thread_choices: deadlib_render_core::build_software_thread_choices(),
+        software_thread_choices: build_software_thread_choices(),
         software_threads: cfg.software_renderer_threads,
     }
 }
@@ -165,7 +176,7 @@ impl App {
             software_threads,
         } = request;
         if let Some(software_threads) = software_threads {
-            config::update_software_renderer_threads(software_threads);
+            config::runtime_update::update_software_renderer_threads(software_threads);
             self.software_renderer_threads = software_threads;
         }
         let renderer = renderer.map(runtime_backend_type);
@@ -239,7 +250,7 @@ impl App {
         // Collect monitors and update options immediately so the initial menu state is correct.
         self.update_options_monitor_specs(event_loop);
 
-        let runtime_config = config::get();
+        let runtime_config = config::runtime::get();
         let startup_config = renderer_startup_config(
             &mut self.state.shell,
             RendererStartupSettings {
@@ -300,7 +311,7 @@ impl App {
                 target,
                 force_recreate,
             },
-            config::get().high_dpi,
+            config::runtime::get().high_dpi,
             desired_size,
         ) else {
             return Ok(());
@@ -332,7 +343,7 @@ impl App {
             Ok(()) => {
                 let success = renderer_switch_success_plan(plan.target);
                 if success.persist_renderer {
-                    config::update_video_renderer(success.target);
+                    config::runtime_update::update_video_renderer(success.target);
                 }
                 if success.sync_options_renderer {
                     options::sync_video_renderer(
@@ -377,12 +388,12 @@ impl App {
                     let display = apply_renderer_switch_restore_display(
                         &mut self.state.shell,
                         event_loop,
-                        config::get().fullscreen_type,
+                        config::runtime::get().fullscreen_type,
                     );
                     self.apply_graphics_display_sync(restore_display_sync(display));
                 }
                 if failure.persist_renderer {
-                    config::update_video_renderer(failure.previous);
+                    config::runtime_update::update_video_renderer(failure.previous);
                 }
                 Err(error)
             }
@@ -395,7 +406,7 @@ impl App {
             self.window.as_deref(),
             &mut self.backend,
             self.backend_type,
-            config::get().high_dpi,
+            config::runtime::get().high_dpi,
             size,
         );
     }
@@ -406,7 +417,7 @@ impl App {
         monitor_override: Option<usize>,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let runtime_config = config::get();
+        let runtime_config = config::runtime::get();
         let result = apply_runtime_display_mode(
             &mut self.state.shell,
             self.window.as_deref(),
@@ -438,7 +449,7 @@ impl App {
             &mut self.backend,
             event_loop,
             self.backend_type,
-            config::get().high_dpi,
+            config::runtime::get().high_dpi,
             width,
             height,
         );
@@ -473,7 +484,7 @@ impl App {
         graphics_change_context(
             &self.state.shell,
             self.backend_type,
-            config::get().fullscreen_type,
+            config::runtime::get().fullscreen_type,
             event_loop,
             monitor_override,
         )
@@ -484,17 +495,17 @@ impl App {
             match update {
                 RuntimeUpdate::Vsync(vsync) => {
                     debug!("Graphics setting changed: vsync={vsync}");
-                    config::update_vsync(vsync);
+                    config::runtime_update::update_vsync(vsync);
                     options::sync_vsync(&mut self.state.screens.options_state, vsync);
                 }
                 RuntimeUpdate::MaxFps(max_fps) => {
                     debug!("Graphics setting changed: max_fps={max_fps}");
-                    config::update_max_fps(max_fps);
+                    config::runtime_update::update_max_fps(max_fps);
                     options::sync_max_fps(&mut self.state.screens.options_state, max_fps);
                 }
                 RuntimeUpdate::PresentModePolicy(policy) => {
                     debug!("Graphics setting changed: present_mode_policy={policy}");
-                    config::update_present_mode_policy(policy);
+                    config::runtime_update::update_present_mode_policy(policy);
                     options::sync_present_mode_policy(
                         &mut self.state.screens.options_state,
                         theme_present_policy(policy),
@@ -502,12 +513,12 @@ impl App {
                 }
                 RuntimeUpdate::HighDpi(enabled) => {
                     debug!("Graphics setting changed: high_dpi={enabled}");
-                    config::update_high_dpi(enabled);
+                    config::runtime_update::update_high_dpi(enabled);
                     options::sync_high_dpi(&mut self.state.screens.options_state, enabled);
                 }
                 RuntimeUpdate::AspectRatio(aspect_ratio) => {
                     debug!("Graphics setting changed: display_aspect_ratio={aspect_ratio}");
-                    config::update_display_aspect_ratio(aspect_ratio);
+                    config::runtime_update::update_display_aspect_ratio(aspect_ratio);
                     apply_display_aspect_ratio(
                         &mut self.state.shell,
                         &mut self.backend,
@@ -519,7 +530,7 @@ impl App {
                     );
                 }
                 RuntimeUpdate::Resolution(w, h) => {
-                    config::update_display_resolution(w, h);
+                    config::runtime_update::update_display_resolution(w, h);
                     options::sync_display_resolution(&mut self.state.screens.options_state, w, h);
                 }
             }
@@ -528,10 +539,10 @@ impl App {
 
     fn apply_graphics_display_sync(&mut self, sync: GraphicsDisplaySync) {
         if sync.persist_mode {
-            config::update_display_mode(sync.mode);
+            config::runtime_update::update_display_mode(sync.mode);
         }
         if sync.persist_monitor {
-            config::update_display_monitor(sync.monitor);
+            config::runtime_update::update_display_monitor(sync.monitor);
         }
         options::sync_display_mode(
             &mut self.state.screens.options_state,
@@ -545,6 +556,15 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn software_thread_choices_include_auto_and_available_range() {
+        let choices = super::build_software_thread_choices();
+        assert_eq!(choices.first().copied(), Some(0));
+        assert!(choices.len() >= 3);
+        assert!(choices.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(choices.len() <= 33);
+    }
+
     use super::*;
 
     #[test]

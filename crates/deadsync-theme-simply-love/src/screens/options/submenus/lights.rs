@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::screens::options) use crate::config::{
+pub(in crate::screens::options) use deadsync_config::options::{
     lights_driver_choice_index, lights_gameplay_pad_choice_index,
 };
 

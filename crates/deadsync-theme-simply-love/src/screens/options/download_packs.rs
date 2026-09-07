@@ -88,7 +88,7 @@ struct DownloadPacksPresentationKey {
     revision: u64,
     cursor_on: bool,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
     screen_width_bits: u32,
     screen_height_bits: u32,
 }
@@ -954,7 +954,7 @@ pub(super) fn push_overlay(
     out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) -> bool {
     let DownloadPacksOverlayState::Visible(data) = &state.download_packs_overlay else {
         return false;
@@ -1002,7 +1002,7 @@ pub(super) fn push_overlay_unreserved(
     data: &DownloadPacksOverlayData,
     snapshot: &Snapshot,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) {
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();

@@ -1,9 +1,10 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSongPlayerView, PostSongRuntimeView};
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
@@ -11,6 +12,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, sc
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score::stage_stats;
+use deadsync_theme::FontRole;
 use std::sync::Arc;
 
 /* ---------------------------- transitions ---------------------------- */
@@ -88,7 +90,7 @@ impl GameOverText {
         runtime: &PostSongRuntimeView,
         stages: &[stage_stats::StageSummary],
     ) -> bool {
-        let i18n_revision = crate::assets::i18n::revision();
+        let i18n_revision = crate::i18n::revision();
         if !self.dirty && self.i18n_revision == i18n_revision && self.stage_count == stages.len() {
             return false;
         }
@@ -105,7 +107,7 @@ impl GameOverText {
             build_player_lines(&runtime.players[index], side, stages)
         });
         self.dirty = false;
-        self.i18n_revision = crate::assets::i18n::revision();
+        self.i18n_revision = crate::i18n::revision();
         self.stage_count = stages.len();
         true
     }
@@ -328,8 +330,8 @@ pub fn push_actors(
         let cy = screen_center_y();
         let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
         let zoom = match state.runtime.machine_font {
-            deadsync_config::prelude::MachineFont::Wendy => 1.2,
-            deadsync_config::prelude::MachineFont::Mega => 1.95,
+            deadsync_config::theme::MachineFont::Wendy => 1.2,
+            deadsync_config::theme::MachineFont::Mega => 1.95,
         };
 
         actors.push(act!(text:

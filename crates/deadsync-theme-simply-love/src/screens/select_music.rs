@@ -1,12 +1,15 @@
 use crate::act;
-use crate::assets::i18n::{self, tr, tr_fmt};
-use crate::assets::{self};
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::{
-    BreakdownStyle, GraphOrientation, GraphOrigin, NewPackMode, SelectMusicPatternInfoMode,
-    SelectMusicSeriesSource, SelectMusicSort, SyncGraphMode,
-};
+use crate::fonts::machine_font_key;
+use crate::i18n;
+use crate::i18n::{tr, tr_fmt};
 use deadlib_assets::AssetManager;
+use deadsync_config::null_or_die::GraphOrigin;
+use deadsync_config::theme::{
+    BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicSeriesSource,
+    SelectMusicSort, SyncGraphMode,
+};
+use deadsync_theme::FontRole;
+use null_or_die::GraphOrientation;
 
 use crate::color;
 use crate::rgba_const;
@@ -20,10 +23,7 @@ use crate::screens::components::{
     },
 };
 use crate::screens::pad_config;
-use crate::screens::{
-    DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, ThemeInputResult,
-    input as screen_input,
-};
+use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, input as screen_input};
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ProfilePickerView,
@@ -34,6 +34,7 @@ use crate::views::{
     SelectMusicSessionView, SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
     SimplyLoveLobbyRuntimeView,
 };
+use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
 use deadlib_platform::input::{KeyCode, PadDir, PadEvent, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{
@@ -51,7 +52,7 @@ use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
     SongPack,
 };
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
@@ -1079,7 +1080,7 @@ struct NullOrDieOverlayData {
 struct NullOrDiePresentationKey {
     revision: u64,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
     screen_width_bits: u32,
     screen_height_bits: u32,
 }
@@ -2252,7 +2253,7 @@ fn build_displayed_entries(
     all_entries: &[MusicWheelEntry],
     expanded_series_name: Option<&str>,
     expanded_pack_name: Option<&str>,
-    wheel_style: crate::config::SelectMusicWheelStyle,
+    wheel_style: deadsync_config::theme::SelectMusicWheelStyle,
     hide_inactive_series: bool,
 ) -> Vec<MusicWheelEntry> {
     let mut entries = Vec::with_capacity(all_entries.len());
@@ -2272,7 +2273,7 @@ fn fill_displayed_entries(
     all_entries: &[MusicWheelEntry],
     expanded_series_name: Option<&str>,
     expanded_pack_name: Option<&str>,
-    wheel_style: crate::config::SelectMusicWheelStyle,
+    wheel_style: deadsync_config::theme::SelectMusicWheelStyle,
     hide_inactive_series: bool,
 ) {
     entries.clear();
@@ -2289,7 +2290,10 @@ fn fill_displayed_entries(
     // header, while retaining the active pack's parent. `Hide Inactive Series`
     // only focuses a Series before drilling into one of its child packs.
     let show_only_active_pack = expanded_pack_name.is_some()
-        && matches!(wheel_style, crate::config::SelectMusicWheelStyle::Iidx);
+        && matches!(
+            wheel_style,
+            deadsync_config::theme::SelectMusicWheelStyle::Iidx
+        );
     let focus_open_series =
         hide_inactive_series && expanded_series_name.is_some() && expanded_pack_name.is_none();
     let show_only_active_series_header = show_only_active_pack || focus_open_series;
@@ -6556,7 +6560,7 @@ fn refresh_sync_overlay_heat_texture(overlay: &NullOrDieOverlayData) {
     ) else {
         return;
     };
-    assets::register_generated_texture(
+    deadlib_assets::register_generated_texture(
         SYNC_HEAT_TEXTURE_KEY,
         image,
         SamplerDesc {
@@ -6612,7 +6616,7 @@ fn push_null_or_die_overlay(
     actors: &mut Vec<Actor>,
     overlay: &NullOrDieOverlayData,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     // Running analysis contains elapsed-time rate text and keeps using the
     // dynamic builder. Ready/error review states are immutable between input
@@ -6657,7 +6661,7 @@ fn push_null_or_die_overlay_unreserved(
     actors: &mut Vec<Actor>,
     overlay: &NullOrDieOverlayData,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     let pane_w = widescale(520.0, 640.0);
     let pane_h = 430.0;
@@ -7113,7 +7117,7 @@ fn push_sync_overlay(
     actors: &mut Vec<Actor>,
     state: &SyncOverlayState,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) -> bool {
     match state {
         SyncOverlayState::Hidden => false,
@@ -7132,7 +7136,7 @@ fn push_manual_sync_overlay(
     actors: &mut Vec<Actor>,
     overlay: &ManualSyncOverlayData,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     actors.reserve(22);
     push_manual_sync_overlay_unreserved(actors, overlay, active_color_index, machine_font);
@@ -7142,7 +7146,7 @@ fn push_manual_sync_overlay_unreserved(
     actors: &mut Vec<Actor>,
     overlay: &ManualSyncOverlayData,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     let accent = color::simply_love_rgba(active_color_index);
     let pane_w = widescale(520.0, 640.0);
@@ -13141,16 +13145,16 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
         fetch_srpg_score,
     });
     let rank_source = match policy.itl_rank_mode {
-        crate::config::SelectMusicItlRankMode::None => MusicWheelRankSource::None,
-        crate::config::SelectMusicItlRankMode::Chart => MusicWheelRankSource::Chart,
-        crate::config::SelectMusicItlRankMode::Overall => MusicWheelRankSource::Overall,
+        deadsync_config::theme::SelectMusicItlRankMode::None => MusicWheelRankSource::None,
+        deadsync_config::theme::SelectMusicItlRankMode::Chart => MusicWheelRankSource::Chart,
+        deadsync_config::theme::SelectMusicItlRankMode::Overall => MusicWheelRankSource::Overall,
     };
     MusicWheelRuntimeRequest {
         read_scores: policy.show_grades || policy.show_lamps,
         rank_source,
         read_itl_scores: !matches!(
             policy.itl_score_mode,
-            crate::config::SelectMusicItlWheelMode::Off
+            deadsync_config::theme::SelectMusicItlWheelMode::Off
         ),
         sides,
         slots,
@@ -13447,9 +13451,9 @@ pub fn push_actors(
     if state.policy.media.show_cdtitles
         && let Some(cdtitle_key) = state.current_cdtitle_key.as_ref()
         && asset_manager.has_texture_key(cdtitle_key)
-        && let Some(tex) = crate::assets::texture_dims(cdtitle_key)
+        && let Some(tex) = deadlib_assets::texture_dims(cdtitle_key)
     {
-        let (cols, rows) = crate::assets::sprite_sheet_dims(cdtitle_key);
+        let (cols, rows) = deadlib_assets::sprite_sheet_dims(cdtitle_key);
         let cols = cols.max(1);
         let rows = rows.max(1);
         let frame_w = (tex.w.max(1) as f32) / cols as f32;
@@ -15153,7 +15157,7 @@ fn push_exit_prompt_choice(
     active_rgba: [f32; 4],
     alpha: f32,
     z: i16,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     let mut rgba = [1.0; 4];
     if active {
@@ -15256,20 +15260,19 @@ mod tests {
         sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
         sync_overlay_graph_size,
     };
-    use crate::config::{
-        GraphOrientation, GraphOrigin, SelectMusicSeriesSource, SelectMusicSort,
-        SelectMusicWheelStyle,
-    };
     use crate::screens::components::select_music::music_wheel;
-    use crate::screens::{ThemeEffect, ThemeInputResult};
     use crate::views::ProfilePickerView;
+    use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
     use deadlib_platform::input::{KeyCode, PadDir, RawKeyboardEvent};
     use deadlib_present::actors::Actor;
     use deadsync_chart::{SongData, SongPack, SyncPref};
+    use deadsync_config::null_or_die::GraphOrigin;
+    use deadsync_config::theme::{SelectMusicSeriesSource, SelectMusicSort, SelectMusicWheelStyle};
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputBinding, InputEvent, Keymap, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
+    use null_or_die::GraphOrientation;
     use rustc_hash::FxHashSet;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -16317,9 +16320,9 @@ mod tests {
             chart_label: "Hard".to_string(),
             kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
             kernel_type: crate::SimplyLoveSyncKernel::Rising,
-            graph_mode: crate::config::SyncGraphMode::PostKernelFingerprint,
-            graph_orientation: crate::config::GraphOrientation::Vertical,
-            graph_origin: crate::config::GraphOrigin::Bottom,
+            graph_mode: deadsync_config::theme::SyncGraphMode::PostKernelFingerprint,
+            graph_orientation: null_or_die::GraphOrientation::Vertical,
+            graph_origin: deadsync_config::null_or_die::GraphOrigin::Bottom,
             confidence_threshold: 0.8,
             cols,
             freq_rows: 0,
@@ -16355,7 +16358,12 @@ mod tests {
 
     fn render_null_or_die_overlay(overlay: &super::NullOrDieOverlayData) -> Vec<Actor> {
         let mut actors = Vec::with_capacity(36);
-        super::push_null_or_die_overlay(&mut actors, overlay, 0, crate::config::MachineFont::Wendy);
+        super::push_null_or_die_overlay(
+            &mut actors,
+            overlay,
+            0,
+            deadsync_config::theme::MachineFont::Wendy,
+        );
         actors
     }
 
@@ -16999,7 +17007,7 @@ mod tests {
             &["alice".to_string()],
             vec!["Pack A".to_string(), "Pack B".to_string()],
             &FxHashSet::default(),
-            crate::config::NewPackMode::OpenPack,
+            deadsync_config::theme::NewPackMode::OpenPack,
             &profiles,
             &mut known,
         );
@@ -17092,7 +17100,7 @@ mod tests {
                 settings: Some(crate::views::SelectMusicSettingsView {
                     arrow_bounce_offset: -0.25,
                     policy: crate::views::SelectMusicPolicyView {
-                        machine_font: crate::config::MachineFont::Mega,
+                        machine_font: deadsync_config::theme::MachineFont::Mega,
                         media: crate::views::SelectMusicMediaPolicyView {
                             show_previews: true,
                             replay_gain: true,
@@ -17100,7 +17108,7 @@ mod tests {
                         },
                         wheel: crate::views::SelectMusicWheelPolicyView {
                             show_grades: true,
-                            itl_rank_mode: crate::config::SelectMusicItlRankMode::Overall,
+                            itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::Overall,
                             ..Default::default()
                         },
                         interaction: crate::views::SelectMusicInteractionPolicyView {
@@ -17109,14 +17117,14 @@ mod tests {
                         },
                         presentation: crate::views::SelectMusicPresentationPolicyView {
                             show_stage_display: false,
-                            breakdown_style: crate::config::BreakdownStyle::Sn,
+                            breakdown_style: deadsync_config::theme::BreakdownStyle::Sn,
                             ..Default::default()
                         },
                         ..Default::default()
                     },
-                    sync_graph_mode: crate::config::SyncGraphMode::Frequency,
-                    sync_graph_orientation: crate::config::GraphOrientation::Horizontal,
-                    sync_graph_origin: crate::config::GraphOrigin::Top,
+                    sync_graph_mode: deadsync_config::theme::SyncGraphMode::Frequency,
+                    sync_graph_orientation: null_or_die::GraphOrientation::Horizontal,
+                    sync_graph_origin: deadsync_config::null_or_die::GraphOrigin::Top,
                     sync_confidence_percent: 75,
                 }),
                 music_wheel: Some(crate::views::MusicWheelRuntimeView {
@@ -17142,13 +17150,16 @@ mod tests {
         assert_eq!(state.ready_song_reload_dirs.len(), 1);
         assert_eq!(
             state.sync_graph_mode,
-            crate::config::SyncGraphMode::Frequency
+            deadsync_config::theme::SyncGraphMode::Frequency
         );
         assert_eq!(
             state.sync_graph_orientation,
-            crate::config::GraphOrientation::Horizontal
+            null_or_die::GraphOrientation::Horizontal
         );
-        assert_eq!(state.sync_graph_origin, crate::config::GraphOrigin::Top);
+        assert_eq!(
+            state.sync_graph_origin,
+            deadsync_config::null_or_die::GraphOrigin::Top
+        );
         assert_eq!(state.sync_confidence_percent, 75);
         assert_eq!(state.session.play_style, profile_data::PlayStyle::Versus);
         assert_eq!(state.session.player_side, profile_data::PlayerSide::P2);
@@ -17178,13 +17189,13 @@ mod tests {
         assert!(state.music_wheel.translated_titles);
         assert_eq!(
             state.policy.wheel.itl_rank_mode,
-            crate::config::SelectMusicItlRankMode::Overall
+            deadsync_config::theme::SelectMusicItlRankMode::Overall
         );
         assert_eq!(state.policy.interaction.song_search_shortcut, KeyCode::KeyQ);
         assert!(!state.policy.presentation.show_stage_display);
         assert_eq!(
             state.policy.presentation.breakdown_style,
-            crate::config::BreakdownStyle::Sn
+            deadsync_config::theme::BreakdownStyle::Sn
         );
         assert_eq!(super::preview_song_sec(&state), Some(12.5));
 
@@ -17494,7 +17505,8 @@ mod tests {
         state.policy.media.show_cdtitles = false;
         state.policy.media.show_folder_stats = false;
         state.policy.media.show_previews = false;
-        state.policy.media.song_select_bg_mode = crate::config::SelectMusicSongSelectBgMode::Banner;
+        state.policy.media.song_select_bg_mode =
+            deadsync_config::theme::SelectMusicSongSelectBgMode::Banner;
         let mut song = (*test_song("wheel background")).clone();
         song.banner_path = Some(PathBuf::from("song-banner.png"));
         state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
@@ -19803,10 +19815,10 @@ mod tests {
         assert_eq!(sync_beat_axis_rows(&overlay), None);
 
         overlay.graph_orientation = GraphOrientation::Vertical;
-        overlay.graph_mode = crate::config::SyncGraphMode::Frequency;
+        overlay.graph_mode = deadsync_config::theme::SyncGraphMode::Frequency;
         assert_eq!(sync_beat_axis_rows(&overlay), None);
 
-        overlay.graph_mode = crate::config::SyncGraphMode::PostKernelFingerprint;
+        overlay.graph_mode = deadsync_config::theme::SyncGraphMode::PostKernelFingerprint;
         overlay.kernel_target = crate::SimplyLoveSyncKernelTarget::Accumulator;
         assert_eq!(sync_beat_axis_rows(&overlay), None);
     }

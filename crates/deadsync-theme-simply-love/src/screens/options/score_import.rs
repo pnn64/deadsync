@@ -789,7 +789,7 @@ pub(super) fn push_score_import_pack_picker_actors(
     out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) {
     let Some(picker) = state.score_import_pack_picker.as_ref() else {
         return;

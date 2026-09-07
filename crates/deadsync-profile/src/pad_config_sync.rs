@@ -5,7 +5,7 @@
 //! markers change, and when managed pad-config resolution must rerun.
 
 use crate::pad_config::PadConfigProfile;
-use deadsync_config::prelude::SmxPadPreset;
+use deadsync_smx::SmxPadPreset;
 
 /// What `DeadSync` last applied to an SMX pad, so the UI can flag the active one.
 /// `preset` = a built-in preset (name is its label); otherwise a saved config.

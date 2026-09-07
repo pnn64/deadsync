@@ -4,7 +4,7 @@ use deadsync_theme::GraphicsRequest;
 
 /// Refresh cached translated labels when the UI language changes.
 pub(super) fn sync_i18n_cache(state: &mut State) {
-    let rev = crate::assets::i18n::revision();
+    let rev = crate::i18n::revision();
     if state.i18n_revision == rev {
         return;
     }

@@ -1,4 +1,4 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_score::stage_stats::StageSummary;
@@ -24,7 +24,7 @@ fn player_view(side: PlayerSide) -> PostSongPlayerView {
 }
 
 pub(crate) fn runtime_view() -> PostSongRuntimeView {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     let session = profile::get_session_snapshot();
     PostSongRuntimeView {
         players: [player_view(PlayerSide::P1), player_view(PlayerSide::P2)],
@@ -36,7 +36,7 @@ pub(crate) fn runtime_view() -> PostSongRuntimeView {
         difficulty_color_scheme: cfg.difficulty_color_scheme,
         three_key_navigation: cfg.three_key_navigation,
         srpg10_visuals: cfg.visual_style.is_srpg()
-            && matches!(cfg.srpg_variant, config::SrpgVariant::Srpg10),
+            && matches!(cfg.srpg_variant, config::theme::SrpgVariant::Srpg10),
         machine_leaderboards: std::collections::HashMap::default(),
     }
 }

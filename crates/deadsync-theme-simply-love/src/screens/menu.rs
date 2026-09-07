@@ -1,12 +1,15 @@
 use crate::act;
-use crate::assets::i18n::{self, tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
+use crate::fonts::machine_font_key;
+use crate::i18n;
+use crate::i18n::{tr, tr_fmt};
+use deadsync_theme::FontRole;
 // Screen navigation is handled in app
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::color;
+use crate::screens::Screen;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{
     MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
     MainMenuRuntimeView,
@@ -48,7 +51,7 @@ const MAX_OPTION_COUNT: usize = OPTION_COUNT + 1;
 const fn option_count(state: &State) -> usize {
     if !matches!(
         state.runtime_view.coin_mode,
-        deadsync_config::prelude::CoinMode::Home
+        deadsync_config::coin::CoinMode::Home
     ) {
         return 1;
     }
@@ -63,7 +66,7 @@ const fn option_count(state: &State) -> usize {
 fn shutdown_index(state: &State) -> Option<usize> {
     if !matches!(
         state.runtime_view.coin_mode,
-        deadsync_config::prelude::CoinMode::Home
+        deadsync_config::coin::CoinMode::Home
     ) {
         return None;
     }
@@ -790,12 +793,12 @@ pub fn push_actors(
     footer_fg[3] *= alpha_multiplier;
     let credit_text = credit_text(state);
     let footer_title = match state.runtime_view.coin_mode {
-        deadsync_config::prelude::CoinMode::Home => chrome_text.event_mode.as_ref(),
-        deadsync_config::prelude::CoinMode::Free if state.runtime_view.event_mode => {
+        deadsync_config::coin::CoinMode::Home => chrome_text.event_mode.as_ref(),
+        deadsync_config::coin::CoinMode::Free if state.runtime_view.event_mode => {
             chrome_text.event_mode.as_ref()
         }
-        deadsync_config::prelude::CoinMode::Free => "FREE PLAY",
-        deadsync_config::prelude::CoinMode::Pay => credit_text.as_ref(),
+        deadsync_config::coin::CoinMode::Free => "FREE PLAY",
+        deadsync_config::coin::CoinMode::Pay => credit_text.as_ref(),
     };
     let footer_prompt = if state.runtime_view.can_start {
         chrome_text.press_start.as_ref()

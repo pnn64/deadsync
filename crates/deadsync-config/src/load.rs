@@ -14,12 +14,12 @@ use crate::theme::{
     MachineFlowOptions, ThemePresentationOptions, ThemeShortcutOptions, load_machine_flow_options,
     load_theme_presentation_options, load_theme_shortcut_options,
 };
+use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input::parse_keycode_to_key;
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,

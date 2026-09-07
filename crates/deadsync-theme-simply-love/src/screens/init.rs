@@ -1,14 +1,16 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::color;
+use crate::fonts::machine_font_key_for_text;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
@@ -518,7 +520,7 @@ fn push_loading_overlay(
     state: &State,
     actors: &mut Vec<Actor>,
     loading_elapsed_s: f32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) {
     let loading = state.loading.as_ref();
     let phase = loading

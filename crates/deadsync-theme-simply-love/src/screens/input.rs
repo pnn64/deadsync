@@ -1,10 +1,11 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::color;
+use crate::screens::Screen;
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction, with_keymap};
 use deadsync_profile::PlayerSide;

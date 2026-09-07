@@ -1,7 +1,6 @@
 use crate::act;
-use crate::assets::{self};
 use crate::color;
-use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
+use crate::views::ScoreInfo;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
     Actor, InlineU32Text, SharedActorFrameScratch, SizeSpec, TextContent,
@@ -13,6 +12,7 @@ use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
+use deadsync_score::ColumnJudgments;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use image::{Rgba, RgbaImage};
 use std::cell::RefCell;
@@ -121,7 +121,7 @@ fn pane3_solid_arrow_mask_key(texture_key: &str) -> Pane3SolidArrowMaskKey {
 
 fn pane3_solid_arrow_texture(texture_key: &str) -> Arc<str> {
     let key = pane3_solid_arrow_mask_key(texture_key);
-    if let Some(key) = assets::generated_texture_shared_key(key.as_str()) {
+    if let Some(key) = deadlib_assets::generated_texture_shared_key(key.as_str()) {
         return key;
     }
 
@@ -142,8 +142,8 @@ fn pane3_solid_arrow_texture(texture_key: &str) -> Arc<str> {
         };
         mask.put_pixel(x, y, out);
     }
-    assets::register_generated_texture(key.as_str(), mask, SamplerDesc::default());
-    assets::generated_texture_shared_key(key.as_str())
+    deadlib_assets::register_generated_texture(key.as_str(), mask, SamplerDesc::default());
+    deadlib_assets::generated_texture_shared_key(key.as_str())
         .expect("generated pane arrow texture was just registered")
 }
 
@@ -1208,11 +1208,11 @@ mod tests {
         FA_PLUS_ROWS, PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, STANDARD_ROWS,
         build_pane3_arrow_preview, column_row_counts, pane3_width, row_disabled,
     };
-    use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::actors::Actor;
     use deadsync_assets::noteskin::load_itg_default;
     use deadsync_noteskin::Style;
     use deadsync_profile as profile_data;
+    use deadsync_score::ColumnJudgments;
 
     #[test]
     fn static_column_rows_preserve_judgment_order_and_labels() {

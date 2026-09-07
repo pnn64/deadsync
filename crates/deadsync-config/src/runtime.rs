@@ -3,7 +3,6 @@ use crate::folders::AdditionalSongFolder;
 use crate::runtime_state::{InputRoutingConfig, RuntimeConfigStore};
 use crate::save::build_default_app_config_file;
 use deadlib_platform::coalesced_write::CoalescedFileWriter;
-use deadsync_audio_stream::AudioMixLevels;
 use log::info;
 use null_or_die::BiasCfg;
 use std::path::{Path, PathBuf};
@@ -86,11 +85,6 @@ pub fn snapshot_if_changed(generation: u64) -> Option<(u64, Config)> {
 #[inline(always)]
 pub fn input_routing_config() -> InputRoutingConfig {
     RUNTIME_CONFIG.input_routing_config()
-}
-
-#[must_use]
-pub fn audio_mix_levels() -> AudioMixLevels {
-    deadsync_audio_stream::audio_mix_levels()
 }
 
 pub fn machine_default_noteskin() -> String {

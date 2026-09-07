@@ -3,8 +3,8 @@ use crate::command::{
     Command, build_density_graph_mesh, command_timing_result, fallback_banner_key,
     log_command_timing_for_screen, spawn_online_grade_fetch,
 };
-use deadsync_assets::media_path_key;
-use deadsync_config::prelude as config;
+use deadlib_assets::media_path_key;
+use deadsync_config as config;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
@@ -139,7 +139,7 @@ impl App {
 
     fn set_dynamic_background(&mut self, path: Option<PathBuf>) {
         let started_at = self.background_video_started_at_sec();
-        let allow_video = config::get().show_video_backgrounds;
+        let allow_video = config::runtime::get().show_video_backgrounds;
         let Some(backend) = self.backend.as_mut() else {
             return;
         };

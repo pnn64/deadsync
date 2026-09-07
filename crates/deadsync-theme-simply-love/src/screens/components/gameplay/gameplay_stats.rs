@@ -1,7 +1,7 @@
 use crate::act;
-use crate::assets::i18n::{LookupKey, lookup_key, tr};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::{LookupKey, lookup_key, tr};
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
@@ -27,6 +27,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_display_mode_from_profile;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
+use deadsync_theme::FontRole;
 use deadsync_theme::color::{JudgmentColorRole, JudgmentPalette};
 use std::cell::RefCell;
 use std::sync::{Arc, LazyLock};
@@ -859,7 +860,7 @@ fn padded_runs(count: u32, digits: usize) -> (TextContent, TextContent) {
 }
 
 fn blue_window_label(ms: i32) -> Arc<str> {
-    use crate::assets::i18n::tr_fmt;
+    use crate::i18n::tr_fmt;
     Arc::from(tr_fmt(
         "Gameplay",
         "BlueWindowLabel",
@@ -914,7 +915,7 @@ fn count_text_slot(player: usize, row: usize, right_aligned: bool) -> u8 {
 }
 
 fn peak_nps_text(peak: f32) -> Arc<str> {
-    use crate::assets::i18n::tr_fmt;
+    use crate::i18n::tr_fmt;
     Arc::from(tr_fmt(
         "Gameplay",
         "PeakNps",

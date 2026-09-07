@@ -5,7 +5,6 @@ use deadsync_input::{
     load_keymap_from_ini_entries, set_keymap, updated_keymap_unique_gamepad,
     updated_keymap_unique_keyboard,
 };
-pub use deadsync_input::{editable_key_binding_slot_indices, protected_default_key_for_action};
 use winit::keyboard::KeyCode;
 
 #[must_use]

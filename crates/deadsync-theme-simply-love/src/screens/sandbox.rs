@@ -1,12 +1,14 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
+use crate::fonts::machine_font_key;
+use crate::screens::Screen;
 use crate::screens::components::shared::transitions;
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_theme::FontRole;
 use deadsync_theme::views::GamepadSystemView;
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use deadlib_platform::input::KeyCode;

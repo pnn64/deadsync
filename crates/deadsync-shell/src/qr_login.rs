@@ -1,4 +1,4 @@
-use deadsync_config::prelude::{ArrowCloudQrLoginWhen, GrooveStatsQrLoginWhen};
+use deadsync_config::theme::{ArrowCloudQrLoginWhen, GrooveStatsQrLoginWhen};
 use deadsync_online::{arrowcloud, groovestats};
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_theme_simply_love::{

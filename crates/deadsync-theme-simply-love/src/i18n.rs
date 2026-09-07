@@ -2,7 +2,7 @@ pub use crate::i18n_runtime::{
     LookupKey, current_locale, lookup_key, revision, tr, tr_fmt, tr_fmt_into,
 };
 
-pub use deadsync_assets::language::LanguageBundle;
+use deadsync_assets::language::LanguageBundle;
 
 /// Initialize render-time localization from a prepared asset bundle.
 pub fn init(bundle: LanguageBundle) {

@@ -36,8 +36,6 @@ mod select_style_flow;
 pub mod smx_assign;
 pub mod test_lights;
 
-pub use crate::SimplyLoveEffect as ThemeEffect;
-pub use crate::SimplyLoveInputResult as ThemeInputResult;
 pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};
 pub(crate) use flow::SimplyLoveScreen as Screen;
 pub use flow::{

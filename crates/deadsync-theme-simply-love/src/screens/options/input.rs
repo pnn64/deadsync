@@ -360,8 +360,8 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::Game => {
                 action = Some(options_config_effect(
                     crate::SimplyLoveOptionsConfigRequest::Game(match new_index {
-                        1 => deadsync_config::prelude::GameFlag::Pump,
-                        _ => deadsync_config::prelude::GameFlag::Dance,
+                        1 => deadsync_config::theme::GameFlag::Pump,
+                        _ => deadsync_config::theme::GameFlag::Dance,
                     }),
                 ));
             }
@@ -549,18 +549,18 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxDefaultPadConfig {
             action = Some(options_config_effect(
                 crate::SimplyLoveOptionsConfigRequest::SmxDefaultPadConfig(
-                    crate::config::SmxPadPreset::from_index(new_index),
+                    deadsync_smx::SmxPadPreset::from_index(new_index),
                 ),
             ));
         }
         if row.id == SubRowId::SmxBgPack {
             let pack = if new_index == 0 {
-                crate::config::SmxPackName::default()
+                config::options::SmxPackName::default()
             } else {
                 state
                     .smx_bg_pack_choices
                     .get(new_index - 1)
-                    .map(|s| crate::config::SmxPackName::parse(s))
+                    .map(|s| config::options::SmxPackName::parse(s))
                     .unwrap_or_default()
             };
             action = Some(options_config_effect(
@@ -569,12 +569,12 @@ pub(super) fn apply_submenu_choice_delta(
         }
         if row.id == SubRowId::SmxJudgePack {
             let pack = if new_index == 0 {
-                crate::config::SmxPackName::default()
+                config::options::SmxPackName::default()
             } else {
                 state
                     .smx_judge_pack_choices
                     .get(new_index - 1)
-                    .map(|s| crate::config::SmxPackName::parse(s))
+                    .map(|s| config::options::SmxPackName::parse(s))
                     .unwrap_or_default()
             };
             action = Some(options_config_effect(
@@ -856,13 +856,13 @@ pub(super) fn apply_submenu_choice_delta(
                 crate::SimplyLoveGameplayConfigRequest::CenterPlayerOneNotefield(new_index == 1)
             }
             SubRowId::NoteScrollClock => crate::SimplyLoveGameplayConfigRequest::NoteScrollClock(
-                config::NoteScrollClock::from_choice(new_index),
+                config::audio::NoteScrollClock::from_choice(new_index),
             ),
             SubRowId::AnimatedBanners => {
                 let mode = match new_index {
-                    0 => config::GameplayBannerMode::Static,
-                    1 => config::GameplayBannerMode::Once,
-                    _ => config::GameplayBannerMode::Loop,
+                    0 => config::theme::GameplayBannerMode::Static,
+                    1 => config::theme::GameplayBannerMode::Once,
+                    _ => config::theme::GameplayBannerMode::Loop,
                 };
                 crate::SimplyLoveGameplayConfigRequest::BannerMode(mode)
             }
@@ -888,9 +888,9 @@ pub(super) fn apply_submenu_choice_delta(
             }
             SubRowId::TournamentScoring => {
                 crate::SimplyLoveTournamentConfigRequest::ScoringSystem(if new_index == 1 {
-                    config::TournamentScoringSystem::Itg
+                    config::theme::TournamentScoringSystem::Itg
                 } else {
-                    config::TournamentScoringSystem::Ex
+                    config::theme::TournamentScoringSystem::Ex
                 })
             }
             SubRowId::TournamentStepStats => {
@@ -1813,7 +1813,7 @@ pub(super) fn activate_current_selection(
                         .get(row_idx)
                         .copied()
                         .unwrap_or(0)
-                        .min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+                        .min(config::theme::AUTO_SS_NUM_FLAGS.saturating_sub(1));
                     return toggle_auto_screenshot_option(state, choice_idx);
                 }
             }

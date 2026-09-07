@@ -6,7 +6,7 @@ pub(super) fn push_overlay(
     actors: &mut Vec<Actor>,
     state: &crate::screens::pack_sync::OverlayState,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) -> bool {
     shared_pack_sync::push_overlay(actors, state, active_color_index, machine_font)
 }

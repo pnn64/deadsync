@@ -1,4 +1,4 @@
-use deadsync_config::prelude::SrpgShopFolder;
+use deadsync_config::theme::SrpgShopFolder;
 use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
 use serde_json::{Map, Value};

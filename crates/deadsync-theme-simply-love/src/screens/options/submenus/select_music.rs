@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::screens::options) use crate::config::{
+pub(in crate::screens::options) use deadsync_config::options::{
     SELECT_MUSIC_CHART_INFO_NUM_CHOICES, SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES,
     auto_screenshot_bit_from_choice, auto_screenshot_cursor_index, bg_brightness_choice_index,
     music_wheel_scroll_speed_choice_index, music_wheel_scroll_speed_from_choice,
@@ -583,7 +583,7 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
 
 #[inline(always)]
 pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(
-    cfg: &config::Config,
+    cfg: &config::app_config::Config,
 ) -> u8 {
     scorebox_cycle_mask(
         cfg.select_music_scorebox_cycle_itg,
@@ -655,7 +655,7 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
         mask |= bit;
     }
     state.auto_screenshot_mask = mask;
-    let clamped = choice_idx.min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
+    let clamped = choice_idx.min(config::theme::AUTO_SS_NUM_FLAGS.saturating_sub(1));
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
@@ -676,7 +676,7 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
 
 #[inline(always)]
 pub(in crate::screens::options) const fn select_music_chart_info_mask_from_config(
-    cfg: &config::Config,
+    cfg: &config::app_config::Config,
 ) -> u8 {
     select_music_chart_info_mask(
         cfg.select_music_chart_info_peak_nps,
@@ -727,5 +727,5 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
 
 #[inline(always)]
 pub(in crate::screens::options) const fn select_music_chart_info_enabled_mask(state: &State) -> u8 {
-    config::select_music_chart_info_enabled_mask(state.chart_info_mask)
+    config::options::select_music_chart_info_enabled_mask(state.chart_info_mask)
 }

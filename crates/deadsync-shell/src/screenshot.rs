@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use deadlib_assets::AssetManager;
+use deadlib_assets::register_texture_dims;
 use deadlib_present::actors::Actor;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
-use deadsync_assets::register_texture_dims;
 use deadsync_assets::screenshot::{
     self as screenshot_data, ScreenshotPreviewTarget, ScreenshotRuntimeState, ScreenshotSaveError,
 };

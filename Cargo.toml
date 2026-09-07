@@ -72,13 +72,14 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1119"
+version = "0.5.1120"
 
 [[bin]]
 name = "generate_pseudo"
 path = "scripts/generate_pseudo.rs"
 
 [dependencies]
+deadlib-audio = { path = "crates/deadlib-audio" }
 deadlib-platform = { path = "crates/deadlib-platform" }
 deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }

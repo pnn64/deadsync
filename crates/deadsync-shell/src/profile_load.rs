@@ -1,4 +1,4 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::PlayMode;
 use deadsync_profile::compat as profile;
@@ -64,7 +64,9 @@ impl Service {
     }
 }
 
-pub(crate) const fn select_course_policy_view(config: &config::Config) -> SelectCoursePolicyView {
+pub(crate) const fn select_course_policy_view(
+    config: &config::app_config::Config,
+) -> SelectCoursePolicyView {
     SelectCoursePolicyView {
         show_random_courses: config.show_random_courses,
         show_most_played_courses: config.show_most_played_courses,
@@ -75,7 +77,9 @@ pub(crate) const fn select_course_policy_view(config: &config::Config) -> Select
     }
 }
 
-pub(crate) fn select_course_context_view(config: &config::Config) -> SelectCourseContextView {
+pub(crate) fn select_course_context_view(
+    config: &config::app_config::Config,
+) -> SelectCourseContextView {
     let session = profile::get_session_snapshot();
     SelectCourseContextView {
         policy: select_course_policy_view(config),
@@ -89,7 +93,7 @@ pub(crate) fn select_course_context_view(config: &config::Config) -> SelectCours
 }
 
 pub(crate) fn select_course_init_view() -> SelectCourseInitView {
-    let config = config::get();
+    let config = config::runtime::get();
     let context = select_course_context_view(&config);
     let translated_titles = config.translated_titles;
     let last_course = profile::get()

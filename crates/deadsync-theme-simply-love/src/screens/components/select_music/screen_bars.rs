@@ -1,12 +1,13 @@
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
+use crate::i18n::tr;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::space::screen_center_x;
+use deadsync_config::theme::MachineFont;
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::sync::Arc;
 

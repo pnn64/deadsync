@@ -1,4 +1,4 @@
-use deadsync_config::prelude::{CoinMode, CoinOptions};
+use deadsync_config::coin::{CoinMode, CoinOptions};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

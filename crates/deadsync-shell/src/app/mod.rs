@@ -95,6 +95,7 @@ use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
 };
 use deadlib_assets::AssetManager;
+use deadlib_assets::upload::TextureUploadBudget;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
 use deadlib_present::compose;
@@ -102,11 +103,11 @@ use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_assets::{TextureUploadBudget, media_cache};
+use deadsync_assets::media_cache;
+use deadsync_config as config;
 use deadsync_config::dirs::AppDirs;
-use deadsync_config::prelude::{
-    self as config, FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since,
-    stutter_severity,
+use deadsync_config::frame_pacing::{
+    FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since, stutter_severity,
 };
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
@@ -258,10 +259,10 @@ struct FramePolicy {
     smx: SmxFramePolicy,
     lights: LightingFramePolicy,
     theme_background_video: Option<&'static str>,
-    game_flag: config::GameFlag,
-    gameplay_banner_mode: config::GameplayBannerMode,
-    version_overlay_side: config::VersionOverlaySide,
-    log_level: config::LogLevel,
+    game_flag: config::theme::GameFlag,
+    gameplay_banner_mode: config::theme::GameplayBannerMode,
+    version_overlay_side: config::theme::VersionOverlaySide,
+    log_level: config::theme::LogLevel,
     auto_screenshot_eval: u8,
     machine_enable_heart_rate_monitors: bool,
     show_video_backgrounds: bool,
@@ -272,7 +273,7 @@ struct FramePolicy {
 }
 
 impl FramePolicy {
-    fn from_config(config: &config::Config) -> Self {
+    fn from_config(config: &config::app_config::Config) -> Self {
         let visual = simply_love_visual_policy(config);
         Self {
             visual,
@@ -299,7 +300,7 @@ impl FramePolicy {
 
 #[derive(Clone, Copy)]
 struct SmxFramePolicy {
-    default_pad_config: config::SmxPadPreset,
+    default_pad_config: deadsync_smx::SmxPadPreset,
     default_light_brightness: u8,
     input: bool,
     manages_pad_config: bool,
@@ -309,7 +310,7 @@ struct SmxFramePolicy {
 }
 
 impl SmxFramePolicy {
-    const fn from_config(config: &config::Config) -> Self {
+    const fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             default_pad_config: config.smx_default_pad_config,
             default_light_brightness: config.smx_default_light_brightness,
@@ -334,7 +335,7 @@ struct LightingFramePolicy {
 }
 
 impl LightingFramePolicy {
-    const fn from_config(config: &config::Config) -> Self {
+    const fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             driver: config.lights_driver,
             gameplay_pad_lights: config.lights_gameplay_pad_lights,
@@ -351,8 +352,8 @@ impl LightingFramePolicy {
 /// They are copied only when the SMX panel-light path actually resolves packs.
 #[derive(Clone, Copy)]
 struct SmxGifDefaults {
-    pad: config::SmxPackName,
-    judge: config::SmxPackName,
+    pad: config::options::SmxPackName,
+    judge: config::options::SmxPackName,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -373,7 +374,7 @@ struct SelectCourseFramePolicy {
 }
 
 impl SelectCourseFramePolicy {
-    fn from_config(config: &config::Config) -> Self {
+    fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             context: crate::profile_load::select_course_policy_view(config),
             wheel: MusicWheelDisplayPolicy::from_config(config),
@@ -436,19 +437,19 @@ impl SelectCourseRuntimeKey {
 }
 
 impl MusicWheelDisplayPolicy {
-    fn from_config(config: &config::Config) -> Self {
+    fn from_config(config: &config::app_config::Config) -> Self {
         let bar_color = config.machine_bar_color.resolve(config.visual_style);
         Self {
             translated_titles: config.translated_titles,
             song_bg_dimmed: config.visual_style.is_srpg()
-                || bar_color == config::MachineBarColor::Transparent,
-            section_bg_dimmed: bar_color == config::MachineBarColor::Transparent,
+                || bar_color == config::theme::MachineBarColor::Transparent,
+            section_bg_dimmed: bar_color == config::theme::MachineBarColor::Transparent,
         }
     }
 }
 
 impl SmxGifDefaults {
-    const fn from_config(config: &config::Config) -> Self {
+    const fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             pad: config.smx_pad_gifs_pack,
             judge: config.smx_judge_gifs_pack,
@@ -541,7 +542,7 @@ fn gameplay_offset_snapshot(gs: &gameplay::State) -> GameplayOffsetSnapshot {
         global_seconds: gs.global_offset_seconds(),
         initial_song_seconds: gs.initial_song_offset_seconds(),
         song_seconds: gs.song_offset_seconds(),
-        song_writable: config::song_path_is_writable(gs.song().simfile_path.as_path()),
+        song_writable: config::runtime::song_path_is_writable(gs.song().simfile_path.as_path()),
     }
 }
 
@@ -610,7 +611,7 @@ struct InputRoutePolicy {
 }
 
 impl InputRoutePolicy {
-    const fn from_config(cfg: &config::Config) -> Self {
+    const fn from_config(cfg: &config::app_config::Config) -> Self {
         Self {
             only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
             keyboard_features: cfg.keyboard_features,
@@ -620,7 +621,7 @@ impl InputRoutePolicy {
     }
 
     fn from_runtime() -> Self {
-        let cfg = config::input_routing_config();
+        let cfg = config::runtime::input_routing_config();
         Self {
             only_dedicated_menu_buttons: cfg.only_dedicated_menu_buttons,
             keyboard_features: cfg.keyboard_features,
@@ -676,7 +677,7 @@ struct GameplayInitFinish {
     payload_ms: f64,
     restart: bool,
     reused_payload: bool,
-    config: config::Config,
+    config: config::app_config::Config,
 }
 
 fn apply_course_summary_column_judgments(
@@ -730,7 +731,7 @@ fn evaluation_context_view(
 }
 
 const fn scorebox_pane_filter(
-    config: &config::Config,
+    config: &config::app_config::Config,
 ) -> deadsync_score::SelectMusicScoreboxFilter {
     deadsync_score::SelectMusicScoreboxFilter {
         itg: config.select_music_scorebox_cycle_itg,
@@ -740,22 +741,22 @@ const fn scorebox_pane_filter(
     }
 }
 
-fn simply_love_visual_policy(config: &config::Config) -> SimplyLoveVisualPolicyView {
-    let srpg10 =
-        config.visual_style.is_srpg() && matches!(config.srpg_variant, config::SrpgVariant::Srpg10);
+fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveVisualPolicyView {
+    let srpg10 = config.visual_style.is_srpg()
+        && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10);
     let background = match config.visual_style {
-        config::VisualStyle::Technique => VisualBackgroundView::Technique,
-        config::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
+        config::theme::VisualStyle::Technique => VisualBackgroundView::Technique,
+        config::theme::VisualStyle::Srpg9 => VisualBackgroundView::Srpg,
         _ => VisualBackgroundView::Tiled,
     };
     let screen_bar = match config.machine_bar_color.resolve(config.visual_style) {
-        config::MachineBarColor::Default => ScreenBarBackgroundView::Default,
-        config::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
+        config::theme::MachineBarColor::Default => ScreenBarBackgroundView::Default,
+        config::theme::MachineBarColor::Colored => ScreenBarBackgroundView::Colored(if srpg10 {
             color::srpg10_rgba(config.simply_love_color)
         } else {
             color::srpg9_rgba(config.simply_love_color)
         }),
-        config::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
+        config::theme::MachineBarColor::Transparent => ScreenBarBackgroundView::Transparent,
     };
 
     SimplyLoveVisualPolicyView {
@@ -770,11 +771,11 @@ fn simply_love_visual_policy(config: &config::Config) -> SimplyLoveVisualPolicyV
 
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
-    course_graph_stages: &[Vec<evaluation::CourseGraphStage>; MAX_PLAYERS],
+    course_graph_stages: &[Vec<deadsync_theme_simply_love::views::CourseGraphStage>; MAX_PLAYERS],
     active_color_index: i32,
     session_elapsed: f32,
     gameplay_elapsed: f32,
-    config: &config::Config,
+    config: &config::app_config::Config,
 ) -> evaluation::State {
     let profile = profile_data::runtime_music_profile_snapshot(
         config.enable_groovestats,
@@ -806,7 +807,7 @@ fn build_course_summary_eval_state(
 struct GameplayBannerSyncKey {
     screen: CurrentScreen,
     window_px: (u32, u32),
-    mode: config::GameplayBannerMode,
+    mode: config::theme::GameplayBannerMode,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -822,7 +823,7 @@ fn sync_gameplay_banners(
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
     state: &gameplay::State,
-    mode: config::GameplayBannerMode,
+    mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
         .into_iter()
@@ -846,7 +847,7 @@ fn prewarm_gameplay_banners(
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
     state: &gameplay::State,
-    mode: config::GameplayBannerMode,
+    mode: config::theme::GameplayBannerMode,
 ) {
     let visible_paths: SmallVec<[&Path; 2]> = gameplay::visible_banner_paths(state)
         .into_iter()
@@ -903,7 +904,7 @@ fn prewarm_gameplay_text_layout_cache(
     compose_scratch: &mut compose::ComposeScratch,
     actor_scratch: &mut Vec<Actor>,
     state: &mut gameplay::State,
-    config: &config::Config,
+    config: &config::app_config::Config,
     edit_measure_text: bool,
 ) {
     let started = Instant::now();
@@ -1069,7 +1070,7 @@ fn options_init_view(
     bookkeeping: crate::coin::Bookkeeping,
 ) -> OptionsInitView {
     OptionsInitView {
-        config: config::get(),
+        config: config::runtime::get(),
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
             deadsync_theme_simply_love::color::JUDGMENT_PRESET,
         ))
@@ -1454,7 +1455,7 @@ impl ScreensState {
 impl AppState {
     fn new(
         dirs: &AppDirs,
-        cfg: config::Config,
+        cfg: config::app_config::Config,
         profile_data: profile_data::Profile,
         overlay_mode: u8,
         color_index: i32,
@@ -1543,7 +1544,7 @@ pub struct App {
         (String, &'static str, &'static str),
         (
             i32,
-            config::DifficultyColorScheme,
+            deadsync_theme::color::DifficultyColorScheme,
             std::sync::Arc<deadsync_smx::gifs::FullPadAnim>,
         ),
     >,
@@ -1603,7 +1604,7 @@ pub struct App {
     /// Last immutable runtime configuration snapshot observed by the game
     /// thread. Broad screen view builders consume this canonical value; the
     /// live loop consumes `frame_policy` instead.
-    frame_config: config::Config,
+    frame_config: config::app_config::Config,
     frame_config_generation: u64,
     /// Compact frame representation rebuilt with `frame_config`, never derived
     /// again on an unchanged frame.
@@ -2035,7 +2036,7 @@ impl App {
     fn accepts_live_input(&self) -> bool {
         self.pending_gameplay_init.is_none()
             && !self.gameplay_preload_holds_frame()
-            && config::foreground_input_active(
+            && config::frame_pacing::foreground_input_active(
                 self.state.shell.frame_loop.window_focused(),
                 self.state.shell.frame_loop.surface_active(),
             )
@@ -2090,7 +2091,7 @@ impl App {
         let play_style = session.play_style;
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
-        let cfg = config::get();
+        let cfg = config::runtime::get();
         let mut options = player_options::init_for_gameplay(
             Arc::clone(&song),
             steps,
@@ -2473,7 +2474,7 @@ impl App {
             let defaults = self.smx_gif_defaults;
             profile::smx_gif_packs(defaults.pad, defaults.judge)
         } else {
-            let none = [config::SmxPackName::default(); 2];
+            let none = [config::options::SmxPackName::default(); 2];
             (none, none)
         };
         self.sync_smx_pad_gifs(
@@ -2504,7 +2505,7 @@ impl App {
         self.gameplay_lights.clear();
         self.lights.clear_blinks();
         self.smx_panels.deactivate();
-        let none = [config::SmxPackName::default(); 2];
+        let none = [config::options::SmxPackName::default(); 2];
         self.sync_smx_pad_gifs(false, false, false, theme_index, none, none);
         if self.smx_blackout_synced != [false; 2] {
             self.smx_blackout_synced = [false; 2];
@@ -2538,7 +2539,7 @@ impl App {
 
     fn evaluation_init_view(
         gameplay: &gameplay::State,
-        config: &config::Config,
+        config: &config::app_config::Config,
     ) -> EvaluationInitView {
         let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
@@ -3087,13 +3088,13 @@ impl App {
     }
 
     fn sync_main_menu_runtime_view(&mut self) {
-        let coin = config::get().coin;
+        let coin = config::runtime::get().coin;
         let view = crate::main_menu::runtime_view(self.state.coin.credits(coin));
         menu::sync_runtime_view(&mut self.state.screens.menu_state, view);
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
-        let options = config::get().coin;
+        let options = config::runtime::get().coin;
         let session = profile::get_session_snapshot();
         let premium_free = matches!(session.play_mode, profile_data::PlayMode::PremiumFree);
         let now = Instant::now();
@@ -3214,8 +3215,8 @@ impl App {
         smx_input: bool,
         idle_black: bool,
         theme_index: i32,
-        bg_packs: [config::SmxPackName; 2],
-        judge_packs: [config::SmxPackName; 2],
+        bg_packs: [config::options::SmxPackName; 2],
+        judge_packs: [config::options::SmxPackName; 2],
     ) {
         let frame_plan = smx_pad_gif_frame_plan(
             self.state.screens.current_screen,
@@ -3495,7 +3496,7 @@ impl App {
             role,
             difficulty,
         );
-        let difficulty_color_scheme = config::get().difficulty_color_scheme;
+        let difficulty_color_scheme = config::runtime::get().difficulty_color_scheme;
         if let Some((cached_theme, cached_scheme, cached_anim)) =
             self.smx_difficulty_tint_cache.get(&cache_key)
             && *cached_theme == theme_index
@@ -3660,7 +3661,7 @@ impl App {
         // frames read one generation atomic; a mutation pays the full snapshot
         // copy and policy rebuild once, attributed to maintenance.
         if let Some((generation, config)) =
-            config::snapshot_if_changed(self.frame_config_generation)
+            config::runtime::snapshot_if_changed(self.frame_config_generation)
         {
             self.lights.set_driver(
                 config.lights_driver,
@@ -3806,7 +3807,7 @@ impl App {
                         | CurrentScreen::SelectMusic
                 )
                 .then(crate::smx_config::smx_assignment_view);
-                let coin_options = config::get().coin;
+                let coin_options = config::runtime::get().coin;
                 let premium_seconds_left = matches!(
                     profile::get_session_play_mode(),
                     profile_data::PlayMode::PremiumFree
@@ -4413,7 +4414,7 @@ impl App {
         overlay_mode: u8,
         color_index: i32,
         config_generation: u64,
-        config: config::Config,
+        config: config::app_config::Config,
         profile_data: profile_data::Profile,
         mut audio: deadsync_audio_stream::AudioControl,
         music_clock: deadsync_audio_stream::MusicClock,
@@ -4748,7 +4749,7 @@ impl App {
                     let (show_groovestats_login, show_arrowcloud_login) = if fast_switch {
                         (false, false)
                     } else {
-                        let cfg = config::get();
+                        let cfg = config::runtime::get();
                         (
                             crate::qr_login::should_auto_show_groovestats(
                                 cfg.groovestats_qr_login_when,
@@ -5119,7 +5120,7 @@ impl App {
                             }
                         }
                         SimplyLoveContentRequest::DeleteSong { simfile_path } => {
-                            let config = config::get();
+                            let config = config::runtime::get();
                             let result = if config.allow_song_deletion {
                                 let songs_root = self.dirs.songs_dir();
                                 let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
@@ -5163,7 +5164,7 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::ShowOverlay(mode)) => {
                     self.state.shell.set_overlay_mode(mode);
-                    config::update_show_stats_mode(mode);
+                    config::runtime_update::update_show_stats_mode(mode);
                     options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                     Vec::new()
                 }
@@ -5173,7 +5174,7 @@ impl App {
                     if let Some(window) = &self.window {
                         window.set_cursor_visible(!hidden);
                     }
-                    config::update_hide_mouse_cursor(hidden);
+                    config::runtime_update::update_hide_mouse_cursor(hidden);
                     options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
                     Vec::new()
                 }
@@ -5187,7 +5188,12 @@ impl App {
                     add_width,
                     add_height,
                 }) => {
-                    config::update_overscan(translate_x, translate_y, add_width, add_height);
+                    config::runtime_update::update_overscan(
+                        translate_x,
+                        translate_y,
+                        add_width,
+                        add_height,
+                    );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::Advanced(request)) => {
@@ -5609,7 +5615,7 @@ impl App {
     ) -> sync_offset::SongOffsetSaveSummary {
         let summary = sync_offset::save_song_offset_changes(
             changes,
-            config::song_path_is_writable,
+            config::runtime::song_path_is_writable,
             |simfile_path| {
                 let updated_song = song_loading::reload_song_in_cache(simfile_path)?;
                 if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
@@ -5699,7 +5705,7 @@ impl App {
             if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
                 let targets = gameplay_offset_save_targets(gameplay_offset_snapshot(gs));
                 if let Some(global_offset) = targets.global_seconds {
-                    config::update_global_offset(global_offset);
+                    config::runtime_update::update_global_offset(global_offset);
                 }
                 if let Some(delta) = targets.song_delta_seconds {
                     song_offset_change = Some((gs.song().simfile_path.clone(), delta));
@@ -5750,7 +5756,7 @@ impl App {
             ev.pressed,
             screens::input::menu_action(
                 ev.action,
-                config::get().game_flag,
+                config::runtime::get().game_flag,
                 self.state.play_input_policy.only_dedicated_menu_buttons,
             ),
             self.state.play_input_policy.only_dedicated_menu_buttons,
@@ -5813,7 +5819,7 @@ impl App {
             .course_run
             .as_ref()
             .is_some_and(|course| {
-                course.course_type == deadsync_theme_simply_love::views::CourseTypeView::Endless
+                course.course_type == deadsync_theme::views::CourseTypeView::Endless
                     && course.next_stage_index == course.stages.len()
             });
         if reroll_endless {
@@ -6232,7 +6238,7 @@ impl App {
         stage_summary
     }
 
-    fn finalize_entered_evaluation(&mut self, config: &config::Config) {
+    fn finalize_entered_evaluation(&mut self, config: &config::app_config::Config) {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
@@ -6491,7 +6497,7 @@ impl App {
             return false;
         };
 
-        let coin = config::get().coin;
+        let coin = config::runtime::get().coin;
         if !self.state.coin.join_player(coin) {
             self.state
                 .shell
@@ -6509,7 +6515,7 @@ impl App {
             profile_data::PlayStyle::Versus
         };
         profile::set_session_play_style(joined_style);
-        let show_select_profile = config::get().machine_show_select_profile;
+        let show_select_profile = config::runtime::get().machine_show_select_profile;
         let join_profile = if show_select_profile {
             profile_data::ActiveProfile::Guest
         } else {
@@ -6598,7 +6604,7 @@ impl App {
                 show_video_backgrounds,
             )
             .cloned();
-        state.current_background_key = path.as_deref().map(deadsync_assets::media_path_key);
+        state.current_background_key = path.as_deref().map(deadlib_assets::media_path_key);
         state.current_background_path.clone_from(&path);
         state.background_allow_video = show_video_backgrounds;
         state.background_path_dirty = false;
@@ -7860,7 +7866,7 @@ impl App {
                         num_players,
                     );
                     let anchor = self.state.shell.frame_stats.cycle_anchor(two_player);
-                    config::update_frame_stats_overlay_anchor(anchor.to_key());
+                    config::runtime_update::update_frame_stats_overlay_anchor(anchor.to_key());
                     debug!("Frame stats overlay corner {anchor:?}");
                 }
             } else if matches!(
@@ -7870,7 +7876,7 @@ impl App {
                 // Ctrl+Alt+F3: switch the overlay presentation (detailed ↔ minimal).
                 if !raw_key.repeat && self.state.shell.frame_stats.enabled() {
                     let style = self.state.shell.frame_stats.toggle_style();
-                    config::update_frame_stats_overlay_style(style.label());
+                    config::runtime_update::update_frame_stats_overlay_style(style.label());
                     debug!("Frame stats overlay style {}", style.label());
                 }
             } else if matches!(app_raw_shortcut, Some(AppRawKeyShortcut::FrameStatsToggle)) {
@@ -7886,7 +7892,7 @@ impl App {
             } else if matches!(app_raw_shortcut, Some(AppRawKeyShortcut::CycleOverlayMode)) {
                 let mode = self.state.shell.cycle_overlay_mode();
                 debug!("Overlay {}", self.state.shell.overlay_mode.label());
-                config::update_show_stats_mode(mode);
+                config::runtime_update::update_show_stats_mode(mode);
                 options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
             }
         }
@@ -7894,8 +7900,8 @@ impl App {
             app_raw_shortcut,
             Some(AppRawKeyShortcut::ToggleTranslatedTitles)
         ) {
-            let new_value = !config::get().translated_titles;
-            config::update_translated_titles(new_value);
+            let new_value = !config::runtime::get().translated_titles;
+            config::runtime_update::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
             self.ui_sfx
                 .play(&mut self.audio, "assets/sounds/change.ogg");
@@ -8049,7 +8055,7 @@ impl App {
         prev: CurrentScreen,
         target: CurrentScreen,
     ) -> Vec<Command> {
-        let config = config::get();
+        let config = config::runtime::get();
         let player_options = if prev == CurrentScreen::PlayerOptions {
             let session = profile::get_session_snapshot();
             self.state
@@ -8129,8 +8135,8 @@ impl App {
         if !self.state.session.begin_play_session(Instant::now()) {
             return;
         }
-        let coin = config::get().coin;
-        if matches!(coin.mode, config::CoinMode::Home) {
+        let coin = config::runtime::get().coin;
+        if matches!(coin.mode, config::coin::CoinMode::Home) {
             let _ = self.state.coin.begin_play(coin);
         }
         self.pad_config_sync.reset_signatures();
@@ -8190,7 +8196,7 @@ impl App {
         } else if target == CurrentScreen::ConfigurePads {
             screens::pad_config::set_fsr_enabled(
                 &mut self.state.screens.pad_config_state,
-                config::get().use_fsrs,
+                config::runtime::get().use_fsrs,
             );
         } else if target == CurrentScreen::ManageLocalProfiles {
             let color_index = self.state.screens.options_state.active_color_index;
@@ -8205,7 +8211,7 @@ impl App {
             self.state.screens.mappings_state = mappings::init(crate::mappings::runtime_view());
             self.state.screens.mappings_state.active_color_index = color_index;
         } else if target == CurrentScreen::Input {
-            let config = config::get();
+            let config = config::runtime::get();
             screens::input::on_enter(
                 &mut self.state.screens.input_state,
                 config.three_key_navigation && config.only_dedicated_menu_buttons,
@@ -8521,7 +8527,7 @@ impl App {
                 let resolved_steps_index = chart_plan.resolved_steps_index;
                 let last_played_idx = profile_data::player_side_index(player_side);
 
-                let cfg = config::get();
+                let cfg = config::runtime::get();
                 self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
@@ -8792,7 +8798,7 @@ impl App {
                 course_display_carry = Some(gameplay_results.course_display_carry());
                 let color_idx = gameplay_results.active_color_index();
                 Self::execute_evaluation_score_runtime(&gameplay_results);
-                let config = config::get();
+                let config = config::runtime::get();
                 let init_view = Self::evaluation_init_view(&gameplay_results, &config);
                 let mut eval_state = evaluation::init(Some(gameplay_results), init_view);
                 eval_state.active_color_index = color_idx;
@@ -8849,7 +8855,7 @@ impl App {
                 let last_played_idx = profile_data::player_side_index(player_side);
 
                 let gameplay_entry_started = Instant::now();
-                let cfg = config::get();
+                let cfg = config::runtime::get();
                 self.state.play_input_policy = InputRoutePolicy::from_config(&cfg);
                 let global_offset_seconds = cfg.global_offset_seconds;
                 let pack_sync_offset_seconds =
@@ -9045,9 +9051,7 @@ impl App {
                     self.state.session.course_run.as_ref()
                 {
                     let stage_num = course.next_stage_index.saturating_add(1);
-                    if course.course_type
-                        == deadsync_theme_simply_love::views::CourseTypeView::Endless
-                    {
+                    if course.course_type == deadsync_theme::views::CourseTypeView::Endless {
                         Arc::from(format!("STAGE {stage_num}"))
                     } else {
                         let total = course.stages.len().max(1);
@@ -9151,7 +9155,7 @@ impl App {
         }
 
         if target == CurrentScreen::Evaluation {
-            let config = config::get();
+            let config = config::runtime::get();
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                 crate::gameplay_runtime::exit(gs);
             }
@@ -9224,7 +9228,7 @@ impl App {
                 .active_color_index = color_idx;
 
             let display_stages = self
-                .post_select_display_stages(config::get().show_course_individual_scores)
+                .post_select_display_stages(config::runtime::get().show_course_individual_scores)
                 .into_owned();
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
@@ -9253,7 +9257,7 @@ impl App {
                 _ => self.state.screens.initials_state.active_color_index,
             };
             let display_stages = self
-                .post_select_display_stages(config::get().show_course_individual_scores)
+                .post_select_display_stages(config::runtime::get().show_course_individual_scores)
                 .into_owned();
             self.state.screens.initials_state =
                 initials::init(crate::post_song::initials_runtime_view(&display_stages));
@@ -9452,7 +9456,7 @@ impl App {
                 session_elapsed,
                 gameplay_elapsed,
             );
-            let coin_options = config::get().coin;
+            let coin_options = config::runtime::get().coin;
             let premium_seconds_left = matches!(
                 profile::get_session_play_mode(),
                 profile_data::PlayMode::PremiumFree
@@ -9913,7 +9917,7 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        config::flush_pending_saves();
+        config::runtime::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
             self.dynamic_media
                 .destroy_assets(&mut self.asset_manager, backend);
@@ -9959,7 +9963,7 @@ pub fn run(
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (config_generation, config) = config::snapshot();
+    let (config_generation, config) = config::runtime::snapshot();
     let show_stats_mode = config.show_stats_mode.min(2);
     let color_index = config.simply_love_color;
     let profile_data = profile::get();
@@ -9983,7 +9987,7 @@ pub fn run(
     // input (e.g. Win32 RawInput RIDEV_INPUTSINK, evdev, IOHID) from being
     // routed into the game while it is launched into the background.
     app.sync_gameplay_input_capture();
-    let (smx_p1_serial, smx_p2_serial) = config::smx_pad_assignment();
+    let (smx_p1_serial, smx_p2_serial) = config::runtime::smx_pad_assignment();
     if app.live_case.is_none() {
         launch_input_backends(
             proxy,
@@ -10173,14 +10177,15 @@ mod tests {
     #[test]
     fn frame_policy_stays_compact() {
         assert!(
-            std::mem::size_of::<FramePolicy>() * 2 < std::mem::size_of::<config::Config>(),
+            std::mem::size_of::<FramePolicy>() * 2
+                < std::mem::size_of::<config::app_config::Config>(),
             "frame policy must stay less than half the full config size"
         );
     }
 
     #[test]
     fn frame_policy_compiles_live_config_values() {
-        let config = config::Config {
+        let config = config::app_config::Config {
             smx_input: true,
             smx_panel_lights: true,
             show_video_backgrounds: false,
@@ -10201,7 +10206,7 @@ mod tests {
 
     #[test]
     fn select_course_policy_compiles_only_runtime_inputs() {
-        let config = config::Config {
+        let config = config::app_config::Config {
             show_random_courses: false,
             show_most_played_courses: false,
             music_wheel_switch_speed: 23,
@@ -10244,7 +10249,7 @@ mod tests {
         assert_eq!(wheel_banner_path(None), None);
     }
 
-    fn test_evaluation_context(config: &config::Config) -> EvaluationContextView {
+    fn test_evaluation_context(config: &config::app_config::Config) -> EvaluationContextView {
         let profile = profile_data::runtime_music_profile_snapshot(
             config.enable_groovestats,
             config.enable_arrowcloud,
@@ -10258,9 +10263,9 @@ mod tests {
 
     #[test]
     fn visual_policy_resolves_runtime_style_and_bar_choices() {
-        let mut config = config::Config {
-            visual_style: config::VisualStyle::Technique,
-            machine_bar_color: config::MachineBarColor::Transparent,
+        let mut config = config::app_config::Config {
+            visual_style: config::theme::VisualStyle::Technique,
+            machine_bar_color: config::theme::MachineBarColor::Transparent,
             ..Default::default()
         };
         let technique = simply_love_visual_policy(&config);
@@ -10268,11 +10273,11 @@ mod tests {
         assert_eq!(technique.screen_bar, ScreenBarBackgroundView::Transparent);
         assert!(!technique.srpg10_tint);
 
-        config.visual_style = config::VisualStyle::Srpg9;
-        config.srpg_variant = config::SrpgVariant::Srpg10;
-        config.machine_bar_color = config::MachineBarColor::Colored;
+        config.visual_style = config::theme::VisualStyle::Srpg9;
+        config.srpg_variant = config::theme::SrpgVariant::Srpg10;
+        config.machine_bar_color = config::theme::MachineBarColor::Colored;
         config.simply_love_color = 4;
-        config.machine_font = config::MachineFont::Mega;
+        config.machine_font = config::theme::MachineFont::Mega;
         let srpg10 = simply_love_visual_policy(&config);
         assert_eq!(srpg10.background, VisualBackgroundView::Srpg);
         assert_eq!(
@@ -10285,7 +10290,7 @@ mod tests {
             ScreenBarBackgroundView::Colored(color::srpg10_rgba(4))
         );
         assert!(srpg10.srpg10_tint);
-        assert_eq!(srpg10.machine_font, config::MachineFont::Mega);
+        assert_eq!(srpg10.machine_font, config::theme::MachineFont::Mega);
         assert_eq!(
             srpg10.title_logo_texture_key,
             Some(visual_styles::SRPG10_TITLE_LOGO)
@@ -10464,8 +10469,8 @@ mod tests {
         hash: &str,
         speed_mod: ScrollSpeedSetting,
         music_rate: f32,
-    ) -> evaluation::ScoreInfo {
-        evaluation::ScoreInfo {
+    ) -> deadsync_theme_simply_love::views::ScoreInfo {
+        deadsync_theme_simply_love::views::ScoreInfo {
             song: song.clone(),
             chart: Arc::new(test_chart(hash)),
             course_graph_stages: Vec::new(),
@@ -10671,7 +10676,7 @@ mod tests {
             course_difficulty_name: "Hard".to_string(),
             course_meter: Some(12),
             course_stepchart_label: "Hard".to_string(),
-            course_type: deadsync_theme_simply_love::views::CourseTypeView::Nonstop,
+            course_type: deadsync_theme::views::CourseTypeView::Nonstop,
             lives: -1,
             song_stub: song_a.clone(),
             stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
@@ -10718,7 +10723,7 @@ mod tests {
         crate::tests::init_paths();
         let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
         let side = profile_data::PlayerSide::P2;
-        let config = config::Config::default();
+        let config = config::app_config::Config::default();
         let mut course_score = std::array::from_fn(|_| None);
         course_score[0] = Some(test_score_info(
             song.clone(),
@@ -10739,7 +10744,7 @@ mod tests {
             1.0,
         );
         first_p2.column_judgments = vec![
-            evaluation::ColumnJudgments {
+            deadsync_score::ColumnJudgments {
                 w0: 1,
                 w1: 2,
                 early_w1: 1,
@@ -10747,7 +10752,7 @@ mod tests {
                 held_miss: 1,
                 ..Default::default()
             },
-            evaluation::ColumnJudgments {
+            deadsync_score::ColumnJudgments {
                 w2: 3,
                 miss: 1,
                 early_w2: 2,
@@ -10764,7 +10769,7 @@ mod tests {
             ScrollSpeedSetting::default(),
             1.0,
         );
-        ignored_p1.column_judgments = vec![evaluation::ColumnJudgments {
+        ignored_p1.column_judgments = vec![deadsync_score::ColumnJudgments {
             w4: 1000,
             ..Default::default()
         }]
@@ -10777,7 +10782,7 @@ mod tests {
         let mut second_p2 =
             test_score_info(song, side, "stage-b", ScrollSpeedSetting::default(), 1.0);
         second_p2.column_judgments = vec![
-            evaluation::ColumnJudgments {
+            deadsync_score::ColumnJudgments {
                 w0: 4,
                 w3: 5,
                 early_w3: 1,
@@ -10785,8 +10790,8 @@ mod tests {
                 held_miss: 2,
                 ..Default::default()
             },
-            evaluation::ColumnJudgments::default(),
-            evaluation::ColumnJudgments {
+            deadsync_score::ColumnJudgments::default(),
+            deadsync_score::ColumnJudgments {
                 w5: 6,
                 early_w5: 3,
                 early_total_w5: 4,

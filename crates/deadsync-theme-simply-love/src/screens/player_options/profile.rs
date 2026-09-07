@@ -1,7 +1,8 @@
 use super::*;
-use crate::assets::{FontRole, machine_font_key};
+use crate::fonts::machine_font_key;
 use deadsync_profile::NoCmodAlternative;
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_theme::FontRole;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpeedModType {
@@ -538,7 +539,7 @@ pub(super) fn scaled_speed_helper_bpm(
 pub(super) fn measure_header_text_width(
     asset_manager: &AssetManager,
     text: &str,
-    machine_font: crate::config::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
 ) -> f32 {
     let mut out_w = 1.0_f32;
     asset_manager.with_fonts(|all_fonts| {

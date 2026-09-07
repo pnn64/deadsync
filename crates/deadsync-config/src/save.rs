@@ -677,10 +677,25 @@ const fn theme_shortcut_tokens<'a>(
 mod tests {
     use super::*;
     use crate::ini::SimpleIni;
+    use deadlib_render_core::BackendType;
 
     #[test]
     fn max_fps_off_round_trips() {
-        for &(video_renderer, _) in deadlib_render_core::BACKEND_TYPE_CHOICES {
+        for video_renderer in [
+            BackendType::OpenGL,
+            BackendType::OpenGLWgpu,
+            BackendType::Software,
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendType::Vulkan,
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendType::VulkanWgpu,
+            #[cfg(target_os = "macos")]
+            BackendType::Metal,
+            #[cfg(target_os = "macos")]
+            BackendType::MetalWgpu,
+            #[cfg(target_os = "windows")]
+            BackendType::DirectX,
+        ] {
             for max_fps in [0, 5, 144] {
                 let mut cfg = Config {
                     video_renderer,

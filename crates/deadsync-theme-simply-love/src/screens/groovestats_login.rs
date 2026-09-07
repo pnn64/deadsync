@@ -14,13 +14,14 @@
 //! The visual state machine consumes shell-prepared slots and events; shell
 //! owns workers, cancellation, and credential persistence.
 
+use crate::SimplyLoveEffect as ThemeEffect;
+use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
     QrLoginUiState, append_dismiss_effects, apply_events as apply_qr_events, create_login_ui,
     push_qr_login_overlay_actors,
 };
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
 

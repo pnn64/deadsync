@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::screens::options) use crate::config::{
+pub(in crate::screens::options) use deadsync_config::options::{
     language_choice_index, language_flag_from_choice, translated_titles_choice_index,
     translated_titles_from_choice,
 };

@@ -8,7 +8,7 @@ use deadsync_theme_simply_love::views::{
 use std::str::FromStr;
 
 pub fn view() -> ManageLocalProfilesView {
-    let config = deadsync_config::prelude::get();
+    let config = deadsync_config::runtime::get();
     ManageLocalProfilesView {
         profiles: profile::scan_local_profiles()
             .into_iter()
@@ -26,7 +26,7 @@ pub fn view() -> ManageLocalProfilesView {
 }
 
 pub fn picker_view() -> ProfilePickerView {
-    let config = deadsync_config::prelude::get();
+    let config = deadsync_config::runtime::get();
     let default_options = profile::new_profile_player_options();
     let guest_options = profile::guest_player_options();
     let default_speed_mod = default_options.scroll_speed.to_string();
@@ -42,7 +42,7 @@ pub fn picker_view() -> ProfilePickerView {
             let mut noteskin = default_options.noteskin.clone();
             let mut judgment = default_options.judgment_graphic.clone();
             let ini_path = profile::local_profile_dir_for_id(&summary.id).join("profile.ini");
-            let mut ini = deadsync_config::prelude::SimpleIni::new();
+            let mut ini = deadsync_config::ini::SimpleIni::new();
             if ini.load(&ini_path).is_ok() {
                 let get_player_option = |key: &str| ini.get(player_options_section, key);
                 if let Some(raw) = get_player_option("ScrollSpeed") {

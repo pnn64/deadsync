@@ -14,12 +14,12 @@ use crate::theme::{
     SrpgVariant, SyncGraphMode, ThemeFlag, ThemePresentationOptions, TournamentModeOptions,
     VersionOverlaySide, VisualStyle,
 };
+use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
 };

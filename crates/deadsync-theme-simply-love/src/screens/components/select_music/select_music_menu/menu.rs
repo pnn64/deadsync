@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayerSide;
+use deadsync_theme::FontRole;
 
 use super::{Action, Item, scroll_anim_dir, set_text_clip_rect};
 
