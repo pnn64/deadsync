@@ -104,7 +104,8 @@ pub struct WasapiOutputPrep {
     samples_per_frame: usize,
     sample_format: WasapiSampleFormat,
     mode: WasapiBackendMode,
-    preferred_buffer_frames: Option<u32>,
+    // HNS for exclusive and shared modes; frames for shared low-latency mode.
+    buffer_size: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -282,12 +283,12 @@ fn resolve_format_for_mode(
     preferred_buffer_frames: Option<u32>,
     mode: WasapiBackendMode,
     mix_format: &[u8],
-) -> Result<Vec<u8>, String> {
+) -> Result<(Vec<u8>, u32), String> {
     let mut chosen_format = mix_format.to_vec();
 
     info!("Resolving WASAPI format for device '{device_name}' with mode '{mode:?}'");
 
-    let resolve = |candidate: &[u8]| -> Result<Vec<u8>, String> {
+    let resolve = |candidate: &[u8]| -> Result<(Vec<u8>, u32), String> {
         match mode {
             WasapiBackendMode::Shared => {
                 shared::validate(audio_client, candidate, preferred_buffer_frames)
@@ -295,9 +296,12 @@ fn resolve_format_for_mode(
             WasapiBackendMode::SharedLowLatency => {
                 shared_low_latency::validate(audio_client, candidate, preferred_buffer_frames)
             }
-            WasapiBackendMode::Exclusive => {
-                exclusive::validate(audio_client, candidate, device_name)
-            }
+            WasapiBackendMode::Exclusive => exclusive::validate(
+                audio_client,
+                candidate,
+                device_name,
+                preferred_buffer_frames,
+            ),
         }
     };
 
@@ -305,12 +309,12 @@ fn resolve_format_for_mode(
     if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
         set_waveformat_sample_rate(&mut chosen_format, rate_hz);
         match resolve(&chosen_format) {
-            Ok(format) => return Ok(format),
+            Ok(format_and_buffer_size) => return Ok(format_and_buffer_size),
             Err(err) => {
                 warn!(
                     "WASAPI {mode:?} sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
                 );
-                return Ok(mix_format.to_vec());
+                return resolve(mix_format);
             }
         }
     }
@@ -329,7 +333,7 @@ pub fn prepare(
     let device = open_output_device(device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
     let mix_format = get_mix_format_bytes(&audio_client)?;
-    let chosen_format = resolve_format_for_mode(
+    let (chosen_format, buffer_size) = resolve_format_for_mode(
         &audio_client,
         &device_name,
         requested_rate_hz,
@@ -365,7 +369,7 @@ pub fn prepare(
         samples_per_frame,
         sample_format,
         mode,
-        preferred_buffer_frames,
+        buffer_size,
     })
 }
 
@@ -756,12 +760,7 @@ fn frames_to_hns(frames: u32, sample_rate_hz: u32) -> i64 {
         return 0;
     }
 
-    // we need to round up to the nearest whole number of reference time units,
-    // otherwise our buffer might be fractionally too short and crash the IAudioClient.
-    let numerator = (frames as u64).saturating_mul(10_000_000);
-    numerator
-        .div_ceil(sample_rate_hz as u64)
-        .min(i64::MAX as u64) as i64
+    ((frames as u64).saturating_mul(10_000_000) / sample_rate_hz as u64).min(i64::MAX as u64) as i64
 }
 
 #[inline(always)]
@@ -804,13 +803,13 @@ fn initialize_client(
 ) -> Result<(), String> {
     match prep.mode {
         WasapiBackendMode::SharedLowLatency => {
-            shared_low_latency::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+            shared_low_latency::initialize(audio_client, &prep.format, prep.buffer_size)
         }
         WasapiBackendMode::Shared => {
-            shared::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+            shared::initialize(audio_client, &prep.format, prep.buffer_size)
         }
         WasapiBackendMode::Exclusive => {
-            exclusive::initialize(audio_client, &prep.format, prep.preferred_buffer_frames)
+            exclusive::initialize(audio_client, &prep.format, prep.buffer_size)
         }
     }
 }

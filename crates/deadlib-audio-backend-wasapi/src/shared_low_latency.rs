@@ -5,16 +5,41 @@ pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     preferred_buffer_frames: Option<u32>,
-) -> Result<Vec<u8>, String> {
-    initialize(audio_client, format, preferred_buffer_frames)?;
-    Ok(format.to_vec())
+) -> Result<(Vec<u8>, u32), String> {
+    let buffer_size = select_buffer_size(audio_client, format, preferred_buffer_frames)?;
+    initialize(audio_client, format, buffer_size)?;
+    Ok((format.to_vec(), buffer_size))
 }
 
 pub(super) fn initialize(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
-    preferred_buffer_frames: Option<u32>,
+    buffer_size: u32,
 ) -> Result<(), String> {
+    let client3 = audio_client
+        .cast::<Audio::IAudioClient3>()
+        .map_err(|e| format!("IAudioClient3 interface not available: {e}"))?;
+
+    // SAFETY: `client3` is live and `pformat` points to a valid waveform buffer.
+    unsafe {
+        client3
+            .InitializeSharedAudioStream(
+                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                buffer_size,
+                waveformat(format),
+                None,
+            )
+            .map_err(|e| format!("IAudioClient3::InitializeSharedAudioStream failed: {e}"))?;
+    }
+
+    Ok(())
+}
+
+fn select_buffer_size(
+    audio_client: &Audio::IAudioClient,
+    format: &[u8],
+    preferred_buffer_frames: Option<u32>,
+) -> Result<u32, String> {
     let client3 = audio_client
         .cast::<Audio::IAudioClient3>()
         .map_err(|e| format!("IAudioClient3 interface not available: {e}"))?;
@@ -38,11 +63,11 @@ pub(super) fn initialize(
 
     let mut period_frames = preferred_buffer_frames
         .filter(|frames| *frames > 0)
-        .unwrap_or(default_period_frames)
+        .unwrap_or(min_period_frames)
         .clamp(min_period_frames, max_period_frames);
 
     // Ensure the period frames align with the fundamental period.
-    if fundamental_period_frames > 0 {
+    if fundamental_period_frames > 0 && period_frames != min_period_frames {
         period_frames = period_frames
             .next_multiple_of(fundamental_period_frames)
             .min(max_period_frames);
@@ -58,17 +83,5 @@ pub(super) fn initialize(
         chosen {period_frames}"
     );
 
-    // SAFETY: `client3` is live and `pformat` points to a valid waveform buffer.
-    unsafe {
-        client3
-            .InitializeSharedAudioStream(
-                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                period_frames,
-                waveformat(format),
-                None,
-            )
-            .map_err(|e| format!("IAudioClient3::InitializeSharedAudioStream failed: {e}"))?;
-    }
-
-    Ok(())
+    Ok(period_frames)
 }

@@ -4,29 +4,20 @@ pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     preferred_buffer_frames: Option<u32>,
-) -> Result<Vec<u8>, String> {
-    initialize(audio_client, format, preferred_buffer_frames)?;
-    Ok(format.to_vec())
-}
-
-pub(super) fn initialize(
-    audio_client: &Audio::IAudioClient,
-    format: &[u8],
-    preferred_buffer_frames: Option<u32>,
-) -> Result<(), String> {
+) -> Result<(Vec<u8>, u32), String> {
     let (default_period_hns, min_period_hns) = query_device_periods_hns(audio_client)?;
     let sample_rate = waveformat(format).nSamplesPerSec;
-    let buffer_duration_hns = preferred_buffer_frames
+    let buffer_size = preferred_buffer_frames
         .filter(|frames| *frames > 0)
         .map_or_else(
             || default_period_hns.max(0),
             |frames| frames_to_hns(frames, sample_rate),
         );
+    let buffer_size = buffer_size.min(u32::MAX as i64) as u32;
 
     let min_period_frames = hns_to_frames(min_period_hns, sample_rate);
     let default_period_frames = hns_to_frames(default_period_hns, sample_rate);
-    let buffer_duration_frames = hns_to_frames(buffer_duration_hns, sample_rate);
-
+    let buffer_duration_frames = hns_to_frames(i64::from(buffer_size), sample_rate);
     log::info!(
         "WASAPI shared periods: \
         min {min_period_frames}, \
@@ -35,6 +26,15 @@ pub(super) fn initialize(
         chosen {buffer_duration_frames}"
     );
 
+    initialize(audio_client, format, buffer_size)?;
+    Ok((format.to_vec(), buffer_size))
+}
+
+pub(super) fn initialize(
+    audio_client: &Audio::IAudioClient,
+    format: &[u8],
+    buffer_size: u32,
+) -> Result<(), String> {
     // SAFETY: `audio_client` is live and `format` points to a valid waveform
     // buffer owned by the caller.
     unsafe {
@@ -42,7 +42,7 @@ pub(super) fn initialize(
             .Initialize(
                 Audio::AUDCLNT_SHAREMODE_SHARED,
                 Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                buffer_duration_hns,
+                i64::from(buffer_size),
                 0,
                 waveformat(format),
                 None,

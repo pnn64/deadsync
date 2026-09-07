@@ -9,30 +9,30 @@ pub(super) fn validate(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
     device_name: &str,
-) -> Result<Vec<u8>, String> {
-    if is_format_supported(audio_client, format)? {
-        return Ok(format.to_vec());
-    }
+    preferred_buffer_frames: Option<u32>,
+) -> Result<(Vec<u8>, u32), String> {
+    let mut chosen_format = format.to_vec();
+    if !is_format_supported(audio_client, &chosen_format)? {
+        let wave = waveformat_mut(&mut chosen_format);
+        wave.wFormatTag = Audio::WAVE_FORMAT_PCM as u16;
+        wave.cbSize = 0;
+        wave.wBitsPerSample = 16;
+        wave.nBlockAlign = wave.nChannels.saturating_mul(2);
+        wave.nAvgBytesPerSec = wave
+            .nSamplesPerSec
+            .saturating_mul(u32::from(wave.nBlockAlign));
 
-    // fallback to PCM-16 by default
-    let mut fallback = format.to_vec();
-    let wave = waveformat_mut(&mut fallback);
-    wave.wFormatTag = Audio::WAVE_FORMAT_PCM as u16;
-    wave.cbSize = 0;
-    wave.wBitsPerSample = 16;
-    wave.nBlockAlign = wave.nChannels.saturating_mul(2);
-    wave.nAvgBytesPerSec = wave
-        .nSamplesPerSec
-        .saturating_mul(u32::from(wave.nBlockAlign));
-
-    if is_format_supported(audio_client, &fallback)? {
+        if !is_format_supported(audio_client, &chosen_format)? {
+            return Err(unsupported_format_error(format, device_name));
+        }
         info!(
             "WASAPI Exclusive: falling back to PCM-16 for device '{}'",
             device_name
         );
-        return Ok(fallback);
     }
-    Err(unsupported_format_error(format, device_name))
+
+    resolve_buffer_size(audio_client, &chosen_format, preferred_buffer_frames)
+        .map(|buffer_size| (chosen_format, buffer_size))
 }
 
 fn is_format_supported(audio_client: &Audio::IAudioClient, format: &[u8]) -> Result<bool, String> {
@@ -66,8 +66,29 @@ fn unsupported_format_error(format: &[u8], device_name: &str) -> String {
 pub(super) fn initialize(
     audio_client: &Audio::IAudioClient,
     format: &[u8],
-    preferred_buffer_frames: Option<u32>,
+    buffer_size: u32,
 ) -> Result<(), String> {
+    // SAFETY: `audio_client` is live and `format` points to a valid waveform
+    // buffer owned by the caller.
+    unsafe {
+        audio_client
+            .Initialize(
+                Audio::AUDCLNT_SHAREMODE_EXCLUSIVE,
+                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                i64::from(buffer_size),
+                i64::from(buffer_size),
+                waveformat(format),
+                None,
+            )
+            .map_err(|e| format!("failed to initialize WASAPI exclusive stream: {e}"))
+    }
+}
+
+fn resolve_buffer_size(
+    audio_client: &Audio::IAudioClient,
+    format: &[u8],
+    preferred_buffer_frames: Option<u32>,
+) -> Result<u32, String> {
     let (default_period_hns, min_period_hns) = query_device_periods_hns(audio_client)?;
     let sample_rate = waveformat(format).nSamplesPerSec;
     let period_hns = preferred_buffer_frames
@@ -81,7 +102,8 @@ pub(super) fn initialize(
                 )
             },
             |frames| frames_to_hns(frames, sample_rate),
-        );
+        )
+        .max(min_period_hns);
 
     let min_period_frames = hns_to_frames(min_period_hns, sample_rate);
     let default_period_frames = hns_to_frames(default_period_hns, sample_rate);
@@ -97,16 +119,43 @@ pub(super) fn initialize(
     );
     // SAFETY: `audio_client` is live and `format` points to a valid waveform
     // buffer owned by the caller.
-    unsafe {
-        audio_client
-            .Initialize(
-                Audio::AUDCLNT_SHAREMODE_EXCLUSIVE,
-                Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                period_hns,
-                period_hns,
-                waveformat(format),
-                None,
-            )
-            .map_err(|e| format!("failed to initialize WASAPI exclusive stream: {e}"))
+    match unsafe {
+        audio_client.Initialize(
+            Audio::AUDCLNT_SHAREMODE_EXCLUSIVE,
+            Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+            period_hns,
+            period_hns,
+            waveformat(format),
+            None,
+        )
+    } {
+        Ok(()) => {
+            log::info!(
+                "WASAPI exclusive succeeded using chosen frames. \
+                period {period_hns}"
+            );
+            Ok(period_hns.min(u32::MAX as i64) as u32)
+        }
+        Err(error) if error.code() == Audio::AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED => {
+            // The caller discards this client after resolution and creates a fresh
+            // client with the driver-selected aligned frame count.
+            let aligned_buffer_size = unsafe {
+                audio_client.GetBufferSize().map_err(|e| {
+                    format!(
+                        "failed to query aligned WASAPI exclusive buffer size after Initialize: {e}"
+                    )
+                })?
+            };
+            log::info!(
+                "WASAPI exclusive failed to use chosen frames, using driver-selected buffer size: \
+                period {aligned_buffer_size}"
+            );
+
+            Ok(aligned_buffer_size)
+            //Ok(frames_to_hns(aligned_buffer_size, sample_rate).min(u32::MAX as i64) as u32)
+        }
+        Err(error) => Err(format!(
+            "failed to initialize WASAPI exclusive stream: {error}"
+        )),
     }
 }
