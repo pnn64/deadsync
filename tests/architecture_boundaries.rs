@@ -933,8 +933,8 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_video",
     "deadsync-input-fsr",
     "deadsync_input_fsr",
-    "deadsync-input-native",
-    "deadsync_input_native",
+    "deadlib-input-native",
+    "deadlib_input_native",
     "deadsync-input =",
     "deadsync_input::",
     "deadsync-audio",
@@ -986,8 +986,8 @@ const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_render_backend_",
     "deadlib-video",
     "deadlib_video",
-    "deadsync-input-native",
-    "deadsync_input_native",
+    "deadlib-input-native",
+    "deadlib_input_native",
     "deadsync-audio-stream",
     "deadsync_audio_stream",
     "deadlib-platform",
@@ -3184,17 +3184,17 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         .map_or(manifest.as_str(), |(dependencies, _)| dependencies);
     assert!(
         !dependencies.contains("winit ="),
-        "Simply Love should consume keyboard codes through deadsync-input"
+        "Simply Love should consume physical keyboard codes through deadlib-platform::input"
     );
     assert!(
-        !manifest.contains("deadsync-input-native"),
+        !manifest.contains("deadlib-input-native"),
         "Simply Love should consume shell-prepared native input views"
     );
 
     let mut failures = Vec::new();
     for file in production_rust_files(&theme.join("src")) {
         let source = production_source(&file);
-        for token in ["winit::", "deadsync_input_native"] {
+        for token in ["winit::", "deadlib_input_native"] {
             if source.contains(token) {
                 failures.push(format!("{}: {token}", rel_path(&root, &file)));
             }
@@ -3206,14 +3206,14 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         failures.join("\n")
     );
 
-    let input = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
-        .expect("input contract should be readable");
+    let input = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input contract should be readable");
     assert!(
         (input.contains("pub use") && input.contains("KeyCode"))
             || input.contains("pub enum KeyCode")
             || input.contains("pub struct KeyCode")
             || input.contains("pub type KeyCode"),
-        "deadsync-input must expose its keyboard-code contract"
+        "deadlib-platform::input must expose the physical keyboard-code contract"
     );
     let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("theme views should be readable");
@@ -5891,18 +5891,20 @@ fn notefield_theme_dependency_points_toward_contracts() {
 }
 
 #[test]
-fn simply_love_has_no_direct_platform_dependency() {
+fn simply_love_platform_access_is_limited_to_physical_input() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let crate_dir = root.join("crates/deadsync-theme-simply-love");
     let manifest = fs::read_to_string(crate_dir.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    assert!(!manifest.contains("deadlib-platform"));
+    assert!(manifest.contains("deadlib-platform"));
 
     for file in rust_files(&crate_dir.join("src")) {
         let source = fs::read_to_string(&file).expect("Simply Love source should be readable");
         assert!(
-            !source.contains("deadlib_platform"),
-            "{} still imports platform paths directly",
+            !source
+                .replace("deadlib_platform::input::", "")
+                .contains("deadlib_platform"),
+            "{} imports platform services beyond physical input types",
             rel_path(&root, &file)
         );
         assert!(
@@ -5956,7 +5958,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
             "deadlib-platform",
             "deadsync-config",
             "deadsync-input-fsr",
-            "deadsync-input-native",
+            "deadlib-input-native",
             "deadsync-lights",
             "deadsync-notefield",
             "deadsync-noteskin",
@@ -6004,7 +6006,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "deadlib_platform",
                 "deadsync_config",
                 "deadsync_input_fsr",
-                "deadsync_input_native",
+                "deadlib_input_native",
                 "deadsync_lights",
                 "deadsync_notefield",
                 "deadsync_noteskin",
@@ -6661,6 +6663,89 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
 }
 
 #[test]
+fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let raw = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input contract should be readable");
+    let game = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
+        .expect("game input should be readable");
+    for definition in [
+        "struct RawKeyboardEvent",
+        "enum PadEvent",
+        "struct PadId",
+        "struct PadCode",
+        "enum PadDir",
+    ] {
+        assert!(raw.contains(definition), "platform must own {definition}");
+        assert!(
+            !game.contains(definition),
+            "game still defines {definition}"
+        );
+    }
+    for token in [
+        "deadsync_",
+        "VirtualAction",
+        "SongTimeNs",
+        "GamepadCodeBinding",
+        "parse_pad_dir",
+    ] {
+        assert!(
+            !raw.contains(token),
+            "physical input knows game interpretation: {token}"
+        );
+    }
+    assert!(game.contains("pub enum VirtualAction"));
+    assert!(game.contains("event_music_time_ns: SongTimeNs"));
+    assert!(game.contains("pub fn parse_pad_dir"));
+    let native = root.join("crates/deadlib-input-native");
+    assert!(!root.join("crates/deadsync-input-native").exists());
+    for file in production_rust_files(&native.join("src")) {
+        let source = production_source(&file);
+        for token in [
+            "deadsync_input",
+            "deadsync_config",
+            "PadOrderRawInput",
+            "PadOrderWGI",
+            "serialize_uuid_list",
+            "uuid_from_hex",
+            "from_ini",
+            "ini_lines",
+        ] {
+            assert!(
+                !source.contains(token),
+                "{} contains game input policy {token}",
+                file.display()
+            );
+        }
+    }
+    let manifest = fs::read_to_string(native.join("Cargo.toml")).expect("native manifest");
+    assert!(!manifest.contains("deadsync-"));
+    assert!(manifest.contains("deadlib-platform"));
+    let config = fs::read_to_string(root.join("crates/deadsync-config/src/pad_order.rs"))
+        .expect("pad-order persistence should be readable");
+    for policy in [
+        "PadOrderRawInput",
+        "PadOrderWGI",
+        "serialize_uuid_list",
+        "uuid_from_hex",
+        "set_pad_order",
+    ] {
+        assert!(
+            config.contains(policy),
+            "config must own pad-order policy {policy}"
+        );
+    }
+    assert!(!config.contains("struct PadIndexUpdate"));
+    assert!(!config.contains("load_pad_order_entries"));
+    assert!(!config.contains("struct PadOrderAssignment"));
+    let mapping = fs::read_to_string(root.join("crates/deadsync-input/src/keymap.rs"))
+        .expect("game mapping should be readable");
+    assert!(mapping.contains("deadlib_platform::input::"));
+    let backend = fs::read_to_string(native.join("src/launch.rs")).expect("native launch");
+    assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
 fn logical_input_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -6704,7 +6789,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
     let backend_dir = root.join("src/engine/input/backends");
     if backend_dir.exists() {
         failures.push(
-            "src/engine/input/backends still exists; import deadsync_input_native directly"
+            "src/engine/input/backends still exists; import deadlib_input_native directly"
                 .to_string(),
         );
     }
@@ -6796,7 +6881,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
 
     assert!(
         failures.is_empty(),
-        "native input launch should be imported from deadsync_input_native:\n{}",
+        "native input launch should be imported from deadlib_input_native:\n{}",
         failures.join("\n")
     );
 }

@@ -1,10 +1,11 @@
+use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
 use deadsync_config::prelude as config;
 use deadsync_gameplay::{
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
 };
-use deadsync_input::{InputEvent, RawKeyboardEvent};
+use deadsync_input::InputEvent;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;

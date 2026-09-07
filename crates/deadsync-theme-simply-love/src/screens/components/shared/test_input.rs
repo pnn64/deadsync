@@ -1,12 +1,13 @@
 use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::config::MachineFont;
+use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::RawKeyboardEvent;
+use deadlib_platform::input::{PadDir, PadEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_config::prelude::GameFlag;
-use deadsync_input::KeyCode;
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
+use deadsync_input::{InputEvent, VirtualAction, with_keymap};
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock};
@@ -491,7 +492,7 @@ pub fn apply_virtual_input(state: &mut State, ev: &InputEvent) {
 }
 
 pub fn apply_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
-    use deadsync_input::PadEvent as PE;
+    use deadlib_platform::input::PadEvent as PE;
 
     state.event_rate.record_pad(pad_event);
     state.invalidate_presentations();
@@ -1208,7 +1209,7 @@ fn push_select_music_overlay_unreserved(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::{PadCode, PadId};
+    use deadlib_platform::input::{PadCode, PadId};
     use std::time::Duration;
 
     #[test]

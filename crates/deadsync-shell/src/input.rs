@@ -1,9 +1,10 @@
 use crate::TransitionState;
+use deadlib_input_native::{GpSystemEvent, PadBackend};
+use deadlib_platform::input::{PadEvent, RawKeyboardEvent};
 use deadsync_gameplay::{
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
 };
-use deadsync_input::{PadEvent, RawKeyboardEvent, VirtualAction};
-use deadsync_input_native::{GpSystemEvent, PadBackend};
+use deadsync_input::VirtualAction;
 use deadsync_profile::PlayerSide;
 use deadsync_theme::views::GamepadSystemView;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
@@ -672,7 +673,7 @@ pub const fn allowed_gameplay_raw_action(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::{PadCode, PadId};
+    use deadlib_platform::input::{PadCode, PadId};
     use winit::keyboard::KeyCode;
 
     #[test]
@@ -846,8 +847,9 @@ mod tests {
 
     #[test]
     fn mapped_press_stops_after_menu_navigation_or_fade() {
+        use deadlib_platform::input::RawKeyboardEvent;
         use deadsync_input::keymap::InputState;
-        use deadsync_input::{InputBinding, Keymap, RawKeyboardEvent};
+        use deadsync_input::{InputBinding, Keymap};
 
         let mut km = Keymap::default();
         km.bind(
@@ -967,7 +969,7 @@ mod tests {
             id: PadId(0),
             timestamp: Instant::now(),
             host_nanos: 0,
-            dir: deadsync_input::PadDir::Up,
+            dir: deadlib_platform::input::PadDir::Up,
             pressed: true,
         };
 

@@ -17,6 +17,7 @@ use crate::views::{
     SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
 };
 use deadlib_assets::AssetManager;
+use deadlib_platform::input::PadDir;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{
@@ -24,7 +25,7 @@ use deadlib_present::space::{
 };
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData, SongPack};
-use deadsync_input::{InputEvent, PadDir, VirtualAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score::default_scorebox_mode_text;
 use deadsync_simfile::course::{

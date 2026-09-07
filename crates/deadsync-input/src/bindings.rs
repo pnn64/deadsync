@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use winit::keyboard::KeyCode;
+use deadlib_platform::input::KeyCode;
 
 use crate::{
     ALL_VIRTUAL_ACTIONS, InputBinding, Keymap, VirtualAction, gamepad_code_binding_to_token,
@@ -738,7 +738,8 @@ pub fn cleared_keymap(current: &Keymap, action: VirtualAction, index: usize) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GamepadCodeBinding, PadDir, parse_pad_dir};
+    use crate::{GamepadCodeBinding, parse_pad_dir};
+    use deadlib_platform::input::PadDir;
 
     #[test]
     fn default_operator_key_is_scroll_lock() {

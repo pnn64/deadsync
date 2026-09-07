@@ -1,7 +1,7 @@
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
 };
-use deadsync_input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
+use deadlib_platform::input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use rustc_hash::FxHashMap;
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
@@ -1145,7 +1145,7 @@ fn run_inner(mut ctx: Box<Ctx>) {
     // intentionally leaked at shutdown so `GWLP_USERDATA` never dangles while the
     // window can still receive messages.
     unsafe {
-        let class_name: Vec<u16> = "deadsync_raw_input\0".encode_utf16().collect();
+        let class_name: Vec<u16> = "deadlib_raw_input\0".encode_utf16().collect();
         let hinst: HINSTANCE = match GetModuleHandleW(PCWSTR::null()) {
             Ok(hinst) => hinst.into(),
             Err(err) => {

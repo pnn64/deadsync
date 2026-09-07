@@ -1314,10 +1314,10 @@ pub struct SelectMusicInteractionPolicyView {
     pub new_pack_mode: deadsync_config::prelude::NewPackMode,
     pub show_srpg_shop: bool,
     pub srpg10_visuals: bool,
-    pub practice_shortcut: deadsync_input::KeyCode,
-    pub song_search_shortcut: deadsync_input::KeyCode,
-    pub reload_shortcut: deadsync_input::KeyCode,
-    pub test_input_shortcut: deadsync_input::KeyCode,
+    pub practice_shortcut: deadlib_platform::input::KeyCode,
+    pub song_search_shortcut: deadlib_platform::input::KeyCode,
+    pub reload_shortcut: deadlib_platform::input::KeyCode,
+    pub test_input_shortcut: deadlib_platform::input::KeyCode,
 }
 
 impl Default for SelectMusicInteractionPolicyView {
@@ -1332,10 +1332,10 @@ impl Default for SelectMusicInteractionPolicyView {
             new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
             show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,
             srpg10_visuals: false,
-            practice_shortcut: deadsync_input::KeyCode::KeyP,
-            song_search_shortcut: deadsync_input::KeyCode::KeyS,
-            reload_shortcut: deadsync_input::KeyCode::KeyL,
-            test_input_shortcut: deadsync_input::KeyCode::KeyT,
+            practice_shortcut: deadlib_platform::input::KeyCode::KeyP,
+            song_search_shortcut: deadlib_platform::input::KeyCode::KeyS,
+            reload_shortcut: deadlib_platform::input::KeyCode::KeyL,
+            test_input_shortcut: deadlib_platform::input::KeyCode::KeyT,
         }
     }
 }

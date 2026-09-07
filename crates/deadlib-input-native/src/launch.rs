@@ -1,4 +1,4 @@
-use deadsync_input::{PadEvent, RawKeyboardEvent};
+use deadlib_platform::input::{PadEvent, RawKeyboardEvent};
 
 use crate::backend::{BackendHost, GpSystemEvent, WindowsPadBackend};
 

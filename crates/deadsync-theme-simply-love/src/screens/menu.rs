@@ -11,9 +11,9 @@ use crate::views::{
     MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
     MainMenuRuntimeView,
 };
+use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextAlign};
-use deadsync_input::KeyCode;
-use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use std::cell::RefCell;
 use std::sync::Arc;

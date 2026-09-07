@@ -352,10 +352,10 @@ mod tests {
             select_music_last_sort: config::SelectMusicSort::Title,
             select_music_new_pack_mode: config::NewPackMode::OpenPack,
             show_srpg_shop: false,
-            music_select_shortcut_practice: deadsync_input::KeyCode::KeyQ,
-            music_select_shortcut_song_search: deadsync_input::KeyCode::KeyW,
-            music_select_shortcut_load_songs: deadsync_input::KeyCode::KeyE,
-            music_select_shortcut_test_input: deadsync_input::KeyCode::KeyR,
+            music_select_shortcut_practice: deadlib_platform::input::KeyCode::KeyQ,
+            music_select_shortcut_song_search: deadlib_platform::input::KeyCode::KeyW,
+            music_select_shortcut_load_songs: deadlib_platform::input::KeyCode::KeyE,
+            music_select_shortcut_test_input: deadlib_platform::input::KeyCode::KeyR,
             show_select_music_scorebox: false,
             select_music_scorebox_cycle_itg: false,
             select_music_scorebox_cycle_ex: false,
@@ -416,7 +416,7 @@ mod tests {
         assert!(!view.interaction.show_srpg_shop);
         assert_eq!(
             view.interaction.song_search_shortcut,
-            deadsync_input::KeyCode::KeyW
+            deadlib_platform::input::KeyCode::KeyW
         );
         assert!(!view.presentation.show_scorebox);
         assert!(view.presentation.scorebox_cycle_enabled);

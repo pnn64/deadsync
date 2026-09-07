@@ -157,6 +157,8 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
+use deadlib_platform::input::PadEvent;
+use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
@@ -166,8 +168,7 @@ use deadsync_gameplay::{
     GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
 };
 use deadsync_input as logical_input;
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
 use deadsync_lights::cabinet_chart::{
     cabinet_light_chart_from_loaded, cabinet_light_key, cabinet_light_plan,
@@ -2405,7 +2406,7 @@ impl App {
         now: Instant,
         window: Option<&Arc<Window>>,
     ) {
-        deadsync_input_native::set_raw_keyboard_window_focused(focused);
+        deadlib_input_native::set_raw_keyboard_window_focused(focused);
         let plan = apply_shell_window_focus(&mut self.state.shell, focused, now);
         if !plan.changed {
             return;
@@ -7981,7 +7982,7 @@ impl App {
         use winit::event::ElementState;
         use winit::keyboard::PhysicalKey;
 
-        if deadsync_input_native::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
+        if deadlib_input_native::unix_raw_keyboard_backend_active() || !self.accepts_live_input() {
             return;
         }
         let PhysicalKey::Code(code) = key_event.physical_key else {

@@ -4854,8 +4854,10 @@ pub(super) mod tests {
         );
     }
 
-    fn raw_key(code: deadsync_input::KeyCode) -> deadsync_input::RawKeyboardEvent {
-        deadsync_input::RawKeyboardEvent {
+    fn raw_key(
+        code: deadlib_platform::input::KeyCode,
+    ) -> deadlib_platform::input::RawKeyboardEvent {
+        deadlib_platform::input::RawKeyboardEvent {
             code,
             pressed: true,
             repeat: false,
@@ -4867,7 +4869,7 @@ pub(super) mod tests {
     /// Drive the search's raw-key entry point; returns whether it consumed the key.
     fn search_key(
         state: &mut super::State,
-        key: Option<&deadsync_input::RawKeyboardEvent>,
+        key: Option<&deadlib_platform::input::RawKeyboardEvent>,
         text: Option<&str>,
         ctrl_held: bool,
     ) -> bool {
@@ -4932,7 +4934,7 @@ pub(super) mod tests {
     fn open_search(state: &mut super::State) -> bool {
         search_key(
             state,
-            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::KeyF)),
             None,
             true,
         )
@@ -4950,7 +4952,7 @@ pub(super) mod tests {
 
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Escape)),
             None,
             false,
         );
@@ -4963,7 +4965,7 @@ pub(super) mod tests {
         let (mut state, _asset_manager) = setup_state();
         let effect = search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::KeyF)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::KeyF)),
             None,
             false,
         );
@@ -5026,7 +5028,7 @@ pub(super) mod tests {
         // Closing clears it too, so nothing leaks back into the screen.
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Escape)),
             None,
             false,
         );
@@ -5068,7 +5070,7 @@ pub(super) mod tests {
         search_key(&mut state, None, Some("turn"), false);
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Enter)),
             None,
             false,
         );
@@ -5098,7 +5100,7 @@ pub(super) mod tests {
         search_key(&mut state, None, Some("turn"), false);
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Enter)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Enter)),
             None,
             false,
         );
@@ -5119,7 +5121,7 @@ pub(super) mod tests {
         for _ in 0..3 {
             search_key(
                 &mut state,
-                Some(&raw_key(deadsync_input::KeyCode::Backspace)),
+                Some(&raw_key(deadlib_platform::input::KeyCode::Backspace)),
                 None,
                 false,
             );
@@ -5134,7 +5136,7 @@ pub(super) mod tests {
         // Escape is the only way out.
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Escape)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Escape)),
             None,
             false,
         );
@@ -5156,7 +5158,7 @@ pub(super) mod tests {
         }
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Tab)),
             None,
             false,
         );
@@ -5178,7 +5180,7 @@ pub(super) mod tests {
         search_key(&mut state, None, Some("spe"), false);
         search_key(
             &mut state,
-            Some(&raw_key(deadsync_input::KeyCode::Tab)),
+            Some(&raw_key(deadlib_platform::input::KeyCode::Tab)),
             None,
             false,
         );

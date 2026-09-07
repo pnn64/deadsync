@@ -3426,7 +3426,7 @@ mod tests {
     #[test]
     fn held_delete_requires_a_fresh_press_to_confirm_profile_deletion() {
         use crate::screens::select_music;
-        use deadsync_input::{KeyCode, RawKeyboardEvent};
+        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
         let mut pad = with_pad();
         set_save_available(&mut pad, true);
         begin_profiles(&mut pad);

@@ -1,3 +1,5 @@
+//! Native keyboard/controller capture and stable device-slot assignment.
+
 mod backend;
 mod launch;
 mod pad_order;

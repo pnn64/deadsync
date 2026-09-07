@@ -4,7 +4,7 @@ use super::hid_report_cache::{
 };
 use super::poll_registration;
 use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
-use deadsync_input::{PadCode, PadDir, PadEvent, PadId};
+use deadlib_platform::input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
 use std::collections::HashMap;

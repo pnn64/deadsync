@@ -513,11 +513,11 @@ impl App {
             &self.state.shell.transition,
             cfg!(windows),
         );
-        deadsync_input_native::set_raw_keyboard_capture_enabled(capture_enabled);
+        deadlib_input_native::set_raw_keyboard_capture_enabled(capture_enabled);
     }
 
     #[inline(always)]
     pub(super) fn clear_gameplay_input_events(&self) {
-        deadsync_input_native::set_raw_keyboard_capture_enabled(false);
+        deadlib_input_native::set_raw_keyboard_capture_enabled(false);
     }
 }

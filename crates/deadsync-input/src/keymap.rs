@@ -3,24 +3,26 @@
 //! [`InputState::new`] compiles and preallocates the mutable state needed by the
 //! event path. Events processed by that application-owned state
 //! map, debounce, normalize, and drain without heap allocation for keyboard
-//! input and native pad IDs below [`crate::PAD_ID_COUNT_CAP`]. Reconfiguration
+//! input and native pad IDs below [`deadlib_platform::input::PAD_ID_COUNT_CAP`]. Reconfiguration
 //! remains an intentionally cold path.
 
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+use deadlib_platform::input::KeyCode;
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use winit::keyboard::KeyCode;
 
 use crate::debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
     next_due_edge,
 };
 use crate::{
-    GamepadCodeBinding, InputEvent, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent, PadId,
-    RawKeyboardEvent, SYSTEM_ACTION_MASK, VirtualAction, clamp_input_debounce_seconds,
-    normalized_actions,
+    GamepadCodeBinding, InputEvent, SYSTEM_ACTION_MASK, VirtualAction,
+    clamp_input_debounce_seconds, normalized_actions,
+};
+use deadlib_platform::input::{
+    PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent,
 };
 use deadsync_core::input::InputSource;
 

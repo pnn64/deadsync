@@ -22,10 +22,10 @@ use crate::theme::{
     VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
+use deadlib_input_native::WindowsPadBackend;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input::clamp_input_debounce_seconds;
-use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_smx::SmxPadPreset;
 use deadsync_theme::color::DifficultyColorScheme;

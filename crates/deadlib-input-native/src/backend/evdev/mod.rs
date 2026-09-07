@@ -5,7 +5,7 @@ pub(super) use super::devd::{DevdEvent, DevdWatch};
 pub(super) use super::emit_hat_axis_edges;
 use super::unix_time::{self, EventTimeCache, EventTimeSample};
 pub(super) use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
-pub(super) use deadsync_input::{PadCode, PadEvent, PadId};
+pub(super) use deadlib_platform::input::{PadCode, PadEvent, PadId};
 
 pub(super) struct ReceiptTime {
     sample: DeferredSample<EventTimeSample>,

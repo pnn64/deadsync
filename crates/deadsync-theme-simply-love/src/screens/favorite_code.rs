@@ -1,4 +1,5 @@
-use deadsync_input::{PadDir, VirtualAction, pad_dir_from_action};
+use deadlib_platform::input::PadDir;
+use deadsync_input::{VirtualAction, pad_dir_from_action};
 use deadsync_profile::{PlayerSide, player_side_index};
 use std::time::{Duration, Instant};
 

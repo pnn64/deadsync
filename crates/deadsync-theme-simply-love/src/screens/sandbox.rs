@@ -2,13 +2,14 @@ use crate::act;
 use crate::assets::{FontRole, machine_font_key};
 use crate::screens::components::shared::transitions;
 use crate::screens::{Screen, ThemeEffect};
+use deadlib_platform::input::PadEvent;
+use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_theme::views::GamepadSystemView;
 // Keyboard input is handled centrally via the virtual dispatcher in app
-use deadsync_input::KeyCode;
+use deadlib_platform::input::KeyCode;
 use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::time::Instant;

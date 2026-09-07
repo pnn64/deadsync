@@ -10,15 +10,16 @@ use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::MappingsRuntimeView;
 use deadlib_assets::AssetManager;
+use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::PadEvent;
+use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
 use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
-use deadsync_input::KeyCode;
-use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{
-    GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
+    GamepadCodeBinding, InputBinding, InputEvent, Keymap, VirtualAction,
     clamp_input_debounce_seconds, cleared_keymap, editable_key_binding_slot_indices,
     protected_default_key_for_action, updated_keymap_unique_gamepad,
     updated_keymap_unique_keyboard,
@@ -1952,13 +1953,12 @@ mod tests {
     };
     use crate::screens::Screen;
     use crate::views::MappingsRuntimeView;
+    use deadlib_platform::input::KeyCode;
+    use deadlib_platform::input::RawKeyboardEvent;
+    use deadlib_platform::input::{PadCode, PadEvent, PadId};
     use deadsync_config::prelude::GameFlag;
     use deadsync_core::input::InputSource;
-    use deadsync_input::KeyCode;
-    use deadsync_input::RawKeyboardEvent;
-    use deadsync_input::{
-        InputBinding, InputEvent, Keymap, PadCode, PadEvent, PadId, VirtualAction,
-    };
+    use deadsync_input::{InputBinding, InputEvent, Keymap, VirtualAction};
     use deadsync_theme::AudioRequest;
     use std::time::{Duration, Instant};
 

@@ -34,6 +34,7 @@ use crate::views::{
     SelectMusicSessionView, SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
     SimplyLoveLobbyRuntimeView,
 };
+use deadlib_platform::input::{KeyCode, PadDir, PadEvent, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{
     SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
@@ -52,9 +53,7 @@ use deadsync_chart::{
 };
 use deadsync_config::prelude::GameFlag;
 use deadsync_core::input::InputSource;
-use deadsync_input::{
-    InputEvent, KeyCode, Keymap, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
-};
+use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
@@ -15264,12 +15263,11 @@ mod tests {
     use crate::screens::components::select_music::music_wheel;
     use crate::screens::{ThemeEffect, ThemeInputResult};
     use crate::views::ProfilePickerView;
+    use deadlib_platform::input::{KeyCode, PadDir, RawKeyboardEvent};
     use deadlib_present::actors::Actor;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
-    use deadsync_input::{
-        InputBinding, InputEvent, KeyCode, Keymap, PadDir, RawKeyboardEvent, VirtualAction,
-    };
+    use deadsync_input::{InputBinding, InputEvent, Keymap, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use rustc_hash::FxHashSet;

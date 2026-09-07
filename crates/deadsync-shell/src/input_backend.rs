@@ -1,6 +1,6 @@
 use crate::UserEvent;
 #[cfg(windows)]
-use deadsync_input_native::WindowsPadBackend;
+use deadlib_input_native::WindowsPadBackend;
 use winit::event_loop::EventLoopProxy;
 
 /// Startup settings for the platform and `StepManiaX` input backends.
@@ -13,8 +13,8 @@ pub struct InputBackendConfig {
 }
 
 #[inline(always)]
-fn native_input_host() -> deadsync_input_native::BackendHost {
-    deadsync_input_native::backend_host(
+fn native_input_host() -> deadlib_input_native::BackendHost {
+    deadlib_input_native::backend_host(
         deadsync_config::pad_order::pad_index_for_uuid_saved,
         |vendor, product| {
             deadsync_smx::native_smx_owns_device(
@@ -36,7 +36,7 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
         let proxy_key = proxy.clone();
         let input_host = native_input_host();
         std::thread::spawn(move || {
-            deadsync_input_native::run_windows_backend(
+            deadlib_input_native::run_windows_backend(
                 windows_pad_backend,
                 move |event| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
@@ -58,7 +58,7 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
         let proxy_key = proxy.clone();
         let input_host = native_input_host();
         std::thread::spawn(move || {
-            deadsync_input_native::run_linux_backend(
+            deadlib_input_native::run_linux_backend(
                 move |event| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
@@ -79,7 +79,7 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
         let proxy_key = proxy.clone();
         let input_host = native_input_host();
         std::thread::spawn(move || {
-            deadsync_input_native::run_freebsd_backend(
+            deadlib_input_native::run_freebsd_backend(
                 move |event| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },
@@ -100,7 +100,7 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
         let proxy_key = proxy.clone();
         let input_host = native_input_host();
         std::thread::spawn(move || {
-            deadsync_input_native::run_macos_backend(
+            deadlib_input_native::run_macos_backend(
                 move |event| {
                     let _ = proxy_pad.send_event(UserEvent::Pad(event));
                 },

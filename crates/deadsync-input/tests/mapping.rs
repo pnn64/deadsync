@@ -1,10 +1,10 @@
+use deadlib_platform::input::{KeyCode, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent};
 use deadsync_core::input::InputSource;
 use deadsync_input::keymap::InputState;
 use deadsync_input::{
-    GamepadCodeBinding, InputBinding, InputEvent, KeyCode, Keymap, PadCode, PadDir, PadEvent,
-    PadId, RawKeyboardEvent, VirtualAction, any_player_has_dedicated_menu_buttons_for_mode,
-    any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
-    set_keymap, with_keymap,
+    GamepadCodeBinding, InputBinding, InputEvent, Keymap, VirtualAction,
+    any_player_has_dedicated_menu_buttons_for_mode, any_player_has_four_way_menu_buttons,
+    any_player_has_three_key_menu_buttons, get_keymap, set_keymap, with_keymap,
 };
 use std::time::{Duration, Instant};
 

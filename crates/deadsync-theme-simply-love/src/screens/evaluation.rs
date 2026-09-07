@@ -46,8 +46,9 @@ use crate::views::{
     EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
     SimplyLoveGrooveStatsService,
 };
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, PadEvent, VirtualAction};
+use deadlib_platform::input::PadEvent;
+use deadlib_platform::input::RawKeyboardEvent;
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 pub use deadsync_score::ColumnJudgments;
 // Keyboard handling is centralized in app via virtual actions

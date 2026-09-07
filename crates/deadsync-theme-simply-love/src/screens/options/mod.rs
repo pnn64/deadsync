@@ -43,8 +43,9 @@ use crate::views::{
     SimplyLoveUpdaterView,
 };
 use deadlib_assets::AssetManager;
+use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
-use deadsync_input::{InputEvent, KeyCode, RawKeyboardEvent, VirtualAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
 use deadsync_theme::views::{
     AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, SmxAssignmentView,

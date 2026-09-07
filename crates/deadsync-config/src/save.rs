@@ -28,9 +28,8 @@ use crate::options::{
     push_system_mine_hit_sound_option_lines, push_system_online_option_lines,
     push_system_translation_option_lines,
 };
-use crate::runtime_state::{
-    RuntimeStateIdTokens, push_pad_order_option_lines, push_runtime_state_id_option_lines,
-};
+use crate::pad_order::push_pad_order_option_lines;
+use crate::runtime_state::{RuntimeStateIdTokens, push_runtime_state_id_option_lines};
 use crate::theme::{
     MachineFlowOptions, ThemePresentationOptions, ThemeShortcutTokens, push_theme_option_lines,
 };
@@ -292,7 +291,7 @@ pub fn build_saved_app_config_file(
                     default_profile_p1,
                     default_profile_p2,
                 ),
-                pad_order_lines: deadsync_input_native::pad_order_ini_lines(),
+                pad_order_lines: crate::pad_order::pad_order_ini_lines(),
             },
             keymap,
             theme: ThemeSection {
@@ -348,7 +347,7 @@ pub fn build_default_app_config_file() -> String {
                 gameplay_bg_color: gameplay_bg_color.as_str(),
                 default_noteskin: crate::machine::DEFAULT_MACHINE_NOTESKIN,
                 runtime_state_ids: runtime_state_ids("", "", "", ""),
-                pad_order_lines: deadsync_input_native::DEFAULT_PAD_ORDER_INI_LINES,
+                pad_order_lines: crate::pad_order::DEFAULT_PAD_ORDER_INI_LINES,
             },
             keymap: (),
             theme: ThemeSection {

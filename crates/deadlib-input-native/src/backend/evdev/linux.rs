@@ -3,7 +3,7 @@ use super::{
     emit_hat_axis_edges, uuid_from_bytes,
 };
 use crate::backend::poll_registration;
-use deadsync_input::RawKeyboardEvent;
+use deadlib_platform::input::RawKeyboardEvent;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::ffi::{CStr, c_char, c_void};

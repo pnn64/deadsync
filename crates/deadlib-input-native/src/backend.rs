@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use deadsync_input::{PadDir, PadEvent, PadId};
+use deadlib_platform::input::{PadDir, PadEvent, PadId};
 
 #[cfg(any(target_os = "linux", target_os = "freebsd", test))]
 mod deferred_sample;
