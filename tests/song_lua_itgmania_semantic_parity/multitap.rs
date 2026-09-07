@@ -125,6 +125,7 @@ pub(super) fn compare_multitap(
 
 #[test]
 fn perspective_geometry_survives_noteskin_kind_change() {
+    crate::paths::init();
     use deadsync_assets::song_lua::SongLuaOverlayActor;
     let mut trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FLIP69_TRACE));
     let decoration = trace
@@ -351,12 +352,25 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
                 }
             }
         }
-        if let Some(hide) = compiled.iter().flat_map(|layer| &layer.note_hides)
+        if let Some(hide) = compiled
+            .iter()
+            .flat_map(|layer| &layer.note_hides)
             .find(|hide| hide.player == player - 1 && hide.column == column - 1)
         {
-            assert_eq!(hide.spline_size, points.len(), "preserve native spline endpoint");
-            assert_eq!(hide.spline_beats_per_t, beats_per_t, "preserve native beat spacing");
-            hides[player - 1].set_zoom_spline(column - 1, hide.spline_beats_per_t, hide.spline_size);
+            assert_eq!(
+                hide.spline_size,
+                points.len(),
+                "preserve native spline endpoint"
+            );
+            assert_eq!(
+                hide.spline_beats_per_t, beats_per_t,
+                "preserve native beat spacing"
+            );
+            hides[player - 1].set_zoom_spline(
+                column - 1,
+                hide.spline_beats_per_t,
+                hide.spline_size,
+            );
         }
         let mut differences = 0;
         for (index, (_, expected)) in points {
@@ -368,8 +382,10 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
             // Multiplying a high row by beats_per_t and dividing again can be
             // one float ULP off the knot; fractional samples have a separate
             // native CubicSpline fixture with a 2e-6 absolute comparison.
-            assert!((offset - expected_offset).abs() < 0.002,
-                "P{player} column {column} spline offset at beat {beat}: {offset}");
+            assert!(
+                (offset - expected_offset).abs() < 0.002,
+                "P{player} column {column} spline offset at beat {beat}: {offset}"
+            );
             checked += 1;
             hidden += usize::from(expected);
             if actual != expected {
@@ -392,6 +408,7 @@ fn compare_zoom_hides(trace: &NativeTrace, compiled: &[CompiledSongLua], gaps: &
 
 #[test]
 fn multitap_boundaries_and_noteskin_commands_match() {
+    crate::paths::init();
     let song = tempfile::tempdir().expect("song directory");
     let entry = song.path().join("default.lua");
     fs::write(&entry, r#"

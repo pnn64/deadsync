@@ -2463,7 +2463,7 @@ fn noteskin_discovery_is_shell_prepared_for_themes() {
     );
     assert!(
         shell_manifest.contains("deadsync-noteskin =")
-            && shell.contains("fn noteskin_catalog_view() -> NoteskinCatalogView")
+            && shell.contains("fn noteskin_catalog_view(dirs: &AppDirs) -> NoteskinCatalogView")
             && shell.contains("deadsync_noteskin::itg::discover_skins"),
         "shell must discover installed noteskins and prepare the theme view"
     );
@@ -4340,7 +4340,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
     for integration in [
         "profile_load: crate::profile_load::Service",
         "fn poll_profile_load",
-        "self.coin_select_music_init_view(crate::select_music::init_view())",
+        "crate::select_music::init_view(&self.dirs)",
         "self.profile_load.start(play_mode, select_music)",
         "self.profile_load.poll()",
         "profile_load::sync_ready",
@@ -4400,8 +4400,8 @@ fn options_folder_paths_are_shell_prepared() {
     assert!(reload.contains("state.app_paths.courses.path.clone()"));
     assert!(views.contains("pub struct AppPathView"));
     assert!(views.contains("pub struct AppPathsView"));
-    assert!(shell.contains("fn app_paths_view() -> AppPathsView"));
-    assert!(shell.contains("deadlib_platform::dirs::app_dirs()"));
+    assert!(shell.contains("fn app_paths_view(dirs: &AppDirs) -> AppPathsView"));
+    assert!(shell.contains("dirs: AppDirs,"));
     assert!(shell.contains("deadlib_platform::dirs::path_shorthand(&path)"));
 }
 
@@ -4455,13 +4455,13 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
             && views.contains("pub song_packs: Vec<deadsync_chart::SongPack>")
             && views.contains("pub sync_graph_mode:")
             && views.contains("pub sync_confidence_percent: u8")
-            && shell.contains("deadlib_platform::dirs::app_dirs()")
+            && shell.contains("dirs: &deadsync_config::dirs::AppDirs")
             && shell.contains("std::fs::read_dir")
             && shell.contains("std::fs::read_to_string")
-            && shell.contains("pub(crate) fn init_view() -> SelectMusicInitView")
+            && shell.contains("pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView")
             && runtime.contains("config.null_or_die_sync_graph")
             && runtime.contains("config.null_or_die_confidence_percent")
-            && app.contains("crate::select_music::prepared_init_view()")
+            && app.contains("crate::select_music::prepared_init_view(&self.dirs)")
             && app.contains("select_music::init(init_view)"),
         "shell must resolve Select Music paths and load playlist files"
     );
@@ -10965,4 +10965,50 @@ fn player_leaderboard_runtime_callbacks_stay_allocation_free() {
             ),
         "player leaderboard runtime must keep its non-capturing callbacks allocation-free"
     );
+}
+
+#[test]
+fn application_layout_is_resolved_above_platform_and_audio() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for file in [
+        "crates/deadlib-platform/src/dirs.rs",
+        "crates/deadsync-audio-stream/src/runtime.rs",
+    ] {
+        let source =
+            fs::read_to_string(root.join(file)).expect("boundary source should be readable");
+        for forbidden in [
+            "app_dirs",
+            "deadsync_config",
+            "deadsync.ini",
+            "portable.txt",
+            "portable.ini",
+            "resolve_asset_path",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{file} retains application layout through {forbidden}"
+            );
+        }
+    }
+    let config =
+        fs::read_to_string(root.join("crates/deadsync-config/src/dirs.rs")).expect("layout source");
+    assert!(
+        !config.contains("OnceLock"),
+        "the full layout must not become another global accessor"
+    );
+    for file in [
+        "crates/deadsync-assets/src/lib.rs",
+        "crates/deadsync-profile/src/app_runtime.rs",
+        "crates/deadsync-simfile/src/app_runtime.rs",
+        "crates/deadsync-online/src/runtime.rs",
+        "crates/deadsync-updater/src/lib.rs",
+    ] {
+        let source = fs::read_to_string(root.join(file)).expect("service source");
+        for forbidden in ["AppDirs", "app_dirs()", "native_dirs("] {
+            assert!(
+                !source.contains(forbidden),
+                "{file} must consume supplied subsystem paths"
+            );
+        }
+    }
 }

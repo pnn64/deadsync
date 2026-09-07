@@ -870,6 +870,7 @@ mod tests {
 
     #[test]
     fn affluent_bucket_keys_preserve_names_and_shared_identity() {
+        crate::tests::init_paths();
         assert_eq!(AFFLUENT_CLIP_KEYS.len(), AFFLUENT_ROT_BUCKETS as usize);
         for (bucket, key) in AFFLUENT_CLIP_KEYS.iter().enumerate() {
             assert_eq!(
@@ -885,6 +886,7 @@ mod tests {
 
     #[test]
     fn exact_one_w2_adds_late_taunt_actors() {
+        crate::tests::init_paths();
         let actors = actors(
             score_data::Grade::Tier04,
             EvalGradeParams {
@@ -902,6 +904,7 @@ mod tests {
 
     #[test]
     fn exact_one_w2_uses_clipped_affluent_after_fade() {
+        crate::tests::init_paths();
         let actors = actors(
             score_data::Grade::Tier04,
             EvalGradeParams {
@@ -919,6 +922,7 @@ mod tests {
 
     #[test]
     fn exact_one_w2_goldstar_starts_black() {
+        crate::tests::init_paths();
         let actors = actors(
             score_data::Grade::Tier04,
             EvalGradeParams {
@@ -938,6 +942,7 @@ mod tests {
 
     #[test]
     fn one_w3_adds_black_flag_only() {
+        crate::tests::init_paths();
         let actors = actors(
             score_data::Grade::Tier04,
             EvalGradeParams {
@@ -957,6 +962,7 @@ mod tests {
 
     #[test]
     fn disabled_easter_eggs_keep_grade_stars_plain() {
+        crate::tests::init_paths();
         for taunt in [
             grade_star_taunt_from_counts(counts(1, 0, 0, 0, 0)),
             grade_star_taunt_from_counts(counts(7, 1, 0, 0, 0)),
@@ -981,6 +987,7 @@ mod tests {
 
     #[test]
     fn worse_than_one_w3_gets_no_taunt() {
+        crate::tests::init_paths();
         let actors = actors(
             score_data::Grade::Tier04,
             EvalGradeParams {

@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use deadlib_platform::dirs;
 use deadlib_platform::display::{self, FullscreenType};
 use deadlib_render::{render_size_for_window, request_window_size, with_requested_window_size};
 use deadlib_render_core::BackendType;
@@ -276,9 +275,8 @@ pub const fn transition_fullscreen_type(
 }
 
 fn load_window_icon() -> Option<Icon> {
-    let dirs = dirs::app_dirs();
     for path in WINDOW_ICON_PATHS {
-        let resolved = dirs.resolve_asset_path(path);
+        let resolved = deadsync_assets::resolve_asset_path(path);
         let Ok(image) = image::open(&resolved) else {
             continue;
         };
@@ -304,9 +302,8 @@ fn set_macos_app_icon() {
 
     let mtm = MainThreadMarker::new().expect("AppKit icon setup requires the main thread");
     let app = NSApplication::sharedApplication(mtm);
-    let dirs = dirs::app_dirs();
     for path in MACOS_APP_ICON_PATHS {
-        let resolved = dirs.resolve_asset_path(path);
+        let resolved = deadsync_assets::resolve_asset_path(path);
         let ns_path = NSString::from_str(&resolved.to_string_lossy());
         if let Some(icon_image) = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path) {
             // SAFETY: both objects are valid AppKit objects on the required main thread.

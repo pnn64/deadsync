@@ -89,8 +89,7 @@ fn read_playlist(path: PathBuf, owner: Option<String>) -> Option<SelectMusicPlay
     }
 }
 
-fn machine_playlists() -> Vec<SelectMusicPlaylistView> {
-    let dirs = deadlib_platform::dirs::app_dirs();
+fn machine_playlists(dirs: &deadsync_config::dirs::AppDirs) -> Vec<SelectMusicPlaylistView> {
     let mut roots = Vec::with_capacity(2);
     if let Some(root) = find_child_dir(&dirs.data_dir, "playlists") {
         roots.push(root);
@@ -144,10 +143,9 @@ fn profile_playlists() -> Vec<SelectMusicPlaylistView> {
     playlists
 }
 
-pub(crate) fn init_view() -> SelectMusicInitView {
-    let dirs = deadlib_platform::dirs::app_dirs();
+pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView {
     let songs_root = dirs.songs_dir();
-    let mut playlists = machine_playlists();
+    let mut playlists = machine_playlists(dirs);
     playlists.extend(profile_playlists());
     let cfg = config::get();
     let session = session_view();
@@ -326,9 +324,9 @@ pub(crate) fn prepare_init_view(mut view: SelectMusicInitView) -> SelectMusicIni
     view
 }
 
-pub(crate) fn prepared_init_view() -> SelectMusicInitView {
+pub(crate) fn prepared_init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView {
     scores::prewarm_select_music_score_caches();
-    prepare_init_view(init_view())
+    prepare_init_view(init_view(dirs))
 }
 
 #[cfg(test)]

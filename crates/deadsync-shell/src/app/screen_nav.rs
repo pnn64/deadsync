@@ -137,7 +137,7 @@ impl App {
         }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
-        write_current_screen_file(target);
+        write_current_screen_file(target, &self.dirs.current_screen_path());
         if plan.clear_text_layout_cache {
             self.ui_text_layout_cache.clear();
         }

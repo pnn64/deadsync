@@ -1,7 +1,6 @@
 use crate::open_image_fallback;
 use deadlib_assets::AssetManager;
 use deadlib_assets::dynamic;
-use deadlib_platform::dirs;
 use deadlib_render::Backend;
 use deadlib_video as video;
 use image::RgbaImage;
@@ -31,7 +30,7 @@ pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
         return dynamic::load_or_build_cached_dynamic_image(
             path,
             opts,
-            &dirs::app_dirs().banner_cache_dir(),
+            &crate::paths().banner_cache,
         )
         .map_err(|e| e.to_string());
     }
@@ -49,7 +48,7 @@ pub fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
         return dynamic::load_or_build_cached_dynamic_image(
             path,
             opts,
-            &dirs::app_dirs().cdtitle_cache_dir(),
+            &crate::paths().cdtitle_cache,
         )
         .map_err(|e| e.to_string());
     }
@@ -135,15 +134,15 @@ fn build_artwork_cache_plan(
 pub fn artwork_cache_plan(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> ArtworkCachePlan {
     let banner_opts = banner_cache_options();
     let cdtitle_opts = cdtitle_cache_options();
-    let bcache = dirs::app_dirs().banner_cache_dir();
-    let ccache = dirs::app_dirs().cdtitle_cache_dir();
+    let bcache = &crate::paths().banner_cache;
+    let ccache = &crate::paths().cdtitle_cache;
     build_artwork_cache_plan(
         banner_paths,
         cdtitle_paths,
         banner_opts,
         cdtitle_opts,
-        &bcache,
-        &ccache,
+        bcache,
+        ccache,
     )
 }
 

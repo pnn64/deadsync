@@ -3,7 +3,7 @@ use crate::{OutputFormat, load_and_resample_sfx};
 use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender};
 use log::{debug, warn};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Validated session-lifetime sound data resolved before a hot submission.
@@ -15,11 +15,11 @@ pub struct SfxId(Arc<[i16]>);
 /// Thread model: the application thread is the sole cache and queue producer;
 /// the audio callback never touches this cache. Capacity is intentionally
 /// grow-only for the current session and warmed at screen/song transitions.
-/// Only explicit preparation resolves paths and decodes samples. Playback
+/// Only explicit preparation decodes samples from caller-resolved paths. Playback
 /// borrows retained `SfxId` values and submits them without locking, hashing,
 /// allocation, or I/O.
 pub struct SfxCache {
-    sounds: HashMap<String, SfxId>,
+    sounds: HashMap<PathBuf, SfxId>,
     sender: SfxSender,
     controls: Arc<MixControls>,
 }
@@ -33,30 +33,24 @@ impl SfxCache {
         }
     }
 
-    /// Resolves, decodes and resamples a sound at startup or a screen/song transition.
+    /// Decodes and resamples a resolved sound at startup or a screen/song transition.
     ///
     /// Returns `None` if loading fails. Repeated preparation reuses the samples.
-    pub fn prepare(
-        &mut self,
-        path: &str,
-        output: OutputFormat,
-        resolve_asset_path: impl FnOnce(&str) -> PathBuf,
-    ) -> Option<SfxId> {
+    pub fn prepare(&mut self, path: &Path, output: OutputFormat) -> Option<SfxId> {
         if let Some(sound) = self.sounds.get(path) {
             return Some(sound.clone());
         }
 
-        let resolved = resolve_asset_path(path);
-        let resolved_str = resolved.to_string_lossy();
+        let resolved_str = path.to_string_lossy();
         let decoded = match load_and_resample_sfx(&resolved_str, output) {
             Ok(data) => data,
             Err(e) => {
-                warn!("Failed to prepare SFX '{path}': {e}");
+                warn!("Failed to prepare SFX '{}': {e}", path.display());
                 return None;
             }
         };
 
-        debug!("Cached SFX: {path}");
+        debug!("Cached SFX: {}", path.display());
         let sound = SfxId(decoded);
         self.sounds.insert(path.to_owned(), sound.clone());
         Some(sound)
@@ -109,7 +103,7 @@ mod tests {
             sample_rate_hz: 48_000,
             channels: 2,
         };
-        let prepared = cache.prepare("cue", output, |_| path.clone());
+        let prepared = cache.prepare(&path, output);
         std::fs::remove_file(&path).unwrap();
         let sound = prepared.expect("valid PCM fixture must prepare");
         assert!(
@@ -117,7 +111,7 @@ mod tests {
             "preparation must not play"
         );
         let same = cache
-            .prepare("cue", output, |_| panic!("prepared cue resolved twice"))
+            .prepare(&path, output)
             .expect("cached sound remains available without its source");
 
         let effect = MixBus::new(0);
@@ -148,7 +142,11 @@ mod tests {
                 .iter()
                 .all(|frame| frame[0] == frame[1])
         );
-        assert!(cache.prepare("missing", output, |_| path.clone()).is_none());
+        assert!(
+            cache
+                .prepare(&path.with_extension("missing"), output)
+                .is_none()
+        );
         assert!(receiver.try_iter().next().is_none());
     }
 }

@@ -6,6 +6,7 @@ pub mod bools;
 pub mod cache;
 pub mod coin;
 pub mod defaults;
+pub mod dirs;
 pub mod folders;
 pub mod frame_pacing;
 pub mod ini;

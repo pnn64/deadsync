@@ -418,6 +418,7 @@ mod tests {
 
     #[test]
     fn profile_request_prepares_one_ready_slot() {
+        crate::tests::init_paths();
         let request = request(
             SimplyLoveQrLoginService::ArrowCloud,
             Some(("missing-profile".to_owned(), "Player".to_owned())),

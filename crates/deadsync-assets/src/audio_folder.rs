@@ -6,11 +6,10 @@
 //! underscore are excluded (matches the `_silent.redir` / theme override
 //! convention used by SL/SM5).
 //!
-//! Resolution goes through [`deadlib_platform::dirs::app_dirs`], so a user-supplied
+//! Resolution goes through [`crate::paths`], so a user-supplied
 //! `{data_dir}/assets/sounds/<folder>/...` overlay is automatically picked up
 //! on top of the bundled `assets/` directory.
 
-use deadlib_platform::dirs;
 use deadsync_audio_decode::folder as audio_folder;
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
@@ -28,7 +27,7 @@ fn enabled() -> bool {
 /// directory is missing or contains no eligible `.ogg` files.
 #[must_use]
 pub fn random_sfx_in(rel_dir: &str) -> Option<PathBuf> {
-    audio_folder::random_sfx_path(rel_dir, |path| dirs::app_dirs().resolve_asset_path(path))
+    audio_folder::random_sfx_path(rel_dir, |path| crate::paths().resolve_asset_path(path))
 }
 
 /// Same as [`random_sfx_in`] but takes a fully resolved directory.
@@ -43,7 +42,7 @@ pub fn pick_random_in(dir: &Path) -> Option<PathBuf> {
 #[must_use]
 pub fn indexed_sfx_in(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
     audio_folder::indexed_sfx_path(rel_dir, index, fallback_name, |path| {
-        dirs::app_dirs().resolve_asset_path(path)
+        crate::paths().resolve_asset_path(path)
     })
 }
 
@@ -87,9 +86,8 @@ pub fn indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) -> Option<Pat
 /// feature.
 #[must_use]
 pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
-    match audio_folder::music_path_result(rel_path, |path| {
-        dirs::app_dirs().resolve_asset_path(path)
-    }) {
+    match audio_folder::music_path_result(rel_path, |path| crate::paths().resolve_asset_path(path))
+    {
         audio_folder::MusicPathResult::Picked(path) => Some(path),
         audio_folder::MusicPathResult::EmptyDirectory(path) => {
             warn!(

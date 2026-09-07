@@ -157,6 +157,7 @@ struct ModStats {
 #[test]
 #[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
 fn native_modifier_values_match_deadsync() {
+    crate::paths::init();
     let trace = read_trace();
     let (compiled, _, context) = compile_trace_song(&trace);
     let timing = deadsync_rules::timing::TimingData::from_segments(

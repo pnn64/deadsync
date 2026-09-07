@@ -739,7 +739,7 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
     fs::create_dir_all(&job.songs_root)
         .map_err(|error| io_error("create the Songs directory", error))?;
     let destination = choose_destination(&job.songs_root, &job.pack)?;
-    let downloads_dir = deadlib_platform::dirs::app_dirs().downloads_dir();
+    let downloads_dir = crate::runtime::downloads_dir();
     fs::create_dir_all(&downloads_dir)
         .map_err(|error| io_error("create the Downloads directory", error))?;
     let archive_path = downloads_dir.join(format!(".deadsync-smo-{}.part.zip", job.pack.id));

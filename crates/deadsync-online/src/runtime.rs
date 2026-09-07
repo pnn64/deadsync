@@ -9,9 +9,34 @@ pub use crate::downloads::{
     runtime_snapshots_if_changed as unlock_download_snapshots_if_changed,
     runtime_take_ready_song_reload_request_if_changed as take_ready_song_reload_request_if_changed,
 };
-use deadlib_platform::dirs;
 use log::warn;
 use std::path::PathBuf;
+
+struct OnlinePaths {
+    downloads: PathBuf,
+    songs: PathBuf,
+    unlock_cache: PathBuf,
+}
+static PATHS: std::sync::OnceLock<OnlinePaths> = std::sync::OnceLock::new();
+
+/// Install download destinations and the unlock cache before online services start.
+pub fn init_paths(
+    downloads: PathBuf,
+    songs: PathBuf,
+    unlock_cache: PathBuf,
+) -> Result<(), &'static str> {
+    PATHS
+        .set(OnlinePaths {
+            downloads,
+            songs,
+            unlock_cache,
+        })
+        .map_err(|_| "online paths already initialized")
+}
+
+fn paths() -> &'static OnlinePaths {
+    PATHS.get().expect("online paths initialized at startup")
+}
 
 const DOWNLOAD_RUNTIME_HOOKS: UnlockDownloadRuntimeHooks = UnlockDownloadRuntimeHooks::new(
     downloads_dir,
@@ -81,13 +106,13 @@ pub fn forget_cached_unlock(url: &str, pack_name: &str) {
     runtime_forget_cached_destination(DOWNLOAD_RUNTIME_HOOKS, url, &destination);
 }
 
-fn downloads_dir() -> PathBuf {
-    dirs::app_dirs().downloads_dir()
+pub(crate) fn downloads_dir() -> PathBuf {
+    paths().downloads.clone()
 }
 
 fn unlock_destination_roots() -> Vec<PathBuf> {
     download_destination_roots(
-        dirs::app_dirs().songs_dir(),
+        paths().songs.clone(),
         deadsync_config::runtime::additional_song_folder_roots()
             .into_iter()
             .map(|folder| (PathBuf::from(folder.path), folder.writable)),
@@ -95,7 +120,7 @@ fn unlock_destination_roots() -> Vec<PathBuf> {
 }
 
 pub(crate) fn installed_pack_paths(pack_name: &str) -> Vec<PathBuf> {
-    let mut roots = vec![dirs::app_dirs().songs_dir()];
+    let mut roots = vec![paths().songs.clone()];
     for folder in deadsync_config::runtime::additional_song_folder_roots() {
         let root = PathBuf::from(folder.path);
         if !roots.contains(&root) {
@@ -106,8 +131,8 @@ pub(crate) fn installed_pack_paths(pack_name: &str) -> Vec<PathBuf> {
 }
 
 fn load_unlock_cache() -> UnlockCache {
-    let path = dirs::app_dirs().unlock_cache_path();
-    match read_unlock_cache_file(&path) {
+    let path = &paths().unlock_cache;
+    match read_unlock_cache_file(path) {
         Ok(cache) => cache,
         Err(error) => {
             if path.exists() {
@@ -119,8 +144,8 @@ fn load_unlock_cache() -> UnlockCache {
 }
 
 fn write_unlock_cache(cache: &UnlockCache) {
-    let path = dirs::app_dirs().unlock_cache_path();
-    if let Err(error) = write_unlock_cache_file(&path, cache) {
+    let path = &paths().unlock_cache;
+    if let Err(error) = write_unlock_cache_file(path, cache) {
         warn!("Failed to write unlock cache file {path:?}: {error}");
     }
 }

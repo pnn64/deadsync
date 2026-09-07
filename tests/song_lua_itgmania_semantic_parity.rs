@@ -1,3 +1,6 @@
+#[path = "support/paths.rs"]
+mod paths;
+
 use deadlib_present::anim::EffectMode;
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
@@ -2926,6 +2929,7 @@ fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
 #[test]
 #[ignore = "reports the current known song-Lua parity gaps"]
 fn native_song_lua_semantics_match_deadsync() {
+    crate::paths::init();
     let trace = read_trace();
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let (compiled, primary_index, context) = compile_trace_song(&trace);
@@ -3001,6 +3005,7 @@ fn native_song_lua_semantics_match_deadsync() {
 #[test]
 #[ignore = "compiles the complete Cuphead song-Lua runtime at 60 Hz"]
 fn cuphead_stateful_fire_message_matches_itgmania() {
+    crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE));
     let (compiled, primary_index, _) = compile_trace_song(&trace);
     for message in ["CagneyInit", "TargetsOn", "GoatSlap"] {
@@ -3172,6 +3177,7 @@ fn cuphead_cagney_parent_segments(
 
 #[test]
 fn semantic_fixture_manifest_is_complete_and_headless() {
+    crate::paths::init();
     let fixture_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua");
     let manifest: SemanticManifest = serde_json::from_slice(
@@ -3222,6 +3228,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 
 #[test]
 fn itl_unlock_fixture_contexts() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flip69 = read_trace_file(&root.join(FLIP69_TRACE));
     assert_eq!(flip69.style, "double");
@@ -3297,6 +3304,7 @@ fn itl_unlock_fixture_contexts() {
 
 #[test]
 fn brogamer_fixture_hides_and_scales_target_until_its_effect() {
+    crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE));
     let target = trace
         .actor_definitions
@@ -3346,6 +3354,7 @@ fn brogamer_fixture_hides_and_scales_target_until_its_effect() {
 
 #[test]
 fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE);
     let trace = read_trace_file(&trace_path);
     let (compiled, primary_index, context) = compile_trace_song(&trace);
@@ -3448,6 +3457,7 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
 
 #[test]
 fn cuphead_fixture_captures_queued_boss_spawns() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
     let trace = read_trace_file(&trace_path);
 
@@ -3494,6 +3504,7 @@ fn cuphead_fixture_captures_queued_boss_spawns() {
 
 #[test]
 fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
     let trace = read_trace_file(&trace_path);
 
@@ -3561,6 +3572,7 @@ fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
 
 #[test]
 fn step_your_game_up_critical_render_states_match_itgmania() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(STEP_YOUR_GAME_UP_TRACE);
     let trace = read_trace_file(&trace_path);
     let (compiled, _, context) = compile_trace_song(&trace);
@@ -3716,6 +3728,7 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
 
 #[test]
 fn starred_modifier_normalization_ignores_existing_options() {
+    crate::paths::init();
     assert_eq!(
         starred_mods("Overhead, 100% Dark, *1 no dark, *2 80% stealth"),
         "*1 no dark, *2 80% stealth"
@@ -3724,6 +3737,7 @@ fn starred_modifier_normalization_ignores_existing_options() {
 
 #[test]
 fn queued_startup_preserves_initial_overlay_state() {
+    crate::paths::init();
     let temp = tempfile::tempdir().expect("create song directory");
     let song_dir = temp.path();
     let entry = song_dir.join("default.lua");

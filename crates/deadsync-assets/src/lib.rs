@@ -23,11 +23,24 @@ pub use textures::{
     resolve_texture_choice_key as resolve_texture_choice,
 };
 
+static PATHS: std::sync::OnceLock<deadsync_config::dirs::AssetPaths> = std::sync::OnceLock::new();
+
+/// Install asset search roots and cache destinations before loading content.
+pub fn init_paths(paths: deadsync_config::dirs::AssetPaths) -> Result<(), &'static str> {
+    PATHS
+        .set(paths)
+        .map_err(|_| "asset paths already initialized")
+}
+
+pub(crate) fn paths() -> &'static deadsync_config::dirs::AssetPaths {
+    PATHS.get().expect("asset paths initialized at startup")
+}
+
 /// Resolve a bundled or data-overlay asset without exposing platform paths to
 /// asset consumers.
 #[must_use]
 pub fn resolve_asset_path(path: &str) -> std::path::PathBuf {
-    deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
+    paths().resolve_asset_path(path)
 }
 
 /// Open an image from bundled/data-overlay assets without exposing resolution
@@ -47,7 +60,7 @@ where
 {
     let jobs = textures::initial_texture_jobs(
         manifest.textures,
-        deadlib_platform::dirs::app_dirs(),
+        paths(),
         manifest.texture_needs_repeat_sampler,
     );
     assets.load_textures(backend, jobs)?;

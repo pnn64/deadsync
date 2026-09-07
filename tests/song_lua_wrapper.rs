@@ -1,3 +1,6 @@
+#[path = "support/paths.rs"]
+mod paths;
+
 use deadsync_assets::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
     SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
@@ -14,6 +17,7 @@ fn test_dir(name: &str) -> PathBuf {
 
 #[test]
 fn recurring_commands_use_song_easing_and_continuous_clock() {
+    crate::paths::init();
     let song_dir = test_dir("recurring-song-easing");
     fs::write(
         song_dir.join("easing.lua"),
@@ -87,6 +91,7 @@ return Def.Actor {
 
 #[test]
 fn compile_song_lua_exposes_noteskin_helpers() {
+    crate::paths::init();
     let song_dir = test_dir("noteskin-helpers");
     let entry = song_dir.join("default.lua");
     fs::write(
@@ -176,6 +181,7 @@ return Def.ActorFrame{
 
 #[test]
 fn compile_song_lua_reuses_noteskin_tap_model_slots() {
+    crate::paths::init();
     let song_dir = test_dir("noteskin-tap-model-slots");
     let entry = song_dir.join("default.lua");
     fs::write(
@@ -223,6 +229,7 @@ fn compile_song_lua_reuses_noteskin_tap_model_slots() {
 
 #[test]
 fn compile_song_lua_extracts_model_overlay_layers() {
+    crate::paths::init();
     let song_dir = test_dir("model-overlay-layers");
     let entry = song_dir.join("default.lua");
     let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -272,6 +279,7 @@ return Def.ActorFrame{{
 
 #[test]
 fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
     let entry = root.join("noteskin-overlay.lua");
     assert!(entry.is_file(), "missing fixture: {}", entry.display());
@@ -334,6 +342,7 @@ fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
 
 #[test]
 fn compile_song_lua_supports_rgb_aft_fixture() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
     let entry = root.join("aft.lua");
     assert!(entry.is_file(), "missing fixture: {}", entry.display());
@@ -393,6 +402,7 @@ fn compile_song_lua_supports_rgb_aft_fixture() {
 
 #[test]
 fn spooky_door_slide_moves_stretched_bounds() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
     let mut context = SongLuaCompileContext::new(&root, "Spooky doors");
     context.music_length_seconds = 1.0;

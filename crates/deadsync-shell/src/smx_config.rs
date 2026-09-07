@@ -61,7 +61,7 @@ pub fn smx_assignment_view() -> SmxAssignmentView {
 }
 
 pub fn smx_gif_catalog_view() -> SmxGifCatalogView {
-    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    let root = deadsync_assets::resolve_asset_path("assets");
     SmxGifCatalogView {
         background_packs: deadsync_smx::gifs::discover_packs(&root.join("smx-pad-lights")),
         judgment_packs: deadsync_smx::gifs::discover_packs(&root.join("smx-judge-lights")),

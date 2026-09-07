@@ -397,6 +397,7 @@ fn encode_hash(hash: impl AsRef<[u8]>) -> String {
 
 #[test]
 fn whole_song_archive_index_and_streamed_members_are_valid() {
+    crate::paths::init();
     let index = archive_index();
     assert_eq!(index.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert_eq!(index.hash, "sha256-compressed-archive");
@@ -410,6 +411,7 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
 #[test]
 #[ignore = "explicit full-corpus compile, composition, and exact semantic/render audit"]
 fn whole_song_archives_compile_compose_and_match_native_trace() {
+    crate::paths::init();
     let index = archive_index();
     for entry in selected_archives(&index) {
         eprintln!("whole-song parity: {}", entry.source_simfile);

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 #[test]
 fn song_plan_preserves_profile_derived_notefield_behavior() {
+    crate::tests::init_paths();
     let mut profile = profile_data::Profile::default();
     profile.note_field_offset_x = 99;
     profile.note_field_offset_y = -99;
@@ -64,6 +65,7 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
 
 #[test]
 fn combo_milestone_assets_keep_keys_and_use_static_sources() {
+    crate::tests::init_paths();
     let effects = &crate::visual_styles::ASSETS[0].effects;
     let sizes = [[10.0, 20.0], [30.0, 40.0], [50.0, 60.0], [70.0, 80.0]];
     let assets = combo_milestone_assets(effects, sizes);
@@ -101,6 +103,7 @@ fn combo_milestone_assets_keep_keys_and_use_static_sources() {
 
 #[test]
 fn combo_milestone_sizes_refresh_only_when_visual_sources_change() {
+    crate::tests::init_paths();
     let resolved = ResolvedComboMilestoneAssets::new();
     let first_keys = ["burst-a", "hundred-a", "mini-a", "thousand-a"];
     let second_keys = ["burst-b", "hundred-b", "mini-b", "thousand-b"];
@@ -118,6 +121,7 @@ fn combo_milestone_sizes_refresh_only_when_visual_sources_change() {
 
 #[test]
 fn cached_judgment_metadata_refreshes_only_when_registry_generation_changes() {
+    crate::tests::init_paths();
     let cached = ResolvedJudgmentAssets::from_profile(&profile_data::Profile::default());
     let first = JudgmentSpriteMetadata {
         frame_size: [128.0, 64.0],
@@ -159,6 +163,7 @@ fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
 
 #[test]
 fn actor_resource_prewarm_covers_every_noteskin_slot() {
+    crate::tests::init_paths();
     let style = Style {
         num_cols: 4,
         num_players: 1,
@@ -188,6 +193,7 @@ fn actor_resource_prewarm_covers_every_noteskin_slot() {
 
 #[test]
 fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
+    crate::tests::init_paths();
     let active = ActiveHold {
         note_index: 42,
         start_time_ns: 100_000_000_000,
@@ -205,6 +211,7 @@ fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
 
 #[test]
 fn hold_explosion_waits_for_receptor_on_early_hit() {
+    crate::tests::init_paths();
     let active = ActiveHold {
         note_index: 42,
         start_time_ns: 100_000_000_000,
@@ -222,6 +229,7 @@ fn hold_explosion_waits_for_receptor_on_early_hit() {
 
 #[test]
 fn hold_explosion_requires_live_hold_state() {
+    crate::tests::init_paths();
     let exhausted = ActiveHold {
         note_index: 7,
         start_time_ns: 100_000_000_000,
@@ -250,6 +258,7 @@ fn hold_explosion_requires_live_hold_state() {
 
 #[test]
 fn hold_explosion_option_uses_holding_mask() {
+    crate::tests::init_paths();
     let enabled = profile_data::Profile::default();
     assert!(hold_explosion_enabled(&enabled));
 
@@ -272,6 +281,7 @@ fn hold_explosion_option_uses_holding_mask() {
 
 #[test]
 fn hold_head_render_flags_switch_to_active_at_receptor() {
+    crate::tests::init_paths();
     let mut active = ActiveHold {
         note_index: 42,
         start_time_ns: 100_000_000_000,
@@ -295,6 +305,7 @@ fn hold_head_render_flags_switch_to_active_at_receptor() {
 
 #[test]
 fn roll_head_render_flags_stay_active_between_taps() {
+    crate::tests::init_paths();
     let active = ActiveHold {
         note_index: 42,
         start_time_ns: 100_000_000_000,
@@ -312,6 +323,7 @@ fn roll_head_render_flags_stay_active_between_taps() {
 
 #[test]
 fn hold_head_render_flags_require_engaged_life_state() {
+    crate::tests::init_paths();
     let exhausted = ActiveHold {
         note_index: 7,
         start_time_ns: 100_000_000_000,
@@ -344,6 +356,7 @@ fn hold_head_render_flags_require_engaged_life_state() {
 
 #[test]
 fn receptor_glow_draws_under_hold_body() {
+    crate::tests::init_paths();
     let style = notefield_style();
     assert!(style.receptor.target_z < style.actors.hold_body_z);
     assert!(style.receptor.press_glow_z < style.actors.hold_body_z);
@@ -351,6 +364,7 @@ fn receptor_glow_draws_under_hold_body() {
 
 #[test]
 fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
+    crate::tests::init_paths();
     let actors = notefield_style().actors;
     assert!(actors.hold_body_z < actors.hold_glow_z);
     assert!(actors.hold_glow_z < actors.note_z);
@@ -358,6 +372,7 @@ fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
 
 #[test]
 fn average_error_bar_draws_under_receptors() {
+    crate::tests::init_paths();
     let z = notefield_style().error_bar.average_z;
     assert!(z < notefield_style().receptor.target_z);
     assert!(z < notefield_style().actors.note_z);
@@ -365,6 +380,7 @@ fn average_error_bar_draws_under_receptors() {
 
 #[test]
 fn judgment_frame_size_uses_logical_atlas_frame_dims() {
+    crate::tests::init_paths();
     let censored = "judgements/Test Censored 1x7 (doubleres).png";
     let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
     let love = "judgements/Test Love 2x7 (doubleres).png";
@@ -384,6 +400,7 @@ fn judgment_frame_size_uses_logical_atlas_frame_dims() {
 
 #[test]
 fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
+    crate::tests::init_paths();
     let windows = timing::TimingProfile::default_itg_with_fa_plus().windows_s;
     let (bounds, len) = error_bar_boundaries_s(
         windows,
@@ -399,6 +416,7 @@ fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
 
 #[test]
 fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
+    crate::tests::init_paths();
     let style = Style {
         num_cols: 4,
         num_players: 1,
@@ -433,6 +451,7 @@ fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
 
 #[test]
 fn hold_explosion_slot_respects_explosion_noteskin_choice() {
+    crate::tests::init_paths();
     let style = Style {
         num_cols: 4,
         num_players: 1,
@@ -468,6 +487,7 @@ fn hold_explosion_slot_respects_explosion_noteskin_choice() {
 
 #[test]
 fn default_tap_circles_stay_inside_arrow_in_gameplay_layout() {
+    crate::tests::init_paths();
     let style = Style {
         num_cols: 4,
         num_players: 1,

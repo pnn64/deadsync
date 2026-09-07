@@ -5,10 +5,9 @@ use deadlib_audio_core::{
     OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot, PlayedMapReader, SfxSender,
     StutterDiagAudioEvent, normalized_music_rate,
 };
-use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
 use log::info;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::thread;
@@ -73,11 +72,15 @@ pub fn collect_stutter_diag_events(
     deadlib_audio_core::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
-pub fn init(cfg: InitConfig) -> Result<(AudioControl, MusicClock), String> {
-    let app_dirs = dirs::app_dirs();
+/// Initialize audio with caller-resolved consolidated and legacy ReplayGain cache paths.
+pub fn init(
+    cfg: InitConfig,
+    cache_file: PathBuf,
+    legacy_cache_dir: PathBuf,
+) -> Result<(AudioControl, MusicClock), String> {
     replaygain::init(replaygain::InitConfig {
-        cache_file: app_dirs.replaygain_cache_file(),
-        legacy_cache_dir: app_dirs.replaygain_cache_dir(),
+        cache_file,
+        legacy_cache_dir,
         result_callback: set_music_replaygain_if_matches,
     })
     .map_err(str::to_string)?;
@@ -133,10 +136,10 @@ impl AudioControl {
     /// Loads a sound for later playback; call during startup or screen/song preparation.
     ///
     /// Returns `None` when audio is unavailable or the sound cannot be loaded.
-    pub fn prepare_sfx(&mut self, path: &str) -> Option<SfxId> {
+    pub fn prepare_sfx(&mut self, path: &Path) -> Option<SfxId> {
         let engine = self.engine.as_mut()?;
         let output = output_format(engine);
-        engine.sfx_cache.prepare(path, output, resolve_asset_path)
+        engine.sfx_cache.prepare(path, output)
     }
 
     /// Enqueues a prepared effect without filesystem access or decoding.
@@ -199,10 +202,6 @@ impl AudioControl {
     pub fn set_replaygain_enabled(&self, enabled: bool) {
         set_replaygain_enabled(enabled);
     }
-}
-
-fn resolve_asset_path(path: &str) -> PathBuf {
-    dirs::app_dirs().resolve_asset_path(path)
 }
 
 #[inline(always)]

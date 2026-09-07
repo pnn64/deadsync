@@ -1,4 +1,3 @@
-use deadlib_platform::dirs;
 mod texture;
 
 pub use self::texture::{
@@ -44,7 +43,7 @@ pub fn clear_itg_runtime_caches() {
 }
 
 fn noteskin_roots() -> Vec<PathBuf> {
-    let mut roots = dirs::app_dirs().noteskin_roots();
+    let mut roots = crate::paths().noteskin_roots.clone();
     if let Ok(cwd) = std::env::current_dir() {
         add_workspace_noteskin_roots(&mut roots, &cwd);
     }
@@ -106,10 +105,6 @@ pub fn song_lua_noteskin_names() -> Vec<String> {
     noteskin_itg::song_lua_noteskin_names_from_roots(&roots, "dance")
 }
 
-fn noteskin_cache_dir() -> PathBuf {
-    dirs::app_dirs().noteskin_cache_dir()
-}
-
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
     ITG_SKIN_CACHE
         .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
@@ -124,9 +119,9 @@ where
 {
     clear_itg_runtime_caches();
     let roots = noteskin_roots();
-    let cache_dir = noteskin_cache_dir();
+    let cache_dir = &crate::paths().noteskin_cache;
     noteskin_compiler::compile_all_itg_caches_with_progress(
-        &cache_dir,
+        cache_dir,
         &roots,
         "dance",
         &mut on_progress,
@@ -175,8 +170,8 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
     let data = noteskin_itg::load_noteskin_data_cached(root, game, skin)?;
-    let cache_dir = noteskin_cache_dir();
-    let bundle = noteskin_compiler::load_or_compile(&cache_dir, game, &data)?;
+    let cache_dir = &crate::paths().noteskin_cache;
+    let bundle = noteskin_compiler::load_or_compile(cache_dir, game, &data)?;
     load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors).map_err(|err| {
         format!(
             "failed to load compiled noteskin '{}/{}': {}",
@@ -356,6 +351,26 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn init_asset_paths() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            let bundle = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .and_then(Path::parent)
+                .expect("crate is under the workspace crates directory")
+                .to_path_buf();
+            let data = std::env::temp_dir()
+                .join(format!("deadsync-noteskin-paths-{}", std::process::id()));
+            let dirs = deadsync_config::dirs::AppDirs {
+                cache_dir: data.join("cache"),
+                data_dir: data,
+                exe_dir: bundle,
+                portable: false,
+            };
+            crate::init_paths(dirs.asset_paths(None)).expect("initialize fixture asset paths");
+        });
+    }
+
     fn temp_noteskin_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -406,6 +421,7 @@ mod tests {
 
     #[test]
     fn loads_default_and_cel_itg_noteskins() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -416,6 +432,7 @@ mod tests {
 
     #[test]
     fn loads_bundled_pump_default_noteskin() {
+        init_asset_paths();
         let style = Style {
             num_cols: 5,
             num_players: 1,
@@ -461,6 +478,7 @@ mod tests {
 
     #[test]
     fn loads_every_bundled_pump_noteskin() {
+        init_asset_paths();
         const PUMP_SKINS: [&str; 14] = [
             "default",
             "cmd",
@@ -496,6 +514,7 @@ mod tests {
 
     #[test]
     fn pump_delta_keeps_tap_note_fade() {
+        init_asset_paths();
         let style = Style {
             num_cols: 5,
             num_players: 1,
@@ -527,6 +546,7 @@ mod tests {
 
     #[test]
     fn cel_exposes_model_and_uv_motion() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -541,6 +561,7 @@ mod tests {
 
     #[test]
     fn shared_background_arrow_model_loads_with_texture_scroll() {
+        init_asset_paths();
         let slots = load_itg_model_slots_from_path(Path::new(
             "assets/graphics/menu_bg_technique/arrow_model.txt",
         ))
@@ -565,6 +586,7 @@ mod tests {
 
     #[test]
     fn shared_background_arrow_model_uv_scroll_uses_animation_cycle() {
+        init_asset_paths();
         let slots = load_itg_model_slots_from_path(Path::new(
             "assets/graphics/menu_bg_technique/arrow_model.txt",
         ))
@@ -585,6 +607,7 @@ mod tests {
 
     #[test]
     fn cel_model_tap_note_uses_multiple_material_layers() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -615,6 +638,7 @@ mod tests {
 
     #[test]
     fn cel_model_tap_note_honors_nomove_material() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -653,6 +677,7 @@ mod tests {
 
     #[test]
     fn default_exposes_multi_layer_tap_note() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -682,6 +707,7 @@ mod tests {
 
     #[test]
     fn default_exposes_lift_layers_for_each_quantization() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -694,6 +720,7 @@ mod tests {
 
     #[test]
     fn lambda_tap_note_uses_source_size_hints() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -730,6 +757,7 @@ mod tests {
 
     #[test]
     fn default_receptor_overlay_press_and_lift_behavior_is_parsed() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -781,6 +809,7 @@ mod tests {
 
     #[test]
     fn default_receptor_overlay_keeps_source_size_ratio() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -812,6 +841,7 @@ mod tests {
 
     #[test]
     fn howdy_receptor_none_command_keeps_init_zoom_static() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -841,6 +871,7 @@ mod tests {
 
     #[test]
     fn command_stack_receptor_none_command_drives_press_pulse() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -863,6 +894,7 @@ mod tests {
 
     #[test]
     fn devcel_receptor_hit_commands_do_not_use_none_zoom_pulse() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -915,6 +947,7 @@ mod tests {
 
     #[test]
     fn devcel_roll_active_preserves_repeated_frame_states() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -941,6 +974,7 @@ mod tests {
 
     #[test]
     fn receptor_pulse_uses_actor_init_command_not_fallback_metric() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("receptor-init-command");
         let skin_dir = root.join("dance/steady");
@@ -1026,6 +1060,7 @@ return t
 
     #[test]
     fn loader_init_command_applies_to_resolved_receptor() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("loader-init-command");
         let skin_dir = root.join("dance/mirror");
@@ -1091,6 +1126,7 @@ return skin
 
     #[test]
     fn loader_base_rotation_y_mirrors_receptor() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("loader-base-rotation-y");
         let skin_dir = root.join("dance/mirror-y");
@@ -1139,6 +1175,7 @@ return skin
 
     #[test]
     fn explosion_children_keep_per_button_rotation() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("explosion-child-rotation");
         let skin_dir = root.join("dance/ghostrot");
@@ -1240,6 +1277,7 @@ return skin
 
     #[test]
     fn child_flash_hold_emitter_does_not_fall_back_to_static_explosion() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("hold-child-flash-emitter");
         let skin_dir = root.join("dance/flashhold");
@@ -1311,6 +1349,7 @@ return Def.ActorFrame {
 
     #[test]
     fn receptor_reverse_commands_are_kept_per_layer() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("receptor-reverse-command");
         let skin_dir = root.join("dance/revbar");
@@ -1398,6 +1437,7 @@ return t
 
     #[test]
     fn default_and_cel_parse_notedisplay_flags() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1445,6 +1485,7 @@ return t
 
     #[test]
     fn ddr_note_and_cel_keep_distinct_reverse_hold_flags() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1472,6 +1513,7 @@ return t
 
     #[test]
     fn default_and_cel_parse_note_color_translation_metrics() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1501,6 +1543,7 @@ return t
 
     #[test]
     fn default_and_cel_resolve_hold_topcaps() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1533,6 +1576,7 @@ return t
 
     #[test]
     fn default_does_not_bake_quantization_uv_shift_into_slots() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1558,6 +1602,7 @@ return t
 
     #[test]
     fn ddr_vivid_parses_hold_body_offsets() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1597,6 +1642,7 @@ return t
 
     #[test]
     fn vivid_zero_spacing_keeps_model_uv_offsets_across_quants() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1625,6 +1671,7 @@ return t
 
     #[test]
     fn vivid_tap_note_honors_vertex_tex_matrix_scale_flags() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1660,6 +1707,7 @@ return t
 
     #[test]
     fn ddr_note_receptor_uses_beat_clock_with_mixed_delays() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1708,6 +1756,7 @@ return t
 
     #[test]
     fn ddr_note_receptor_phase_index_uses_weighted_delays() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1728,6 +1777,7 @@ return t
 
     #[test]
     fn ddr_note_hold_body_and_cap_use_per_column_assets() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1767,6 +1817,7 @@ return t
 
     #[test]
     fn ddr_note_hold_head_uses_down_hold_head_sheet() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1799,6 +1850,7 @@ return t
 
     #[test]
     fn multi_layer_hold_heads_keep_model_layers() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("multi-layer-hold-head");
         let skin_dir = root.join("dance/multilayer");
@@ -1931,6 +1983,7 @@ Materials: 2
 
     #[test]
     fn default_skin_blanks_hold_and_roll_explosion() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1961,6 +2014,7 @@ Materials: 2
 
     #[test]
     fn default_mine_hit_explosion_comes_from_noteskin_actor_and_commands() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -1985,6 +2039,7 @@ Materials: 2
 
     #[test]
     fn blank_tap_explosions_do_not_fall_back_to_common() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("blank-tap-explosion");
         let skin_dir = root.join("dance/blanktap");
@@ -2048,6 +2103,7 @@ return skin
 
     #[test]
     fn cel_hold_heads_remap_to_tap_layers() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2072,6 +2128,7 @@ return skin
 
     #[test]
     fn cel_hold_body_resolves_for_all_columns() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2093,6 +2150,7 @@ return skin
 
     #[test]
     fn enchantment_tap_note_uses_linear_frames_animation() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2134,6 +2192,7 @@ return skin
 
     #[test]
     fn enchantment_tap_mine_uses_linear_frames_animation() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2174,6 +2233,7 @@ return skin
 
     #[test]
     fn ddr_vivid_hold_explosion_uses_four_animated_frames() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2223,6 +2283,7 @@ return skin
 
     #[test]
     fn setstateproperties_linear_frames_applies_to_synthetic_8x8_slot() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2309,6 +2370,7 @@ return skin
 
     #[test]
     fn setallstatedelays_overrides_existing_sprite_animation() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2368,6 +2430,7 @@ return skin
 
     #[test]
     fn cel_roll_glowshift_keeps_diffuse_and_uses_glow_channel() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2420,6 +2483,7 @@ return skin
 
     #[test]
     fn cel_w1_tap_explosion_resolves_dim_and_bright_paths() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2477,6 +2541,7 @@ return skin
 
     #[test]
     fn command_stack_tap_explosions_keep_button_rotation() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -2533,6 +2598,7 @@ return skin
 
     #[test]
     fn command_stack_mine_explosion_uses_emitter_commands_without_spin() {
+        init_asset_paths();
         clear_itg_runtime_caches();
         let style = Style {
             num_cols: 4,
@@ -2593,6 +2659,7 @@ return skin
 
     #[test]
     fn cel_tap_mine_prefers_model_actor_over_texture_fallback() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2615,6 +2682,7 @@ return skin
 
     #[test]
     fn cel_tap_mine_uv_phase_uses_beat_clock_from_metrics() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2639,6 +2707,7 @@ return skin
 
     #[test]
     fn cel_tap_mine_does_not_set_model_spin_effect() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2657,6 +2726,7 @@ return skin
 
     #[test]
     fn cel_tap_mine_uses_milkshape_bone_rotation_timing() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2686,6 +2756,7 @@ return skin
 
     #[test]
     fn lambda_tap_mine_spin_uses_beat_clock_and_magnitude() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,
@@ -2716,6 +2787,7 @@ return skin
 
     #[test]
     fn ddr_note_tap_mine_keeps_second_model_layer_as_frame() {
+        init_asset_paths();
         let style = Style {
             num_cols: 4,
             num_players: 1,

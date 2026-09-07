@@ -95,7 +95,6 @@ use crate::window_state::{
     apply_shell_surface_active, apply_shell_window_focus, apply_shell_window_occlusion,
 };
 use deadlib_assets::AssetManager;
-use deadlib_platform::dirs;
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
 use deadlib_present::compose;
@@ -104,6 +103,7 @@ use deadlib_render as renderer_backend;
 use deadlib_render_core as renderer;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::{TextureUploadBudget, media_cache};
+use deadsync_config::dirs::AppDirs;
 use deadsync_config::prelude::{
     self as config, FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since,
     stutter_severity,
@@ -1005,8 +1005,7 @@ fn wheel_banner_path(entry: Option<&select_music::MusicWheelEntry>) -> Option<Pa
     }
 }
 
-fn app_paths_view() -> AppPathsView {
-    let dirs = deadlib_platform::dirs::app_dirs();
+fn app_paths_view(dirs: &AppDirs) -> AppPathsView {
     AppPathsView {
         data: app_path_view(dirs.data_dir.clone()),
         cache: app_path_view(dirs.cache_dir.clone()),
@@ -1042,8 +1041,8 @@ fn options_pack_sync_view() -> OptionsPackSyncView {
     }
 }
 
-fn noteskin_catalog_view() -> NoteskinCatalogView {
-    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
+fn noteskin_catalog_view(dirs: &AppDirs) -> NoteskinCatalogView {
+    let roots = dirs.noteskin_roots();
     let game = if profile::get_session_play_style().is_pump() {
         "pump"
     } else {
@@ -1064,6 +1063,7 @@ const fn bookkeeping_view(bookkeeping: crate::coin::Bookkeeping) -> BookkeepingV
 }
 
 fn options_init_view(
+    dirs: &AppDirs,
     audio: AudioOptionsView,
     bookkeeping: crate::coin::Bookkeeping,
 ) -> OptionsInitView {
@@ -1074,12 +1074,12 @@ fn options_init_view(
         ))
         .clone(),
         updater_capabilities: updater::capabilities(),
-        app_paths: app_paths_view(),
+        app_paths: app_paths_view(dirs),
         audio,
         graphics: graphics::options_graphics_view(),
         song_packs: options_song_pack_view(),
         pack_sync: options_pack_sync_view(),
-        noteskins: noteskin_catalog_view(),
+        noteskins: noteskin_catalog_view(dirs),
         machine_player_options: profile::machine_common_player_options(),
         smx_assignment: crate::smx_config::smx_assignment_view(),
         smx_gifs: crate::smx_config::smx_gif_catalog_view(),
@@ -1090,6 +1090,7 @@ fn options_init_view(
 
 impl ScreensState {
     fn new(
+        dirs: &AppDirs,
         color_index: i32,
         preferred_difficulty_index: usize,
         dedicated_three_key_nav: bool,
@@ -1133,10 +1134,10 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let app_paths = app_paths_view();
+        let app_paths = app_paths_view(dirs);
         let init_songs_root = app_paths.songs.path.clone();
         let init_courses_root = app_paths.courses.path;
-        let mut options_state = options::init(options_init_view(audio_options, bookkeeping));
+        let mut options_state = options::init(options_init_view(dirs, audio_options, bookkeeping));
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -1451,6 +1452,7 @@ impl ScreensState {
 
 impl AppState {
     fn new(
+        dirs: &AppDirs,
         cfg: config::Config,
         profile_data: profile_data::Profile,
         overlay_mode: u8,
@@ -1462,13 +1464,9 @@ impl AppState {
 
         let shell = ShellState::new(&cfg, overlay_mode);
         let session = SessionState::new(preferred, profile::combo_carry());
-        let coin = crate::coin::State::load(
-            deadlib_platform::dirs::app_dirs()
-                .data_dir
-                .join("save")
-                .join("bookkeeping.json"),
-        );
+        let coin = crate::coin::State::load(dirs.bookkeeping_path());
         let screens = ScreensState::new(
+            dirs,
             color_index,
             preferred,
             cfg.three_key_navigation && cfg.only_dedicated_menu_buttons,
@@ -1488,6 +1486,8 @@ impl AppState {
 }
 
 pub struct App {
+    dirs: AppDirs,
+    screenshots_dir: PathBuf,
     input: logical_input::keymap::InputState,
     window: Option<Arc<Window>>,
     backend: Option<renderer_backend::Backend>,
@@ -1736,10 +1736,10 @@ pub struct App {
     gfx_debug_enabled: bool,
 }
 
-fn execute_platform_request(request: PlatformRequest) {
+fn execute_platform_request(dirs: &AppDirs, request: PlatformRequest) {
     match request {
         PlatformRequest::RevealPath { path, kind } => {
-            dirs::ensure_dirs_exist();
+            dirs.ensure_dirs_exist();
             if matches!(kind, RevealPathKind::Directory)
                 && !path.exists()
                 && let Err(e) = std::fs::create_dir_all(&path)
@@ -2097,7 +2097,7 @@ impl App {
             self.state.screens.select_music_state.active_color_index,
             CurrentScreen::SelectMusic,
             None,
-            noteskin_catalog_view(),
+            noteskin_catalog_view(&self.dirs),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
             crate::player_options::init_view(),
@@ -2334,7 +2334,11 @@ impl App {
         // command installs the initial media.
         gs.background_path_dirty = true;
         let song_start_sfx = gameplay::start_sfx(self.state.session.gameplay_restart_count)
-            .and_then(|path| self.audio.prepare_sfx(path.to_string_lossy().as_ref()));
+            .and_then(|path| {
+                self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+                    path.to_string_lossy().as_ref(),
+                ))
+            });
         self.state.screens.gameplay_state = Some(gs);
         if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
             crate::gameplay_runtime::enter(
@@ -3454,7 +3458,7 @@ impl App {
     /// option first resolves a background, never per frame.
     fn smx_gif_registry(&mut self) -> &std::sync::Arc<deadsync_smx::gifs::GifRegistry> {
         self.smx_gifs.get_or_insert_with(|| {
-            let root = dirs::app_dirs().resolve_asset_path("assets");
+            let root = deadsync_assets::resolve_asset_path("assets");
             std::sync::Arc::new(deadsync_smx::gifs::GifRegistry::load(&root))
         })
     }
@@ -4376,6 +4380,7 @@ impl App {
             .then_some(self.state.screens.options_state.selected);
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state = options::init(options_init_view(
+            &self.dirs,
             audio_requests::options_view(&self.audio),
             self.state.coin.bookkeeping(),
         ));
@@ -4403,6 +4408,7 @@ impl App {
     }
 
     fn new(
+        dirs: AppDirs,
         overlay_mode: u8,
         color_index: i32,
         config_generation: u64,
@@ -4424,6 +4430,7 @@ impl App {
             audio_requests::UiSfx::prepare(&mut audio, deadsync_theme_simply_love::SFX_PATHS);
         let audio_options = audio_requests::options_view(&audio);
         let state = AppState::new(
+            &dirs,
             config,
             profile_data,
             overlay_mode,
@@ -4528,7 +4535,9 @@ impl App {
             heart_rate: crate::heart_rate::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
-            sync_analysis: crate::sync_analysis::Service::default(),
+            sync_analysis: crate::sync_analysis::Service::new(dirs.null_or_die_cache_file()),
+            screenshots_dir: dirs.screenshots_dir(),
+            dirs,
             song_search: crate::song_search::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
@@ -4696,7 +4705,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Debug(SimplyLoveDebugRequest::WriteFsrDump) => {
-                    let path = dirs::app_dirs().data_dir.join("fsrdump.txt");
+                    let path = self.dirs.fsr_dump_path();
                     match self.fsr_monitor.write_debug_dump(&path) {
                         Ok(()) => {
                             info!("Wrote FSR debug dump to '{}'", path.display());
@@ -5111,7 +5120,7 @@ impl App {
                         SimplyLoveContentRequest::DeleteSong { simfile_path } => {
                             let config = config::get();
                             let result = if config.allow_song_deletion {
-                                let songs_root = deadlib_platform::dirs::app_dirs().songs_dir();
+                                let songs_root = self.dirs.songs_dir();
                                 let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
                                     &songs_root,
                                 );
@@ -5394,7 +5403,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Platform(request) => {
-                    execute_platform_request(request);
+                    execute_platform_request(&self.dirs, request);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Reinitialize) => {
@@ -5539,7 +5548,7 @@ impl App {
                 ) => {
                     if let Err(error) = deadsync_online::stepmaniaonline::runtime_queue_download(
                         pack_id,
-                        dirs::app_dirs().songs_dir(),
+                        self.dirs.songs_dir(),
                     ) {
                         warn!("Could not queue StepManiaOnline pack {pack_id}: {error}");
                     }
@@ -5843,7 +5852,7 @@ impl App {
             Some(player_options::FixedStepchart {
                 label: course_run.course_stepchart_label.clone(),
             }),
-            noteskin_catalog_view(),
+            noteskin_catalog_view(&self.dirs),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
             crate::player_options::init_view(),
@@ -5881,7 +5890,7 @@ impl App {
             active_color_index,
             return_screen,
             None,
-            noteskin_catalog_view(),
+            noteskin_catalog_view(&self.dirs),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
             crate::player_options::init_view(),
@@ -6264,7 +6273,11 @@ impl App {
         // the player's actual exit from gameplay.
         let failed = screens::evaluation::all_joined_players_failed(&eval_snapshot);
         let entry_sfx = evaluation::entry_sfx(failed, config.visual_style, config.srpg_variant)
-            .and_then(|path| self.audio.prepare_sfx(path.to_string_lossy().as_ref()));
+            .and_then(|path| {
+                self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+                    path.to_string_lossy().as_ref(),
+                ))
+            });
         if let Some(sound) = entry_sfx {
             self.audio.play_screen_sfx(&sound);
         }
@@ -6765,7 +6778,7 @@ impl App {
             return;
         }
 
-        let path = path.map(|path| dirs::app_dirs().resolve_asset_path(path));
+        let path = path.map(deadsync_assets::resolve_asset_path);
 
         let Some(backend) = self.backend.as_mut() else {
             screens::components::shared::visual_style_bg::set_srpg_background_key(None);
@@ -8062,9 +8075,10 @@ impl App {
             ),
             music_paths: TransitionMusicPaths {
                 menu: screen_nav::menu_music_path(config.visual_style, config.srpg_variant),
-                course: dirs::app_dirs()
-                    .resolve_asset_path("assets/music/select_course (loop).ogg"),
-                credits: dirs::app_dirs().resolve_asset_path("assets/music/credits.ogg"),
+                course: deadsync_assets::resolve_asset_path(
+                    "assets/music/select_course (loop).ogg",
+                ),
+                credits: deadsync_assets::resolve_asset_path("assets/music/credits.ogg"),
                 gameover: screen_nav::gameover_music_path(),
             },
             player_options,
@@ -8287,7 +8301,8 @@ impl App {
             self.sync_profile_load_state(&profiles);
             let play_mode = profile::get_session_play_mode();
             profile_load::on_enter(&mut self.state.screens.profile_load_state, play_mode);
-            let select_music = self.coin_select_music_init_view(crate::select_music::init_view());
+            let select_music =
+                self.coin_select_music_init_view(crate::select_music::init_view(&self.dirs));
             self.profile_load.start(play_mode, select_music);
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
@@ -8344,7 +8359,7 @@ impl App {
                     color_index,
                     return_screen,
                     None,
-                    noteskin_catalog_view(),
+                    noteskin_catalog_view(&self.dirs),
                     crate::smx_config::smx_gif_catalog_view(),
                     crate::heart_rate::devices_view(),
                     crate::player_options::init_view(),
@@ -8415,7 +8430,7 @@ impl App {
                     color_index,
                     CurrentScreen::SelectMusic,
                     None,
-                    noteskin_catalog_view(),
+                    noteskin_catalog_view(&self.dirs),
                     crate::smx_config::smx_gif_catalog_view(),
                     crate::heart_rate::devices_view(),
                     crate::player_options::init_view(),
@@ -9390,8 +9405,9 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
-                    let init_view =
-                        self.coin_select_music_init_view(crate::select_music::prepared_init_view());
+                    let init_view = self.coin_select_music_init_view(
+                        crate::select_music::prepared_init_view(&self.dirs),
+                    );
                     let mut refreshed = select_music::init(init_view);
                     select_music::adopt_song_search_generation(
                         &mut refreshed,
@@ -9907,7 +9923,37 @@ impl ApplicationHandler<UserEvent> for App {
     }
 }
 
+/// Install each service's paths before config loads or workers start.
+/// The shell retains the full layout; services receive only their own roots.
+pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
+    use deadsync_simfile::media::{BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR};
+    let cwd = std::env::current_dir().ok();
+    let media_roots = |name| dirs.media_roots(name, cwd.as_deref());
+    deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
+    deadsync_assets::init_paths(dirs.asset_paths(cwd.as_deref()))?;
+    deadsync_profile::app_runtime::init_paths(
+        dirs.profiles_root(),
+        dirs.default_player_options_path(),
+    )?;
+    deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
+        song_cache: dirs.song_cache_dir(),
+        extra_songs: dirs.extra_song_roots(),
+        extra_courses: dirs.extra_course_roots(),
+        autogen_courses: dirs.courses_dir(),
+        song_movies: media_roots(SONG_MOVIES_DIR),
+        random_movies: media_roots(RANDOM_MOVIES_DIR),
+        bg_animations: media_roots(BG_ANIMATIONS_DIR),
+    })?;
+    deadsync_online::runtime::init_paths(
+        dirs.downloads_dir(),
+        dirs.songs_dir(),
+        dirs.unlock_cache_path(),
+    )?;
+    deadsync_updater::init_cache_dir(dirs.cache_dir.clone())
+}
+
 pub fn run(
+    dirs: AppDirs,
     audio: deadsync_audio_stream::AudioControl,
     music_clock: deadsync_audio_stream::MusicClock,
     live_case: Option<crate::live_case::LiveCase>,
@@ -9918,6 +9964,7 @@ pub fn run(
     let profile_data = profile::get();
     let event_loop: EventLoop<UserEvent> = EventLoop::<UserEvent>::with_user_event().build()?;
     let mut app = App::new(
+        dirs,
         show_stats_mode,
         color_index,
         config_generation,
@@ -10589,6 +10636,7 @@ mod tests {
 
     #[test]
     fn course_summary_uses_trail_totals_and_keeps_timing_graphs() {
+        crate::tests::init_paths();
         let song_a = test_song_with_duration("Songs/Test/a.ssc", "a", 60.0);
         let song_b = test_song_with_duration("Songs/Test/b.ssc", "b", 90.0);
         let mut chart = test_chart("stage-a");
@@ -10666,6 +10714,7 @@ mod tests {
 
     #[test]
     fn course_summary_merges_column_judgments_from_song_pages() {
+        crate::tests::init_paths();
         let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
         let side = profile_data::PlayerSide::P2;
         let config = config::Config::default();

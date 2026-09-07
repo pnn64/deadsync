@@ -21,9 +21,8 @@ pub use context::{METADATA_TEXTURE_CONTEXT, MetadataTextureContext};
 pub use decode::{TextureAssetSpec, TextureDecodeJob, decode_texture_image, texture_asset};
 pub use error::AssetError;
 pub use font::{
-    FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_asset_roots,
-    font_texture_key, parse_font_asset_specs, parse_font_with_asset_context,
-    parse_font_with_asset_dirs, prepare_font_texture, prepare_required_font_textures,
+    FontAssetSpec, ParsedFontAsset, PreparedFontTexture, font_texture_key, parse_font_asset_specs,
+    parse_font_with_asset_context, prepare_font_texture, prepare_required_font_textures,
     set_font_fallback,
 };
 pub use font_store::FontStore;

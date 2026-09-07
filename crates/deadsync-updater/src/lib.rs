@@ -14,6 +14,21 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+static CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Install the session cache root before loading update state or starting downloads.
+pub fn init_cache_dir(path: std::path::PathBuf) -> Result<(), &'static str> {
+    CACHE_DIR
+        .set(path)
+        .map_err(|_| "updater cache directory already initialized")
+}
+
+fn cache_dir() -> &'static std::path::Path {
+    CACHE_DIR
+        .get()
+        .expect("updater cache directory initialized at startup")
+}
+
 pub mod action;
 pub mod cli;
 pub mod download;

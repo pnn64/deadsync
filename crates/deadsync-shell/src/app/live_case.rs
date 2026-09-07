@@ -236,7 +236,7 @@ impl App {
             self.state.screens.menu_state.active_color_index,
             CurrentScreen::SelectMusic,
             None,
-            noteskin_catalog_view(),
+            noteskin_catalog_view(&self.dirs),
             crate::smx_config::smx_gif_catalog_view(),
             crate::heart_rate::devices_view(),
             init_view,
@@ -321,7 +321,7 @@ impl App {
             event_loop.exit();
             return;
         };
-        let config_path = dirs::app_dirs().config_path();
+        let config_path = self.dirs.config_path();
         let config_sha256 = match sha256_file(&config_path) {
             Ok(hash) => hash,
             Err(error) => {

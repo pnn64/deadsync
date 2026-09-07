@@ -3,10 +3,7 @@ use crate::cache::{
     RuntimeSongLoadLogEntry, RuntimeSongLoadLogLevel,
 };
 use crate::course::runtime_course_scan_log_entry;
-use crate::media::{
-    BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR, collect_media_roots,
-    random_movie_paths_for_song,
-};
+use crate::media::random_movie_paths_for_song;
 use crate::runtime::{
     RuntimeSongConfig, gameplay_chart_load_log_entries_from_report, load_gameplay_charts_runtime,
     load_song_for_scan_runtime_in, load_sync_analysis_chart_runtime, reload_song_in_cache_runtime,
@@ -19,7 +16,6 @@ use crate::scan::{
     scan_and_load_songs_with_progress_counts_runtime,
 };
 use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
-use deadlib_platform::dirs;
 use deadsync_audio_decode as decode;
 use deadsync_chart::{
     GameplayChartData, SongBackgroundChange, SongData, background::expand_random_background_changes,
@@ -27,6 +23,30 @@ use deadsync_chart::{
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+/// Session paths supplied by startup before scan workers are launched.
+pub struct ScanPaths {
+    pub song_cache: PathBuf,
+    pub extra_songs: Vec<PathBuf>,
+    pub extra_courses: Vec<PathBuf>,
+    pub autogen_courses: PathBuf,
+    pub song_movies: Vec<PathBuf>,
+    pub random_movies: Vec<PathBuf>,
+    pub bg_animations: Vec<PathBuf>,
+}
+
+static PATHS: std::sync::OnceLock<ScanPaths> = std::sync::OnceLock::new();
+
+/// Install scan roots and cache paths before any scan or chart-loading work.
+pub fn init_paths(paths: ScanPaths) -> Result<(), &'static str> {
+    PATHS
+        .set(paths)
+        .map_err(|_| "scan paths already initialized")
+}
+
+fn paths() -> &'static ScanPaths {
+    PATHS.get().expect("scan paths initialized at startup")
+}
 
 pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
 where
@@ -109,11 +129,11 @@ pub fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
 /// This is used after writing sync edits to disk so immediate replays use the
 /// updated timing without a full songs rescan.
 pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String> {
-    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let cache_dir = &paths().song_cache;
     let parse_options = parse_song_options();
     reload_song_in_cache_runtime(
         simfile_path,
-        &cache_dir,
+        cache_dir,
         &parse_options,
         runtime_song_config(),
         deadsync_config::runtime::group_is_never_cached,
@@ -122,13 +142,17 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
     )
 }
 
+fn existing_roots(roots: &[PathBuf]) -> Vec<PathBuf> {
+    roots.iter().filter(|path| path.is_dir()).cloned().collect()
+}
+
 fn song_scan_env(root_path: &Path) -> RuntimeSongScanEnv {
     let config = deadsync_config::runtime::get();
     RuntimeSongScanEnv {
         base_root: root_path.to_path_buf(),
-        extra_song_roots: dirs::app_dirs().extra_song_roots(),
+        extra_song_roots: existing_roots(&paths().extra_songs),
         additional_song_roots: additional_song_roots(),
-        cache_dir: dirs::app_dirs().song_cache_dir(),
+        cache_dir: paths().song_cache.clone(),
         load_options: SongLoadOptions {
             fastload: config.fastload,
             cachesongs: config.cachesongs,
@@ -143,10 +167,10 @@ fn course_scan_env(courses_root: &Path, songs_root: &Path) -> RuntimeCourseScanE
     RuntimeCourseScanEnv {
         courses_root: courses_root.to_path_buf(),
         songs_root: songs_root.to_path_buf(),
-        extra_course_roots: dirs::app_dirs().extra_course_roots(),
-        extra_song_roots: dirs::app_dirs().extra_song_roots(),
+        extra_course_roots: existing_roots(&paths().extra_courses),
+        extra_song_roots: existing_roots(&paths().extra_songs),
         additional_song_roots: additional_song_roots(),
-        autogen_courses_root: dirs::app_dirs().courses_dir(),
+        autogen_courses_root: paths().autogen_courses.clone(),
     }
 }
 
@@ -199,12 +223,12 @@ pub fn load_gameplay_charts(
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
-    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let cache_dir = &paths().song_cache;
     let parse_options = parse_song_options();
     let result = load_gameplay_charts_runtime(
         song,
         requested_chart_ixs,
-        &cache_dir,
+        cache_dir,
         &parse_options,
         RuntimeSongConfig {
             global_offset_seconds,
@@ -221,12 +245,12 @@ pub fn load_sync_analysis_chart(
     song: &SongData,
     chart_ix: usize,
 ) -> Result<GameplayChartData, String> {
-    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let cache_dir = &paths().song_cache;
     let parse_options = parse_song_options();
     let mut result = load_sync_analysis_chart_runtime(
         song,
         chart_ix,
-        &cache_dir,
+        cache_dir,
         &parse_options,
         runtime_song_config(),
         deadsync_config::runtime::group_is_never_cached,
@@ -292,18 +316,12 @@ pub fn parse_song_for_test(path: &Path, global_offset_seconds: f32) -> Result<So
     )
 }
 
-fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
-    let dirs = dirs::app_dirs();
-    let cwd = std::env::current_dir().ok();
-    collect_media_roots(dirname, &dirs.data_dir, &dirs.exe_dir, cwd.as_deref())
-}
-
 #[must_use]
 pub fn random_movie_paths(song: &SongData, random_movies: bool) -> Vec<PathBuf> {
     if !random_movies {
         return Vec::new();
     }
-    random_movie_paths_for_song(song, &bgchange_asset_roots(RANDOM_MOVIES_DIR))
+    random_movie_paths_for_song(song, &paths().random_movies)
 }
 
 #[must_use]
@@ -331,9 +349,9 @@ pub fn gameplay_background_changes(
 
 fn parse_song_options() -> ParseSongOptions {
     ParseSongOptions::new(
-        bgchange_asset_roots(SONG_MOVIES_DIR),
-        bgchange_asset_roots(RANDOM_MOVIES_DIR),
-        bgchange_asset_roots(BG_ANIMATIONS_DIR),
+        paths().song_movies.clone(),
+        paths().random_movies.clone(),
+        paths().bg_animations.clone(),
     )
 }
 

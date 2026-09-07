@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1116"
+version = "0.5.1117"
 dependencies = [
  "deadlib-assets",
  "deadlib-platform",
@@ -1307,7 +1307,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "deadlib-assets",
- "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
@@ -1535,7 +1534,6 @@ name = "deadsync-online"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "deadlib-platform",
  "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
@@ -1674,7 +1672,6 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "deadlib-bincode",
- "deadlib-platform",
  "deadsync-audio-decode",
  "deadsync-chart",
  "deadsync-config",
@@ -1733,7 +1730,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1116"
+version = "0.5.1117"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1777,7 +1774,6 @@ dependencies = [
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
- "deadlib-platform",
  "deadsync-version",
  "flate2",
  "libc",
@@ -1795,7 +1791,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1116"
+version = "0.5.1117"
 dependencies = [
  "log",
  "semver",
