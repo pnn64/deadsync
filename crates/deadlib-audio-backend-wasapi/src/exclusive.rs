@@ -92,7 +92,8 @@ pub(super) fn initialize(
         min {min_period_frames}, \
         default {default_period_frames}, \
         preferred {preferred_buffer_frames:?}, \
-        chosen {buffer_duration_frames}"
+        chosen {buffer_duration_frames}, \
+        period {period_hns}"
     );
     // SAFETY: `audio_client` is live and `format` points to a valid waveform
     // buffer owned by the caller.
