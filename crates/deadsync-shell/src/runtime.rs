@@ -3,7 +3,7 @@ use crate::{
     ShellInteractionState, StutterDiagRecorder, TransitionState,
 };
 use deadlib_platform::frame_pacing::{FrameIntervalState, FrameLoopMode, FrameLoopState};
-use deadlib_present::space::{self, Metrics};
+use deadlib_present::space::Metrics;
 use deadlib_render_core::{DrawStats, PresentModePolicy, PresentStats};
 use deadsync_assets::screenshot::ScreenshotRuntimeState;
 use deadsync_config::app_config::{Config, DisplayMode};
@@ -49,7 +49,7 @@ pub struct ShellState {
 
 impl ShellState {
     pub fn new(cfg: &Config, overlay_mode: u8) -> Self {
-        let metrics = space::metrics_for_aspect(cfg.display_aspect_ratio);
+        let metrics = crate::graphics::metrics_for_aspect(cfg.display_aspect_ratio);
         let now = Instant::now();
         Self {
             frame_count: 0,

@@ -34,8 +34,6 @@ const FRAMES_IN_FLIGHT: usize = 3;
 const IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-const LOGICAL_HEIGHT: f32 = 480.0;
-const DESIGN_WIDTH_16_9: f32 = 854.0;
 const COLOR_FORMAT: MTLPixelFormat = MTLPixelFormat::BGRA8Unorm;
 const DEPTH_FORMAT: MTLPixelFormat = MTLPixelFormat::Depth32Float;
 const SHADER: &str = include_str!("shaders/renderer.metal");
@@ -256,6 +254,7 @@ pub struct State {
 
 pub fn init(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -350,7 +349,7 @@ pub fn init(
         frames,
         frame_index: 0,
         window_size,
-        projection: ortho_for_window(size.width, size.height),
+        projection,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
         texture_uploads: TextureUploadState::with_capacity(16),
         cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
@@ -999,7 +998,6 @@ fn draw_inner(
 
 pub fn resize(state: &mut State, width: u32, height: u32) {
     state.window_size = (width, height);
-    state.projection = ortho_for_window(width, height);
     state.layer.set_contents_scale(state.window.scale_factor());
     set_layer_size(&state.layer, width, height);
     state.depth = create_depth_target(&state.device, width, height);
@@ -2006,24 +2004,6 @@ fn present_mode(vsync: bool, policy: PresentModePolicy) -> PresentModeTrace {
     } else {
         PresentModeTrace::Mailbox
     }
-}
-
-#[inline(always)]
-fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    let aspect = if height == 0 {
-        1.0
-    } else {
-        width as f32 / height as f32
-    };
-    let h = LOGICAL_HEIGHT;
-    let w = if aspect >= 16.0 / 9.0 {
-        DESIGN_WIDTH_16_9
-    } else {
-        (h * aspect).min(DESIGN_WIDTH_16_9)
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 #[cfg(test)]

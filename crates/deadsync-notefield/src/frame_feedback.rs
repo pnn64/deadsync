@@ -1163,7 +1163,7 @@ mod tests {
         let taps = [tap(), None];
         let mut feedback = spline_feedback(&taps);
         feedback.lanes[0].active_hold = Some(&hold);
-        let metrics = deadlib_present::space::metrics_for_window(640, 480);
+        let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
         let mut checked = 0;
         for (index, (beat, offset, confusion, dizzy)) in cases.into_iter().enumerate() {
             let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);

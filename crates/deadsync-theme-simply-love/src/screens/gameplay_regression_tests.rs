@@ -1028,7 +1028,7 @@ L000
         deadlib_assets::AssetManager,
         space::Metrics,
     ) {
-        let metrics = space::metrics_for_window(640, 480);
+        let metrics = space::Metrics::centered(640.0, 480.0);
         space::set_current_metrics(metrics);
         space::set_current_window_px(640, 480);
         space::set_overscan(0, 0, 0, 0);
@@ -1911,6 +1911,7 @@ L000
         let mut backend = deadlib_render::create_backend(
             backend_type,
             Arc::clone(&window),
+            space::Metrics::centered(640.0, 480.0).projection(),
             false,
             deadlib_render_core::PresentModePolicy::Immediate,
             false,
@@ -2300,7 +2301,7 @@ M000
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(640, 480);
+                let metrics = space::Metrics::centered(640.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(640, 480);
                 space::set_overscan(0, 0, 0, 0);
@@ -2387,7 +2388,7 @@ M000
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(640, 480);
+                let metrics = space::Metrics::centered(640.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(640, 480);
                 space::set_overscan(0, 0, 0, 0);
@@ -2561,7 +2562,7 @@ M000
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -2658,7 +2659,7 @@ M000
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -2971,7 +2972,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3262,7 +3263,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3377,7 +3378,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3445,7 +3446,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3518,7 +3519,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3588,7 +3589,7 @@ return Def.ActorFrame{
             true,
             false,
             || {
-                let metrics = space::metrics_for_window(1280, 720);
+                let metrics = space::Metrics::centered(854.0, 480.0);
                 space::set_current_metrics(metrics);
                 space::set_current_window_px(1280, 720);
                 space::set_overscan(0, 0, 0, 0);
@@ -3672,7 +3673,7 @@ return Def.ActorFrame{
                     true,
                     false,
                     || {
-                        let metrics = space::metrics_for_window(1280, 720);
+                        let metrics = space::Metrics::centered(854.0, 480.0);
                         space::set_current_metrics(metrics);
                         space::set_current_window_px(1280, 720);
                         space::set_overscan(0, 0, 0, 0);
@@ -3895,7 +3896,7 @@ return Def.ActorFrame{
     #[test]
     fn versus_modes_frame_is_structurally_repeatable() {
         let simfile = write_fixture("f0-versus-modes", generated_sprite_core_simfile());
-        let metrics = space::metrics_for_window(1280, 720);
+        let metrics = space::Metrics::centered(854.0, 480.0);
         space::set_current_metrics(metrics);
         space::set_current_window_px(1280, 720);
         space::set_overscan(0, 0, 0, 0);

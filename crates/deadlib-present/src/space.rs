@@ -1,25 +1,17 @@
+//! Logical presentation bounds, pixel dimensions, and clip-space centering.
+//!
+//! Applications install their logical bounds and surface dimensions independently.
+//! Until configured, the current bounds span -1 to 1 and the pixel size is zero.
+
 use glam::Mat4 as Matrix4;
 use glam::Vec3;
 use std::cell::Cell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 // -----------------------------------------------------------------------------
-// Logical design space
-// -----------------------------------------------------------------------------
-#[inline(always)]
-#[must_use]
-pub const fn logical_height() -> f32 {
-    480.0
-}
-#[inline(always)]
-#[must_use]
-pub const fn design_width_16_9() -> f32 {
-    854.0
-}
-
-// -----------------------------------------------------------------------------
 // Metrics (world space)
 // -----------------------------------------------------------------------------
+/// Logical world-space bounds used to construct an orthographic camera.
 #[derive(Clone, Copy, Debug)]
 pub struct Metrics {
     pub left: f32,
@@ -28,23 +20,47 @@ pub struct Metrics {
     pub bottom: f32,
 }
 
-// Thread-local current metrics and current *pixel* size
+impl Metrics {
+    /// Constructs logical bounds centered on the world origin.
+    #[must_use]
+    pub const fn centered(width: f32, height: f32) -> Self {
+        Self {
+            left: -0.5 * width,
+            right: 0.5 * width,
+            bottom: -0.5 * height,
+            top: 0.5 * height,
+        }
+    }
+
+    /// Projects these bounds into OpenGL clip space, with depth from -1 to 1.
+    ///
+    /// Bounds must be finite, with positive width and height.
+    #[must_use]
+    pub fn projection(self) -> Matrix4 {
+        glam::camera::rh::proj::opengl::orthographic(
+            self.left,
+            self.right,
+            self.bottom,
+            self.top,
+            -1.0,
+            1.0,
+        )
+    }
+}
+
+// Logical bounds and surface pixels are independent, caller-owned choices.
 thread_local! {
-    static CURRENT_METRICS: Cell<Metrics> = Cell::new(default_metrics());
-    static CURRENT_PIXEL:   Cell<(u32,u32)> = const { Cell::new((854, 480)) };
+    static CURRENT_METRICS: Cell<Metrics> = const { Cell::new(Metrics::centered(2.0, 2.0)) };
+    static CURRENT_PIXEL: Cell<(u32, u32)> = const { Cell::new((0, 0)) };
 }
 
-#[inline(always)]
-fn default_metrics() -> Metrics {
-    // sensible default (16:9 design space), used only until the app sets real metrics
-    metrics_for_window(854, 480)
-}
-
+/// Installs logical bounds for presentation on the calling thread.
 #[inline(always)]
 pub fn set_current_metrics(m: Metrics) {
     CURRENT_METRICS.with(|c| c.set(m));
 }
 
+/// Updates surface pixels without changing the current logical bounds.
 #[inline(always)]
 pub fn set_current_window_px(px_w: u32, px_h: u32) {
     CURRENT_PIXEL.with(|c| c.set((px_w, px_h)));
@@ -150,7 +166,7 @@ pub fn screen_height() -> f32 {
     })
 }
 
-// Top-left origin to match SM (SCREEN_LEFT/TOP = 0)
+// Presentation coordinates use a top-left origin.
 #[inline(always)]
 #[must_use]
 pub const fn screen_left() -> f32 {
@@ -181,66 +197,6 @@ pub fn screen_center_x() -> f32 {
 #[must_use]
 pub fn screen_center_y() -> f32 {
     0.5 * screen_height()
-}
-
-// -----------------------------------------------------------------------------
-// Metrics for a display aspect ratio (clamped ≤ 16:9)
-// -----------------------------------------------------------------------------
-#[inline(always)]
-#[must_use]
-pub fn metrics_for_aspect(aspect: f32) -> Metrics {
-    let aspect = if aspect.is_finite() && aspect > 0.0 {
-        aspect
-    } else {
-        1.0
-    };
-    let h = logical_height(); // 480 world units
-    let w = if aspect >= 16.0 / 9.0 {
-        // Match SM/SL exactly: 854 units at ≥16:9
-        design_width_16_9()
-    } else {
-        // below 16:9, scale width from height
-        (h * aspect).min(design_width_16_9())
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-
-    Metrics {
-        left: -half_w,
-        right: half_w,
-        bottom: -half_h,
-        top: half_h,
-    }
-}
-
-#[inline(always)]
-#[must_use]
-pub fn metrics_for_window(px_w: u32, px_h: u32) -> Metrics {
-    let aspect = if px_h == 0 {
-        1.0
-    } else {
-        px_w as f32 / px_h as f32
-    };
-    metrics_for_aspect(aspect)
-}
-
-#[inline(always)]
-#[must_use]
-pub fn ortho_for_aspect(aspect: f32) -> Matrix4 {
-    let m = metrics_for_aspect(aspect);
-    glam::camera::rh::proj::opengl::orthographic(m.left, m.right, m.bottom, m.top, -1.0, 1.0)
-}
-
-// -----------------------------------------------------------------------------
-// Ortho for current window (also stores CURRENT_PIXEL + CURRENT_METRICS)
-// -----------------------------------------------------------------------------
-#[inline(always)]
-#[must_use]
-pub fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    set_current_window_px(width, height);
-    let m = metrics_for_window(width, height);
-    set_current_metrics(m);
-    ortho_for_aspect(width as f32 / height.max(1) as f32)
 }
 
 // -----------------------------------------------------------------------------
@@ -300,15 +256,5 @@ mod tests {
         // scaleX is column 0 row 0, scaleY is column 1 row 1.
         assert!((cols[0] - MIN_OVERSCAN_SCALE).abs() < 1e-6);
         assert!((cols[5] - MIN_OVERSCAN_SCALE).abs() < 1e-6);
-    }
-
-    #[test]
-    fn configured_aspect_is_independent_of_pixel_resolution() {
-        let from_aspect = metrics_for_aspect(4.0 / 3.0);
-        let square_pixels = metrics_for_window(3840, 780);
-
-        assert_eq!(from_aspect.right - from_aspect.left, 640.0);
-        assert_eq!(from_aspect.top - from_aspect.bottom, 480.0);
-        assert_eq!(square_pixels.right - square_pixels.left, 854.0);
     }
 }

@@ -145,6 +145,24 @@ pub struct RecreateDisplayState {
     pub monitor_count: usize,
 }
 
+// DeadSync follows SM/Simply Love's 480-unit canvas and exact 854-unit
+// widescreen width. These dimensions determine the theme's actor layout.
+pub(crate) fn metrics_for_aspect(aspect: f32) -> Metrics {
+    const HEIGHT: f32 = 480.0;
+    const WIDE_WIDTH: f32 = 854.0;
+    let aspect = if aspect.is_finite() && aspect > 0.0 {
+        aspect
+    } else {
+        1.0
+    };
+    let width = if aspect >= 16.0 / 9.0 {
+        WIDE_WIDTH
+    } else {
+        HEIGHT * aspect
+    };
+    Metrics::centered(width, HEIGHT)
+}
+
 pub fn initialize_renderer(
     setup: AppWindowSetup,
     config: RendererInitConfig,
@@ -153,19 +171,19 @@ pub fn initialize_renderer(
 ) -> Result<RendererInitResult, Box<dyn Error>> {
     let window = setup.window;
     let size = render_size_for_window(&window, config.backend_type, config.high_dpi);
-    let metrics = space::metrics_for_aspect(config.display_aspect_ratio);
+    let metrics = metrics_for_aspect(config.display_aspect_ratio);
     space::set_current_window_px(size.width, size.height);
     space::set_current_metrics(metrics);
 
     let mut backend = create_backend(
         config.backend_type,
         window.clone(),
+        metrics.projection(),
         config.vsync_enabled,
         config.present_mode_policy,
         config.gfx_debug_enabled,
         config.high_dpi,
     )?;
-    backend.set_default_projection(space::ortho_for_aspect(config.display_aspect_ratio));
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));
     }
@@ -577,13 +595,12 @@ pub fn sync_renderer_window_size(
         render_size_for_physical(window, backend_type, high_dpi, physical_size)
     });
     if render_size.width > 0 && render_size.height > 0 {
-        shell.metrics = space::metrics_for_aspect(shell.display_aspect_ratio);
+        shell.metrics = metrics_for_aspect(shell.display_aspect_ratio);
         space::set_current_window_px(render_size.width, render_size.height);
         space::set_current_metrics(shell.metrics);
     }
     if let Some(backend) = backend {
         backend.resize(render_size.width, render_size.height);
-        backend.set_default_projection(space::ortho_for_aspect(shell.display_aspect_ratio));
     }
     render_size
 }
@@ -597,10 +614,10 @@ pub fn apply_display_aspect_ratio(
         return;
     }
     shell.display_aspect_ratio = aspect_ratio;
-    shell.metrics = space::metrics_for_aspect(aspect_ratio);
+    shell.metrics = metrics_for_aspect(aspect_ratio);
     space::set_current_metrics(shell.metrics);
     if let Some(backend) = backend {
-        backend.set_default_projection(space::ortho_for_aspect(aspect_ratio));
+        backend.set_default_projection(shell.metrics.projection());
     }
 }
 
@@ -1121,7 +1138,7 @@ mod tests {
         shell.frame_count = 12;
         shell.current_frame_vpf = 4;
         let now = shell.start_time + std::time::Duration::from_secs(2);
-        let metrics = space::metrics_for_window(640, 480);
+        let metrics = space::Metrics::centered(640.0, 480.0);
 
         apply_renderer_started(&mut shell, metrics, now);
 
@@ -1643,6 +1660,53 @@ mod tests {
             change.display_mode,
             DisplayMode::Fullscreen(FullscreenType::Exclusive)
         );
+    }
+
+    #[test]
+    fn logical_bounds_follow_configured_aspect_across_pixel_resizes() {
+        for (aspect, width) in [
+            (1.0, 480.0),
+            (4.0 / 3.0, 640.0),
+            (16.0 / 10.0, 768.0),
+            (16.0 / 9.0, 854.0),
+            (21.0 / 9.0, 854.0),
+            (32.0 / 9.0, 854.0),
+        ] {
+            let config = Config {
+                display_aspect_ratio: aspect,
+                ..Config::default()
+            };
+            let mut shell = ShellState::new(&config, 0);
+            for (pw, ph) in [(640, 480), (1920, 1080), (3840, 780), (0, 0)] {
+                sync_renderer_window_size(
+                    &mut shell,
+                    None,
+                    &mut None,
+                    BackendType::Software,
+                    false,
+                    PhysicalSize::new(pw, ph),
+                );
+                assert_eq!(shell.metrics.right - shell.metrics.left, width);
+                assert_eq!(shell.metrics.top - shell.metrics.bottom, 480.0);
+                assert_eq!(
+                    &shell.metrics.projection().to_cols_array()[12..15],
+                    &[0.0; 3]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_aspect_uses_square_bounds_and_live_updates_are_ignored() {
+        let mut shell = ShellState::new(&Config::default(), 0);
+        apply_display_aspect_ratio(&mut shell, &mut None, 4.0 / 3.0);
+        for aspect in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            let metrics = metrics_for_aspect(aspect);
+            assert_eq!(metrics.right - metrics.left, 480.0);
+            apply_display_aspect_ratio(&mut shell, &mut None, aspect);
+            assert_eq!(shell.display_aspect_ratio, 4.0 / 3.0);
+            assert_eq!(shell.metrics.right - shell.metrics.left, 640.0);
+        }
     }
 
     #[test]

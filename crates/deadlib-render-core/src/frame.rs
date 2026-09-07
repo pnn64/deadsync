@@ -16,6 +16,7 @@ pub struct RenderFrame {
     /// list order before the main frame, so later targets may sample earlier
     /// ones without backend-specific scene reconstruction.
     pub render_targets: Vec<RenderTargetFrame>,
+    /// Draw cameras; missing indices use the backend's caller-supplied projection.
     pub cameras: Vec<Mat4>,
     pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,
@@ -41,6 +42,7 @@ pub struct RenderTargetFrame {
     pub alpha: bool,
     pub depth: bool,
     pub preserve: bool,
+    /// Draw cameras; missing indices use the backend's caller-supplied projection.
     pub cameras: Vec<Mat4>,
     pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,

@@ -29,8 +29,6 @@ use winit::window::Window;
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const WGPU_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-const LOGICAL_HEIGHT: f32 = 480.0;
-const DESIGN_WIDTH_16_9: f32 = 854.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Api {
@@ -469,6 +467,7 @@ pub struct State {
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 pub fn init_vulkan(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -476,6 +475,7 @@ pub fn init_vulkan(
     init(
         Api::Vulkan,
         window,
+        projection,
         vsync_enabled,
         present_mode_policy,
         gfx_debug_enabled,
@@ -485,6 +485,7 @@ pub fn init_vulkan(
 #[cfg(target_os = "macos")]
 pub fn init_metal(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -492,6 +493,7 @@ pub fn init_metal(
     init(
         Api::Metal,
         window,
+        projection,
         vsync_enabled,
         present_mode_policy,
         gfx_debug_enabled,
@@ -500,6 +502,7 @@ pub fn init_metal(
 
 pub fn init_opengl(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -507,6 +510,7 @@ pub fn init_opengl(
     init(
         Api::OpenGL,
         window,
+        projection,
         vsync_enabled,
         present_mode_policy,
         gfx_debug_enabled,
@@ -516,6 +520,7 @@ pub fn init_opengl(
 #[cfg(target_os = "windows")]
 pub fn init_dx12(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -523,6 +528,7 @@ pub fn init_dx12(
     init(
         Api::DirectX,
         window,
+        projection,
         vsync_enabled,
         present_mode_policy,
         gfx_debug_enabled,
@@ -532,6 +538,7 @@ pub fn init_dx12(
 fn init(
     api: Api,
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -622,7 +629,6 @@ fn init(
     let (depth_texture, depth_view) =
         create_depth_target(&device, config.width.max(1), config.height.max(1));
 
-    let projection = ortho_for_window(size.width, size.height);
     let proj = if use_immediates {
         ProjState::Immediates
     } else {
@@ -2570,7 +2576,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     if width == 0 || height == 0 {
         return;
     }
-    state.projection = ortho_for_window(width, height);
     reconfigure_surface(state);
 }
 
@@ -3541,24 +3546,6 @@ fn get_sampler(state: &mut State, desc: SamplerDesc) -> wgpu::Sampler {
     sampler
 }
 
-#[inline(always)]
-fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    let aspect = if height == 0 {
-        1.0
-    } else {
-        width as f32 / height as f32
-    };
-    let h = LOGICAL_HEIGHT;
-    let w = if aspect >= 16.0 / 9.0 {
-        DESIGN_WIDTH_16_9
-    } else {
-        (h * aspect).min(DESIGN_WIDTH_16_9)
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
-}
-
 const SHADER_IMM: &str = include_str!("shaders/wgpu_sprite.wgsl");
 const YUV_SHADER_IMM: &str = include_str!("shaders/wgpu_sprite_yuv.wgsl");
 const MESH_SHADER_IMM: &str = include_str!("shaders/wgpu_mesh.wgsl");
@@ -3570,6 +3557,61 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires OpenGL, Vulkan, and DirectX devices and a window system"]
+    fn surface_resize_preserves_caller_projection() {
+        use super::{Api, PresentModePolicy, Window, init, resize, set_default_projection};
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("test event loop");
+        let projection =
+            glam::camera::rh::proj::opengl::orthographic(-10.0, 10.0, -5.0, 5.0, -1.0, 1.0);
+        for api in [Api::OpenGL, Api::Vulkan, Api::DirectX] {
+            #[expect(
+                deprecated,
+                reason = "hidden fixture checks surface state without presenting"
+            )]
+            let window = event_loop
+                .create_window(Window::default_attributes().with_visible(false))
+                .expect("hidden test window");
+            let mut state = init(
+                api,
+                Arc::new(window),
+                projection,
+                false,
+                PresentModePolicy::Immediate,
+                false,
+            )
+            .expect("wgpu backend");
+            assert_eq!(state.projection, projection);
+            let mut columns = projection.to_cols_array();
+            columns[12] = 0.25;
+            columns[13] = -0.5;
+            let custom = Matrix4::from_cols_array(&columns);
+            set_default_projection(&mut state, custom);
+            for (width, height) in [
+                (640, 480),
+                (1920, 1080),
+                (3840, 780),
+                (0, 480),
+                (640, 0),
+                (80, 60),
+            ] {
+                resize(&mut state, width, height);
+                assert_eq!(state.projection, custom);
+                assert_eq!(state.window_size, (width, height));
+            }
+        }
+    }
+
     use super::{
         DrawBindingCache, InstanceBinding, MESH_SHADER_IMM, MESH_SHADER_UBO, Matrix4,
         PresentCompletion, PresentCompletionCell, SHADER_IMM, SHADER_UBO, TMESH_SHADER_IMM,

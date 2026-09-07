@@ -121,7 +121,11 @@ fn matrix_from_rows(rows: [[f32; 4]; 4]) -> Matrix4 {
 
 #[must_use]
 pub fn view_projection(screen: [u32; 2], fov: f32, vanishpoint: [f32; 2]) -> [[f32; 4]; 4] {
-    let _ = deadlib_present::space::ortho_for_window(screen[0], screen[1]);
+    deadlib_present::space::set_current_window_px(screen[0], screen[1]);
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        screen[0] as f32,
+        screen[1] as f32,
+    ));
     matrix_rows(
         song_lua_overlay_view_proj(
             SongLuaOverlayState {

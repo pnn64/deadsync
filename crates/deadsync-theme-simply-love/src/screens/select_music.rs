@@ -13244,7 +13244,9 @@ mod select_heart_rate_tests {
     use super::push_heart_rates;
     use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, HeartRateView};
     use deadlib_present::actors::Actor;
-    use deadlib_present::space::{ortho_for_window, screen_center_x};
+    use deadlib_present::space::{
+        Metrics, screen_center_x, set_current_metrics, set_current_window_px,
+    };
     use deadsync_profile::PlayerSide;
 
     const CONNECTED: HeartRatePlayerView = HeartRatePlayerView {
@@ -13256,7 +13258,8 @@ mod select_heart_rate_tests {
 
     #[test]
     fn connected_monitor_renders_left_of_wide_pattern_panel() {
-        let _ = ortho_for_window(768, 480);
+        set_current_metrics(Metrics::centered(768.0, 480.0));
+        set_current_window_px(768, 480);
         let mut actors = Vec::new();
         let chart_info_cx = screen_center_x() - 187.0;
         push_heart_rates(
@@ -13286,7 +13289,8 @@ mod select_heart_rate_tests {
         let view = HeartRateView {
             players: [CONNECTED, HeartRatePlayerView::default()],
         };
-        let _ = ortho_for_window(640, 480);
+        set_current_metrics(Metrics::centered(640.0, 480.0));
+        set_current_window_px(640, 480);
         push_heart_rates(
             &mut actors,
             view,
@@ -13299,7 +13303,8 @@ mod select_heart_rate_tests {
         );
         assert!(actors.is_empty());
 
-        let _ = ortho_for_window(854, 480);
+        set_current_metrics(Metrics::centered(854.0, 480.0));
+        set_current_window_px(854, 480);
         let disconnected = HeartRateView {
             players: [
                 HeartRatePlayerView {
@@ -16611,7 +16616,7 @@ mod tests {
     #[test]
     fn gs_scorebox_remains_visible_at_cabinet_aspect_ratio() {
         use deadlib_present::space::{
-            metrics_for_window, screen_width, set_current_metrics, set_current_window_px,
+            Metrics, screen_width, set_current_metrics, set_current_window_px,
         };
 
         let mut state = init_placeholder();
@@ -16640,14 +16645,14 @@ mod tests {
         };
 
         set_current_window_px(3_686, 2_560);
-        set_current_metrics(metrics_for_window(3_686, 2_560));
+        set_current_metrics(Metrics::centered(691.125, 480.0));
         let logical_width = screen_width();
         let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);
         let gs_logo = actors
             .iter()
             .find_map(|actor| texture_offset(actor, "GrooveStats.png"));
         set_current_window_px(854, 480);
-        set_current_metrics(metrics_for_window(854, 480));
+        set_current_metrics(Metrics::centered(854.0, 480.0));
 
         let [x, _] = gs_logo.expect("narrow Select Music should still construct the GS box");
         assert!(
@@ -16659,11 +16664,11 @@ mod tests {
     #[test]
     fn sole_versus_gs_scorebox_stays_on_wheel_side() {
         use deadlib_present::space::{
-            metrics_for_window, screen_center_x, set_current_metrics, set_current_window_px,
+            Metrics, screen_center_x, set_current_metrics, set_current_window_px,
         };
 
         set_current_window_px(854, 480);
-        set_current_metrics(metrics_for_window(854, 480));
+        set_current_metrics(Metrics::centered(854.0, 480.0));
         let wheel_side_min_x = screen_center_x();
 
         for incumbent in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
@@ -16687,11 +16692,11 @@ mod tests {
     #[test]
     fn dual_versus_gs_scoreboxes_stay_in_player_panes() {
         use deadlib_present::space::{
-            metrics_for_window, screen_center_x, set_current_metrics, set_current_window_px,
+            Metrics, screen_center_x, set_current_metrics, set_current_window_px,
         };
 
         set_current_window_px(854, 480);
-        set_current_metrics(metrics_for_window(854, 480));
+        set_current_metrics(Metrics::centered(854.0, 480.0));
         let center_x = screen_center_x();
         let state = versus_scorebox_state(profile_data::PlayerSide::P1, [true, true]);
         let actors = super::get_actors(&state, &deadlib_assets::AssetManager::new(), 1);

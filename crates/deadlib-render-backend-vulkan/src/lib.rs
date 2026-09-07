@@ -34,8 +34,6 @@ const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-const LOGICAL_HEIGHT: f32 = 480.0;
-const DESIGN_WIDTH_16_9: f32 = 854.0;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
@@ -395,6 +393,7 @@ pub struct State {
 /// Panics if an internal state invariant is violated.
 pub fn init(
     window: &Window,
+    projection: Matrix4,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -536,7 +535,6 @@ pub fn init(
         create_sync_objects(device.as_ref().unwrap())?;
     let images_in_flight = vec![vk::Fence::null(); swapchain_resources._images.len()];
 
-    let projection = ortho_for_window(initial_size.width, initial_size.height);
     let present_telemetry = init_present_telemetry(
         &entry,
         &instance,
@@ -3567,7 +3565,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     debug!("Vulkan resize requested to {width}x{height}");
     state.window_size = PhysicalSize::new(width, height);
     if width > 0 && height > 0 {
-        state.projection = ortho_for_window(width, height);
         if let Err(e) = recreate_swapchain_and_dependents(state) {
             error!("Failed to recreate swapchain: {e}");
         }
@@ -5570,24 +5567,6 @@ pub fn set_present_config(
     {
         warn!("Failed to apply Vulkan present config update: {e}");
     }
-}
-
-#[inline(always)]
-fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    let aspect = if height == 0 {
-        1.0
-    } else {
-        width as f32 / height as f32
-    };
-    let h = LOGICAL_HEIGHT;
-    let w = if aspect >= 16.0 / 9.0 {
-        DESIGN_WIDTH_16_9
-    } else {
-        (h * aspect).min(DESIGN_WIDTH_16_9)
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 #[cfg(test)]

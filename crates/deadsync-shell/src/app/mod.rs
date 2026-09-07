@@ -1466,6 +1466,7 @@ impl AppState {
         let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
 
         let shell = ShellState::new(&cfg, overlay_mode);
+        space::set_current_metrics(shell.metrics);
         let session = SessionState::new(preferred, profile::combo_carry());
         let coin = crate::coin::State::load(dirs.bookkeeping_path());
         let screens = ScreensState::new(
@@ -9106,7 +9107,11 @@ impl App {
                     reused_payload: reusing_gameplay_payload,
                     config: cfg,
                 };
+                let metrics = self.state.shell.metrics;
+                let (pixel_width, pixel_height) = space::current_window_px();
                 let init = move || {
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(pixel_width, pixel_height);
                     gameplay::init(
                         song_arc,
                         charts,
