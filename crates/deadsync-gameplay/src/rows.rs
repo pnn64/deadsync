@@ -730,7 +730,6 @@ pub fn completed_row_tap_feedback_plan(
         note_indices: out,
         note_count: len,
         judgment,
-        receptor_window: grade_to_window(judgment.grade),
     })
 }
 
@@ -739,7 +738,6 @@ pub struct CompletedRowTapFeedbackPlan {
     pub note_indices: [usize; MAX_COLS],
     pub note_count: usize,
     pub judgment: Judgment,
-    pub receptor_window: Option<&'static str>,
 }
 
 #[inline(always)]

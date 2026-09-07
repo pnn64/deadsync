@@ -1,11 +1,11 @@
 pub use deadlib_audio_core::AudioOutputMode;
+pub use deadlib_input_native::PadOrderBackend;
+#[cfg(windows)]
+pub use deadlib_input_native::WindowsPadBackend;
 pub use deadlib_platform::display::FullscreenType;
 pub use deadlib_present::color::Color;
 pub use deadsync_audio_stream::AudioMixLevels;
 pub use deadsync_audio_stream::LinuxAudioBackend;
-pub use deadsync_input_native::PadOrderBackend;
-#[cfg(windows)]
-pub use deadsync_input_native::WindowsPadBackend;
 pub use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };

@@ -133,6 +133,7 @@ pub fn read_runtime_mod_eases(
                 players.peek().is_some(),
             );
             eases.push(SongLuaEaseWindow {
+                approach_speed: None,
                 unit: entry.unit,
                 start: entry.start,
                 limit: entry.limit,
@@ -308,6 +309,7 @@ where
                         players.peek().is_some(),
                     );
                     out.push(SongLuaEaseWindow {
+                        approach_speed: None,
                         unit: entry.unit,
                         start: entry.start,
                         limit: entry.limit,

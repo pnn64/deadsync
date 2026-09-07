@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "simfile": "[10] flip69 (DX) [Telperion]/flip69.ssc",
+  "song_dir": "[10] flip69 (DX) [Telperion]",
+  "title": "[5604] [10] flip69",
+  "changes": [
+    {
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0.0,
+      "rate": 1.0,
+      "effect": "",
+      "file1": "multitap",
+      "file2": "",
+      "color1": "",
+      "color2": "",
+      "transition": "",
+      "lua_entry": "[10] flip69 (DX) [Telperion]/multitap/Default.lua"
+    }
+  ]
+}

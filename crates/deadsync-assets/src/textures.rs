@@ -3,9 +3,9 @@ use deadlib_assets::{
     canonical_texture_key_with_asset_roots, parse_texture_hints, strip_sprite_hints,
     texture_filename_has_multiframe_hint, texture_key_sampler,
 };
-use deadlib_platform::dirs::{self, AppDirs};
 use deadlib_render::Backend;
 use deadlib_render_core::{SamplerDesc, SamplerWrap};
+use deadsync_config::dirs::AssetPaths;
 use log::warn;
 use std::{
     collections::HashSet,
@@ -29,8 +29,8 @@ static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoice
 
 #[must_use]
 pub fn graphic_texture_roots(folder: &str) -> Vec<PathBuf> {
-    let dirs = dirs::app_dirs();
-    graphic_roots_in_dirs(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
+    let dirs = crate::paths();
+    graphic_roots_in_dirs(folder, &dirs.graphic_roots)
 }
 
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
@@ -46,11 +46,8 @@ pub fn held_miss_texture_choices() -> &'static [TextureChoice] {
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
-    let dirs = dirs::app_dirs();
-    canonical_texture_key_with_asset_roots(
-        p.as_ref(),
-        [dirs.data_dir.join("assets"), dirs.exe_dir.join("assets")],
-    )
+    let dirs = crate::paths();
+    canonical_texture_key_with_asset_roots(p.as_ref(), &dirs.texture_roots)
 }
 
 #[must_use]
@@ -63,7 +60,7 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
 
 pub fn initial_texture_jobs(
     texture_assets: impl IntoIterator<Item = TextureAssetSpec>,
-    dirs: &AppDirs,
+    dirs: &AssetPaths,
     needs_repeat: fn(&str) -> bool,
 ) -> Vec<TextureDecodeJob> {
     let textures = texture_assets
@@ -74,19 +71,13 @@ pub fn initial_texture_jobs(
                 initial_texture_source_path(asset.path, |path| dirs.resolve_asset_path(path)),
             )
         })
-        .chain(noteskin_png_texture_entries(
-            &dirs.noteskin_roots(),
-            |path| {
-                canonical_texture_key_with_asset_roots(
-                    path,
-                    [dirs.data_dir.join("assets"), dirs.exe_dir.join("assets")],
-                )
-            },
-        ))
+        .chain(noteskin_png_texture_entries(&dirs.noteskin_roots, |path| {
+            canonical_texture_key_with_asset_roots(path, &dirs.texture_roots)
+        }))
         .chain(INITIAL_GRAPHIC_TEXTURES.iter().flat_map(|spec| {
             discover_graphic_textures_in_roots(
                 spec.folder,
-                graphic_roots_in_dirs(spec.folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir),
+                graphic_roots_in_dirs(spec.folder, &dirs.graphic_roots),
                 spec.love_first,
                 spec.require_multiframe_hint,
             )
@@ -149,7 +140,7 @@ fn load_texture_key(
         return;
     }
     let path = texture_key_source_path(texture_key, &key, |path| {
-        dirs::app_dirs().resolve_asset_path(path)
+        crate::paths().resolve_asset_path(path)
     });
     if !path.is_file() {
         warn!("Failed to resolve texture key '{key}' for preload.");
@@ -287,31 +278,13 @@ fn absolute_or_self(path: &Path) -> PathBuf {
 }
 
 #[must_use]
-fn graphic_roots_in_dirs(
-    folder: &str,
-    portable: bool,
-    data_dir: &Path,
-    exe_dir: &Path,
-) -> Vec<PathBuf> {
-    let mut roots = Vec::with_capacity(3);
-    if !portable {
-        let data_root = data_dir.join("assets").join("graphics").join(folder);
-        if data_root.is_dir() {
-            roots.push(data_root);
+fn graphic_roots_in_dirs(folder: &str, bases: &[PathBuf]) -> Vec<PathBuf> {
+    let mut roots = Vec::with_capacity(bases.len());
+    for base in bases {
+        let root = base.join(folder);
+        if root.is_dir() && !roots.contains(&root) {
+            roots.push(root);
         }
-    }
-
-    let cwd_root = Path::new("assets").join("graphics").join(folder);
-    if cwd_root.is_dir() {
-        let cwd_root = absolute_or_self(&cwd_root);
-        if !roots.iter().any(|root| root == &cwd_root) {
-            roots.push(cwd_root);
-        }
-    }
-
-    let exe_root = exe_dir.join("assets").join("graphics").join(folder);
-    if exe_root.is_dir() && !roots.iter().any(|root| root == &exe_root) {
-        roots.push(exe_root);
     }
     roots
 }
@@ -551,7 +524,7 @@ mod tests {
     #[test]
     fn jobs_resolve_noteskins_and_carry_startup_options() {
         let root = std::env::temp_dir().join(format!("asset-jobs-{}", std::process::id()));
-        let dirs = AppDirs {
+        let dirs = deadsync_config::dirs::AppDirs {
             data_dir: root.join("user"),
             exe_dir: root.join("bundled"),
             cache_dir: root.join("cache"),
@@ -568,7 +541,7 @@ mod tests {
         }
         let jobs = initial_texture_jobs(
             [deadlib_assets::texture_asset("boundary (nearest).png")],
-            &dirs,
+            &dirs.asset_paths(None),
             |key| key == "boundary (nearest).png",
         );
         let skin_jobs = jobs.iter().filter(|job| job.key == key).collect::<Vec<_>>();
@@ -583,7 +556,8 @@ mod tests {
         assert_eq!(manifest_job.sampler.filter, SamplerFilter::Linear);
         assert_eq!(
             manifest_job.path,
-            dirs.resolve_asset_path("assets/graphics/boundary (nearest).png")
+            dirs.asset_paths(None)
+                .resolve_asset_path("assets/graphics/boundary (nearest).png")
         );
         fs::remove_dir_all(root).expect("remove noteskin fixture");
     }

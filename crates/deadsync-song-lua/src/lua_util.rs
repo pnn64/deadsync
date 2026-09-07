@@ -530,7 +530,7 @@ pub fn load_script_file(lua: &Lua, path: &Path, song_dir: &Path) -> mlua::Result
     load_script_file_with_env(lua, path, song_dir, None)
 }
 
-fn load_script_file_with_env(
+pub(crate) fn load_script_file_with_env(
     lua: &Lua,
     path: &Path,
     song_dir: &Path,
@@ -584,11 +584,11 @@ fn create_loader_function_with_env(
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or(path);
-    if basename.eq_ignore_ascii_case("easing.lua") {
+    let resolved = resolve_script_path(lua, song_dir, path)?;
+    if basename.eq_ignore_ascii_case("easing.lua") && !resolved.is_file() {
         let ease: Table = lua.globals().get("ease")?;
         return lua.create_function(move |_, _args: MultiValue| Ok(Value::Table(ease.clone())));
     }
-    let resolved = resolve_script_path(lua, song_dir, path)?;
     load_script_file_with_env(lua, &resolved, song_dir, environment)
 }
 
@@ -2116,7 +2116,7 @@ fn run_guarded_actor_command(
     active.set(name, true)?;
     let recurring_cursor_key = "__songlua_recurring_update_start_cursor";
     let recurring_exact_key = "__songlua_recurring_update_exact_interval";
-    let previous_recurring_state = if name.eq_ignore_ascii_case("UpdateCommand") {
+    let previous_recurring_state = {
         let previous_cursor = actor.get::<Value>(recurring_cursor_key)?;
         let previous_exact = actor.get::<Value>(recurring_exact_key)?;
         actor.set(
@@ -2126,9 +2126,7 @@ fn run_guarded_actor_command(
                 .unwrap_or(0.0),
         )?;
         actor.set(recurring_exact_key, 0.0_f64)?;
-        Some((previous_cursor, previous_exact))
-    } else {
-        None
+        (previous_cursor, previous_exact)
     };
     let result = call_actor_function(lua, actor, command, params)
         .map_err(|err| {
@@ -2144,10 +2142,8 @@ fn run_guarded_actor_command(
             }
             Ok(())
         });
-    if let Some((previous_cursor, previous_exact)) = previous_recurring_state {
-        actor.set(recurring_cursor_key, previous_cursor)?;
-        actor.set(recurring_exact_key, previous_exact)?;
-    }
+    actor.set(recurring_cursor_key, previous_recurring_state.0)?;
+    actor.set(recurring_exact_key, previous_recurring_state.1)?;
     active.set(name, Value::Nil)?;
     result
 }
@@ -2182,6 +2178,17 @@ pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 
 pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let queue = actor_command_queue(lua, actor)?;
+    if let Some(mut startup) = lua.app_data_mut::<SongLuaStartupQueues>() {
+        if queue.raw_len() > 0
+            && !startup
+                .0
+                .iter()
+                .any(|queued| queued.to_pointer() == actor.to_pointer())
+        {
+            startup.0.push(actor.clone());
+        }
+        return Ok(());
+    }
     while queue.raw_len() > 0 {
         let Some(name) = queue.raw_get::<Option<String>>(1)? else {
             break;
@@ -3015,6 +3022,8 @@ pub fn capture_block_set_vec2(
 }
 
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
+    capture_block_set_f32(lua, actor, "x", f32::midpoint(rect[0], rect[2]))?;
+    capture_block_set_f32(lua, actor, "y", f32::midpoint(rect[1], rect[3]))?;
     let value = lua.create_table()?;
     value.raw_set(1, rect[0])?;
     value.raw_set(2, rect[1])?;
@@ -4092,10 +4101,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     .unwrap_or(0.0);
                 actor.set("__songlua_capture_cursor", cursor + duration)?;
                 actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
-                if actor_active_commands(lua, &actor)?
-                    .get::<Option<bool>>("UpdateCommand")?
-                    .unwrap_or(false)
-                {
+                if actor_has_active_command(lua, &actor)? {
                     let interval = actor
                         .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
                         .unwrap_or(0.0);
@@ -4176,35 +4182,33 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 let active = actor_active_commands(lua, &actor)?;
-                let update = name.eq_ignore_ascii_case("Update");
-                let command_active = if update {
-                    active.get::<Option<bool>>("UpdateCommand")?
-                } else {
-                    active.get::<Option<bool>>(format!("{name}Command"))?
-                };
-                if command_active.unwrap_or(false) {
-                    if update {
-                        actor.set("__songlua_recurring_update_command", true)?;
-                        invalidate_compile_update_plan(lua);
-                        let cursor = actor
-                            .get::<Option<f32>>("__songlua_capture_cursor")?
-                            .unwrap_or(0.0);
-                        let start = actor
-                            .get::<Option<f32>>("__songlua_recurring_update_start_cursor")?
-                            .unwrap_or(cursor);
-                        let interval = actor
-                            .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
-                            .filter(|interval| *interval > f64::EPSILON)
-                            .unwrap_or_else(|| f64::from((cursor - start).max(0.0)));
-                        if interval > f64::EPSILON {
-                            actor.set("__songlua_recurring_update_interval", interval)?;
-                        }
+                let command = format!("{name}Command");
+                if active
+                    .get::<Option<bool>>(command.as_str())?
+                    .unwrap_or(false)
+                {
+                    actor.set("__songlua_recurring_update_command", command)?;
+                    invalidate_compile_update_plan(lua);
+                    let cursor = actor
+                        .get::<Option<f32>>("__songlua_capture_cursor")?
+                        .unwrap_or(0.0);
+                    let start = actor
+                        .get::<Option<f32>>("__songlua_recurring_update_start_cursor")?
+                        .unwrap_or(cursor);
+                    let interval = actor
+                        .get::<Option<f64>>("__songlua_recurring_update_exact_interval")?
+                        .filter(|interval| *interval > f64::EPSILON)
+                        .unwrap_or_else(|| f64::from((cursor - start).max(0.0)));
+                    if interval > f64::EPSILON {
+                        actor.set("__songlua_recurring_update_interval", interval)?;
                     }
                     return Ok(actor.clone());
                 }
                 let queue = actor_command_queue(lua, &actor)?;
                 queue.raw_set(queue.raw_len() + 1, name)?;
-                if !actor_has_active_command(lua, &actor)? {
+                if lua.app_data_ref::<SongLuaStartupQueues>().is_some()
+                    || !actor_has_active_command(lua, &actor)?
+                {
                     drain_actor_command_queue(lua, &actor)?;
                 }
                 Ok(actor.clone())
@@ -7698,11 +7702,55 @@ pub fn run_actor_init_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
     run_actor_init_commands_for_table(lua, root)
 }
 
-pub fn run_actor_startup_commands(lua: &Lua, root: &Value) -> mlua::Result<()> {
+struct SongLuaStartupQueues(Vec<Table>);
+
+fn collect_startup_states(
+    actor: &Table,
+    states: &mut HashMap<usize, SongLuaOverlayState>,
+) -> mlua::Result<()> {
+    if actor
+        .get::<Option<String>>("__songlua_actor_type")?
+        .is_some()
+    {
+        states.insert(
+            actor.to_pointer() as usize,
+            actor_overlay_initial_state(actor).map_err(mlua::Error::external)?,
+        );
+    }
+    for child in actor.sequence_values::<Value>() {
+        if let Value::Table(child) = child? {
+            collect_startup_states(&child, states)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn run_actor_startup_commands(
+    lua: &Lua,
+    root: &Value,
+) -> mlua::Result<HashMap<usize, SongLuaOverlayState>> {
     let Value::Table(root) = root else {
-        return Ok(());
+        return Ok(HashMap::new());
     };
-    run_actor_startup_commands_for_table(lua, root)
+    lua.set_app_data(SongLuaStartupQueues(Vec::new()));
+    let result = run_actor_startup_commands_for_table(lua, root);
+    let queued = lua
+        .remove_app_data::<SongLuaStartupQueues>()
+        .expect("startup queue scope was installed above");
+    result?;
+    let mut states = HashMap::new();
+    if !queued.0.is_empty() {
+        // Actor::UpdateTweening requires positive delta time. Keep the state
+        // after On but before queued commands for the compiled beat-zero frame.
+        collect_startup_states(root, &mut states)?;
+        for actor in queued.0 {
+            drain_actor_command_queue(lua, &actor)?;
+        }
+        let mut ready = HashMap::with_capacity(states.len());
+        collect_startup_states(root, &mut ready)?;
+        states.retain(|actor, initial| ready.get(actor).is_some_and(|state| state != initial));
+    }
+    Ok(states)
 }
 
 pub fn run_actor_update_functions(lua: &Lua, root: &Value) -> mlua::Result<()> {
@@ -7742,8 +7790,8 @@ fn collect_compile_update_jobs(
 ) -> mlua::Result<()> {
     let rate = parent_rate * actor_update_rate(actor)?;
     if actor
-        .get::<Option<bool>>("__songlua_recurring_update_command")?
-        .unwrap_or(false)
+        .get::<Option<String>>("__songlua_recurring_update_command")?
+        .is_some()
     {
         jobs.push(SongLuaCompileUpdateJob::Recurring {
             actor: actor.clone(),
@@ -7827,12 +7875,10 @@ fn update_actor_reads_global(lua: &Lua, actor: &Table, name: &[u8]) -> mlua::Res
     if actor
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some_and(&chunk_has_name)
-        || (actor
-            .get::<Option<bool>>("__songlua_recurring_update_command")?
-            .unwrap_or(false)
-            && actor
-                .get::<Option<Function>>("UpdateCommand")?
-                .is_some_and(&chunk_has_name))
+        || actor
+            .get::<Option<String>>("__songlua_recurring_update_command")?
+            .and_then(|name| actor.get::<Option<Function>>(name).ok().flatten())
+            .is_some_and(&chunk_has_name)
     {
         return Ok(true);
     }
@@ -7889,7 +7935,7 @@ fn actor_update_rate(actor: &Table) -> mlua::Result<f64> {
 fn report_update_error(
     actor: &Table,
     reported_key: &'static str,
-    callback: &'static str,
+    callback: &str,
     err: &mlua::Error,
 ) -> mlua::Result<()> {
     if actor.get::<Option<bool>>(reported_key)?.unwrap_or(false) {
@@ -7909,18 +7955,18 @@ fn run_recurring_update(
     delta_seconds: f64,
     enabled: bool,
 ) -> mlua::Result<()> {
-    let recurring = actor
-        .get::<Option<bool>>("__songlua_recurring_update_command")?
-        .unwrap_or(false);
-    if !enabled || !recurring {
+    let Some(command) = actor.get::<Option<String>>("__songlua_recurring_update_command")? else {
+        return Ok(());
+    };
+    if !enabled {
         return Ok(());
     }
     let mut interval = actor
         .get::<Option<f64>>("__songlua_recurring_update_interval")?
         .unwrap_or(0.0);
     if interval <= f64::EPSILON {
-        if let Err(err) = run_actor_named_command(lua, actor, "UpdateCommand") {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, "UpdateCommand", &err)?;
+        if let Err(err) = run_actor_named_command(lua, actor, &command) {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
         }
         return Ok(());
     }
@@ -7947,8 +7993,8 @@ fn run_recurring_update(
             }
         }
 
-        if let Err(err) = run_actor_named_command(lua, actor, "UpdateCommand") {
-            report_update_error(actor, UPDATE_CMD_ERROR_KEY, "UpdateCommand", &err)?;
+        if let Err(err) = run_actor_named_command(lua, actor, &command) {
+            report_update_error(actor, UPDATE_CMD_ERROR_KEY, &command, &err)?;
         }
         runs += 1;
         interval = actor
@@ -8068,8 +8114,8 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
         .get::<Option<Function>>("__songlua_update_function")?
         .is_some()
         || actor
-            .get::<Option<bool>>("__songlua_recurring_update_command")?
-            .unwrap_or(false)
+            .get::<Option<String>>("__songlua_recurring_update_command")?
+            .is_some()
     {
         return Ok(true);
     }
@@ -9026,9 +9072,14 @@ pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
         "SetSplineMode",
         lua.create_function({
             let handler = handler.clone();
-            move |_, args: MultiValue| {
+            move |lua, args: MultiValue| {
                 if let Some(mode) = args.get(1).cloned().and_then(read_string) {
                     handler.set("__songlua_spline_mode", mode)?;
+                    let globals = lua.globals();
+                    let writes = globals
+                        .raw_get::<Option<u64>>("__songlua_column_writes")?
+                        .unwrap_or(0);
+                    globals.raw_set("__songlua_column_writes", writes + 1)?;
                 }
                 Ok(handler.clone())
             }
@@ -10353,6 +10404,7 @@ pub struct SongLuaFunctionActionCapture {
     pub broadcasts: Vec<(String, bool)>,
     pub sound_paths: Vec<PathBuf>,
     pub saw_side_effect: bool,
+    pub column_writes: bool,
 }
 
 struct FunctionActionTableSnapshot {
@@ -10452,6 +10504,11 @@ fn capture_function_action_blocks_inner(
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
     let globals = lua.globals();
+    let column_writes_before = globals
+        .raw_get::<Option<u64>>("__songlua_column_writes")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(0);
+    let column_snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
     let previous_broadcasts = globals
         .get::<Value>(SONG_LUA_BROADCASTS_KEY)
         .map_err(|err| err.to_string())?;
@@ -10507,6 +10564,12 @@ fn capture_function_action_blocks_inner(
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
     let sound_paths = read_path_table(&sound_calls);
+    let column_writes = globals
+        .raw_get::<Option<u64>>("__songlua_column_writes")
+        .map_err(|err| err.to_string())?
+        .unwrap_or(0)
+        > column_writes_before;
+    restore_note_field_columns(lua, column_snapshot).map_err(|err| err.to_string())?;
     let saw_side_effect =
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     reset_actor_capture_tables(lua, &touched_actors)?;
@@ -10540,6 +10603,7 @@ fn capture_function_action_blocks_inner(
         broadcasts,
         sound_paths,
         saw_side_effect,
+        column_writes,
     })
 }
 
@@ -10700,6 +10764,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
     counter: &mut usize,
     messages: &mut Vec<SongLuaMessageEvent>,
     sound_events: &mut Vec<SongLuaSoundEvent>,
+    runtime: bool,
 ) -> Result<bool, String> {
     let capture = capture_overlay_compile_actor_function_action_blocks(
         lua,
@@ -10742,7 +10807,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
         return Ok(true);
     }
     if !has_direct_effects {
-        return Ok(capture.saw_side_effect);
+        return Ok(capture.saw_side_effect || (runtime && capture.column_writes));
     }
 
     let message = format!("__songlua_overlay_fn_action_{counter}");
@@ -10800,6 +10865,7 @@ pub fn read_overlay_compile_actor_actions<Kind>(
     sound_events: &mut Vec<SongLuaSoundEvent>,
     counter: &mut usize,
     info: &mut SongLuaCompileInfo,
+    runtime: bool,
 ) -> Result<(), String> {
     read_actions_with_function_capture(table, messages, |input, messages| {
         if !matches!(
@@ -10813,6 +10879,7 @@ pub fn read_overlay_compile_actor_actions<Kind>(
                 counter,
                 messages,
                 sound_events,
+                runtime,
             ),
             Ok(true)
         ) {
@@ -10844,6 +10911,7 @@ pub fn read_update_function_overlay_compile_actor_actions<Kind>(
             sound_events,
             counter,
             info,
+            true,
         )?;
     }
     Ok(())
@@ -13716,13 +13784,12 @@ fn read_update_function_tables_for_table(
             seen_tables,
         )?);
     }
-    if actor
-        .get::<Option<bool>>("__songlua_recurring_update_command")
+    if let Some(command) = actor
+        .get::<Option<String>>("__songlua_recurring_update_command")
         .map_err(|err| err.to_string())?
-        .unwrap_or(false)
     {
         if let Some(update) = actor
-            .get::<Option<Function>>("UpdateCommand")
+            .get::<Option<Function>>(command)
             .map_err(|err| err.to_string())?
         {
             out.extend(function_named_upvalue_tables(
@@ -13762,13 +13829,12 @@ fn read_update_function_nested_tables_for_table(
             seen_functions,
         )?);
     }
-    if actor
-        .get::<Option<bool>>("__songlua_recurring_update_command")
+    if let Some(command) = actor
+        .get::<Option<String>>("__songlua_recurring_update_command")
         .map_err(|err| err.to_string())?
-        .unwrap_or(false)
     {
         if let Some(update) = actor
-            .get::<Option<Function>>("UpdateCommand")
+            .get::<Option<Function>>(command)
             .map_err(|err| err.to_string())?
         {
             out.extend(nested_function_named_upvalue_tables(

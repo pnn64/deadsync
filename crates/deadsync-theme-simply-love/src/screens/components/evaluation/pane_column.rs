@@ -1216,6 +1216,7 @@ mod tests {
 
     #[test]
     fn static_column_rows_preserve_judgment_order_and_labels() {
+        crate::tests::init_paths();
         assert_eq!(
             STANDARD_ROWS.map(|row| (row.kind, row.label, row.show_early)),
             [
@@ -1243,6 +1244,7 @@ mod tests {
 
     #[test]
     fn column_counts_expose_arrowcloud_all_bad_rescores() {
+        crate::tests::init_paths();
         let cj = ColumnJudgments {
             w4: 3,
             w5: 4,
@@ -1273,6 +1275,7 @@ mod tests {
 
     #[test]
     fn column_counts_keep_rescore_all_counts_off_other_rows() {
+        crate::tests::init_paths();
         let cj = ColumnJudgments {
             w0: 1,
             w1: 2,
@@ -1323,6 +1326,7 @@ mod tests {
 
     #[test]
     fn column_rows_map_to_disabled_timing_windows() {
+        crate::tests::init_paths();
         let disabled = [false, false, false, true, true];
         assert!(row_disabled(disabled, RowKind::Dec));
         assert!(row_disabled(disabled, RowKind::Wo));
@@ -1332,6 +1336,7 @@ mod tests {
 
     #[test]
     fn pane3_doubles_layout_uses_full_width_slot() {
+        crate::tests::init_paths();
         assert_eq!(pane3_width(4), PANE3_SINGLE_WIDTH);
         assert_eq!(pane3_width(5), PANE3_SINGLE_WIDTH);
         assert_eq!(pane3_width(8), PANE3_DOUBLE_WIDTH);
@@ -1348,6 +1353,7 @@ mod tests {
 
     #[test]
     fn pane3_arrow_glow_colors_tint_doubles_p2_columns() {
+        crate::tests::init_paths();
         assert_eq!(arrow_breakdown_rgba(0), [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(1), [0.0, 0.0, 1.0, 1.0]);
         assert_eq!(arrow_breakdown_rgba(2), [0.0, 1.0, 0.0, 1.0]);
@@ -1370,6 +1376,7 @@ mod tests {
 
     #[test]
     fn pump_evaluation_preview_preserves_right_panel_mirroring() {
+        crate::tests::init_paths();
         let noteskin = load_itg_default(&Style {
             num_cols: 5,
             num_players: 1,
@@ -1390,6 +1397,7 @@ mod tests {
 
     #[test]
     fn pump_evaluation_preview_advances_noteskin_animation_phase() {
+        crate::tests::init_paths();
         let noteskin = load_itg_default(&Style {
             num_cols: 5,
             num_players: 1,

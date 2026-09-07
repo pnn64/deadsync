@@ -39,6 +39,8 @@ fn vs_main(input: VertexIn) -> VertexOut {
         input.model_col3,
     );
     out.pos = u_proj.proj * model * vec4<f32>(input.pos, 1.0);
+    // Engine cameras use [-w, w] depth; wgpu clips to [0, w].
+    out.pos.z = (out.pos.z + out.pos.w) * 0.5;
     out.uv = input.uv * input.uv_scale
         + input.uv_offset
         + input.uv_tex_shift * (input.tex_matrix_scale - vec2<f32>(1.0, 1.0));

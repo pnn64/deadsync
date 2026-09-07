@@ -1,5 +1,5 @@
 use crate::ini::SimpleIni;
-use deadlib_platform::dirs::app_dirs;
+use crate::runtime::palette_path;
 use deadlib_present::color::Color;
 use deadsync_theme::color::{JudgmentColorRole, JudgmentPalette, JudgmentPalettePreset};
 use std::fmt::Write as _;
@@ -154,12 +154,14 @@ impl JudgmentPaletteCatalog {
                 )
             })?;
         }
-        std::fs::write(path, self.to_ini()).map_err(|error| {
-            format!(
-                "failed to save judgment palettes to '{}': {error}",
-                path.display()
-            )
-        })
+        deadlib_platform::atomic_write::write_atomic(path, self.to_ini().as_bytes()).map_err(
+            |error| {
+                format!(
+                    "failed to save judgment palettes to '{}': {error}",
+                    path.display()
+                )
+            },
+        )
     }
 
     #[must_use]
@@ -279,7 +281,7 @@ pub fn runtime_catalog(built_in: JudgmentPalettePreset) -> Arc<JudgmentPaletteCa
     RUNTIME_CATALOG
         .get_or_init(|| {
             RwLock::new(Arc::new(JudgmentPaletteCatalog::load(
-                &app_dirs().judgment_palettes_path(),
+                palette_path(),
                 built_in,
             )))
         })
@@ -295,7 +297,7 @@ pub fn update_runtime_catalog(
     let current = runtime_catalog(built_in);
     let mut next = (*current).clone();
     update(&mut next)?;
-    next.save(&app_dirs().judgment_palettes_path())?;
+    next.save(palette_path())?;
     let next = Arc::new(next);
     *RUNTIME_CATALOG
         .get()

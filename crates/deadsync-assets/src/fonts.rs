@@ -1,8 +1,7 @@
 use deadlib_assets::{
-    AssetManager, PreparedFontTexture, font_texture_asset_roots, parse_font_asset_specs,
-    parse_font_with_asset_dirs, prepare_required_font_textures,
+    AssetManager, PreparedFontTexture, parse_font_asset_specs, parse_font_with_asset_context,
+    prepare_required_font_textures,
 };
-use deadlib_platform::dirs;
 use deadlib_present::font::Font;
 use deadlib_render::Backend;
 use log::debug;
@@ -14,9 +13,9 @@ fn upload_font_textures(
     font: &Font,
     required_textures: &[std::path::PathBuf],
 ) -> Result<(), deadlib_assets::AssetError> {
-    let dirs = dirs::app_dirs();
-    let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-    let textures = prepare_required_font_textures(font, required_textures, &asset_roots, |key| {
+    let dirs = crate::paths();
+    let asset_roots = &dirs.texture_roots;
+    let textures = prepare_required_font_textures(font, required_textures, asset_roots, |key| {
         assets.has_texture_key(key)
     })?;
     for PreparedFontTexture { key, image, hints } in textures {
@@ -35,11 +34,11 @@ pub fn load_font_from_ini_path(
     if assets.has_font(name) {
         return Ok(());
     }
-    let dirs = dirs::app_dirs();
+    let dirs = crate::paths();
     let deadlib_present::font::FontLoadData {
         font,
         required_textures,
-    } = parse_font_with_asset_dirs(ini_path, &dirs.data_dir, &dirs.exe_dir)?;
+    } = parse_font_with_asset_context(ini_path, &dirs.texture_roots)?;
     upload_font_textures(assets, backend, &font, &required_textures)?;
     assets.register_font(name, font);
     debug!("Loaded font '{name}' from '{}'", ini_path.display());
@@ -51,9 +50,9 @@ pub fn load_initial_fonts(
     backend: &mut Backend,
     fonts: &'static [deadlib_assets::FontAssetSpec],
 ) -> Result<(), deadlib_assets::AssetError> {
-    let dirs = dirs::app_dirs();
-    let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-    let parsed = parse_font_asset_specs(fonts.iter().copied(), &asset_roots, |path| {
+    let dirs = crate::paths();
+    let asset_roots = &dirs.texture_roots;
+    let parsed = parse_font_asset_specs(fonts.iter().copied(), asset_roots, |path| {
         dirs.resolve_asset_path(path)
     })?;
     let mut font_batch = Vec::with_capacity(parsed.len());

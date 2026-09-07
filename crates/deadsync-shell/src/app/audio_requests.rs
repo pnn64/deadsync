@@ -19,7 +19,7 @@ impl UiSfx {
     pub fn prepare(audio: &mut AudioControl, paths: &[&'static str]) -> Self {
         let mut fixed = HashMap::with_capacity(paths.len());
         for &path in paths {
-            if let Some(sound) = audio.prepare_sfx(path) {
+            if let Some(sound) = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(path)) {
                 fixed.insert(path, sound);
             }
         }
@@ -37,7 +37,9 @@ impl UiSfx {
         self.screen = paths
             .filter_map(|path| {
                 audio
-                    .prepare_sfx(path.to_string_lossy().as_ref())
+                    .prepare_sfx(&deadsync_assets::resolve_asset_path(
+                        path.to_string_lossy().as_ref(),
+                    ))
                     .map(|sound| (path.to_owned(), sound))
             })
             .collect();
@@ -132,7 +134,7 @@ pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRe
             rate,
         } => audio.play_music(
             path,
-            deadsync_audio_stream::Cut {
+            deadlib_audio::stream::Cut {
                 start_sec: cut.start_sec,
                 length_sec: cut.length_sec,
                 fade_in_sec: cut.fade_in_sec,

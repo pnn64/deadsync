@@ -898,8 +898,14 @@ pub fn create_arrow_effects_table(
         lua.create_function(|_, args: MultiValue| {
             let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
             let reverse = arrow_effects_reverse_percent(&args)?;
-            let receptor_y = (THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)
-                .mul_add(reverse, THEME_RECEPTOR_Y_STD);
+            // ArrowEffects is local to NoteField; Player places that actor at
+            // the midpoint of the two theme receptor metrics.
+            let reverse_offset = args
+                .get(3)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD);
+            let receptor_y = reverse_offset * (reverse - 0.5);
             Ok(receptor_y + y_offset * 2.0f32.mul_add(-reverse, 1.0))
         })?,
     )?;
@@ -926,7 +932,10 @@ pub fn create_arrow_effects_table(
     )?;
     table.set(
         "GetRotationX",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, args: MultiValue| {
+            let column = args.get(2).cloned().and_then(read_f32).unwrap_or(1.0) as i32;
+            Ok(arrow_effects_rotation_x(column))
+        })?,
     )?;
     table.set(
         "GetRotationY",
@@ -949,6 +958,19 @@ pub fn create_arrow_effects_table(
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
     Ok(table)
+}
+
+pub(crate) const fn arrow_effects_rotation_x(column: i32) -> f32 {
+    // ITGmania's Lua binding reads the third argument as a one-based column.
+    // Legacy multitap passes (ps, offset, 0, lane), so its column is zero.
+    // PlayerOptions places m_SpeedfMovesZ[15] (default 1) immediately before
+    // m_fConfusionX. Safely reproduce that legacy alias, not an out-of-bounds
+    // read. ReceptorGetRotationX converts this one radian to degrees.
+    if column == 0 {
+        180.0 / std::f32::consts::PI
+    } else {
+        0.0
+    }
 }
 
 fn song_lua_sound_paths_table(lua: &Lua) -> mlua::Result<Table> {
@@ -1121,7 +1143,7 @@ pub fn install_game_state_globals(
         "currentTimeSongOrCourse",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _args: MultiValue| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let current_sort_order = lua.create_table()?;
@@ -1364,7 +1386,7 @@ pub fn install_game_state_globals(
         "GetSongBeat",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_BEAT_KEY)
         })?,
     )?;
     let song_bps = song_display_bps(context);
@@ -1376,7 +1398,7 @@ pub fn install_game_state_globals(
         "GetCurMusicSeconds",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _self: Option<Value>| song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _self: Option<Value>| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let song_position = create_song_position_table(lua, &song_runtime)?;

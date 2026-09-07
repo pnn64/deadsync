@@ -190,6 +190,117 @@ fn pixel(image: &RgbaImage, x: f32, y: f32, expected: [u8; 4]) {
     assert_eq!(image.get_pixel(x, y).0, expected, "pixel at {x}, {y}");
 }
 
+fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
+    // The engine and ITGmania use OpenGL clip depth. Rotating an eight-column
+    // field puts opposite halves on either side of zero, both still visible.
+    let camera =
+        glam::camera::rh::proj::opengl::orthographic(-427.0, 427.0, -240.0, 240.0, -1000.0, 1000.0)
+            * Mat4::from_rotation_y(angle.to_radians());
+    let mut field = target(4);
+    field.width = 128;
+    field.height = 128;
+    field.cameras = vec![camera];
+    field
+        .tmesh_geometries
+        .push(quad([-32.0, 32.0, -32.0, 32.0], 0));
+    for column in 0..8 {
+        let x = (column as f32 - 3.5) * 100.0;
+        field.sprite_instances.push(SpriteInstanceRaw {
+            center: [x, 150.0, 0.0, 0.0],
+            size: [64.0; 2],
+            tint: [1.0, 0.0, 0.0, 1.0],
+            ..sprite()
+        });
+        field.mesh_vertices.extend(
+            quad([x - 32.0, x + 32.0, -32.0, 32.0], 0)
+                .vertices
+                .as_ref()
+                .iter()
+                .map(|v| MeshVertex {
+                    pos: [v.pos[0], v.pos[1]],
+                    color: [0.0, 1.0, 0.0, 1.0],
+                }),
+        );
+        field.tmesh_instances.push(instance(
+            [0.0, 0.0, 1.0, 1.0],
+            Mat4::from_translation([x, -150.0, -0.5].into()),
+        ));
+    }
+    field.ops = vec![
+        DrawOp::Sprite(SpriteRun {
+            instance_start: 0,
+            instance_count: 8,
+            blend: BlendMode::Alpha,
+            texture_handle: 1,
+            camera: 0,
+        }),
+        DrawOp::Mesh(MeshRun {
+            vertex_start: 0,
+            vertex_count: 48,
+            blend: BlendMode::Alpha,
+            camera: 0,
+        }),
+        DrawOp::TexturedMesh(TexturedMeshRun {
+            geometry: 0,
+            instance_start: 0,
+            instance_count: 8,
+            blend: BlendMode::Alpha,
+            texture_handle: 1,
+            camera: 0,
+            depth_test: true,
+        }),
+    ];
+    let frame = if offscreen {
+        RenderFrame {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: vec![Mat4::IDENTITY],
+            sprite_instances: vec![sprite()],
+            ops: vec![sample(field.texture_handle)],
+            render_targets: vec![field],
+            mesh_vertices: Vec::new(),
+            tmesh_instances: Vec::new(),
+            tmesh_geometries: Vec::new(),
+        }
+    } else {
+        RenderFrame {
+            clear_color: [0.0, 0.0, 0.0, 1.0],
+            cameras: field.cameras,
+            sprite_instances: field.sprite_instances,
+            mesh_vertices: field.mesh_vertices,
+            tmesh_instances: field.tmesh_instances,
+            tmesh_geometries: field.tmesh_geometries,
+            ops: field.ops,
+            render_targets: Vec::new(),
+        }
+    };
+    (frame, camera)
+}
+
+fn check_rotated_field(state: &mut backend::State, textures: &Textures, api: &str) {
+    for offscreen in [false, true] {
+        for angle in [-20.0, 20.0] {
+            let (mut frame, camera) = rotated_field(angle, offscreen);
+            if offscreen {
+                // RGB vibration also moves the final texture sprite in Z.
+                frame.sprite_instances[0].center[2] = angle.signum() * 0.01;
+            }
+            let image = capture(state, &frame, textures);
+            eprintln!("{api}: rotated field angle={angle} offscreen={offscreen}");
+            for column in 0..8 {
+                let x = (column as f32 - 3.5) * 100.0;
+                for (y, color) in [
+                    (150.0, [255, 0, 0, 255]),
+                    (0.0, [0, 255, 0, 255]),
+                    (-150.0, [0, 0, 255, 255]),
+                ] {
+                    let clip = camera * glam::Vec4::new(x, y, 0.0, 1.0);
+                    pixel(&image, clip.x / clip.w, clip.y / clip.w, color);
+                }
+            }
+        }
+    }
+}
+
 struct CaptureApp {
     ran: bool,
 }
@@ -301,6 +412,7 @@ impl ApplicationHandler for CaptureApp {
             let main = capture(&mut state, &frame, &textures);
             pixel(&main, -0.5, -0.5, [0, 255, 255, 255]);
             pixel(&main, 0.0, -0.75, [255, 0, 255, 255]);
+            check_rotated_field(&mut state, &textures, api);
             backend::wait_for_idle(&mut state);
             eprintln!("{api}: offscreen pixel regression passed");
         }

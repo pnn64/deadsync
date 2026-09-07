@@ -679,11 +679,7 @@ fn archive_file_name(url: &str) -> String {
 /// Absolute path of the directory archives are staged into.
 #[must_use]
 pub fn downloads_dir() -> Option<PathBuf> {
-    Some(
-        deadlib_platform::dirs::app_dirs()
-            .cache_dir
-            .join(DOWNLOADS_SUBDIR),
-    )
+    Some(crate::cache_dir().join(DOWNLOADS_SUBDIR))
 }
 
 /// Runtime `bin/` directory the tools are installed into

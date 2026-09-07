@@ -89,8 +89,7 @@ fn read_playlist(path: PathBuf, owner: Option<String>) -> Option<SelectMusicPlay
     }
 }
 
-fn machine_playlists() -> Vec<SelectMusicPlaylistView> {
-    let dirs = deadlib_platform::dirs::app_dirs();
+fn machine_playlists(dirs: &deadsync_config::dirs::AppDirs) -> Vec<SelectMusicPlaylistView> {
     let mut roots = Vec::with_capacity(2);
     if let Some(root) = find_child_dir(&dirs.data_dir, "playlists") {
         roots.push(root);
@@ -144,10 +143,9 @@ fn profile_playlists() -> Vec<SelectMusicPlaylistView> {
     playlists
 }
 
-pub(crate) fn init_view() -> SelectMusicInitView {
-    let dirs = deadlib_platform::dirs::app_dirs();
+pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView {
     let songs_root = dirs.songs_dir();
-    let mut playlists = machine_playlists();
+    let mut playlists = machine_playlists(dirs);
     playlists.extend(profile_playlists());
     let cfg = config::get();
     let session = session_view();
@@ -326,9 +324,9 @@ pub(crate) fn prepare_init_view(mut view: SelectMusicInitView) -> SelectMusicIni
     view
 }
 
-pub(crate) fn prepared_init_view() -> SelectMusicInitView {
+pub(crate) fn prepared_init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView {
     scores::prewarm_select_music_score_caches();
-    prepare_init_view(init_view())
+    prepare_init_view(init_view(dirs))
 }
 
 #[cfg(test)]
@@ -354,10 +352,10 @@ mod tests {
             select_music_last_sort: config::SelectMusicSort::Title,
             select_music_new_pack_mode: config::NewPackMode::OpenPack,
             show_srpg_shop: false,
-            music_select_shortcut_practice: deadsync_input::KeyCode::KeyQ,
-            music_select_shortcut_song_search: deadsync_input::KeyCode::KeyW,
-            music_select_shortcut_load_songs: deadsync_input::KeyCode::KeyE,
-            music_select_shortcut_test_input: deadsync_input::KeyCode::KeyR,
+            music_select_shortcut_practice: deadlib_platform::input::KeyCode::KeyQ,
+            music_select_shortcut_song_search: deadlib_platform::input::KeyCode::KeyW,
+            music_select_shortcut_load_songs: deadlib_platform::input::KeyCode::KeyE,
+            music_select_shortcut_test_input: deadlib_platform::input::KeyCode::KeyR,
             show_select_music_scorebox: false,
             select_music_scorebox_cycle_itg: false,
             select_music_scorebox_cycle_ex: false,
@@ -418,7 +416,7 @@ mod tests {
         assert!(!view.interaction.show_srpg_shop);
         assert_eq!(
             view.interaction.song_search_shortcut,
-            deadsync_input::KeyCode::KeyW
+            deadlib_platform::input::KeyCode::KeyW
         );
         assert!(!view.presentation.show_scorebox);
         assert!(view.presentation.scorebox_cycle_enabled);

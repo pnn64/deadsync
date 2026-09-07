@@ -1,5 +1,6 @@
 use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
+use deadlib_platform::input::KeyCode;
 #[cfg(target_os = "windows")]
 use deadsync_config::prelude::WindowsPadBackend;
 use deadsync_config::prelude::{
@@ -12,7 +13,7 @@ use deadsync_config::prelude::{
     SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant, TournamentScoringSystem,
     VersionOverlaySide, VisualStyle,
 };
-use deadsync_input::{InputBinding, KeyCode, VirtualAction};
+use deadsync_input::{InputBinding, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::color::DifficultyColorScheme;

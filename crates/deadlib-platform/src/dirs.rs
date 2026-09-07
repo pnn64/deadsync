@@ -1,346 +1,35 @@
-use log::warn;
+//! Native per-application roots and host-friendly path display.
+
 use std::path::{Path, PathBuf};
 
-/// Single source of truth for all resolved application directories.
+/// Filesystem namespace supplied by the application, interpreted using host conventions.
+#[derive(Clone, Copy)]
+pub struct AppIdentity<'a> {
+    pub qualifier: &'a str,
+    pub organization: &'a str,
+    pub application: &'a str,
+}
+
+/// Standard OS locations, without portable-mode or application layout policy.
 #[derive(Clone, Debug)]
-pub struct AppDirs {
-    /// Root for user data (config, saves, songs, courses, log).
+pub struct NativeDirs {
     pub data_dir: PathBuf,
-    /// Root for regenerable cache data.
     pub cache_dir: PathBuf,
-    /// Directory containing bundled runtime data.
-    /// Usually this is the executable directory. For test binaries built under
-    /// `target/<profile>/deps`, this is normalized back to `target/<profile>`
-    /// so copied assets remain discoverable.
-    pub exe_dir: PathBuf,
-    /// Whether running in portable mode.
-    pub portable: bool,
+    pub config_dir: PathBuf,
 }
 
-impl AppDirs {
-    #[must_use]
-    pub fn config_path(&self) -> PathBuf {
-        self.data_dir.join("deadsync.ini")
-    }
-
-    #[must_use]
-    pub fn log_path(&self) -> PathBuf {
-        self.data_dir.join("deadsync.log")
-    }
-
-    #[must_use]
-    pub fn profiles_root(&self) -> PathBuf {
-        self.data_dir.join("save").join("profiles")
-    }
-
-    #[must_use]
-    pub fn screenshots_dir(&self) -> PathBuf {
-        self.data_dir.join("save").join("screenshots")
-    }
-
-    #[must_use]
-    pub fn current_screen_path(&self) -> PathBuf {
-        self.data_dir.join("save").join("current_screen.txt")
-    }
-
-    #[must_use]
-    pub fn default_player_options_path(&self) -> PathBuf {
-        self.data_dir
-            .join("save")
-            .join("default_player_options.ini")
-    }
-
-    #[must_use]
-    pub fn judgment_palettes_path(&self) -> PathBuf {
-        self.data_dir.join("save").join("judgment_palettes.ini")
-    }
-
-    #[must_use]
-    pub fn songs_dir(&self) -> PathBuf {
-        self.data_dir.join("songs")
-    }
-
-    #[must_use]
-    pub fn courses_dir(&self) -> PathBuf {
-        self.data_dir.join("courses")
-    }
-
-    #[must_use]
-    pub fn song_cache_dir(&self) -> PathBuf {
-        self.cache_dir.join("songs")
-    }
-
-    #[must_use]
-    pub fn banner_cache_dir(&self) -> PathBuf {
-        self.cache_dir.join("banner")
-    }
-
-    #[must_use]
-    pub fn cdtitle_cache_dir(&self) -> PathBuf {
-        self.cache_dir.join("cdtitle")
-    }
-
-    #[must_use]
-    pub fn replaygain_cache_dir(&self) -> PathBuf {
-        self.cache_dir.join("replaygain")
-    }
-
-    /// Single-file consolidated `ReplayGain` cache. Replaces the legacy
-    /// per-song `replaygain/<hash>.bin` layout, which doesn't scale to
-    /// libraries of 10k+ songs.
-    #[must_use]
-    pub fn replaygain_cache_file(&self) -> PathBuf {
-        self.cache_dir.join("replaygain.bin")
-    }
-
-    #[must_use]
-    pub fn null_or_die_cache_file(&self) -> PathBuf {
-        self.cache_dir.join("null-or-die-sync.json")
-    }
-
-    #[must_use]
-    pub fn downloads_dir(&self) -> PathBuf {
-        self.cache_dir.join("downloads")
-    }
-
-    #[must_use]
-    pub fn noteskin_cache_dir(&self) -> PathBuf {
-        self.cache_dir.join("noteskins")
-    }
-
-    #[must_use]
-    pub fn unlock_cache_path(&self) -> PathBuf {
-        self.cache_dir.join("unlocks-cache.json")
-    }
-
-    /// Returns additional song scan roots beyond the primary `songs_dir()`.
-    /// In platform-native mode, also includes `{exe_dir}/songs` so bundled songs
-    /// are found even when the data dir is elsewhere.
-    #[must_use]
-    pub fn extra_song_roots(&self) -> Vec<PathBuf> {
-        if self.portable {
-            return Vec::new();
-        }
-        let exe_songs = self.exe_dir.join("songs");
-        if exe_songs.is_dir() && exe_songs != self.songs_dir() {
-            vec![exe_songs]
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Returns additional course roots beyond the primary `courses_dir()`.
-    /// In platform-native mode, also includes `{exe_dir}/courses`.
-    #[must_use]
-    pub fn extra_course_roots(&self) -> Vec<PathBuf> {
-        if self.portable {
-            return Vec::new();
-        }
-        let exe_courses = self.exe_dir.join("courses");
-        if exe_courses.is_dir() && exe_courses != self.courses_dir() {
-            vec![exe_courses]
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Resolves a relative asset path (e.g. `"assets/sounds/change.ogg"`) by
-    /// checking the data dir overlay first. In platform-native mode, if the
-    /// file or directory exists at `{data_dir}/{path}`, returns that absolute
-    /// path. Otherwise, returns the first existing bundled path found from the
-    /// current working directory, the workspace `deadsync/` directory, or the
-    /// executable directory. If no candidate exists, returns the original path.
-    #[must_use]
-    pub fn resolve_asset_path(&self, path: &str) -> PathBuf {
-        let original = PathBuf::from(path);
-        if original.is_absolute() {
-            return original;
-        }
-        if !self.portable {
-            let candidate = self.data_dir.join(path);
-            if candidate.exists() {
-                return candidate;
-            }
-        }
-        if let Ok(cwd) = std::env::current_dir() {
-            for candidate in [cwd.join(path), cwd.join("deadsync").join(path)] {
-                if candidate.exists() {
-                    return candidate;
-                }
-            }
-        }
-        let candidate = self.exe_dir.join(path);
-        if candidate.exists() {
-            return candidate;
-        }
-        original
-    }
-
-    /// Strips the data-dir or exe-dir `assets/` prefix from an absolute path,
-    /// returning the relative portion after `assets/`. Returns `None` if the
-    /// path doesn't start with either prefix.
-    #[must_use]
-    pub fn strip_asset_prefix<'a>(&self, path: &'a std::path::Path) -> Option<&'a std::path::Path> {
-        let data_assets = self.data_dir.join("assets");
-        let exe_assets = self.exe_dir.join("assets");
-        path.strip_prefix(&data_assets)
-            .or_else(|_| path.strip_prefix(&exe_assets))
-            .ok()
-    }
-
-    /// Returns all root directories where noteskins may be found.
-    /// In platform-native mode the data-dir variant is listed first so that
-    /// user-added skins take priority over bundled ones.
-    #[must_use]
-    pub fn noteskin_roots(&self) -> Vec<PathBuf> {
-        let mut roots = Vec::with_capacity(2);
-        if !self.portable {
-            let data_root = self.data_dir.join("assets").join("noteskins");
-            if data_root.is_dir() {
-                roots.push(data_root);
-            }
-        }
-        roots.push(self.exe_dir.join("assets").join("noteskins"));
-        roots
-    }
-}
-
-static APP_DIRS: std::sync::OnceLock<AppDirs> = std::sync::OnceLock::new();
-
-/// Returns the globally-resolved application directories.
-#[inline(always)]
-pub fn app_dirs() -> &'static AppDirs {
-    APP_DIRS.get_or_init(AppDirs::resolve)
-}
-
-/// Install an explicit application-data root before any directory consumer
-/// starts. Bundled assets continue to resolve from the executable directory;
-/// configuration, saves, songs, and regenerable caches are isolated below the
-/// supplied root. The one-shot startup contract prevents runtime path changes.
-pub fn install_data_dir(data_dir: PathBuf) -> Result<(), String> {
-    if !data_dir.is_absolute() {
-        return Err(format!(
-            "application data directory must be absolute: '{}'",
-            data_dir.display()
-        ));
-    }
-    let exe_path = std::env::current_exe()
-        .map_err(|error| format!("cannot determine executable path: {error}"))?;
-    let dirs = AppDirs::isolated_layout(data_dir, AppDirs::runtime_root_from_exe_path(&exe_path));
-    APP_DIRS
-        .set(dirs)
-        .map_err(|_| "application directories were already initialized".to_owned())
-}
-
-fn cache_dir_under(root: &std::path::Path) -> PathBuf {
-    root.join("cache")
-}
-
-#[cfg(any(windows, test))]
-fn native_cache_dir_for_data_dir(data_dir: &std::path::Path) -> PathBuf {
-    cache_dir_under(data_dir)
-}
-
-impl AppDirs {
-    fn has_portable_marker(dir: &std::path::Path) -> bool {
-        dir.join("portable.txt").exists() || dir.join("portable.ini").exists()
-    }
-
-    fn runtime_root_from_exe_path(exe_path: &std::path::Path) -> PathBuf {
-        let exe_dir = exe_path
-            .parent()
-            .expect("exe has no parent dir")
-            .to_path_buf();
-        let in_cargo_deps_dir = exe_dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.eq_ignore_ascii_case("deps"));
-        if !in_cargo_deps_dir {
-            return exe_dir;
-        }
-
-        let Some(parent) = exe_dir.parent() else {
-            return exe_dir;
-        };
-        let parent = parent.to_path_buf();
-        let looks_like_bundle_root = parent.join("assets").is_dir()
-            || Self::has_portable_marker(&parent)
-            || parent.join("songs").is_dir()
-            || parent.join("courses").is_dir();
-        if looks_like_bundle_root {
-            parent
-        } else {
-            exe_dir
-        }
-    }
-
-    fn portable_layout(exe_dir: PathBuf) -> Self {
-        let cache_dir = cache_dir_under(&exe_dir);
-        Self {
-            data_dir: exe_dir.clone(),
-            cache_dir,
-            exe_dir,
-            portable: true,
-        }
-    }
-
-    fn isolated_layout(data_dir: PathBuf, exe_dir: PathBuf) -> Self {
-        Self {
-            cache_dir: cache_dir_under(&data_dir),
-            data_dir,
-            exe_dir,
-            portable: false,
-        }
-    }
-
-    fn resolve() -> Self {
-        let exe_path = std::env::current_exe().expect("cannot determine exe path");
-        let exe_dir = Self::runtime_root_from_exe_path(&exe_path);
-
-        if Self::has_portable_marker(&exe_dir) {
-            return Self::portable_layout(exe_dir);
-        }
-
-        {
-            let proj = directories::ProjectDirs::from("", "", "deadsync")
-                .expect("cannot determine platform directories");
-
-            // On Windows, `data_dir()` appends a `\data` subdirectory
-            // (e.g. `%APPDATA%\deadsync\data`). We want `%APPDATA%\deadsync`
-            // directly, so use `config_dir().parent()` which strips the suffix.
-            // On macOS, `data_dir()` already gives the flat path we want.
-            #[cfg(windows)]
-            let data_dir = proj
-                .config_dir()
-                .parent()
-                .expect("config_dir has no parent")
-                .to_path_buf();
-            #[cfg(not(windows))]
-            let data_dir = proj.data_dir().to_path_buf();
-
-            #[cfg(windows)]
-            let cache_dir = native_cache_dir_for_data_dir(&data_dir);
-            #[cfg(not(windows))]
-            let cache_dir = proj.cache_dir().to_path_buf();
-
-            Self {
-                data_dir,
-                cache_dir,
-                exe_dir,
-                portable: false,
-            }
-        }
-    }
-}
-
-/// Creates the data and cache directories if they don't exist.
-pub fn ensure_dirs_exist() {
-    let dirs = app_dirs();
-    for dir in [&dirs.data_dir, &dirs.cache_dir] {
-        if let Err(e) = std::fs::create_dir_all(dir) {
-            warn!("Failed to create directory {}: {e}", dir.display());
-        }
-    }
+/// Discover native roots for the supplied application identity.
+pub fn native_dirs(identity: AppIdentity<'_>) -> Option<NativeDirs> {
+    let dirs = directories::ProjectDirs::from(
+        identity.qualifier,
+        identity.organization,
+        identity.application,
+    )?;
+    Some(NativeDirs {
+        data_dir: dirs.data_dir().to_path_buf(),
+        cache_dir: dirs.cache_dir().to_path_buf(),
+        config_dir: dirs.config_dir().to_path_buf(),
+    })
 }
 
 /// Returns a host-friendly shorthand for an absolute path when a stable home
@@ -386,106 +75,33 @@ fn replace_path_prefix(path: &Path, prefix: &std::ffi::OsStr, label: &str) -> Op
 
 #[cfg(test)]
 mod tests {
-    use super::{AppDirs, native_cache_dir_for_data_dir, path_shorthand, replace_path_prefix};
-    use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
-
+    use super::*;
     #[test]
-    fn windows_cache_dir_is_nested_under_data_dir() {
-        assert_eq!(
-            native_cache_dir_for_data_dir(Path::new("/tmp/deadsync")),
-            Path::new("/tmp/deadsync/cache")
-        );
-    }
-
-    #[test]
-    fn runtime_root_uses_parent_profile_dir_for_cargo_test_binaries() {
-        let unique = format!(
-            "deadsync-dirs-test-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time before unix epoch")
-                .as_nanos()
-        );
-        let root = std::env::temp_dir().join(unique);
-        let exe_path = root.join("target/debug/deps/deadsync-test");
-        let expected = root.join("target/debug");
-        std::fs::create_dir_all(expected.join("assets")).expect("create mock assets dir");
-
-        assert_eq!(AppDirs::runtime_root_from_exe_path(&exe_path), expected);
-
-        std::fs::remove_dir_all(root).expect("cleanup mock target dir");
-    }
-
-    #[test]
-    fn runtime_root_uses_parent_profile_dir_for_cargo_test_binaries_with_portable_ini() {
-        let unique = format!(
-            "deadsync-dirs-test-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system time before unix epoch")
-                .as_nanos()
-        );
-        let root = std::env::temp_dir().join(unique);
-        let exe_path = root.join("target/debug/deps/deadsync-test");
-        let expected = root.join("target/debug");
-        std::fs::create_dir_all(&expected).expect("create mock target dir");
-        std::fs::write(expected.join("portable.ini"), "").expect("create portable.ini");
-
-        assert_eq!(AppDirs::runtime_root_from_exe_path(&exe_path), expected);
-
-        std::fs::remove_dir_all(root).expect("cleanup mock target dir");
-    }
-
-    #[test]
-    fn runtime_root_keeps_regular_executable_dir() {
-        let exe_path = PathBuf::from("/tmp/deadsync/bin/deadsync");
-        assert_eq!(
-            AppDirs::runtime_root_from_exe_path(&exe_path),
-            PathBuf::from("/tmp/deadsync/bin")
-        );
-    }
-
-    #[test]
-    fn portable_layout_keeps_song_cache_under_cache_dir() {
-        let dirs = AppDirs::portable_layout(PathBuf::from("/tmp/deadsync-portable"));
-        assert_eq!(dirs.songs_dir(), Path::new("/tmp/deadsync-portable/songs"));
-        assert_eq!(
-            dirs.default_player_options_path(),
-            Path::new("/tmp/deadsync-portable/save/default_player_options.ini")
-        );
-        assert_eq!(
-            dirs.song_cache_dir(),
-            Path::new("/tmp/deadsync-portable/cache/songs")
-        );
-        assert_eq!(
-            dirs.null_or_die_cache_file(),
-            Path::new("/tmp/deadsync-portable/cache/null-or-die-sync.json")
-        );
-    }
-
-    #[test]
-    fn isolated_layout_keeps_bundled_assets_separate_from_case_data() {
-        let dirs = AppDirs::isolated_layout(
-            PathBuf::from("/tmp/deadsync-case"),
-            PathBuf::from("/opt/deadsync"),
-        );
-
-        assert_eq!(dirs.data_dir, Path::new("/tmp/deadsync-case"));
-        assert_eq!(dirs.cache_dir, Path::new("/tmp/deadsync-case/cache"));
-        assert_eq!(dirs.exe_dir, Path::new("/opt/deadsync"));
-        assert!(!dirs.portable);
+    fn native_roots_follow_the_supplied_identity() {
+        let roots = |application| {
+            native_dirs(AppIdentity {
+                qualifier: "org",
+                organization: "Example",
+                application,
+            })
+            .expect("native roots are available on the test host")
+        };
+        let first = roots("FirstApp");
+        let second = roots("SecondApp");
+        assert_ne!(first.data_dir, second.data_dir);
+        assert_ne!(first.cache_dir, second.cache_dir);
+        assert_ne!(first.config_dir, second.config_dir);
+        assert!(first.data_dir.is_absolute());
+        assert!(first.cache_dir.is_absolute());
     }
 
     #[test]
     fn path_prefix_replacement_keeps_the_same_relative_target() {
-        let path = Path::new("/home/user/.deadsync/save");
+        let path = Path::new("/home/user/.example-app/save");
         let result = replace_path_prefix(path, std::ffi::OsStr::new("/home/user"), "~");
         assert_eq!(
             result,
-            Some(format!("~{}.deadsync/save", std::path::MAIN_SEPARATOR))
+            Some(format!("~{}.example-app/save", std::path::MAIN_SEPARATOR))
         );
     }
 
@@ -506,7 +122,7 @@ mod tests {
     fn path_prefix_replacement_rejects_an_unrelated_root() {
         assert_eq!(
             replace_path_prefix(
-                Path::new("/var/log/deadsync.log"),
+                Path::new("/var/log/example-app.log"),
                 std::ffi::OsStr::new("/home/user"),
                 "~"
             ),

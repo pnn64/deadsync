@@ -9,7 +9,7 @@ arrayvec = "0.7.8"
 deadsync-core = { path = "../deadsync-core" }
 log = "0.4.34"
 rustc-hash = "2.1.3"
-winit = "0.30.13"
+deadlib-platform = { path = "../deadlib-platform" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

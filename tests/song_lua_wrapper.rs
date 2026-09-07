@@ -1,6 +1,9 @@
+#[path = "support/paths.rs"]
+mod paths;
+
 use deadsync_assets::song_lua::{
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayBlendMode, SongLuaOverlayKind,
-    SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
+    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
+    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -13,7 +16,82 @@ fn test_dir(name: &str) -> PathBuf {
 }
 
 #[test]
+fn recurring_commands_use_song_easing_and_continuous_clock() {
+    crate::paths::init();
+    let song_dir = test_dir("recurring-song-easing");
+    fs::write(
+        song_dir.join("easing.lua"),
+        "return function(t) return t * t * t end",
+    )
+    .unwrap();
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local curve = loadfile(GAMESTATE:GetCurrentSong():GetSongDir() .. 'easing.lua')()
+assert(curve(0.5) == 0.125, 'song easing file must execute')
+local options = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+local previous = 0
+return Def.Actor {
+    OnCommand=function(self) self:queuecommand('Loop') end,
+    LoopCommand=function(self)
+        local beat = GAMESTATE:GetSongBeat()
+        local seconds = GAMESTATE:GetCurMusicSeconds()
+        assert(math.abs(beat - seconds * 155 / 60) < 1e-12, 'Lua clock lost precision')
+        if beat < 1 then previous = curve(beat) end
+        options:Mini(previous)
+        if beat > 1 then options:FromString('*10000 inf beat') end
+        self:sleep(1/60):queuecommand('Loop')
+    end
+}
+"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Recurring Song Easing");
+    context.song_display_bpms = [155.0; 2];
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua(&entry, &context).unwrap();
+    assert_eq!(compiled.info.unsupported_perframes, 0);
+    for beat in [0.4, 0.8] {
+        let samples = compiled
+            .eases
+            .iter()
+            .filter(|ease| {
+                ease.target == SongLuaEaseTarget::Mod("mini".into())
+                    && ease.start >= beat
+                    && ease.start < beat + 0.1
+            })
+            .collect::<Vec<_>>();
+        // Finishing a sleep on an exact frame boundary can leave the queued
+        // command for the next frame; inspect a range containing an actual run.
+        assert!(
+            samples
+                .iter()
+                .any(|sample| { (sample.from - sample.start.powi(3) * 100.0).abs() < 0.001 }),
+            "LoopCommand must sample the authored curve near {beat}: {samples:?}"
+        );
+    }
+    let held = compiled
+        .eases
+        .iter()
+        .find(|ease| {
+            ease.target == SongLuaEaseTarget::Mod("mini".into())
+                && ease.start <= 1.1
+                && ease.start + ease.limit > 1.1
+        })
+        .expect("last sampled value should persist");
+    assert!(held.from > 70.0 && held.from < 100.0);
+    assert_eq!(held.from, held.to);
+    assert!(
+        compiled.eases.iter().any(|ease| {
+            ease.target == SongLuaEaseTarget::Mod("beat".into()) && ease.to == 100.0
+        })
+    );
+}
+
+#[test]
 fn compile_song_lua_exposes_noteskin_helpers() {
+    crate::paths::init();
     let song_dir = test_dir("noteskin-helpers");
     let entry = song_dir.join("default.lua");
     fs::write(
@@ -103,6 +181,7 @@ return Def.ActorFrame{
 
 #[test]
 fn compile_song_lua_reuses_noteskin_tap_model_slots() {
+    crate::paths::init();
     let song_dir = test_dir("noteskin-tap-model-slots");
     let entry = song_dir.join("default.lua");
     fs::write(
@@ -150,6 +229,7 @@ fn compile_song_lua_reuses_noteskin_tap_model_slots() {
 
 #[test]
 fn compile_song_lua_extracts_model_overlay_layers() {
+    crate::paths::init();
     let song_dir = test_dir("model-overlay-layers");
     let entry = song_dir.join("default.lua");
     let model_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -199,6 +279,7 @@ return Def.ActorFrame{{
 
 #[test]
 fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
     let entry = root.join("noteskin-overlay.lua");
     assert!(entry.is_file(), "missing fixture: {}", entry.display());
@@ -261,6 +342,7 @@ fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
 
 #[test]
 fn compile_song_lua_supports_rgb_aft_fixture() {
+    crate::paths::init();
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
     let entry = root.join("aft.lua");
     assert!(entry.is_file(), "missing fixture: {}", entry.display());
@@ -315,5 +397,49 @@ fn compile_song_lua_supports_rgb_aft_fixture() {
         assert_eq!(overlay.initial_state.diffuse, diffuse);
         assert_eq!(overlay.initial_state.blend, SongLuaOverlayBlendMode::Add);
         assert_eq!(overlay.initial_state.effect_magnitude, [0.0; 3]);
+    }
+}
+
+#[test]
+fn spooky_door_slide_moves_stretched_bounds() {
+    crate::paths::init();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&root, "Spooky doors");
+    context.music_length_seconds = 1.0;
+    let compiled = compile_song_lua(&root.join("spooky-door.lua"), &context).unwrap();
+    let doors = compiled
+        .overlays
+        .iter()
+        .filter(|o| o.name.as_deref().is_some_and(|n| n.starts_with("door")))
+        .collect::<Vec<_>>();
+    assert_eq!(doors.len(), 2);
+    for (side, door) in doors.iter().enumerate() {
+        let initial = door.initial_state;
+        let [left, top, right, bottom] = initial.stretch_rect.expect("stretched door");
+        let width = right - left;
+        assert_eq!(initial.x, width / 2.0, "StretchTo sets actor position");
+        assert_eq!(initial.y, (top + bottom) / 2.0);
+        let command = door
+            .message_commands
+            .iter()
+            .find(|c| c.message == "SlideDoor")
+            .unwrap();
+        for frame in 0..=32 {
+            let elapsed = frame as f32 / 240.0;
+            let t = (elapsed / (60.0 / 140.0 * 0.3)).min(1.0);
+            let from = side as f32 * width;
+            let x = from + (width / 2.0 - from) * t;
+            let state =
+                deadsync_song_lua::overlay_state_after_blocks(initial, &command.blocks, elapsed);
+            let rect = state.stretch_rect.unwrap();
+            assert!((state.x - x).abs() < 0.001);
+            assert!(
+                (rect[0] - (x - width / 2.0)).abs() < 0.001,
+                "door {} frame {frame}: {rect:?}",
+                side + 1
+            );
+            assert!((rect[2] - (x + width / 2.0)).abs() < 0.001);
+            assert_eq!([rect[1], rect[3]], [top, bottom]);
+        }
     }
 }

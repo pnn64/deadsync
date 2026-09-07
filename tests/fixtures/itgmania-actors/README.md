@@ -33,3 +33,93 @@ and draw-order sorting each have separate named tests.
   sampled position through the same DeadSync magnitude-application primitive.
   DeadSync's live renderer chooses jitter from its deterministic frame clock,
   so an unseeded live run is not expected to share ITGmania's random positions.
+
+## Glow fading regression
+
+`glow-alpha.json` records native `Actor::BeginDraw` and Sprite draw output for
+transparent, partially faded, opaque, and expiring `glowshift` actors. It includes
+later effect cycles after a tap explosion reaches zero alpha. Regenerate from
+`itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/glow-alpha.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/glow-alpha.json
+```
+
+Update this baseline only after checking the native alpha multiplication and
+its production-render comparison in `itgmania_actor_conformance/effects.rs`.
+
+## Note-column zoom spline regression
+
+`note-zoom-spline.json` draws a native Sprite using offset zoom sampled from
+ITGmania's `CubicSpline::solve_straight`/`evaluate`, as used for receptors and
+native ghost explosions. It covers fractional entry/exit, negative overshoot,
+and the final endpoint. Regenerate from `itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/note-zoom-spline.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/note-zoom-spline.json
+```
+
+The production `SongLuaNoteHideWindows` evaluator is compared in
+`itgmania_actor_conformance/effects.rs`; change the baseline only with an
+intentional native spline or fixture-input change.
+
+## KENPO SAITO offscreen capture regression
+
+`kenpo-capture.json` records native orthographic projection of a rotated,
+wagging note and a judgment through six phases. The theme's
+`song_lua_kenpo_capture_keeps_rotated_notes_and_rgb_split` test compares the
+production AFT draw vertices, including clip depth, and verifies independent
+RGB vibration. See `docs/song-lua-kenpo-rendering-2026-09-06.md` for regeneration
+and the native source contracts. The fixture does not contain random vibration;
+the renderer's independent RGB offsets are tested separately from golden data.
+
+`kenpo-motion.json` adds the nested NoteField X rotation and outer proxy Y wag,
+with the song's 77 BPM beat clock and Z scale. Seventeen samples cover three
+columns through two complete cycles. The theme's
+`song_lua_kenpo_nested_rotation_matches_native_motion` regression checks all 204
+projected corners and requires all three columns to produce draw commands.
+Both KENPO tests use a valid test texture registry so an empty draw stream cannot
+silently pass. Regeneration details are in the same rendering follow-up document.
+
+## Riddle note and feedback rotation regression
+
+`riddle-rotation.json` records native Actor/Sprite vertices for angles derived
+from the local `ArrowEffects::ReceptorGetRotationZ` and `GetRotationZ` formulas.
+It covers positive/negative confusion offsets and spin, plus note-only dizzy.
+The notefield test `riddle_note_and_feedback_rotation_match_native_vertices`
+compares 96 UV-matched corners through production note rotation and receptor,
+hold explosion, and tap explosion composition. The fixture exercises native
+Actor/Sprite projection; the harness does not execute ArrowEffects itself.
+
+Regenerate from `itgmania-harness-rs/` with:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/riddle-rotation.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/riddle-rotation.json
+```
+
+See `docs/song-lua-riddle-rendering-2026-09-06.md` for the source contracts and
+the separate sampled PlayerOptions approach regression.
+
+## Spooky door slide regression
+
+`spooky-doors.json` records native Sprite tweening and cropped vertices for both
+closing doors over 33 frames at 240 Hz. Initial position/size describe the result
+of the song's `StretchTo`, followed by its `SlideDoor` command. The harness runs
+Actor/Sprite tweening; it does not invoke Lua `stretchto` in this fixture.
+
+The portable `song_lua/spooky-door.lua` fixture exercises Lua compilation and
+movement of stretched bounds. The theme's `spooky_door_vertices_match_native_tween`
+test compares all 264 cropped corners emitted by the production overlay builder.
+Regenerate the native output from `itgmania-harness-rs/`:
+
+```powershell
+cargo run -- actor-conformance fixtures/actors/spooky-doors.json `
+  --out ../deadsync/tests/fixtures/itgmania-actors/spooky-doors.json
+```
+
+Only update the baseline for intentional native-source or fixture-input changes.
+See `docs/song-lua-spooky-rendering-2026-09-06.md` for the other source checks and
+validation limits.

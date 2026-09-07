@@ -1,3 +1,6 @@
+#[path = "support/paths.rs"]
+mod paths;
+
 use deadlib_present::anim::EffectMode;
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
@@ -23,6 +26,10 @@ const STEP_YOUR_GAME_UP_TRACE: &str = "tests/fixtures/itgmania-song-lua/Step You
 const CUPHEAD_TRACE: &str =
     "tests/fixtures/itgmania-song-lua/Cuphead [TaroNuke]/botanic.sm.semantic.json";
 const BROGAMER_TRACE: &str = "tests/fixtures/itgmania-song-lua/BroGamer/BroGamer.ssc.semantic.json";
+const COSMIC_TRACE: &str = "tests/fixtures/itgmania-song-lua/[11] CO5M1C R4ILR0AD (SH) [TaroNuke vs. Scrypts]/CO5M1C R4ILR0AD-chart.ssc.semantic.json";
+const RIDDLE_DOUBLE_TRACE: &str = "tests/fixtures/itgmania-song-lua/[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc.semantic.json";
+const FLIP69_TRACE: &str =
+    "tests/fixtures/itgmania-song-lua/[10] flip69 (DX) [Telperion]/flip69.ssc.semantic.json";
 const SEMANTIC_MANIFEST: &str = "_semantic_manifest.json";
 const EPSILON: f32 = 0.002;
 const PROJECTED_BEAT_EPSILON: f32 = 0.005;
@@ -30,10 +37,21 @@ const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
 mod whole_song_archives;
 
+#[path = "song_lua_itgmania_semantic_parity/runtime_modifiers.rs"]
+mod runtime_modifiers;
+
+#[path = "song_lua_itgmania_semantic_parity/multitap.rs"]
+mod multitap;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     oracle: String,
     title: String,
+    style: String,
+    #[serde(default)]
+    enabled_players: Option<[bool; 2]>,
+    #[serde(default)]
+    noteskin_reference: Option<NativeNoteskin>,
     simfile: String,
     source_simfile: Option<PathBuf>,
     roots: Vec<String>,
@@ -55,6 +73,19 @@ struct NativeTrace {
     display: NativeDisplay,
     fixture_context: NativeFixtureContext,
     trace_until_beat: f32,
+}
+
+#[derive(Deserialize)]
+struct NativeNoteskin {
+    skin: String,
+    #[serde(default)]
+    files: Vec<NativeNoteskinFile>,
+}
+
+#[derive(Deserialize)]
+struct NativeNoteskinFile {
+    path: PathBuf,
+    sha256: String,
 }
 
 #[derive(Deserialize)]
@@ -358,6 +389,7 @@ fn compile_trace_song_at(
         context.song_timing_bpms = timing_bpms;
     }
     context.music_length_seconds = trace.end_position.seconds;
+    context.style_name = trace.style.clone();
     context.screen_width = trace.display.logical_width;
     context.screen_height = trace.display.logical_height;
     context.display_width = trace.display.width;
@@ -366,9 +398,15 @@ fn compile_trace_song_at(
         ((0.85 / 3.0) * context.screen_width).floor(),
         ((2.15 / 3.0) * context.screen_width).floor(),
     ];
+    let player_x = if trace.style == "double" {
+        [context.screen_width * 0.5; 2]
+    } else {
+        player_x
+    };
+    let enabled_players = trace.enabled_players.unwrap_or([true; 2]);
     context.players = [
         SongLuaPlayerContext {
-            enabled: true,
+            enabled: enabled_players[0],
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[0],
@@ -376,7 +414,7 @@ fn compile_trace_song_at(
             ..SongLuaPlayerContext::default()
         },
         SongLuaPlayerContext {
-            enabled: true,
+            enabled: enabled_players[1],
             difficulty: SongLuaDifficulty::Challenge,
             speedmod: SongLuaSpeedMod::X(1.0),
             screen_x: player_x[1],
@@ -384,6 +422,26 @@ fn compile_trace_song_at(
             ..SongLuaPlayerContext::default()
         },
     ];
+
+    if let Some(noteskin) = &trace.noteskin_reference {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/noteskins");
+        for file in &noteskin.files {
+            assert!(
+                file.path
+                    .components()
+                    .all(|part| matches!(part, std::path::Component::Normal(_)))
+            );
+            assert_eq!(
+                whole_song_archives::hash_file(&root.join(&file.path)),
+                file.sha256,
+                "noteskin dependency changed: {}",
+                file.path.display()
+            );
+        }
+        for player in &mut context.players {
+            player.noteskin_name = noteskin.skin.clone();
+        }
+    }
 
     let compiled =
         compile_song_lua_layers(&paths, primary_index, &context).unwrap_or_else(|error| {
@@ -408,6 +466,12 @@ fn kind_name(kind: &SongLuaOverlayKind) -> &'static str {
         SongLuaOverlayKind::BitmapText { .. } => "BitmapText",
         SongLuaOverlayKind::ActorMultiVertex { .. } => "ActorMultiVertex",
         SongLuaOverlayKind::Model { .. } => "Model",
+        // A compiled noteskin model uses cached slots for rendering.
+        SongLuaOverlayKind::NoteskinActor { slots }
+            if !slots.is_empty() && slots.iter().all(|slot| slot.model.is_some()) =>
+        {
+            "Model"
+        }
         SongLuaOverlayKind::NoteskinActor { .. } => "NoteskinActor",
         SongLuaOverlayKind::SongMeterDisplay { .. } => "SongMeterDisplay",
         SongLuaOverlayKind::GraphDisplay { .. } => "GraphDisplay",
@@ -535,31 +599,43 @@ fn native_final_render_state(
         .filter(|track| track.actor == actor)
         .flat_map(|track| &track.segments)
         .flat_map(|segment| &segment.operations)
+        .map(|operation| (operation.seq, operation.operation.as_str(), &operation.args))
+        .chain(
+            trace
+                .operation_tracks
+                .iter()
+                .filter(|track| track.actor == actor)
+                .flat_map(|track| {
+                    track
+                        .samples
+                        .iter()
+                        .map(|(seq, _, _, args)| (*seq, track.operation.as_str(), args))
+                }),
+        )
         .collect::<Vec<_>>();
-    operations.sort_by_key(|operation| operation.seq);
+    operations.sort_by_key(|(seq, _, _)| *seq);
     let mut state = NativeFinalRenderState::default();
-    for operation in operations {
+    for (_, operation, args) in operations {
         let method = operation
-            .operation
             .rsplit('.')
             .next()
-            .unwrap_or(&operation.operation)
+            .unwrap_or(operation)
             .to_ascii_lowercase();
         match method.as_str() {
             "diffusealpha" => {
-                if let Some(alpha) = value_f32(operation.args.first()) {
+                if let Some(alpha) = value_f32(args.first()) {
                     state.alpha = alpha;
                     state.wrote_alpha = true;
                 }
             }
             "diffuse" => {
-                if let Some(alpha) = native_color_alpha(&operation.args) {
+                if let Some(alpha) = native_color_alpha(args) {
                     state.alpha = alpha;
                     state.wrote_alpha = true;
                 }
             }
             "visible" => {
-                if let Some(visible) = operation.args.first().and_then(Value::as_bool) {
+                if let Some(visible) = args.first().and_then(Value::as_bool) {
                     state.visible = visible;
                     state.wrote_visible = true;
                 }
@@ -2033,6 +2109,25 @@ fn compiled_player_range(
     default: f32,
 ) -> (f32, f32) {
     let mut range = (default, default);
+    for layer in compiled {
+        let state = layer.player_actors[usize::from(player - 1)].initial_state;
+        let value = match target {
+            SongLuaEaseTarget::PlayerX => state.x,
+            SongLuaEaseTarget::PlayerY => state.y,
+            SongLuaEaseTarget::PlayerZ => state.z,
+            SongLuaEaseTarget::PlayerRotationX => state.rot_x_deg,
+            SongLuaEaseTarget::PlayerRotationY => state.rot_y_deg,
+            SongLuaEaseTarget::PlayerRotationZ => state.rot_z_deg,
+            SongLuaEaseTarget::PlayerSkewX => state.skew_x,
+            SongLuaEaseTarget::PlayerSkewY => state.skew_y,
+            SongLuaEaseTarget::PlayerZoom => state.zoom,
+            SongLuaEaseTarget::PlayerZoomX => state.zoom_x,
+            SongLuaEaseTarget::PlayerZoomY => state.zoom_y,
+            SongLuaEaseTarget::PlayerZoomZ => state.zoom_z,
+            _ => default,
+        };
+        range = (range.0.min(value), range.1.max(value));
+    }
     for ease in compiled
         .iter()
         .flat_map(|layer| &layer.eases)
@@ -2124,7 +2219,7 @@ fn compare_player_operation_ranges(
     }
 }
 
-fn compiled_message_state_at(
+fn compiled_command_state_at(
     context: &SongLuaCompileContext,
     compiled: &CompiledSongLua,
     overlay_index: usize,
@@ -2154,6 +2249,146 @@ fn compiled_message_state_at(
         current = overlay_state_after_blocks(base, blocks, seconds - start_seconds);
     }
     current
+}
+
+fn apply_compiled_ease(
+    context: &SongLuaCompileContext,
+    ease: &deadsync_song_lua::SongLuaOverlayEase,
+    seconds: f32,
+    current: &mut SongLuaOverlayState,
+) {
+    let end = match ease.span_mode {
+        SongLuaSpanMode::Len => ease.start + ease.limit,
+        SongLuaSpanMode::End => ease.limit,
+    };
+    let (start, end) = match ease.unit {
+        SongLuaTimeUnit::Beat => (
+            song_elapsed_seconds_at(ease.start, context),
+            song_elapsed_seconds_at(end, context),
+        ),
+        SongLuaTimeUnit::Second => (ease.start, end),
+    };
+    if seconds < start {
+        return;
+    }
+    if seconds >= end {
+        deadsync_song_lua::apply_overlay_delta(current, &ease.to);
+    } else {
+        let factor = deadsync_gameplay::song_lua_ease_factor(
+            ease.easing.as_deref(),
+            (seconds - start) / (end - start),
+            ease.opt1,
+            ease.opt2,
+        );
+        deadsync_song_lua::apply_overlay_delta(current, &ease.from);
+        deadsync_song_lua::overlay_state_lerp(current, &ease.to, factor);
+    }
+}
+
+fn compiled_message_state_at(
+    context: &SongLuaCompileContext,
+    compiled: &CompiledSongLua,
+    overlay_index: usize,
+    beat: f32,
+    seconds: f32,
+) -> SongLuaOverlayState {
+    let mut current = compiled_command_state_at(context, compiled, overlay_index, beat, seconds);
+    for ease in compiled
+        .overlay_eases
+        .iter()
+        .filter(|ease| ease.overlay_index == overlay_index)
+    {
+        apply_compiled_ease(context, ease, seconds, &mut current);
+    }
+    current
+}
+
+fn compare_column_splines(
+    trace: &NativeTrace,
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+    gaps: &mut Vec<String>,
+) {
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.0,
+        0.0,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            ..Default::default()
+        },
+        &[],
+    );
+    for player in 0..2 {
+        let windows = compiled
+            .iter()
+            .flat_map(|layer| {
+                deadsync_profile_gameplay::build_song_lua_column_offset_windows_for_player(
+                    layer, &timing, player, 0.0,
+                )
+            })
+            .collect::<Vec<_>>();
+        let prefix = format!("ScreenGameplay/PlayerP{}/NoteField/Column", player + 1);
+        let mut writes = Vec::new();
+        for actor in &trace.external_actors {
+            let Some((column, handler)) = actor
+                .path
+                .strip_prefix(&prefix)
+                .and_then(|path| path.split_once('/'))
+            else {
+                continue;
+            };
+            if !matches!(handler, "GetPosHandler" | "GetPosHandler/GetSpline") {
+                continue;
+            }
+            let Some(column) = column
+                .parse::<usize>()
+                .ok()
+                .and_then(|column| column.checked_sub(1))
+            else {
+                continue;
+            };
+            for track in trace
+                .operation_tracks
+                .iter()
+                .filter(|track| track.actor == actor.id)
+            {
+                for (sequence, beat, seconds, args) in &track.samples {
+                    let expected = match track.operation.as_str() {
+                        "Spline.SetSplineMode"
+                            if args.first().and_then(Value::as_str)
+                                == Some("NoteColumnSplineMode_Disabled") =>
+                        {
+                            Some(0.0)
+                        }
+                        "Spline.SetPoint" if value_f32(args.first()) == Some(1.0) => {
+                            args.get(1).and_then(|point| value_f32(point.get(1)))
+                        }
+                        _ => None,
+                    };
+                    if let Some(expected) = expected {
+                        writes.push((column, *seconds, *sequence, *beat, expected));
+                    }
+                }
+            }
+        }
+        writes.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
+        let mut reported = HashSet::new();
+        for (index, &(column, seconds, _, beat, expected)) in writes.iter().enumerate() {
+            // Compare state after the update. A later Disable can override a
+            // SetPoint in the same frame; both cannot equal the rendered value.
+            if writes
+                .get(index + 1)
+                .is_some_and(|next| next.0 == column && next.1 == seconds)
+            {
+                continue;
+            }
+            let actual = deadsync_gameplay::song_lua_column_y_offset(&windows, column, seconds);
+            if (!actual.is_finite() || (actual - expected).abs() > 0.03) && reported.insert(column)
+            {
+                gaps.push(format!("P{} column {} final spline y differs at beat {beat:.3}: ITGmania {expected:.3}, DeadSync {actual:.3}", player + 1, column + 1));
+            }
+        }
+    }
 }
 
 fn apply_runtime_updates(
@@ -2248,9 +2483,51 @@ fn projected_drawable_map(
                     .zip(deadsync)
                     .map(|(definition, index)| (definition.id.clone(), (layer, index))),
             );
+        } else {
+            // A noteskin placeholder can change drawable kinds without changing
+            // the authored tree. Keep checking the other actors in that tree.
+            let mut actors = Vec::new();
+            collect_native_overlay_definitions(root, &definitions, &mut actors);
+            if actors.len() == compiled.overlays.len()
+                && actors
+                    .iter()
+                    .zip(&compiled.overlays)
+                    .all(|(native, actual)| native.name == actual.name)
+            {
+                drawable_map.extend(
+                    actors
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, definition)| (definition.id.clone(), (layer, index))),
+                );
+            }
         }
     }
     drawable_map
+}
+
+fn compiled_local_states_at(
+    compiled: &CompiledSongLua,
+    context: &SongLuaCompileContext,
+    beat: f32,
+    seconds: f32,
+) -> Vec<SongLuaOverlayState> {
+    let mut local = compiled
+        .overlays
+        .iter()
+        .enumerate()
+        .map(|(overlay_index, _)| {
+            compiled_command_state_at(context, compiled, overlay_index, beat, seconds)
+        })
+        .collect::<Vec<_>>();
+    // Visit eases once per frame, rather than once per actor per frame.
+    for ease in &compiled.overlay_eases {
+        apply_compiled_ease(context, ease, seconds, &mut local[ease.overlay_index]);
+    }
+    for (index, state) in local.iter_mut().enumerate() {
+        apply_runtime_updates(compiled, index, beat, state);
+    }
+    local
 }
 
 fn compiled_overlay_states_at(
@@ -2259,17 +2536,7 @@ fn compiled_overlay_states_at(
     beat: f32,
     seconds: f32,
 ) -> Vec<SongLuaOverlayState> {
-    let local = compiled
-        .overlays
-        .iter()
-        .enumerate()
-        .map(|(overlay_index, _)| {
-            let mut state =
-                compiled_message_state_at(context, compiled, overlay_index, beat, seconds);
-            apply_runtime_updates(compiled, overlay_index, beat, &mut state);
-            state
-        })
-        .collect::<Vec<_>>();
+    let local = compiled_local_states_at(compiled, context, beat, seconds);
     compose_overlay_states(
         &compiled.overlays,
         &local,
@@ -2313,6 +2580,59 @@ fn compiled_screen_vertices(state: SongLuaOverlayState, texture_size: [f32; 2]) 
     })
 }
 
+fn compiled_perspective_vertices(
+    compiled: &CompiledSongLua,
+    states: &[SongLuaOverlayState],
+    index: usize,
+    texture_size: [f32; 2],
+) -> Option<[[f32; 2]; 4]> {
+    use deadsync_theme_simply_love::screens::gameplay::actor_conformance as actor;
+    let state = states[index];
+    let mut parent = compiled.overlays[index].parent_index;
+    let camera = loop {
+        let index = parent?;
+        let overlay = &compiled.overlays[index];
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::ActorFrame | SongLuaOverlayKind::ActorFrameTexture { .. }
+        ) && states[index].fov.is_some()
+        {
+            break states[index];
+        }
+        parent = overlay.parent_index;
+    };
+    let screen = [compiled.screen_width, compiled.screen_height];
+    let projection = actor::view_projection(
+        screen.map(|axis| axis as u32),
+        camera.fov?,
+        camera.vanishpoint.unwrap_or(screen.map(|axis| axis * 0.5)),
+    );
+    let size = state.size.unwrap_or(texture_size);
+    let [sx, sy] = overlay_state_axis_scale(state);
+    let matrix = actor::sprite_matrix(
+        [state.x, state.y, state.z],
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [0.0; 3],
+        [sx, sy, deadsync_song_lua::overlay_state_z_scale(state)],
+        [1.0; 3],
+        size,
+        [state.halign, state.valign],
+        [state.skew_x, state.skew_y],
+    );
+    let matrix = actor::multiply_matrices(projection, matrix);
+    let corners = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+        .map(|[x, y]| actor::project_world(matrix, [x * size[0], y * size[1], 0.0, 1.0]));
+    if corners.iter().any(|corner| corner[3] <= 0.0) {
+        return None;
+    }
+    Some(corners.map(|[x, y, _, w]| {
+        [
+            (x / w + 1.0) * screen[0] * 0.5,
+            (1.0 - y / w) * screen[1] * 0.5,
+        ]
+    }))
+}
+
 fn vertex_bounds(vertices: &[[f32; 2]]) -> [f32; 4] {
     vertices.iter().fold(
         [
@@ -2348,10 +2668,14 @@ fn compare_projected_geometry(
             continue;
         };
         let Some(&(layer, overlay_index)) = drawable_map.get(definition_id) else {
+            gaps.push(format!(
+                "projected geometry is untested for {definition_id}: no matching DeadSync actor"
+            ));
             continue;
         };
         let mut reported_visibility = false;
         let mut reported_alpha = false;
+        let mut reported_nonfinite = false;
         let mut reported_bounds = false;
         let mut reported_center = false;
         for sample in &track.samples {
@@ -2367,10 +2691,13 @@ fn compare_projected_geometry(
             let Some(native_visible) = sample.get(2).and_then(Value::as_bool) else {
                 continue;
             };
-            let native_alpha = sample
-                .get(3)
-                .and_then(|value| value_f32(Some(value)))
-                .unwrap_or(1.0);
+            let Some(native_alpha) = sample.get(3).and_then(|value| value_f32(Some(value))) else {
+                if !reported_nonfinite {
+                    gaps.push(format!("reference projected alpha is non-finite for {definition_id} at beat {beat:.3}"));
+                    reported_nonfinite = true;
+                }
+                continue;
+            };
             let states = state_cache
                 .entry((layer, beat.to_bits(), seconds.to_bits()))
                 .or_insert_with(|| {
@@ -2422,11 +2749,7 @@ fn compare_projected_geometry(
                 ));
                 reported_alpha = true;
             }
-            if !native_visible
-                || !actual_visible
-                || track.camera_actor != "orthographic-screen"
-                || state.stretch_rect.is_some()
-            {
+            if !native_visible || !actual_visible || state.stretch_rect.is_some() {
                 continue;
             }
             let Some(native_vertices) = native_screen_vertices(sample) else {
@@ -2435,7 +2758,24 @@ fn compare_projected_geometry(
             if native_vertices.len() != 4 {
                 continue;
             }
-            let actual_vertices = compiled_screen_vertices(state, track.texture_size);
+            let actual_vertices = if track.camera_actor == "orthographic-screen" {
+                compiled_screen_vertices(state, track.texture_size)
+            } else {
+                let states = &state_cache[&(layer, beat.to_bits(), seconds.to_bits())];
+                let Some(vertices) = compiled_perspective_vertices(
+                    &compiled[layer],
+                    states,
+                    overlay_index,
+                    track.texture_size,
+                ) else {
+                    if !reported_bounds {
+                        gaps.push(format!("projected perspective geometry is untested for {definition_id}: missing camera or near-plane clipping at beat {beat:.3}"));
+                        reported_bounds = true;
+                    }
+                    continue;
+                };
+                vertices
+            };
             let expected_bounds = vertex_bounds(&native_vertices);
             let actual_bounds = vertex_bounds(&actual_vertices);
             if expected_bounds
@@ -2589,11 +2929,12 @@ fn compare_compile_info(compiled: &[CompiledSongLua], gaps: &mut Vec<String>) {
 #[test]
 #[ignore = "reports the current known song-Lua parity gaps"]
 fn native_song_lua_semantics_match_deadsync() {
+    crate::paths::init();
     let trace = read_trace();
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let (compiled, primary_index, context) = compile_trace_song(&trace);
     eprintln!(
-        "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
+        "compiled {} layer(s): {} overlays, {} overlay eases, {} overlay update tracks, {} beat mods, {} player eases, {} column offsets, {} messages; unsupported: {} function eases, {} function actions, {} perframes, {} skipped message commands",
         compiled.len(),
         compiled
             .iter()
@@ -2610,6 +2951,14 @@ fn native_song_lua_semantics_match_deadsync() {
         compiled
             .iter()
             .map(|layer| layer.beat_mods.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.eases.len())
+            .sum::<usize>(),
+        compiled
+            .iter()
+            .map(|layer| layer.column_offsets.len())
             .sum::<usize>(),
         compiled
             .iter()
@@ -2639,6 +2988,8 @@ fn native_song_lua_semantics_match_deadsync() {
     compare_update_render_persistence(&trace, &compiled, &mut gaps);
     compare_update_render_values(&trace, &compiled, &context, &mut gaps);
     compare_player_operation_ranges(&trace, &compiled, &mut gaps);
+    compare_column_splines(&trace, &compiled, &context, &mut gaps);
+    multitap::compare_multitap(&trace, &compiled, &context, &mut gaps);
     compare_projected_geometry(&trace, &compiled, &context, &mut gaps);
     compare_projected_vibration_coverage(&trace, &compiled, &context, &mut gaps);
     compare_timeline(&trace, &compiled[primary_index], &mut gaps);
@@ -2654,6 +3005,7 @@ fn native_song_lua_semantics_match_deadsync() {
 #[test]
 #[ignore = "compiles the complete Cuphead song-Lua runtime at 60 Hz"]
 fn cuphead_stateful_fire_message_matches_itgmania() {
+    crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE));
     let (compiled, primary_index, _) = compile_trace_song(&trace);
     for message in ["CagneyInit", "TargetsOn", "GoatSlap"] {
@@ -2825,6 +3177,7 @@ fn cuphead_cagney_parent_segments(
 
 #[test]
 fn semantic_fixture_manifest_is_complete_and_headless() {
+    crate::paths::init();
     let fixture_root =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua");
     let manifest: SemanticManifest = serde_json::from_slice(
@@ -2835,7 +3188,7 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 
     assert_eq!(manifest.itgmania.execution, "embedded_bundled_lua");
     assert!(!manifest.itgmania.launches_executable);
-    assert_eq!(manifest.simfiles.len(), 43);
+    assert_eq!(manifest.simfiles.len(), 46);
     for entry in manifest.simfiles {
         assert_eq!(
             entry.status, "ok",
@@ -2874,7 +3227,84 @@ fn semantic_fixture_manifest_is_complete_and_headless() {
 }
 
 #[test]
+fn itl_unlock_fixture_contexts() {
+    crate::paths::init();
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let flip69 = read_trace_file(&root.join(FLIP69_TRACE));
+    assert_eq!(flip69.style, "double");
+    assert_eq!(flip69.enabled_players, Some([true, false]));
+    assert_eq!(flip69.trace_until_beat, 288.0);
+    let zoom_spline = flip69
+        .external_actors
+        .iter()
+        .find(|actor| {
+            actor.path == "ScreenGameplay/PlayerP1/NoteField/Column8/GetZoomHandler/GetSpline"
+        })
+        .expect("flip69 must build the eighth-column multitap zoom spline");
+    assert!(
+        flip69.operation_tracks.iter().any(|track| {
+            track.actor == zoom_spline.id
+                && track.operation == "Spline.SetPoint"
+                && track
+                    .samples
+                    .iter()
+                    .any(|sample| sample.3.get(1) == Some(&serde_json::json!([-1, -1, -1])))
+        }),
+        "multitap regions must hide the original notes"
+    );
+
+    let riddle = read_trace_file(&root.join(RIDDLE_DOUBLE_TRACE));
+    assert_eq!(riddle.style, "double");
+    assert_eq!(riddle.enabled_players, Some([true, false]));
+    assert_eq!(riddle.trace_until_beat, 300.5);
+    assert_eq!(
+        native_player_option_value_at(&riddle, 1, "PlayerOptions.Flip", 0.6),
+        Some(1.0),
+        "Riddle must execute its double-specific flip branch"
+    );
+    let handler = riddle
+        .external_actors
+        .iter()
+        .find(|actor| actor.path == "ScreenGameplay/PlayerP1/NoteField/Column8/GetPosHandler")
+        .expect("Riddle must exercise the eighth column");
+    assert!(riddle.operation_tracks.iter().any(|track| {
+        track.actor == handler.id
+            && track.operation == "Spline.SetSplineMode"
+            && track.samples.iter().any(|sample| {
+                sample.3.first().and_then(Value::as_str) == Some("NoteColumnSplineMode_Disabled")
+            })
+    }));
+
+    let cosmic = read_trace_file(&root.join(COSMIC_TRACE));
+    assert_eq!(cosmic.style, "single");
+    assert_eq!(cosmic.enabled_players, Some([true, true]));
+    assert_eq!(cosmic.trace_until_beat, 348.0);
+    let sprite = cosmic
+        .projected_vertex_tracks
+        .iter()
+        .find(|track| track.texture.ends_with("_static 4x1.png"))
+        .expect("CO5M1C static sprite trace");
+    assert_eq!(
+        sprite.texture_size,
+        [480.0, 480.0],
+        "use a frame, not the full sprite sheet"
+    );
+    let visible = sprite
+        .samples
+        .iter()
+        .find(|sample| {
+            value_f32(sample.get(0)).is_some_and(|beat| (71.2..71.3).contains(&beat))
+                && value_f32(sample.get(3)) == Some(0.3)
+        })
+        .expect("CO5M1C static burst");
+    let vertices = native_screen_vertices(visible.as_array().expect("projected sample"))
+        .expect("static sprite corners");
+    assert_eq!(vertex_bounds(&vertices), [0.0, -187.0, 854.0, 667.0]);
+}
+
+#[test]
 fn brogamer_fixture_hides_and_scales_target_until_its_effect() {
+    crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE));
     let target = trace
         .actor_definitions
@@ -2924,6 +3354,7 @@ fn brogamer_fixture_hides_and_scales_target_until_its_effect() {
 
 #[test]
 fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(BROGAMER_TRACE);
     let trace = read_trace_file(&trace_path);
     let (compiled, primary_index, context) = compile_trace_song(&trace);
@@ -3026,6 +3457,7 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
 
 #[test]
 fn cuphead_fixture_captures_queued_boss_spawns() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
     let trace = read_trace_file(&trace_path);
 
@@ -3072,6 +3504,7 @@ fn cuphead_fixture_captures_queued_boss_spawns() {
 
 #[test]
 fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CUPHEAD_TRACE);
     let trace = read_trace_file(&trace_path);
 
@@ -3139,6 +3572,7 @@ fn cuphead_fixture_captures_impact_rotation_and_cannon_vibration() {
 
 #[test]
 fn step_your_game_up_critical_render_states_match_itgmania() {
+    crate::paths::init();
     let trace_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(STEP_YOUR_GAME_UP_TRACE);
     let trace = read_trace_file(&trace_path);
     let (compiled, _, context) = compile_trace_song(&trace);
@@ -3294,8 +3728,73 @@ fn assert_step_player_proxy_and_projection(trace: &NativeTrace, compiled: &[Comp
 
 #[test]
 fn starred_modifier_normalization_ignores_existing_options() {
+    crate::paths::init();
     assert_eq!(
         starred_mods("Overhead, 100% Dark, *1 no dark, *2 80% stealth"),
         "*1 no dark, *2 80% stealth"
     );
+}
+
+#[test]
+fn queued_startup_preserves_initial_overlay_state() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().expect("create song directory");
+    let song_dir = temp.path();
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+local bg, white, black
+return Def.ActorFrame{
+    OnCommand=function(self) self:queuecommand("Ready") end,
+    ReadyCommand=function()
+        bg:xy(427, 240):zoomto(2562, 1440)
+        white:diffusealpha(0)
+        black:diffusealpha(0)
+    end,
+    Def.Quad{
+        Name="BG",
+        InitCommand=function(self) bg = self end,
+        OnCommand=function(self) self:x(7):queuecommand("ChildReady") end,
+        ChildReadyCommand=function(self) self:x(450) end,
+    },
+    Def.Quad{Name="White", InitCommand=function(self) white = self end},
+    Def.Quad{Name="Black", InitCommand=function(self) black = self end},
+}
+"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Queued Startup");
+    context.song_display_bpms = [120.0, 120.0];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    let event = compiled
+        .messages
+        .first()
+        .expect("queued setup must be scheduled");
+    assert_eq!(compiled.messages.len(), 1);
+    assert!((event.beat - 1.0 / 30.0).abs() < 0.000_001);
+    for name in ["BG", "White", "Black"] {
+        let actor = compiled
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some(name))
+            .unwrap();
+        assert_eq!(actor.initial_state.diffuse[3], 1.0);
+        assert_eq!(actor.initial_state.size, None);
+        let command = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message == event.message)
+            .unwrap();
+        let ready = overlay_state_after_blocks(actor.initial_state, &command.blocks, 0.0);
+        if name == "BG" {
+            assert_eq!(actor.initial_state.x, 7.0);
+            assert_eq!([ready.x, ready.y], [450.0, 240.0]);
+            assert_eq!(ready.size, Some([2562.0, 1440.0]));
+        } else {
+            assert_eq!(ready.diffuse[3], 0.0);
+        }
+    }
 }

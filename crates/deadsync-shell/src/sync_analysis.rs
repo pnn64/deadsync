@@ -1,7 +1,7 @@
 use crate::sync_analysis_cache::{
     AnalysisOptions, Cache as AnalysisCache, CachedAnalysis, CachedPlot, CompletedTarget,
 };
-use deadsync_audio_decode as decode;
+use deadlib_audio_decode as decode;
 use deadsync_chart::SongData;
 use deadsync_config::prelude as config;
 use deadsync_simfile::app_runtime as song_loading;
@@ -103,19 +103,15 @@ const fn sync_owner_index(owner: SimplyLoveSyncOwner) -> usize {
     }
 }
 
-impl Default for Service {
-    fn default() -> Self {
+impl Service {
+    pub(crate) fn new(cache_path: PathBuf) -> Self {
         Self {
             jobs: Vec::new(),
-            cache: Arc::new(AnalysisCache::load(
-                deadlib_platform::dirs::app_dirs().null_or_die_cache_file(),
-            )),
+            cache: Arc::new(AnalysisCache::load(cache_path)),
             events: RoutedEvents::default(),
         }
     }
-}
 
-impl Service {
     pub(crate) fn start(
         &mut self,
         owner: SimplyLoveSyncOwner,
@@ -565,7 +561,9 @@ mod tests {
 
     #[test]
     fn sync_poll_only_runs_while_a_job_is_active() {
-        let mut service = Service::default();
+        let mut service = Service::new(
+            std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
+        );
         assert!(service.poll().is_none());
 
         let (tx, rx) = mpsc::channel();
@@ -590,7 +588,9 @@ mod tests {
 
     #[test]
     fn sync_poll_routes_each_owner_directly_and_preserves_fifo_order() {
-        let mut service = Service::default();
+        let mut service = Service::new(
+            std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
+        );
         let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
         let (select_job, select_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
         let (options_job, options_tx) = test_job(SimplyLoveSyncOwner::OptionsPack);
@@ -633,7 +633,9 @@ mod tests {
 
     #[test]
     fn sync_poll_reuses_owner_batch_capacity_after_consumption() {
-        let mut service = Service::default();
+        let mut service = Service::new(
+            std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
+        );
         let (job, tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
         service.jobs.push(job);
         for index in 0..8 {
@@ -658,7 +660,9 @@ mod tests {
 
     #[test]
     fn terminal_owner_mask_removes_only_the_finished_job() {
-        let mut service = Service::default();
+        let mut service = Service::new(
+            std::env::temp_dir().join(format!("deadsync-sync-routing-{}.json", std::process::id())),
+        );
         let (song_job, song_tx) = test_job(SimplyLoveSyncOwner::SelectMusicSong);
         let (pack_job, pack_tx) = test_job(SimplyLoveSyncOwner::SelectMusicPack);
         service.jobs.extend([song_job, pack_job]);

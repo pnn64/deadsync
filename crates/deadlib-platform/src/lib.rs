@@ -1,9 +1,11 @@
+pub mod atomic_write;
 pub mod coalesced_write;
 pub mod console;
 pub mod dirs;
 pub mod display;
 pub mod host_time;
 pub mod idle_inhibit;
+pub mod input;
 pub mod lock_wait;
 pub mod logging;
 pub mod network;

@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use deadlib_assets::AssetManager;
-use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_render::Backend;
 use deadlib_render_core::SamplerDesc;
@@ -135,6 +134,7 @@ where
 
 /// Capture the current backend frame, force opaque alpha, and save it to the screenshot tree.
 pub fn capture_screenshot(
+    screenshots_dir: &std::path::Path,
     backend: &mut Backend,
     song_info: Option<(&str, Option<u32>)>,
 ) -> Result<SavedScreenshot, ScreenshotFlowError> {
@@ -142,12 +142,8 @@ pub fn capture_screenshot(
         .capture_frame()
         .map_err(|error| ScreenshotFlowError::Capture(error.to_string()))?;
     screenshot_data::set_opaque_alpha(&mut image);
-    let path = screenshot_data::save_screenshot_image(
-        &dirs::app_dirs().screenshots_dir(),
-        &image,
-        song_info,
-    )
-    .map_err(ScreenshotFlowError::Save)?;
+    let path = screenshot_data::save_screenshot_image(screenshots_dir, &image, song_info)
+        .map_err(ScreenshotFlowError::Save)?;
     Ok(SavedScreenshot { image, path })
 }
 
@@ -179,6 +175,7 @@ pub fn replace_screenshot_preview_texture(
 }
 
 pub fn capture_pending_screenshot<F>(
+    screenshots_dir: &std::path::Path,
     state: &mut ScreenshotRuntimeState<PlayerSide>,
     backend: Option<&mut Backend>,
     asset_manager: &mut AssetManager,
@@ -196,7 +193,7 @@ where
     let Some(backend) = backend else {
         return Ok(PendingScreenshotResult::NoBackend);
     };
-    let saved = capture_screenshot(backend, song_info)?;
+    let saved = capture_screenshot(screenshots_dir, backend, song_info)?;
 
     state.mark_saved(now);
     let mut preview_error = None;
@@ -531,6 +528,7 @@ mod tests {
     fn pending_screenshot_without_request_or_backend_is_nonfatal() {
         let mut state = ScreenshotRuntimeState::new();
         let no_request = capture_pending_screenshot(
+            std::path::Path::new("unused-screenshots"),
             &mut state,
             None,
             &mut AssetManager::new(),
@@ -543,6 +541,7 @@ mod tests {
 
         state.request(Some(PlayerSide::P1));
         let no_backend = capture_pending_screenshot(
+            std::path::Path::new("unused-screenshots"),
             &mut state,
             None,
             &mut AssetManager::new(),

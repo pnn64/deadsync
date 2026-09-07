@@ -128,24 +128,6 @@ pub fn refresh_active_attack_masks<Profile, OverlayActor, CapturedActor, StateDe
 }
 
 #[inline(always)]
-pub fn song_lua_hides_note_visual<Profile, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
-    player: usize,
-    column: usize,
-    beat: f32,
-) -> bool
-where
-    Profile: GameplayProfileData,
-{
-    song_lua_field_note_hidden(
-        &state.song_lua_visuals().note_hides[player],
-        state.setup.cols_per_player,
-        column,
-        beat,
-    )
-}
-
-#[inline(always)]
 #[must_use]
 pub const fn hold_to_exit_seconds(key: HoldToExitKey) -> f32 {
     match key {

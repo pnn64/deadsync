@@ -1,3 +1,6 @@
+#[path = "support/paths.rs"]
+mod paths;
+
 use deadsync_assets::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext, SongLuaSpeedMod,
     compile_song_lua_layers,
@@ -45,6 +48,7 @@ fn workspace_root() -> PathBuf {
 }
 
 fn fixture_root() -> PathBuf {
+    paths::init();
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/itgmania-song-lua")
 }
 

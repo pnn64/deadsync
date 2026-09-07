@@ -22,29 +22,6 @@ fn extension_matches(ext: &str, extensions: &[&str]) -> bool {
 }
 
 #[must_use]
-pub fn collect_media_roots(
-    dirname: &str,
-    data_dir: &Path,
-    exe_dir: &Path,
-    cwd: Option<&Path>,
-) -> Vec<PathBuf> {
-    let mut roots = Vec::with_capacity(4);
-    push_media_root(&mut roots, data_dir.join(dirname));
-    push_media_root(&mut roots, exe_dir.join(dirname));
-    if let Some(cwd) = cwd {
-        push_media_root(&mut roots, cwd.join(dirname));
-        push_media_root(&mut roots, cwd.join("deadsync").join(dirname));
-    }
-    roots
-}
-
-fn push_media_root(out: &mut Vec<PathBuf>, path: PathBuf) {
-    if path.is_dir() && !out.iter().any(|existing| existing == &path) {
-        out.push(path);
-    }
-}
-
-#[must_use]
 pub fn collapse_song_asset_path(path: &str) -> String {
     collapse_song_asset_path_with(path, false)
 }
@@ -543,25 +520,6 @@ mod tests {
             let actual = song_art_file_key(path);
             assert_eq!(actual, expected, "case: {path:?}");
         }
-    }
-
-    #[test]
-    fn collect_media_roots_skips_missing_and_dedupes() {
-        let root = test_dir("media-roots");
-        let shared = root.join("shared");
-        let cwd = root.join("work");
-        let cwd_deadsync = cwd.join("deadsync");
-        let shared_movies = shared.join(RANDOM_MOVIES_DIR);
-        let cwd_movies = cwd.join(RANDOM_MOVIES_DIR);
-        let cwd_deadsync_movies = cwd_deadsync.join(RANDOM_MOVIES_DIR);
-        fs::create_dir_all(&shared_movies).unwrap();
-        fs::create_dir_all(&cwd_deadsync_movies).unwrap();
-
-        let roots = collect_media_roots(RANDOM_MOVIES_DIR, &shared, &shared, Some(&cwd));
-
-        assert_eq!(roots, vec![shared_movies, cwd_deadsync_movies]);
-        assert!(!roots.contains(&cwd_movies));
-        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

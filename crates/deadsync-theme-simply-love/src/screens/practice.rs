@@ -7,6 +7,8 @@ use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
 use deadlib_assets::AssetManager;
+use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec};
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
@@ -18,8 +20,6 @@ use deadsync_gameplay::{
     GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, handle_core_input,
     scroll_effects_from_flags, spacing_multiplier_for_percent, update_core,
 };
-use deadsync_input::KeyCode;
-use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -3083,9 +3083,9 @@ mod tests {
     use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
     use crate::screens::{Screen, ThemeEffect};
+    use deadlib_platform::input::KeyCode;
     use deadlib_render_core::MeshVertex;
     use deadsync_gameplay::{GameplayOffsetAdjustKey, GameplayRawKeyInput};
-    use deadsync_input::KeyCode;
     use deadsync_input::VirtualAction;
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{

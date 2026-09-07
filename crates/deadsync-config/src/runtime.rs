@@ -3,19 +3,44 @@ use crate::folders::AdditionalSongFolder;
 use crate::runtime_state::{InputRoutingConfig, RuntimeConfigStore};
 use crate::save::build_default_app_config_file;
 use deadlib_platform::coalesced_write::CoalescedFileWriter;
-use deadlib_platform::dirs;
 use deadsync_audio_stream::AudioMixLevels;
 use log::info;
 use null_or_die::BiasCfg;
-use std::path::Path;
-use std::sync::LazyLock;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
+
+struct ConfigPaths {
+    config: PathBuf,
+    palettes: PathBuf,
+}
+static PATHS: OnceLock<ConfigPaths> = OnceLock::new();
+
+/// Install persistence paths before loading settings or accepting save requests.
+pub fn init_paths(config: PathBuf, palettes: PathBuf) -> Result<(), &'static str> {
+    PATHS
+        .set(ConfigPaths { config, palettes })
+        .map_err(|_| "config paths already initialized")
+}
+
+pub(crate) fn config_path() -> &'static Path {
+    &PATHS
+        .get()
+        .expect("config paths initialized at startup")
+        .config
+}
+
+pub(crate) fn palette_path() -> &'static Path {
+    &PATHS
+        .get()
+        .expect("config paths initialized at startup")
+        .palettes
+}
 
 pub static RUNTIME_CONFIG: LazyLock<RuntimeConfigStore> = LazyLock::new(RuntimeConfigStore::new);
 
-static SAVE_WRITER: LazyLock<CoalescedFileWriter> = LazyLock::new(|| {
-    CoalescedFileWriter::new("deadsync-config-save", dirs::app_dirs().config_path())
-});
+static SAVE_WRITER: LazyLock<CoalescedFileWriter> =
+    LazyLock::new(|| CoalescedFileWriter::new("deadsync-config-save", config_path().to_path_buf()));
 
 #[inline(always)]
 pub fn queue_save_write(content: String) {
@@ -36,12 +61,13 @@ pub fn save_without_keymaps() {
 }
 
 pub fn create_default_config_file() -> Result<(), std::io::Error> {
-    let path = dirs::app_dirs().config_path();
+    let path = config_path();
     info!(
         "'{}' not found, creating with default values.",
         path.display()
     );
-    std::fs::write(path, build_default_app_config_file())
+    let content = build_default_app_config_file();
+    deadlib_platform::atomic_write::write_atomic(path, content.as_bytes())
 }
 
 pub fn get() -> Config {

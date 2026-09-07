@@ -287,17 +287,7 @@ fn compose_entire_song(
         let seconds = frame as f32 / update_hz;
         let beat = song_beat_at_elapsed_seconds(seconds, context);
         for (compiled, composer) in compiled_layers.iter().zip(&composers) {
-            let local = compiled
-                .overlays
-                .iter()
-                .enumerate()
-                .map(|(overlay_index, _)| {
-                    let mut state =
-                        compiled_message_state_at(context, compiled, overlay_index, beat, seconds);
-                    apply_runtime_updates(compiled, overlay_index, beat, &mut state);
-                    state
-                })
-                .collect::<Vec<_>>();
+            let local = compiled_local_states_at(compiled, context, beat, seconds);
             let composed = compose_overlay_states(
                 &compiled.overlays,
                 &local,
@@ -337,9 +327,17 @@ fn compose_entire_song(
             }
         }
     }
+    // Modifier-only songs can have no drawable overlays. Require draw output
+    // only when the reference actually sampled a visible primitive.
+    let native_draws = trace.projected_vertex_tracks.iter().any(|track| {
+        track.samples.iter().any(|sample| {
+            sample.get(2).and_then(Value::as_bool) == Some(true)
+                && value_f32(sample.get(3)).is_some_and(|alpha| alpha > 0.000_001)
+        })
+    });
     assert!(
-        actor_samples > 0,
-        "whole-song composition emitted no actors"
+        !native_draws || actor_samples > 0,
+        "whole-song composition emitted no actors despite visible reference geometry"
     );
 }
 
@@ -356,6 +354,8 @@ fn assert_complete_parity(
     compare_update_render_persistence(trace, compiled, &mut gaps);
     compare_update_render_values(trace, compiled, context, &mut gaps);
     compare_player_operation_ranges(trace, compiled, &mut gaps);
+    compare_column_splines(trace, compiled, context, &mut gaps);
+    multitap::compare_multitap(trace, compiled, context, &mut gaps);
     compare_projected_geometry(trace, compiled, context, &mut gaps);
     compare_projected_vibration_coverage(trace, compiled, context, &mut gaps);
     compare_timeline(trace, &compiled[primary_index], &mut gaps);
@@ -368,7 +368,7 @@ fn assert_complete_parity(
     );
 }
 
-fn hash_file(path: &Path) -> String {
+pub(super) fn hash_file(path: &Path) -> String {
     let mut file = File::open(path).expect("open archive for hashing");
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 64 * 1024];
@@ -397,10 +397,11 @@ fn encode_hash(hash: impl AsRef<[u8]>) -> String {
 
 #[test]
 fn whole_song_archive_index_and_streamed_members_are_valid() {
+    crate::paths::init();
     let index = archive_index();
     assert_eq!(index.archive_schema_version, ARCHIVE_SCHEMA_VERSION);
     assert_eq!(index.hash, "sha256-compressed-archive");
-    assert_eq!(index.archives.len(), 43);
+    assert_eq!(index.archives.len(), 46);
     for entry in selected_archives(&index) {
         let archive = extract_archive(entry);
         validate_archive(entry, &archive);
@@ -410,6 +411,7 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
 #[test]
 #[ignore = "explicit full-corpus compile, composition, and exact semantic/render audit"]
 fn whole_song_archives_compile_compose_and_match_native_trace() {
+    crate::paths::init();
     let index = archive_index();
     for entry in selected_archives(&index) {
         eprintln!("whole-song parity: {}", entry.source_simfile);

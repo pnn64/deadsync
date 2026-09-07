@@ -185,12 +185,11 @@ pub use lua_util::{
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
-    MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    MultitapPhase, apply_multitap_field_state, calc_multitap_phase,
+    MULTITAP_PREVISIBLE_BEATS, MultitapDesc, MultitapPhase, calc_multitap_phase,
     compile_multitap_update_overlays_for_actors, multitap_deco_child_state, multitap_deco_state,
-    multitap_explosion_command_blocks, multitap_explosion_state, multitap_frame_state,
-    overlay_delta_pair_from_states, push_multitap_actor_eases, push_multitap_arrow_sample,
-    push_multitap_explosion_eases, push_overlay_sample_eases, read_multitap_descs,
+    multitap_explosion_state, multitap_frame_state, overlay_delta_pair_from_states,
+    push_multitap_actor_eases, push_multitap_arrow_sample, push_multitap_explosion_eases,
+    push_overlay_sample_eases, read_multitap_descs,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use noteskin::{SongLuaActorFactory, create_noteskin_table};
@@ -1400,22 +1399,36 @@ pub fn song_elapsed_seconds_at(beat: f32, context: &SongLuaCompileContext) -> f3
 
 #[must_use]
 pub fn song_beat_at_elapsed_seconds(seconds: f32, context: &SongLuaCompileContext) -> f32 {
-    let target = seconds * song_music_rate(context);
+    song_beat_at_seconds64(f64::from(seconds), context) as f32
+}
+
+// Lua numbers and the reference update clock are doubles. Narrow only when
+// storing runtime windows, after the chart's strict boundary predicates run.
+fn song_beat_at_seconds64(seconds: f64, context: &SongLuaCompileContext) -> f64 {
+    let target = seconds * f64::from(song_music_rate(context));
     let mut cursor_beat = 0.0;
     let mut cursor_seconds = 0.0;
     let mut bpm = context
         .song_timing_bpms
         .first()
         .filter(|(segment_beat, segment_bpm)| *segment_beat <= 0.0 && *segment_bpm > 0.0)
-        .map_or_else(|| song_display_bps(context) * 60.0, |segment| segment.1);
+        .map_or_else(
+            || {
+                f64::from(context.song_display_bpms[0].max(context.song_display_bpms[1]))
+                    .max(f64::from(f32::EPSILON) * 60.0)
+            },
+            |segment| f64::from(segment.1),
+        );
     for &(segment_beat, segment_bpm) in &context.song_timing_bpms {
+        let segment_beat = f64::from(segment_beat);
+        let segment_bpm = f64::from(segment_bpm);
         let next_seconds = cursor_seconds + (segment_beat - cursor_beat) * 60.0 / bpm;
         if next_seconds > target {
             break;
         }
         cursor_beat = segment_beat;
         cursor_seconds = next_seconds;
-        bpm = segment_bpm.max(f32::EPSILON);
+        bpm = segment_bpm.max(f64::EPSILON);
     }
     cursor_beat + (target - cursor_seconds) * bpm / 60.0
 }
@@ -1517,6 +1530,9 @@ pub struct SongLuaModWindow {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaEaseWindow {
+    /// Native option units per second for sampled Song-level targets.
+    /// None applies the authored ease directly to Current.
+    pub approach_speed: Option<f32>,
     pub unit: SongLuaTimeUnit,
     pub start: f32,
     pub limit: f32,
@@ -2862,6 +2878,21 @@ pub fn overlay_state_after_blocks(
     state
 }
 
+/// Move an overlay and its cached stretch bounds together. Actor::StretchTo
+/// sets position and scale; later x/y commands still move that geometry.
+pub const fn move_overlay(state: &mut SongLuaOverlayState, x: f32, y: f32) {
+    if let Some(rect) = &mut state.stretch_rect {
+        let dx = x - state.x;
+        let dy = y - state.y;
+        rect[0] += dx;
+        rect[2] += dx;
+        rect[1] += dy;
+        rect[3] += dy;
+    }
+    state.x = x;
+    state.y = y;
+}
+
 /// Applies only the properties written by `delta`, preserving all other state.
 ///
 /// Optional state fields become `Some` when written. Sound playback is a
@@ -2870,12 +2901,15 @@ pub const fn apply_overlay_delta(
     state: &mut SongLuaOverlayState,
     delta: &SongLuaOverlayStateDelta,
 ) {
-    if let Some(value) = delta.x {
-        state.x = value;
-    }
-    if let Some(value) = delta.y {
-        state.y = value;
-    }
+    let x = match delta.x {
+        Some(x) => x,
+        None => state.x,
+    };
+    let y = match delta.y {
+        Some(y) => y,
+        None => state.y,
+    };
+    move_overlay(state, x, y);
     if let Some(value) = delta.z {
         state.z = value;
     }
@@ -3115,11 +3149,17 @@ pub fn overlay_state_lerp(
     delta: &SongLuaOverlayStateDelta,
     t: f32,
 ) {
-    if let Some(to) = delta.x {
-        from.x = (to - from.x).mul_add(t, from.x);
-    }
-    if let Some(to) = delta.y {
-        from.y = (to - from.y).mul_add(t, from.y);
+    let x = delta
+        .x
+        .map_or(from.x, |to| (to - from.x).mul_add(t, from.x));
+    let y = delta
+        .y
+        .map_or(from.y, |to| (to - from.y).mul_add(t, from.y));
+    if delta.stretch_rect.is_some() {
+        from.x = x;
+        from.y = y;
+    } else {
+        move_overlay(from, x, y);
     }
     if let Some(to) = delta.z {
         from.z = (to - from.z).mul_add(t, from.z);
@@ -4365,6 +4405,8 @@ pub struct SongLuaTrackedActor {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaNoteHideWindow {
+    pub spline_beats_per_t: f32,
+    pub spline_size: usize,
     pub player: usize,
     pub column: usize,
     pub start_beat: f32,
@@ -4388,6 +4430,8 @@ pub fn note_hide_window_from_indices(
         return None;
     }
     Some(SongLuaNoteHideWindow {
+        spline_beats_per_t: beats_per_t,
+        spline_size: end_index,
         player,
         column,
         start_beat,
@@ -4427,6 +4471,9 @@ pub fn note_hide_windows_from_flags(
             note_hide_window_from_indices(player, column, beats_per_t, start, hidden.len())
     {
         out.push(window);
+    }
+    for window in &mut out {
+        window.spline_size = hidden.len();
     }
     out
 }
@@ -4929,6 +4976,7 @@ mod tests {
 
     fn ease_window(start: f32, limit: f32) -> SongLuaEaseWindow {
         SongLuaEaseWindow {
+            approach_speed: None,
             unit: SongLuaTimeUnit::Beat,
             start,
             limit,
@@ -20491,24 +20539,32 @@ end
     fn sort_note_hide_windows_matches_actor_host_order() {
         let mut windows = vec![
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 1,
                 column: 0,
                 start_beat: 1.0,
                 end_beat: 1.5,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 2.0,
                 end_beat: 2.5,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 1.0,
                 end_beat: 2.0,
             },
             SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 0,
                 start_beat: 4.0,
@@ -20652,6 +20708,8 @@ end
         assert_eq!(
             note_hide_window_from_indices(0, 1, 0.25, 1, 1),
             Some(super::SongLuaNoteHideWindow {
+                spline_beats_per_t: 0.25,
+                spline_size: 1,
                 player: 0,
                 column: 1,
                 start_beat: 0.0,

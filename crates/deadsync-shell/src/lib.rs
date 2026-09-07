@@ -72,3 +72,27 @@ pub(crate) use navigation::{TransitionMusicPaths, TransitionState, transition_au
 pub(crate) use runtime::ShellState;
 pub(crate) use session::SessionState;
 pub(crate) use stutter_diag::StutterDiagRecorder;
+
+#[cfg(test)]
+mod tests {
+    pub(crate) fn init_paths() {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            let data =
+                std::env::temp_dir().join(format!("deadsync-shell-paths-{}", std::process::id()));
+            let bundle = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .and_then(std::path::Path::parent)
+                .expect("crate is under the workspace crates directory")
+                .to_path_buf();
+            let dirs = deadsync_config::dirs::AppDirs {
+                cache_dir: data.join("cache"),
+                data_dir: data,
+                exe_dir: bundle,
+                portable: false,
+            };
+            dirs.ensure_dirs_exist();
+            crate::app::init_paths(&dirs).expect("initialize test services");
+        });
+    }
+}

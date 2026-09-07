@@ -1,5 +1,4 @@
 use crate as assets;
-use deadlib_platform::dirs;
 use deadlib_present::actors::{ActorResourceArena, SpriteSource as ActorSpriteSource};
 use deadlib_present::texture::TextureContext;
 use deadlib_render_core::{SamplerDesc, TexturedMeshVertex};
@@ -536,7 +535,7 @@ pub fn test_model_slot() -> SpriteSlot {
 }
 
 pub fn itg_texture_key(path: &Path) -> Option<String> {
-    let dirs = dirs::app_dirs();
+    let dirs = crate::paths();
     let asset_relative_path = dirs
         .strip_asset_prefix(path)
         .map(Path::to_path_buf)
@@ -1048,7 +1047,7 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
 }
 
 fn resolve_asset_path(path: &Path) -> PathBuf {
-    let resolved = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
+    let resolved = crate::paths().resolve_asset_path(&path.to_string_lossy());
     if resolved.exists() {
         return resolved;
     }

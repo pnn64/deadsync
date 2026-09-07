@@ -853,12 +853,12 @@ pub fn handle_input(
 /// separately, mirroring the select-music song search.
 pub fn handle_raw_key_event(
     state: &mut State,
-    key: Option<&deadsync_input::RawKeyboardEvent>,
+    key: Option<&deadlib_platform::input::RawKeyboardEvent>,
     text: Option<&str>,
     ctrl_held: bool,
     _effects: &mut Vec<ThemeEffect>,
 ) -> bool {
-    use deadsync_input::KeyCode;
+    use deadlib_platform::input::KeyCode;
 
     // Gated on keyboard_features so keyboard-less cabinets never reach it.
     if !state.search.is_open() {

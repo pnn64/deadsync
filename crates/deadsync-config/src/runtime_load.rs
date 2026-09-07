@@ -3,31 +3,32 @@ use crate::backfill::has_missing_fields;
 use crate::ini::SimpleIni;
 use crate::load::load_bootstrap_bool;
 use crate::runtime::{
-    RUNTIME_CONFIG, create_default_config_file, current_save_content, get, queue_save_write,
+    RUNTIME_CONFIG, config_path, create_default_config_file, current_save_content, get,
+    queue_save_write,
 };
 use crate::runtime_state::PublishedConfigEffects;
 use crate::update::dedicated_menu_navigation_label;
-use deadlib_platform::{dirs, logging};
+use deadlib_platform::logging;
 use log::{info, warn};
 
 #[must_use]
 pub fn bootstrap_log_to_file() -> bool {
     let default = Config::default().log_to_file;
-    load_bootstrap_bool(&dirs::app_dirs().config_path(), "LogToFile", default)
+    load_bootstrap_bool(config_path(), "LogToFile", default)
 }
 
 #[must_use]
 pub fn bootstrap_show_console() -> bool {
     let default = Config::default().show_console;
-    load_bootstrap_bool(&dirs::app_dirs().config_path(), "ShowConsole", default)
+    load_bootstrap_bool(config_path(), "ShowConsole", default)
 }
 
 pub fn load() {
     ensure_config_file();
 
     let mut conf = SimpleIni::new();
-    let path = dirs::app_dirs().config_path();
-    match conf.load(&path) {
+    let path = config_path();
+    match conf.load(path) {
         Ok(()) => load_from_ini(&conf),
         Err(e) => {
             warn!(
@@ -42,7 +43,7 @@ pub fn load() {
 }
 
 fn ensure_config_file() {
-    if !dirs::app_dirs().config_path().exists()
+    if !config_path().exists()
         && let Err(e) = create_default_config_file()
     {
         warn!("Failed to create default config file: {e}");
@@ -56,10 +57,7 @@ fn load_from_ini(conf: &SimpleIni) {
 
 fn publish_config(effects: PublishedConfigEffects) {
     apply_published_config_effects(effects);
-    info!(
-        "Configuration loaded from '{}'.",
-        dirs::app_dirs().config_path().display()
-    );
+    info!("Configuration loaded from '{}'.", config_path().display());
 }
 
 fn apply_published_config_effects(effects: PublishedConfigEffects) {
@@ -83,7 +81,7 @@ fn backfill_missing_fields(conf: &SimpleIni) {
         queue_save_write(content);
         info!(
             "'{}' updated with default values for any missing fields.",
-            dirs::app_dirs().config_path().display()
+            config_path().display()
         );
     } else {
         info!("Configuration OK; no write needed.");

@@ -167,6 +167,7 @@ mod tests {
 
     #[test]
     fn model_cache_prewarms_more_than_legacy_slot_limit() {
+        crate::tests::init_paths();
         let style = Style {
             num_cols: 8,
             num_players: 1,
@@ -294,6 +295,7 @@ mod tests {
         p2_joined: bool,
         f: impl FnOnce() -> R,
     ) -> R {
+        crate::tests::init_paths();
         let _lock = SESSION_TEST_LOCK.lock().expect("session test lock");
         let _restore = SessionRestore {
             play_style: profile::get_session_play_style(),

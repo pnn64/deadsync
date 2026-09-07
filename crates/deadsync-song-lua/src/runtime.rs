@@ -40,9 +40,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             method,
             lua.create_function({
                 let song_runtime = song_runtime.clone();
-                move |_, _self: Option<Value>| {
-                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?)
-                }
+                move |_, _self: Option<Value>| song_runtime.get::<Value>(SONG_LUA_RUNTIME_BEAT_KEY)
             })?,
         )?;
     }
@@ -52,7 +50,7 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
             lua.create_function({
                 let song_runtime = song_runtime.clone();
                 move |_, _self: Option<Value>| {
-                    song_lua_runtime_number(song_runtime.get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?)
+                    song_runtime.get::<Value>(SONG_LUA_RUNTIME_SECONDS_KEY)
                 }
             })?,
         )?;

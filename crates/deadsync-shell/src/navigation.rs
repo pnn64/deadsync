@@ -1,7 +1,6 @@
 use crate::Command;
 use crate::interaction::{ExitIntent, ProcessExitPlan, ProcessExitRequest, ShellInteractionState};
 use crate::runtime::ShellState;
-use deadlib_platform::dirs;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::path::PathBuf;
 
@@ -544,18 +543,17 @@ pub const fn is_actor_only_transition(from: Screen, to: Screen) -> bool {
     deadsync_theme_simply_love::screens::uses_actor_only_transition(from, to)
 }
 
-pub fn write_current_screen_file(screen: Screen) {
+pub fn write_current_screen_file(screen: Screen, path: &std::path::Path) {
     if !deadsync_config::runtime::get().write_current_screen {
         return;
     }
-    let path = dirs::app_dirs().current_screen_path();
     if let Some(parent) = path.parent()
         && let Err(e) = std::fs::create_dir_all(parent)
     {
         log::warn!("Failed to create current_screen.txt parent dir: {e}");
         return;
     }
-    if let Err(e) = std::fs::write(&path, screen.current_screen_file_name()) {
+    if let Err(e) = std::fs::write(path, screen.current_screen_file_name()) {
         log::warn!("Failed to write current_screen.txt: {e}");
     }
 }

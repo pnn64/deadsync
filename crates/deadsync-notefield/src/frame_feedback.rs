@@ -12,7 +12,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
-    SongLuaNoteHideWindows, hold_explosion_active, song_lua_note_hidden,
+    hold_explosion_active,
 };
 use deadsync_noteskin::NoteskinSlot;
 #[cfg(test)]
@@ -141,6 +141,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let beat_factor = notes.beat_factor;
     let mut lane_effects = [crate::VisualEffectParams::default(); MAX_COLS];
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
+    let mut lane_zooms = [0.0; MAX_COLS];
     let targets_enabled = !options.hide_targets && prepared.receptor_alpha > f32::EPSILON;
     let lane_work_mask = feedback_lane_work_mask(
         num_cols,
@@ -163,26 +164,16 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             continue;
         }
         let lane = frame.lanes[local_col];
-        let hold_candidate = options.hold_explosion_enabled && lane.active_hold.is_some();
-        let tap_candidate = tap_explosion.is_some()
-            && frame
-                .tap_explosions
-                .unwrap_or_default()
-                .get(local_col)
-                .is_some_and(Option::is_some);
-        let mine_candidate = notes.mine.mine_hit_explosion.is_some()
-            && frame
-                .mine_explosions
-                .unwrap_or_default()
-                .get(local_col)
-                .is_some_and(Option::is_some);
-        let hidden = (targets_enabled || hold_candidate || tap_candidate)
-            && song_lua_note_hidden(request.song_lua.note_hides, local_col, current_beat);
-        if hidden && !mine_candidate {
-            continue;
-        }
         let effect = gameplay_visual_effect_params(&visual, local_col);
         lane_effects[local_col] = effect;
+        let effect_zoom = (visual_arrow_effect_zoom(0.0, effect)
+            + request
+                .song_lua
+                .note_hides
+                .zoom_offset(local_col, current_beat))
+            * prepared.column_zooms[local_col];
+        lane_zooms[local_col] = effect_zoom;
+        let hidden = effect_zoom.abs() <= f32::EPSILON;
         let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect)
             + prepared.column_rotations_deg[local_col];
         let mut center = receptor_row_center(
@@ -209,7 +200,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         );
         center[0] += prepared.column_x_offsets[local_col];
         lane_centers[local_col] = center;
-        let effect_zoom = visual_arrow_effect_zoom(0.0, effect) * prepared.column_zooms[local_col];
         let hold_slot = if hidden || !options.hold_explosion_enabled {
             None
         } else {
@@ -307,11 +297,12 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             let Some(active) = tap_explosions.get(local_col) else {
                 continue;
             };
-            let Some(active) =
-                visible_tap_explosion(active, request.song_lua.note_hides, local_col, current_beat)
-            else {
+            let Some(active) = active.as_ref() else {
                 continue;
             };
+            if lane_zooms[local_col].abs() <= f32::EPSILON {
+                continue;
+            }
             let Some(explosion) = tap_explosion.tap_explosion_for_col_with_bright(
                 local_col,
                 active.window,
@@ -333,8 +324,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     uv_elapsed_s: elapsed_screen,
                     center,
                     field_zoom,
-                    effect_zoom: visual_arrow_effect_zoom(0.0, effect)
-                        * prepared.column_zooms[local_col],
+                    effect_zoom: lane_zooms[local_col],
                     rotation: ExplosionRotation::Tap {
                         rotation_y_deg: 0.0,
                         extra_z_deg: visual_confusion_rotation_deg(current_beat, effect)
@@ -410,17 +400,6 @@ fn feedback_lane_work_mask(
     mask
 }
 
-#[inline(always)]
-fn visible_tap_explosion<'a>(
-    active: &'a Option<ActiveTapExplosion>,
-    note_hides: &SongLuaNoteHideWindows,
-    local_col: usize,
-    current_beat: f32,
-) -> Option<&'a ActiveTapExplosion> {
-    let active = active.as_ref()?;
-    (!song_lua_note_hidden(note_hides, local_col, current_beat)).then_some(active)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,7 +412,7 @@ mod tests {
     use deadlib_present::actors::SpriteSource;
     use deadsync_gameplay::{
         AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects,
-        SongLuaNoteHideWindowRuntime, VisibilityEffects, VisualEffects,
+        SongLuaNoteHideWindowRuntime, SongLuaNoteHideWindows, VisibilityEffects, VisualEffects,
     };
     use deadsync_noteskin::{
         ExplosionAnimation, HoldVisuals, ModelDrawState, ModelMesh, NoteDisplayMetrics,
@@ -1146,6 +1125,152 @@ mod tests {
     }
 
     #[test]
+    fn riddle_note_and_feedback_rotation_match_native_vertices() {
+        use deadlib_present::compose::{ActorSegment, ComposeScratch};
+        struct Textures;
+        impl deadlib_present::texture::TextureContext for Textures {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<deadlib_present::texture::TextureMeta> {
+                Some(deadlib_present::texture::TextureMeta { w: 64, h: 64 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, _: &str) -> u64 {
+                1
+            }
+        }
+        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/itgmania-actors/riddle-rotation.json"
+        )))
+        .expect("native Riddle rotation fixture");
+        let cases = [
+            (103.125, 0.8, 0.0, 0.0),
+            (103.25, -0.4, 0.0, 0.0),
+            (200.0, std::f32::consts::FRAC_PI_2, 0.0, 0.0),
+            (3.5, 0.4, 1.5, 0.0),
+            (3.5, -0.4, -1.5, 0.0),
+            (68.0, 0.0, 0.0, -0.5),
+        ];
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let hides = SongLuaNoteHideWindows::default();
+        let hold = active_hold(0);
+        let taps = [tap(), None];
+        let mut feedback = spline_feedback(&taps);
+        feedback.lanes[0].active_hold = Some(&hold);
+        let metrics = deadlib_present::space::metrics_for_window(640, 480);
+        let mut checked = 0;
+        for (index, (beat, offset, confusion, dizzy)) in cases.into_iter().enumerate() {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.visual.current_display_beat = beat;
+            request.chart.visible_beat = beat;
+            request.visual.visual.confusion_offset = offset;
+            request.visual.visual.confusion = confusion;
+            request.visual.visual.dizzy = dizzy;
+            let prepared = prepare_notefield(&request).expect("prepared field");
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &feedback,
+                &source,
+            );
+            let find = |key| {
+                draws
+                    .iter()
+                    .find_map(|draw| match draw {
+                        FlatDraw::Sprite(sprite)
+                            if matches!(&sprite.source,
+                    SpriteSource::TextureHandle { key: name, .. } if name.as_ref() == key) =>
+                        {
+                            Some(sprite.clone())
+                        }
+                        _ => None,
+                    })
+                    .expect("rendered feedback source")
+            };
+            let receptor = find("target0");
+            let mut note = receptor.clone();
+            note.rot_z_deg = crate::visual_note_rotation_z_cached(
+                beat + 2.0,
+                crate::lane_note_transform_cache(
+                    beat,
+                    gameplay_visual_effect_params(&request.visual.visual, 0),
+                ),
+            );
+            for (role, mut sprite) in [
+                ("receptor", receptor),
+                ("hold", find("hold0")),
+                ("flash", find("tap0")),
+                ("note", note),
+            ] {
+                // Isolate the shared rotation contract from noteskin pulses and layout.
+                sprite.center = [320.0, 240.0];
+                sprite.size = [64.0; 2];
+                let draws = [FlatDraw::Sprite(sprite)];
+                let frame = deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                    &[ActorSegment::new(&[]).with_flat_draws(&draws, None)], [0.0; 4], &metrics,
+                    &deadlib_present::font::FontMap::default(), 0.0,
+                    &mut deadlib_present::compose::TextLayoutCache::default(), &mut ComposeScratch::default(),
+                    &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
+                );
+                assert_eq!(frame.sprite_instances.len(), 1, "{role} must draw");
+                assert_eq!(frame.ops.len(), 1, "{role} must submit geometry");
+                let deadlib_render_core::DrawOp::Sprite(run) = &frame.ops[0] else {
+                    panic!("sprite draw")
+                };
+                let sprite = &frame.sprite_instances[0];
+                let camera = frame.cameras[run.camera as usize];
+                let name = format!("case_{index}_{role}");
+                let actor = native["samples"][0]["actors"]
+                    .as_array()
+                    .expect("native actors")
+                    .iter()
+                    .find(|a| a["name"] == name)
+                    .expect("native role");
+                let vertices = actor["draws"][0]["vertices"]
+                    .as_array()
+                    .expect("native vertices");
+                for vertex in vertices {
+                    let u = vertex["uv"][0].as_f64().expect("u") as f32;
+                    let v = vertex["uv"][1].as_f64().expect("v") as f32;
+                    let x = (u - 0.5) * sprite.size[0];
+                    let y = (0.5 - v) * sprite.size[1];
+                    let [sin, cos] = sprite.rot_sin_cos;
+                    let clip = camera
+                        * glam::Vec4::new(
+                            sprite.center[0] + x * cos - y * sin,
+                            sprite.center[1] + x * sin + y * cos,
+                            sprite.center[2],
+                            1.0,
+                        );
+                    for axis in 0..4 {
+                        let expected = vertex["clip"][axis].as_f64().expect("native clip") as f32;
+                        assert!(
+                            (clip[axis] - expected).abs() < 0.000002,
+                            "{name}: {clip:?} != {}",
+                            vertex["clip"]
+                        );
+                    }
+                    checked += 1;
+                }
+            }
+        }
+        assert_eq!(
+            checked, 96,
+            "four textured corners for each role and rotation"
+        );
+    }
+
+    #[test]
     fn hidden_idle_receptors_emit_no_feedback_actors() {
         let noteskin = noteskin();
         let timing = TimingData::default();
@@ -1390,5 +1515,199 @@ mod tests {
             sprite_keys(&actors),
             ["target1", "hold1", "press1", "tap1", "mine", "mine"]
         );
+    }
+
+    fn spline_feedback(taps: &[Option<ActiveTapExplosion>]) -> NotefieldFeedbackFrameView<'_> {
+        NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: Some(taps),
+            mine_explosions: None,
+            lanes: [NotefieldLaneFeedback {
+                receptor_bop_zoom: 1.0,
+                ..NotefieldLaneFeedback::default()
+            }; MAX_COLS],
+            countdown_font: "test",
+            countdown_text_slot: 0,
+        }
+    }
+
+    #[test]
+    fn returning_receptor_and_live_flash_share_spline_zoom() {
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let mut hides = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
+            column: 0,
+            start_beat: 1.0,
+            end_beat: 2.0,
+        }]);
+        hides.set_zoom_spline(0, 1.0 / 48.0, 98);
+        let taps = [tap(), None];
+        let frame = spline_feedback(&taps);
+        let mut prior_width = 0.0;
+        for (beat, returning) in [
+            (1.0 + 0.5 / 48.0, false),
+            (2.0, true),
+            (2.0 + 0.25 / 48.0, true),
+            (2.0 + 0.5 / 48.0, true),
+            (2.0 + 1.0 / 48.0, true),
+        ] {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_beat = beat;
+            request.visual.current_display_beat = beat;
+            let prepared = prepare_notefield(&request).expect("prepared feedback");
+            let mut draws = Vec::new();
+            compose_notefield_feedback(
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            let target = draws.iter().find_map(|draw| match draw {
+                FlatDraw::Sprite(sprite) if matches!(&sprite.source, SpriteSource::TextureHandle { key, .. } if key.as_ref() == "target0") => Some(sprite),
+                _ => None,
+            });
+            if beat == 2.0 {
+                assert!(target.is_none());
+                assert!(!sprite_keys(&draws).contains(&"tap0"));
+            } else {
+                let target = target.expect("receptor grows back");
+                if returning {
+                    assert!(target.size[0] > prior_width && target.size[0] <= 64.001);
+                    prior_width = target.size[0];
+                } else {
+                    assert!(
+                        target.flip_x && target.flip_y,
+                        "native negative spline overshoot mirrors the receptor"
+                    );
+                }
+                let positions = sprite_positions(&draws);
+                let flash = positions
+                    .iter()
+                    .find(|(key, _)| *key == "tap0")
+                    .expect("live final-hit flash returns");
+                assert_eq!(target.center, flash.1);
+            }
+        }
+    }
+
+    #[test]
+    fn hidden_hold_head_keeps_visible_body_sections() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadlib_present::actors::FlatMeshVertices;
+        use deadsync_rules::note::HoldData;
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("tap-head"))
+            .collect();
+        ns.hold_columns[0].head_inactive = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        ns.hold_columns[0].head_active = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_active = Some(TestSlot::new("body"));
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let mut hold_note = note(0);
+        hold_note.beat = 8.0;
+        hold_note.row_index = 384;
+        hold_note.hold = Some(HoldData {
+            end_row_index: 576,
+            end_beat: 12.0,
+            result: None,
+            life: 1.0,
+            let_go_started_at: None,
+            let_go_starting_life: 1.0,
+            last_held_row_index: 384,
+            last_held_beat: 8.0,
+        });
+        for (note_type, beat) in [
+            (NoteType::Hold, 6.0),
+            (NoteType::Hold, 9.0),
+            (NoteType::Roll, 6.0),
+            (NoteType::Roll, 9.0),
+        ] {
+            let mut drawn_note = hold_note.clone();
+            drawn_note.note_type = note_type;
+            let notes = [drawn_note];
+            let lanes = [
+                vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).expect("index")],
+                vec![],
+            ];
+            let mut hides = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
+                column: 0,
+                start_beat: 8.0,
+                end_beat: 10.0,
+            }]);
+            hides.set_zoom_spline(0, 1.0 / 48.0, 482);
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_beat = beat;
+            request.chart.search_beat = beat;
+            request.chart.lane_note_row_indices = &lanes;
+            request.chart.lane_hold_indices = &lanes;
+            request.chart.note_itg_rows = &[384];
+            request.visual.current_display_beat = beat;
+            let prepared = prepare_notefield(&request).expect("prepared hold field");
+            let mut active = active_hold(0);
+            active.note_type = note_type;
+            let mut feedback = spline_feedback(&[]);
+            if beat > 8.0 {
+                feedback.lanes[0].active_hold = Some(&active);
+            }
+            let frame = NotefieldFieldFrameView {
+                feedback,
+                completed_rows: Default::default(),
+            };
+            let mut draws = Vec::new();
+            compose_notefield_field(
+                &mut Vec::new(),
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &mut HoldMeshScratch::default(),
+                &mut CapturedActorScratch::with_capacities(32, 0),
+                &mut NotefieldCameraCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            assert!(!sprite_keys(&draws).contains(&"head"));
+            let vertices: Vec<_> = draws
+                .iter()
+                .filter_map(|draw| match draw {
+                    FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref() == "body" => {
+                        Some(match &mesh.vertices {
+                            FlatMeshVertices::Shared(v) => v.as_ref(),
+                            FlatMeshVertices::Reusable(v) => v.as_slice(),
+                        })
+                    }
+                    _ => None,
+                })
+                .flatten()
+                .collect();
+            assert!(
+                !vertices.is_empty(),
+                "body must render despite its hidden head"
+            );
+            let center_x = prepared.field.playfield_center_x - 32.0;
+            assert!(
+                vertices.iter().any(|v| (v.pos[0] - center_x).abs() < 0.001),
+                "hidden body section collapses"
+            );
+            assert!(
+                vertices.iter().any(|v| (v.pos[0] - center_x).abs() > 30.0),
+                "tail section keeps full width"
+            );
+        }
     }
 }

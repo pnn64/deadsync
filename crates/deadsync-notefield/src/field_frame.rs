@@ -407,9 +407,6 @@ fn compose_field_contents<S, F>(
         if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
             return;
         }
-        if song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat) {
-            return;
-        }
         let Some(hold) = &note.hold else {
             return;
         };
@@ -542,17 +539,26 @@ fn compose_field_contents<S, F>(
         let head_slot = hold_plan.head_slot;
 
         let transform_cache = lane_transform_caches[local_col];
-        let hold_arrow_px_for_adjusted_travel = |travel_offset: f32| -> f32 {
-            target_arrow_px
-                * column_zoom
-                * visual_arrow_effect_zoom_cached(travel_offset, transform_cache)
+        let note_hides = request.song_lua.note_hides;
+        let has_zoom_spline = note_hides.has_column_hides(local_col);
+        // NoteDisplay interpolates the beat along the body's original endpoints,
+        // then samples only the spline's X scale for each strip vertex.
+        let body_head_beat = if engaged { current_beat } else { note.beat };
+        let body_beat_at_y = |y: f32| {
+            if (y_tail - y_head).abs() <= f32::EPSILON {
+                body_head_beat
+            } else {
+                body_head_beat
+                    + (hold.end_beat - body_head_beat) * ((y - y_head) / (y_tail - y_head))
+            }
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
         let hold_head_zoom = column_zoom
-            * visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache);
+            * (visual_arrow_effect_zoom_cached(head_anchor_adjusted_travel, transform_cache)
+                + note_hides.zoom_offset(local_col, note.beat));
         let hold_head_target_arrow_px = target_arrow_px * hold_head_zoom;
         let hold_note_scale = field_zoom * hold_head_zoom;
-        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites;
+        let use_legacy_hold_sprites = lane_frame.use_legacy_sprites && !has_zoom_spline;
         let sample_hold_path = |screen_y: f32| {
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
                 lane_receptor_y,
@@ -564,7 +570,10 @@ fn compose_field_contents<S, F>(
                 adjusted_travel,
                 center_x: lane_center_x_from_adjusted_travel(local_col, adjusted_travel),
                 world_z: world_z_for_adjusted_travel(local_col, adjusted_travel),
-                arrow_px: hold_arrow_px_for_adjusted_travel(adjusted_travel),
+                arrow_px: target_arrow_px
+                    * column_zoom
+                    * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
+                        + note_hides.zoom_offset(local_col, body_beat_at_y(screen_y))),
             }
         };
         compose_hold_body_caps(
@@ -619,6 +628,9 @@ fn compose_field_contents<S, F>(
             sprite_source,
         );
 
+        if hold_head_zoom.abs() <= f32::EPSILON {
+            return;
+        }
         let head_draw_y = head_anchor_y;
         let head_draw_delta = (head_draw_y - receptor_draw_y) * dir;
         if head_draw_delta < -draw_distance_after_targets

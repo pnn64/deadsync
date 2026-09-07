@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use deadlib_platform::dirs;
 use deadsync_config::prelude as config;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, info, warn};
@@ -19,10 +18,27 @@ use crate::{
     default_profile_ids_after_side_update, is_local_profile_id, player_side_index,
 };
 
+struct ProfilePaths {
+    root: PathBuf,
+    defaults: PathBuf,
+}
+static PATHS: std::sync::OnceLock<ProfilePaths> = std::sync::OnceLock::new();
+
+/// Install profile and default-option paths before profile loading or worker startup.
+pub fn init_paths(root: PathBuf, defaults: PathBuf) -> Result<(), &'static str> {
+    PATHS
+        .set(ProfilePaths { root, defaults })
+        .map_err(|_| "profile paths already initialized")
+}
+
 #[inline(always)]
 #[must_use]
 pub fn profiles_root() -> PathBuf {
-    dirs::app_dirs().profiles_root()
+    PATHS
+        .get()
+        .expect("profile paths initialized at startup")
+        .root
+        .clone()
 }
 
 pub fn warn_duplicate_profile_guid(guid: &str, left: &Path, right: &Path, kept: &Path) {
@@ -1089,7 +1105,11 @@ fn legacy_common_player_options() -> PlayerOptionsData {
 }
 
 fn default_player_options_path() -> PathBuf {
-    dirs::app_dirs().default_player_options_path()
+    PATHS
+        .get()
+        .expect("profile paths initialized at startup")
+        .defaults
+        .clone()
 }
 
 fn read_machine_player_defaults(
@@ -1107,7 +1127,9 @@ fn read_machine_player_defaults(
                     "Failed to create default player options directory '{}': {error}",
                     parent.display()
                 );
-            } else if let Err(error) = fs::write(path, content) {
+            } else if let Err(error) =
+                deadlib_platform::atomic_write::write_atomic(path, content.as_bytes())
+            {
                 warn!(
                     "Failed to create default player options file '{}': {error}",
                     path.display()
@@ -1168,7 +1190,7 @@ fn update_common_machine_player_default(key: &str, value: &str) {
         );
         return;
     }
-    if let Err(error) = fs::write(&path, &content) {
+    if let Err(error) = deadlib_platform::atomic_write::write_atomic(&path, content.as_bytes()) {
         warn!(
             "Failed to update default player options file '{}': {error}",
             path.display()
@@ -2023,6 +2045,10 @@ mod tests {
 
     #[test]
     fn wheel_score_read_does_not_deadlock_with_leaderboard_worker() {
+        let data =
+            std::env::temp_dir().join(format!("deadsync-profile-paths-{}", std::process::id()));
+        init_paths(data.join("profiles"), data.join("defaults.ini"))
+            .expect("initialize isolated profile test paths");
         let profile_id = "test-deadlock-wheel-profile";
         let chart_hash = "feedface";
         let seeded = deadsync_score::CachedScore {

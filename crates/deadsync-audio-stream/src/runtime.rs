@@ -1,17 +1,13 @@
 #[cfg(target_os = "linux")]
 use deadlib_audio::LinuxAudioBackend;
-use deadlib_audio::{InitConfig, OutputPlan, prepare_output};
+use deadlib_audio::{InitConfig, prepare_output};
 use deadlib_audio_core::{
-    OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot, PlayedMapReader, SfxSender,
-    StutterDiagAudioEvent, normalized_music_rate,
+    OutputDeviceInfo, OutputTimingSnapshot, StutterDiagAudioEvent, normalized_music_rate,
 };
-use deadlib_platform::dirs;
 use deadsync_audio_replaygain as replaygain;
-use log::info;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, channel};
-use std::thread;
+use std::sync::mpsc::Sender;
 
 use crate::mix::{
     EFFECT_BUS, SCREEN_BUS, assist_tick_generation, init_controls, stop_assist_tick_bus,
@@ -19,7 +15,8 @@ use crate::mix::{
 };
 use crate::music_map::clear_music_pos_map;
 use crate::sfx_cache::SfxCache;
-use crate::{Cut, MusicClock, MusicStreamRuntime, OutputFormat, SfxId, StreamCommand};
+use crate::{MusicClock, SfxId};
+use deadlib_audio::stream::{self, Cut, OutputFormat, StreamCommand};
 
 static REPLAYGAIN_ENABLED: AtomicBool = AtomicBool::new(false);
 static PRESERVE_PITCH_ENABLED: AtomicBool = AtomicBool::new(false);
@@ -36,22 +33,8 @@ pub struct AudioControl {
 struct AudioEngine {
     command_sender: Sender<StreamCommand>,
     sfx_cache: SfxCache,
-    device_sample_rate: u32,
-    device_channels: usize,
+    output: OutputFormat,
     startup_output_devices: Vec<OutputDeviceInfo>,
-}
-
-struct AudioThreadReady {
-    backend_ready: OutputBackendReady,
-    sfx_sender: SfxSender,
-    played_map: PlayedMapReader,
-}
-
-const fn output_format(engine: &AudioEngine) -> OutputFormat {
-    OutputFormat {
-        sample_rate_hz: engine.device_sample_rate,
-        channels: engine.device_channels,
-    }
 }
 
 #[inline(always)]
@@ -73,15 +56,42 @@ pub fn collect_stutter_diag_events(
     deadlib_audio_core::collect_stutter_diag_events(now_host_nanos, window_ns, out);
 }
 
-pub fn init(cfg: InitConfig) -> Result<(AudioControl, MusicClock), String> {
-    let app_dirs = dirs::app_dirs();
+/// Initialize audio with caller-resolved consolidated and legacy ReplayGain cache paths.
+pub fn init(
+    cfg: InitConfig,
+    cache_file: PathBuf,
+    legacy_cache_dir: PathBuf,
+) -> Result<(AudioControl, MusicClock), String> {
     replaygain::init(replaygain::InitConfig {
-        cache_file: app_dirs.replaygain_cache_file(),
-        legacy_cache_dir: app_dirs.replaygain_cache_dir(),
+        cache_file,
+        legacy_cache_dir,
         result_callback: set_music_replaygain_if_matches,
     })
     .map_err(str::to_string)?;
-    Ok(init_engine_and_thread(&cfg))
+    let controls = init_controls();
+    let output_plan = prepare_output(&cfg, controls.clone());
+    let startup_output_devices = output_plan.devices().to_vec();
+    let stream::StreamReady {
+        command_sender,
+        backend_ready: ready,
+        sfx_sender,
+        played_map,
+    } = stream::start(output_plan)?;
+    let music_clock = MusicClock::new(played_map, ready.device_sample_rate);
+    Ok((
+        AudioControl {
+            engine: Some(AudioEngine {
+                command_sender,
+                sfx_cache: SfxCache::new(controls, sfx_sender),
+                output: OutputFormat {
+                    sample_rate_hz: ready.device_sample_rate,
+                    channels: ready.device_channels,
+                },
+                startup_output_devices,
+            }),
+        },
+        music_clock,
+    ))
 }
 
 #[cfg(target_os = "linux")]
@@ -133,10 +143,9 @@ impl AudioControl {
     /// Loads a sound for later playback; call during startup or screen/song preparation.
     ///
     /// Returns `None` when audio is unavailable or the sound cannot be loaded.
-    pub fn prepare_sfx(&mut self, path: &str) -> Option<SfxId> {
+    pub fn prepare_sfx(&mut self, path: &Path) -> Option<SfxId> {
         let engine = self.engine.as_mut()?;
-        let output = output_format(engine);
-        engine.sfx_cache.prepare(path, output, resolve_asset_path)
+        engine.sfx_cache.prepare(path, engine.output)
     }
 
     /// Enqueues a prepared effect without filesystem access or decoding.
@@ -201,10 +210,6 @@ impl AudioControl {
     }
 }
 
-fn resolve_asset_path(path: &str) -> PathBuf {
-    dirs::app_dirs().resolve_asset_path(path)
-}
-
 #[inline(always)]
 fn reset_music_stream_clock() -> u64 {
     // Reset immediately on the caller thread so async command handoff can't
@@ -259,13 +264,11 @@ pub fn set_music_replaygain_if_matches(track_id: u64, gain_linear: f32) {
 }
 
 fn stop_music(engine: Option<&AudioEngine>) {
-    let generation = reset_music_stream_clock();
+    reset_music_stream_clock();
     deadlib_audio_core::reset_music_target_gain();
     deadlib_audio_core::snap_music_gain_generation();
     if let Some(engine) = engine {
-        let _ = engine
-            .command_sender
-            .send(StreamCommand::StopMusic { generation });
+        let _ = engine.command_sender.send(StreamCommand::StopMusic);
     }
 }
 
@@ -288,99 +291,4 @@ pub fn assist_sfx_generation() -> u64 {
 #[must_use]
 pub fn get_output_timing_snapshot() -> OutputTimingSnapshot {
     deadlib_audio_core::get_output_timing_snapshot()
-}
-
-#[inline(always)]
-fn publish_output_backend_ready(ready: OutputBackendReady) {
-    deadlib_audio_core::publish_output_backend_ready(ready);
-}
-
-fn init_engine_and_thread(cfg: &InitConfig) -> (AudioControl, MusicClock) {
-    let (command_sender, command_receiver) = channel();
-    let (ready_sender, ready_receiver) = channel();
-    let controls = init_controls();
-    let output_plan = prepare_output(cfg, controls.clone());
-    let startup_output_devices = output_plan.devices().to_vec();
-
-    thread::spawn(move || {
-        audio_manager_thread(command_receiver, ready_sender, output_plan);
-    });
-
-    let thread_ready = match ready_receiver.recv() {
-        Ok(Ok(ready)) => ready,
-        Ok(Err(err)) => panic!("failed to initialize audio runtime: {err}"),
-        Err(_) => panic!("audio manager thread exited before reporting ready"),
-    };
-    let AudioThreadReady {
-        backend_ready: ready,
-        sfx_sender,
-        played_map,
-    } = thread_ready;
-
-    info!(
-        "Audio runtime initialized ({} Hz, {} ch, backend={} req={} fallback={} clock={} quality={} device='{}').",
-        ready.device_sample_rate,
-        ready.device_channels,
-        ready.backend_name,
-        ready.requested_output_mode.as_str(),
-        ready.fallback_from_native,
-        ready.timing_clock,
-        ready.timing_quality,
-        ready.device_name
-    );
-    publish_output_backend_ready(ready.clone());
-    let music_clock = MusicClock::new(played_map, ready.device_sample_rate);
-    (
-        AudioControl {
-            engine: Some(AudioEngine {
-                command_sender,
-                sfx_cache: SfxCache::new(controls, sfx_sender),
-                device_sample_rate: ready.device_sample_rate,
-                device_channels: ready.device_channels,
-                startup_output_devices,
-            }),
-        },
-        music_clock,
-    )
-}
-
-fn audio_manager_thread(
-    command_receiver: Receiver<StreamCommand>,
-    ready_sender: Sender<Result<AudioThreadReady, String>>,
-    output_plan: OutputPlan,
-) {
-    let opened = match output_plan.open() {
-        Ok(output) => output,
-        Err(err) => {
-            let _ = ready_sender.send(Err(err));
-            return;
-        }
-    };
-    let (_session, ready, sfx_sender, stream_handle) = opened.into_parts();
-    let deadlib_audio_core::AudioStreamHandle { writer, played_map } = stream_handle;
-    let stream_output = OutputFormat {
-        sample_rate_hz: ready.device_sample_rate,
-        channels: ready.device_channels,
-    };
-    if ready_sender
-        .send(Ok(AudioThreadReady {
-            backend_ready: ready,
-            sfx_sender,
-            played_map,
-        }))
-        .is_err()
-    {
-        drop(_session);
-        drop(writer);
-        return;
-    }
-
-    let mut music_runtime = MusicStreamRuntime::new(writer, stream_output);
-    while let Ok(command) = command_receiver.recv() {
-        music_runtime.handle(command);
-    }
-    // Stop and join the render callback while the recycle consumer still owns
-    // the pool. Pooled blocks are then destroyed here on the manager thread.
-    drop(_session);
-    drop(music_runtime);
 }

@@ -173,6 +173,7 @@ where
         }
 
         eases.push(SongLuaEaseWindow {
+            approach_speed: None,
             unit,
             start,
             limit,

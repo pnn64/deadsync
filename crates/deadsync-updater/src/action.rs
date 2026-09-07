@@ -820,9 +820,7 @@ fn resolve_expected_digest(
 /// Absolute path of the directory archives are downloaded into.
 #[must_use]
 pub fn downloads_dir() -> PathBuf {
-    deadlib_platform::dirs::app_dirs()
-        .cache_dir
-        .join(DOWNLOADS_SUBDIR)
+    crate::cache_dir().join(DOWNLOADS_SUBDIR)
 }
 
 /// Spawn a worker that runs the platform apply + relaunch.  No-op if
@@ -1444,7 +1442,10 @@ mod tests {
 
     #[test]
     fn downloads_dir_is_under_cache_dir() {
+        let cache = std::env::temp_dir().join("deadsync-updater-path-test");
+        crate::init_cache_dir(cache.clone()).expect("initialize updater test paths");
         let dir = downloads_dir();
+        assert_eq!(dir, cache.join(DOWNLOADS_SUBDIR));
         assert!(
             dir.ends_with(DOWNLOADS_SUBDIR),
             "downloads dir was {}",

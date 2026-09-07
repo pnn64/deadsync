@@ -72,9 +72,17 @@ trap cleanup EXIT
 
 echo "Verifying FreeBSD builder ${user}@${host}:${port}"
 ssh_run "uname -srm
-command -v cargo >/dev/null
+if ! command -v rustup >/dev/null 2>&1; then
+  echo 'rustup is required on the FreeBSD builder to update Rust before release builds. Install rustup for the SSH user.' >&2
+  exit 1
+fi
 command -v tar >/dev/null
 command -v git >/dev/null"
+
+echo "Checking for Rust stable updates on the FreeBSD builder"
+ssh_run "rustup update stable --no-self-update
+rustup run stable rustc --version
+rustup run stable cargo --version"
 
 echo "Preparing remote workspace ${remote_dir}"
 ssh_run "rm -rf ${remote_dir_q}
@@ -93,7 +101,7 @@ tar \
 
 echo "Building ${arch} (${target}) on FreeBSD"
 ssh_run "cd ${remote_dir_q}
-CARGO_TERM_COLOR=${term_color_q} cargo build --release --locked --target ${target_q}"
+CARGO_TERM_COLOR=${term_color_q} rustup run stable cargo build --release --locked --target ${target_q}"
 
 mkdir -p "${local_bin_dir}"
 echo "Downloading ${remote_bin}"

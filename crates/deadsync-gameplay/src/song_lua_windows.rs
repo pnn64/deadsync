@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SongLuaCompilePlayStyle {
     #[default]
     Single,
@@ -163,7 +163,7 @@ pub fn song_lua_time_to_second(
     global_offset_seconds: f32,
 ) -> f32 {
     match unit {
-        SongLuaRuntimeTimeUnit::Beat => timing_player.get_time_for_beat(value),
+        SongLuaRuntimeTimeUnit::Beat => timing_player.get_time_for_beat_exact(value),
         SongLuaRuntimeTimeUnit::Second => value - global_offset_seconds,
     }
 }

@@ -643,6 +643,9 @@ impl<'a> SongLuaEaseWindowRef<'a> {
 }
 
 impl<'a> deadsync_gameplay::SongLuaEaseWindowLike for SongLuaEaseWindowRef<'a> {
+    fn approach_speed(&self) -> Option<f32> {
+        self.source.approach_speed
+    }
     type Target = deadsync_gameplay::SongLuaRuntimeEaseTarget<'a>;
 
     #[inline(always)]
@@ -799,6 +802,7 @@ pub fn song_lua_runtime_ease_windows(
     windows
         .iter()
         .map(|window| deadsync_gameplay::SongLuaRuntimeEaseWindow {
+            approach_speed: window.approach_speed,
             player: window.player,
             unit: song_lua_runtime_time_unit(window.unit),
             start: window.start,

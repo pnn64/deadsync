@@ -22,7 +22,6 @@ use deadlib_platform::lock_wait::{LockWaitStats, lock_mutex};
 use deadsync_audio_stream::AudioMixLevels;
 use deadsync_input::Keymap;
 use null_or_die::BiasCfg;
-use std::fmt::Display;
 use std::path::Path;
 use std::sync::{
     Mutex, MutexGuard,
@@ -52,8 +51,6 @@ pub struct RuntimeStateIdTokens<'a> {
     pub default_profile_p1: &'a str,
     pub default_profile_p2: &'a str,
 }
-
-pub type PadOrderEntry = (String, String);
 
 #[derive(Debug, Clone)]
 pub struct SaveSnapshot {
@@ -437,7 +434,7 @@ impl RuntimeConfigStore {
 
     pub fn reset_load_state(&self) {
         self.reset_runtime_state();
-        config_pad_order::reset();
+        deadlib_input_native::reset_pad_order();
     }
 
     /// # Panics
@@ -708,16 +705,6 @@ pub fn load_runtime_state_ids(conf: &SimpleIni) -> RuntimeStateIds {
     }
 }
 
-#[must_use]
-pub fn load_pad_order_entries(conf: &SimpleIni) -> Option<Vec<PadOrderEntry>> {
-    conf.get_section("Options").map(|section| {
-        section
-            .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
-            .collect()
-    })
-}
-
 fn profile_id(conf: &SimpleIni, key: &str, fallback_key: &str) -> Option<String> {
     nonempty_option(conf, key).or_else(|| nonempty_option(conf, fallback_key))
 }
@@ -733,16 +720,6 @@ pub fn push_runtime_state_id_option_lines(content: &mut String, ids: RuntimeStat
     push_line(content, "SmxP2Serial", ids.smx_p2_serial);
     push_line(content, "DefaultLocalProfileIDP1", ids.default_profile_p1);
     push_line(content, "DefaultLocalProfileIDP2", ids.default_profile_p2);
-}
-
-pub fn push_pad_order_option_lines<I, V>(content: &mut String, lines: I)
-where
-    I: IntoIterator<Item = (&'static str, V)>,
-    V: Display,
-{
-    for (key, value) in lines {
-        push_line(content, key, value);
-    }
 }
 
 #[cfg(test)]
@@ -1289,21 +1266,6 @@ SmxP1Serial= pad-1\n"),
     }
 
     #[test]
-    fn load_pad_order_entries_copies_options_section_entries() {
-        let entries = load_pad_order_entries(&ini("[Options]\n\
-PadOrderRawInput=1,0\n\
-Unrelated=kept-for-native-filter\n"))
-        .expect("options section should be present");
-
-        assert!(entries.contains(&("PadOrderRawInput".to_string(), "1,0".to_string())));
-        assert!(entries.contains(&(
-            "Unrelated".to_string(),
-            "kept-for-native-filter".to_string()
-        )));
-        assert_eq!(load_pad_order_entries(&ini("[Other]\nKey=Value\n")), None);
-    }
-
-    #[test]
     fn writes_runtime_state_id_option_lines() {
         let mut content = String::new();
 
@@ -1326,17 +1288,5 @@ Unrelated=kept-for-native-filter\n"))
                 "DefaultLocalProfileIDP2=profile-b\n",
             ),
         );
-    }
-
-    #[test]
-    fn writes_pad_order_option_lines() {
-        let mut content = String::new();
-
-        push_pad_order_option_lines(
-            &mut content,
-            [("PadOrderRawInput", "0,1"), ("PadOrderSmx", "")],
-        );
-
-        assert_eq!(content, "PadOrderRawInput=0,1\nPadOrderSmx=\n");
     }
 }

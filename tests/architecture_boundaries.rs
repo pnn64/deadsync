@@ -2,6 +2,51 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[test]
+fn asset_catalog_policy_stays_above_the_engine() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
+    {
+        let path = entry.expect("asset source").path();
+        if path.extension().is_none_or(|ext| ext != "rs") {
+            continue;
+        }
+        let source = fs::read_to_string(&path).expect("read engine asset source");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        for policy in [
+            "deadsync_",
+            "judgements",
+            "hold_judgements",
+            "held_miss",
+            "step_stats_gifs",
+            "noteskins/",
+            "love_first",
+        ] {
+            assert!(
+                !production.contains(policy),
+                "{} owns game asset policy: {policy}",
+                path.display()
+            );
+        }
+    }
+    let engine =
+        fs::read_to_string(root.join("crates/deadlib-assets/Cargo.toml")).expect("engine manifest");
+    assert!(engine.contains("deadlib-render ="));
+    assert!(!engine.contains("deadsync-"));
+    let game =
+        fs::read_to_string(root.join("crates/deadsync-assets/src/lib.rs")).expect("game assets");
+    assert!(!game.contains("pub use manager::AssetManager"));
+    assert!(!root.join("crates/deadsync-assets/src/manager.rs").exists());
+    assert!(
+        !root
+            .join("crates/deadlib-assets/src/asset_store.rs")
+            .exists()
+    );
+}
+
 const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[];
 
 const LOGICAL_INPUT_SYMBOLS: &[&str] = &[
@@ -229,7 +274,7 @@ const AUDIO_CORE_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::game",
     "crate::screens",
     "deadlib_platform",
-    "deadsync_audio_decode",
+    "deadlib_audio_decode",
     "std::fs",
     "std::path",
     "std::sync::mpsc",
@@ -888,8 +933,8 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_video",
     "deadsync-input-fsr",
     "deadsync_input_fsr",
-    "deadsync-input-native",
-    "deadsync_input_native",
+    "deadlib-input-native",
+    "deadlib_input_native",
     "deadsync-input =",
     "deadsync_input::",
     "deadsync-audio",
@@ -941,8 +986,8 @@ const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_render_backend_",
     "deadlib-video",
     "deadlib_video",
-    "deadsync-input-native",
-    "deadsync_input_native",
+    "deadlib-input-native",
+    "deadlib_input_native",
     "deadsync-audio-stream",
     "deadsync_audio_stream",
     "deadlib-platform",
@@ -1283,7 +1328,7 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         .expect("shell sync-analysis service should be readable");
 
     assert!(
-        !theme_manifest.contains("deadsync-audio-decode"),
+        !theme_manifest.contains("deadlib-audio-decode"),
         "Simply Love must not depend on audio decode; sync analysis is shell-owned"
     );
     assert!(
@@ -1309,7 +1354,7 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
     );
     assert!(
         !pack_sync.contains("std::thread::spawn")
-            && !pack_sync.contains("deadsync_audio_decode")
+            && !pack_sync.contains("deadlib_audio_decode")
             && !pack_sync.contains("analyze_song_chart_stream"),
         "Pack Sync must retain UI state without owning analysis workers or decoding"
     );
@@ -1318,9 +1363,9 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         "Simply Love must express sync-analysis start and cancel as runtime intent"
     );
     assert!(
-        shell_manifest.contains("deadsync-audio-decode")
+        shell_manifest.contains("deadlib-audio-decode")
             && shell_manifest.contains("null-or-die")
-            && shell_sync.contains("use deadsync_audio_decode as decode")
+            && shell_sync.contains("use deadlib_audio_decode as decode")
             && shell_sync.contains("use null_or_die::")
             && shell_sync.contains("fn sync_stream_event")
             && shell_sync.contains("fn sync_song_result")
@@ -2418,7 +2463,7 @@ fn noteskin_discovery_is_shell_prepared_for_themes() {
     );
     assert!(
         shell_manifest.contains("deadsync-noteskin =")
-            && shell.contains("fn noteskin_catalog_view() -> NoteskinCatalogView")
+            && shell.contains("fn noteskin_catalog_view(dirs: &AppDirs) -> NoteskinCatalogView")
             && shell.contains("deadsync_noteskin::itg::discover_skins"),
         "shell must discover installed noteskins and prepare the theme view"
     );
@@ -2974,7 +3019,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         "music_clock.snapshot()",
         "GameplayAudioCommand::PlayMusic",
         "GameplayAudioCommand::SetMusicRate(rate)",
-        "deadsync_audio_stream::snap_music_start_sec",
+        "deadlib_audio::stream::snap_music_start_sec",
     ] {
         assert!(
             gameplay_runtime.contains(execution),
@@ -3139,17 +3184,17 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         .map_or(manifest.as_str(), |(dependencies, _)| dependencies);
     assert!(
         !dependencies.contains("winit ="),
-        "Simply Love should consume keyboard codes through deadsync-input"
+        "Simply Love should consume physical keyboard codes through deadlib-platform::input"
     );
     assert!(
-        !manifest.contains("deadsync-input-native"),
+        !manifest.contains("deadlib-input-native"),
         "Simply Love should consume shell-prepared native input views"
     );
 
     let mut failures = Vec::new();
     for file in production_rust_files(&theme.join("src")) {
         let source = production_source(&file);
-        for token in ["winit::", "deadsync_input_native"] {
+        for token in ["winit::", "deadlib_input_native"] {
             if source.contains(token) {
                 failures.push(format!("{}: {token}", rel_path(&root, &file)));
             }
@@ -3161,14 +3206,14 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         failures.join("\n")
     );
 
-    let input = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
-        .expect("input contract should be readable");
+    let input = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input contract should be readable");
     assert!(
         (input.contains("pub use") && input.contains("KeyCode"))
             || input.contains("pub enum KeyCode")
             || input.contains("pub struct KeyCode")
             || input.contains("pub type KeyCode"),
-        "deadsync-input must expose its keyboard-code contract"
+        "deadlib-platform::input must expose the physical keyboard-code contract"
     );
     let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("theme views should be readable");
@@ -4295,7 +4340,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
     for integration in [
         "profile_load: crate::profile_load::Service",
         "fn poll_profile_load",
-        "self.coin_select_music_init_view(crate::select_music::init_view())",
+        "crate::select_music::init_view(&self.dirs)",
         "self.profile_load.start(play_mode, select_music)",
         "self.profile_load.poll()",
         "profile_load::sync_ready",
@@ -4355,8 +4400,8 @@ fn options_folder_paths_are_shell_prepared() {
     assert!(reload.contains("state.app_paths.courses.path.clone()"));
     assert!(views.contains("pub struct AppPathView"));
     assert!(views.contains("pub struct AppPathsView"));
-    assert!(shell.contains("fn app_paths_view() -> AppPathsView"));
-    assert!(shell.contains("deadlib_platform::dirs::app_dirs()"));
+    assert!(shell.contains("fn app_paths_view(dirs: &AppDirs) -> AppPathsView"));
+    assert!(shell.contains("dirs: AppDirs,"));
     assert!(shell.contains("deadlib_platform::dirs::path_shorthand(&path)"));
 }
 
@@ -4410,13 +4455,13 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
             && views.contains("pub song_packs: Vec<deadsync_chart::SongPack>")
             && views.contains("pub sync_graph_mode:")
             && views.contains("pub sync_confidence_percent: u8")
-            && shell.contains("deadlib_platform::dirs::app_dirs()")
+            && shell.contains("dirs: &deadsync_config::dirs::AppDirs")
             && shell.contains("std::fs::read_dir")
             && shell.contains("std::fs::read_to_string")
-            && shell.contains("pub(crate) fn init_view() -> SelectMusicInitView")
+            && shell.contains("pub(crate) fn init_view(dirs: &deadsync_config::dirs::AppDirs) -> SelectMusicInitView")
             && runtime.contains("config.null_or_die_sync_graph")
             && runtime.contains("config.null_or_die_confidence_percent")
-            && app.contains("crate::select_music::prepared_init_view()")
+            && app.contains("crate::select_music::prepared_init_view(&self.dirs)")
             && app.contains("select_music::init(init_view)"),
         "shell must resolve Select Music paths and load playlist files"
     );
@@ -5846,18 +5891,20 @@ fn notefield_theme_dependency_points_toward_contracts() {
 }
 
 #[test]
-fn simply_love_has_no_direct_platform_dependency() {
+fn simply_love_platform_access_is_limited_to_physical_input() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let crate_dir = root.join("crates/deadsync-theme-simply-love");
     let manifest = fs::read_to_string(crate_dir.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    assert!(!manifest.contains("deadlib-platform"));
+    assert!(manifest.contains("deadlib-platform"));
 
     for file in rust_files(&crate_dir.join("src")) {
         let source = fs::read_to_string(&file).expect("Simply Love source should be readable");
         assert!(
-            !source.contains("deadlib_platform"),
-            "{} still imports platform paths directly",
+            !source
+                .replace("deadlib_platform::input::", "")
+                .contains("deadlib_platform"),
+            "{} imports platform services beyond physical input types",
             rel_path(&root, &file)
         );
         assert!(
@@ -5911,7 +5958,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
             "deadlib-platform",
             "deadsync-config",
             "deadsync-input-fsr",
-            "deadsync-input-native",
+            "deadlib-input-native",
             "deadsync-lights",
             "deadsync-notefield",
             "deadsync-noteskin",
@@ -5959,7 +6006,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "deadlib_platform",
                 "deadsync_config",
                 "deadsync_input_fsr",
-                "deadsync_input_native",
+                "deadlib_input_native",
                 "deadsync_lights",
                 "deadsync_notefield",
                 "deadsync_noteskin",
@@ -6391,130 +6438,128 @@ fn audio_core_lives_in_audio_crate() {
 }
 
 #[test]
-fn audio_decode_helpers_live_in_decode_crate() {
+fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut failures = Vec::new();
-
-    for file in [
-        root.join("crates/deadsync-audio-decode/src/lib.rs"),
-        root.join("crates/deadsync-audio-decode/src/folder.rs"),
-        root.join("crates/deadsync-audio-decode/src/resample.rs"),
-        root.join("crates/deadsync-audio-stream/Cargo.toml"),
-        root.join("crates/deadsync-audio-stream/src/clock.rs"),
-        root.join("crates/deadsync-audio-stream/src/lib.rs"),
-        root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"),
-        root.join("crates/deadsync-audio-stream/src/stream_runtime.rs"),
+    for relative in [
+        "crates/deadlib-audio-decode/src/lib.rs",
+        "crates/deadlib-audio-decode/src/resample.rs",
+        "crates/deadlib-audio/src/stream.rs",
+        "crates/deadlib-audio/src/stream/runtime.rs",
+        "crates/deadlib-audio/src/stream/processing.rs",
+        "crates/deadlib-audio/src/stream/stretch.rs",
     ] {
-        if !file.exists() {
-            failures.push(format!("{} is missing", rel_path(&root, &file)));
-        }
+        assert!(root.join(relative).is_file(), "missing {relative}");
+    }
+    for relative in [
+        "crates/deadsync-audio-decode",
+        "crates/deadlib-audio-decode/src/folder.rs",
+        "crates/deadsync-audio-stream/src/stream_runtime.rs",
+        "crates/deadsync-audio-stream/src/processing.rs",
+        "crates/deadsync-audio-stream/src/stretch.rs",
+    ] {
+        assert!(
+            !root.join(relative).exists(),
+            "retired audio machinery: {relative}"
+        );
     }
 
-    let engine_resample = root.join("src/engine/audio/resample.rs");
-    if engine_resample.exists() {
-        failures.push(format!(
-            "{} still exists; decoder stream runtime should live in deadsync-audio-stream",
-            rel_path(&root, &engine_resample)
-        ));
-    }
-
-    let engine_audio = root.join("src/engine/audio/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_audio) {
-        for token in [
-            "deadsync_audio_decode as decode",
-            "snap_start_forward_to_packet",
-            "MAX_PACKET_START_SNAP_SEC",
-        ] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still references decode stream token {token} {count} times",
-                    rel_path(&root, &engine_audio)
-                ));
+    for name in ["deadlib-audio", "deadlib-audio-decode"] {
+        let manifest = fs::read_to_string(root.join("crates").join(name).join("Cargo.toml"))
+            .expect("engine audio manifest should be readable");
+        assert!(
+            !manifest.contains("deadsync-"),
+            "{name} depends on game code"
+        );
+        for file in production_rust_files(&root.join("crates").join(name).join("src")) {
+            let source = production_source(&file);
+            for token in [
+                "deadsync_",
+                "replaygain::",
+                "REPLAYGAIN_ENABLED",
+                "EFFECT_BUS",
+                "SCREEN_BUS",
+                "ASSIST_TICK_BUS",
+                "custom_sounds_enabled",
+                "OGG_LISTINGS",
+            ] {
+                assert!(
+                    !source.contains(token),
+                    "{} owns policy {token}",
+                    file.display()
+                );
             }
         }
     }
-
-    let stream_runtime = root.join("crates/deadsync-audio-stream/src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&stream_runtime) {
-        for token in ["ENGINE", "crate::engine::audio"] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still references root audio runtime token {token} {count} times",
-                    rel_path(&root, &stream_runtime)
-                ));
-            }
+    for file in rust_files(&root.join("crates/deadlib-audio-decode/src")) {
+        let source = fs::read_to_string(&file).expect("codec source should be readable");
+        for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
+            assert!(
+                !source.contains(token),
+                "{} references {token}",
+                file.display()
+            );
         }
     }
 
-    let engine_folder = root.join("src/engine/audio/folder.rs");
-    if engine_folder.exists() {
-        failures.push(format!(
-            "{} still exists; asset-path audio folder helpers should live in crates/deadsync-assets/src/audio_folder.rs",
-            rel_path(&root, &engine_folder)
-        ));
-    }
-
-    let assets_folder = root.join("crates/deadsync-assets/src/audio_folder.rs");
-    if !assets_folder.exists() {
-        failures.push(format!("{} is missing", rel_path(&root, &assets_folder)));
-    }
-    if let Ok(text) = fs::read_to_string(&assets_folder) {
-        for token in [
-            "fn is_ogg",
-            "fn is_skipped_stem",
-            "std::fs::read_dir",
-            "path.is_file() && is_ogg",
-            "dir.join(format!(\"{index}.ogg\"))",
-        ] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still defines decode folder token {token} {count} times",
-                    rel_path(&root, &assets_folder)
-                ));
-            }
-        }
-    }
-
-    let decode_src = root.join("crates/deadsync-audio-decode/src");
-    if decode_src.exists() {
-        for file in rust_files(&decode_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
-            let rel = rel_path(&root, &file);
-            for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
-                let count = count_token_refs(&text, token);
-                if count != 0 {
-                    failures.push(format!(
-                        "{rel} references forbidden audio-decode token {token} {count} times"
-                    ));
-                }
-            }
-        }
-    }
-
-    let stream_src = root.join("crates/deadsync-audio-stream/src");
-    if stream_src.exists() {
-        for file in rust_files(&stream_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
-            let rel = rel_path(&root, &file);
-            for token in AUDIO_STREAM_FORBIDDEN_TOKENS {
-                let count = count_token_refs(&text, token);
-                if count != 0 {
-                    failures.push(format!(
-                        "{rel} references forbidden audio-stream token {token} {count} times"
-                    ));
-                }
-            }
-        }
-    }
-
+    let manager = fs::read_to_string(root.join("crates/deadlib-audio/src/stream/runtime.rs"))
+        .expect("stream manager should be readable");
+    assert!(manager.contains("let (command_sender, command_receiver) = channel()"));
+    assert!(manager.contains("while let Ok(command) = command_receiver.recv()"));
+    assert!(manager.contains("old.thread.join()"));
+    let shutdown = manager
+        .rsplit_once("// Stop and join the render callback")
+        .unwrap()
+        .1;
     assert!(
-        failures.is_empty(),
-        "audio decode helpers and stream runtime should live in audio crates:\n{}",
-        failures.join("\n")
+        shutdown.find("drop(_session)").expect("output must stop")
+            < shutdown
+                .find("drop(music_runtime)")
+                .expect("decoder must stop")
     );
+
+    let game = root.join("crates/deadsync-audio-stream/src");
+    for file in production_rust_files(&game) {
+        let source = production_source(&file);
+        for token in AUDIO_STREAM_FORBIDDEN_TOKENS.iter().copied().chain([
+            "rubato::",
+            "SolaStretcher",
+            "thread::spawn",
+            "command_receiver.recv()",
+            "fn music_decoder_thread_loop",
+            "fn push_music_block",
+        ]) {
+            assert!(
+                !source.contains(token),
+                "{} owns machinery {token}",
+                file.display()
+            );
+        }
+    }
+    let runtime =
+        fs::read_to_string(game.join("runtime.rs")).expect("game audio should be readable");
+    assert!(runtime.contains("stream::start(output_plan)?"));
+    assert!(runtime.contains("replaygain::get_or_queue_gain_linear"));
+    assert!(runtime.contains("set_music_replaygain_if_matches"));
+    assert!(runtime.contains("stop_assist_tick_bus()"));
+    let mix = fs::read_to_string(game.join("mix.rs")).expect("bus policy should be readable");
+    for bus in ["EFFECT_BUS", "SCREEN_BUS", "ASSIST_TICK_BUS"] {
+        assert!(mix.contains(bus), "missing game bus {bus}");
+    }
+    let folder = fs::read_to_string(root.join("crates/deadsync-assets/src/audio_folder.rs"))
+        .expect("game audio folder selection should be readable");
+    for policy in [
+        "fn is_ogg",
+        "fn is_skipped_stem",
+        "fn pick_indexed_in",
+        "fn pick_random_in",
+    ] {
+        assert!(
+            folder.contains(policy),
+            "missing sound-folder policy {policy}"
+        );
+    }
+    assert!(!folder.contains("audio_decode"));
+    assert!(!folder.contains("MusicPathResult"));
 }
 
 #[test]
@@ -6618,6 +6663,89 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
 }
 
 #[test]
+fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let raw = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+        .expect("physical input contract should be readable");
+    let game = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
+        .expect("game input should be readable");
+    for definition in [
+        "struct RawKeyboardEvent",
+        "enum PadEvent",
+        "struct PadId",
+        "struct PadCode",
+        "enum PadDir",
+    ] {
+        assert!(raw.contains(definition), "platform must own {definition}");
+        assert!(
+            !game.contains(definition),
+            "game still defines {definition}"
+        );
+    }
+    for token in [
+        "deadsync_",
+        "VirtualAction",
+        "SongTimeNs",
+        "GamepadCodeBinding",
+        "parse_pad_dir",
+    ] {
+        assert!(
+            !raw.contains(token),
+            "physical input knows game interpretation: {token}"
+        );
+    }
+    assert!(game.contains("pub enum VirtualAction"));
+    assert!(game.contains("event_music_time_ns: SongTimeNs"));
+    assert!(game.contains("pub fn parse_pad_dir"));
+    let native = root.join("crates/deadlib-input-native");
+    assert!(!root.join("crates/deadsync-input-native").exists());
+    for file in production_rust_files(&native.join("src")) {
+        let source = production_source(&file);
+        for token in [
+            "deadsync_input",
+            "deadsync_config",
+            "PadOrderRawInput",
+            "PadOrderWGI",
+            "serialize_uuid_list",
+            "uuid_from_hex",
+            "from_ini",
+            "ini_lines",
+        ] {
+            assert!(
+                !source.contains(token),
+                "{} contains game input policy {token}",
+                file.display()
+            );
+        }
+    }
+    let manifest = fs::read_to_string(native.join("Cargo.toml")).expect("native manifest");
+    assert!(!manifest.contains("deadsync-"));
+    assert!(manifest.contains("deadlib-platform"));
+    let config = fs::read_to_string(root.join("crates/deadsync-config/src/pad_order.rs"))
+        .expect("pad-order persistence should be readable");
+    for policy in [
+        "PadOrderRawInput",
+        "PadOrderWGI",
+        "serialize_uuid_list",
+        "uuid_from_hex",
+        "set_pad_order",
+    ] {
+        assert!(
+            config.contains(policy),
+            "config must own pad-order policy {policy}"
+        );
+    }
+    assert!(!config.contains("struct PadIndexUpdate"));
+    assert!(!config.contains("load_pad_order_entries"));
+    assert!(!config.contains("struct PadOrderAssignment"));
+    let mapping = fs::read_to_string(root.join("crates/deadsync-input/src/keymap.rs"))
+        .expect("game mapping should be readable");
+    assert!(mapping.contains("deadlib_platform::input::"));
+    let backend = fs::read_to_string(native.join("src/launch.rs")).expect("native launch");
+    assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
+}
+
+#[test]
 fn logical_input_imports_do_not_use_engine_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -6661,7 +6789,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
     let backend_dir = root.join("src/engine/input/backends");
     if backend_dir.exists() {
         failures.push(
-            "src/engine/input/backends still exists; import deadsync_input_native directly"
+            "src/engine/input/backends still exists; import deadlib_input_native directly"
                 .to_string(),
         );
     }
@@ -6753,7 +6881,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
 
     assert!(
         failures.is_empty(),
-        "native input launch should be imported from deadsync_input_native:\n{}",
+        "native input launch should be imported from deadlib_input_native:\n{}",
         failures.join("\n")
     );
 }
@@ -7177,6 +7305,53 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
 }
 
 #[test]
+fn presentation_color_and_mesh_are_theme_neutral() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (dir, forbidden) in [
+        (
+            "crates/deadlib-present",
+            &[
+                "JudgmentColorRole",
+                "JudgmentPalette",
+                "DifficultyColorScheme",
+                "SIMPLY_LOVE_RGBA",
+                "JUDGMENT_RGBA",
+                "ITG_DIFFICULTY_RGBA",
+                "DDR_DIFFICULTY_RGBA",
+                "menu_selected_rgba",
+                "difficulty_display_name",
+                "measure_nps",
+                "DensityHistCache",
+                "deadsync_theme",
+                "deadsync-theme",
+            ][..],
+        ),
+        (
+            "crates/deadsync-config",
+            &[
+                "deadsync_theme_simply_love",
+                "deadsync-theme-simply-love",
+                "SIMPLY_LOVE_JUDGMENT_PALETTE",
+            ][..],
+        ),
+    ] {
+        let crate_dir = root.join(dir);
+        let mut files = rust_files(&crate_dir.join("src"));
+        files.push(crate_dir.join("Cargo.toml"));
+        for file in files {
+            let text = fs::read_to_string(&file).expect("crate source should be readable");
+            for token in forbidden {
+                assert!(
+                    !text.contains(token),
+                    "{} contains theme policy {token}",
+                    rel_path(&root, &file)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn present_model_lives_in_present_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
@@ -7243,8 +7418,8 @@ fn present_model_lives_in_present_crate() {
     if let Ok(text) = fs::read_to_string(&assets_lib) {
         for token in [
             "pub mod present_dsl",
-            "PRESENT_TEXTURE_CONTEXT",
-            "pub use manager::",
+            "METADATA_TEXTURE_CONTEXT",
+            "pub fn load_initial_assets",
             "pub use textures::",
         ] {
             if !text.contains(token) {
@@ -7260,8 +7435,9 @@ fn present_model_lives_in_present_crate() {
 
     let deadlib_assets_lib = root.join("crates/deadlib-assets/src/lib.rs");
     if let Ok(text) = fs::read_to_string(&deadlib_assets_lib)
-        && (!text.contains("ASSET_TEXTURE_CONTEXT")
-            || !text.contains("AssetTextureContext")
+        && (!text.contains("METADATA_TEXTURE_CONTEXT")
+            || !text.contains("MetadataTextureContext")
+            || !text.contains("pub use manager::AssetManager")
             || !text.contains("pub use present_dsl::SpriteBuilder"))
     {
         failures.push(format!(
@@ -7287,7 +7463,7 @@ fn present_model_lives_in_present_crate() {
     let asset_textures = root.join("crates/deadsync-assets/src/textures.rs");
     if let Ok(text) = fs::read_to_string(&asset_textures)
         && (!text.contains("GraphicTextureChoiceCache")
-            || !text.contains("load_initial_textures")
+            || !text.contains("initial_texture_jobs")
             || !text.contains("load_texture_key"))
     {
         failures.push(format!(
@@ -10872,4 +11048,50 @@ fn player_leaderboard_runtime_callbacks_stay_allocation_free() {
             ),
         "player leaderboard runtime must keep its non-capturing callbacks allocation-free"
     );
+}
+
+#[test]
+fn application_layout_is_resolved_above_platform_and_audio() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for file in [
+        "crates/deadlib-platform/src/dirs.rs",
+        "crates/deadsync-audio-stream/src/runtime.rs",
+    ] {
+        let source =
+            fs::read_to_string(root.join(file)).expect("boundary source should be readable");
+        for forbidden in [
+            "app_dirs",
+            "deadsync_config",
+            "deadsync.ini",
+            "portable.txt",
+            "portable.ini",
+            "resolve_asset_path",
+        ] {
+            assert!(
+                !source.contains(forbidden),
+                "{file} retains application layout through {forbidden}"
+            );
+        }
+    }
+    let config =
+        fs::read_to_string(root.join("crates/deadsync-config/src/dirs.rs")).expect("layout source");
+    assert!(
+        !config.contains("OnceLock"),
+        "the full layout must not become another global accessor"
+    );
+    for file in [
+        "crates/deadsync-assets/src/lib.rs",
+        "crates/deadsync-profile/src/app_runtime.rs",
+        "crates/deadsync-simfile/src/app_runtime.rs",
+        "crates/deadsync-online/src/runtime.rs",
+        "crates/deadsync-updater/src/lib.rs",
+    ] {
+        let source = fs::read_to_string(root.join(file)).expect("service source");
+        for forbidden in ["AppDirs", "app_dirs()", "native_dirs("] {
+            assert!(
+                !source.contains(forbidden),
+                "{file} must consume supplied subsystem paths"
+            );
+        }
+    }
 }

@@ -1,8 +1,7 @@
 //! Run with `cargo test -p deadsync-input --release --test input_pipeline_timing -- --ignored --nocapture`.
+use deadlib_platform::input::{KeyCode, PadDir, PadEvent, PadId, RawKeyboardEvent};
 use deadsync_input::keymap::InputState;
-use deadsync_input::{
-    InputBinding, KeyCode, Keymap, PadDir, PadEvent, PadId, RawKeyboardEvent, VirtualAction,
-};
+use deadsync_input::{InputBinding, Keymap, VirtualAction};
 use std::{
     hint::black_box,
     time::{Duration, Instant},

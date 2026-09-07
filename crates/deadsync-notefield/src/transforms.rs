@@ -604,7 +604,7 @@ pub(crate) fn lane_note_transform_cache(
         && params.confusion_offset == 0.0
         && params.dizzy == 0.0;
     let rotation_base_z =
-        itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params);
+        itg_actor_rotation_z(params.rotate_z) + visual_confusion_rotation_deg(song_beat, params);
     let static_rotation_z = if !identity_rotation && params.dizzy == 0.0 && song_beat.is_finite() {
         let rotation = visual_note_rotation_z_full(song_beat, song_beat, params);
         (rotation.is_finite() && rotation != 0.0).then_some(rotation)
@@ -643,10 +643,10 @@ pub(crate) fn visual_arrow_effect_zoom_cached(y: f32, cache: LaneNoteTransformCa
 }
 
 pub(crate) fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
-    song_beat
-        .mul_add(params.confusion, params.confusion_offset)
-        .rem_euclid(std::f32::consts::TAU)
-        * (-180.0 / std::f32::consts::PI)
+    // ArrowEffects uses +offset and -beat*confusion in screen coordinates.
+    // Flat draws rotate in Y-up world coordinates, so negate the native angle.
+    let spin = (song_beat * params.confusion) % std::f32::consts::TAU;
+    (spin - params.confusion_offset) * (180.0 / std::f32::consts::PI)
 }
 
 pub(crate) fn visual_dizzy_rotation_deg(
@@ -690,7 +690,8 @@ pub(crate) fn visual_hold_head_rotation_z_cached(cache: LaneNoteTransformCache) 
 
 #[inline(always)]
 fn visual_note_rotation_z_full(note_beat: f32, song_beat: f32, params: VisualEffectParams) -> f32 {
-    itg_actor_rotation_z(params.rotate_z) - visual_confusion_rotation_deg(song_beat, params)
+    itg_actor_rotation_z(params.rotate_z)
+        + visual_confusion_rotation_deg(song_beat, params)
         + visual_dizzy_rotation_deg(note_beat, song_beat, params)
 }
 

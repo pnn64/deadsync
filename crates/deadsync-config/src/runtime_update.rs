@@ -15,12 +15,12 @@ use crate::theme::{
     SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio_core::AudioOutputMode;
+#[cfg(target_os = "windows")]
+use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::logging;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 #[cfg(target_os = "linux")]
 use deadsync_audio_stream::LinuxAudioBackend;
-#[cfg(target_os = "windows")]
-use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_theme::color::DifficultyColorScheme;
 use log::warn;

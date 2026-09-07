@@ -25,6 +25,8 @@ layout(location = 2) flat out float v_texture_mask;
 void main() {
     mat4 model = mat4(i_model_col0, i_model_col1, i_model_col2, i_model_col3);
     gl_Position = pc.proj * model * vec4(a_pos, 1.0);
+    // Engine cameras use [-w, w] depth; Vulkan clips to [0, w].
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
     v_uv = a_uv * i_uv_scale + i_uv_offset
          + i_uv_tex_shift * (a_tex_matrix_scale - vec2(1.0, 1.0));
     v_color = a_color * i_tint;

@@ -1,8 +1,8 @@
-use deadsync_input::keymap::InputState;
-use deadsync_input::{
-    GamepadCodeBinding, InputBinding, KeyCode, Keymap, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent,
-    PadId, RawKeyboardEvent, VirtualAction,
+use deadlib_platform::input::{
+    KeyCode, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent,
 };
+use deadsync_input::keymap::InputState;
+use deadsync_input::{GamepadCodeBinding, InputBinding, Keymap, VirtualAction};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

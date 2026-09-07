@@ -85,7 +85,7 @@ fn write_worker_loop(rx: mpsc::Receiver<WriteReq>, path: PathBuf) {
 }
 
 fn write_file(path: &Path, content: &str) {
-    if let Err(e) = std::fs::write(path, content) {
+    if let Err(e) = crate::atomic_write::write_atomic(path, content.as_bytes()) {
         warn!("Failed to save '{}': {e}", path.display());
     }
 }

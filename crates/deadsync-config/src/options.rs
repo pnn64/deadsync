@@ -52,7 +52,7 @@ use crate::theme::{
 };
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
-use deadsync_input_native::WindowsPadBackend;
+use deadlib_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };

@@ -13,8 +13,7 @@ use deadsync_theme_simply_love::{i18n, visual_styles};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
-fn startup_lines(cfg: &config::Config) -> Vec<String> {
-    let dirs = deadlib_platform::dirs::app_dirs();
+fn startup_lines(cfg: &config::Config, dirs: &deadsync_config::dirs::AppDirs) -> Vec<String> {
     vec![
         format!("Portable mode: {}", dirs.portable),
         format!("Data directory: {}", dirs.data_dir.display()),
@@ -150,15 +149,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )
     .map_err(std::io::Error::other)?;
-    if let Some(case) = live_case.as_ref() {
-        deadlib_platform::dirs::install_data_dir(case.data_dir().to_path_buf())
-            .map_err(std::io::Error::other)?;
-    }
+    let dirs = deadsync_config::dirs::AppDirs::resolve(
+        live_case.as_ref().map(|case| case.data_dir().to_path_buf()),
+    )?;
     deadlib_platform::runtime_dir::set_current_dir_to_exe_dir()?;
     deadlib_platform::host_time::init();
-
-    // Resolve and create platform-native data/cache directories.
-    deadlib_platform::dirs::ensure_dirs_exist();
+    dirs.ensure_dirs_exist();
+    app::init_paths(&dirs).map_err(std::io::Error::other)?;
 
     // Reconcile the GUI-subsystem release build with terminal/opt-in output
     // before the logger starts, so the first log lines land in the console when
@@ -166,10 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     deadlib_platform::console::init(resolve_show_console());
 
     // Install logger immediately, then set runtime max level from config after loading it.
-    logging::init(
-        config::bootstrap_log_to_file(),
-        deadlib_platform::dirs::app_dirs().log_path(),
-    );
+    logging::init(config::bootstrap_log_to_file(), dirs.log_path());
     install_panic_hook();
     // Startup default when config is missing or malformed.
     log::set_max_level(log::LevelFilter::Warn);
@@ -199,7 +193,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             build_hash: option_env!("DEADSYNC_BUILD_HASH").unwrap_or("unknown"),
             build_stamp: option_env!("DEADSYNC_BUILD_STAMP").unwrap_or("unknown"),
         },
-        &startup_lines(&cfg),
+        &startup_lines(&cfg, &dirs),
     );
 
     if cli.restart {
@@ -244,54 +238,57 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
     profile::load();
-    let (audio, music_clock) =
-        match deadsync_audio_stream::init(deadsync_audio_stream::InitConfig {
+    let (audio, music_clock) = match deadsync_audio_stream::init(
+        deadsync_audio_stream::InitConfig {
             output_device_index: cfg.audio_output_device_index,
             output_mode: cfg.audio_output_mode,
             #[cfg(target_os = "linux")]
             linux_backend: cfg.linux_audio_backend,
             sample_rate_hz: cfg.audio_sample_rate_hz,
             buffer_size_frames: cfg.audio_buffer_size_frames,
-        }) {
-            Ok((audio, clock)) => {
-                logging::write_report_block(
-                    "Startup audio devices",
-                    &audio_device_lines(audio.startup_output_devices()),
+        },
+        dirs.replaygain_cache_file(),
+        dirs.replaygain_cache_dir(),
+    ) {
+        Ok((audio, clock)) => {
+            logging::write_report_block(
+                "Startup audio devices",
+                &audio_device_lines(audio.startup_output_devices()),
+            );
+
+            // Pre-warm ReplayGain for the bundled menu/background music so the
+            // first time one plays (fresh install, or after the cache was cleared)
+            // it doesn't audibly adjust loudness a few seconds in. Background
+            // priority keeps the foreground song preview ahead of this; already
+            // cached tracks are a cheap disk hit, so this is a no-op once warmed.
+            // Gated on the audio runtime initializing, since that is what sets up
+            // the ReplayGain subsystem the prewarm workers depend on.
+            if cfg.enable_replaygain && live_case.is_none() {
+                deadsync_audio_replaygain::prewarm_paths(
+                    visual_styles::bundled_music_asset_paths()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .map(deadsync_assets::resolve_asset_path),
+                    deadsync_audio_replaygain::Priority::Background,
                 );
-
-                // Pre-warm ReplayGain for the bundled menu/background music so the
-                // first time one plays (fresh install, or after the cache was cleared)
-                // it doesn't audibly adjust loudness a few seconds in. Background
-                // priority keeps the foreground song preview ahead of this; already
-                // cached tracks are a cheap disk hit, so this is a no-op once warmed.
-                // Gated on the audio runtime initializing, since that is what sets up
-                // the ReplayGain subsystem the prewarm workers depend on.
-                if cfg.enable_replaygain && live_case.is_none() {
-                    deadsync_audio_replaygain::prewarm_paths(
-                        visual_styles::bundled_music_asset_paths()
-                            .collect::<std::collections::BTreeSet<_>>()
-                            .into_iter()
-                            .map(deadsync_assets::resolve_asset_path),
-                        deadsync_audio_replaygain::Priority::Background,
-                    );
-                }
-                (audio, clock)
             }
-            Err(e) => {
-                if live_case.is_some() {
-                    return Err(std::io::Error::other(format!(
-                        "performance case requires a live audio output: {e}"
-                    ))
-                    .into());
-                }
-                // The game can run without audio; log the error and continue.
-                log::error!("Failed to initialize audio runtime: {e}");
-                (
-                    deadsync_audio_stream::AudioControl::without_audio(),
-                    deadsync_audio_stream::MusicClock::without_audio(),
-                )
+            (audio, clock)
+        }
+        Err(e) => {
+            if live_case.is_some() {
+                return Err(std::io::Error::other(format!(
+                    "performance case requires a live audio output: {e}"
+                ))
+                .into());
             }
-        };
+            // The game can run without audio; log the error and continue.
+            log::error!("Failed to initialize audio runtime: {e}");
+            (
+                deadsync_audio_stream::AudioControl::without_audio(),
+                deadsync_audio_stream::MusicClock::without_audio(),
+            )
+        }
+    };
 
-    app::run(audio, music_clock, live_case)
+    app::run(dirs, audio, music_clock, live_case)
 }

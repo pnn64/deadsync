@@ -56,6 +56,7 @@ impl App {
             .as_ref()
             .map(|info| (info.title.as_str(), info.meter));
         let result = capture_pending_screenshot(
+            &self.screenshots_dir,
             &mut self.state.shell.screenshot,
             self.backend.as_mut(),
             &mut self.asset_manager,

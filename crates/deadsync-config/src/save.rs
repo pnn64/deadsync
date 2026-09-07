@@ -28,9 +28,8 @@ use crate::options::{
     push_system_mine_hit_sound_option_lines, push_system_online_option_lines,
     push_system_translation_option_lines,
 };
-use crate::runtime_state::{
-    RuntimeStateIdTokens, push_pad_order_option_lines, push_runtime_state_id_option_lines,
-};
+use crate::pad_order::push_pad_order_option_lines;
+use crate::runtime_state::{RuntimeStateIdTokens, push_runtime_state_id_option_lines};
 use crate::theme::{
     MachineFlowOptions, ThemePresentationOptions, ThemeShortcutTokens, push_theme_option_lines,
 };
@@ -292,7 +291,7 @@ pub fn build_saved_app_config_file(
                     default_profile_p1,
                     default_profile_p2,
                 ),
-                pad_order_lines: deadsync_input_native::pad_order_ini_lines(),
+                pad_order_lines: crate::pad_order::pad_order_ini_lines(),
             },
             keymap,
             theme: ThemeSection {
@@ -348,7 +347,7 @@ pub fn build_default_app_config_file() -> String {
                 gameplay_bg_color: gameplay_bg_color.as_str(),
                 default_noteskin: crate::machine::DEFAULT_MACHINE_NOTESKIN,
                 runtime_state_ids: runtime_state_ids("", "", "", ""),
-                pad_order_lines: deadsync_input_native::DEFAULT_PAD_ORDER_INI_LINES,
+                pad_order_lines: crate::pad_order::DEFAULT_PAD_ORDER_INI_LINES,
             },
             keymap: (),
             theme: ThemeSection {
@@ -678,6 +677,44 @@ const fn theme_shortcut_tokens<'a>(
 mod tests {
     use super::*;
     use crate::ini::SimpleIni;
+
+    #[test]
+    fn max_fps_off_round_trips() {
+        for &(video_renderer, _) in deadlib_render_core::BACKEND_TYPE_CHOICES {
+            for max_fps in [0, 5, 144] {
+                let mut cfg = Config {
+                    video_renderer,
+                    vsync: false,
+                    max_fps,
+                    ..Config::default()
+                };
+                crate::app_update::set_max_fps(&mut cfg, 0);
+                let content = build_saved_app_config_file(
+                    &cfg,
+                    &Keymap::default(),
+                    "",
+                    &[],
+                    &[],
+                    "",
+                    "",
+                    "",
+                    "",
+                );
+                let mut conf = SimpleIni::new();
+                conf.load_str(&content);
+                assert_eq!(conf.get("Options", "MaxFps"), Some("0"));
+
+                let loaded = crate::load::load_app_config(&conf, Config::default());
+                assert_eq!(loaded.video_renderer, video_renderer);
+                assert!(!loaded.vsync);
+                assert_eq!(loaded.max_fps, 0);
+                assert_eq!(
+                    crate::frame_pacing::frame_interval_for_max_fps(loaded.max_fps),
+                    None
+                );
+            }
+        }
+    }
 
     #[test]
     fn saved_content_round_trips_smx_underglow_options() {

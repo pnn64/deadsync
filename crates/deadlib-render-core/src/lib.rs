@@ -10,6 +10,8 @@ use std::{collections::HashMap, sync::Arc};
 
 // --- Public Data Contract ---
 pub type TextureHandle = u64;
+/// Engine cameras output OpenGL clip coordinates (-w <= z <= w). Backends
+/// whose clip depth is 0 <= z <= w must remap z to (z + w) / 2 before clipping.
 pub type ProjectionMatrix = Matrix4;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 /// Render-target handles occupy a namespace that can never overlap asset-store

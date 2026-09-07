@@ -61,14 +61,6 @@ pub fn parse_font_with_asset_context(
     font::parse_with_texture_context(&ini_path.to_string_lossy(), &context)
 }
 
-pub fn parse_font_with_asset_dirs(
-    ini_path: &Path,
-    data_dir: &Path,
-    exe_dir: &Path,
-) -> Result<FontLoadData, FontParseError> {
-    parse_font_with_asset_context(ini_path, font_texture_asset_roots(data_dir, exe_dir))
-}
-
 pub fn parse_font_asset_specs(
     specs: impl IntoIterator<Item = FontAssetSpec>,
     asset_roots: &[PathBuf],
@@ -151,11 +143,6 @@ pub fn prepare_required_font_textures(
     )
 }
 
-#[must_use]
-pub fn font_texture_asset_roots(data_dir: &Path, exe_dir: &Path) -> Vec<PathBuf> {
-    vec![data_dir.join("assets"), exe_dir.join("assets")]
-}
-
 pub const fn set_font_fallback(font: &mut Font, fallback_font_name: Option<&'static str>) {
     if let Some(fallback) = fallback_font_name {
         font.fallback_font_name = Some(fallback);
@@ -165,16 +152,6 @@ pub const fn set_font_fallback(font: &mut Font, fallback_font_name: Option<&'sta
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn font_texture_asset_roots_include_data_and_exe_assets() {
-        let roots = font_texture_asset_roots(Path::new("/data"), Path::new("/exe"));
-
-        assert_eq!(
-            roots,
-            [PathBuf::from("/data/assets"), PathBuf::from("/exe/assets")]
-        );
-    }
 
     #[test]
     fn font_texture_key_strips_known_asset_roots() {

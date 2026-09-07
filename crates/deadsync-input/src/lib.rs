@@ -1,9 +1,11 @@
+//! Bindings, action mapping, debouncing, and song-time input interpretation.
+
 use std::sync::OnceLock;
 use std::time::Instant;
 
+use deadlib_platform::input::PadDir;
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
-pub use winit::keyboard::KeyCode;
 
 pub mod bindings;
 pub mod debounce;
@@ -28,12 +30,6 @@ pub use keymap::{
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;
 pub const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
-/// Number of native `PadId` values supported without growing hot-path state.
-///
-/// IDs `0..64` cover the 64 persisted device positions plus the shared
-/// overflow position assigned by the native backends.
-pub const PAD_ID_COUNT_CAP: usize = 65;
-
 pub type ButtonLabeler = fn(usize, u32) -> Option<String>;
 static BUTTON_LABELER: OnceLock<ButtonLabeler> = OnceLock::new();
 
@@ -49,16 +45,6 @@ pub fn raw_button_label(device: usize, code: u32) -> Option<String> {
     BUTTON_LABELER
         .get()
         .and_then(|labeler| labeler(device, code))
-}
-
-#[cfg_attr(not(windows), allow(dead_code))]
-#[derive(Clone, Copy, Debug)]
-pub struct RawKeyboardEvent {
-    pub code: KeyCode,
-    pub pressed: bool,
-    pub repeat: bool,
-    pub timestamp: Instant,
-    pub host_nanos: u64,
 }
 
 #[inline(always)]
@@ -91,48 +77,6 @@ pub fn parse_input_debounce_seconds(raw: &str) -> Option<f32> {
     })
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PadId(pub u32);
-
-impl From<PadId> for usize {
-    #[inline(always)]
-    fn from(value: PadId) -> Self {
-        value.0 as Self
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct PadCode(pub u32);
-
-impl PadCode {
-    #[inline(always)]
-    #[must_use]
-    pub const fn into_u32(self) -> u32 {
-        self.0
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PadDir {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-impl PadDir {
-    #[inline(always)]
-    #[must_use]
-    pub const fn ix(self) -> usize {
-        match self {
-            Self::Up => 0,
-            Self::Down => 1,
-            Self::Left => 2,
-            Self::Right => 3,
-        }
-    }
-}
-
 #[inline(always)]
 #[must_use]
 pub fn parse_pad_dir(name: &str) -> Option<PadDir> {
@@ -143,37 +87,6 @@ pub fn parse_pad_dir(name: &str) -> Option<PadDir> {
         "Right" => Some(PadDir::Right),
         _ => None,
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PadEvent {
-    Dir {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        dir: PadDir,
-        pressed: bool,
-    },
-    /// Raw low-level button event with platform-specific code and device UUID.
-    RawButton {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        code: PadCode,
-        uuid: [u8; 16],
-        value: f32,
-        pressed: bool,
-    },
-    /// Raw low-level axis event with platform-specific code and device UUID.
-    #[cfg_attr(windows, allow(dead_code))]
-    RawAxis {
-        id: PadId,
-        timestamp: Instant,
-        host_nanos: u64,
-        code: PadCode,
-        uuid: [u8; 16],
-        value: f32,
-    },
 }
 
 /// Low-level gamepad binding to a platform-specific element code.
@@ -726,13 +639,13 @@ impl InputEvent {
 #[cfg(test)]
 mod tests {
     use super::{
-        ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
-        VirtualAction, action_from_ini_key, action_to_ini_key, clamp_input_debounce_seconds,
-        gamepad_code_binding_to_token, lane_from_action, lane_from_column, normalized_actions,
-        pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
-        parse_pad_dir, raw_button_label, secondary_menu_mask, set_button_labeler,
+        ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, VirtualAction, action_from_ini_key,
+        action_to_ini_key, clamp_input_debounce_seconds, gamepad_code_binding_to_token,
+        lane_from_action, lane_from_column, normalized_actions, pad_dir_from_action,
+        parse_gamepad_code_binding, parse_input_debounce_seconds, parse_pad_dir, raw_button_label,
+        secondary_menu_mask, set_button_labeler,
     };
-    use std::time::Instant;
+    use deadlib_platform::input::PadDir;
 
     fn normalized(mask: u32, pressed: bool) -> Vec<(VirtualAction, bool)> {
         normalized_actions(mask, pressed)
@@ -757,14 +670,6 @@ mod tests {
     }
 
     #[test]
-    fn pad_dir_indices_are_stable() {
-        assert_eq!(PadDir::Up.ix(), 0);
-        assert_eq!(PadDir::Down.ix(), 1);
-        assert_eq!(PadDir::Left.ix(), 2);
-        assert_eq!(PadDir::Right.ix(), 3);
-    }
-
-    #[test]
     fn pad_dir_names_match_config_tokens() {
         assert_eq!(parse_pad_dir("Up"), Some(PadDir::Up));
         assert_eq!(parse_pad_dir("Down"), Some(PadDir::Down));
@@ -772,12 +677,6 @@ mod tests {
         assert_eq!(parse_pad_dir("Right"), Some(PadDir::Right));
         assert_eq!(parse_pad_dir("up"), None);
         assert_eq!(parse_pad_dir(""), None);
-    }
-
-    #[test]
-    fn pad_physical_ids_are_plain_numeric_wrappers() {
-        assert_eq!(usize::from(PadId(7)), 7);
-        assert_eq!(PadCode(0xDEAD_BEEF).into_u32(), 0xDEAD_BEEF);
     }
 
     #[test]
@@ -800,39 +699,6 @@ mod tests {
         assert_eq!(parse_input_debounce_seconds("ms"), None);
         assert_eq!(parse_input_debounce_seconds("100milliseconds"), None);
         assert_eq!(parse_input_debounce_seconds("fast"), None);
-    }
-
-    #[test]
-    fn pad_event_carries_physical_button_data() {
-        let timestamp = Instant::now();
-        let event = PadEvent::RawButton {
-            id: PadId(2),
-            timestamp,
-            host_nanos: 99,
-            code: PadCode(12),
-            uuid: [7; 16],
-            value: 1.0,
-            pressed: true,
-        };
-        let PadEvent::RawButton {
-            id,
-            timestamp: event_time,
-            host_nanos,
-            code,
-            uuid,
-            value,
-            pressed,
-        } = event
-        else {
-            panic!("expected raw button event");
-        };
-        assert_eq!(id, PadId(2));
-        assert_eq!(event_time, timestamp);
-        assert_eq!(host_nanos, 99);
-        assert_eq!(code.into_u32(), 12);
-        assert_eq!(uuid, [7; 16]);
-        assert_eq!(value, 1.0);
-        assert!(pressed);
     }
 
     #[test]

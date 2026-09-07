@@ -14,8 +14,8 @@ use rustmaniax_sdk::{
 };
 pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
-use deadsync_input::{PadCode, PadEvent, PadId};
-use deadsync_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
+use deadlib_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
+use deadlib_platform::input::{PadCode, PadEvent, PadId};
 
 pub mod gameplay_driver;
 pub mod gifs;

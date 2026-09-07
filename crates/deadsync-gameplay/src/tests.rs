@@ -884,6 +884,7 @@ mod tests {
         to: f32,
     ) -> SongLuaEaseMaskWindow {
         SongLuaEaseMaskWindow {
+            approach_speed: None,
             start_second,
             end_second,
             sustain_end_second,
@@ -1542,12 +1543,12 @@ mod tests {
     }
 
     #[test]
-    fn mini_value_uses_fallback_big_adjustment_and_clamps() {
+    fn mini_value_preserves_authored_range() {
         assert_near(mini_value_for_percent(50.0, 0.0, false), 0.5);
         assert_near(mini_value_for_percent(f32::NAN, 25.0, false), 0.25);
         assert_near(mini_value_for_percent(50.0, 0.0, true), -0.5);
-        assert_near(mini_value_for_percent(-250.0, 0.0, false), -1.0);
-        assert_near(mini_value_for_percent(250.0, 0.0, false), 1.5);
+        assert_near(mini_value_for_percent(-250.0, 0.0, false), -2.5);
+        assert_near(mini_value_for_percent(250.0, 0.0, false), 2.5);
     }
 
     #[test]
@@ -1567,14 +1568,12 @@ mod tests {
 
     #[test]
     fn effective_mini_percent_uses_active_fallback_and_clear_all() {
-        assert_eq!(MINI_PERCENT_MIN, -100.0);
-        assert_eq!(MINI_PERCENT_MAX, 150.0);
         assert_near(effective_mini_percent(Some(25.0), 50.0, false), 25.0);
         assert_near(effective_mini_percent(Some(f32::NAN), 50.0, false), 50.0);
         assert_near(effective_mini_percent(None, 50.0, true), 0.0);
         assert_near(effective_mini_percent(None, 50.0, false), 50.0);
-        assert_near(effective_mini_percent(Some(250.0), 0.0, false), 150.0);
-        assert_near(effective_mini_percent(Some(-250.0), 0.0, false), -100.0);
+        assert_near(effective_mini_percent(Some(250.0), 0.0, false), 250.0);
+        assert_near(effective_mini_percent(Some(-250.0), 0.0, false), -250.0);
     }
 
     #[test]
@@ -1826,7 +1825,7 @@ mod tests {
     }
 
     #[test]
-    fn attack_mini_approach_uses_base_and_clamps() {
+    fn attack_mini_preserves_authored_range() {
         let mut current = None;
         approach_attack_mini_percent_to_target(&mut current, Some(100.0), 0.0, Some(1.0), 0.5);
         assert_near(current.unwrap(), 50.0);
@@ -1843,11 +1842,11 @@ mod tests {
 
         let mut high = None;
         approach_attack_mini_percent_to_target(&mut high, Some(250.0), 0.0, None, 1.0);
-        assert_near(high.unwrap(), 150.0);
+        assert_near(high.unwrap(), 250.0);
 
         let mut low = None;
         approach_attack_mini_percent_to_target(&mut low, Some(-250.0), 0.0, None, 1.0);
-        assert_near(low.unwrap(), -100.0);
+        assert_near(low.unwrap(), -250.0);
     }
 
     #[test]
@@ -6452,6 +6451,41 @@ mod tests {
     }
 
     #[test]
+    fn spooky_negative_scroll_mods_preserve_native_motion() {
+        for (options, expected) in [
+            (
+                ScrollReverseOptions {
+                    cross: -0.05,
+                    ..Default::default()
+                },
+                [0.0, -0.05, -0.05, 0.0],
+            ),
+            (
+                ScrollReverseOptions {
+                    alternate: -0.05,
+                    ..Default::default()
+                },
+                [0.0, -0.05, 0.0, -0.05],
+            ),
+            (
+                ScrollReverseOptions {
+                    split: -0.05,
+                    ..Default::default()
+                },
+                [0.0, 0.0, -0.05, -0.05],
+            ),
+        ] {
+            for (col, reverse) in expected.into_iter().enumerate() {
+                assert_near(scroll_reverse_percent_for_column(options, col, 4), reverse);
+                assert_near(
+                    scroll_reverse_scale_for_column(options, col, 4),
+                    1.0 - 2.0 * reverse,
+                );
+            }
+        }
+    }
+
+    #[test]
     fn scroll_reverse_scale_maps_percent_to_direction() {
         let reverse = ScrollReverseOptions {
             reverse: 1.0,
@@ -7296,19 +7330,6 @@ mod tests {
         assert_eq!(window.column, 3);
         assert_near(window.start_beat, 12.5);
         assert_near(window.end_beat, 24.0);
-    }
-
-    #[test]
-    fn song_lua_field_note_hide_maps_global_columns() {
-        let windows = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
-            column: 2,
-            start_beat: 40.0,
-            end_beat: 44.0,
-        }]);
-
-        assert!(song_lua_field_note_hidden(&windows, 4, 6, 42.0));
-        assert!(!song_lua_field_note_hidden(&windows, 4, 5, 42.0));
-        assert!(song_lua_field_note_hidden(&windows, 0, 2, 42.0));
     }
 
     #[test]
@@ -15332,7 +15353,6 @@ mod tests {
         assert_eq!(finalized.outcome.final_grade, JudgeGrade::Great);
         assert_eq!(flash_judgment.grade, JudgeGrade::Great);
         assert_eq!(plan.judgment.grade, JudgeGrade::Great);
-        assert_eq!(plan.receptor_window, Some("W3"));
         assert_eq!(&plan.note_indices[..plan.note_count], &[0, 1]);
         assert_eq!(&indices[..len], &[0, 1]);
     }

@@ -3103,11 +3103,13 @@ impl Serialize for ArrowCloudLeaderboard {
 // Lua charts stay blocked from online submit unless their effects have been
 // verified closely enough to match ITGmania for scoring purposes.
 const LUA_SCORE_SUBMIT_ALLOWLIST: &[&str] = &[
-    // "d5bd4dd7224f68ff", // Spooky (SM)
-    // "c9e45c5e534f058d", // media offline (SM)
-    // "596b42ed8317d9b8", // Godspeed (SX)
-    // "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
-    // "a147dd828cd08fc7", // Riddle (DX)
+    "d5bd4dd7224f68ff", // Spooky (SM)
+    "c9e45c5e534f058d", // media offline (SM)
+    "596b42ed8317d9b8", // Godspeed (SX)
+    "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
+    "a147dd828cd08fc7", // Riddle (DX)
+    "0ea0735edbc2405f", // flip69 (DX)
+    "e443862891fe809a", // KENPO SAITO (DX)
     // "f95bc209c6f2cbfe", // Levels (SM)
     // "b50d0c3916e75b84", // Levels (SH)
     // "f41a24722a37758f", // Levels (SX)
@@ -9564,7 +9566,18 @@ mod tests {
     fn lua_submit_allowlist_requires_known_hash() {
         assert!(lua_chart_submit_allowed("3a6b2cedcc3fdca3"));
         assert!(lua_chart_submit_allowed(" 3A6B2CEDCC3FDCA3 "));
-        assert!(!lua_chart_submit_allowed("d5bd4dd7224f68ff"));
+        for hash in [
+            "d5bd4dd7224f68ff", // Spooky
+            "c9e45c5e534f058d", // media offline
+            "596b42ed8317d9b8", // Godspeed
+            "3926ec3e5f1aaede", // CO5M1C R4ILR0AD
+            "a147dd828cd08fc7", // Riddle
+            "0ea0735edbc2405f", // flip69
+            "e443862891fe809a", // KENPO SAITO
+        ] {
+            assert!(lua_submit_allowed(true, hash), "{hash}");
+        }
+        assert!(!lua_chart_submit_allowed("f95bc209c6f2cbfe")); // Levels (SM)
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
         assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));

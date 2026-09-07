@@ -2,7 +2,7 @@ use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
-use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use log::debug;
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -896,6 +896,19 @@ impl TimingData {
         timing_ns_to_seconds(self.get_time_for_beat_ns(target_beat))
     }
 
+    /// Converts continuous Lua/animation beats without snapping the marker to a
+    /// note row. Timing segments retain their authored row semantics.
+    #[must_use]
+    pub fn get_time_for_beat_exact(&self, beat: f32) -> f32 {
+        if !beat.is_finite() {
+            return beat;
+        }
+        let mut start = GetBeatStarts::default();
+        start.last_time_ns = self.beat_start_time_ns();
+        let time = self.get_elapsed_time_internal_mut(&mut start, beat, usize::MAX, true);
+        timing_ns_to_seconds(time.saturating_sub(self.global_offset_ns))
+    }
+
     #[must_use]
     pub fn get_time_for_beat_ns(&self, target_beat: f32) -> i64 {
         self.get_time_for_beat_internal_ns(target_beat)
@@ -947,8 +960,12 @@ impl TimingData {
         {
             cache.reset(self);
         }
-        let time_ns =
-            self.get_elapsed_time_internal_mut(&mut cache.start, target_beat, u32::MAX as usize);
+        let time_ns = self.get_elapsed_time_internal_mut(
+            &mut cache.start,
+            target_beat,
+            u32::MAX as usize,
+            false,
+        );
         cache.last_row = target_row;
         time_ns
     }
@@ -1074,7 +1091,7 @@ impl TimingData {
 
     fn get_elapsed_time_internal(&self, starts: &GetBeatStarts, beat: f32) -> TimingNs {
         let mut start = *starts;
-        self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize)
+        self.get_elapsed_time_internal_mut(&mut start, beat, u32::MAX as usize, false)
     }
 
     fn get_beat_internal(
@@ -1192,6 +1209,7 @@ impl TimingData {
         start: &mut GetBeatStarts,
         beat: f32,
         max_segment: usize,
+        continuous: bool,
     ) -> TimingNs {
         let bpms = &self.beat_to_time;
         let warps = &self.warps;
@@ -1201,6 +1219,11 @@ impl TimingData {
         let mut curr_segment = start.bpm_idx + start.warp_idx + start.stop_idx + start.delay_idx;
         let mut bps = self.get_bpm_for_beat(note_row_to_beat(start.last_row)) / 60.0;
         let find_marker = beat < f32::MAX;
+        let marker_beat = if continuous && beat.is_finite() {
+            (beat * ROWS_PER_BEAT as f32).ceil() / ROWS_PER_BEAT as f32
+        } else {
+            beat
+        };
 
         while curr_segment < max_segment {
             let mut event_row = i32::MAX;
@@ -1209,7 +1232,7 @@ impl TimingData {
                 &mut event_row,
                 &mut event_type,
                 *start,
-                beat,
+                marker_beat,
                 find_marker,
                 bpms,
                 warps,
@@ -1218,6 +1241,17 @@ impl TimingData {
             );
             if event_type == TimingEvent::NotFound {
                 break;
+            }
+            // A fractional marker precedes every segment at the next row.
+            // Earlier stops/delays/warps have already been processed, avoiding
+            // the discontinuity smearing caused by interpolating row times.
+            if continuous && beat < note_row_to_beat(event_row) {
+                let delta = if start.is_warping {
+                    0
+                } else {
+                    timing_ns_from_seconds((beat - note_row_to_beat(start.last_row)) / bps)
+                };
+                return start.last_time_ns.saturating_add(delta);
             }
             let time_to_next_event_ns = if start.is_warping {
                 0
@@ -2825,6 +2859,53 @@ mod tests {
             ((expected_window / HIST_BIN_MS).round() as usize * 2) + 1
         );
         assert!(hist.smoothed.iter().all(|(_, value)| value.abs() < 0.0001));
+    }
+
+    #[test]
+    fn continuous_beats_preserve_timing_discontinuities() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (4.0, 60.0)],
+                stops: vec![StopSegment {
+                    beat: 4.0,
+                    duration: 0.25,
+                }],
+                delays: vec![DelaySegment {
+                    beat: 6.0,
+                    duration: 0.125,
+                }],
+                warps: vec![WarpSegment {
+                    beat: 8.0,
+                    length: 1.0,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        for (beat, expected) in [
+            (-0.01, -0.005),
+            (3.999, 1.9995),
+            (4.0, 2.0),
+            (4.001, 2.251),
+            (5.999, 4.249),
+            (6.0, 4.375),
+            (6.001, 4.376),
+            (7.999, 6.374),
+            (8.0, 6.375),
+            (8.5, 6.375),
+            (9.0, 6.375),
+            (9.001, 6.376),
+        ] {
+            let actual = timing.get_time_for_beat_exact(beat);
+            assert!(
+                (actual - expected).abs() < 0.000_002,
+                "beat {beat}: {actual} != {expected}"
+            );
+        }
+        assert_eq!(timing.get_time_for_beat(3.999), 2.0);
+        assert!(timing.get_time_for_beat_exact(f32::NAN).is_nan());
     }
 
     #[test]

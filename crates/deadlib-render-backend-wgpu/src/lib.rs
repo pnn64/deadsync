@@ -3571,8 +3571,9 @@ const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 #[cfg(test)]
 mod tests {
     use super::{
-        DrawBindingCache, InstanceBinding, Matrix4, PresentCompletion, PresentCompletionCell,
-        SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, clamp_vertex_count,
+        DrawBindingCache, InstanceBinding, MESH_SHADER_IMM, MESH_SHADER_UBO, Matrix4,
+        PresentCompletion, PresentCompletionCell, SHADER_IMM, SHADER_UBO, TMESH_SHADER_IMM,
+        TMESH_SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO, clamp_vertex_count,
         stage_offscreen_projection_upload, stage_projection_upload,
     };
     use std::sync::{
@@ -3583,15 +3584,24 @@ mod tests {
     const STRIDE: usize = 256;
 
     #[test]
-    fn sprite_shaders_validate() {
-        for source in [SHADER_IMM, SHADER_UBO, YUV_SHADER_IMM, YUV_SHADER_UBO] {
-            let module = naga::front::wgsl::parse_str(source).expect("sprite shader parses");
+    fn shaders_validate() {
+        for source in [
+            SHADER_IMM,
+            SHADER_UBO,
+            YUV_SHADER_IMM,
+            YUV_SHADER_UBO,
+            MESH_SHADER_IMM,
+            MESH_SHADER_UBO,
+            TMESH_SHADER_IMM,
+            TMESH_SHADER_UBO,
+        ] {
+            let module = naga::front::wgsl::parse_str(source).expect("shader parses");
             naga::valid::Validator::new(
                 naga::valid::ValidationFlags::all(),
                 naga::valid::Capabilities::all(),
             )
             .validate(&module)
-            .expect("sprite shader validates");
+            .expect("shader validates");
         }
     }
 
