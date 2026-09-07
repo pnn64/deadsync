@@ -1,6 +1,6 @@
 pub mod cache;
 
-use deadsync_audio_decode as decode;
+use deadlib_audio_decode as decode;
 use ebur128::{EbuR128, Mode};
 use std::path::Path;
 

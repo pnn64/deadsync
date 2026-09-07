@@ -1,9 +1,9 @@
+use deadlib_audio::stream::{Cut, MusicDecodeContext, OutputFormat, spawn_music_decoder_thread};
 use deadlib_audio_core::{
     CallbackClockSource, CallbackInfo, MixControls, MusicMapSeg, OutputBufferMut, RenderState,
     activate_music_track, music_map_generation, music_transport, reset_music_stream_clock_state,
     reset_music_target_gain,
 };
-use deadsync_audio_stream::{Cut, MusicDecodeContext, OutputFormat, spawn_music_decoder_thread};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -168,10 +168,10 @@ fn stretched_worker_preserves_cuts_fades_channels_and_timing() {
 }
 
 fn live_and_looped_playback() {
+    use deadlib_audio::stream::{MusicStreamRuntime, StreamCommand};
     use deadlib_audio_core::{
         bump_music_map_generation, music_total_frames, music_track_start_frame,
     };
-    use deadsync_audio_stream::{MusicStreamRuntime, StreamCommand};
     use std::time::{Duration, Instant};
 
     // EOF is inside SOLA's first window; each iteration must retain its tail.
@@ -284,5 +284,20 @@ fn live_and_looped_playback() {
             );
         }
     }
+    // The caller invalidates queued audio before the asynchronous stop handoff.
+    reset_music_stream_clock_state();
+    bump_music_map_generation();
+    runtime.handle(StreamCommand::StopMusic);
+    assert!(!deadlib_audio_core::music_track_active());
+    output.fill(123);
+    renderer.render(
+        OutputBufferMut::I16(&mut output),
+        CallbackInfo {
+            anchor_nanos: 2_000_000_000,
+            clock: CallbackClockSource::Instant,
+        },
+        std::iter::empty(),
+    );
+    assert!(output.iter().all(|&sample| sample == 0));
     drop(runtime);
 }

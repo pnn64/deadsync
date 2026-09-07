@@ -5,6 +5,9 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-audio-decode = { path = "../deadlib-audio-decode" }
+deadlib-platform = { path = "../deadlib-platform" }
+rubato = "5.0.0"
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 log = "0.4.34"
 

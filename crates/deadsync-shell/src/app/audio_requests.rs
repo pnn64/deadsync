@@ -132,7 +132,7 @@ pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRe
             rate,
         } => audio.play_music(
             path,
-            deadsync_audio_stream::Cut {
+            deadlib_audio::stream::Cut {
                 start_sec: cut.start_sec,
                 length_sec: cut.length_sec,
                 fade_in_sec: cut.fade_in_sec,

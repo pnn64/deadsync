@@ -16,7 +16,7 @@ use crate::scan::{
     scan_and_load_songs_with_progress_counts_runtime,
 };
 use crate::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
-use deadsync_audio_decode as decode;
+use deadlib_audio_decode as decode;
 use deadsync_chart::{
     GameplayChartData, SongBackgroundChange, SongData, background::expand_random_background_changes,
 };

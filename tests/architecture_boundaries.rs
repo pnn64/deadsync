@@ -274,7 +274,7 @@ const AUDIO_CORE_FORBIDDEN_TOKENS: &[&str] = &[
     "crate::game",
     "crate::screens",
     "deadlib_platform",
-    "deadsync_audio_decode",
+    "deadlib_audio_decode",
     "std::fs",
     "std::path",
     "std::sync::mpsc",
@@ -1328,7 +1328,7 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         .expect("shell sync-analysis service should be readable");
 
     assert!(
-        !theme_manifest.contains("deadsync-audio-decode"),
+        !theme_manifest.contains("deadlib-audio-decode"),
         "Simply Love must not depend on audio decode; sync analysis is shell-owned"
     );
     assert!(
@@ -1354,7 +1354,7 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
     );
     assert!(
         !pack_sync.contains("std::thread::spawn")
-            && !pack_sync.contains("deadsync_audio_decode")
+            && !pack_sync.contains("deadlib_audio_decode")
             && !pack_sync.contains("analyze_song_chart_stream"),
         "Pack Sync must retain UI state without owning analysis workers or decoding"
     );
@@ -1363,9 +1363,9 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         "Simply Love must express sync-analysis start and cancel as runtime intent"
     );
     assert!(
-        shell_manifest.contains("deadsync-audio-decode")
+        shell_manifest.contains("deadlib-audio-decode")
             && shell_manifest.contains("null-or-die")
-            && shell_sync.contains("use deadsync_audio_decode as decode")
+            && shell_sync.contains("use deadlib_audio_decode as decode")
             && shell_sync.contains("use null_or_die::")
             && shell_sync.contains("fn sync_stream_event")
             && shell_sync.contains("fn sync_song_result")
@@ -3019,7 +3019,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         "music_clock.snapshot()",
         "GameplayAudioCommand::PlayMusic",
         "GameplayAudioCommand::SetMusicRate(rate)",
-        "deadsync_audio_stream::snap_music_start_sec",
+        "deadlib_audio::stream::snap_music_start_sec",
     ] {
         assert!(
             gameplay_runtime.contains(execution),
@@ -6436,130 +6436,128 @@ fn audio_core_lives_in_audio_crate() {
 }
 
 #[test]
-fn audio_decode_helpers_live_in_decode_crate() {
+fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut failures = Vec::new();
-
-    for file in [
-        root.join("crates/deadsync-audio-decode/src/lib.rs"),
-        root.join("crates/deadsync-audio-decode/src/folder.rs"),
-        root.join("crates/deadsync-audio-decode/src/resample.rs"),
-        root.join("crates/deadsync-audio-stream/Cargo.toml"),
-        root.join("crates/deadsync-audio-stream/src/clock.rs"),
-        root.join("crates/deadsync-audio-stream/src/lib.rs"),
-        root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"),
-        root.join("crates/deadsync-audio-stream/src/stream_runtime.rs"),
+    for relative in [
+        "crates/deadlib-audio-decode/src/lib.rs",
+        "crates/deadlib-audio-decode/src/resample.rs",
+        "crates/deadlib-audio/src/stream.rs",
+        "crates/deadlib-audio/src/stream/runtime.rs",
+        "crates/deadlib-audio/src/stream/processing.rs",
+        "crates/deadlib-audio/src/stream/stretch.rs",
     ] {
-        if !file.exists() {
-            failures.push(format!("{} is missing", rel_path(&root, &file)));
-        }
+        assert!(root.join(relative).is_file(), "missing {relative}");
+    }
+    for relative in [
+        "crates/deadsync-audio-decode",
+        "crates/deadlib-audio-decode/src/folder.rs",
+        "crates/deadsync-audio-stream/src/stream_runtime.rs",
+        "crates/deadsync-audio-stream/src/processing.rs",
+        "crates/deadsync-audio-stream/src/stretch.rs",
+    ] {
+        assert!(
+            !root.join(relative).exists(),
+            "retired audio machinery: {relative}"
+        );
     }
 
-    let engine_resample = root.join("src/engine/audio/resample.rs");
-    if engine_resample.exists() {
-        failures.push(format!(
-            "{} still exists; decoder stream runtime should live in deadsync-audio-stream",
-            rel_path(&root, &engine_resample)
-        ));
-    }
-
-    let engine_audio = root.join("src/engine/audio/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_audio) {
-        for token in [
-            "deadsync_audio_decode as decode",
-            "snap_start_forward_to_packet",
-            "MAX_PACKET_START_SNAP_SEC",
-        ] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still references decode stream token {token} {count} times",
-                    rel_path(&root, &engine_audio)
-                ));
+    for name in ["deadlib-audio", "deadlib-audio-decode"] {
+        let manifest = fs::read_to_string(root.join("crates").join(name).join("Cargo.toml"))
+            .expect("engine audio manifest should be readable");
+        assert!(
+            !manifest.contains("deadsync-"),
+            "{name} depends on game code"
+        );
+        for file in production_rust_files(&root.join("crates").join(name).join("src")) {
+            let source = production_source(&file);
+            for token in [
+                "deadsync_",
+                "replaygain::",
+                "REPLAYGAIN_ENABLED",
+                "EFFECT_BUS",
+                "SCREEN_BUS",
+                "ASSIST_TICK_BUS",
+                "custom_sounds_enabled",
+                "OGG_LISTINGS",
+            ] {
+                assert!(
+                    !source.contains(token),
+                    "{} owns policy {token}",
+                    file.display()
+                );
             }
         }
     }
-
-    let stream_runtime = root.join("crates/deadsync-audio-stream/src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&stream_runtime) {
-        for token in ["ENGINE", "crate::engine::audio"] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still references root audio runtime token {token} {count} times",
-                    rel_path(&root, &stream_runtime)
-                ));
-            }
+    for file in rust_files(&root.join("crates/deadlib-audio-decode/src")) {
+        let source = fs::read_to_string(&file).expect("codec source should be readable");
+        for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
+            assert!(
+                !source.contains(token),
+                "{} references {token}",
+                file.display()
+            );
         }
     }
 
-    let engine_folder = root.join("src/engine/audio/folder.rs");
-    if engine_folder.exists() {
-        failures.push(format!(
-            "{} still exists; asset-path audio folder helpers should live in crates/deadsync-assets/src/audio_folder.rs",
-            rel_path(&root, &engine_folder)
-        ));
-    }
-
-    let assets_folder = root.join("crates/deadsync-assets/src/audio_folder.rs");
-    if !assets_folder.exists() {
-        failures.push(format!("{} is missing", rel_path(&root, &assets_folder)));
-    }
-    if let Ok(text) = fs::read_to_string(&assets_folder) {
-        for token in [
-            "fn is_ogg",
-            "fn is_skipped_stem",
-            "std::fs::read_dir",
-            "path.is_file() && is_ogg",
-            "dir.join(format!(\"{index}.ogg\"))",
-        ] {
-            let count = count_token_refs(&text, token);
-            if count != 0 {
-                failures.push(format!(
-                    "{} still defines decode folder token {token} {count} times",
-                    rel_path(&root, &assets_folder)
-                ));
-            }
-        }
-    }
-
-    let decode_src = root.join("crates/deadsync-audio-decode/src");
-    if decode_src.exists() {
-        for file in rust_files(&decode_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
-            let rel = rel_path(&root, &file);
-            for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
-                let count = count_token_refs(&text, token);
-                if count != 0 {
-                    failures.push(format!(
-                        "{rel} references forbidden audio-decode token {token} {count} times"
-                    ));
-                }
-            }
-        }
-    }
-
-    let stream_src = root.join("crates/deadsync-audio-stream/src");
-    if stream_src.exists() {
-        for file in rust_files(&stream_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
-            let rel = rel_path(&root, &file);
-            for token in AUDIO_STREAM_FORBIDDEN_TOKENS {
-                let count = count_token_refs(&text, token);
-                if count != 0 {
-                    failures.push(format!(
-                        "{rel} references forbidden audio-stream token {token} {count} times"
-                    ));
-                }
-            }
-        }
-    }
-
+    let manager = fs::read_to_string(root.join("crates/deadlib-audio/src/stream/runtime.rs"))
+        .expect("stream manager should be readable");
+    assert!(manager.contains("let (command_sender, command_receiver) = channel()"));
+    assert!(manager.contains("while let Ok(command) = command_receiver.recv()"));
+    assert!(manager.contains("old.thread.join()"));
+    let shutdown = manager
+        .rsplit_once("// Stop and join the render callback")
+        .unwrap()
+        .1;
     assert!(
-        failures.is_empty(),
-        "audio decode helpers and stream runtime should live in audio crates:\n{}",
-        failures.join("\n")
+        shutdown.find("drop(_session)").expect("output must stop")
+            < shutdown
+                .find("drop(music_runtime)")
+                .expect("decoder must stop")
     );
+
+    let game = root.join("crates/deadsync-audio-stream/src");
+    for file in production_rust_files(&game) {
+        let source = production_source(&file);
+        for token in AUDIO_STREAM_FORBIDDEN_TOKENS.iter().copied().chain([
+            "rubato::",
+            "SolaStretcher",
+            "thread::spawn",
+            "command_receiver.recv()",
+            "fn music_decoder_thread_loop",
+            "fn push_music_block",
+        ]) {
+            assert!(
+                !source.contains(token),
+                "{} owns machinery {token}",
+                file.display()
+            );
+        }
+    }
+    let runtime =
+        fs::read_to_string(game.join("runtime.rs")).expect("game audio should be readable");
+    assert!(runtime.contains("stream::start(output_plan)?"));
+    assert!(runtime.contains("replaygain::get_or_queue_gain_linear"));
+    assert!(runtime.contains("set_music_replaygain_if_matches"));
+    assert!(runtime.contains("stop_assist_tick_bus()"));
+    let mix = fs::read_to_string(game.join("mix.rs")).expect("bus policy should be readable");
+    for bus in ["EFFECT_BUS", "SCREEN_BUS", "ASSIST_TICK_BUS"] {
+        assert!(mix.contains(bus), "missing game bus {bus}");
+    }
+    let folder = fs::read_to_string(root.join("crates/deadsync-assets/src/audio_folder.rs"))
+        .expect("game audio folder selection should be readable");
+    for policy in [
+        "fn is_ogg",
+        "fn is_skipped_stem",
+        "fn pick_indexed_in",
+        "fn pick_random_in",
+    ] {
+        assert!(
+            folder.contains(policy),
+            "missing sound-folder policy {policy}"
+        );
+    }
+    assert!(!folder.contains("audio_decode"));
+    assert!(!folder.contains("MusicPathResult"));
 }
 
 #[test]

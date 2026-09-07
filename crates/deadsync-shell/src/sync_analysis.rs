@@ -1,7 +1,7 @@
 use crate::sync_analysis_cache::{
     AnalysisOptions, Cache as AnalysisCache, CachedAnalysis, CachedPlot, CompletedTarget,
 };
-use deadsync_audio_decode as decode;
+use deadlib_audio_decode as decode;
 use deadsync_chart::SongData;
 use deadsync_config::prelude as config;
 use deadsync_simfile::app_runtime as song_loading;

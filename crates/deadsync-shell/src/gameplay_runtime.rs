@@ -496,8 +496,8 @@ pub(crate) fn exit(state: &mut gameplay::State) {
 }
 
 #[inline(always)]
-const fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
-    deadsync_audio_stream::Cut {
+const fn audio_cut(cut: GameplayMusicCut) -> deadlib_audio::stream::Cut {
+    deadlib_audio::stream::Cut {
         start_sec: cut.start_sec,
         length_sec: cut.length_sec,
         fade_in_sec: cut.fade_in_sec,
@@ -682,7 +682,7 @@ pub(crate) fn update_practice(
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
-        deadsync_audio_stream::snap_music_start_sec,
+        deadlib_audio::stream::snap_music_start_sec,
         effects,
     );
     score_cursor.sync_if_dirty(&mut state.gameplay);
@@ -710,7 +710,7 @@ pub(crate) fn handle_practice_input(
     practice::handle_input(
         state,
         ev,
-        deadsync_audio_stream::snap_music_start_sec,
+        deadlib_audio::stream::snap_music_start_sec,
         effects,
     );
     drain(&mut state.gameplay, audio, sounds, music_clock);
@@ -727,7 +727,7 @@ pub(crate) fn handle_practice_raw_key(
     let consumed = practice::handle_raw_key_event(
         state,
         ev,
-        deadsync_audio_stream::snap_music_start_sec,
+        deadlib_audio::stream::snap_music_start_sec,
         effects,
     );
     drain(&mut state.gameplay, audio, sounds, music_clock);

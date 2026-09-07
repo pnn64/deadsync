@@ -418,5 +418,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "../tests/perf/processing_perf.rs"]
+#[path = "../../tests/perf/processing_perf.rs"]
 mod processing_perf;

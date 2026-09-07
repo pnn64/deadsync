@@ -1,5 +1,5 @@
 use crate::mix::ASSIST_TICK_BUS;
-use crate::{OutputFormat, load_and_resample_sfx};
+use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx};
 use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -41,8 +41,7 @@ impl SfxCache {
             return Some(sound.clone());
         }
 
-        let resolved_str = path.to_string_lossy();
-        let decoded = match load_and_resample_sfx(&resolved_str, output) {
+        let decoded = match load_and_resample_sfx(path, output) {
             Ok(data) => data,
             Err(e) => {
                 warn!("Failed to prepare SFX '{}': {e}", path.display());
