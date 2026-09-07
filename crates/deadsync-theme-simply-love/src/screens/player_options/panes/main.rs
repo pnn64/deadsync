@@ -500,7 +500,7 @@ const JUDGMENT_FONT: CustomBinding = CustomBinding {
         else {
             return Outcome::NONE;
         };
-        let setting = assets::judgment_texture_choices()
+        let setting = deadsync_assets::textures::judgment_texture_choices()
             .get(new_index)
             .map(|choice| JudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
@@ -530,7 +530,7 @@ const HOLD_JUDGMENT: CustomBinding = CustomBinding {
         else {
             return Outcome::NONE;
         };
-        let setting = assets::hold_judgment_texture_choices()
+        let setting = deadsync_assets::textures::hold_judgment_texture_choices()
             .get(new_index)
             .map(|choice| HoldJudgmentGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
@@ -545,7 +545,7 @@ const HELD_GRAPHIC: CustomBinding = CustomBinding {
         else {
             return Outcome::NONE;
         };
-        let setting = assets::held_miss_texture_choices()
+        let setting = deadsync_assets::textures::held_miss_texture_choices()
             .get(new_index)
             .map(|choice| HeldMissGraphic::new(choice.key.as_ref()))
             .unwrap_or_default();
@@ -689,7 +689,7 @@ fn push_judgment_font_row(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "JudgmentFont"),
         lookup_key("PlayerOptionsHelp", "JudgmentFontHelp"),
         JUDGMENT_FONT,
-        assets::judgment_texture_choices()
+        deadsync_assets::textures::judgment_texture_choices()
             .iter()
             .map(|choice| choice.label.clone())
             .collect(),
@@ -778,7 +778,7 @@ fn push_hold_judgment_row(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "HoldJudgment"),
         lookup_key("PlayerOptionsHelp", "HoldJudgmentHelp"),
         HOLD_JUDGMENT,
-        assets::hold_judgment_texture_choices()
+        deadsync_assets::textures::hold_judgment_texture_choices()
             .iter()
             .map(|choice| choice.label.clone())
             .collect(),
@@ -791,7 +791,7 @@ fn push_held_graphic_row(b: &mut RowBuilder) {
         lookup_key("PlayerOptions", "HeldGraphic"),
         lookup_key("PlayerOptionsHelp", "HeldGraphicHelp"),
         HELD_GRAPHIC,
-        assets::held_miss_texture_choices()
+        deadsync_assets::textures::held_miss_texture_choices()
             .iter()
             .map(|choice| choice.label.clone())
             .collect(),

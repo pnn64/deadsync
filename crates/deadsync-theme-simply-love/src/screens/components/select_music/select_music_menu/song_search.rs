@@ -10,10 +10,9 @@
 //! `select_music`, which is the one place that should spell them out.
 
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt};
 use crate::screens::components::select_music::push_retained_overlay;
 use crate::screens::components::shared::fuzzy;
 use crate::screens::select_music::MusicWheelEntry;
@@ -21,10 +20,12 @@ use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::SongData;
+use deadsync_config::theme::MachineFont;
 use deadsync_simfile::song_search::{
     SongSearchCandidate, parse_song_search_live, song_passes_search_filters,
     song_search_difficulties_text,
 };
+use deadsync_theme::FontRole;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;

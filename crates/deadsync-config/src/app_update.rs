@@ -21,10 +21,15 @@ use crate::theme::{
     SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide,
     VisualStyle,
 };
+use crate::update::{
+    set_f32_if_changed, set_f64_if_changed, set_if_changed, set_pair_if_changed,
+    set_quad_if_changed,
+};
+#[cfg(target_os = "linux")]
+use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio_core::AudioOutputMode;
 use deadlib_input_native::WindowsPadBackend;
 use deadlib_render_core::{BackendType, PresentModePolicy};
-use deadsync_audio_stream::LinuxAudioBackend;
 use deadsync_input::clamp_input_debounce_seconds;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use deadsync_smx::SmxPadPreset;
@@ -505,6 +510,7 @@ pub fn set_audio_output_mode(cfg: &mut Config, mode: AudioOutputMode) -> bool {
     set_if_changed(&mut cfg.audio_output_mode, mode)
 }
 
+#[cfg(target_os = "linux")]
 pub fn set_linux_audio_backend(cfg: &mut Config, backend: LinuxAudioBackend) -> bool {
     set_if_changed(&mut cfg.linux_audio_backend, backend)
 }
@@ -839,65 +845,6 @@ pub fn set_null_or_die_kernel_type(cfg: &mut Config, value: BiasKernel) -> bool 
 
 pub fn set_null_or_die_full_spectrogram(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.null_or_die_full_spectrogram, enabled)
-}
-
-pub fn set_if_changed<T>(slot: &mut T, value: T) -> bool
-where
-    T: PartialEq,
-{
-    if *slot == value {
-        false
-    } else {
-        *slot = value;
-        true
-    }
-}
-
-pub fn set_pair_if_changed<T>(a: &mut T, a_value: T, b: &mut T, b_value: T) -> bool
-where
-    T: PartialEq,
-{
-    let mut changed = set_if_changed(a, a_value);
-    changed |= set_if_changed(b, b_value);
-    changed
-}
-
-pub fn set_quad_if_changed<T>(
-    a: &mut T,
-    a_value: T,
-    b: &mut T,
-    b_value: T,
-    c: &mut T,
-    c_value: T,
-    d: &mut T,
-    d_value: T,
-) -> bool
-where
-    T: PartialEq,
-{
-    let mut changed = set_if_changed(a, a_value);
-    changed |= set_if_changed(b, b_value);
-    changed |= set_if_changed(c, c_value);
-    changed |= set_if_changed(d, d_value);
-    changed
-}
-
-pub fn set_f32_if_changed(slot: &mut f32, value: f32) -> bool {
-    if (*slot - value).abs() <= f32::EPSILON {
-        false
-    } else {
-        *slot = value;
-        true
-    }
-}
-
-pub fn set_f64_if_changed(slot: &mut f64, value: f64) -> bool {
-    if (*slot - value).abs() <= f64::EPSILON {
-        false
-    } else {
-        *slot = value;
-        true
-    }
 }
 
 #[cfg(test)]

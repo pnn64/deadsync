@@ -18,8 +18,9 @@ pub(super) mod tests {
         repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
         sync_speed_mod_type_row, update,
     };
-    use crate::assets::i18n::{LookupKey, lookup_key};
-    use crate::screens::{Screen, ThemeEffect};
+    use crate::SimplyLoveEffect as ThemeEffect;
+    use crate::i18n::{LookupKey, lookup_key};
+    use crate::screens::Screen;
     use deadlib_assets::AssetManager;
     use deadlib_present::actors::TextContent;
     use deadlib_present::font::{Font, Glyph, GlyphMap};
@@ -41,7 +42,7 @@ pub(super) mod tests {
         use std::sync::Once;
         static INIT: Once = Once::new();
         INIT.call_once(|| {
-            crate::assets::i18n::init_for_tests();
+            crate::i18n::init_for_tests();
         });
     }
 
@@ -1757,7 +1758,7 @@ pub(super) mod tests {
         assert_eq!(fa_plus.choices.len(), 1);
         assert_eq!(
             fa_plus.choices[0].as_ref(),
-            crate::assets::i18n::tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").as_ref()
+            crate::i18n::tr("PlayerOptions", "FAPlusOptionsDisplayFAPlusWindow").as_ref()
         );
     }
 
@@ -2214,7 +2215,7 @@ pub(super) mod tests {
         );
 
         let pane_idx = OptionsPane::Main.index();
-        let revision = crate::assets::i18n::revision();
+        let revision = crate::i18n::revision();
         let sentinel = Arc::<str>::from("stale row title");
         state.row_titles[pane_idx] = super::super::PlayerOptionsRowTitles {
             i18n_revision: revision.wrapping_sub(1),
@@ -2275,7 +2276,7 @@ pub(super) mod tests {
     fn preview_texture_selection_borrows_catalog_key() {
         ensure_i18n();
         let (mut state, _) = setup_state();
-        let choices = [crate::assets::TextureChoice::new(
+        let choices = [deadlib_assets::TextureChoice::new(
             "test/judgment.png".to_owned(),
             "Test Judgment".to_owned(),
         )];
@@ -3481,11 +3482,11 @@ pub(super) mod tests {
 
         assert_eq!(
             normal[4],
-            crate::assets::i18n::tr("PlayerOptions", "StepStatisticsPackInfo").as_ref()
+            crate::i18n::tr("PlayerOptions", "StepStatisticsPackInfo").as_ref()
         );
         assert_eq!(
             course[4],
-            crate::assets::i18n::tr("PlayerOptions", "StepStatisticsCourseBanner").as_ref()
+            crate::i18n::tr("PlayerOptions", "StepStatisticsCourseBanner").as_ref()
         );
     }
 
@@ -3506,7 +3507,7 @@ pub(super) mod tests {
         assert_eq!(choices.len(), 3);
         assert_eq!(
             choices[2].as_ref(),
-            crate::assets::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
+            crate::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
         );
     }
 
@@ -3574,14 +3575,11 @@ pub(super) mod tests {
         assert_eq!(
             choices,
             vec![
-                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
-                crate::assets::i18n::tr("PlayerOptions", "ChooseDifferentSong").to_string(),
-                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextDisplayModifiers")
-                    .to_string(),
-                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextAdvancedModifiers")
-                    .to_string(),
-                crate::assets::i18n::tr("PlayerOptions", "WhatComesNextUncommonModifiers")
-                    .to_string(),
+                crate::i18n::tr("PlayerOptions", "WhatComesNextGameplay").to_string(),
+                crate::i18n::tr("PlayerOptions", "ChooseDifferentSong").to_string(),
+                crate::i18n::tr("PlayerOptions", "WhatComesNextDisplayModifiers").to_string(),
+                crate::i18n::tr("PlayerOptions", "WhatComesNextAdvancedModifiers").to_string(),
+                crate::i18n::tr("PlayerOptions", "WhatComesNextUncommonModifiers").to_string(),
             ],
         );
     }
@@ -3606,7 +3604,7 @@ pub(super) mod tests {
     fn pane_switch_resets_what_comes_next_to_gameplay() {
         ensure_i18n();
         let (mut state, _asset_manager) = setup_state();
-        let gameplay = crate::assets::i18n::tr("PlayerOptions", "WhatComesNextGameplay");
+        let gameplay = crate::i18n::tr("PlayerOptions", "WhatComesNextGameplay");
 
         for pane in [
             super::OptionsPane::Display,

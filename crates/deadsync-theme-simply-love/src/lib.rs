@@ -1,7 +1,7 @@
 pub(crate) use deadlib_present::rgba_const;
 
 pub mod color;
-pub mod effects;
+mod effects;
 pub mod fonts;
 pub mod i18n;
 mod i18n_runtime;
@@ -38,12 +38,6 @@ pub use effects::{
     SimplyLoveUpdaterRequest, resolve_effect_route,
 };
 
-pub use screens::components::select_music::select_music_menu::{
-    SongSearchIndex, SongSearchMatch, SongSearchScope, build_pack_matches, build_song_matches,
-    build_song_search_index,
-};
-pub use screens::select_music::MusicWheelEntry;
-
 pub struct SimplyLoveTheme;
 
 impl deadsync_theme::Theme for SimplyLoveTheme {
@@ -54,15 +48,6 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
         screen.id()
     }
-}
-
-pub(crate) mod assets {
-    pub use crate::fonts::{FontRole, machine_font_key, machine_font_key_for_text};
-    pub use crate::{i18n, visual_styles};
-    pub use deadsync_assets::*;
-}
-pub(crate) mod config {
-    pub use deadsync_config::prelude::*;
 }
 
 mod act_macro {

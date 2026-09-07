@@ -8,7 +8,7 @@ use crate::screens::components::shared::gs_scorebox::{
 };
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-use deadsync_config::prelude::SrpgVariant;
+use deadsync_config::theme::SrpgVariant;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};

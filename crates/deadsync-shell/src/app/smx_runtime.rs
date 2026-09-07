@@ -9,7 +9,7 @@ use crate::smx_config::{
     smx_light_preview_restore_auto, smx_options_light_preview_active,
     smx_player_options_light_preview_allowed, smx_runtime_assignment_plan,
 };
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_profile::{compat as profile, pad_config as pad_profile_data, pad_config_sync};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::screens::{self, options, player_options};
@@ -205,7 +205,7 @@ impl App {
         if matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) || !smx_input {
             return;
         }
-        let (p1, p2) = config::smx_pad_assignment();
+        let (p1, p2) = config::runtime::smx_pad_assignment();
         if p1.is_some() || p2.is_some() {
             return;
         }

@@ -4,7 +4,7 @@ mod runtime;
 mod screen;
 pub mod views;
 
-pub use deadlib_assets::{FontAssetSpec, TextureAssetSpec, texture_asset};
+use deadlib_assets::FontAssetSpec;
 pub use effect::{ThemeEffect, ThemeFlowEvent, ThemeInputResult};
 pub use runtime::{
     AudioCut, AudioOutputModeChoice, AudioRequest, AudioVolumeTarget, DisplayModeChoice,

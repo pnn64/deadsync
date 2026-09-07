@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use crate::act;
-use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::color;
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key_for_text;
 use crate::screens::components::evaluation::eval_graphs::TimingHistogramScale;
-use crate::screens::evaluation::ScoreInfo;
+use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_render_core::{BlendMode, MeshVertex};
+use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
+use deadsync_theme::FontRole;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::cell::RefCell;
 

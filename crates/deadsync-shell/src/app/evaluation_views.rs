@@ -3,7 +3,7 @@ use super::{
     EvaluationSubmissionView, MAX_PLAYERS, ScoreboxSideView, SimplyLoveGrooveStatsService,
     evaluation_context_view, scorebox_pane_filter,
 };
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, evaluation};
@@ -22,7 +22,7 @@ pub(super) struct EvaluationFramePolicy {
 }
 
 impl EvaluationFramePolicy {
-    pub(super) const fn from_config(config: &config::Config) -> Self {
+    pub(super) const fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             context: EvaluationPolicyView {
                 enable_groovestats: config.enable_groovestats,
@@ -39,10 +39,10 @@ impl EvaluationFramePolicy {
                 translated_titles: config.translated_titles,
                 transparent_panels: matches!(
                     config.machine_evaluation_style.resolve(config.visual_style),
-                    config::MachineEvaluationStyle::Transparent
+                    config::theme::MachineEvaluationStyle::Transparent
                 ),
                 srpg10_visuals: config.visual_style.is_srpg()
-                    && matches!(config.srpg_variant, config::SrpgVariant::Srpg10),
+                    && matches!(config.srpg_variant, config::theme::SrpgVariant::Srpg10),
                 machine_font: config.machine_font,
                 zmod_rating_box_text: config.zmod_rating_box_text,
                 difficulty_color_scheme: config.difficulty_color_scheme,
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn policy_compiles_evaluation_only_inputs() {
-        let config = config::Config {
+        let config = config::app_config::Config {
             enable_groovestats: true,
             enable_boogiestats: true,
             enable_arrowcloud: false,
@@ -503,7 +503,7 @@ mod tests {
             groovestats_next_auto_retry_at: Some(now),
             arrowcloud_next_auto_retry_at: Some(now + std::time::Duration::from_secs(1)),
         };
-        let policy = EvaluationFramePolicy::from_config(&config::Config {
+        let policy = EvaluationFramePolicy::from_config(&config::app_config::Config {
             enable_groovestats: false,
             enable_arrowcloud: true,
             ..Default::default()

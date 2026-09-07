@@ -1107,8 +1107,8 @@ mod contract_tests {
         let arena = ActorResourceArena::new(1);
         arena.begin_hit_stats(true);
 
-        let first = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
-        let second = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
+        let first = slot.actor_texture_source(&arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
+        let second = slot.actor_texture_source(&arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
 
         assert!(matches!(
             first,

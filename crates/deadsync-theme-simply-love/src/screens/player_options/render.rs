@@ -1,12 +1,13 @@
 use super::*;
-use crate::assets::{FontRole, machine_font_key};
+use crate::fonts::machine_font_key;
 use deadlib_present::actors::TextContent;
+use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
     state: &State,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) -> Actor {
-    let i18n_revision = crate::assets::i18n::revision();
+    let i18n_revision = crate::i18n::revision();
     let screen_size_bits = [screen_width().to_bits(), screen_height().to_bits()];
     {
         let cache = state.top_bar_cache.borrow();
@@ -58,7 +59,7 @@ pub(super) fn row_title_content(text: Arc<str>) -> TextContent {
 
 pub(super) fn prepare_row_titles(state: &mut State) {
     let pane_idx = state.current_pane.index();
-    let i18n_revision = crate::assets::i18n::revision();
+    let i18n_revision = crate::i18n::revision();
     if state.row_titles[pane_idx].i18n_revision == i18n_revision {
         return;
     }
@@ -669,7 +670,7 @@ pub(super) const fn cursor_stack_y(active: [bool; PLAYER_SLOTS], player_idx: usi
 pub(super) fn select_preview_texture<'a>(
     row: &Row,
     player_idx: usize,
-    choices: &'a [crate::assets::TextureChoice],
+    choices: &'a [deadlib_assets::TextureChoice],
 ) -> Option<&'a Arc<str>> {
     choices
         .get(row.selected_choice_index[player_idx])
@@ -677,8 +678,11 @@ pub(super) fn select_preview_texture<'a>(
             if choice.key.eq_ignore_ascii_case("None") {
                 None
             } else {
-                crate::assets::resolve_texture_choice_entry(Some(choice.key.as_ref()), choices)
-                    .map(|choice| &choice.key)
+                deadsync_assets::textures::resolve_texture_choice_entry(
+                    Some(choice.key.as_ref()),
+                    choices,
+                )
+                .map(|choice| &choice.key)
             }
         })
 }
@@ -1116,7 +1120,11 @@ fn draw_cached_value_text(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_i
 fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::JudgmentFont {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
-            select_preview_texture(rc.row, player_idx, assets::judgment_texture_choices())
+            select_preview_texture(
+                rc.row,
+                player_idx,
+                deadsync_assets::textures::judgment_texture_choices(),
+            )
         };
         if let Some(texture) = texture_for(primary_player_idx) {
             actors.push(act!(sprite(texture):
@@ -1147,11 +1155,15 @@ fn draw_judgment_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_id
 fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HoldJudgment {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
-            select_preview_texture(rc.row, player_idx, assets::hold_judgment_texture_choices())
+            select_preview_texture(
+                rc.row,
+                player_idx,
+                deadsync_assets::textures::hold_judgment_texture_choices(),
+            )
         };
         let draw_hold_preview = |texture: &Arc<str>, center_x: f32, actors: &mut Vec<Actor>| {
             let zoom = JUDGMENT_PREVIEW_ZOOM;
-            let tex_w = crate::assets::texture_dims(texture.as_ref())
+            let tex_w = deadlib_assets::texture_dims(texture.as_ref())
                 .map_or(128.0, |meta| meta.w.max(1) as f32);
             let center_offset = tex_w * zoom * 0.4;
 
@@ -1187,7 +1199,11 @@ fn draw_hold_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: u
 fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     if rc.row.id == RowId::HeldGraphic {
         let texture_for = |player_idx: usize| -> Option<&Arc<str>> {
-            select_preview_texture(rc.row, player_idx, assets::held_miss_texture_choices())
+            select_preview_texture(
+                rc.row,
+                player_idx,
+                deadsync_assets::textures::held_miss_texture_choices(),
+            )
         };
         if let Some(texture) = texture_for(primary_player_idx) {
             actors.push(act!(sprite(texture):

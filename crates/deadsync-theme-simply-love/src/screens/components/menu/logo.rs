@@ -1,8 +1,7 @@
 use crate::act;
-use crate::assets;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 
 /// Parameters to tweak the layout easily.
 #[derive(Clone, Copy, Debug)]
@@ -32,7 +31,8 @@ pub fn build_logo(
     game: GameFlag,
 ) -> Vec<Actor> {
     if let Some(texture_key) = title_logo_texture_key {
-        let dims = assets::texture_dims(texture_key).unwrap_or(assets::TexMeta { w: 1, h: 1 });
+        let dims = deadlib_assets::texture_dims(texture_key)
+            .unwrap_or(deadlib_assets::TexMeta { w: 1, h: 1 });
         let aspect = if dims.h > 0 {
             dims.w as f32 / dims.h as f32
         } else {
@@ -48,7 +48,8 @@ pub fn build_logo(
     }
 
     // Get logo's native dimensions from the asset system, with a safe fallback.
-    let logo_dims = assets::texture_dims("logo.png").unwrap_or(assets::TexMeta { w: 1, h: 1 });
+    let logo_dims =
+        deadlib_assets::texture_dims("logo.png").unwrap_or(deadlib_assets::TexMeta { w: 1, h: 1 });
     let logo_aspect = if logo_dims.h > 0 {
         logo_dims.w as f32 / logo_dims.h as f32
     } else {

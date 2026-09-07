@@ -1,6 +1,6 @@
 use crate::act;
-use crate::assets::visual_styles;
 use crate::color;
+use crate::visual_styles;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 

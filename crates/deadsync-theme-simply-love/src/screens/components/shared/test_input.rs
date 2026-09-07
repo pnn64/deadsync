@@ -1,13 +1,14 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_platform::input::{PadDir, PadEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
+use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction, with_keymap};
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, OnceLock};

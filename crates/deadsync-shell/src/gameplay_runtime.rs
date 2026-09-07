@@ -1,6 +1,6 @@
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_gameplay::{
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
@@ -74,7 +74,7 @@ fn smx_profile_enabled() -> bool {
     })
 }
 
-fn policy_view(config: &config::Config) -> GameplayPolicyView {
+fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
     GameplayPolicyView {
         translated_titles: config.translated_titles,
         center_single_notefield: config.center_1player_notefield,
@@ -97,7 +97,7 @@ fn policy_view(config: &config::Config) -> GameplayPolicyView {
 }
 
 fn background_changes(
-    config: &config::Config,
+    config: &config::app_config::Config,
     song: &SongData,
     gameplay_charts: &[Arc<GameplayChartData>; 2],
     session: &GameplaySession,
@@ -106,7 +106,7 @@ fn background_changes(
         song,
         matches!(
             config.random_background_mode,
-            config::RandomBackgroundMode::RandomMovies
+            config::theme::RandomBackgroundMode::RandomMovies
         ),
     );
     let chart = background_chart(gameplay_charts, session);
@@ -125,7 +125,7 @@ fn background_chart<'a>(
 }
 
 pub(crate) fn runtime_view(
-    config: &config::Config,
+    config: &config::app_config::Config,
     lobby: SimplyLoveLobbyRuntimeView,
 ) -> GameplayRuntimeView {
     let session = profile::get_session_snapshot();
@@ -307,7 +307,7 @@ fn score_init_view(
 }
 
 pub(crate) fn init_view(
-    config: &config::Config,
+    config: &config::app_config::Config,
     lobby: SimplyLoveLobbyRuntimeView,
     song: &SongData,
     charts: &[Arc<ChartData>; 2],
@@ -388,7 +388,7 @@ pub(crate) fn sync_initial_scores(state: &mut gameplay::State) {
 }
 
 pub(crate) fn practice_view(
-    config: &config::Config,
+    config: &config::app_config::Config,
     gameplay: &GameplayInitView,
 ) -> PracticeRuntimeView {
     PracticeRuntimeView {
@@ -785,15 +785,15 @@ mod tests {
 
     #[test]
     fn gameplay_policy_carries_presentation_fields() {
-        let config = deadsync_config::prelude::Config {
-            machine_font: deadsync_config::prelude::MachineFont::Mega,
+        let config = deadsync_config::app_config::Config {
+            machine_font: deadsync_config::theme::MachineFont::Mega,
             bg_brightness: 0.42,
-            gameplay_bg_color: deadsync_config::prelude::Color::from_hex("#123456")
+            gameplay_bg_color: deadlib_present::color::Color::from_hex("#123456")
                 .expect("test color should parse"),
             smx_input: true,
             zmod_rating_box_text: true,
             show_bpm_decimal: true,
-            gameplay_bpm_position: deadsync_config::prelude::GameplayBpmPosition::NearField,
+            gameplay_bpm_position: deadsync_config::theme::GameplayBpmPosition::NearField,
             ..Default::default()
         };
         let policy = policy_view(&config);

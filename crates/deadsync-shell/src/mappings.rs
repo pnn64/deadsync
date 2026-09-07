@@ -1,10 +1,10 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_input::{any_player_has_dedicated_menu_buttons_for_mode, get_keymap};
 use deadsync_theme_simply_love::SimplyLoveMappingsConfigRequest;
 use deadsync_theme_simply_love::views::MappingsRuntimeView;
 
 pub(crate) fn runtime_view() -> MappingsRuntimeView {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     MappingsRuntimeView {
         keymap: get_keymap(),
         game: cfg.game_flag,
@@ -23,7 +23,7 @@ pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest) {
             index,
             code,
         } => {
-            config::update_keymap_binding_unique_keyboard(action, index, code);
+            config::keybinds::update_keymap_binding_unique_keyboard_saved(action, index, code);
             true
         }
         Request::BindGamepad {
@@ -31,10 +31,12 @@ pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest) {
             index,
             binding,
         } => {
-            config::update_keymap_binding_unique_gamepad(action, index, binding);
+            config::keybinds::update_keymap_binding_unique_gamepad_saved(action, index, binding);
             true
         }
-        Request::Clear { action, index } => config::clear_keymap_binding(action, index),
+        Request::Clear { action, index } => {
+            config::keybinds::clear_keymap_binding_saved(action, index)
+        }
     };
 
     if check_dedicated {
@@ -43,10 +45,10 @@ pub(crate) fn execute(request: SimplyLoveMappingsConfigRequest) {
 }
 
 fn disable_unsupported_dedicated_nav() {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     if cfg.only_dedicated_menu_buttons
         && !any_player_has_dedicated_menu_buttons_for_mode(cfg.three_key_navigation)
     {
-        config::update_only_dedicated_menu_buttons(false);
+        config::runtime_update::update_only_dedicated_menu_buttons(false);
     }
 }

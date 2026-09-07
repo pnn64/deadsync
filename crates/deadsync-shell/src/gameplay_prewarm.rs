@@ -27,7 +27,7 @@ fn prewarm_model_texture_key(
     seen_model_textures: &mut FastHashSet<String>,
     key: &str,
 ) {
-    let key = deadsync_assets::canonical_texture_key(key);
+    let key = deadsync_assets::textures::canonical_texture_key(key);
     if !seen_model_textures.insert(key.clone()) {
         return;
     }

@@ -1,15 +1,16 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::color::JUDGMENT_RGBA;
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key_for_text;
 use crate::screens::components::shared::banner as shared_banner;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec, TextAttribute};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_chart::SongData;
+use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_theme::FontRole;
 use std::sync::Arc;
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
@@ -93,7 +94,7 @@ fn event_font_key(asset_manager: &AssetManager, machine_font: MachineFont) -> Ev
         wendy: font_address(asset_manager, UPPER_HEADER_FONT),
         machine_header: font_address(
             asset_manager,
-            crate::assets::machine_font_key(machine_font, FontRole::Header),
+            crate::fonts::machine_font_key(machine_font, FontRole::Header),
         ),
     }
 }

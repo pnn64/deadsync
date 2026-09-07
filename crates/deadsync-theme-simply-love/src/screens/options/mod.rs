@@ -1,9 +1,26 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::visual_styles;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::config::{
-    self, arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
+use crate::fonts::machine_font_key;
+use crate::screens::Screen;
+use crate::screens::input as screen_input;
+use crate::screens::pack_sync as shared_pack_sync;
+use crate::screens::select_music;
+use crate::views::{
+    OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
+    SimplyLoveUpdaterView,
+};
+use crate::visual_styles;
+use deadlib_assets::AssetManager;
+use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
+use deadsync_config as config;
+use deadsync_config::null_or_die::{
+    null_or_die_graph_orientation_choice_index, null_or_die_graph_origin_choice_index,
+    null_or_die_kernel_target_choice_index, null_or_die_kernel_type_choice_index,
+};
+use deadsync_config::options::{
+    arrowcloud_qr_login_when_choice_index, breakdown_style_choice_index,
     breakdown_style_from_choice, default_fail_type_choice_index, default_fail_type_from_choice,
     default_sync_offset_choice_index, default_sync_offset_from_choice,
     groovestats_qr_login_when_choice_index, log_level_choice_index, log_level_from_choice,
@@ -11,9 +28,7 @@ use crate::config::{
     machine_evaluation_style_choice_index, machine_evaluation_style_from_choice,
     machine_font_choice_index, machine_font_from_choice, machine_preferred_play_mode_choice_index,
     machine_preferred_play_mode_from_choice, machine_preferred_play_style_choice_index,
-    machine_preferred_play_style_from_choice, null_or_die_graph_orientation_choice_index,
-    null_or_die_graph_origin_choice_index, null_or_die_kernel_target_choice_index,
-    null_or_die_kernel_type_choice_index, random_background_mode_choice_index,
+    machine_preferred_play_style_from_choice, random_background_mode_choice_index,
     random_background_mode_from_choice, select_music_default_sort_choice_index,
     select_music_default_sort_from_choice, select_music_difficulty_color_scheme_choice_index,
     select_music_difficulty_color_scheme_from_choice, select_music_itl_rank_mode_choice_index,
@@ -30,23 +45,13 @@ use crate::config::{
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };
 #[cfg(target_os = "windows")]
-use crate::config::{
+use deadsync_config::options::{
     windows_pad_backend_choice_index as windows_backend_choice_index,
     windows_pad_backend_from_choice as windows_backend_from_choice,
 };
-use crate::screens::input as screen_input;
-use crate::screens::pack_sync as shared_pack_sync;
-use crate::screens::select_music;
-use crate::screens::{Screen, ThemeEffect};
-use crate::views::{
-    OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
-    SimplyLoveUpdaterView,
-};
-use deadlib_assets::AssetManager;
-use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
-use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
+use deadsync_theme::FontRole;
 use deadsync_theme::views::{
     AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, SmxAssignmentView,
 };
@@ -61,7 +66,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
+use crate::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use deadlib_present::actors;

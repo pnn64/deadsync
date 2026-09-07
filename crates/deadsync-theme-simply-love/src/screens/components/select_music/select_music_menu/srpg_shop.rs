@@ -1,14 +1,15 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use crate::screens::components::select_music::push_retained_overlay;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::srpg_shop::{
     SRPG_SHOP_IDS, SrpgShop, SrpgShopItem, SrpgShopItemKind, SrpgShopPhase, SrpgShopSnapshot,
 };
 use deadsync_profile::PlayerSide;
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Arc;

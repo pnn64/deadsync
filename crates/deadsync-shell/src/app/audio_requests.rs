@@ -1,5 +1,5 @@
 use deadsync_audio_stream::{AudioControl, SfxId};
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_theme::views::{AudioOptionsView, AudioOutputDeviceView};
 use deadsync_theme::{AudioOutputModeChoice, AudioRequest, AudioVolumeTarget};
 use std::collections::HashMap;
@@ -53,7 +53,7 @@ impl UiSfx {
 }
 
 pub(super) fn options_view(audio: &deadsync_audio_stream::AudioControl) -> AudioOptionsView {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     let output_devices = audio
         .startup_output_devices()
         .iter()
@@ -90,30 +90,30 @@ pub(super) fn options_view(audio: &deadsync_audio_stream::AudioControl) -> Audio
     }
 }
 
-const fn output_mode_choice(mode: config::AudioOutputMode) -> AudioOutputModeChoice {
+const fn output_mode_choice(mode: deadlib_audio_core::AudioOutputMode) -> AudioOutputModeChoice {
     match mode {
-        config::AudioOutputMode::Auto => AudioOutputModeChoice::Auto,
-        config::AudioOutputMode::Shared => AudioOutputModeChoice::Shared,
-        config::AudioOutputMode::Exclusive => AudioOutputModeChoice::Exclusive,
+        deadlib_audio_core::AudioOutputMode::Auto => AudioOutputModeChoice::Auto,
+        deadlib_audio_core::AudioOutputMode::Shared => AudioOutputModeChoice::Shared,
+        deadlib_audio_core::AudioOutputMode::Exclusive => AudioOutputModeChoice::Exclusive,
     }
 }
 
-const fn output_mode(choice: AudioOutputModeChoice) -> config::AudioOutputMode {
+const fn output_mode(choice: AudioOutputModeChoice) -> deadlib_audio_core::AudioOutputMode {
     match choice {
-        AudioOutputModeChoice::Auto => config::AudioOutputMode::Auto,
-        AudioOutputModeChoice::Shared => config::AudioOutputMode::Shared,
-        AudioOutputModeChoice::Exclusive => config::AudioOutputMode::Exclusive,
+        AudioOutputModeChoice::Auto => deadlib_audio_core::AudioOutputMode::Auto,
+        AudioOutputModeChoice::Shared => deadlib_audio_core::AudioOutputMode::Shared,
+        AudioOutputModeChoice::Exclusive => deadlib_audio_core::AudioOutputMode::Exclusive,
     }
 }
 
 #[cfg(target_os = "linux")]
-fn linux_backend(name: &str) -> config::LinuxAudioBackend {
+fn linux_backend(name: &str) -> deadlib_audio::LinuxAudioBackend {
     match name {
-        "PipeWire" => config::LinuxAudioBackend::PipeWire,
-        "PulseAudio" => config::LinuxAudioBackend::PulseAudio,
-        "JACK" => config::LinuxAudioBackend::Jack,
-        "ALSA" => config::LinuxAudioBackend::Alsa,
-        _ => config::LinuxAudioBackend::Auto,
+        "PipeWire" => deadlib_audio::LinuxAudioBackend::PipeWire,
+        "PulseAudio" => deadlib_audio::LinuxAudioBackend::PulseAudio,
+        "JACK" => deadlib_audio::LinuxAudioBackend::Jack,
+        "ALSA" => deadlib_audio::LinuxAudioBackend::Alsa,
+        _ => deadlib_audio::LinuxAudioBackend::Auto,
     }
 }
 
@@ -144,30 +144,38 @@ pub(super) fn execute(audio: &mut AudioControl, sounds: &UiSfx, request: AudioRe
         AudioRequest::StopMusic => audio.stop_music(),
         AudioRequest::SetMusicRate(rate) => audio.set_music_rate(rate),
         AudioRequest::SetVolume { target, percent } => match target {
-            AudioVolumeTarget::Master => config::update_master_volume(percent),
-            AudioVolumeTarget::Music => config::update_music_volume(percent),
-            AudioVolumeTarget::Sfx => config::update_sfx_volume(percent),
-            AudioVolumeTarget::AssistTick => config::update_assist_tick_volume(percent),
+            AudioVolumeTarget::Master => config::runtime_update::update_master_volume(percent),
+            AudioVolumeTarget::Music => config::runtime_update::update_music_volume(percent),
+            AudioVolumeTarget::Sfx => config::runtime_update::update_sfx_volume(percent),
+            AudioVolumeTarget::AssistTick => {
+                config::runtime_update::update_assist_tick_volume(percent)
+            }
         },
-        AudioRequest::SetOutputDevice(device) => config::update_audio_output_device(device),
-        AudioRequest::SetOutputMode(mode) => config::update_audio_output_mode(output_mode(mode)),
+        AudioRequest::SetOutputDevice(device) => {
+            config::runtime_update::update_audio_output_device(device)
+        }
+        AudioRequest::SetOutputMode(mode) => {
+            config::runtime_update::update_audio_output_mode(output_mode(mode))
+        }
         AudioRequest::SetOutputBackend(name) => {
             #[cfg(target_os = "linux")]
-            config::update_linux_audio_backend(linux_backend(&name));
+            config::runtime_update::update_linux_audio_backend(linux_backend(&name));
             #[cfg(not(target_os = "linux"))]
             drop(name);
         }
-        AudioRequest::SetSampleRate(rate) => config::update_audio_sample_rate(rate),
-        AudioRequest::SetMineHitSound(enabled) => config::update_mine_hit_sound(enabled),
+        AudioRequest::SetSampleRate(rate) => config::runtime_update::update_audio_sample_rate(rate),
+        AudioRequest::SetMineHitSound(enabled) => {
+            config::runtime_update::update_mine_hit_sound(enabled)
+        }
         AudioRequest::SetGlobalOffsetMillis(milliseconds) => {
-            config::update_global_offset(milliseconds as f32 / 1000.0);
+            config::runtime_update::update_global_offset(milliseconds as f32 / 1000.0);
         }
         AudioRequest::SetPreservePitch(enabled) => {
-            config::update_rate_mod_preserves_pitch(enabled);
+            config::runtime_update::update_rate_mod_preserves_pitch(enabled);
             audio.set_preserve_pitch_enabled(enabled);
         }
         AudioRequest::SetReplayGain(enabled) => {
-            config::update_enable_replaygain(enabled);
+            config::runtime_update::update_enable_replaygain(enabled);
             audio.set_replaygain_enabled(enabled);
         }
         AudioRequest::PrewarmReplayGain(paths) => deadsync_audio_replaygain::prewarm_paths(

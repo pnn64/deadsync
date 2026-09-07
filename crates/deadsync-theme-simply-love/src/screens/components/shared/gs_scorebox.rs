@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets;
 use crate::color;
 use crate::scorebox as scorebox_theme;
 use crate::scorebox::{
@@ -9,7 +8,7 @@ use crate::scorebox::{
 use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
-use deadsync_config::prelude::SrpgVariant;
+use deadsync_config::theme::SrpgVariant;
 use deadsync_score as score_data;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::borrow::Cow;
@@ -764,7 +763,8 @@ fn push_centered_logo(
     if alpha <= 0.0 {
         return;
     }
-    let dims = assets::texture_dims(texture).unwrap_or(assets::TexMeta { w: 1, h: 1 });
+    let dims =
+        deadlib_assets::texture_dims(texture).unwrap_or(deadlib_assets::TexMeta { w: 1, h: 1 });
     let fit = scorebox_theme::fit_scorebox_logo(dims.w, dims.h, sprite_zoom, zoom);
     let c = color_with_alpha([1.0; 4], alpha);
     actors.push(act!(sprite_static(texture):

@@ -1,5 +1,5 @@
 use crate::screens::Screen;
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayStyle;
 

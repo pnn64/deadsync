@@ -1,4 +1,4 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_theme_simply_love::views::{
     SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
 };
@@ -316,7 +316,7 @@ fn analyze_replaygain(
     restrict_to: Option<&[PathBuf]>,
     audio_available: bool,
 ) {
-    if !config::get().enable_replaygain || !audio_available {
+    if !config::runtime::get().enable_replaygain || !audio_available {
         return;
     }
     let paths = replaygain_music_paths(restrict_to);
@@ -600,7 +600,7 @@ pub(crate) fn delete_song(
     simfile_path: &Path,
     song_scan_roots: &[PathBuf],
 ) -> Result<Vec<deadsync_chart::SongPack>, String> {
-    if !deadsync_config::prelude::song_path_is_writable(simfile_path) {
+    if !deadsync_config::runtime::song_path_is_writable(simfile_path) {
         return Err(format!(
             "song is in a read-only additional song folder: {}",
             simfile_path.display()

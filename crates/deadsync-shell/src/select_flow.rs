@@ -1,4 +1,4 @@
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_theme_simply_love::views::{SelectFlowPlayerView, SelectFlowRuntimeView};
 
@@ -17,7 +17,7 @@ pub(crate) fn players_view() -> [SelectFlowPlayerView; 2] {
 }
 
 pub(crate) fn runtime_view() -> SelectFlowRuntimeView {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     SelectFlowRuntimeView {
         players: players_view(),
         game: cfg.game_flag,

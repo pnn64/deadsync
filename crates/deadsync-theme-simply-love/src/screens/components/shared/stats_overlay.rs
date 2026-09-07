@@ -1,9 +1,10 @@
 use crate::act;
-use crate::views::{TimingHealth, VisibleStutterSample};
+use crate::views::TimingHealth;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadlib_present::space::{screen_height, screen_width};
 use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
+use deadsync_config::frame_pacing::VisibleStutterSample;
 use std::cell::RefCell;
 use std::fmt::{self, Write};
 use std::sync::Arc;
@@ -37,8 +38,8 @@ struct AudioTimingTextKey {
     underrun_count: u64,
 }
 
-impl From<crate::views::AudioTimingView> for AudioTimingTextKey {
-    fn from(audio: crate::views::AudioTimingView) -> Self {
+impl From<deadsync_theme::views::AudioTimingView> for AudioTimingTextKey {
+    fn from(audio: deadsync_theme::views::AudioTimingView) -> Self {
         Self {
             backend: audio.backend,
             requested_output_mode: audio.requested_output_mode,
@@ -365,8 +366,8 @@ pub fn push_stutter(actors: &mut Vec<Actor>, events: &[VisibleStutterSample]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::views::AudioTimingView;
     use deadlib_render_core::{ClockDomainTrace, PresentModeTrace};
+    use deadsync_theme::views::AudioTimingView;
 
     fn timing(audio: bool) -> TimingHealth {
         TimingHealth {

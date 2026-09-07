@@ -2,7 +2,13 @@ mod frame;
 #[cfg(any(test, feature = "test-util"))]
 pub mod frame_compare;
 
-pub use frame::*;
+pub use frame::{
+    CameraUploadCache, DRAW_STORAGE_NAMES, DRAW_STORAGE_SLOTS, DrawOp, DrawStorageStats, MeshRun,
+    RenderFrame, RenderTargetFrame, SOFTWARE_MESH_STORAGE_SLOT, SOFTWARE_OBJECTS_STORAGE_SLOT,
+    SOFTWARE_TMESH_STORAGE_SLOT, SpriteRun, TexturedMeshBufferCache, TexturedMeshGeometry,
+    TexturedMeshRun, TexturedMeshSource, TexturedMeshUploads, draw_storage_stats,
+    resolve_textured_mesh_geometries, resolve_textured_meshes,
+};
 
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
@@ -628,85 +634,6 @@ impl core::str::FromStr for BackendType {
     }
 }
 
-#[cfg(all(
-    target_os = "windows",
-    not(target_vendor = "win7"),
-    not(target_pointer_width = "32")
-))]
-pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::DirectX, "DirectX"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(
-    target_os = "windows",
-    any(target_vendor = "win7", target_pointer_width = "32")
-))]
-pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::DirectX, "DirectX"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
-pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::Metal, "Metal"),
-    (BackendType::MetalWgpu, "Metal (wgpu)"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(
-    not(any(target_os = "windows", target_os = "macos")),
-    not(target_pointer_width = "32")
-))]
-pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
-pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-
-#[must_use]
-pub fn backend_type_choice_index(backend: BackendType) -> usize {
-    BACKEND_TYPE_CHOICES
-        .iter()
-        .position(|(candidate, _)| *candidate == backend)
-        .unwrap_or(0)
-}
-
-#[must_use]
-pub fn backend_type_from_choice(idx: usize) -> BackendType {
-    BACKEND_TYPE_CHOICES
-        .get(idx)
-        .map_or_else(|| BACKEND_TYPE_CHOICES[0].0, |(backend, _)| *backend)
-}
-
-pub fn build_software_thread_choices() -> Vec<u8> {
-    let max_threads = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(8)
-        .clamp(2, 32);
-    let mut out = Vec::with_capacity(max_threads + 1);
-    out.push(0);
-    for n in 1..=max_threads {
-        out.push(n as u8);
-    }
-    out
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresentModePolicy {
     Mailbox,
@@ -814,22 +741,6 @@ impl PresentModePolicy {
             Self::Mailbox => "mailbox",
             Self::Immediate => "immediate",
         }
-    }
-}
-
-#[must_use]
-pub const fn present_mode_policy_choice_index(policy: PresentModePolicy) -> usize {
-    match policy {
-        PresentModePolicy::Mailbox => 0,
-        PresentModePolicy::Immediate => 1,
-    }
-}
-
-#[must_use]
-pub const fn present_mode_policy_from_choice(idx: usize) -> PresentModePolicy {
-    match idx {
-        1 => PresentModePolicy::Immediate,
-        _ => PresentModePolicy::Mailbox,
     }
 }
 
@@ -953,68 +864,6 @@ mod tests {
         assert!(!Yuv420Upload { u: &[0], ..valid }.is_valid());
     }
 
-    #[test]
-    fn present_mode_policy_choices_match_options_order() {
-        assert_eq!(
-            present_mode_policy_choice_index(PresentModePolicy::Mailbox),
-            0
-        );
-        assert_eq!(
-            present_mode_policy_choice_index(PresentModePolicy::Immediate),
-            1
-        );
-        assert_eq!(
-            present_mode_policy_from_choice(0),
-            PresentModePolicy::Mailbox
-        );
-        assert_eq!(
-            present_mode_policy_from_choice(1),
-            PresentModePolicy::Immediate
-        );
-        assert_eq!(
-            present_mode_policy_from_choice(99),
-            PresentModePolicy::Mailbox
-        );
-    }
-
-    #[test]
-    fn backend_type_choices_match_options_order() {
-        assert_eq!(BACKEND_TYPE_CHOICES[0], (BackendType::OpenGL, "OpenGL"));
-        assert_eq!(backend_type_choice_index(BackendType::OpenGL), 0);
-        assert_eq!(backend_type_from_choice(0), BackendType::OpenGL);
-        assert_eq!(backend_type_from_choice(usize::MAX), BackendType::OpenGL);
-        assert_eq!(
-            backend_type_choice_index(BackendType::Software),
-            BACKEND_TYPE_CHOICES.len() - 1
-        );
-
-        #[cfg(target_os = "windows")]
-        assert!(
-            BACKEND_TYPE_CHOICES
-                .iter()
-                .any(|(backend, _)| *backend == BackendType::DirectX)
-        );
-        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        assert!(
-            BACKEND_TYPE_CHOICES
-                .iter()
-                .any(|(backend, _)| *backend == BackendType::VulkanWgpu)
-        );
-        #[cfg(target_os = "macos")]
-        {
-            assert!(
-                BACKEND_TYPE_CHOICES
-                    .iter()
-                    .any(|(backend, _)| *backend == BackendType::Metal)
-            );
-            assert!(
-                BACKEND_TYPE_CHOICES
-                    .iter()
-                    .any(|(backend, _)| *backend == BackendType::MetalWgpu)
-            );
-        }
-    }
-
     #[cfg(target_os = "macos")]
     #[test]
     fn metal_backend_names_distinguish_native_and_wgpu() {
@@ -1025,14 +874,5 @@ mod tests {
         assert_eq!("wgpu-metal".parse(), Ok(BackendType::MetalWgpu));
         assert_eq!(BackendType::Metal.to_string(), "Metal");
         assert_eq!(BackendType::MetalWgpu.to_string(), "Metal (wgpu)");
-    }
-
-    #[test]
-    fn software_thread_choices_include_auto_and_available_range() {
-        let choices = build_software_thread_choices();
-        assert_eq!(choices.first().copied(), Some(0));
-        assert!(choices.len() >= 3);
-        assert!(choices.windows(2).all(|pair| pair[0] < pair[1]));
-        assert!(choices.len() <= 33);
     }
 }

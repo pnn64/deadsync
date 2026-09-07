@@ -7,7 +7,7 @@ use deadsync_theme_simply_love::views::{
 };
 
 pub(crate) fn init_view() -> PlayerOptionsInitView {
-    let config = deadsync_config::prelude::get();
+    let config = deadsync_config::runtime::get();
     let session = profile::get_session_snapshot();
     let palette_catalog = deadsync_config::judgment_palettes::runtime_catalog(
         deadsync_theme_simply_love::color::JUDGMENT_PRESET,
@@ -55,7 +55,7 @@ pub(crate) fn gameplay_profiles(
     options: &[profile_data::PlayerOptionsData; MAX_PLAYERS],
     judgment_palette_ids: &[Option<String>; MAX_PLAYERS],
     heart_rate_device_ids: &[Option<String>; MAX_PLAYERS],
-    tournament: deadsync_config::prelude::TournamentModeOptions,
+    tournament: deadsync_config::theme::TournamentModeOptions,
     play_style: profile_data::PlayStyle,
 ) -> [profile_data::Profile; MAX_PLAYERS] {
     std::array::from_fn(|idx| {
@@ -72,7 +72,7 @@ pub(crate) fn gameplay_profiles(
 
 fn apply_tournament_policy(
     options: &mut profile_data::PlayerOptionsData,
-    tournament: deadsync_config::prelude::TournamentModeOptions,
+    tournament: deadsync_config::theme::TournamentModeOptions,
     play_style: profile_data::PlayStyle,
 ) {
     if !tournament.enabled {
@@ -80,7 +80,7 @@ fn apply_tournament_policy(
     }
 
     options.show_ex_score =
-        tournament.scoring_system == deadsync_config::prelude::TournamentScoringSystem::Ex;
+        tournament.scoring_system == deadsync_config::theme::TournamentScoringSystem::Ex;
     options.show_hard_ex_score = false;
     options.show_fa_plus_pane = true;
     if tournament.show_step_stats {
@@ -150,9 +150,9 @@ mod tests {
 
         apply_tournament_policy(
             &mut effective,
-            deadsync_config::prelude::TournamentModeOptions {
+            deadsync_config::theme::TournamentModeOptions {
                 enabled: true,
-                scoring_system: deadsync_config::prelude::TournamentScoringSystem::Ex,
+                scoring_system: deadsync_config::theme::TournamentScoringSystem::Ex,
                 show_step_stats: true,
                 enforce_no_cmod: true,
             },
@@ -187,9 +187,9 @@ mod tests {
 
         apply_tournament_policy(
             &mut effective,
-            deadsync_config::prelude::TournamentModeOptions {
+            deadsync_config::theme::TournamentModeOptions {
                 enabled: true,
-                scoring_system: deadsync_config::prelude::TournamentScoringSystem::Itg,
+                scoring_system: deadsync_config::theme::TournamentScoringSystem::Itg,
                 show_step_stats: false,
                 enforce_no_cmod: false,
             },

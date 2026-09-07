@@ -5,11 +5,9 @@ use deadsync_profile::{PlayMode, PlayStyle, PlayerSide};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use deadsync_config::frame_pacing::VisibleStutterSample;
-pub use deadsync_theme::views::{
-    AudioTimingView, CourseGraphStageView, CourseStageView, CourseTypeView, DensityGraphView,
-    EvaluationView, FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle,
-    SelectedCourseView, TimingHealthView,
+use deadsync_theme::views::{
+    AudioTimingView, CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView,
+    FrameStatsSample, SelectedCourseView, TimingHealthView,
 };
 
 /// Concrete evaluation view used by the Simply Love screens.
@@ -65,7 +63,7 @@ impl<'a> PostSelectStageView<'a> {
 pub struct SimplyLoveVisualPolicyView {
     pub background: VisualBackgroundView,
     pub assets: &'static crate::visual_styles::Assets,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub title_logo_texture_key: Option<&'static str>,
     pub srpg10_tint: bool,
     pub screen_bar: ScreenBarBackgroundView,
@@ -91,8 +89,8 @@ impl Default for SimplyLoveVisualPolicyView {
     fn default() -> Self {
         Self {
             background: VisualBackgroundView::Tiled,
-            assets: crate::visual_styles::for_style(deadsync_config::prelude::VisualStyle::Hearts),
-            machine_font: deadsync_config::prelude::MachineFont::default(),
+            assets: crate::visual_styles::for_style(deadsync_config::theme::VisualStyle::Hearts),
+            machine_font: deadsync_config::theme::MachineFont::default(),
             title_logo_texture_key: None,
             srpg10_tint: false,
             screen_bar: ScreenBarBackgroundView::Default,
@@ -106,20 +104,20 @@ pub struct GameplayPolicyView {
     pub translated_titles: bool,
     pub center_single_notefield: bool,
     pub background_brightness: f32,
-    pub background_color: deadsync_config::prelude::Color,
+    pub background_color: deadlib_present::color::Color,
     pub smx_input: bool,
     pub zmod_rating_box_text: bool,
-    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    pub difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
     pub show_bpm_decimal: bool,
-    pub bpm_position: deadsync_config::prelude::GameplayBpmPosition,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub bpm_position: deadsync_config::theme::GameplayBpmPosition,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
     pub smx_profile_enabled: bool,
 }
 
 impl Default for GameplayPolicyView {
     fn default() -> Self {
-        let config = deadsync_config::prelude::Config::default();
+        let config = deadsync_config::app_config::Config::default();
         Self {
             translated_titles: config.translated_titles,
             center_single_notefield: config.center_1player_notefield,
@@ -263,7 +261,7 @@ pub struct PlayerOptionsPolicyView {
     pub allow_per_player_global_offsets: bool,
     pub heart_rate_monitors: bool,
     pub arcade_navigation: bool,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub smx_input: bool,
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
@@ -273,7 +271,7 @@ pub struct PlayerOptionsPolicyView {
 
 impl Default for PlayerOptionsPolicyView {
     fn default() -> Self {
-        let config = deadsync_config::prelude::Config::default();
+        let config = deadsync_config::app_config::Config::default();
         Self {
             allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
             heart_rate_monitors: config.machine_enable_heart_rate_monitors,
@@ -351,8 +349,8 @@ impl Default for PlayerOptionsInitView {
 #[derive(Clone, Debug)]
 pub struct MappingsRuntimeView {
     pub keymap: Keymap,
-    pub game: deadsync_config::prelude::GameFlag,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub game: deadsync_config::theme::GameFlag,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub input_debounce_seconds: f32,
     pub dedicated_three_key_nav: bool,
 }
@@ -361,8 +359,8 @@ impl Default for MappingsRuntimeView {
     fn default() -> Self {
         Self {
             keymap: deadsync_input::default_keymap(),
-            game: deadsync_config::prelude::GameFlag::default(),
-            machine_font: deadsync_config::prelude::MachineFont::default(),
+            game: deadsync_config::theme::GameFlag::default(),
+            machine_font: deadsync_config::theme::MachineFont::default(),
             input_debounce_seconds: 0.02,
             dedicated_three_key_nav: false,
         }
@@ -382,7 +380,7 @@ pub struct SelectFlowPlayerView {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SelectFlowRuntimeView {
     pub players: [SelectFlowPlayerView; 2],
-    pub game: deadsync_config::prelude::GameFlag,
+    pub game: deadsync_config::theme::GameFlag,
     pub play_style: PlayStyle,
     pub play_mode: PlayMode,
     pub premium_free_available: bool,
@@ -424,10 +422,10 @@ pub struct PostSongRuntimeView {
     pub players: [PostSongPlayerView; 2],
     pub play_style: PlayStyle,
     pub player_side: PlayerSide,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub translated_titles: bool,
     pub zmod_rating_box_text: bool,
-    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    pub difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
     pub three_key_navigation: bool,
     pub srpg10_visuals: bool,
     pub machine_leaderboards:
@@ -462,15 +460,15 @@ pub struct EvaluationPolicyView {
     pub translated_titles: bool,
     pub transparent_panels: bool,
     pub srpg10_visuals: bool,
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub zmod_rating_box_text: bool,
-    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
-    pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
+    pub difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
+    pub breakdown_style: deadsync_config::theme::BreakdownStyle,
 }
 
 impl Default for EvaluationPolicyView {
     fn default() -> Self {
-        let config = deadsync_config::prelude::Config::default();
+        let config = deadsync_config::app_config::Config::default();
         Self {
             enable_groovestats: config.enable_groovestats,
             enable_arrowcloud: config.enable_arrowcloud,
@@ -486,12 +484,12 @@ impl Default for EvaluationPolicyView {
             translated_titles: config.translated_titles,
             transparent_panels: matches!(
                 config.machine_evaluation_style.resolve(config.visual_style),
-                deadsync_config::prelude::MachineEvaluationStyle::Transparent
+                deadsync_config::theme::MachineEvaluationStyle::Transparent
             ),
             srpg10_visuals: config.visual_style.is_srpg()
                 && matches!(
                     config.srpg_variant,
-                    deadsync_config::prelude::SrpgVariant::Srpg10
+                    deadsync_config::theme::SrpgVariant::Srpg10
                 ),
             machine_font: config.machine_font,
             zmod_rating_box_text: config.zmod_rating_box_text,
@@ -752,12 +750,12 @@ pub struct SelectCoursePolicyView {
     pub music_wheel_switch_speed: u8,
     pub global_offset_seconds: f32,
     pub dedicated_three_key_nav: bool,
-    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    pub difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
 }
 
 impl Default for SelectCoursePolicyView {
     fn default() -> Self {
-        let config = deadsync_config::prelude::Config::default();
+        let config = deadsync_config::app_config::Config::default();
         Self {
             show_random_courses: config.show_random_courses,
             show_most_played_courses: config.show_most_played_courses,
@@ -824,7 +822,7 @@ pub struct LocalProfileView {
 /// Select Music profile overlay.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfilePickerView {
-    pub game: deadsync_config::prelude::GameFlag,
+    pub game: deadsync_config::theme::GameFlag,
     pub guest: ProfilePickerEntryView,
     pub profiles: Vec<ProfilePickerEntryView>,
     pub default_profiles: [deadsync_profile::ActiveProfile; 2],
@@ -835,7 +833,7 @@ impl Default for ProfilePickerView {
     fn default() -> Self {
         let options = deadsync_profile::PlayerOptionsData::default();
         Self {
-            game: deadsync_config::prelude::GameFlag::default(),
+            game: deadsync_config::theme::GameFlag::default(),
             guest: ProfilePickerEntryView {
                 id: String::new(),
                 display_name: String::new(),
@@ -964,9 +962,9 @@ impl Default for SelectMusicLastPlayedView {
 pub struct SelectMusicSettingsView {
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
-    pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
-    pub sync_graph_orientation: deadsync_config::prelude::GraphOrientation,
-    pub sync_graph_origin: deadsync_config::prelude::GraphOrigin,
+    pub sync_graph_mode: deadsync_config::theme::SyncGraphMode,
+    pub sync_graph_orientation: null_or_die::GraphOrientation,
+    pub sync_graph_origin: deadsync_config::null_or_die::GraphOrigin,
     pub sync_confidence_percent: u8,
 }
 
@@ -1224,7 +1222,7 @@ pub struct OptionsPackSyncView {
 /// copied config is kept whole instead of duplicating its fields in another DTO.
 #[derive(Clone, Debug)]
 pub struct OptionsInitView {
-    pub config: deadsync_config::prelude::Config,
+    pub config: deadsync_config::app_config::Config,
     pub judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog,
     pub updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub app_paths: deadsync_theme::views::AppPathsView,
@@ -1279,7 +1277,7 @@ pub struct SelectMusicMediaPolicyView {
     pub preview_starts_immediately: bool,
     pub show_preview_marker: bool,
     pub replay_gain: bool,
-    pub song_select_bg_mode: deadsync_config::prelude::SelectMusicSongSelectBgMode,
+    pub song_select_bg_mode: deadsync_config::theme::SelectMusicSongSelectBgMode,
 }
 
 /// Shell-prepared score and tournament policy consumed by Simply Love's wheel.
@@ -1287,8 +1285,8 @@ pub struct SelectMusicMediaPolicyView {
 pub struct SelectMusicWheelPolicyView {
     pub show_grades: bool,
     pub show_lamps: bool,
-    pub itl_rank_mode: deadsync_config::prelude::SelectMusicItlRankMode,
-    pub itl_score_mode: deadsync_config::prelude::SelectMusicItlWheelMode,
+    pub itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode,
+    pub itl_score_mode: deadsync_config::theme::SelectMusicItlWheelMode,
 }
 
 impl Default for SelectMusicWheelPolicyView {
@@ -1296,8 +1294,8 @@ impl Default for SelectMusicWheelPolicyView {
         Self {
             show_grades: false,
             show_lamps: false,
-            itl_rank_mode: deadsync_config::prelude::SelectMusicItlRankMode::None,
-            itl_score_mode: deadsync_config::prelude::SelectMusicItlWheelMode::Score,
+            itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,
+            itl_score_mode: deadsync_config::theme::SelectMusicItlWheelMode::Score,
         }
     }
 }
@@ -1306,12 +1304,12 @@ impl Default for SelectMusicWheelPolicyView {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicInteractionPolicyView {
     pub wheel_switch_speed: u8,
-    pub wheel_style: deadsync_config::prelude::SelectMusicWheelStyle,
+    pub wheel_style: deadsync_config::theme::SelectMusicWheelStyle,
     pub hide_inactive_series: bool,
-    pub initial_sort: deadsync_config::prelude::SelectMusicSort,
+    pub initial_sort: deadsync_config::theme::SelectMusicSort,
     pub remember_last_sort: bool,
-    pub series_source: deadsync_config::prelude::SelectMusicSeriesSource,
-    pub new_pack_mode: deadsync_config::prelude::NewPackMode,
+    pub series_source: deadsync_config::theme::SelectMusicSeriesSource,
+    pub new_pack_mode: deadsync_config::theme::NewPackMode,
     pub show_srpg_shop: bool,
     pub srpg10_visuals: bool,
     pub practice_shortcut: deadlib_platform::input::KeyCode,
@@ -1323,14 +1321,14 @@ pub struct SelectMusicInteractionPolicyView {
 impl Default for SelectMusicInteractionPolicyView {
     fn default() -> Self {
         Self {
-            wheel_switch_speed: deadsync_config::prelude::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
-            wheel_style: deadsync_config::prelude::SelectMusicWheelStyle::Itg,
+            wheel_switch_speed: deadsync_config::defaults::DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
+            wheel_style: deadsync_config::theme::SelectMusicWheelStyle::Itg,
             hide_inactive_series: false,
-            initial_sort: deadsync_config::prelude::SelectMusicSort::Series,
+            initial_sort: deadsync_config::theme::SelectMusicSort::Series,
             remember_last_sort: false,
-            series_source: deadsync_config::prelude::SelectMusicSeriesSource::PackIni,
-            new_pack_mode: deadsync_config::prelude::NewPackMode::Disabled,
-            show_srpg_shop: deadsync_config::prelude::DEFAULT_SHOW_SRPG_SHOP,
+            series_source: deadsync_config::theme::SelectMusicSeriesSource::PackIni,
+            new_pack_mode: deadsync_config::theme::NewPackMode::Disabled,
+            show_srpg_shop: deadsync_config::defaults::DEFAULT_SHOW_SRPG_SHOP,
             srpg10_visuals: false,
             practice_shortcut: deadlib_platform::input::KeyCode::KeyP,
             song_search_shortcut: deadlib_platform::input::KeyCode::KeyS,
@@ -1349,41 +1347,43 @@ pub struct SelectMusicPresentationPolicyView {
     pub show_stage_display: bool,
     pub show_gameplay_timer: bool,
     pub step_artist_expanded: bool,
-    pub breakdown_style: deadsync_config::prelude::BreakdownStyle,
-    pub pattern_info_mode: deadsync_config::prelude::SelectMusicPatternInfoMode,
+    pub breakdown_style: deadsync_config::theme::BreakdownStyle,
+    pub pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode,
     pub chart_info_peak_nps: bool,
     pub chart_info_effective_bpm: bool,
     pub chart_info_matrix_rating: bool,
     pub show_breakdown: bool,
     pub pack_ini_offsets: bool,
-    pub default_sync_offset: deadsync_config::prelude::DefaultSyncOffset,
-    pub difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    pub default_sync_offset: deadsync_config::theme::DefaultSyncOffset,
+    pub difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
 }
 
 impl Default for SelectMusicPresentationPolicyView {
     fn default() -> Self {
         Self {
-            show_scorebox: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
+            show_scorebox: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
             scorebox_cycle_enabled:
-                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG
-                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX
-                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX
-                    || deadsync_config::prelude::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+                deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG
+                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX
+                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX
+                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
             scorebox_in_step_pane: false,
-            show_stage_display: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
-            show_gameplay_timer: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
+            show_stage_display: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
+            show_gameplay_timer:
+                deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
             step_artist_expanded: false,
-            breakdown_style: deadsync_config::prelude::BreakdownStyle::Sl,
-            pattern_info_mode: deadsync_config::prelude::SelectMusicPatternInfoMode::Tech,
-            chart_info_peak_nps: deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
+            breakdown_style: deadsync_config::theme::BreakdownStyle::Sl,
+            pattern_info_mode: deadsync_config::theme::SelectMusicPatternInfoMode::Tech,
+            chart_info_peak_nps:
+                deadsync_config::defaults::DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
             chart_info_effective_bpm:
-                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
+                deadsync_config::defaults::DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
             chart_info_matrix_rating:
-                deadsync_config::prelude::DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
-            show_breakdown: deadsync_config::prelude::DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
-            pack_ini_offsets: deadsync_config::prelude::DEFAULT_MACHINE_PACK_INI_OFFSETS,
-            default_sync_offset: deadsync_config::prelude::DefaultSyncOffset::Null,
-            difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme::SimplyLove,
+                deadsync_config::defaults::DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
+            show_breakdown: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
+            pack_ini_offsets: deadsync_config::defaults::DEFAULT_MACHINE_PACK_INI_OFFSETS,
+            default_sync_offset: deadsync_config::theme::DefaultSyncOffset::Null,
+            difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme::SimplyLove,
         }
     }
 }
@@ -1391,7 +1391,7 @@ impl Default for SelectMusicPresentationPolicyView {
 /// Runtime/config policy used to expose Select Music features and input paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicPolicyView {
-    pub machine_font: deadsync_config::prelude::MachineFont,
+    pub machine_font: deadsync_config::theme::MachineFont,
     pub dedicated_menu_only: bool,
     pub three_key_navigation: bool,
     pub fsr_profiles: bool,
@@ -1484,8 +1484,8 @@ pub struct MainMenuSmxConflictView {
 /// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MainMenuRuntimeView {
-    pub game: deadsync_config::prelude::GameFlag,
-    pub coin_mode: deadsync_config::prelude::CoinMode,
+    pub game: deadsync_config::theme::GameFlag,
+    pub coin_mode: deadsync_config::coin::CoinMode,
     pub event_mode: bool,
     pub credits: u32,
     pub can_start: bool,
@@ -1503,8 +1503,8 @@ pub struct MainMenuRuntimeView {
 impl Default for MainMenuRuntimeView {
     fn default() -> Self {
         Self {
-            game: deadsync_config::prelude::GameFlag::default(),
-            coin_mode: deadsync_config::prelude::CoinMode::Home,
+            game: deadsync_config::theme::GameFlag::default(),
+            coin_mode: deadsync_config::coin::CoinMode::Home,
             event_mode: true,
             credits: 0,
             can_start: true,

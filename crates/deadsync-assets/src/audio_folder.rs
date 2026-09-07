@@ -21,7 +21,7 @@ use std::{
 /// Returns true when the folder feature is enabled in config.
 #[inline(always)]
 fn enabled() -> bool {
-    deadsync_config::prelude::get().custom_sounds_enabled
+    deadsync_config::runtime::get().custom_sounds_enabled
 }
 
 /// Resolves an enabled custom sound from eligible, non-underscore `.ogg` files.

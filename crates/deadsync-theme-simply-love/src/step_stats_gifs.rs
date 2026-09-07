@@ -176,7 +176,7 @@ static CATALOG: LazyLock<Vec<GifDefinition>> = LazyLock::new(|| {
 });
 
 fn catalog_roots() -> Vec<PathBuf> {
-    let roots = deadsync_assets::graphic_texture_roots(GIF_FOLDER);
+    let roots = deadsync_assets::textures::graphic_texture_roots(GIF_FOLDER);
     #[cfg(test)]
     let roots = {
         let mut roots = roots;

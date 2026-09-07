@@ -1,7 +1,9 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::tr;
+use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -9,13 +11,13 @@ use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_
 use crate::screens::select_style_flow::{
     self as style_flow, Choice, InputEffect, State as StyleFlow,
 };
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::SelectFlowRuntimeView;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
+use deadsync_theme::FontRole;
 
 /* ------------------------------ layout ------------------------------- */
 // Simply Love: ScreenSelectStyle underlay/choice.lua

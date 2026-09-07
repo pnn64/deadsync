@@ -1,5 +1,5 @@
 use crate::act;
-use crate::screens::evaluation::ScoreInfo;
+use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec};
 use std::cell::RefCell;
 use std::sync::Arc;

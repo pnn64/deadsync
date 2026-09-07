@@ -4,15 +4,17 @@
 //! want as P1, then the pad you want as P2. The theme owns this interaction and
 //! emits shell requests that pin the selected serials and drive indicator lights.
 
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key_for_text};
 use crate::color;
+use crate::fonts::machine_font_key_for_text;
+use crate::i18n::tr;
+use crate::screens::Screen;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{self, screen_center_x, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_theme::FontRole;
 use deadsync_theme::views::SmxAssignmentView;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -422,7 +424,7 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{accept_p2_serial, handle_input, init, on_enter, pressed_slot, update};
-    use crate::screens::ThemeEffect;
+    use crate::SimplyLoveEffect as ThemeEffect;
     use crate::{SimplyLoveHardwareRequest, SimplyLoveRuntimeRequest};
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputEvent, VirtualAction};

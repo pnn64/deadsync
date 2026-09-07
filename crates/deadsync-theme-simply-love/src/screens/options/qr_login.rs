@@ -10,11 +10,12 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::color;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::qr_code;
-use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
@@ -202,7 +203,7 @@ pub fn push_qr_login_overlay_actors(
 ) {
     let key = QrLoginPresentationKey {
         active_color_index,
-        i18n_revision: crate::assets::i18n::revision(),
+        i18n_revision: crate::i18n::revision(),
         screen_width_bits: screen_width().to_bits(),
         screen_height_bits: screen_height().to_bits(),
     };

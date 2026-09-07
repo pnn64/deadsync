@@ -8,8 +8,6 @@ mod runtime;
 mod sfx_cache;
 
 pub use clock::timing_diag_enabled;
-pub use deadlib_audio::{InitConfig, LinuxAudioBackend};
-pub use deadlib_audio_core::{MusicStreamClockSnapshot, OutputDeviceInfo, OutputTimingSnapshot};
 pub use mix::{AudioMixLevels, audio_mix_levels, set_audio_mix_levels};
 pub use music_map::MusicClock;
 #[cfg(target_os = "linux")]

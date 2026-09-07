@@ -1,22 +1,26 @@
 use crate::screens::SimplyLoveScreen;
-use crate::views::{DensityGraphView, ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
-use deadlib_platform::input::KeyCode;
+use crate::views::{ManageLocalProfilesView, SimplyLoveDensityGraphSlot};
 #[cfg(target_os = "windows")]
-use deadsync_config::prelude::WindowsPadBackend;
-use deadsync_config::prelude::{
-    BreakdownStyle, CoinMode, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode,
-    LanguageFlag, LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont,
-    MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, NoteScrollClock,
-    RandomBackgroundMode, SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
-    SelectMusicSongSelectBgMode, SelectMusicSort, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SmxPackName, SmxPadPreset, SrpgVariant, TournamentScoringSystem,
-    VersionOverlaySide, VisualStyle,
+use deadlib_input_native::WindowsPadBackend;
+use deadlib_platform::input::KeyCode;
+use deadsync_config::audio::NoteScrollClock;
+use deadsync_config::coin::CoinMode;
+use deadsync_config::options::SmxPackName;
+use deadsync_config::theme::{
+    BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag, GameplayBannerMode, LanguageFlag,
+    LogLevel, MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
+    MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicDefaultSort,
+    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSeriesSource, SelectMusicSongSelectBgMode,
+    SelectMusicSort, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant,
+    TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use deadsync_input::{InputBinding, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
+use deadsync_smx::SmxPadPreset;
 use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_theme::views::DensityGraphView;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
 use std::path::PathBuf;
 use std::sync::Arc;

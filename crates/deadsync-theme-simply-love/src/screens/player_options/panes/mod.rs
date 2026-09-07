@@ -159,14 +159,15 @@ pub(super) fn apply_profile_defaults(
     let no_tap_label = tr("PlayerOptions", NO_TAP_EXPLOSION_LABEL);
     // Initialize Judgment Font row from profile setting
     if let Some(row) = row_map.get_mut(RowId::JudgmentFont) {
-        row.selected_choice_index[player_idx] = assets::judgment_texture_choices()
-            .iter()
-            .position(|choice| {
-                choice
-                    .key
-                    .eq_ignore_ascii_case(profile.judgment_graphic.as_str())
-            })
-            .unwrap_or(0);
+        row.selected_choice_index[player_idx] =
+            deadsync_assets::textures::judgment_texture_choices()
+                .iter()
+                .position(|choice| {
+                    choice
+                        .key
+                        .eq_ignore_ascii_case(profile.judgment_graphic.as_str())
+                })
+                .unwrap_or(0);
     }
     // Initialize NoteSkin row from profile setting
     if let Some(row) = row_map.get_mut(RowId::NoteSkin) {
@@ -207,24 +208,26 @@ pub(super) fn apply_profile_defaults(
     }
     // Initialize Hold Judgment row from profile setting (Love, mute, ITG2, None)
     if let Some(row) = row_map.get_mut(RowId::HoldJudgment) {
-        row.selected_choice_index[player_idx] = assets::hold_judgment_texture_choices()
-            .iter()
-            .position(|choice| {
-                choice
-                    .key
-                    .eq_ignore_ascii_case(profile.hold_judgment_graphic.as_str())
-            })
-            .unwrap_or(0);
+        row.selected_choice_index[player_idx] =
+            deadsync_assets::textures::hold_judgment_texture_choices()
+                .iter()
+                .position(|choice| {
+                    choice
+                        .key
+                        .eq_ignore_ascii_case(profile.hold_judgment_graphic.as_str())
+                })
+                .unwrap_or(0);
     }
     if let Some(row) = row_map.get_mut(RowId::HeldGraphic) {
-        row.selected_choice_index[player_idx] = assets::held_miss_texture_choices()
-            .iter()
-            .position(|choice| {
-                choice
-                    .key
-                    .eq_ignore_ascii_case(profile.held_miss_graphic.as_str())
-            })
-            .unwrap_or(0);
+        row.selected_choice_index[player_idx] =
+            deadsync_assets::textures::held_miss_texture_choices()
+                .iter()
+                .position(|choice| {
+                    choice
+                        .key
+                        .eq_ignore_ascii_case(profile.held_miss_graphic.as_str())
+                })
+                .unwrap_or(0);
     }
     if let Some(row) = row_map.get_mut(RowId::StepStatsExtra) {
         row.selected_choice_index[player_idx] =

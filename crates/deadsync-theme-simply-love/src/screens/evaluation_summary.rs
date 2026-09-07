@@ -1,7 +1,9 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::evaluation::{FooterClock, eval_grades};
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -10,7 +12,6 @@ use crate::screens::components::shared::{
     banner as shared_banner, screen_bar, transitions, visual_style_bg,
 };
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{PostSelectStageView, PostSongRuntimeView};
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
@@ -21,6 +22,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
+use deadsync_theme::FontRole;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::sync::Arc;
 
@@ -84,7 +86,7 @@ impl SummaryRows {
         translated_titles: bool,
         zmod_rating_box_text: bool,
     ) -> bool {
-        let i18n_revision = crate::assets::i18n::revision();
+        let i18n_revision = crate::i18n::revision();
         if !self.dirty
             && self.i18n_revision == i18n_revision
             && self.active_color_index == active_color_index
@@ -146,7 +148,7 @@ impl SummaryLabels {
     }
 
     fn sync(&mut self, page: usize, pages: usize) -> bool {
-        let i18n_revision = crate::assets::i18n::revision();
+        let i18n_revision = crate::i18n::revision();
         if self.i18n_revision == i18n_revision && self.page == page && self.pages == pages {
             return false;
         }
@@ -161,7 +163,7 @@ impl SummaryLabels {
             "PageFormat",
             &[("page", page_text.as_str()), ("pages", pages_text.as_str())],
         );
-        self.i18n_revision = crate::assets::i18n::revision();
+        self.i18n_revision = crate::i18n::revision();
         self.page = page;
         self.pages = pages;
         true
@@ -384,7 +386,7 @@ fn build_row_text(
         .song
         .banner_path
         .as_deref()
-        .map(crate::assets::media_path_key)
+        .map(deadlib_assets::media_path_key)
         .unwrap_or_else(|| {
             let banner_num = active_color_index.rem_euclid(12) + 1;
             Arc::from(format!("banner{banner_num}.png"))
@@ -451,9 +453,9 @@ fn build_player_stats(
     p: &stage_stats::PlayerStageSummary,
     text: &SummaryPlayerText,
     active_color_index: i32,
-    difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
     elapsed: f32,
-    machine_font: deadsync_config::prelude::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
     judgment_palette: JudgmentPalette,
 ) -> Vec<Actor> {
     let (col1x, col2x, grade_x, align1_x, align2_x, align1_text, align2_text, col1_eps) = match side
@@ -674,9 +676,9 @@ fn build_row(
     stage: &stage_stats::StageSummary,
     text: &SummaryRowText,
     active_color_index: i32,
-    difficulty_color_scheme: deadsync_config::prelude::DifficultyColorScheme,
+    difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme,
     elapsed: f32,
-    machine_font: deadsync_config::prelude::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
     judgment_palettes: [JudgmentPalette; 2],
 ) -> Actor {
     let cx = screen_center_x();

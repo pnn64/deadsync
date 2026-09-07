@@ -4,8 +4,8 @@
 //! retains prepared panel content between source revisions, while input
 //! continues to inspect the current [`FfmpegPhase`].
 
-use crate::assets::i18n::{tr, tr_fmt};
 use crate::effects::SimplyLoveUpdaterRequest;
+use crate::i18n::{tr, tr_fmt};
 use crate::views::{
     SimplyLoveFfmpegPhase as FfmpegPhase, SimplyLoveUpdateErrorKind as ActionErrorKind,
 };

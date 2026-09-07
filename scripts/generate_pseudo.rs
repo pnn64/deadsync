@@ -11,7 +11,7 @@
 //!
 //! Run with: `cargo run --bin generate_pseudo`
 
-use deadsync_config::prelude::SimpleIni;
+use deadsync_config::ini::SimpleIni;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::path::Path;

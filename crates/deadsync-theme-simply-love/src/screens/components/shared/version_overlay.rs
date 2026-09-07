@@ -9,9 +9,9 @@
 //! `app/mod.rs` checks it each frame.
 
 use crate::act;
-use crate::config::{LogLevel, VersionOverlaySide};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_height, screen_width};
+use deadsync_config::theme::{LogLevel, VersionOverlaySide};
 use std::sync::{Arc, OnceLock};
 
 /// Z just under the FPS/stats overlay (`32020`) so the two don't fight

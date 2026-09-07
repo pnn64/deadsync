@@ -19,14 +19,15 @@ use deadlib_present::cache::{
 use deadlib_present::space::widescale;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render_core::{BlendMode, MeshVertex};
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_score as score_data;
 
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key, machine_font_key_for_text, visual_styles};
+use crate::fonts::{machine_font_key, machine_font_key_for_text};
+use crate::i18n::{tr, tr_fmt};
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
+use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
@@ -34,14 +35,15 @@ use deadsync_gameplay::build_crossover_rows;
 use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::judgment;
 use deadsync_rules::timing as timing_stats;
+use deadsync_theme::FontRole;
 use log::warn;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::screens::ThemeEffect;
-pub use crate::views::{CourseGraphStage, ScoreInfo};
+use crate::SimplyLoveEffect as ThemeEffect;
+use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
     EvaluationContextView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
     SimplyLoveGrooveStatsService,
@@ -50,7 +52,6 @@ use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
-pub use deadsync_score::ColumnJudgments;
 // Keyboard handling is centralized in app via virtual actions
 
 /* ---------------------------- transitions ---------------------------- */
@@ -660,7 +661,7 @@ fn submit_footer_lines(
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct SubmitSource {
     service: SimplyLoveGrooveStatsService,
-    machine_font: deadsync_config::prelude::MachineFont,
+    machine_font: deadsync_config::theme::MachineFont,
     expected_gs: bool,
     expected_ac: bool,
     gs_status: Option<score_data::GrooveStatsSubmitUiStatus>,
@@ -705,7 +706,7 @@ impl Default for SubmitPresentation {
 
 impl SubmitPresentation {
     fn sync(&mut self, source: SubmitSource) -> bool {
-        let revision = crate::assets::i18n::revision();
+        let revision = crate::i18n::revision();
         if self.source == Some(source) && self.i18n_revision == revision {
             return false;
         }
@@ -730,7 +731,7 @@ impl SubmitPresentation {
         self.source = Some(source);
         // Translation lookup can initialize the test bundle and advance the
         // observable revision, so record it after every localized field loads.
-        self.i18n_revision = crate::assets::i18n::revision();
+        self.i18n_revision = crate::i18n::revision();
         self.generation = self.generation.wrapping_add(1);
         true
     }
@@ -1100,7 +1101,7 @@ mod tests {
         submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
         submit_footer_lines, sync_runtime_view,
     };
-    use crate::assets::i18n;
+    use crate::i18n;
     use crate::views::EvaluationRuntimeView;
     use deadlib_present::actors::{Actor, TextAlign};
     use deadsync_chart::ChartData;
@@ -1257,13 +1258,13 @@ mod tests {
 
         assert!(matches!(
             super::handle_input(&mut state, &press(VirtualAction::p1_right)),
-            crate::screens::ThemeEffect::None
+            crate::SimplyLoveEffect::None
         ));
         assert_eq!(state.result_dialogs[0].as_ref().unwrap().page, 1);
 
         assert!(matches!(
             super::handle_input(&mut state, &press(VirtualAction::p1_start)),
-            crate::screens::ThemeEffect::None
+            crate::SimplyLoveEffect::None
         ));
         assert!(!state.result_dialog_visible);
         assert!(state.result_dialogs[0].is_none());
@@ -1299,7 +1300,7 @@ mod tests {
 
         assert_eq!(
             submit_footer_gs_label_for(SimplyLoveGrooveStatsService::BoogieStats),
-            crate::assets::i18n::tr("SubmitStatus", "BSLabel")
+            crate::i18n::tr("SubmitStatus", "BSLabel")
         );
         assert_eq!(
             active_groovestats_service_name(SimplyLoveGrooveStatsService::BoogieStats),
@@ -2579,7 +2580,7 @@ impl ResultText {
         Self {
             meter: Arc::from(meter.to_string()),
             artist: Arc::from(artist),
-            banner_key: banner_path.map(crate::assets::media_path_key),
+            banner_key: banner_path.map(deadlib_assets::media_path_key),
             full_titles: [full_title, translit_title],
         }
     }
@@ -3998,9 +3999,9 @@ impl SfxPaths {
     #[must_use]
     pub fn choose() -> Self {
         Self {
-            personal_best: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_pb"),
-            world_record: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_wr"),
-            nice: crate::assets::audio_folder::random_sfx("assets/sounds/evaluation_nice"),
+            personal_best: deadsync_assets::audio_folder::random_sfx("assets/sounds/evaluation_pb"),
+            world_record: deadsync_assets::audio_folder::random_sfx("assets/sounds/evaluation_wr"),
+            nice: deadsync_assets::audio_folder::random_sfx("assets/sounds/evaluation_nice"),
         }
     }
 
@@ -4020,8 +4021,8 @@ impl SfxPaths {
 #[must_use]
 pub fn entry_sfx(
     failed: bool,
-    visual_style: deadsync_config::prelude::VisualStyle,
-    srpg_variant: deadsync_config::prelude::SrpgVariant,
+    visual_style: deadsync_config::theme::VisualStyle,
+    srpg_variant: deadsync_config::theme::SrpgVariant,
 ) -> Option<std::path::PathBuf> {
     if visual_styles::srpg10_active(visual_style, srpg_variant) {
         Some(
@@ -4033,7 +4034,7 @@ pub fn entry_sfx(
             .into(),
         )
     } else {
-        crate::assets::audio_folder::random_sfx(if failed {
+        deadsync_assets::audio_folder::random_sfx(if failed {
             "assets/sounds/evaluation_fail"
         } else {
             "assets/sounds/evaluation_pass"
@@ -6309,12 +6310,12 @@ pub fn push_actors(
                 let breakdown_text = {
                     let chart = &si.chart;
                     let (detailed, partial, simple) = match policy.breakdown_style {
-                        deadsync_config::prelude::BreakdownStyle::Sn => (
+                        deadsync_config::theme::BreakdownStyle::Sn => (
                             &chart.sn_detailed_breakdown,
                             &chart.sn_partial_breakdown,
                             &chart.sn_simple_breakdown,
                         ),
-                        deadsync_config::prelude::BreakdownStyle::Sl => (
+                        deadsync_config::theme::BreakdownStyle::Sl => (
                             &chart.detailed_breakdown,
                             &chart.partial_breakdown,
                             &chart.simple_breakdown,

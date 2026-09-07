@@ -3,7 +3,7 @@ use crate::sync_analysis_cache::{
 };
 use deadlib_audio_decode as decode;
 use deadsync_chart::SongData;
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_theme_simply_love::{
     SimplyLoveSyncEvent, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner,
@@ -119,7 +119,7 @@ impl Service {
         emit_freq_delta: bool,
     ) {
         self.cancel(owner);
-        let cache_results = config::get().null_or_die_cache_results;
+        let cache_results = config::runtime::get().null_or_die_cache_results;
         let cancel = Arc::new(AtomicBool::new(false));
         let thread_cancel = Arc::clone(&cancel);
         let rx = if owner == SimplyLoveSyncOwner::SelectMusicSong {
@@ -151,7 +151,7 @@ impl Service {
         &self,
         changes: &[deadsync_simfile::sync_offset::SongOffsetSyncChange],
     ) {
-        if !config::get().null_or_die_cache_results {
+        if !config::runtime::get().null_or_die_cache_results {
             return;
         }
         self.cache.refresh_applied(
@@ -231,8 +231,8 @@ fn run_song(
         )));
         return;
     };
-    let cfg = config::null_or_die_bias_cfg();
-    let options = AnalysisOptions::new(&cfg, config::get().null_or_die_confidence_percent);
+    let cfg = config::runtime::null_or_die_bias_cfg();
+    let options = AnalysisOptions::new(&cfg, config::runtime::get().null_or_die_confidence_percent);
     let prepared = sync_music_path(target.song.as_ref(), target.chart_ix)
         .ok()
         .and_then(|music_path| {
@@ -260,7 +260,7 @@ fn run_song(
     let prepared = prepared.and_then(super::sync_analysis_cache::TargetPreparation::into_prepared);
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta,
-        orientation: config::get().null_or_die_graph_orientation,
+        orientation: config::runtime::get().null_or_die_graph_orientation,
     };
     let kernel = cfg.kernel_type;
     let result = analyze_song_chart_stream(
@@ -399,11 +399,11 @@ fn run_pack(
     cache_results: bool,
 ) {
     let worker_count = pack_worker_count(targets.len());
-    let cfg = Arc::new(config::null_or_die_bias_cfg());
-    let options = AnalysisOptions::new(&cfg, config::get().null_or_die_confidence_percent);
+    let cfg = Arc::new(config::runtime::null_or_die_bias_cfg());
+    let options = AnalysisOptions::new(&cfg, config::runtime::get().null_or_die_confidence_percent);
     let stream_cfg = BiasStreamCfg {
         emit_freq_delta: false,
-        orientation: config::get().null_or_die_graph_orientation,
+        orientation: config::runtime::get().null_or_die_graph_orientation,
     };
     let (job_tx, job_rx) = mpsc::channel::<(usize, SimplyLoveSyncTarget)>();
     let job_rx = Arc::new(Mutex::new(job_rx));
@@ -535,7 +535,7 @@ fn pack_worker_count(target_count: usize) -> usize {
     let available = std::thread::available_parallelism()
         .map(std::num::NonZero::get)
         .unwrap_or(1);
-    let configured = match config::get().null_or_die_pack_sync_threads {
+    let configured = match config::runtime::get().null_or_die_pack_sync_threads {
         0 => available,
         1 => 1,
         count => usize::from(count).min(available).max(1),

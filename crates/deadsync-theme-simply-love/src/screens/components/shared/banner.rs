@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets;
 use deadlib_present::actors::Actor;
 use std::sync::Arc;
 
@@ -51,14 +50,14 @@ fn cover_uv_for_dims(tex_w: f32, tex_h: f32, frame_w: f32, frame_h: f32) -> Opti
 #[inline(always)]
 #[must_use]
 pub fn clipped_uv(texture_key: &str, frame_w: f32, frame_h: f32) -> Option<[f32; 4]> {
-    let meta = assets::texture_dims(texture_key)?;
+    let meta = deadlib_assets::texture_dims(texture_key)?;
     clipped_uv_for_dims(meta.w as f32, meta.h as f32, frame_w, frame_h)
 }
 
 #[inline(always)]
 #[must_use]
 pub fn cover_uv(texture_key: &str, frame_w: f32, frame_h: f32) -> Option<[f32; 4]> {
-    let meta = assets::texture_dims(texture_key)?;
+    let meta = deadlib_assets::texture_dims(texture_key)?;
     cover_uv_for_dims(meta.w as f32, meta.h as f32, frame_w, frame_h)
 }
 

@@ -1,5 +1,4 @@
 use crate::act;
-use crate::assets;
 use deadlib_present::actors::Actor;
 use deadlib_render_core::SamplerDesc;
 use deadsync_rules::judgment::{self, JudgeGrade};
@@ -576,13 +575,13 @@ static AFFLUENT_SOURCE_IMAGES: OnceLock<Option<AffluentSourceImages>> = OnceLock
 fn clipped_affluent_texture(rot_deg: f32) -> Option<Arc<str>> {
     let bucket = affluent_rot_bucket(rot_deg);
     let key = &AFFLUENT_CLIP_KEYS[bucket as usize];
-    if assets::texture_dims(key).is_some() {
+    if deadlib_assets::texture_dims(key).is_some() {
         return Some(Arc::clone(key));
     }
 
     let rot = bucket as f32 * AFFLUENT_ROT_BUCKET_DEG;
     let image = build_clipped_affluent_texture(rot)?;
-    assets::register_generated_texture(key, image, SamplerDesc::default());
+    deadlib_assets::register_generated_texture(key, image, SamplerDesc::default());
     Some(Arc::clone(key))
 }
 

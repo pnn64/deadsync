@@ -1,7 +1,7 @@
-use deadsync_config::prelude::SmxPadPreset;
 use deadsync_profile::pad_config;
 use deadsync_profile::pad_config_sync::AppliedPadConfig;
 use deadsync_smx::SmxInfo;
+use deadsync_smx::SmxPadPreset;
 use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
@@ -34,7 +34,7 @@ pub struct SmxLightBrightnessPlan {
 
 pub fn smx_assignment_view() -> SmxAssignmentView {
     let manager = deadsync_smx::manager();
-    let (saved_p1, saved_p2) = deadsync_config::prelude::smx_pad_assignment();
+    let (saved_p1, saved_p2) = deadsync_config::runtime::smx_pad_assignment();
     SmxAssignmentView {
         pads: std::array::from_fn(|slot| {
             let info = deadsync_smx::get_info(slot);
@@ -70,7 +70,7 @@ pub fn smx_gif_catalog_view() -> SmxGifCatalogView {
 
 pub fn apply_smx_underglow() {
     let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
-    let cfg = deadsync_config::prelude::get();
+    let cfg = deadsync_config::runtime::get();
     let colors = deadsync_theme_simply_love::color::underglow_rgba(cfg.simply_love_color, lone_pad);
     if let Some(plan) =
         deadsync_config::runtime_state::smx_underglow_colors_from_config(&cfg, colors)
@@ -81,13 +81,13 @@ pub fn apply_smx_underglow() {
 }
 
 pub fn set_smx_underglow_theme(enabled: bool) {
-    if deadsync_config::prelude::update_smx_underglow_theme(enabled) && enabled {
+    if deadsync_config::runtime_update::update_smx_underglow_theme(enabled) && enabled {
         apply_smx_underglow();
     }
 }
 
 pub fn set_smx_underglow_grb(grb: bool) {
-    if !deadsync_config::prelude::update_smx_underglow_grb(grb) {
+    if !deadsync_config::runtime_update::update_smx_underglow_grb(grb) {
         return;
     }
     deadsync_smx::set_platform_lights_grb(grb);
@@ -95,13 +95,16 @@ pub fn set_smx_underglow_grb(grb: bool) {
 }
 
 pub fn set_theme_color(index: i32) {
-    if deadsync_config::prelude::update_simply_love_color(index) {
+    if deadsync_config::runtime_update::update_simply_love_color(index) {
         apply_smx_underglow();
     }
 }
 
 pub fn set_smx_assignment(p1_serial: Option<String>, p2_serial: Option<String>) {
-    if deadsync_config::prelude::update_smx_pad_assignment(p1_serial.clone(), p2_serial.clone()) {
+    if deadsync_config::runtime_update::update_smx_pad_assignment(
+        p1_serial.clone(),
+        p2_serial.clone(),
+    ) {
         deadsync_smx::set_player_assignment(p1_serial, p2_serial);
     }
 }

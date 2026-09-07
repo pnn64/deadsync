@@ -1,9 +1,9 @@
 use super::super::*;
 
-pub(in crate::screens::options) const COIN_MODE_VALUES: [deadsync_config::prelude::CoinMode; 3] = [
-    deadsync_config::prelude::CoinMode::Home,
-    deadsync_config::prelude::CoinMode::Pay,
-    deadsync_config::prelude::CoinMode::Free,
+pub(in crate::screens::options) const COIN_MODE_VALUES: [deadsync_config::coin::CoinMode; 3] = [
+    deadsync_config::coin::CoinMode::Home,
+    deadsync_config::coin::CoinMode::Pay,
+    deadsync_config::coin::CoinMode::Free,
 ];
 pub(in crate::screens::options) const PREMIUM_MINUTE_VALUES: [u8; 7] = [0, 10, 11, 12, 13, 14, 15];
 pub(in crate::screens::options) const PREMIUM_GRACE_VALUES: [u16; 11] =

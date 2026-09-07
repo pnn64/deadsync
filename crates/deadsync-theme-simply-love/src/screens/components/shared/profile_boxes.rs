@@ -1,12 +1,12 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{self};
+use crate::i18n::{tr, tr_fmt};
+use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::ProfilePickerView;
 use deadlib_assets::AssetManager;
 use deadsync_assets::noteskin::{self, Noteskin};
@@ -15,7 +15,7 @@ use crate::color;
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render_core::BlendMode;
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
     ModelMeshCache, noteskin_model_actor_from_draw, noteskin_model_actor_from_draw_cached,
@@ -318,9 +318,9 @@ fn build_choices(
         guest.mini_indicator,
         &guest.noteskin,
     );
-    let guest_judgment_texture = assets::resolve_texture_choice(
+    let guest_judgment_texture = deadsync_assets::textures::resolve_texture_choice_key(
         guest.judgment.texture_key(),
-        assets::judgment_texture_choices(),
+        deadsync_assets::textures::judgment_texture_choices(),
     );
     out.push(Choice {
         kind: profile_data::ActiveProfile::Guest,
@@ -339,9 +339,9 @@ fn build_choices(
             profile.mini_indicator,
             &profile.noteskin,
         );
-        let judgment_texture = assets::resolve_texture_choice(
+        let judgment_texture = deadsync_assets::textures::resolve_texture_choice_key(
             profile.judgment.texture_key(),
-            assets::judgment_texture_choices(),
+            deadsync_assets::textures::judgment_texture_choices(),
         );
         out.push(Choice {
             kind: profile_data::ActiveProfile::Local { id: profile.id },
@@ -1780,9 +1780,9 @@ fn push_scroller_frame(
             if retain_static_payloads {
                 choice.judgment_texture
             } else {
-                assets::resolve_texture_choice(
+                deadsync_assets::textures::resolve_texture_choice_key(
                     choice.judgment.texture_key(),
-                    assets::judgment_texture_choices(),
+                    deadsync_assets::textures::judgment_texture_choices(),
                 )
             }
         });

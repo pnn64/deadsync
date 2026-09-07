@@ -1,13 +1,14 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
 use crate::effects::{
     SimplyLoveConfigRequest, SimplyLoveMappingsConfigRequest, SimplyLoveRuntimeRequest,
 };
+use crate::fonts::machine_font_key;
+use crate::screens::Screen;
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::MappingsRuntimeView;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::KeyCode;
@@ -16,7 +17,7 @@ use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
-use deadsync_config::prelude::GameFlag;
+use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{
     GamepadCodeBinding, InputBinding, InputEvent, Keymap, VirtualAction,
@@ -24,6 +25,7 @@ use deadsync_input::{
     protected_default_key_for_action, updated_keymap_unique_gamepad,
     updated_keymap_unique_keyboard,
 };
+use deadsync_theme::FontRole;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -1956,7 +1958,7 @@ mod tests {
     use deadlib_platform::input::KeyCode;
     use deadlib_platform::input::RawKeyboardEvent;
     use deadlib_platform::input::{PadCode, PadEvent, PadId};
-    use deadsync_config::prelude::GameFlag;
+    use deadsync_config::theme::GameFlag;
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputBinding, InputEvent, Keymap, VirtualAction};
     use deadsync_theme::AudioRequest;

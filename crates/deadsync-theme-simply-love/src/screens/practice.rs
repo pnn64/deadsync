@@ -1,10 +1,12 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{self, LookupKey, lookup_key};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n;
+use crate::i18n::{LookupKey, lookup_key};
+use crate::screens::Screen;
 use crate::screens::components::shared::density;
 use crate::screens::gameplay as gameplay_screen;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::PracticeRuntimeView;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::KeyCode;
@@ -24,6 +26,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
+use deadsync_theme::FontRole;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -3080,9 +3083,10 @@ mod tests {
         push_selection_info, quantized_music_rate, rotate_practice_density_mesh,
         timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
+    use crate::SimplyLoveEffect as ThemeEffect;
     use crate::SimplyLoveRuntimeRequest;
-    use crate::assets::i18n;
-    use crate::screens::{Screen, ThemeEffect};
+    use crate::i18n;
+    use crate::screens::Screen;
     use deadlib_platform::input::KeyCode;
     use deadlib_render_core::MeshVertex;
     use deadsync_gameplay::{GameplayOffsetAdjustKey, GameplayRawKeyInput};

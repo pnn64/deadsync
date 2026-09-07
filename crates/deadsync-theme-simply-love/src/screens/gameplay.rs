@@ -1,7 +1,9 @@
+use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt, tr_fmt_into};
-use crate::assets::{FontRole, machine_font_key, visual_styles};
 use crate::color;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt, tr_fmt_into};
+use crate::screens::Screen;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
     score_leader_alphas,
@@ -17,8 +19,8 @@ pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, He
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ThemeEffect};
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
+use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{
     Actor, ActorResourceArena, FlatDraw, InlineText, RetainedActorFrame, SharedActorFrameScratch,
@@ -90,6 +92,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
 use deadsync_song_lua::{apply_overlay_delta, overlay_state_lerp};
+use deadsync_theme::FontRole;
 use glam::{Mat2 as Matrix2, Mat4 as Matrix4, Vec2 as Vector2, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::{Cell, RefCell};
@@ -109,9 +112,9 @@ pub mod actor_conformance;
 #[must_use]
 pub fn start_sfx(restart_count: u32) -> Option<PathBuf> {
     if restart_count == 0 {
-        crate::assets::audio_folder::random_sfx("assets/sounds/song_start")
+        deadsync_assets::audio_folder::random_sfx("assets/sounds/song_start")
     } else {
-        crate::assets::audio_folder::indexed_sfx(
+        deadsync_assets::audio_folder::indexed_sfx(
             "assets/sounds/song_start/restart",
             restart_count,
             "restart.ogg",
@@ -2299,7 +2302,7 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
-    pub const fn machine_font(&self) -> crate::config::MachineFont {
+    pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
         self.runtime_view.policy.machine_font
     }
 
@@ -2405,14 +2408,14 @@ impl State {
         let song_banner_key = song
             .banner_path
             .as_deref()
-            .map(crate::assets::media_path_key);
+            .map(deadlib_assets::media_path_key);
         let pack_banner_key = pack_banner_path
             .as_deref()
-            .map(crate::assets::media_path_key);
+            .map(deadlib_assets::media_path_key);
         let song_background_key = song
             .background_path
             .as_deref()
-            .map(crate::assets::media_path_key);
+            .map(deadlib_assets::media_path_key);
         let notefield_model_cache =
             notefield_model_cache_from_assets(&noteskin_assets, gameplay.num_players());
         let notefield_hold_mesh_scratch = std::array::from_fn(|player| {
@@ -4510,7 +4513,7 @@ fn step_stats_score_pos(
 }
 
 fn gameplay_bpm_x(
-    position: crate::config::GameplayBpmPosition,
+    position: deadsync_config::theme::GameplayBpmPosition,
     num_players: usize,
     play_style: profile_data::PlayStyle,
     player_side: profile_data::PlayerSide,
@@ -4518,7 +4521,7 @@ fn gameplay_bpm_x(
     field_width: f32,
     nps_graph_at_top: bool,
 ) -> f32 {
-    if position == crate::config::GameplayBpmPosition::NearField
+    if position == deadsync_config::theme::GameplayBpmPosition::NearField
         && num_players == 1
         && play_style.is_single()
     {
@@ -4999,7 +5002,7 @@ pub fn refresh_foreground_media(state: &mut State) -> bool {
         return false;
     }
 
-    state.current_foreground_key = next_path.as_deref().map(crate::assets::media_path_key);
+    state.current_foreground_key = next_path.as_deref().map(deadlib_assets::media_path_key);
     state.current_foreground_path = next_path;
     state
         .song_lua_foreground_owner_index
@@ -6343,7 +6346,7 @@ fn push_background(
     actors: &mut Vec<Actor>,
     state: &State,
     bg_brightness: f32,
-    base_color: crate::config::Color,
+    base_color: deadlib_present::color::Color,
 ) {
     let sw = screen_width();
     let sh = screen_height();
@@ -6680,11 +6683,11 @@ fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
     ));
 }
 
-fn custom_gameplay_backdrop_enabled(color: crate::config::Color) -> bool {
-    color != crate::config::Color::BLACK
+fn custom_gameplay_backdrop_enabled(color: deadlib_present::color::Color) -> bool {
+    color != deadlib_present::color::Color::BLACK
 }
 
-fn push_custom_gameplay_backdrop(actors: &mut Vec<Actor>, color: crate::config::Color) {
+fn push_custom_gameplay_backdrop(actors: &mut Vec<Actor>, color: deadlib_present::color::Color) {
     if !custom_gameplay_backdrop_enabled(color) {
         return;
     }
@@ -6697,7 +6700,7 @@ fn push_custom_gameplay_backdrop(actors: &mut Vec<Actor>, color: crate::config::
     ));
 }
 
-fn gameplay_header_rgba(color: crate::config::Color) -> [f32; 4] {
+fn gameplay_header_rgba(color: deadlib_present::color::Color) -> [f32; 4] {
     if custom_gameplay_backdrop_enabled(color) {
         color.to_rgba()
     } else {
@@ -21134,13 +21137,13 @@ mod tests {
     }
 
     fn ensure_i18n() {
-        crate::assets::i18n::init_for_tests();
+        crate::i18n::init_for_tests();
     }
 
     #[test]
     fn custom_gameplay_backdrop_covers_full_screen_under_song_ui() {
         let mut actors = Vec::new();
-        let color = crate::config::Color::from_hex("#0c0c0c").unwrap();
+        let color = deadlib_present::color::Color::from_hex("#0c0c0c").unwrap();
 
         push_custom_gameplay_backdrop(&mut actors, color);
 
@@ -21176,18 +21179,18 @@ mod tests {
     fn black_gameplay_backdrop_preserves_legacy_header() {
         let mut actors = Vec::new();
 
-        push_custom_gameplay_backdrop(&mut actors, crate::config::Color::BLACK);
+        push_custom_gameplay_backdrop(&mut actors, deadlib_present::color::Color::BLACK);
 
         assert!(actors.is_empty());
         assert_eq!(
-            gameplay_header_rgba(crate::config::Color::BLACK),
+            gameplay_header_rgba(deadlib_present::color::Color::BLACK),
             [0.0, 0.0, 0.0, 0.85]
         );
     }
 
     #[test]
     fn custom_gameplay_backdrop_tints_header() {
-        let color = crate::config::Color::from_hex("#0c0c0c").unwrap();
+        let color = deadlib_present::color::Color::from_hex("#0c0c0c").unwrap();
 
         assert_eq!(gameplay_header_rgba(color), color.to_rgba());
     }
@@ -21368,16 +21371,22 @@ mod tests {
             };
 
             assert_eq!(
-                bpm_x(crate::config::GameplayBpmPosition::TopCenter, false),
+                bpm_x(
+                    deadsync_config::theme::GameplayBpmPosition::TopCenter,
+                    false
+                ),
                 center_x
             );
             assert_eq!(
-                bpm_x(crate::config::GameplayBpmPosition::NearField, false),
+                bpm_x(
+                    deadsync_config::theme::GameplayBpmPosition::NearField,
+                    false
+                ),
                 center_x
             );
 
-            let top_center = bpm_x(crate::config::GameplayBpmPosition::TopCenter, true);
-            let near_field = bpm_x(crate::config::GameplayBpmPosition::NearField, true);
+            let top_center = bpm_x(deadsync_config::theme::GameplayBpmPosition::TopCenter, true);
+            let near_field = bpm_x(deadsync_config::theme::GameplayBpmPosition::NearField, true);
             assert_eq!(near_field, top_center);
             assert_ne!(top_center, center_x);
         }
@@ -27753,7 +27762,10 @@ mod tests {
             0.0,
             0.0,
         );
-        assert!(quad_actors.is_none(), "transparent glowshift must not emit a glow pass");
+        assert!(
+            quad_actors.is_none(),
+            "transparent glowshift must not emit a glow pass"
+        );
     }
 
     #[test]

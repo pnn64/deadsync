@@ -5,7 +5,7 @@
 //! regular renderer, audio runtime, Gameplay initialization, frame loop, and
 //! presentation path are used unchanged.
 
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_profile::{PlayStyle, PlayerSide};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -129,14 +129,14 @@ impl LiveCase {
         &self.name
     }
 
-    pub fn validate_config(&self, actual: &config::Config) -> Result<(), String> {
+    pub fn validate_config(&self, actual: &config::app_config::Config) -> Result<(), String> {
         let expected = &self.expected_runtime;
         let actual_renderer = actual.video_renderer.to_string();
         let actual_present = actual.present_mode_policy.as_str();
         let actual_audio_mode = actual.audio_output_mode.as_str();
         let actual_display_mode = match actual.display_mode() {
-            config::DisplayMode::Windowed => "Windowed",
-            config::DisplayMode::Fullscreen(kind) => kind.as_str(),
+            config::app_config::DisplayMode::Windowed => "Windowed",
+            config::app_config::DisplayMode::Fullscreen(kind) => kind.as_str(),
         };
         let matches = actual_renderer.eq_ignore_ascii_case(expected.renderer.trim())
             && actual.vsync == expected.vsync

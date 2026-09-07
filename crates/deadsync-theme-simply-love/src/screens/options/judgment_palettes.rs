@@ -39,7 +39,7 @@ pub(super) enum JudgmentPaletteOverlayState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct JudgmentPalettePresentationKey {
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
     screen_width_bits: u32,
     screen_height_bits: u32,
 }
@@ -687,7 +687,7 @@ pub(super) fn push_judgment_palette_overlay(
     out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) -> bool {
     if !judgment_palette_overlay_visible(&state.judgment_palette_overlay) {
         return false;
@@ -736,7 +736,7 @@ pub(super) fn push_judgment_palette_overlay_unreserved(
     out: &mut Vec<Actor>,
     state: &State,
     active_color_index: i32,
-    machine_font: crate::config::MachineFont,
+    machine_font: config::theme::MachineFont,
 ) {
     let accent = color::simply_love_rgba(active_color_index);
     let cx = screen_center_x();

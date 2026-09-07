@@ -1,10 +1,12 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::config::MachineFont;
-use crate::screens::evaluation::{EvalPane, ScoreInfo};
+use crate::fonts::machine_font_key;
+use crate::screens::evaluation::EvalPane;
+use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
+use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
+use deadsync_theme::FontRole;
 use deadsync_theme::color::{JudgmentColorRole as Role, JudgmentPalette};
 use std::cell::RefCell;
 use std::sync::Arc;

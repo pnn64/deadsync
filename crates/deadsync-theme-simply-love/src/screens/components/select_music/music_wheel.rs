@@ -1,10 +1,6 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::config::MachineFont;
-use crate::config::{
-    DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
-};
+use crate::fonts::machine_font_key;
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
 use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest};
@@ -19,9 +15,14 @@ use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
+use deadsync_config::theme::MachineFont;
+use deadsync_config::theme::{
+    DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
+};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::event_intro::is_srpg_event_song;
+use deadsync_theme::FontRole;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::cell::RefCell;
@@ -1667,13 +1668,13 @@ mod tests {
         visible_song_select_bg_paths_match, wheel_bg_layout, wheel_song_meta,
     };
     use crate::color;
-    use crate::config::{
-        SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
-    };
     use crate::screens::select_music::MusicWheelEntry;
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
     use deadlib_present::space::{metrics_for_window, set_current_metrics};
     use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
+    use deadsync_config::theme::{
+        SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
+    };
     use deadsync_profile as profile_data;
     use deadsync_score::CachedItlScore;
     use deadsync_simfile::event_intro::is_srpg_event_song;

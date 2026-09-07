@@ -2010,14 +2010,14 @@ mod bitmask_binding_init_tests {
     use super::super::super::row::{Row, RowBehavior, RowId, init_bitmask_row_from_binding};
     use super::super::super::state::{FaPlusMask, PlayerOptionMasks};
     use super::*;
-    use crate::assets::i18n::{LookupKey, lookup_key};
+    use crate::i18n::{LookupKey, lookup_key};
     use deadsync_profile::PlayerOptionsData;
 
     fn ensure_i18n() {
         use std::sync::Once;
         static INIT: Once = Once::new();
         INIT.call_once(|| {
-            crate::assets::i18n::init_for_tests();
+            crate::i18n::init_for_tests();
         });
     }
 

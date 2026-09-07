@@ -1,8 +1,9 @@
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use deadlib_present::actors::{Actor, InlineText, TextContent};
 use deadlib_present::space::{screen_center_x, widescale};
+use deadsync_config::theme::MachineFont;
+use deadsync_theme::FontRole;
 use std::sync::Arc;
 
 const SESSION_LAYOUT_SLOT: u8 = 0;

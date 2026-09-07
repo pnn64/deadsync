@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, info, warn};
 
@@ -1085,7 +1085,7 @@ pub fn restore_default_profiles(default_profiles: [Option<String>; PLAYER_SLOTS]
 #[inline(always)]
 #[must_use]
 pub fn machine_default_noteskin_value() -> NoteSkin {
-    NoteSkin::new(&config::machine_default_noteskin())
+    NoteSkin::new(&config::runtime::machine_default_noteskin())
 }
 
 /// Machine-default pad-light brightness used to seed a new profile, mirroring
@@ -1093,7 +1093,7 @@ pub fn machine_default_noteskin_value() -> NoteSkin {
 #[inline(always)]
 #[must_use]
 pub fn machine_default_light_brightness() -> u8 {
-    config::get().smx_default_light_brightness
+    config::runtime::get().smx_default_light_brightness
 }
 
 fn legacy_common_player_options() -> PlayerOptionsData {
@@ -1234,13 +1234,13 @@ pub fn update_machine_default_background_filter(setting: BackgroundFilter) {
 }
 
 pub fn update_machine_default_noteskin_from_config(setting: NoteSkin) {
-    config::update_machine_default_noteskin(setting.as_str());
+    config::runtime_update::update_machine_default_noteskin(setting.as_str());
     update_common_machine_player_default("NoteSkin", setting.as_str());
 }
 
 pub fn update_machine_default_light_brightness_from_config(percent: u8) {
     let percent = percent.min(100);
-    config::update_smx_default_light_brightness(percent);
+    config::runtime_update::update_smx_default_light_brightness(percent);
     update_common_machine_player_default("PadLightBrightness", &percent.to_string());
 }
 
@@ -1339,8 +1339,8 @@ pub fn load_profiles(
 
 pub fn load_profiles_from_config() {
     initialize_machine_player_defaults_from_config();
-    let (p1, p2) = config::default_profiles();
-    load_profiles([p1, p2], config::update_default_profiles);
+    let (p1, p2) = config::runtime::default_profiles();
+    load_profiles([p1, p2], config::runtime_update::update_default_profiles);
 }
 
 #[must_use]
@@ -1377,13 +1377,13 @@ pub fn default_local_profile_id_for_side(
 
 #[must_use]
 pub fn default_profile_for_side_from_config(side: PlayerSide) -> ActiveProfile {
-    let (p1, p2) = config::default_profiles();
+    let (p1, p2) = config::runtime::default_profiles();
     default_profile_for_side([p1, p2], side)
 }
 
 #[must_use]
 pub fn default_local_profile_id_for_side_from_config(side: PlayerSide) -> Option<String> {
-    let (p1, p2) = config::default_profiles();
+    let (p1, p2) = config::runtime::default_profiles();
     default_local_profile_id_for_side([p1, p2], side)
 }
 
@@ -1400,8 +1400,13 @@ pub fn update_default_profile_for_side(
 }
 
 pub fn update_default_profile_for_side_from_config(side: PlayerSide, profile: ActiveProfile) {
-    let (p1, p2) = config::default_profiles();
-    update_default_profile_for_side([p1, p2], side, &profile, config::update_default_profiles);
+    let (p1, p2) = config::runtime::default_profiles();
+    update_default_profile_for_side(
+        [p1, p2],
+        side,
+        &profile,
+        config::runtime_update::update_default_profiles,
+    );
 }
 
 #[inline(always)]
@@ -1441,13 +1446,17 @@ pub fn smx_gif_packs<T: Copy>(
 }
 
 pub fn smx_gif_packs_from_config(
-    machine_bg: config::SmxPackName,
-    machine_judge: config::SmxPackName,
+    machine_bg: config::options::SmxPackName,
+    machine_judge: config::options::SmxPackName,
 ) -> (
-    [config::SmxPackName; PLAYER_SLOTS],
-    [config::SmxPackName; PLAYER_SLOTS],
+    [config::options::SmxPackName; PLAYER_SLOTS],
+    [config::options::SmxPackName; PLAYER_SLOTS],
 ) {
-    smx_gif_packs(machine_bg, machine_judge, config::SmxPackName::parse)
+    smx_gif_packs(
+        machine_bg,
+        machine_judge,
+        config::options::SmxPackName::parse,
+    )
 }
 
 #[must_use]
@@ -1456,7 +1465,7 @@ pub fn scorebox_profile_snapshot_from_config(
     side_joined: bool,
     persistent_profile_id: Option<String>,
 ) -> deadsync_score::GameplayScoreboxProfileSnapshot {
-    let cfg = config::get();
+    let cfg = config::runtime::get();
     crate::scorebox_profile_snapshot(
         player_profile,
         side_joined,
@@ -1470,7 +1479,7 @@ pub fn scorebox_profile_snapshot_from_config(
 #[inline(always)]
 #[must_use]
 pub fn groovestats_score_service_allowed() -> bool {
-    config::get().enable_groovestats
+    config::runtime::get().enable_groovestats
 }
 
 pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
@@ -1542,11 +1551,11 @@ pub fn set_active_profiles_from_config(
     p1: ActiveProfile,
     p2: ActiveProfile,
 ) -> [Profile; PLAYER_SLOTS] {
-    let (p1_default, p2_default) = config::default_profiles();
+    let (p1_default, p2_default) = config::runtime::default_profiles();
     set_active_profiles_with_defaults(
         [p1, p2],
         [p1_default, p2_default],
-        config::update_default_profiles,
+        config::runtime_update::update_default_profiles,
     )
 }
 
@@ -1570,7 +1579,7 @@ pub fn load_default_profiles_for_joined_sides_with_defaults(
 
 #[must_use]
 pub fn load_default_profiles_for_joined_sides_from_config() -> [Profile; PLAYER_SLOTS] {
-    let (p1, p2) = config::default_profiles();
+    let (p1, p2) = config::runtime::default_profiles();
     load_default_profiles_for_joined_sides_with_defaults([p1, p2])
 }
 
@@ -1594,13 +1603,13 @@ pub fn create_local_profile(
 }
 
 pub fn create_local_profile_from_config(display_name: &str) -> Result<String, std::io::Error> {
-    let (p1_default, p2_default) = config::default_profiles();
+    let (p1_default, p2_default) = config::runtime::default_profiles();
     let player_options = new_profile_player_options();
     create_local_profile(
         display_name,
         &player_options,
         [p1_default, p2_default],
-        config::update_default_profiles,
+        config::runtime_update::update_default_profiles,
     )
 }
 
@@ -1660,11 +1669,11 @@ pub fn delete_local_profile_with_defaults(
 }
 
 pub fn delete_local_profile_from_config(id: &str) -> Result<(), std::io::Error> {
-    let (p1_default, p2_default) = config::default_profiles();
+    let (p1_default, p2_default) = config::runtime::default_profiles();
     delete_local_profile_with_defaults(
         id,
         [p1_default, p2_default],
-        config::update_default_profiles,
+        config::runtime_update::update_default_profiles,
     )
 }
 

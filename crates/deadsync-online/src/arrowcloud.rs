@@ -718,7 +718,7 @@ fn publish_result_dialog_download(download: ArrowCloudResultDialogDownload) {
 }
 
 fn spawn_result_dialog_download_if_enabled(job: &ArrowCloudSubmitJob, urls: Box<[Box<str>]>) {
-    if urls.is_empty() || !deadsync_config::prelude::get().show_arrowcloud_result_dialogs {
+    if urls.is_empty() || !deadsync_config::runtime::get().show_arrowcloud_result_dialogs {
         return;
     }
     let side = job.side;
@@ -729,7 +729,7 @@ fn spawn_result_dialog_download_if_enabled(job: &ArrowCloudSubmitJob, urls: Box<
         .spawn(move || {
             let images = download_result_dialog_images(&urls);
             if images.is_empty()
-                || !deadsync_config::prelude::get().show_arrowcloud_result_dialogs
+                || !deadsync_config::runtime::get().show_arrowcloud_result_dialogs
                 || !deadsync_score::arrowcloud_submit_ui_token_matches(
                     profile_data::player_side_index(side),
                     chart_hash.as_ref(),

@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use crate::act;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
 use crate::screens::components::shared::qr_code;
-use crate::screens::evaluation::ScoreInfo;
+use crate::views::ScoreInfo;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
+use deadsync_config::theme::MachineFont;
 use deadsync_profile as profile_data;
+use deadsync_theme::FontRole;
 
 use super::utils::pane_origin_x;
 

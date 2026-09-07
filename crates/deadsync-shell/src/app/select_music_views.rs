@@ -1,5 +1,5 @@
 use super::{App, MusicWheelDisplayPolicy, post_step_sync_needed};
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_theme::views::AudioPlaybackView;
@@ -22,9 +22,9 @@ pub(super) struct SelectMusicFramePolicy {
     view: SelectMusicPolicyView,
     wheel: MusicWheelDisplayPolicy,
     pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    sync_graph_mode: config::SyncGraphMode,
-    sync_graph_orientation: config::GraphOrientation,
-    sync_graph_origin: config::GraphOrigin,
+    sync_graph_mode: config::theme::SyncGraphMode,
+    sync_graph_orientation: null_or_die::GraphOrientation,
+    sync_graph_origin: config::null_or_die::GraphOrigin,
     arrow_bounce_offset: f32,
     sync_confidence_percent: u8,
     enable_groovestats: bool,
@@ -196,7 +196,7 @@ impl LeaderboardRuntimeKey {
 }
 
 impl SelectMusicFramePolicy {
-    pub(super) fn from_config(config: &config::Config) -> Self {
+    pub(super) fn from_config(config: &config::app_config::Config) -> Self {
         Self {
             view: crate::select_music::policy_view(config),
             wheel: MusicWheelDisplayPolicy::from_config(config),
@@ -728,9 +728,9 @@ mod tests {
 
     #[test]
     fn frame_policy_compiles_select_music_config() {
-        let config = config::Config {
+        let config = config::app_config::Config {
             translated_titles: false,
-            machine_bar_color: config::MachineBarColor::Transparent,
+            machine_bar_color: config::theme::MachineBarColor::Transparent,
             global_offset_seconds: 0.025,
             null_or_die_confidence_percent: 91,
             enable_groovestats: false,

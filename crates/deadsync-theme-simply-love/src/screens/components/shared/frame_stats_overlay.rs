@@ -1,10 +1,8 @@
 use crate::act;
-use crate::views::{
-    FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle,
-    frame_histogram as histogram,
-};
+use crate::views::{HISTOGRAM_BINS, frame_histogram as histogram};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
+use deadsync_theme::views::{FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle};
 use std::cell::RefCell;
 use std::sync::Arc;
 

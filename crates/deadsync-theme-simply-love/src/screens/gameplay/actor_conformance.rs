@@ -286,7 +286,7 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     if assets.has_texture_key(key) {
         return;
     }
-    let dims = crate::assets::texture_dims(key);
+    let dims = deadlib_assets::texture_dims(key);
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));

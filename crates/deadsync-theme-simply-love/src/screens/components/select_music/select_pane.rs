@@ -1,9 +1,10 @@
 use crate::act;
-use crate::assets::i18n::tr;
-use crate::assets::{FontRole, machine_font_key};
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
+use crate::i18n::tr;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
+use deadsync_config::theme::MachineFont;
+use deadsync_theme::FontRole;
 use std::sync::Arc;
 
 #[derive(Clone, Copy)]

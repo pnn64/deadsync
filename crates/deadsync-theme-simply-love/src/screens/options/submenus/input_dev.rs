@@ -6,7 +6,7 @@ use super::super::*;
 pub(in crate::screens::options) fn smx_assignment_status(
     view: &deadsync_theme::views::SmxAssignmentView,
 ) -> String {
-    use crate::assets::i18n::{tr, tr_fmt};
+    use crate::i18n::{tr, tr_fmt};
     let label = |slot: usize| -> String {
         let pad = &view.pads[slot];
         if pad.connected && !pad.label.is_empty() {

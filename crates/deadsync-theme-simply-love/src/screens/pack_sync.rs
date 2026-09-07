@@ -1,16 +1,17 @@
 use crate::act;
-use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, machine_font_key};
 use crate::color;
-use crate::config::MachineFont;
+use crate::fonts::machine_font_key;
+use crate::i18n::{tr, tr_fmt};
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
+use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_simfile::sync_offset::{SongOffsetSyncChange, quantize_sync_offset_seconds};
+use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -830,7 +831,7 @@ pub fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
     navigation: NavigationPolicy,
-    effects: &mut Vec<crate::screens::ThemeEffect>,
+    effects: &mut Vec<crate::SimplyLoveEffect>,
 ) {
     if screen_input::dedicated_blocks_arrow(ev.action, navigation.only_dedicated_menu_buttons) {
         return;
@@ -1090,14 +1091,14 @@ pub fn handle_input(
         effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
     }
     if close_overlay && let Some(request) = hide(state) {
-        effects.push(crate::screens::ThemeEffect::Runtime(
+        effects.push(crate::SimplyLoveEffect::Runtime(
             crate::SimplyLoveRuntimeRequest::Sync(request),
         ));
     }
     if let Some((owner, changes)) = apply_changes
         && !changes.is_empty()
     {
-        effects.push(crate::screens::ThemeEffect::Runtime(
+        effects.push(crate::SimplyLoveEffect::Runtime(
             crate::SimplyLoveRuntimeRequest::Sync(
                 crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { owner, changes },
             ),
@@ -1643,7 +1644,7 @@ mod tests {
         RowState, RowText, Summary, build_overlay_text, can_save, confidence_threshold_percent,
         refresh_row_text, result_text, review_choice_delta, row_disposition,
     };
-    use crate::screens::ThemeEffect;
+    use crate::SimplyLoveEffect as ThemeEffect;
     use deadlib_present::actors::{Actor, TextContent};
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputEvent, VirtualAction};
@@ -1711,7 +1712,7 @@ mod tests {
             &mut first,
             &state,
             2,
-            crate::config::MachineFont::Mega,
+            deadsync_config::theme::MachineFont::Mega,
         ));
         let Actor::SharedFrame {
             children: first_children,
@@ -1727,7 +1728,7 @@ mod tests {
             &mut stable,
             &state,
             2,
-            crate::config::MachineFont::Mega,
+            deadsync_config::theme::MachineFont::Mega,
         ));
         let Actor::SharedFrame {
             children: stable_children,
@@ -1751,7 +1752,7 @@ mod tests {
             &mut changed,
             &state,
             2,
-            crate::config::MachineFont::Mega,
+            deadsync_config::theme::MachineFont::Mega,
         ));
         let Actor::SharedFrame {
             children: changed_children,
@@ -1766,7 +1767,12 @@ mod tests {
             unreachable!();
         };
         let mut immediate = Vec::with_capacity(96);
-        super::push_overlay_unreserved(&mut immediate, data, 2, crate::config::MachineFont::Mega);
+        super::push_overlay_unreserved(
+            &mut immediate,
+            data,
+            2,
+            deadsync_config::theme::MachineFont::Mega,
+        );
         assert_eq!(format!("{changed_children:#?}"), format!("{immediate:#?}"));
     }
 

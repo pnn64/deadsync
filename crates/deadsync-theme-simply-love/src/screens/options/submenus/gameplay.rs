@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::screens::options) use crate::config::{
+pub(in crate::screens::options) use deadsync_config::options::{
     sync_confidence_choice_index, sync_confidence_from_choice,
 };
 

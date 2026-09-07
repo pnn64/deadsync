@@ -8,6 +8,9 @@ license = "GPL-3.0"
 test-support = []
 
 [dependencies]
+null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
+deadsync-smx = { path = "../deadsync-smx" }
+deadlib-input-native = { path = "../deadlib-input-native" }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
@@ -44,6 +47,7 @@ twox-hash = "2.1.4"
 unicode-normalization = "0.1.25"
 
 [dev-dependencies]
+deadsync-lights = { path = "../deadsync-lights" }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-notefield = { path = "../deadsync-notefield" }

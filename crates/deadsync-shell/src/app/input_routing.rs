@@ -5,7 +5,7 @@ use crate::input::{
     allowed_gameplay_raw_action, gameplay_raw_key_route_plan, pre_screen_input_route,
     queued_input_flush_plan, raw_keyboard_capture_enabled,
 };
-use deadsync_config::prelude as config;
+use deadsync_config as config;
 use deadsync_gameplay::RawKeyAction;
 use deadsync_input::{self as logical_input, InputEvent};
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
@@ -149,8 +149,8 @@ impl App {
                 logical_input::VirtualAction::p1_coin | logical_input::VirtualAction::p2_coin
             )
         {
-            let coin = config::get().coin;
-            if matches!(coin.mode, config::CoinMode::Pay) {
+            let coin = config::runtime::get().coin;
+            if matches!(coin.mode, config::coin::CoinMode::Pay) {
                 self.state.coin.insert_coin();
                 self.sync_main_menu_runtime_view();
                 let credits = self.state.coin.credits(coin);
@@ -195,14 +195,14 @@ impl App {
                     | logical_input::VirtualAction::p2_back
             )
         {
-            let coin = config::get().coin;
+            let coin = config::runtime::get().coin;
             if self.state.coin.set_over(coin, std::time::Instant::now()) {
                 let is_start = matches!(
                     ev.action,
                     logical_input::VirtualAction::p1_start | logical_input::VirtualAction::p2_start
                 );
                 if is_start
-                    && matches!(coin.mode, config::CoinMode::Pay)
+                    && matches!(coin.mode, config::coin::CoinMode::Pay)
                     && !self.state.coin.premium_free_active()
                 {
                     let session = deadsync_profile::compat::get_session_snapshot();
@@ -236,8 +236,8 @@ impl App {
                 logical_input::VirtualAction::p1_start | logical_input::VirtualAction::p2_start
             )
         {
-            let coin = config::get().coin;
-            if !matches!(coin.mode, config::CoinMode::Home)
+            let coin = config::runtime::get().coin;
+            if !matches!(coin.mode, config::coin::CoinMode::Home)
                 && self.state.session.session_start_time.is_none()
             {
                 if !self.state.coin.begin_play(coin) {
@@ -263,7 +263,7 @@ impl App {
             let mut menu_ev = ev;
             menu_ev.action = screens::input::menu_action(
                 ev.action,
-                config::get().game_flag,
+                config::runtime::get().game_flag,
                 input_policy.only_dedicated_menu_buttons,
             );
             if self.try_handle_late_join(&menu_ev) {
@@ -476,8 +476,9 @@ impl App {
                 screens::evaluation::handle_input(&mut self.state.screens.evaluation_state, &ev)
             }
             CurrentScreen::EvaluationSummary => {
-                let num_stages = self
-                    .post_select_display_stage_count(config::get().show_course_individual_scores);
+                let num_stages = self.post_select_display_stage_count(
+                    config::runtime::get().show_course_individual_scores,
+                );
                 screens::evaluation_summary::handle_input(
                     &mut self.state.screens.evaluation_summary_state,
                     num_stages,

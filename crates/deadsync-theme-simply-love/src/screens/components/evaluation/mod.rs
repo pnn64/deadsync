@@ -4,12 +4,12 @@ use deadlib_present::actors::TextContent;
 
 pub mod eval_grades;
 pub mod eval_graphs;
-pub mod event_progress;
+mod event_progress;
 mod footer_clock;
-pub mod pane_column;
+mod pane_column;
 pub mod pane_gs_records;
 pub mod pane_machine_records;
-pub mod pane_modifiers;
+mod pane_modifiers;
 pub mod pane_percentage;
 pub mod pane_qr;
 pub mod pane_stats;

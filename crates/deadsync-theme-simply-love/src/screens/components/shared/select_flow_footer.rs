@@ -1,4 +1,4 @@
-use crate::assets::i18n::tr;
+use crate::i18n::tr;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };

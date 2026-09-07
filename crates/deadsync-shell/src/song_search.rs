@@ -5,10 +5,11 @@
 //! then only sends queries (`Rank`). Results come back through
 //! [`Service::poll`] tagged with a generation the screen can check.
 
-use deadsync_theme_simply_love::{
-    SimplyLoveSongSearchRequest, SimplyLoveSongSearchResult, SongSearchIndex, SongSearchScope,
-    build_pack_matches, build_song_matches, build_song_search_index,
+use deadsync_theme_simply_love::screens::components::select_music::select_music_menu::{
+    SongSearchIndex, SongSearchScope, build_pack_matches, build_song_matches,
+    build_song_search_index,
 };
+use deadsync_theme_simply_love::{SimplyLoveSongSearchRequest, SimplyLoveSongSearchResult};
 use std::sync::mpsc;
 
 /// A long-lived worker plus its result queue.

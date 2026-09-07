@@ -1,6 +1,6 @@
 use super::super::*;
 
-pub(in crate::screens::options) use crate::config::{
+pub(in crate::screens::options) use deadsync_config::options::{
     build_max_fps_choices, clamped_max_fps, max_fps_choice_index, max_fps_from_choice,
     max_fps_hold_delta,
 };

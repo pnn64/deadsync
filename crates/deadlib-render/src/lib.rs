@@ -5,7 +5,21 @@ use deadlib_render_backend_software as software;
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
 use deadlib_render_backend_vulkan as vulkan;
 use deadlib_render_backend_wgpu as wgpu_core;
-pub use deadlib_render_core::*;
+// The renderer and its core contract form one public umbrella.
+pub use deadlib_render_core::{
+    BackendType, BlendMode, CameraUploadCache, ClockDomainTrace, DRAW_STORAGE_NAMES,
+    DRAW_STORAGE_SLOTS, DenseSlotMap, DrawOp, DrawStats, DrawStorageStats, FastU64Map,
+    INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshRun, MeshVertex, PresentModePolicy,
+    PresentModeTrace, PresentStats, ProjectionMatrix, RENDER_TARGET_TEXTURE_BIT, RenderFrame,
+    RenderTargetFrame, SAMPLER_DESC_COUNT, SOFTWARE_MESH_STORAGE_SLOT,
+    SOFTWARE_OBJECTS_STORAGE_SLOT, SOFTWARE_TMESH_STORAGE_SLOT, SamplerCache, SamplerDesc,
+    SamplerFilter, SamplerWrap, SpriteInstanceRaw, SpriteRun, TMeshCacheKey, TextureHandle,
+    TextureHandleMap, TexturedMeshBufferCache, TexturedMeshGeometry, TexturedMeshInstanceRaw,
+    TexturedMeshRun, TexturedMeshSource, TexturedMeshUploads, TexturedMeshVertex,
+    TexturedMeshVertices, Yuv420Upload, draw_storage_stats, is_render_target_texture,
+    render_target_base_handle, render_target_sample_handle, render_target_texture_handle,
+    render_target_uses_nearest, resolve_textured_mesh_geometries, resolve_textured_meshes,
+};
 use image::RgbaImage;
 use std::{error::Error, sync::Arc};
 use winit::window::Window;

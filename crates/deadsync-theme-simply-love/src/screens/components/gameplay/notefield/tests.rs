@@ -3,7 +3,6 @@ use super::{
     combo_milestone_assets, error_bar_trim_max_window_ix, gameplay_notefield_plan,
     hold_explosion_enabled, judgment_frame_size, prewarm_actor_resources,
 };
-use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{ActorResourceArena, SpriteSource};
@@ -183,7 +182,7 @@ fn actor_resource_prewarm_covers_every_noteskin_slot() {
     prewarm_actor_resources(&arena, &assets, &profiles, 1);
     let warmed = arena.stats();
     noteskin.for_each_slot(|slot| {
-        let _ = slot.actor_texture_source(&arena, &assets::METADATA_TEXTURE_CONTEXT);
+        let _ = slot.actor_texture_source(&arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
     });
 
     assert!(warmed.textures > 0);
@@ -384,9 +383,9 @@ fn judgment_frame_size_uses_logical_atlas_frame_dims() {
     let censored = "judgements/Test Censored 1x7 (doubleres).png";
     let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
     let love = "judgements/Test Love 2x7 (doubleres).png";
-    assets::register_texture_dims(censored, 600, 1400);
-    assets::register_texture_dims(tight_censored, 600, 1050);
-    assets::register_texture_dims(love, 880, 1036);
+    deadlib_assets::register_texture_dims(censored, 600, 1400);
+    deadlib_assets::register_texture_dims(tight_censored, 600, 1050);
+    deadlib_assets::register_texture_dims(love, 880, 1036);
 
     assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
     assert_eq!(judgment_frame_size(tight_censored), [300.0, 75.0]);

@@ -1,4 +1,3 @@
-use crate::assets;
 use crate::color;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
@@ -82,39 +81,39 @@ const fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) ->
 #[inline(always)]
 fn resolved_judgment_texture(
     profile: &profile_data::Profile,
-) -> Option<&'static assets::TextureChoice> {
-    assets::resolve_texture_choice_entry(
+) -> Option<&'static deadlib_assets::TextureChoice> {
+    deadsync_assets::textures::resolve_texture_choice_entry(
         profile.judgment_graphic.texture_key(),
-        assets::judgment_texture_choices(),
+        deadsync_assets::textures::judgment_texture_choices(),
     )
 }
 
 #[inline(always)]
 fn resolved_hold_judgment_texture(
     profile: &profile_data::Profile,
-) -> Option<&'static assets::TextureChoice> {
-    assets::resolve_texture_choice_entry(
+) -> Option<&'static deadlib_assets::TextureChoice> {
+    deadsync_assets::textures::resolve_texture_choice_entry(
         profile.hold_judgment_graphic.texture_key(),
-        assets::hold_judgment_texture_choices(),
+        deadsync_assets::textures::hold_judgment_texture_choices(),
     )
 }
 
 #[inline(always)]
 fn resolved_held_miss_texture(
     profile: &profile_data::Profile,
-) -> Option<&'static assets::TextureChoice> {
-    assets::resolve_texture_choice_entry(
+) -> Option<&'static deadlib_assets::TextureChoice> {
+    deadsync_assets::textures::resolve_texture_choice_entry(
         profile.held_miss_graphic.texture_key(),
-        assets::held_miss_texture_choices(),
+        deadsync_assets::textures::held_miss_texture_choices(),
     )
 }
 
 #[inline(always)]
 fn sprite_frame_size(texture_key: &str, fallback: [f32; 2]) -> [f32; 2] {
-    let Some(meta) = assets::texture_dims(texture_key) else {
+    let Some(meta) = deadlib_assets::texture_dims(texture_key) else {
         return fallback;
     };
-    let (w, h) = assets::texture_source_frame_dims_from_real(texture_key, meta.w, meta.h);
+    let (w, h) = deadlib_assets::texture_source_frame_dims_from_real(texture_key, meta.w, meta.h);
     [w as f32, h as f32]
 }
 
@@ -143,9 +142,9 @@ struct CachedJudgmentSpriteMetadata {
 /// and live texture replacement while keeping the steady frame path allocation
 /// free.
 pub(crate) struct ResolvedJudgmentAssets {
-    judgment: Option<&'static assets::TextureChoice>,
-    hold_judgment: Option<&'static assets::TextureChoice>,
-    held_miss: Option<&'static assets::TextureChoice>,
+    judgment: Option<&'static deadlib_assets::TextureChoice>,
+    hold_judgment: Option<&'static deadlib_assets::TextureChoice>,
+    held_miss: Option<&'static deadlib_assets::TextureChoice>,
     held_miss_scale: Option<f32>,
     judgment_sprite: Cell<Option<CachedJudgmentSpriteMetadata>>,
     hold_judgment_sprite: Cell<Option<CachedJudgmentSpriteMetadata>>,
@@ -160,7 +159,7 @@ impl ResolvedJudgmentAssets {
             hold_judgment: resolved_hold_judgment_texture(profile),
             held_miss,
             held_miss_scale: held_miss.map(|texture| {
-                if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
+                if deadlib_assets::parse_texture_hints(texture.key.as_ref()).doubleres {
                     0.5
                 } else {
                     1.0
@@ -173,25 +172,26 @@ impl ResolvedJudgmentAssets {
     }
 
     #[inline(always)]
-    pub(crate) const fn judgment(&self) -> Option<&'static assets::TextureChoice> {
+    pub(crate) const fn judgment(&self) -> Option<&'static deadlib_assets::TextureChoice> {
         self.judgment
     }
 
     #[inline(always)]
-    pub(crate) const fn hold_judgment(&self) -> Option<&'static assets::TextureChoice> {
+    pub(crate) const fn hold_judgment(&self) -> Option<&'static deadlib_assets::TextureChoice> {
         self.hold_judgment
     }
 
     #[inline(always)]
-    pub(crate) fn held_miss(&self) -> Option<(&'static assets::TextureChoice, f32)> {
+    pub(crate) fn held_miss(&self) -> Option<(&'static deadlib_assets::TextureChoice, f32)> {
         self.held_miss.zip(self.held_miss_scale)
     }
 
     #[inline(always)]
     fn judgment_sprite_metadata(&self) -> Option<JudgmentSpriteMetadata> {
-        let registry_generation = assets::texture_registry_generation();
+        let registry_generation = deadlib_assets::texture_registry_generation();
         self.judgment_sprite_metadata_for_generation(registry_generation, |texture| {
-            let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
+            let (frame_cols, frame_rows) =
+                deadlib_assets::parse_sprite_sheet_dims(texture.key.as_ref());
             JudgmentSpriteMetadata {
                 frame_size: judgment_frame_size(texture.key.as_ref()),
                 frame_cols: frame_cols as usize,
@@ -204,7 +204,7 @@ impl ResolvedJudgmentAssets {
     fn judgment_sprite_metadata_for_generation(
         &self,
         registry_generation: u64,
-        resolve: impl FnOnce(&assets::TextureChoice) -> JudgmentSpriteMetadata,
+        resolve: impl FnOnce(&deadlib_assets::TextureChoice) -> JudgmentSpriteMetadata,
     ) -> Option<JudgmentSpriteMetadata> {
         cached_sprite_metadata(
             self.judgment,
@@ -219,7 +219,7 @@ impl ResolvedJudgmentAssets {
         cached_sprite_metadata(
             self.hold_judgment,
             &self.hold_judgment_sprite,
-            assets::texture_registry_generation(),
+            deadlib_assets::texture_registry_generation(),
             |texture| resolve_sprite_metadata(texture, [0.0; 2]),
         )
     }
@@ -229,7 +229,7 @@ impl ResolvedJudgmentAssets {
         cached_sprite_metadata(
             self.held_miss,
             &self.held_miss_sprite,
-            assets::texture_registry_generation(),
+            deadlib_assets::texture_registry_generation(),
             |texture| resolve_sprite_metadata(texture, [0.0; 2]),
         )
     }
@@ -242,11 +242,11 @@ impl ResolvedJudgmentAssets {
 }
 
 fn resolve_sprite_metadata(
-    texture: &assets::TextureChoice,
+    texture: &deadlib_assets::TextureChoice,
     fallback: [f32; 2],
 ) -> JudgmentSpriteMetadata {
-    let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
-    let frame_size = assets::texture_dims(texture.key.as_ref()).map_or(fallback, |meta| {
+    let (frame_cols, frame_rows) = deadlib_assets::parse_sprite_sheet_dims(texture.key.as_ref());
+    let frame_size = deadlib_assets::texture_dims(texture.key.as_ref()).map_or(fallback, |meta| {
         [
             meta.w as f32 / frame_cols.max(1) as f32,
             meta.h as f32 / frame_rows.max(1) as f32,
@@ -263,10 +263,10 @@ fn resolve_sprite_metadata(
 }
 
 fn cached_sprite_metadata(
-    texture: Option<&'static assets::TextureChoice>,
+    texture: Option<&'static deadlib_assets::TextureChoice>,
     cache: &Cell<Option<CachedJudgmentSpriteMetadata>>,
     registry_generation: u64,
-    resolve: impl FnOnce(&assets::TextureChoice) -> JudgmentSpriteMetadata,
+    resolve: impl FnOnce(&deadlib_assets::TextureChoice) -> JudgmentSpriteMetadata,
 ) -> Option<JudgmentSpriteMetadata> {
     let texture = texture?;
     if let Some(cached) = cache.get()
@@ -317,7 +317,8 @@ impl ResolvedComboMilestoneAssets {
         effects: &'static crate::visual_styles::EffectAssets,
     ) -> ComboMilestoneAssets {
         let sizes = self.sizes_for_keys(combo_milestone_keys(effects), |key| {
-            assets::texture_dims(key).map_or([0.0; 2], |meta| [meta.w as f32, meta.h as f32])
+            deadlib_assets::texture_dims(key)
+                .map_or([0.0; 2], |meta| [meta.w as f32, meta.h as f32])
         });
         combo_milestone_assets(effects, sizes)
     }
@@ -579,17 +580,17 @@ fn combo_milestone_assets(
         hundred: ComboMilestoneSprite {
             source: SpriteSource::static_texture(keys[1]),
             native_size: sizes[1],
-            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[1]),
+            zoom_scale: crate::visual_styles::effect_zoom_scale(keys[1]),
         },
         hundred_mini: ComboMilestoneSprite {
             source: SpriteSource::static_texture(keys[2]),
             native_size: sizes[2],
-            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[2]),
+            zoom_scale: crate::visual_styles::effect_zoom_scale(keys[2]),
         },
         thousand: ComboMilestoneSprite {
             source: SpriteSource::static_texture(keys[3]),
             native_size: sizes[3],
-            zoom_scale: assets::visual_styles::effect_zoom_scale(keys[3]),
+            zoom_scale: crate::visual_styles::effect_zoom_scale(keys[3]),
         },
     }
 }
@@ -1164,7 +1165,7 @@ pub(crate) fn prewarm_actor_resources(
     ] {
         for noteskin in noteskins.iter().take(num_players).flatten() {
             noteskin.for_each_slot(|slot| {
-                let _ = slot.actor_texture_source(arena, &assets::METADATA_TEXTURE_CONTEXT);
+                let _ = slot.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
             });
         }
     }
@@ -1178,7 +1179,7 @@ pub(crate) fn prewarm_actor_resources(
         .into_iter()
         .flatten()
         {
-            let _ = texture.actor_texture_source(arena, &assets::METADATA_TEXTURE_CONTEXT);
+            let _ = texture.actor_texture_source(arena, &deadlib_assets::METADATA_TEXTURE_CONTEXT);
         }
     }
     arena.lock_growth();
