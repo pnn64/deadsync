@@ -34,7 +34,7 @@ deadsync-theme = { path = "../deadsync-theme" }
 deadsync-version = { path = "../deadsync-version" }
 bitflags = "2.13.1"
 chrono = "0.4.45"
-glam = "0.33.6"
+glam = "0.33.7"
 image = "0.25.10"
 log = "0.4.34"
 mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
