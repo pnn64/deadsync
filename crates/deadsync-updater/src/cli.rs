@@ -13,6 +13,9 @@
 //!
 //! * `--no-update-check` — skips the startup network check.
 //!
+//! * `--update` — check, download, verify, and install the latest release,
+//!   then exit without starting the game. Overrides `--no-update-check`.
+//!
 //! * `--apply-update <archive> --apply-sha256 <hex>
 //!   [--apply-parent-pid <pid>]` - helper mode used by self-updates.
 //!
@@ -38,6 +41,8 @@ pub struct UpdaterCli {
     pub restart: bool,
     /// `true` if `--no-update-check` was passed (skip startup check).
     pub no_update_check: bool,
+    /// Install the latest release and exit without launching the game.
+    pub update: bool,
     /// Helper-mode request. Normal startup must not continue when
     /// this is present.
     pub apply_update: Option<ApplyRequest>,
@@ -76,6 +81,7 @@ impl UpdaterCli {
                 }
                 "--restart" => out.restart = true,
                 "--no-update-check" => out.no_update_check = true,
+                "--update" => out.update = true,
                 "--apply-update" => {
                     if let Some(path) = iter.next() {
                         apply_archive = Some(PathBuf::from(path));
@@ -129,6 +135,96 @@ impl UpdaterCli {
     pub fn from_env() -> Self {
         Self::parse(std::env::args())
     }
+}
+
+/// Install the latest release synchronously, without starting or relaunching the game.
+///
+/// The caller initializes the updater cache directory and console first. Completed
+/// installs leave their journal for cleanup on the next launch, since Windows
+/// cannot delete the backup of the running executable until this process exits.
+///
+/// # Errors
+/// Returns an error if installation is disabled or unsupported, or if checking,
+/// downloading, verification, or installation fails.
+pub fn run_update(
+    exe_dir: &std::path::Path,
+    install_enabled: bool,
+) -> Result<(), super::UpdaterError> {
+    use super::{FetchOutcome, UpdaterError};
+
+    if !install_enabled {
+        return Err(UpdaterError::Io(
+            "self-update is disabled by UpdaterInstallEnabled=0; use your package manager or distribution's updater".to_owned(),
+        ));
+    }
+    let target = super::host_target()
+        .filter(|_| super::apply_supported_for_host())
+        .ok_or_else(|| UpdaterError::AssetNotFound("unsupported host platform".to_owned()))?;
+    let _ = super::apply_journal::recover(exe_dir);
+    let journal = super::apply_journal::journal_path(exe_dir);
+    if journal
+        .try_exists()
+        .map_err(|err| super::io_err_at("inspect", &journal, err))?
+    {
+        return Err(UpdaterError::Io(
+            "a previous update could not be cleaned up or recovered; close other DeadSync processes and try again".to_owned(),
+        ));
+    }
+    eprintln!(
+        "Checking for updates (current: {})...",
+        deadsync_version::current_tag()
+    );
+    // An explicit update always fetches fresh metadata, independent of the
+    // startup check's ETag and cached release.
+    let FetchOutcome::Fresh { info, .. } =
+        super::fetch_latest_release(&super::check_agent(), None)?
+    else {
+        return Err(UpdaterError::HttpStatus(304));
+    };
+    if !deadsync_version::is_newer(&info.version, &deadsync_version::current()) {
+        eprintln!(
+            "DeadSync is up to date ({}).",
+            deadsync_version::current_tag()
+        );
+        return Ok(());
+    }
+    let asset = super::pick_asset_for_host(&info.assets, &info.tag, target).ok_or_else(|| {
+        UpdaterError::AssetNotFound(super::expected_asset_name(&info.tag, target))
+    })?;
+    let (dest, expected) = download_update(asset)?;
+    eprintln!("Installing {}...", info.tag);
+    apply_archive(&dest, &expected, exe_dir)?;
+    eprintln!("Updated to {}.", info.tag);
+    Ok(())
+}
+
+fn download_update(
+    asset: &super::ReleaseAsset,
+) -> Result<(PathBuf, [u8; 32]), super::UpdaterError> {
+    eprintln!("Downloading {}...", asset.name);
+    let expected = super::download::resolve_expected_digest(&super::check_agent(), asset)?;
+    let dest = super::action::downloads_dir().join(&asset.name);
+    // Report at most once per second so slow downloads remain visible without
+    // printing a line for every 64 KiB chunk. This command has no game loop.
+    let mut last_progress = std::time::Instant::now();
+    super::download::download_to_file(
+        &super::download_agent(),
+        asset,
+        &expected,
+        &dest,
+        |written, total| {
+            if last_progress.elapsed() < std::time::Duration::from_secs(1) {
+                return;
+            }
+            last_progress = std::time::Instant::now();
+            match total {
+                Some(total) => eprintln!("Downloaded {written} / {total} bytes"),
+                None => eprintln!("Downloaded {written} bytes"),
+            }
+        },
+        || false,
+    )?;
+    Ok((dest, expected))
 }
 
 /// Runs the post-update cleanup pass.
@@ -366,8 +462,7 @@ pub fn apply_archive_and_relaunch(
         Some(name) => exe_dir.join(name),
         None => original_exe.clone(),
     };
-    reverify_archive(archive_path, expected_sha256)?;
-    apply_for_host(archive_path, &exe_dir)?;
+    apply_archive(archive_path, expected_sha256, &exe_dir)?;
     // Apply already committed: the on-disk install is the new
     // version.  A relaunch failure here is NOT an apply failure --
     // surfacing it as Err would mislead the caller into rolling
@@ -378,6 +473,19 @@ pub fn apply_archive_and_relaunch(
             detail: format!("{e}"),
         }),
     }
+}
+
+/// Verify and install an archive into `exe_dir` without relaunching the executable.
+///
+/// # Errors
+/// Returns an error on a checksum mismatch or failed extraction or file swap.
+pub fn apply_archive(
+    archive_path: &std::path::Path,
+    expected_sha256: &[u8; 32],
+    exe_dir: &std::path::Path,
+) -> Result<(), super::UpdaterError> {
+    reverify_archive(archive_path, expected_sha256)?;
+    apply_for_host(archive_path, exe_dir)
 }
 
 #[allow(clippy::result_large_err)]
@@ -499,11 +607,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_update_preserves_other_args() {
+        let cli = UpdaterCli::parse(["deadsync", "--update", "--no-update-check", "--console"]);
+        assert!(cli.update);
+        assert!(cli.no_update_check);
+        assert_eq!(cli.remaining, ["--console"]);
+        assert!(cli.apply_update.is_none());
+        assert!(!cli.restart);
+    }
+
+    #[test]
+    fn update_disabled_needs_no_cache_or_network() {
+        let err = run_update(std::path::Path::new("unused"), false)
+            .expect_err("disabled installs must fail before any update work");
+        assert!(err.to_string().contains("UpdaterInstallEnabled=0"));
+    }
+
+    #[test]
     fn parse_no_update_check_sets_flag() {
         let cli = UpdaterCli::parse(vec!["deadsync", "--no-update-check"]);
         assert!(cli.no_update_check);
         assert!(!cli.restart);
         assert!(cli.cleanup_old.is_none());
+        assert!(!cli.update);
     }
 
     #[test]
