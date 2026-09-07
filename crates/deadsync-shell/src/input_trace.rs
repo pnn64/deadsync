@@ -193,7 +193,7 @@ impl GameplayInputTrace {
             return;
         }
 
-        let batch_us = deadsync_config::frame_pacing::elapsed_us_between(now, batch.started_at);
+        let batch_us = deadlib_platform::frame_pacing::elapsed_us_between(now, batch.started_at);
         let app_handler_sum_us = batch.app_handler_sum_us.min(u64::from(u32::MAX)) as u32;
         let dispatch_overhead_us = batch_us.saturating_sub(app_handler_sum_us);
         if batch_us >= SLOW_BATCH_US || batch.key_events >= BURST_KEYS {

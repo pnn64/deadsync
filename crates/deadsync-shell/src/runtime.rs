@@ -1,14 +1,14 @@
 use crate::{
-    FrameLoopState, FrameStatsController, FrameStatsSample, GameplayInputTrace,
-    GameplayPacingTrace, ShellInteractionState, StutterDiagRecorder, TransitionState,
+    FrameStatsController, FrameStatsSample, GameplayInputTrace, GameplayPacingTrace,
+    ShellInteractionState, StutterDiagRecorder, TransitionState,
 };
+use deadlib_platform::frame_pacing::{FrameIntervalState, FrameLoopMode, FrameLoopState};
 use deadlib_present::space::{self, Metrics};
 use deadlib_render_core::{DrawStats, PresentModePolicy, PresentStats};
 use deadsync_assets::screenshot::ScreenshotRuntimeState;
 use deadsync_config::app_config::{Config, DisplayMode};
 use deadsync_config::frame_pacing::{
-    FrameIntervalState, FrameLoopMode, OverlayMode, StutterSampleRing, seconds_to_us_u32,
-    stutter_severity,
+    OverlayMode, StutterSampleRing, seconds_to_us_u32, stutter_severity,
 };
 use deadsync_profile::PlayerSide;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
@@ -92,7 +92,7 @@ impl ShellState {
 
     #[inline(always)]
     pub fn set_max_fps(&mut self, max_fps: u16) {
-        self.frame_loop.set_max_fps(max_fps);
+        self.frame_loop.set_max_fps(max_fps, Instant::now());
     }
 
     #[inline(always)]
@@ -128,7 +128,9 @@ impl ShellState {
 
     #[inline(always)]
     pub fn frame_interval_state(&self, screen: Screen) -> FrameIntervalState {
-        self.frame_loop.interval_state(self.vsync_enabled, screen)
+        let throttle_unfocused = !matches!(screen, Screen::Gameplay | Screen::Practice);
+        self.frame_loop
+            .interval_state(self.vsync_enabled, throttle_unfocused)
     }
 
     #[inline(always)]
@@ -292,6 +294,33 @@ impl ShellState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unfocused_gameplay_and_practice_keep_foreground_pacing() {
+        let cfg = Config {
+            vsync: false,
+            max_fps: 100,
+            ..Config::default()
+        };
+        let mut state = ShellState::new(&cfg, 0);
+        for screen in [Screen::Gameplay, Screen::Practice] {
+            assert_eq!(
+                state.frame_interval_state(screen).interval,
+                Some(Duration::from_millis(10))
+            );
+        }
+        assert_eq!(
+            state.frame_interval_state(Screen::SelectMusic).interval,
+            Some(Duration::from_millis(67))
+        );
+        state.frame_loop.set_window_occluded(true);
+        for screen in [Screen::Gameplay, Screen::Practice] {
+            assert_eq!(
+                state.frame_interval_state(screen).interval,
+                Some(Duration::from_millis(67))
+            );
+        }
+    }
 
     #[test]
     fn new_state_copies_runtime_config() {

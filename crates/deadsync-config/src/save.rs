@@ -722,7 +722,7 @@ mod tests {
                 assert!(!loaded.vsync);
                 assert_eq!(loaded.max_fps, 0);
                 assert_eq!(
-                    crate::frame_pacing::frame_interval_for_max_fps(loaded.max_fps),
+                    deadlib_platform::frame_pacing::frame_interval_for_max_fps(loaded.max_fps),
                     None
                 );
             }
