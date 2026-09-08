@@ -110,12 +110,12 @@ fn resolve_buffer_size(
     let buffer_duration_frames = hns_to_frames(period_hns, sample_rate);
 
     log::info!(
-        "WASAPI exclusive periods: \
-        min {min_period_frames}, \
-        default {default_period_frames}, \
-        preferred {preferred_buffer_frames:?}, \
-        chosen {buffer_duration_frames}, \
-        period {period_hns}"
+        "WASAPI exclusive: \
+        min frames {min_period_frames}, \
+        default frames {default_period_frames}, \
+        preferred frames {preferred_buffer_frames:?}, \
+        chosen frames {buffer_duration_frames}, \
+        chosen hns {period_hns}"
     );
     // SAFETY: `audio_client` is live and `format` points to a valid waveform
     // buffer owned by the caller.
@@ -131,8 +131,8 @@ fn resolve_buffer_size(
     } {
         Ok(()) => {
             log::info!(
-                "WASAPI exclusive succeeded using chosen frames. \
-                period {period_hns}"
+                "WASAPI exclusive buffer size resolution 
+                succeeded using {period_hns} HNS."
             );
             Ok(period_hns.min(u32::MAX as i64) as u32)
         }

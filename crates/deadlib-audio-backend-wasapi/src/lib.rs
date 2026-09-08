@@ -63,6 +63,15 @@ impl WasapiBackendMode {
     }
 
     #[inline(always)]
+    const fn buffer_size_unit(self) -> &'static str {
+        match self {
+            Self::Shared => "HNS",
+            Self::SharedLowLatency => "frames",
+            Self::Exclusive => "HNS",
+        }
+    }
+
+    #[inline(always)]
     const fn assumes_zero_audio_client_padding(self) -> bool {
         // Exclusive event callbacks occur when the complete endpoint buffer is
         // ready. Shared-mode padding is not applicable there.
@@ -351,12 +360,13 @@ pub fn prepare(
         usize::from(waveformat(&chosen_format).nBlockAlign) / sample_format.sample_size();
 
     info!(
-        "WASAPI: {} mode, {} channels, {} Hz, {}, preferred buffer size {} frames",
+        "WASAPI: {} mode, {} channels, {} Hz, {}, buffer size {} {}",
         mode.display_name(),
         channels,
         sample_rate_hz,
         sample_format.display_name(),
-        preferred_buffer_frames.unwrap_or(0),
+        buffer_size,
+        mode.buffer_size_unit()
     );
 
     Ok(WasapiOutputPrep {
