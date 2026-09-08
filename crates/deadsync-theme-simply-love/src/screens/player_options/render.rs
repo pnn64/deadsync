@@ -1,6 +1,7 @@
 use super::*;
 use crate::fonts::machine_font_key;
 use deadlib_present::actors::TextContent;
+use deadsync_notefield::noteskin_model_actor_from_draw;
 use deadsync_theme::FontRole;
 
 pub(super) fn top_bar_actor(
@@ -1245,14 +1246,51 @@ fn draw_pack_thumb(actors: &mut Vec<Actor>, rc: &RowCtx, player: usize) -> bool 
     let Some(thumb) = rc.fc.state.pack_menu.preview(player, rc.row.id) else {
         return false;
     };
-    let uv = thumb.uv;
-    let size = 32.0;
-    actors.push(act!(sprite(Arc::clone(&thumb.key)):
-        align(0.5, 0.5): xy(rc.fc.preview_x[player], rc.current_row_y):
-        setsize(size, size): customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-        diffuse(1.0, 1.0, 1.0, rc.a): z(Z_ROW_PREVIEW)
-    ));
+    draw_thumb(
+        actors,
+        rc.fc.state,
+        thumb,
+        [rc.fc.preview_x[player], rc.current_row_y],
+        32.0,
+        rc.a,
+        Z_ROW_PREVIEW,
+    );
     true
+}
+
+pub(super) fn draw_thumb(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    thumb: &super::pack_options::Thumb,
+    center: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
+) {
+    use super::pack_options::Thumb;
+    match thumb {
+        Thumb::Sprite { key, uv } => actors.push(act!(sprite(Arc::clone(key)):
+            align(0.5, 0.5): xy(center[0], center[1]):
+            setsize(size, size): customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+            diffuse(1.0, 1.0, 1.0, alpha): z(z)
+        )),
+        Thumb::Note { skin, part } => {
+            let first = actors.len();
+            draw_noteskin_note(
+                actors,
+                state,
+                skin,
+                *part,
+                Quantization::Q4th as usize,
+                0.0,
+                center,
+                size,
+                alpha,
+                z,
+            );
+            fit_preview(&mut actors[first..], center, [size, size]);
+        }
+    }
 }
 
 fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
@@ -1400,173 +1438,106 @@ const fn preview_arrows(num_cols: usize) -> &'static [(usize, f32, f32)] {
     }
 }
 
+// Keep layer selection, animation, and model/sprite composition together so the
+// noteskin row, component rows, and picker use the same note presentation.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn draw_noteskin_note(
     actors: &mut Vec<Actor>,
-    rc: &RowCtx,
+    state: &State,
     ns: &Noteskin,
+    part: NoteAnimPart,
     note_idx: usize,
     quant_idx: f32,
-    center_x: f32,
+    center: [f32; 2],
+    target_height: f32,
+    alpha: f32,
+    z: i16,
 ) {
-    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let elapsed = rc.fc.state.preview_time;
-    let beat = rc.fc.state.preview_beat;
-    let note_uv_phase = ns.tap_note_uv_phase(elapsed, beat, 0.0);
-    let tap_spacing = ns.note_display_metrics.part_texture_translate[NoteAnimPart::Tap as usize]
-        .note_color_spacing;
-    let uv_translate = [tap_spacing[0] * quant_idx, tap_spacing[1] * quant_idx];
-    if let Some(note_slots) = ns.note_layers.get(note_idx) {
-        let primary_h = note_slots
-            .first()
-            .map(|slot| slot.logical_size()[1].max(1.0))
-            .unwrap_or(1.0);
-        let note_scale = if primary_h > f32::EPSILON {
-            target_height / primary_h
-        } else {
-            NOTESKIN_PREVIEW_SCALE
-        };
-        for (layer_idx, note_slot) in note_slots.iter().enumerate() {
-            let draw = note_slot.model_draw_at(elapsed, beat);
-            if !draw.visible {
-                continue;
-            }
-            let frame = note_slot.frame_index_from_phase(note_uv_phase);
-            let uv_elapsed = if note_slot.model.is_some() {
-                note_uv_phase
-            } else {
-                elapsed
-            };
-            let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
-            let uv = [
-                uv[0] + uv_translate[0],
-                uv[1] + uv_translate[1],
-                uv[2] + uv_translate[0],
-                uv[3] + uv_translate[1],
-            ];
-            let slot_size = note_slot.logical_size();
-            let base_size = [slot_size[0] * note_scale, slot_size[1] * note_scale];
-            let rot_rad = (-note_slot.def.rotation_deg as f32).to_radians();
-            let (sin_r, cos_r) = rot_rad.sin_cos();
-            let ox = draw.pos[0] * note_scale;
-            let oy = draw.pos[1] * note_scale;
-            let center = [
-                center_x + ox * cos_r - oy * sin_r,
-                rc.current_row_y + ox * sin_r + oy * cos_r,
-            ];
-            let size = [
-                base_size[0] * draw.zoom[0].max(0.0),
-                base_size[1] * draw.zoom[1].max(0.0),
-            ];
-            if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
-                continue;
-            }
-            let color = [
-                draw.tint[0],
-                draw.tint[1],
-                draw.tint[2],
-                draw.tint[3] * rc.a,
-            ];
-            let blend = if draw.blend_add {
-                BlendMode::Add
-            } else {
-                BlendMode::Alpha
-            };
-            let z = 102 + layer_idx as i32;
-            if let Some(model_actor) = noteskin_model_actor(
-                note_slot,
-                center,
-                size,
-                uv,
-                -note_slot.def.rotation_deg as f32,
-                elapsed,
-                beat,
-                color,
-                blend,
-                z as i16,
-            ) {
-                actors.push(model_actor);
-            } else if draw.blend_add {
-                actors.push(act!(sprite(note_slot.texture_key_shared()):
-                    align(0.5, 0.5):
-                    xy(center[0], center[1]):
-                    setsize(size[0], size[1]):
-                    zoomx(slot_preview_zoom_x(note_slot, 1.0)):
-                    zoomy(slot_preview_zoom_y(note_slot, 1.0)):
-                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffuse(color[0], color[1], color[2], color[3]):
-                    blend(add):
-                    z(z)
-                ));
-            } else {
-                actors.push(act!(sprite(note_slot.texture_key_shared()):
-                    align(0.5, 0.5):
-                    xy(center[0], center[1]):
-                    setsize(size[0], size[1]):
-                    zoomx(slot_preview_zoom_x(note_slot, 1.0)):
-                    zoomy(slot_preview_zoom_y(note_slot, 1.0)):
-                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32):
-                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                    diffuse(color[0], color[1], color[2], color[3]):
-                    blend(normal):
-                    z(z)
-                ));
-            }
+    let elapsed = state.preview_time;
+    let beat = state.preview_beat;
+    let phase = ns.part_uv_phase(part, elapsed, beat, 0.0);
+    let spacing = ns.note_display_metrics.part_texture_translate[part as usize].note_color_spacing;
+    let translation = [spacing[0] * quant_idx, spacing[1] * quant_idx];
+    let layers = if part == NoteAnimPart::Lift {
+        ns.lift_note_layers.get(note_idx)
+    } else {
+        None
+    };
+    let slots = layers
+        .or_else(|| ns.note_layers.get(note_idx))
+        .map(AsRef::as_ref)
+        .or_else(|| ns.notes.get(note_idx).map(std::slice::from_ref))
+        .unwrap_or_default();
+    let Some(primary) = slots.first() else { return };
+    let note_scale = target_height / primary.logical_size()[1].max(1.0);
+    for (layer_idx, slot) in slots.iter().enumerate() {
+        let draw = slot.model_draw_at(elapsed, beat);
+        if !draw.visible {
+            continue;
         }
-        return;
-    }
-    let Some(note_slot) = ns.notes.get(note_idx) else {
-        return;
-    };
-    let frame = note_slot.frame_index_from_phase(note_uv_phase);
-    let uv_elapsed = if note_slot.model.is_some() {
-        note_uv_phase
-    } else {
-        elapsed
-    };
-    let uv = note_slot.uv_for_frame_at(frame, uv_elapsed);
-    let uv = [
-        uv[0] + uv_translate[0],
-        uv[1] + uv_translate[1],
-        uv[2] + uv_translate[0],
-        uv[3] + uv_translate[1],
-    ];
-    let size_raw = note_slot.logical_size();
-    let width = size_raw[0].max(1.0);
-    let height = size_raw[1].max(1.0);
-    let scale = if height > 0.0 {
-        target_height / height
-    } else {
-        NOTESKIN_PREVIEW_SCALE
-    };
-    let size = [width * scale, target_height];
-    let center = [center_x, rc.current_row_y];
-    if let Some(model_actor) = noteskin_model_actor(
-        note_slot,
-        center,
-        size,
-        uv,
-        -note_slot.def.rotation_deg as f32,
-        elapsed,
-        beat,
-        [1.0, 1.0, 1.0, rc.a],
-        BlendMode::Alpha,
-        102,
-    ) {
-        actors.push(model_actor);
-    } else {
-        actors.push(act!(sprite(note_slot.texture_key_shared()):
-            align(0.5, 0.5):
-            xy(center[0], center[1]):
-            setsize(size[0], size[1]):
-            zoomx(slot_preview_zoom_x(note_slot, 1.0)):
-            zoomy(slot_preview_zoom_y(note_slot, 1.0)):
-            rotationz(-note_slot.def.rotation_deg as f32):
+        let frame = slot.frame_index_from_phase(phase);
+        let uv_elapsed = if slot.model.is_some() { phase } else { elapsed };
+        let uv = slot.uv_for_frame_at(frame, uv_elapsed);
+        let uv = [
+            uv[0] + translation[0],
+            uv[1] + translation[1],
+            uv[2] + translation[0],
+            uv[3] + translation[1],
+        ];
+        let logical = slot.logical_size();
+        let size = [logical[0] * note_scale, logical[1] * note_scale];
+        let blend = if draw.blend_add {
+            BlendMode::Add
+        } else {
+            BlendMode::Alpha
+        };
+        let z = z + layer_idx as i16;
+        if let Some(actor) = noteskin_model_actor_from_draw(
+            slot,
+            draw,
+            center,
+            size,
+            uv,
+            -slot.def.rotation_deg as f32,
+            [1.0, 1.0, 1.0, alpha],
+            blend,
+            z,
+        ) {
+            actors.push(actor);
+            continue;
+        }
+        let size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
+        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+            continue;
+        }
+        let [sin_r, cos_r] = slot.base_rot_sin_cos();
+        let ox = draw.pos[0] * note_scale;
+        let oy = draw.pos[1] * note_scale;
+        let pos = [
+            center[0] + ox * cos_r - oy * sin_r,
+            center[1] + ox * sin_r + oy * cos_r,
+        ];
+        let color = [
+            draw.tint[0],
+            draw.tint[1],
+            draw.tint[2],
+            draw.tint[3] * alpha,
+        ];
+        let mut actor = act!(sprite(slot.texture_key_shared()):
+            align(0.5, 0.5): xy(pos[0], pos[1]): setsize(size[0], size[1]):
+            zoomx(slot_preview_zoom_x(slot, draw.zoom[0].signum())):
+            zoomy(slot_preview_zoom_y(slot, draw.zoom[1].signum())):
+            rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
             customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(1.0, 1.0, 1.0, rc.a):
-            z(Z_ROW_PREVIEW)
-        ));
+            diffuse(color[0], color[1], color[2], color[3]): z(z)
+        );
+        if let Actor::Sprite {
+            blend: actor_blend, ..
+        } = &mut actor
+        {
+            *actor_blend = blend;
+        }
+        actors.push(actor);
     }
 }
 
@@ -1575,7 +1546,18 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
     for &(col, quant_idx, x_mult) in preview_arrows(ns.column_xs.len()) {
         let x = x_mult.mul_add(target_height, center_x);
         let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-        draw_noteskin_note(actors, rc, ns, note_idx, quant_idx, x);
+        draw_noteskin_note(
+            actors,
+            rc.fc.state,
+            ns,
+            NoteAnimPart::Tap,
+            note_idx,
+            quant_idx,
+            [x, rc.current_row_y],
+            target_height,
+            rc.a,
+            Z_ROW_PREVIEW,
+        );
     }
 }
 

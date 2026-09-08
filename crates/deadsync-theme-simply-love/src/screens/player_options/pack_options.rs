@@ -55,9 +55,15 @@ fn parts(options: &PlayerOptionsData) -> [Option<&NoteSkin>; 11] {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Thumb {
-    pub key: Arc<str>,
-    pub uv: [f32; 4],
+pub(super) enum Thumb {
+    Sprite {
+        key: Arc<str>,
+        uv: [f32; 4],
+    },
+    Note {
+        skin: Arc<Noteskin>,
+        part: NoteAnimPart,
+    },
 }
 
 struct MenuSkin {
@@ -221,7 +227,7 @@ impl PackMenu {
             .find(|choice| choice.slot == SLOTS[slot] && choice.id == id)?;
         let x = f32::from(choice.cell % 32) / 32.0;
         let y = f32::from(choice.cell / 32) / 32.0;
-        Some(Thumb {
+        Some(Thumb::Sprite {
             key: Arc::clone(&skin.atlas),
             uv: [x, y, x + 1.0 / 32.0, y + 1.0 / 32.0],
         })
@@ -296,9 +302,18 @@ impl PackMenu {
     }
 }
 
-fn bundled_thumb(skin: &Noteskin, slot: usize) -> Option<Thumb> {
+fn bundled_thumb(skin: &Arc<Noteskin>, slot: usize) -> Option<Thumb> {
+    if matches!(slot, 0 | 10) {
+        return Some(Thumb::Note {
+            skin: Arc::clone(skin),
+            part: if slot == 10 {
+                NoteAnimPart::Lift
+            } else {
+                NoteAnimPart::Tap
+            },
+        });
+    }
     let sprite = match slot {
-        0 => skin.notes.first(),
         1 => skin.receptor_off.first(),
         2 => skin.hold.body_active.as_ref(),
         3 => skin.hold.body_inactive.as_ref(),
@@ -310,13 +325,9 @@ fn bundled_thumb(skin: &Noteskin, slot: usize) -> Option<Thumb> {
             .next()
             .map(|explosion| &explosion.slot),
         7 => skin.hold.explosion.as_ref(),
-        10 => skin
-            .lift_note_layers
-            .first()
-            .and_then(|layers| layers.first()),
         _ => None,
     }?;
-    Some(Thumb {
+    Some(Thumb::Sprite {
         key: sprite.texture_key_shared(),
         uv: sprite.uv_for_frame_at(0, 0.0),
     })

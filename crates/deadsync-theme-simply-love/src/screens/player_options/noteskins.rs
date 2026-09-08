@@ -186,6 +186,12 @@ pub(super) fn preview_noteskin_names(
     }
     for options in player_options {
         push_noteskin_name_once(&mut names, &options.noteskin);
+        for skin in [&options.arrow_noteskin, &options.lift_noteskin]
+            .into_iter()
+            .flatten()
+        {
+            push_noteskin_name_once(&mut names, skin);
+        }
         if let Some(skin) = options.mine_noteskin.as_ref() {
             push_noteskin_name_once(&mut names, skin);
         }

@@ -564,11 +564,15 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
                 );
             }
         } else if let Some(thumb) = &m.thumb {
-            let uv = thumb.uv;
-            actors.push(act!(sprite(Arc::clone(&thumb.key)):
-                align(0.5, 0.5): xy(list_x + 10.0, y): setsize(18.0, 18.0):
-                customtexturerect(uv[0], uv[1], uv[2], uv[3]): z(Z_TEXT + 1)
-            ));
+            super::render::draw_thumb(
+                actors,
+                state,
+                thumb,
+                [list_x + 10.0, y],
+                18.0,
+                1.0,
+                Z_TEXT + 1,
+            );
         }
         let choice_x = if open.component.is_some() {
             list_x + 24.0

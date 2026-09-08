@@ -108,6 +108,18 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn preview_cache_plan_keeps_saved_arrow_and_lift_styles() {
+        let options = PlayerOptionsData {
+            noteskin: deadsync_profile::NoteSkin::new("default"),
+            arrow_noteskin: Some(deadsync_profile::NoteSkin::new("cyber")),
+            lift_noteskin: Some(deadsync_profile::NoteSkin::new("cel")),
+            ..Default::default()
+        };
+        let names = preview_noteskin_names(vec!["default".into()], &[options]);
+        assert_eq!(names, ["default", "cyber", "cel"]);
+    }
+
+    #[test]
     fn gameplay_payload_skips_catalog_preview_warmup() {
         let state = init_noteskin_state(
             4,
@@ -1986,8 +1998,110 @@ pub(super) mod tests {
         );
     }
 
+    #[test]
+    fn arrow_lift_previews_render_selected_layers() {
+        use super::super::{NoteAnimPart, pack_options, render};
+        use deadlib_present::actors::Actor;
+        use deadsync_profile::NoteSkin;
+        ensure_i18n();
+        let (mut state, _) = setup_versus_state();
+        for name in ["cel", "cyber", "metal", "default", "lambda"] {
+            let skin = deadsync_assets::noteskin::load_itg_skin_cached(
+                &deadsync_noteskin::Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                name,
+            )
+            .unwrap();
+            state.noteskin.cache.insert(name.into(), Arc::clone(&skin));
+            state.player_options[P1].noteskin = NoteSkin::new(name);
+            state.player_options[P2].arrow_noteskin = Some(NoteSkin::new(name));
+            state.player_options[P2].lift_noteskin = Some(NoteSkin::new(name));
+            let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
+            rows.get_mut(RowId::NoteSkin)
+                .unwrap()
+                .replace_choices(vec![name.into()]);
+            state.pack_menu.add_rows(rows, &state.player_options);
+            for player in [P1, P2] {
+                pack_options::sync_player(&mut state, player);
+            }
+            for (row, part, layers) in [
+                (RowId::SkinArrows, NoteAnimPart::Tap, &skin.note_layers[0]),
+                (
+                    RowId::SkinLifts,
+                    NoteAnimPart::Lift,
+                    &skin.lift_note_layers[0],
+                ),
+            ] {
+                // Inherited P1 and explicit P2 choices use the same component.
+                for player in [P1, P2] {
+                    let pack_options::Thumb::Note {
+                        skin: selected,
+                        part: selected_part,
+                    } = state.pack_menu.preview(player, row).unwrap()
+                    else {
+                        panic!("{name}: component must render note geometry")
+                    };
+                    assert!(Arc::ptr_eq(selected, &skin));
+                    assert_eq!(*selected_part, part);
+                }
+                let mut first_frame = None;
+                let mut animated = false;
+                for time in [0.0, 0.17, 0.43, 0.79] {
+                    state.preview_time = time;
+                    state.preview_beat = time * 2.0;
+                    for (choice, size) in [(0, 18.0), (1, 32.0)] {
+                        let thumb = state
+                            .pack_menu
+                            .choice_thumb(&state, P1, row, choice)
+                            .unwrap();
+                        let mut actors = Vec::new();
+                        render::draw_thumb(&mut actors, &state, &thumb, [100.0; 2], size, 1.0, 102);
+                        assert_eq!(
+                            actors.len(),
+                            layers.len(),
+                            "{name}: {part:?} keeps every layer"
+                        );
+                        assert!(!actors.is_empty());
+                        for (actor, slot) in actors.iter().zip(layers.iter()) {
+                            match actor {
+                                Actor::TexturedMesh {
+                                    texture, vertices, ..
+                                } => {
+                                    assert!(slot.model.is_some(), "{name}: {part:?}");
+                                    assert!(!vertices.is_empty());
+                                    assert_eq!(texture.as_ref(), slot.texture_key());
+                                }
+                                Actor::Sprite { source, .. } => {
+                                    assert!(
+                                        slot.model.is_none(),
+                                        "{name}: {part:?} must keep its mesh"
+                                    );
+                                    assert_eq!(source.texture_key(), Some(slot.texture_key()));
+                                }
+                                _ => panic!("unexpected note preview actor"),
+                            }
+                        }
+                        assert_preview_bounds(&actors, name, size);
+                        if choice == 0 {
+                            let frame = format!("{actors:?}");
+                            if let Some(first) = &first_frame {
+                                animated |= first != &frame;
+                            } else {
+                                first_frame = Some(frame);
+                            }
+                        }
+                    }
+                }
+                if name == "cyber" {
+                    assert!(animated, "cyber {part:?} must advance its animation");
+                }
+            }
+        }
+    }
+
     fn check_mine_preview(state: &mut super::State, name: &str) {
-        use deadlib_present::actors::{Actor, SizeSpec};
         let mut first_frame = None;
         let mut animated = false;
         for time in [0.0, 0.17, 0.43, 0.79] {
@@ -2010,44 +2124,54 @@ pub(super) mod tests {
             } else {
                 first_frame = Some(frame);
             }
-            let inside = |x: f32, y: f32| {
-                assert!((91.0 - 0.01..=109.0 + 0.01).contains(&x), "{name}: x={x}");
-                assert!((91.0 - 0.01..=109.0 + 0.01).contains(&y), "{name}: y={y}");
-            };
-            for actor in &actors {
-                match actor {
-                    Actor::TexturedMesh {
-                        offset,
-                        local_transform,
-                        vertices,
-                        ..
-                    } => {
-                        for v in vertices.iter() {
-                            let p = local_transform.transform_point3(glam::Vec3::from(v.pos));
+            assert_preview_bounds(&actors, name, 18.0);
+        }
+        assert!(animated, "{name} must advance its animation");
+    }
+
+    fn assert_preview_bounds(actors: &[deadlib_present::actors::Actor], name: &str, size: f32) {
+        use deadlib_present::actors::{Actor, SizeSpec};
+        let inside = |x: f32, y: f32| {
+            assert!(
+                (100.0 - size * 0.5 - 0.01..=100.0 + size * 0.5 + 0.01).contains(&x),
+                "{name}: x={x}"
+            );
+            assert!(
+                (100.0 - size * 0.5 - 0.01..=100.0 + size * 0.5 + 0.01).contains(&y),
+                "{name}: y={y}"
+            );
+        };
+        for actor in actors {
+            match actor {
+                Actor::TexturedMesh {
+                    offset,
+                    local_transform,
+                    vertices,
+                    ..
+                } => {
+                    for v in vertices.iter() {
+                        let p = local_transform.transform_point3(glam::Vec3::from(v.pos));
+                        inside(p.x + offset[0], p.y + offset[1]);
+                    }
+                }
+                Actor::Sprite {
+                    offset,
+                    size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                    scale,
+                    rot_z_deg,
+                    ..
+                } => {
+                    let rotation = glam::Mat2::from_angle(rot_z_deg.to_radians());
+                    for x in [-0.5, 0.5] {
+                        for y in [-0.5, 0.5] {
+                            let p = rotation * glam::Vec2::new(x * w * scale[0], y * h * scale[1]);
                             inside(p.x + offset[0], p.y + offset[1]);
                         }
                     }
-                    Actor::Sprite {
-                        offset,
-                        size: [SizeSpec::Px(w), SizeSpec::Px(h)],
-                        scale,
-                        rot_z_deg,
-                        ..
-                    } => {
-                        let rotation = glam::Mat2::from_angle(rot_z_deg.to_radians());
-                        for x in [-0.5, 0.5] {
-                            for y in [-0.5, 0.5] {
-                                let p =
-                                    rotation * glam::Vec2::new(x * w * scale[0], y * h * scale[1]);
-                                inside(p.x + offset[0], p.y + offset[1]);
-                            }
-                        }
-                    }
-                    _ => panic!("unexpected mine actor"),
                 }
+                _ => panic!("unexpected preview actor"),
             }
         }
-        assert!(animated, "{name} must advance its animation");
     }
 
     #[test]
