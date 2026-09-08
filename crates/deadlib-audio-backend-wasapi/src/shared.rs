@@ -10,7 +10,7 @@ pub(super) fn validate(
     let buffer_size = preferred_buffer_frames
         .filter(|frames| *frames > 0)
         .map_or_else(
-            || default_period_hns.max(0),
+            || 0, //sending 0 to WASAPI will make it choose the minimum buffer size
             |frames| frames_to_hns(frames, sample_rate),
         );
     let buffer_size = buffer_size.min(u32::MAX as i64) as u32;
