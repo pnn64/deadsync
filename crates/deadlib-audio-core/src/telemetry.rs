@@ -460,6 +460,7 @@ pub enum OutputTelemetryBackend {
     WasapiExclusive = 7,
     FreeBsdPcm = 8,
     CoreAudioShared = 9,
+    WasapiSharedLowLatency = 10,
 }
 
 impl OutputTelemetryBackend {
@@ -470,6 +471,7 @@ impl OutputTelemetryBackend {
             "alsa-shared" => Self::AlsaShared,
             "alsa-exclusive" => Self::AlsaExclusive,
             "wasapi-shared" => Self::WasapiShared,
+            "wasapi-shared-low-latency" => Self::WasapiSharedLowLatency,
             "wasapi-exclusive" => Self::WasapiExclusive,
             "pulse-shared" => Self::PulseAudioShared,
             "freebsd-pcm" => Self::FreeBsdPcm,
@@ -493,6 +495,7 @@ impl OutputTelemetryBackend {
             7 => Self::WasapiExclusive,
             8 => Self::FreeBsdPcm,
             9 => Self::CoreAudioShared,
+            10 => Self::WasapiSharedLowLatency,
             _ => Self::Unknown,
         }
     }
@@ -505,6 +508,7 @@ impl OutputTelemetryBackend {
             Self::AlsaShared => "alsa-shared",
             Self::AlsaExclusive => "alsa-exclusive",
             Self::WasapiShared => "wasapi-shared",
+            Self::WasapiSharedLowLatency => "wasapi-shared-low-latency",
             Self::WasapiExclusive => "wasapi-exclusive",
             Self::PulseAudioShared => "pulse-shared",
             Self::FreeBsdPcm => "freebsd-pcm",
@@ -686,6 +690,7 @@ mod tests {
             OutputTelemetryBackend::JackShared,
             OutputTelemetryBackend::PipeWireShared,
             OutputTelemetryBackend::WasapiShared,
+            OutputTelemetryBackend::WasapiSharedLowLatency,
             OutputTelemetryBackend::WasapiExclusive,
             OutputTelemetryBackend::FreeBsdPcm,
             OutputTelemetryBackend::CoreAudioShared,
