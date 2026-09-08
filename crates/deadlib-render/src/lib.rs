@@ -270,6 +270,7 @@ impl Backend {
         }
     }
 
+    /// Resizes surface pixels while preserving the current default projection.
     pub fn resize(&mut self, width: u32, height: u32) {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
@@ -288,6 +289,7 @@ impl Backend {
         }
     }
 
+    /// Sets the fallback camera used by draws with no matching frame camera.
     pub fn set_default_projection(&mut self, projection: ProjectionMatrix) {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
@@ -584,10 +586,17 @@ impl Backend {
     }
 }
 
-/// Creates and initializes a new graphics backend.
+/// Creates a graphics backend with the caller's default projection.
+///
+/// Surface resizing preserves `projection`. Frame and render-target cameras
+/// override it per draw; missing camera indices use this default.
+///
+/// # Errors
+/// Returns an error if the graphics device or surface cannot be initialized.
 pub fn create_backend(
     backend_type: BackendType,
     window: Arc<Window>,
+    projection: ProjectionMatrix,
     vsync_enabled: bool,
     present_mode_policy: PresentModePolicy,
     gfx_debug_enabled: bool,
@@ -597,6 +606,7 @@ pub fn create_backend(
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         BackendType::Vulkan => BackendImpl::Vulkan(Box::new(vulkan::init(
             &window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
@@ -604,6 +614,7 @@ pub fn create_backend(
         #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
         BackendType::VulkanWgpu => BackendImpl::VulkanWgpu(Box::new(wgpu_core::init_vulkan(
             window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
@@ -611,6 +622,7 @@ pub fn create_backend(
         #[cfg(target_os = "macos")]
         BackendType::Metal => BackendImpl::Metal(Box::new(metal::init(
             window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
@@ -618,28 +630,32 @@ pub fn create_backend(
         #[cfg(target_os = "macos")]
         BackendType::MetalWgpu => BackendImpl::MetalWgpu(Box::new(wgpu_core::init_metal(
             window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
         )?)),
         BackendType::OpenGL => BackendImpl::OpenGL(Box::new(opengl::init(
             window,
+            projection,
             vsync_enabled,
             gfx_debug_enabled,
             high_dpi_enabled,
         )?)),
         BackendType::OpenGLWgpu => BackendImpl::OpenGLWgpu(Box::new(wgpu_core::init_opengl(
             window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,
         )?)),
         BackendType::Software => {
-            BackendImpl::Software(Box::new(software::init(window, vsync_enabled)?))
+            BackendImpl::Software(Box::new(software::init(window, projection, vsync_enabled)?))
         }
         #[cfg(target_os = "windows")]
         BackendType::DirectX => BackendImpl::DirectX(Box::new(wgpu_core::init_dx12(
             window,
+            projection,
             vsync_enabled,
             present_mode_policy,
             gfx_debug_enabled,

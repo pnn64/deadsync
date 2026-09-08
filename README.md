@@ -121,6 +121,27 @@ Follow these steps to get the game running:
         ./target/release/deadsync
         ```
 
+## Updating without starting the game
+
+Run this from your DeadSync installation directory:
+
+```powershell
+.\deadsync.exe --update
+```
+
+On Linux, FreeBSD, and macOS, use `./deadsync --update`.
+
+The command checks for the latest release, downloads and verifies the matching
+build, installs it, and exits. It prints progress without opening a game window,
+loading songs, or starting audio, and leaves the game closed after the update.
+If your version is already current or newer, it exits without downloading.
+
+Exit status is `0` on success (including already up to date), or `1` on failure.
+In PowerShell scripts, use `Start-Process .\deadsync.exe -ArgumentList '--update'
+-NoNewWindow -Wait -PassThru` and read the returned process's `ExitCode`.
+`--update` takes precedence over `--no-update-check`. Installations with
+`UpdaterInstallEnabled=0` must use their package manager or distribution's updater.
+
 ## Configuration
 
 After running the game for the first time, configuration files and a `save` directory will be generated.

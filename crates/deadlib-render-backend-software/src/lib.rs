@@ -19,8 +19,6 @@ const MIN_STAGE_MESH_STRIPES: usize = 12;
 // Frames that exceed either buffer render through the direct path instead.
 const MESH_STAGE_VERTEX_CAP: usize = 36 * 1024;
 const U8_TO_F32: f32 = 1.0 / 255.0;
-const LOGICAL_HEIGHT: f32 = 480.0;
-const DESIGN_WIDTH_16_9: f32 = 854.0;
 
 pub struct Texture {
     pub image: RgbaImage,
@@ -373,11 +371,14 @@ impl StripeBins {
     }
 }
 
-pub fn init(window: Arc<Window>, _vsync_enabled: bool) -> Result<State, Box<dyn Error>> {
+pub fn init(
+    window: Arc<Window>,
+    projection: Matrix4,
+    _vsync_enabled: bool,
+) -> Result<State, Box<dyn Error>> {
     info!("Initializing software renderer backend (softbuffer)...");
 
     let window_size = window.inner_size();
-    let projection = ortho_for_window(window_size.width, window_size.height);
 
     let context = softbuffer::Context::new(window.clone())?;
     let surface = softbuffer::Surface::new(&context, window)?;
@@ -638,10 +639,7 @@ fn draw_offscreen_targets(
         let software_pass = SoftwarePass::from(pass);
         prepare_objects(
             software_pass,
-            pass.cameras
-                .first()
-                .copied()
-                .unwrap_or_else(|| ortho_for_window(pass.width.max(1), pass.height.max(1))),
+            state.projection,
             &resolved,
             width,
             height,
@@ -1341,10 +1339,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     let window_size = PhysicalSize::new(width, height);
     state.surface_resize_pending |= state.window_size != window_size;
     state.window_size = window_size;
-    if width == 0 || height == 0 {
-        return;
-    }
-    state.projection = ortho_for_window(width, height);
 }
 
 pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
@@ -1353,24 +1347,6 @@ pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
 
 pub fn cleanup(_state: &mut State) {
     info!("Software renderer backend cleanup.");
-}
-
-#[inline(always)]
-fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    let aspect = if height == 0 {
-        1.0
-    } else {
-        width as f32 / height as f32
-    };
-    let h = LOGICAL_HEIGHT;
-    let w = if aspect >= 16.0 / 9.0 {
-        DESIGN_WIDTH_16_9
-    } else {
-        (h * aspect).min(DESIGN_WIDTH_16_9)
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 #[inline(always)]
@@ -3109,6 +3085,114 @@ mod tests {
     const TEXTURE_HANDLE: TextureHandle = 7;
     const MISSING_TEXTURE_HANDLE: TextureHandle = 99;
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn resize_preserves_projection_and_offscreen_cameras_override_it() {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .expect("create test event loop");
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = event_loop
+            .create_window(Window::default_attributes().with_visible(false))
+            .expect("create hidden test window");
+        let projection =
+            glam::camera::rh::proj::opengl::orthographic(-10.0, 10.0, -5.0, 5.0, -1.0, 1.0);
+        let mut state =
+            init(Arc::new(window), projection, false).expect("create software renderer");
+        assert_eq!(state.projection, projection);
+        let custom = Matrix4::from_translation(Vec3::new(0.25, -0.5, 0.0)) * projection;
+        set_default_projection(&mut state, custom);
+        for (width, height) in [
+            (640, 480),
+            (1920, 1080),
+            (3840, 780),
+            (0, 480),
+            (640, 0),
+            (80, 60),
+        ] {
+            resize(&mut state, width, height);
+            assert_eq!(state.projection, custom);
+            assert_eq!(state.window_size, PhysicalSize::new(width, height));
+        }
+        set_default_projection(&mut state, projection);
+        let mut frame = RenderFrame {
+            clear_color: [0.0; 4],
+            render_targets: vec![RenderTargetFrame {
+                texture_handle: deadlib_render_core::render_target_texture_handle(1),
+                width: 40,
+                height: 24,
+                alpha: false,
+                depth: false,
+                preserve: false,
+                cameras: Vec::new(),
+                sprite_instances: Vec::new(),
+                mesh_vertices: [
+                    (-5.0, -2.5),
+                    (5.0, -2.5),
+                    (5.0, 2.5),
+                    (-5.0, -2.5),
+                    (5.0, 2.5),
+                    (-5.0, 2.5),
+                ]
+                .map(|(x, y)| MeshVertex {
+                    pos: [x, y],
+                    color: [1.0; 4],
+                })
+                .to_vec(),
+                tmesh_instances: Vec::new(),
+                tmesh_geometries: Vec::new(),
+                ops: vec![DrawOp::Mesh(MeshRun {
+                    vertex_start: 0,
+                    vertex_count: 6,
+                    blend: BlendMode::Alpha,
+                    camera: 0,
+                })],
+            }],
+            cameras: Vec::new(),
+            sprite_instances: Vec::new(),
+            mesh_vertices: Vec::new(),
+            tmesh_instances: Vec::new(),
+            tmesh_geometries: Vec::new(),
+            ops: Vec::new(),
+        };
+        for (width, height) in [(40, 24), (80, 16)] {
+            frame.render_targets[0].width = width;
+            frame.render_targets[0].height = height;
+            // Explicit cameras change coverage; absent and invalid indices use the default.
+            for (cameras, camera, inset) in [
+                (vec![], 0, 4),
+                (
+                    vec![projection * Matrix4::from_scale(Vec3::new(0.5, 0.5, 1.0))],
+                    0,
+                    8,
+                ),
+                (vec![Matrix4::IDENTITY], 1, 4),
+            ] {
+                frame.render_targets[0].cameras = cameras;
+                let DrawOp::Mesh(run) = &mut frame.render_targets[0].ops[0] else {
+                    panic!("mesh fixture");
+                };
+                run.camera = camera;
+                draw_offscreen_targets(&mut state, &frame, &test_textures());
+                for (index, pixel) in state.offscreen_targets[0].pixels.iter().enumerate() {
+                    let x = index as u32 % width;
+                    let y = index as u32 / width;
+                    let inside = (width / 2 - width / inset..width / 2 + width / inset)
+                        .contains(&x)
+                        && (height / 2 - height / inset..height / 2 + height / inset).contains(&y);
+                    assert_eq!(
+                        *pixel,
+                        if inside { 0xffff_ffff } else { 0xff00_0000 },
+                        "target {width}x{height}, camera {camera}, pixel {x},{y}"
+                    );
+                }
+            }
+        }
+    }
+
     struct TestTextures {
         texture: Texture,
         lookups: AtomicUsize,
@@ -3865,7 +3949,9 @@ mod tests {
         RenderFrame {
             clear_color: [0.025, 0.05, 0.075, 1.0],
             render_targets: Vec::new(),
-            cameras: vec![ortho_for_window(WIDTH as u32, HEIGHT as u32)],
+            cameras: vec![glam::camera::rh::proj::opengl::orthographic(
+                -288.0, 288.0, -240.0, 240.0, -1.0, 1.0,
+            )],
             sprite_instances: vec![
                 sprite([-30.0, 15.0], 0.17, 0.92),
                 sprite([0.0, 0.0], -0.31, 0.0),

@@ -27,6 +27,70 @@ use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+/// Resolve the archive checksum from the release sidecar and GitHub API digest.
+///
+/// # Errors
+/// Returns an error if no valid checksum is available or the two sources disagree.
+pub fn resolve_expected_digest(
+    agent: &ureq::Agent,
+    asset: &ReleaseAsset,
+) -> Result<[u8; 32], UpdaterError> {
+    let api_digest = match asset.digest.as_deref() {
+        Some(raw) => match parse_api_digest(raw)? {
+            Some(digest) => Some(digest),
+            None => {
+                log::info!(
+                    "Skipping API digest for {}: unsupported algorithm in '{}'",
+                    asset.name,
+                    raw
+                );
+                None
+            }
+        },
+        None => None,
+    };
+
+    let sidecar = match fetch_checksum_sidecar(agent, &asset.browser_download_url) {
+        Ok(text) => Some(text),
+        Err(err) => {
+            if let Some(digest) = api_digest {
+                log::warn!(
+                    "Checksum sidecar unavailable for {}; using GitHub API digest instead: {err}",
+                    asset.name
+                );
+                return Ok(digest);
+            }
+            return Err(err);
+        }
+    };
+
+    let sidecar_digest =
+        match parse_checksum_sidecar(sidecar.as_deref().unwrap_or_default(), &asset.name) {
+            Ok(digest) => digest,
+            Err(err) => {
+                if let Some(digest) = api_digest {
+                    log::warn!(
+                        "Checksum sidecar malformed for {}; using GitHub API digest instead: {err}",
+                        asset.name
+                    );
+                    return Ok(digest);
+                }
+                return Err(err);
+            }
+        };
+
+    if let Some(api_digest) = api_digest
+        && api_digest != sidecar_digest
+    {
+        return Err(UpdaterError::ChecksumMismatch {
+            expected: format!("api={}", sha256_hex(&api_digest)),
+            actual: format!("sidecar={}", sha256_hex(&sidecar_digest)),
+        });
+    }
+
+    Ok(sidecar_digest)
+}
+
 /// Length of an upload `.sha256` sidecar in bytes is bounded; we refuse
 /// anything larger than this to avoid pathological allocations on bad
 /// servers.  A normal sidecar is ~80 bytes.

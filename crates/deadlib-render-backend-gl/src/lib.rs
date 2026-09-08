@@ -85,8 +85,6 @@ fn set_macos_opengl_high_dpi_surface(window: &Window, enabled: bool) {
 const OPENGL_PRESENT_SPIKE_US: u32 = 3_000;
 const OPENGL_GPU_WAIT_SPIKE_US: u32 = 1_000;
 const OPENGL_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
-const LOGICAL_HEIGHT: f32 = 480.0;
-const DESIGN_WIDTH_16_9: f32 = 854.0;
 const MODERN_DESKTOP_GL: GlVersion = GlVersion { major: 3, minor: 3 };
 const BASE_INSTANCE_DESKTOP_GL: GlVersion = GlVersion { major: 4, minor: 2 };
 
@@ -323,6 +321,7 @@ pub struct State {
 
 pub fn init(
     window: Arc<Window>,
+    projection: Matrix4,
     vsync_enabled: bool,
     gfx_debug_enabled: bool,
     high_dpi_enabled: bool,
@@ -678,7 +677,6 @@ pub fn init(
     };
 
     let (initial_width, initial_height) = opengl_render_size(&window, high_dpi_enabled);
-    let projection = ortho_for_window(initial_width, initial_height);
     let (surface_width, surface_height) = surface_extent(initial_width, initial_height);
     gl_surface.resize(&gl_context, surface_width, surface_height);
     info!(
@@ -3111,7 +3109,6 @@ pub fn resize(state: &mut State, width: u32, height: u32) {
     unsafe {
         state.gl.viewport(0, 0, width as i32, height as i32);
     }
-    state.projection = ortho_for_window(width, height);
 }
 
 pub const fn set_default_projection(state: &mut State, projection: Matrix4) {
@@ -3156,24 +3153,6 @@ pub fn cleanup(state: &mut State) {
         }
     }
     info!("OpenGL resources cleaned up.");
-}
-
-#[inline(always)]
-fn ortho_for_window(width: u32, height: u32) -> Matrix4 {
-    let aspect = if height == 0 {
-        1.0
-    } else {
-        width as f32 / height as f32
-    };
-    let h = LOGICAL_HEIGHT;
-    let w = if aspect >= 16.0 / 9.0 {
-        DESIGN_WIDTH_16_9
-    } else {
-        (h * aspect).min(DESIGN_WIDTH_16_9)
-    };
-    let half_w = 0.5 * w;
-    let half_h = 0.5 * h;
-    glam::camera::rh::proj::opengl::orthographic(-half_w, half_w, -half_h, half_h, -1.0, 1.0)
 }
 
 fn create_opengl_context(

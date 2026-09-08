@@ -2032,7 +2032,7 @@ mod tests {
         assert_eq!(tint, [0.1, 0.2, 0.3, 0.4]);
         assert_eq!(blend, deadlib_render_core::BlendMode::Add);
 
-        crate::space::set_current_metrics(crate::space::metrics_for_window(854, 480));
+        crate::space::set_current_metrics(crate::space::Metrics::centered(854.0, 480.0));
     }
 
     #[test]

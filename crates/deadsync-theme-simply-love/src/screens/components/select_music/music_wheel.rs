@@ -1670,7 +1670,7 @@ mod tests {
     use crate::color;
     use crate::screens::select_music::MusicWheelEntry;
     use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
-    use deadlib_present::space::{metrics_for_window, set_current_metrics};
+    use deadlib_present::space::{Metrics, set_current_metrics};
     use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
     use deadsync_config::theme::{
         SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
@@ -1763,12 +1763,12 @@ mod tests {
 
     #[test]
     fn pack_header_text_clears_series_icons_in_4_3() {
-        set_current_metrics(metrics_for_window(640, 480));
+        set_current_metrics(Metrics::centered(640.0, 480.0));
         assert_eq!(pack_header_text_x(false, false), 65.0);
         assert_eq!(pack_header_text_x(true, false), 70.0);
         assert_eq!(pack_header_text_x(false, true), 75.0);
 
-        set_current_metrics(metrics_for_window(854, 480));
+        set_current_metrics(Metrics::centered(854.0, 480.0));
         assert_eq!(pack_header_text_x(false, false), 74.0);
         assert_eq!(pack_header_text_x(true, false), 74.0);
         assert_eq!(pack_header_text_x(false, true), 84.0);

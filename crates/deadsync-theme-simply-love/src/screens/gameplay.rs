@@ -21262,6 +21262,9 @@ mod tests {
 
     #[test]
     fn difficulty_meter_overlap_uses_profile_target_offset() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let mut profile = profile_data::Profile::default();
 
         assert!(!saved_targets_hit_meter(&profile, 4, DIFFICULTY_METER_Y));
@@ -21272,6 +21275,9 @@ mod tests {
 
     #[test]
     fn difficulty_meter_overlap_uses_profile_scroll_option() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let mut profile = profile_data::Profile {
             note_field_offset_y: -50,
             ..profile_data::Profile::default()
@@ -21529,8 +21535,8 @@ mod tests {
 
     #[test]
     fn fullscreen_opaque_aft_marks_captured_screen_sources_occluded() {
-        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
-            1280, 720,
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
         ));
         let overlays = test_covering_aft_overlays();
         let states = overlays
@@ -21558,8 +21564,8 @@ mod tests {
 
     #[test]
     fn nested_alpha_afts_propagate_their_opaque_screen_region() {
-        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
-            1280, 720,
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
         ));
         for scale in [2.0, 5.0, 10.0] {
             let overlays = test_nested_alpha_covering_aft_overlays(scale);
@@ -21642,8 +21648,8 @@ mod tests {
 
     #[test]
     fn partial_translucent_and_alpha_afts_keep_original_screen_sources() {
-        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
-            1280, 720,
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
         ));
         let mut overlays = test_covering_aft_overlays();
         let index = SongLuaProxyRequestIndex::new(&overlays);
@@ -22665,6 +22671,9 @@ mod tests {
 
     #[test]
     fn song_lua_overlay_perspective_keeps_logical_center_fixed() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let camera = SongLuaOverlayState {
             fov: Some(120.0),
             ..SongLuaOverlayState::default()
@@ -22718,6 +22727,9 @@ mod tests {
 
     #[test]
     fn song_lua_projection_matches_step_your_game_up_fixture() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let fixture_path = workspace_root().join(
             "tests/fixtures/itgmania-song-lua/Step Your Game Up (Director's Cut)/stepyourgameup.ssc.semantic.json",
         );
@@ -23103,8 +23115,8 @@ mod tests {
 
     #[test]
     fn song_lua_actor_proxy_zoom_fills_display_sized_aft() {
-        deadlib_present::space::set_current_metrics(deadlib_present::space::metrics_for_window(
-            854, 480,
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
         ));
         let source = [Arc::<[Actor]>::from([test_source_actor()])];
         let display_width = 1600.0;
@@ -23757,7 +23769,7 @@ mod tests {
             std::iter::once(ActorSegment::new(&actors)),
             &targets,
             [0.0; 4],
-            &deadlib_present::space::metrics_for_window(854, 480),
+            &deadlib_present::space::Metrics::centered(854.0, 480.0),
             &deadlib_present::font::FontMap::default(),
             0.0,
             &mut deadlib_present::compose::TextLayoutCache::default(),
@@ -23775,6 +23787,9 @@ mod tests {
 
     #[test]
     fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         deadlib_present::space::set_current_window_px(1600, 900);
         let mut overlays = vec![
             test_capture_overlay("CaptureAFT"),
@@ -23883,7 +23898,7 @@ mod tests {
             "/../../tests/fixtures/itgmania-actors/kenpo-capture.json"
         )))
         .expect("native capture fixture");
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
         deadlib_present::space::set_current_metrics(metrics);
         let mut overlays = vec![
             test_capture_overlay("CaptureAFT"),
@@ -24091,7 +24106,7 @@ mod tests {
             "/../../tests/fixtures/itgmania-actors/kenpo-motion.json"
         )))
         .expect("native nested rotation fixture");
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
         deadlib_present::space::set_current_metrics(metrics);
         let notes =
             [Arc::<[Actor]>::from([-224.0, 32.0, 224.0].map(|x| {
@@ -24292,7 +24307,7 @@ mod tests {
 
     #[test]
     fn identity_proxy_capture_reuses_source_with_origin_offset() {
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
         deadlib_present::space::set_current_metrics(metrics);
         let vertices: Arc<[MeshVertex]> = Arc::from([
             MeshVertex {
@@ -24509,10 +24524,7 @@ mod tests {
             Some(&mut proxy_scratch),
         )
         .expect("translated field proxy should render");
-        let metrics = deadlib_present::space::metrics_for_window(
-            screen_width() as u32,
-            screen_height() as u32,
-        );
+        let metrics = deadlib_present::space::Metrics::centered(screen_width(), screen_height());
         let resources = ActorResourceArena::new(0);
         let fonts = font::FontMap::default();
         let compose = |segment: ActorSegment<'_>| {
@@ -24663,10 +24675,7 @@ mod tests {
             Some(&mut proxy_scratch),
         )
         .expect("translated HUD proxy should render");
-        let metrics = deadlib_present::space::metrics_for_window(
-            screen_width() as u32,
-            screen_height() as u32,
-        );
+        let metrics = deadlib_present::space::Metrics::centered(screen_width(), screen_height());
         let resources = ActorResourceArena::new(0);
         let fonts = font::FontMap::default();
         let compose = |segment: ActorSegment<'_>| {
@@ -24712,7 +24721,7 @@ mod tests {
 
     #[test]
     fn transformed_player_proxy_flattens_depth_before_perspective() {
-        let metrics = deadlib_present::space::metrics_for_window(854, 480);
+        let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
         deadlib_present::space::set_current_metrics(metrics);
         let base = Matrix4::from_cols_array(&[
             1.0, 0.0, 0.0, 0.0, //
@@ -26543,6 +26552,9 @@ mod tests {
 
     #[test]
     fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let key = "lua-bound-draw 4x2.png";
         let mut assets = AssetManager::new();
         let overlay = SongLuaOverlayActor {

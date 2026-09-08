@@ -1093,12 +1093,7 @@ where
         }
         let width = target.size[0].max(1);
         let height = target.size[1].max(1);
-        let metrics = Metrics {
-            left: -0.5 * target.logical_size[0],
-            right: 0.5 * target.logical_size[0],
-            bottom: -0.5 * target.logical_size[1],
-            top: 0.5 * target.logical_size[1],
-        };
+        let metrics = Metrics::centered(target.logical_size[0], target.logical_size[1]);
         let target_scratch = &mut scratch.render_target_scratches[index];
         let target_render = build_single_pass_cached_with_scratch_and_texture_context_impl(
             std::iter::once(ActorSegment::new(&target.children)),
@@ -1186,9 +1181,7 @@ where
     debug_assert!(cameras.capacity() >= 4);
     let mut texture_cache = std::mem::take(&mut scratch.texture_cache);
     texture_cache.begin_frame(texture_ctx);
-    cameras.push(glam::camera::rh::proj::opengl::orthographic(
-        m.left, m.right, m.bottom, m.top, -1.0, 1.0,
-    ));
+    cameras.push(m.projection());
     let mut order_counter: u32 = 0;
     let mut masks = std::mem::take(&mut scratch.masks);
     masks.clear();

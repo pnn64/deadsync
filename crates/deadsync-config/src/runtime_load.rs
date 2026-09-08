@@ -23,6 +23,13 @@ pub fn bootstrap_show_console() -> bool {
     load_bootstrap_bool(config_path(), "ShowConsole", default)
 }
 
+/// Read the install policy without loading or rewriting the game configuration.
+#[must_use]
+pub fn bootstrap_update_install() -> bool {
+    let default = Config::default().updater_install_enabled;
+    load_bootstrap_bool(config_path(), "UpdaterInstallEnabled", default)
+}
+
 pub fn load() {
     ensure_config_file();
 

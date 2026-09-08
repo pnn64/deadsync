@@ -28,7 +28,6 @@ use crate::course::{
 use crate::course::{CourseStageRuntime, score_info_from_stage};
 use crate::diagnostics::timing_health;
 use crate::dynamic_media::{BgVideoTiming, DynamicMedia};
-use crate::frame_loop::{FrameScreenStepContext, FrameWaitControl, frame_screen_step_plan};
 use crate::frame_pacing_trace::{GameplayPacingPhases, GameplayStorageSample};
 use crate::frame_stats::{
     FrameStatsSummaryContext, frame_stats_summary, frame_stats_target_us, frame_stats_two_player,
@@ -96,6 +95,10 @@ use crate::window_state::{
 };
 use deadlib_assets::AssetManager;
 use deadlib_assets::upload::TextureUploadBudget;
+use deadlib_platform::frame_pacing::{
+    FrameIntervalState, FrameLoopMode, FrameWaitControl, elapsed_us_between, elapsed_us_since,
+    foreground_input_active,
+};
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 use deadlib_platform::host_time;
 use deadlib_present::compose;
@@ -106,9 +109,7 @@ use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_assets::media_cache;
 use deadsync_config as config;
 use deadsync_config::dirs::AppDirs;
-use deadsync_config::frame_pacing::{
-    FrameIntervalState, FrameLoopMode, elapsed_us_between, elapsed_us_since, stutter_severity,
-};
+use deadsync_config::frame_pacing::stutter_severity;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::pad_config_sync;
@@ -1465,6 +1466,7 @@ impl AppState {
         let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
 
         let shell = ShellState::new(&cfg, overlay_mode);
+        space::set_current_metrics(shell.metrics);
         let session = SessionState::new(preferred, profile::combo_carry());
         let coin = crate::coin::State::load(dirs.bookkeeping_path());
         let screens = ScreensState::new(
@@ -2036,7 +2038,7 @@ impl App {
     fn accepts_live_input(&self) -> bool {
         self.pending_gameplay_init.is_none()
             && !self.gameplay_preload_holds_frame()
-            && config::frame_pacing::foreground_input_active(
+            && foreground_input_active(
                 self.state.shell.frame_loop.window_focused(),
                 self.state.shell.frame_loop.surface_active(),
             )
@@ -9105,7 +9107,11 @@ impl App {
                     reused_payload: reusing_gameplay_payload,
                     config: cfg,
                 };
+                let metrics = self.state.shell.metrics;
+                let (pixel_width, pixel_height) = space::current_window_px();
                 let init = move || {
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(pixel_width, pixel_height);
                     gameplay::init(
                         song_arc,
                         charts,
@@ -10004,10 +10010,71 @@ pub fn run(
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FrameScreenStepContext {
+    current_screen: CurrentScreen,
+    transition_step_screen: bool,
+    gameplay_offset_prompt_active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FrameScreenStepPlan {
+    step_screen: bool,
+}
+
+#[inline(always)]
+const fn frame_screen_step_plan(context: FrameScreenStepContext) -> FrameScreenStepPlan {
+    FrameScreenStepPlan {
+        step_screen: context.transition_step_screen
+            && !(matches!(context.current_screen, CurrentScreen::Gameplay)
+                && context.gameplay_offset_prompt_active),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn screen_step_follows_transition_gate() {
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: CurrentScreen::SelectMusic,
+                transition_step_screen: false,
+                gameplay_offset_prompt_active: false,
+            }),
+            FrameScreenStepPlan { step_screen: false }
+        );
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: CurrentScreen::SelectMusic,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: false,
+            }),
+            FrameScreenStepPlan { step_screen: true }
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_blocks_only_gameplay_screen_step() {
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: CurrentScreen::Gameplay,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: true,
+            }),
+            FrameScreenStepPlan { step_screen: false }
+        );
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: CurrentScreen::Evaluation,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: true,
+            }),
+            FrameScreenStepPlan { step_screen: true }
+        );
+    }
 
     #[test]
     fn select_music_frame_holds_only_after_entry_request_until_preload_ready() {

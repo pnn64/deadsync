@@ -418,6 +418,7 @@ mod tests {
         let mut backend = deadlib_render::create_backend(
             BackendType::Software,
             Arc::new(window),
+            deadlib_render_core::ProjectionMatrix::IDENTITY,
             false,
             PresentModePolicy::Immediate,
             false,

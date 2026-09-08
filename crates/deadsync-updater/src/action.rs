@@ -26,9 +26,7 @@ use std::sync::{LazyLock, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::download::{
-    download_to_file, fetch_checksum_sidecar, parse_api_digest, parse_checksum_sidecar, sha256_hex,
-};
+use crate::download::{download_to_file, resolve_expected_digest};
 use crate::{
     FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError, apply_supported_for_host,
     check_agent, classify, download_agent, expected_asset_name, fetch_latest_release,
@@ -755,66 +753,6 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
             set_phase_if_current(generation, classify_error(&err));
         }
     }
-}
-
-fn resolve_expected_digest(
-    agent: &ureq::Agent,
-    asset: &ReleaseAsset,
-) -> Result<[u8; 32], UpdaterError> {
-    let api_digest = match asset.digest.as_deref() {
-        Some(raw) => match parse_api_digest(raw)? {
-            Some(digest) => Some(digest),
-            None => {
-                log::info!(
-                    "Skipping API digest for {}: unsupported algorithm in '{}'",
-                    asset.name,
-                    raw
-                );
-                None
-            }
-        },
-        None => None,
-    };
-
-    let sidecar = match fetch_checksum_sidecar(agent, &asset.browser_download_url) {
-        Ok(text) => Some(text),
-        Err(err) => {
-            if let Some(digest) = api_digest {
-                log::warn!(
-                    "Checksum sidecar unavailable for {}; using GitHub API digest instead: {err}",
-                    asset.name
-                );
-                return Ok(digest);
-            }
-            return Err(err);
-        }
-    };
-
-    let sidecar_digest =
-        match parse_checksum_sidecar(sidecar.as_deref().unwrap_or_default(), &asset.name) {
-            Ok(digest) => digest,
-            Err(err) => {
-                if let Some(digest) = api_digest {
-                    log::warn!(
-                        "Checksum sidecar malformed for {}; using GitHub API digest instead: {err}",
-                        asset.name
-                    );
-                    return Ok(digest);
-                }
-                return Err(err);
-            }
-        };
-
-    if let Some(api_digest) = api_digest
-        && api_digest != sidecar_digest
-    {
-        return Err(UpdaterError::ChecksumMismatch {
-            expected: format!("api={}", sha256_hex(&api_digest)),
-            actual: format!("sidecar={}", sha256_hex(&sidecar_digest)),
-        });
-    }
-
-    Ok(sidecar_digest)
 }
 
 /// Absolute path of the directory archives are downloaded into.

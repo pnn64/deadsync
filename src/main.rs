@@ -167,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Reconcile the GUI-subsystem release build with terminal/opt-in output
     // before the logger starts, so the first log lines land in the console when
     // one is wanted (and no window appears when it isn't).
-    deadlib_platform::console::init(resolve_show_console());
+    deadlib_platform::console::init(cli.update || resolve_show_console());
 
     // Install logger immediately, then set runtime max level from config after loading it.
     logging::init(
@@ -180,6 +180,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(request) = cli.apply_update.clone() {
         let code = deadsync_updater::cli::run_apply_helper(request);
+        log::logger().flush();
+        std::process::exit(code);
+    }
+
+    if cli.update {
+        let code = match deadsync_updater::cli::run_update(
+            &dirs.exe_dir,
+            config::runtime_load::bootstrap_update_install(),
+        ) {
+            Ok(()) => 0,
+            Err(err) => {
+                eprintln!("Update failed: {err}");
+                log::error!("Command-line update failed: {err}");
+                1
+            }
+        };
         log::logger().flush();
         std::process::exit(code);
     }

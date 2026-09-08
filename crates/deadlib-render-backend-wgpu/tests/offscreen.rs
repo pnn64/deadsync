@@ -321,19 +321,20 @@ impl ApplicationHandler for CaptureApp {
             let mut state = match api {
                 "dx12" => backend::init_dx12(
                     Arc::clone(&window),
+                    Mat4::IDENTITY,
                     false,
                     PresentModePolicy::Immediate,
                     !benchmark,
                 ),
                 _ => backend::init_vulkan(
                     Arc::clone(&window),
+                    Mat4::IDENTITY,
                     false,
                     PresentModePolicy::Immediate,
                     !benchmark,
                 ),
             }
             .expect("initialize GPU backend");
-            backend::set_default_projection(&mut state, Mat4::IDENTITY);
             let textures = Textures(
                 backend::create_texture(
                     &mut state,

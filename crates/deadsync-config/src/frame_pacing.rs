@@ -1,5 +1,3 @@
-use std::time::{Duration, Instant};
-
 /// Hold-`Tab` fast-forward / hold-`Backquote` slow-down multipliers, `ITGmania` parity.
 ///
 /// `Tab` alone -> `TAB_FAST_MULTIPLIER`x engine update rate.
@@ -13,10 +11,6 @@ pub const TAB_SLOW_DIVISOR: f32 = 4.0;
 /// Prevents catastrophic stalls from injecting absurd dt values into
 /// per-screen update accumulators when fast-forward is held.
 pub const MAX_LOGIC_DT_PER_FRAME: f32 = 0.25;
-
-/// Background redraw cap used while the window is occluded, inactive, or safely
-/// throttled while unfocused.
-pub const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
 
 #[inline]
 #[must_use]
@@ -41,83 +35,6 @@ pub fn apply_tab_acceleration(
 
 #[inline(always)]
 #[must_use]
-pub fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
-    if max_fps == 0 {
-        None
-    } else {
-        Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
-    }
-}
-
-#[inline(always)]
-#[must_use]
-pub fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Duration) -> Instant {
-    if deadline > now {
-        return deadline;
-    }
-    let step_ns = interval.as_nanos();
-    if step_ns == 0 {
-        return now;
-    }
-    let overdue_ns = now.duration_since(deadline).as_nanos();
-    let steps = overdue_ns / step_ns + 1;
-    if steps <= u128::from(u32::MAX)
-        && let Some(delta) = interval.checked_mul(steps as u32)
-        && let Some(next) = deadline.checked_add(delta)
-    {
-        return next;
-    }
-    now.checked_add(interval).unwrap_or(now)
-}
-
-#[inline(always)]
-#[must_use]
-pub fn window_frame_interval_state(
-    vsync_enabled: bool,
-    max_fps_interval: Option<Duration>,
-    window_occluded: bool,
-    surface_active: bool,
-    window_focused: bool,
-    throttle_unfocused: bool,
-) -> FrameIntervalState {
-    let base = (!vsync_enabled).then_some(max_fps_interval).flatten();
-    let background =
-        (window_occluded || !surface_active || (!window_focused && throttle_unfocused))
-            .then_some(BACKGROUND_REDRAW_INTERVAL);
-    match (base, background) {
-        (Some(base), Some(background)) => FrameIntervalState {
-            interval: Some(base.max(background)),
-            reason: FrameIntervalReason::MaxFpsBackground,
-        },
-        (Some(interval), None) => FrameIntervalState {
-            interval: Some(interval),
-            reason: FrameIntervalReason::MaxFps,
-        },
-        (None, Some(interval)) => FrameIntervalState {
-            interval: Some(interval),
-            reason: FrameIntervalReason::Background,
-        },
-        (None, None) => FrameIntervalState {
-            interval: None,
-            reason: FrameIntervalReason::None,
-        },
-    }
-}
-
-#[inline(always)]
-#[must_use]
-pub const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
-    window_focused && surface_active
-}
-
-#[inline(always)]
-#[must_use]
-pub const fn should_skip_compose_and_draw(window_occluded: bool, surface_active: bool) -> bool {
-    window_occluded || !surface_active
-}
-
-#[inline(always)]
-#[must_use]
 pub const fn queued_input_allowed(
     screen_is_gameplay: bool,
     transition_idle: bool,
@@ -128,35 +45,9 @@ pub const fn queued_input_allowed(
 
 #[inline(always)]
 #[must_use]
-pub fn elapsed_us_since(started: Instant) -> u32 {
-    micros_to_u32(started.elapsed().as_micros())
-}
-
-#[inline(always)]
-#[must_use]
-pub fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
-    micros_to_u32(
-        later
-            .checked_duration_since(earlier)
-            .unwrap_or(Duration::ZERO)
-            .as_micros(),
-    )
-}
-
-#[inline(always)]
-#[must_use]
 pub fn seconds_to_us_u32(seconds: f32) -> u32 {
     let micros = (seconds * 1_000_000.0).max(0.0);
     if micros > u32::MAX as f32 {
-        u32::MAX
-    } else {
-        micros as u32
-    }
-}
-
-#[inline(always)]
-const fn micros_to_u32(micros: u128) -> u32 {
-    if micros > u32::MAX as u128 {
         u32::MAX
     } else {
         micros as u32
@@ -265,143 +156,6 @@ impl OverlayMode {
             Self::FpsAndStutter => 2,
             Self::FpsStutterTiming => 3,
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FrameIntervalReason {
-    None,
-    MaxFps,
-    Background,
-    MaxFpsBackground,
-}
-
-impl FrameIntervalReason {
-    #[inline(always)]
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::MaxFps => "max_fps",
-            Self::Background => "background",
-            Self::MaxFpsBackground => "max_fps+background",
-        }
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn redraw_reason(self) -> &'static str {
-        match self {
-            Self::None => "scheduled",
-            Self::MaxFps => "scheduled_maxfps",
-            Self::Background => "scheduled_background",
-            Self::MaxFpsBackground => "scheduled_maxfps_background",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FrameIntervalState {
-    pub interval: Option<Duration>,
-    pub reason: FrameIntervalReason,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FrameLoopMode {
-    Poll,
-    WaitPending,
-    Scheduled(FrameIntervalReason, Duration),
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RedrawRequestTiming {
-    pub request_to_redraw_us: u32,
-    pub reason: &'static str,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RedrawRequestState {
-    requested_at: Option<Instant>,
-    reason: &'static str,
-}
-
-impl RedrawRequestState {
-    #[inline(always)]
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            requested_at: None,
-            reason: "none",
-        }
-    }
-
-    #[inline(always)]
-    pub const fn reset(&mut self) {
-        *self = Self::new();
-    }
-
-    #[inline(always)]
-    pub const fn note_requested(&mut self, now: Instant, reason: &'static str) {
-        if self.requested_at.is_none() {
-            self.requested_at = Some(now);
-            self.reason = reason;
-        }
-    }
-
-    #[inline(always)]
-    pub fn take_timing(&mut self, now: Instant) -> RedrawRequestTiming {
-        let requested_at = self.requested_at.take();
-        let reason = if requested_at.is_some() {
-            self.reason
-        } else {
-            "external"
-        };
-        self.reason = "none";
-        RedrawRequestTiming {
-            request_to_redraw_us: requested_at
-                .map(|at| elapsed_us_between(now, at))
-                .unwrap_or_default(),
-            reason,
-        }
-    }
-
-    #[inline(always)]
-    #[must_use]
-    pub const fn pending(&self) -> bool {
-        self.requested_at.is_some()
-    }
-}
-
-impl Default for RedrawRequestState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct FrameLoopModeTracker {
-    last: Option<FrameLoopMode>,
-}
-
-impl FrameLoopModeTracker {
-    #[inline(always)]
-    #[must_use]
-    pub const fn new() -> Self {
-        Self { last: None }
-    }
-
-    #[inline(always)]
-    pub const fn reset(&mut self) {
-        self.last = None;
-    }
-
-    #[inline(always)]
-    pub fn note(&mut self, mode: FrameLoopMode) -> bool {
-        if self.last == Some(mode) {
-            return false;
-        }
-        self.last = Some(mode);
-        true
     }
 }
 
@@ -670,59 +424,6 @@ mod tests {
     }
 
     #[test]
-    fn window_frame_interval_uses_background_when_occluded() {
-        let state = window_frame_interval_state(true, None, true, true, true, false);
-        assert_eq!(
-            state,
-            FrameIntervalState {
-                interval: Some(BACKGROUND_REDRAW_INTERVAL),
-                reason: FrameIntervalReason::Background,
-            }
-        );
-    }
-
-    #[test]
-    fn window_frame_interval_combines_max_fps_and_background() {
-        let max_fps = Some(Duration::from_millis(5));
-        let state = window_frame_interval_state(false, max_fps, false, true, false, true);
-        assert_eq!(
-            state,
-            FrameIntervalState {
-                interval: Some(BACKGROUND_REDRAW_INTERVAL),
-                reason: FrameIntervalReason::MaxFpsBackground,
-            }
-        );
-    }
-
-    #[test]
-    fn window_frame_interval_respects_unfocused_no_throttle() {
-        let max_fps = Some(Duration::from_millis(5));
-        let state = window_frame_interval_state(false, max_fps, false, true, false, false);
-        assert_eq!(
-            state,
-            FrameIntervalState {
-                interval: max_fps,
-                reason: FrameIntervalReason::MaxFps,
-            }
-        );
-    }
-
-    #[test]
-    fn foreground_input_requires_focus_and_surface() {
-        assert!(foreground_input_active(true, true));
-        assert!(!foreground_input_active(false, true));
-        assert!(!foreground_input_active(true, false));
-        assert!(!foreground_input_active(false, false));
-    }
-
-    #[test]
-    fn compose_draw_skips_occluded_or_inactive_surface() {
-        assert!(!should_skip_compose_and_draw(false, true));
-        assert!(should_skip_compose_and_draw(true, true));
-        assert!(should_skip_compose_and_draw(false, false));
-    }
-
-    #[test]
     fn queued_input_dispatch_allows_gameplay_fade_in_only() {
         assert!(queued_input_allowed(false, true, false));
         assert!(queued_input_allowed(true, false, true));
@@ -751,73 +452,6 @@ mod tests {
         let out = apply_tab_acceleration(dt, true, true, false, true);
         assert!(out < MAX_LOGIC_DT_PER_FRAME);
         assert!(4.0f32.mul_add(-dt, out).abs() < EPS);
-    }
-
-    #[test]
-    fn max_fps_zero_has_no_interval() {
-        assert_eq!(frame_interval_for_max_fps(0), None);
-    }
-
-    #[test]
-    fn max_fps_interval_uses_fps_period() {
-        assert_eq!(
-            frame_interval_for_max_fps(60),
-            Some(Duration::from_secs_f64(1.0 / 60.0))
-        );
-    }
-
-    #[test]
-    fn redraw_deadline_keeps_future_deadline() {
-        let now = Instant::now();
-        let deadline = now + Duration::from_millis(16);
-        assert_eq!(
-            advance_redraw_deadline(deadline, now, Duration::from_millis(16)),
-            deadline
-        );
-    }
-
-    #[test]
-    fn redraw_deadline_advances_past_now() {
-        let now = Instant::now();
-        let deadline = now - Duration::from_millis(33);
-        let next = advance_redraw_deadline(deadline, now, Duration::from_millis(16));
-        assert!(next > now);
-    }
-
-    #[test]
-    fn redraw_request_state_latches_first_reason_until_taken() {
-        let now = Instant::now();
-        let mut state = RedrawRequestState::new();
-
-        state.note_requested(now, "input");
-        state.note_requested(now + Duration::from_micros(100), "chain");
-        assert!(state.pending());
-
-        let timing = state.take_timing(now + Duration::from_micros(250));
-
-        assert_eq!(timing.request_to_redraw_us, 250);
-        assert_eq!(timing.reason, "input");
-        assert!(!state.pending());
-    }
-
-    #[test]
-    fn redraw_request_state_marks_external_when_unrequested() {
-        let mut state = RedrawRequestState::new();
-        let timing = state.take_timing(Instant::now());
-
-        assert_eq!(timing.request_to_redraw_us, 0);
-        assert_eq!(timing.reason, "external");
-    }
-
-    #[test]
-    fn frame_loop_mode_tracker_reports_only_changes() {
-        let mut tracker = FrameLoopModeTracker::new();
-
-        assert!(tracker.note(FrameLoopMode::Poll));
-        assert!(!tracker.note(FrameLoopMode::Poll));
-        assert!(tracker.note(FrameLoopMode::WaitPending));
-        tracker.reset();
-        assert!(tracker.note(FrameLoopMode::WaitPending));
     }
 
     #[test]

@@ -3,6 +3,7 @@ pub mod coalesced_write;
 pub mod console;
 pub mod dirs;
 pub mod display;
+pub mod frame_pacing;
 pub mod host_time;
 pub mod idle_inhibit;
 pub mod input;
