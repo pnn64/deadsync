@@ -58,11 +58,48 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     }
 }
 
+/// Decode a small menu preview on a worker, retaining the source texture's UV layout.
+///
+/// # Errors
+/// Returns an error for unreadable, malformed, or oversized source images.
+pub fn decode_preview_texture(
+    key: &str,
+    model: bool,
+) -> Result<(image::RgbaImage, SamplerDesc), String> {
+    let (image, sampler) = if let Some(texture) = deadlib_assets::generated_texture(key) {
+        ((*texture.image).clone(), texture.sampler)
+    } else {
+        let path =
+            texture_key_source_path(key, key, |path| crate::paths().resolve_asset_path(path));
+        let mut reader = image::ImageReader::open(path).map_err(|error| error.to_string())?;
+        let mut limits = image::Limits::default();
+        limits.max_alloc = Some(64 * 1024 * 1024);
+        limits.max_image_width = Some(4096);
+        limits.max_image_height = Some(4096);
+        reader.limits(limits);
+        let mut image = reader
+            .decode()
+            .map_err(|error| error.to_string())?
+            .into_rgba8();
+        let hints = parse_texture_hints(key);
+        deadlib_assets::apply_texture_hints(&mut image, &hints);
+        (image, texture_key_sampler(&hints, model))
+    };
+    // A preview is at most 32 screen pixels; keep animated sheets within 1 MiB.
+    let image = if image.width() > 512 || image.height() > 512 {
+        image::imageops::thumbnail(&image, 512, 512)
+    } else {
+        image
+    };
+    Ok((image, sampler))
+}
+
 pub fn initial_texture_jobs(
     texture_assets: impl IntoIterator<Item = TextureAssetSpec>,
     dirs: &AssetPaths,
     needs_repeat: fn(&str) -> bool,
 ) -> Vec<TextureDecodeJob> {
+    let packs = crate::noteskin::pack_catalog();
     let textures = texture_assets
         .into_iter()
         .map(|asset| {
@@ -73,6 +110,19 @@ pub fn initial_texture_jobs(
         })
         .chain(noteskin_png_texture_entries(&dirs.noteskin_roots, |path| {
             canonical_texture_key_with_asset_roots(path, &dirs.texture_roots)
+        }))
+        .chain(packs.iter().flat_map(|pack| {
+            pack.manifest
+                .skins
+                .iter()
+                .map(|skin| {
+                    let path = pack.root.join(&skin.preview);
+                    (
+                        canonical_texture_key_with_asset_roots(&path, &dirs.texture_roots),
+                        path,
+                    )
+                })
+                .collect::<Vec<_>>()
         }))
         .chain(INITIAL_GRAPHIC_TEXTURES.iter().flat_map(|spec| {
             discover_graphic_textures_in_roots(
@@ -417,6 +467,15 @@ fn noteskin_png_texture_entries(
     for root in roots {
         let mut dirs = vec![root.clone()];
         while let Some(dir) = dirs.pop() {
+            // Pack atlases are queued separately. Variants and installer staging
+            // stay on disk until the selected components are compiled at song load.
+            if dir.join("pack.json").is_file()
+                || dir
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+            {
+                continue;
+            }
             let Ok(entries) = fs::read_dir(&dir) else {
                 continue;
             };
@@ -475,6 +534,27 @@ pub fn resolve_texture_choice_entry<'a>(
 mod tests {
     use super::*;
     use deadlib_render_core::SamplerFilter;
+
+    #[test]
+    fn noteskin_scan_skips_packs_and_partial_installs() {
+        let root = std::env::temp_dir().join(format!("deadsync-pack-scan-{}", std::process::id()));
+        for name in [
+            "dance/cel",
+            "hurg/Customizations/Arrows",
+            ".workshop-partial/pack",
+        ] {
+            let dir = root.join(name);
+            fs::create_dir_all(&dir).unwrap();
+            fs::write(dir.join("texture.png"), b"fixture").unwrap();
+        }
+        fs::write(root.join("hurg/pack.json"), b"{}").unwrap();
+        let entries = noteskin_png_texture_entries(&[root.clone()], |path| {
+            format!("noteskins/{}", path.strip_prefix(&root).unwrap().display())
+        });
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].1, root.join("dance/cel/texture.png"));
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn initial_sampler_keeps_startup_policy() {

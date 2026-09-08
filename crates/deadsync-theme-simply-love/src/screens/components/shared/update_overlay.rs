@@ -98,7 +98,7 @@ struct PanelProgress {
 }
 
 impl PanelContent {
-    pub(super) fn new(
+    pub(crate) fn new(
         title: String,
         version_tag: Option<String>,
         body_lines: Vec<String>,

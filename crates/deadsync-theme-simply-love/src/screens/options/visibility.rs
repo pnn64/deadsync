@@ -6,6 +6,10 @@ use super::*;
 pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
         (SubmenuKind::Bookkeeping, _) => true,
+        (SubmenuKind::Downloads, SubRowId::CheckForUpdates) => !state.updater_capabilities.app_update,
+        (SubmenuKind::Downloads, SubRowId::DownloadVideoSupport) => {
+            !state.updater_capabilities.ffmpeg_install
+        }
         (SubmenuKind::Coin, SubRowId::EventMode) => {
             get_choice_by_id(
                 &state.sub[SubmenuKind::Coin].choice_indices,
@@ -71,6 +75,7 @@ pub(super) const fn submenu_rows(kind: SubmenuKind) -> &'static [SubRow] {
         SubmenuKind::ArrowCloud => ARROWCLOUD_OPTIONS_ROWS,
         SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ROWS,
         SubmenuKind::Folders => FOLDERS_OPTIONS_ROWS,
+        SubmenuKind::Downloads => DOWNLOADS_ROWS,
     }
 }
 
@@ -99,6 +104,7 @@ pub(super) const fn submenu_items(kind: SubmenuKind) -> &'static [Item] {
         SubmenuKind::ArrowCloud => ARROWCLOUD_OPTIONS_ITEMS,
         SubmenuKind::ScoreImport => SCORE_IMPORT_OPTIONS_ITEMS,
         SubmenuKind::Folders => FOLDERS_OPTIONS_ITEMS,
+        SubmenuKind::Downloads => DOWNLOADS_ITEMS,
     }
 }
 
@@ -127,6 +133,7 @@ pub(super) const fn submenu_title(kind: SubmenuKind) -> &'static str {
         SubmenuKind::ArrowCloud => "ARROWCLOUD OPTIONS",
         SubmenuKind::ScoreImport => "SCORE IMPORT",
         SubmenuKind::Folders => "FOLDERS",
+        SubmenuKind::Downloads => "DOWNLOADS",
     }
 }
 

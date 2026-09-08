@@ -211,14 +211,13 @@ pub struct PlayerOptionMasks {
 #[derive(Clone, Default)]
 pub(super) struct PlayerNoteskinPreviews {
     pub(super) base: Option<Arc<Noteskin>>,
-    pub(super) mine: Option<Arc<Noteskin>>,
     pub(super) receptor: Option<Arc<Noteskin>>,
     pub(super) tap_explosion: Option<Arc<Noteskin>>,
 }
 
 /// Screen-lifetime noteskin preview cache owned by the app/game thread.
 ///
-/// This is single-thread-only and is warmed with the complete noteskin catalog
+/// This is single-thread-only and is warmed with the ordinary noteskin catalog
 /// before the first Player Options frame, while "Entering Options..." remains
 /// visible. Its capacity is bounded by the catalog plus profile-only fallback
 /// names. Normal option changes only clone cached `Arc`s; no disk access,
@@ -227,7 +226,8 @@ pub(super) struct PlayerNoteskinPreviews {
 /// weak references, so it does not extend that lifetime. The underlying loader
 /// reports failed loads through its existing warnings; cache hits need no
 /// per-frame instrumentation because their worst-case work is a bounded hash
-/// lookup and `Arc` clone.
+/// lookup and `Arc` clone. PackMenu owns the separate bounded live mine previews;
+/// other optional pack components use atlas previews.
 pub(super) struct NoteskinState {
     pub(super) cache: HashMap<String, Arc<Noteskin>>,
     pub(super) previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],
@@ -332,6 +332,7 @@ pub(super) struct MusicRatePresentation {
 }
 
 pub struct State {
+    pub(super) pack_menu: super::pack_options::PackMenu,
     pub song: Arc<SongData>,
     pub return_screen: Screen,
     pub fixed_stepchart: Option<FixedStepchart>,

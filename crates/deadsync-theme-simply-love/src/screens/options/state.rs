@@ -37,10 +37,11 @@ pub enum SubmenuKind {
     ArrowCloud,
     ScoreImport,
     Folders,
+    Downloads,
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 23] = [
+    pub(super) const ALL: [Self; 24] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -64,6 +65,7 @@ impl SubmenuKind {
         Self::ArrowCloud,
         Self::ScoreImport,
         Self::Folders,
+        Self::Downloads,
     ];
     pub(super) const COUNT: usize = Self::ALL.len();
 
@@ -118,7 +120,10 @@ pub(super) struct OptionsStartInput {
 pub(super) const fn is_launcher_submenu(kind: SubmenuKind) -> bool {
     matches!(
         kind,
-        SubmenuKind::Input | SubmenuKind::OnlineScoring | SubmenuKind::NullOrDie
+        SubmenuKind::Input
+            | SubmenuKind::OnlineScoring
+            | SubmenuKind::NullOrDie
+            | SubmenuKind::Downloads
     )
 }
 
@@ -223,6 +228,9 @@ pub struct State {
     pub(super) ffmpeg_panel:
         Option<crate::screens::components::shared::update_overlay::PanelContent>,
     pub(super) updater_i18n_revision: u64,
+    pub(super) workshop_panel:
+        Option<crate::screens::components::shared::update_overlay::PanelContent>,
+    pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub(super) pending_audio: smallvec::SmallVec<[AudioRequest; MAX_PENDING_AUDIO_REQUESTS]>,
     // Submenu state
     pub(super) sub_selected: usize,
@@ -455,6 +463,8 @@ pub fn init(view: OptionsInitView) -> State {
         online_reinit_pending: false,
         update_panel: None,
         ffmpeg_panel: None,
+        workshop_panel: None,
+        updater_capabilities,
         updater_i18n_revision: u64::MAX,
         pending_audio: smallvec::SmallVec::new(),
         view: OptionsView::Main,

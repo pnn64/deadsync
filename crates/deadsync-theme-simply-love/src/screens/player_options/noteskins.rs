@@ -2,7 +2,135 @@ use super::*;
 use deadsync_noteskin::Style;
 use deadsync_profile as profile_data;
 
+// Two selected mines plus the eight visible picker entries. One worker loads at
+// a time; misses never do I/O on the menu thread. Only unused entries are replaced.
+// Runtime ownership ends at screen exit. Twenty fixed texture keys cap retained
+// preview pixels at 20 MiB (plus GPU copies), reused across screens. Completion
+// queues at most two uploads through the normal upload budget. Failed loads log
+// once per entry; frames only poll one channel and inspect ten cached names.
+const MINE_PREVIEW_COUNT: usize = PLAYER_SLOTS + search::SEARCH_MAX_RESULTS;
+
+#[derive(Default)]
+pub(super) struct MinePreviews {
+    entries: [Option<MinePreview>; MINE_PREVIEW_COUNT],
+    loading: Option<(usize, std::sync::mpsc::Receiver<Result<LoadedMine, String>>)>,
+}
+
+pub(super) struct MinePreview {
+    name: String,
+    pub skin: Option<Arc<Noteskin>>,
+    pub textures: Vec<(Arc<str>, Arc<str>)>,
+}
+
+struct LoadedMine {
+    skin: Arc<Noteskin>,
+    textures: Vec<(Arc<str>, image::RgbaImage, deadlib_render_core::SamplerDesc)>,
+}
+
+impl MinePreviews {
+    pub fn get(&self, name: &str) -> Option<&MinePreview> {
+        self.entries
+            .iter()
+            .flatten()
+            .find(|entry| entry.name == name)
+    }
+
+    pub fn update(
+        &mut self,
+        wanted: &[&str],
+        bundled: &HashMap<String, Arc<Noteskin>>,
+        cols: usize,
+    ) {
+        if let Some((index, receiver)) = &self.loading {
+            match receiver.try_recv() {
+                Ok(result) => {
+                    let entry = self.entries[*index]
+                        .as_mut()
+                        .expect("loading slot is reserved");
+                    match result {
+                        Ok(loaded) => {
+                            for (layer, (source, image, sampler)) in
+                                loaded.textures.into_iter().enumerate()
+                            {
+                                let key: Arc<str> = format!("__menu_mine_{index}_{layer}").into();
+                                deadlib_assets::register_generated_texture(&key, image, sampler);
+                                entry.textures.push((source, key));
+                            }
+                            entry.skin = Some(loaded.skin);
+                        }
+                        Err(error) => log::warn!("Cannot preview mine '{}': {error}", entry.name),
+                    }
+                    self.loading = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    log::warn!("Mine preview worker disconnected");
+                    self.loading = None;
+                }
+            }
+        }
+        let Some(&name) = wanted
+            .iter()
+            .find(|&&name| !bundled.contains_key(name) && self.get(name).is_none())
+        else {
+            return;
+        };
+        let Some(index) = self.entries.iter().position(|entry| {
+            entry
+                .as_ref()
+                .is_none_or(|entry| !wanted.contains(&entry.name.as_str()))
+        }) else {
+            return;
+        };
+        self.entries[index] = Some(MinePreview {
+            name: name.to_string(),
+            skin: None,
+            textures: Vec::with_capacity(2),
+        });
+        let name = name.to_string();
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+        match std::thread::Builder::new()
+            .name("mine-preview".into())
+            .spawn(move || {
+                let _ = sender.send(load_mine_preview(&name, cols));
+            }) {
+            Ok(_) => self.loading = Some((index, receiver)),
+            Err(error) => log::warn!("Cannot start mine preview worker: {error}"),
+        }
+    }
+}
+
+fn load_mine_preview(name: &str, cols: usize) -> Result<LoadedMine, String> {
+    let skin = noteskin::load_itg_skin_cached(
+        &Style {
+            num_cols: cols,
+            num_players: 1,
+        },
+        name,
+    )?;
+    let col = usize::from(skin.mines.len() > 1 || skin.mine_frames.len() > 1);
+    let mut textures = Vec::with_capacity(2);
+    for slot in [skin.mines.get(col), skin.mine_frames.get(col)]
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let key = slot.texture_key_shared();
+        if textures.iter().any(|(source, _, _)| *source == key) {
+            continue;
+        }
+        let (image, sampler) =
+            deadsync_assets::textures::decode_preview_texture(&key, slot.model.is_some())?;
+        textures.push((key, image, sampler));
+    }
+    Ok(LoadedMine { skin, textures })
+}
+
 pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
+    // Catalog warmup uses pack atlases; live mines load separately on a worker.
+    if noteskin::is_pack_skin(skin) {
+        return None;
+    }
     let style = Style {
         num_cols: cols_per_player,
         num_players: 1,
@@ -90,12 +218,6 @@ pub(super) fn init_noteskin_state(
         let profile_noteskin = &player_options[i].noteskin;
         PlayerNoteskinPreviews {
             base: cached_or_load_noteskin(&mut cache, profile_noteskin, cols_per_player),
-            mine: resolved_noteskin_override_preview(
-                &mut cache,
-                profile_noteskin,
-                player_options[i].mine_noteskin.as_ref(),
-                cols_per_player,
-            ),
             receptor: resolved_noteskin_override_preview(
                 &mut cache,
                 profile_noteskin,
@@ -142,6 +264,9 @@ pub(super) fn cached_or_load_noteskin(
     skin: &profile_data::NoteSkin,
     cols_per_player: usize,
 ) -> Option<Arc<Noteskin>> {
+    if noteskin::is_pack_skin(skin.as_str()) {
+        return None;
+    }
     if let Some(ns) = cached_noteskin(cache, skin) {
         return Some(ns);
     }
@@ -220,18 +345,11 @@ pub(super) fn sync_noteskin_previews_for_player(
     cols_per_player: usize,
 ) {
     let noteskin_setting = options.noteskin.clone();
-    let mine_noteskin_setting = options.mine_noteskin.clone();
     let receptor_noteskin_setting = options.receptor_noteskin.clone();
     let tap_explosion_noteskin_setting = options.tap_explosion_noteskin.clone();
     let previews = &mut noteskin.previews[player_idx];
     previews.base =
         cached_or_load_noteskin(&mut noteskin.cache, &noteskin_setting, cols_per_player);
-    previews.mine = resolved_noteskin_override_preview(
-        &mut noteskin.cache,
-        &noteskin_setting,
-        mine_noteskin_setting.as_ref(),
-        cols_per_player,
-    );
     previews.receptor = resolved_noteskin_override_preview(
         &mut noteskin.cache,
         &noteskin_setting,

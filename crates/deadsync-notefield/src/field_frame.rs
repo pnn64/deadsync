@@ -1007,7 +1007,8 @@ fn compose_visible_notes<S, F>(
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
-                    [size[0] * effect_zoom, size[1] * effect_zoom]
+                    let scale = effect_zoom * request.options.mine_size_scale;
+                    [size[0] * scale, size[1] * scale]
                 };
                 let note_rotation_z = prepared.column_rotations_deg[local_col]
                     + calc_note_rotation_z(note.beat, transform_cache);

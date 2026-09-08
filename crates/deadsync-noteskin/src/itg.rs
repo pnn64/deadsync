@@ -376,6 +376,13 @@ impl IniData {
             .map(String::as_str)
     }
 
+    pub(crate) fn set(&mut self, section: &str, key: &str, value: &str) {
+        self.sections
+            .entry(IniKey::new(section))
+            .or_default()
+            .insert(IniKey::new(key), value.to_owned());
+    }
+
     pub fn merge_missing_from(&mut self, other: &Self) {
         for (section, values) in &other.sections {
             let dst = self.sections.entry(section.clone()).or_default();
@@ -428,9 +435,18 @@ pub struct NoteskinData {
     pub name: String,
     pub metrics: IniData,
     pub search_dirs: Vec<PathBuf>,
+    /// Selected pack files; resolved once at the screen/song load boundary.
+    pub overrides: Vec<(PathBuf, PathBuf)>,
 }
 
 impl NoteskinData {
+    pub fn override_path(&self, path: PathBuf) -> PathBuf {
+        if let Some((_, replacement)) = self.overrides.iter().find(|(base, _)| *base == path) {
+            replacement.clone()
+        } else {
+            path
+        }
+    }
     #[must_use]
     pub fn get_metric(&self, button: &str, value: &str) -> Option<&str> {
         self.metrics
@@ -444,7 +460,7 @@ impl NoteskinData {
 
         for _ in 0..MAX_REDIR_DEPTH {
             if !is_redir(&path) {
-                return Some(path);
+                return Some(self.override_path(path));
             }
 
             let target = fs::read_to_string(&path).ok()?.trim().to_string();
@@ -527,8 +543,8 @@ pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<Pat
                     .map(|byte| byte.to_ascii_lowercase())
                     .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
             });
-        if matching.is_some() {
-            return matching;
+        if let Some(path) = matching {
+            return Some(data.override_path(path));
         }
     }
     None
@@ -770,6 +786,7 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
 
         let Some(next_skin) = next else {
             return Ok(NoteskinData {
+                overrides: Vec::new(),
                 name: requested,
                 metrics,
                 search_dirs,
@@ -777,6 +794,7 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
         };
         if next_skin == current {
             return Ok(NoteskinData {
+                overrides: Vec::new(),
                 name: requested,
                 metrics,
                 search_dirs,
@@ -784,6 +802,7 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
         }
         if seen.contains(&next_skin) {
             return Ok(NoteskinData {
+                overrides: Vec::new(),
                 name: requested,
                 metrics,
                 search_dirs,
@@ -1617,6 +1636,7 @@ mod tests {
         fs::write(skin_dir.join("Down Tap Note.png"), b"").unwrap();
         fs::write(skin_dir.join("Fallback Explosion.png"), b"").unwrap();
         let data = NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: IniData::default(),
             search_dirs: vec![skin_dir.clone()],
@@ -1745,11 +1765,13 @@ mod tests {
     #[test]
     fn animation_is_beat_based_reads_notedisplay_then_global() {
         let global = NoteskinData {
+            overrides: Vec::new(),
             name: "global".to_string(),
             metrics: ini_section("Global", &[("AnimationIsBeatBased", "1")]),
             search_dirs: Vec::new(),
         };
         let override_off = NoteskinData {
+            overrides: Vec::new(),
             name: "override".to_string(),
             metrics: {
                 let mut metrics = ini_section("Global", &[("AnimationIsBeatBased", "1")]);
@@ -1856,6 +1878,7 @@ mod tests {
         fs::write(first.join("_arrow a.PNG"), []).unwrap();
         fs::write(second.join("_arrow first.png"), []).unwrap();
         let data = NoteskinData {
+            overrides: Vec::new(),
             name: "test".to_string(),
             metrics: IniData::default(),
             search_dirs: vec![first.clone(), second],

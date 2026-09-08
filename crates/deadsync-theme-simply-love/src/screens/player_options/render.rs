@@ -985,8 +985,18 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
         RowId::JudgmentFont => draw_judgment_preview(actors, rc, primary_player_idx),
         RowId::HoldJudgment => draw_hold_preview(actors, rc, primary_player_idx),
         RowId::HeldGraphic => draw_held_graphic_preview(actors, rc, primary_player_idx),
-        RowId::NoteSkin | RowId::MineSkin | RowId::ReceptorSkin | RowId::TapExplosionSkin => {
+        RowId::NoteSkin
+        | RowId::MineSkin
+        | RowId::SkinMineSize
+        | RowId::ReceptorSkin
+        | RowId::TapExplosionSkin => {
             draw_noteskin_family_preview(actors, rc, primary_player_idx);
+        }
+        id if super::pack_options::slot_for_row(id).is_some() => {
+            draw_pack_thumb(actors, rc, primary_player_idx);
+            if rc.fc.show_p2 && primary_player_idx != P2 {
+                draw_pack_thumb(actors, rc, P2);
+            }
         }
         RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
         RowId::HeartRateMonitor => draw_heart_rate_preview(actors, rc, primary_player_idx),
@@ -1231,14 +1241,95 @@ fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
     }
 }
 
-#[allow(clippy::too_many_lines)]
+fn draw_pack_thumb(actors: &mut Vec<Actor>, rc: &RowCtx, player: usize) -> bool {
+    let Some(thumb) = rc.fc.state.pack_menu.preview(player, rc.row.id) else {
+        return false;
+    };
+    let uv = thumb.uv;
+    let size = 32.0;
+    actors.push(act!(sprite(Arc::clone(&thumb.key)):
+        align(0.5, 0.5): xy(rc.fc.preview_x[player], rc.current_row_y):
+        setsize(size, size): customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+        diffuse(1.0, 1.0, 1.0, rc.a): z(Z_ROW_PREVIEW)
+    ));
+    true
+}
+
 fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    match rc.row.id {
-        RowId::NoteSkin => draw_noteskin_row_preview(actors, rc, primary_player_idx),
-        RowId::MineSkin => draw_mineskin_row_preview(actors, rc, primary_player_idx),
-        RowId::ReceptorSkin => draw_receptorskin_row_preview(actors, rc, primary_player_idx),
-        RowId::TapExplosionSkin => draw_tap_explosion_row_preview(actors, rc, primary_player_idx),
-        _ => {}
+    for player in [primary_player_idx, P2] {
+        if player == P2 && primary_player_idx != P2 && !rc.fc.show_p2 {
+            continue;
+        }
+        let first = actors.len();
+        let mine = matches!(rc.row.id, RowId::MineSkin | RowId::SkinMineSize);
+        if mine || !draw_pack_thumb(actors, rc, player) {
+            let previews = &rc.fc.state.noteskin.previews[player];
+            let center = rc.fc.preview_x[player];
+            match rc.row.id {
+                RowId::NoteSkin => {
+                    if let Some(ns) = previews.base.as_deref() {
+                        draw_noteskin_preview(actors, rc, ns, center);
+                    }
+                }
+                RowId::MineSkin | RowId::SkinMineSize => {
+                    let options = &rc.fc.state.player_options[player];
+                    let name = options.mine_noteskin.as_ref().unwrap_or(&options.noteskin);
+                    let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+                    // The size row demonstrates 10–200% within one row's fixed space.
+                    let size = if rc.row.id == RowId::SkinMineSize {
+                        size * options.mine_size_percent.clamp(10, 200) as f32 / 200.0
+                    } else {
+                        size
+                    };
+                    draw_live_mine(
+                        actors,
+                        rc.fc.state,
+                        name.as_str(),
+                        [center, rc.current_row_y],
+                        size,
+                        rc.a,
+                        Z_ROW_PREVIEW,
+                    );
+                }
+                RowId::ReceptorSkin => {
+                    if let Some(ns) = previews.receptor.as_deref().or(previews.base.as_deref()) {
+                        draw_receptor_preview(actors, rc, ns, center);
+                    }
+                }
+                RowId::TapExplosionSkin => {
+                    if !deadsync_profile::tap_explosion_skin_hidden(
+                        rc.fc.state.player_options[player]
+                            .tap_explosion_noteskin
+                            .as_ref(),
+                    ) && let Some(ns) = previews
+                        .tap_explosion
+                        .as_deref()
+                        .or(previews.base.as_deref())
+                    {
+                        let receptor = previews
+                            .receptor
+                            .as_deref()
+                            .or(previews.base.as_deref())
+                            .unwrap_or(ns);
+                        draw_tap_explosion_preview(actors, rc, ns, receptor, center);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let width = if matches!(rc.row.id, RowId::NoteSkin | RowId::ReceptorSkin) {
+            96.0
+        } else {
+            40.0
+        };
+        fit_preview(
+            &mut actors[first..],
+            [rc.fc.preview_x[player], rc.current_row_y],
+            [width, 32.0],
+        );
+        if primary_player_idx == P2 {
+            break;
+        }
     }
 }
 
@@ -1488,8 +1579,133 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
     }
 }
 
-fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, center_x: f32) {
-    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+pub(super) fn draw_live_mine(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    name: &str,
+    center: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
+) {
+    let preview = state.pack_menu.mines.get(name);
+    let skin = state
+        .noteskin
+        .cache
+        .get(name)
+        .or_else(|| preview.and_then(|preview| preview.skin.as_ref()));
+    let Some(skin) = skin else { return };
+    let first = actors.len();
+    draw_mine_preview(actors, state, skin, center, size, alpha, z);
+    for actor in &mut actors[first..] {
+        if let Some(preview) = preview {
+            match actor {
+                Actor::Sprite { source, .. } => {
+                    if let Some((_, alias)) = preview
+                        .textures
+                        .iter()
+                        .find(|(key, _)| Some(key.as_ref()) == source.texture_key())
+                    {
+                        *source = deadlib_present::actors::SpriteSource::Texture(Arc::clone(alias));
+                    }
+                }
+                Actor::TexturedMesh { texture: key, .. } => {
+                    if let Some((_, alias)) =
+                        preview.textures.iter().find(|(source, _)| source == key)
+                    {
+                        *key = Arc::clone(alias);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    fit_preview(&mut actors[first..], center, [size, size]);
+}
+
+/// Fit the complete animated geometry, including rotated sprites and model transforms.
+fn fit_preview(actors: &mut [Actor], center: [f32; 2], limit: [f32; 2]) {
+    use deadlib_present::actors::SizeSpec;
+    let mut min = glam::Vec2::splat(f32::INFINITY);
+    let mut max = glam::Vec2::splat(f32::NEG_INFINITY);
+    for actor in actors.iter() {
+        match actor {
+            Actor::Sprite {
+                offset,
+                size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                scale,
+                rot_z_deg,
+                ..
+            } => {
+                let (sin, cos) = rot_z_deg.to_radians().sin_cos();
+                let w = (w * scale[0]).abs();
+                let h = (h * scale[1]).abs();
+                let half =
+                    glam::Vec2::new(cos.abs() * w + sin.abs() * h, sin.abs() * w + cos.abs() * h)
+                        * 0.5;
+                min = min.min(glam::Vec2::from(*offset) - half);
+                max = max.max(glam::Vec2::from(*offset) + half);
+            }
+            Actor::TexturedMesh {
+                offset,
+                vertices,
+                local_transform,
+                ..
+            } => {
+                for vertex in vertices.iter() {
+                    let p = local_transform
+                        .transform_point3(glam::Vec3::from(vertex.pos))
+                        .truncate()
+                        + glam::Vec2::from(*offset);
+                    min = min.min(p);
+                    max = max.max(p);
+                }
+            }
+            _ => {}
+        }
+    }
+    if !min.is_finite() || !max.is_finite() {
+        return;
+    }
+    let extent = (max - min).max(glam::Vec2::splat(1.0));
+    let scale = (limit[0] / extent.x).min(limit[1] / extent.y).min(1.0);
+    let origin = (min + max) * 0.5;
+    for actor in actors {
+        match actor {
+            Actor::Sprite {
+                offset,
+                scale: zoom,
+                ..
+            } => {
+                *offset = (glam::Vec2::from(center) + (glam::Vec2::from(*offset) - origin) * scale)
+                    .to_array();
+                zoom[0] *= scale;
+                zoom[1] *= scale;
+            }
+            Actor::TexturedMesh {
+                offset,
+                local_transform,
+                ..
+            } => {
+                *offset = (glam::Vec2::from(center) + (glam::Vec2::from(*offset) - origin) * scale)
+                    .to_array();
+                *local_transform =
+                    glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.0)) * *local_transform;
+            }
+            _ => {}
+        }
+    }
+}
+
+fn draw_mine_preview(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    mine_ns: &Noteskin,
+    mine_center: [f32; 2],
+    target_height: f32,
+    alpha: f32,
+    z: i16,
+) {
     let mine_col = if mine_ns.mines.len() > 1 || mine_ns.mine_frames.len() > 1 {
         1
     } else {
@@ -1503,10 +1719,9 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
     let Some(primary_slot) = frame_slot.or(fill_slot) else {
         return;
     };
-    let mine_phase =
-        mine_ns.tap_mine_uv_phase(rc.fc.state.preview_time, rc.fc.state.preview_beat, 0.0);
+    let mine_phase = mine_ns.tap_mine_uv_phase(state.preview_time, state.preview_beat, 0.0);
     let mine_translation = mine_ns.part_uv_translation(NoteAnimPart::Mine, 0.0, false);
-    let mine_center = [center_x, rc.current_row_y];
+
     let scale_mine_slot = |slot: &SpriteSlot| {
         let size = slot
             .model
@@ -1522,7 +1737,7 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
         [width * scale, target_height]
     };
     let draw_mine_slot = |slot: &SpriteSlot, alpha: f32, z: i32, actors: &mut Vec<Actor>| {
-        let draw = slot.model_draw_at(rc.fc.state.preview_time, rc.fc.state.preview_beat);
+        let draw = slot.model_draw_at(state.preview_time, state.preview_beat);
         if !draw.visible {
             return;
         }
@@ -1530,7 +1745,7 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
         let uv_elapsed = if slot.model.is_some() {
             mine_phase
         } else {
-            rc.fc.state.preview_time
+            state.preview_time
         };
         let uv = slot.uv_for_frame_at(frame, uv_elapsed);
         let uv = [
@@ -1546,8 +1761,8 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
             size,
             uv,
             -slot.def.rotation_deg as f32,
-            rc.fc.state.preview_time,
-            rc.fc.state.preview_beat,
+            state.preview_time,
+            state.preview_beat,
             [1.0, 1.0, 1.0, alpha],
             BlendMode::Alpha,
             z as i16,
@@ -1566,12 +1781,12 @@ fn draw_mine_preview(actors: &mut Vec<Actor>, rc: &RowCtx, mine_ns: &Noteskin, c
         }
     };
     if let Some(slot) = fill_slot {
-        draw_mine_slot(slot, 0.85 * rc.a, 106, actors);
+        draw_mine_slot(slot, 0.85 * alpha, i32::from(z), actors);
     }
     if let Some(slot) = frame_slot {
-        draw_mine_slot(slot, rc.a, 107, actors);
+        draw_mine_slot(slot, alpha, i32::from(z) + 1, actors);
     } else if fill_slot.is_none() {
-        draw_mine_slot(primary_slot, rc.a, 107, actors);
+        draw_mine_slot(primary_slot, alpha, i32::from(z) + 1, actors);
     }
 }
 
@@ -1825,122 +2040,32 @@ fn draw_tap_explosion_preview(
     }
 }
 
-fn draw_noteskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(ns) = rc.fc.state.noteskin.previews[primary_player_idx]
-        .base
-        .as_ref()
-    {
-        draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[primary_player_idx]);
-    }
-    if rc.fc.show_p2
-        && primary_player_idx != P2
-        && let Some(ns) = rc.fc.state.noteskin.previews[P2].base.as_ref()
-    {
-        draw_noteskin_preview(actors, rc, ns, rc.fc.preview_x[P2]);
-    }
-}
-
-fn draw_mineskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(mine_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
-        .mine
-        .as_deref()
-        .or_else(|| {
-            rc.fc.state.noteskin.previews[primary_player_idx]
-                .base
-                .as_deref()
-        })
-    {
-        draw_mine_preview(actors, rc, mine_ns, rc.fc.preview_x[primary_player_idx]);
-    }
-    if rc.fc.show_p2
-        && primary_player_idx != P2
-        && let Some(mine_ns) = rc.fc.state.noteskin.previews[P2]
-            .mine
-            .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
-    {
-        draw_mine_preview(actors, rc, mine_ns, rc.fc.preview_x[P2]);
-    }
-}
-
-fn draw_receptorskin_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if let Some(receptor_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
-        .receptor
-        .as_deref()
-        .or_else(|| {
-            rc.fc.state.noteskin.previews[primary_player_idx]
-                .base
-                .as_deref()
-        })
-    {
-        draw_receptor_preview(actors, rc, receptor_ns, rc.fc.preview_x[primary_player_idx]);
-    }
-    if rc.fc.show_p2
-        && primary_player_idx != P2
-        && let Some(receptor_ns) = rc.fc.state.noteskin.previews[P2]
-            .receptor
-            .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
-    {
-        draw_receptor_preview(actors, rc, receptor_ns, rc.fc.preview_x[P2]);
-    }
-}
-
-fn draw_tap_explosion_row_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
-    if !deadsync_profile::tap_explosion_skin_hidden(
-        rc.fc.state.player_options[primary_player_idx]
-            .tap_explosion_noteskin
-            .as_ref(),
-    ) && let Some(explosion_ns) = rc.fc.state.noteskin.previews[primary_player_idx]
-        .tap_explosion
-        .as_deref()
-        .or_else(|| {
-            rc.fc.state.noteskin.previews[primary_player_idx]
-                .base
-                .as_deref()
-        })
-    {
-        let receptor_ns = rc.fc.state.noteskin.previews[primary_player_idx]
-            .receptor
-            .as_deref()
-            .or_else(|| {
-                rc.fc.state.noteskin.previews[primary_player_idx]
-                    .base
-                    .as_deref()
-            })
-            .unwrap_or(explosion_ns);
-        draw_tap_explosion_preview(
-            actors,
-            rc,
-            explosion_ns,
-            receptor_ns,
-            rc.fc.preview_x[primary_player_idx],
-        );
-    }
-    if rc.fc.show_p2
-        && primary_player_idx != P2
-        && !deadsync_profile::tap_explosion_skin_hidden(
-            rc.fc.state.player_options[P2]
-                .tap_explosion_noteskin
-                .as_ref(),
-        )
-        && let Some(explosion_ns) = rc.fc.state.noteskin.previews[P2]
-            .tap_explosion
-            .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
-    {
-        let receptor_ns = rc.fc.state.noteskin.previews[P2]
-            .receptor
-            .as_deref()
-            .or_else(|| rc.fc.state.noteskin.previews[P2].base.as_deref())
-            .unwrap_or(explosion_ns);
-        draw_tap_explosion_preview(actors, rc, explosion_ns, receptor_ns, rc.fc.preview_x[P2]);
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::preview_arrows;
+    use super::{fit_preview, preview_arrows};
+    use crate::act;
+    use deadlib_present::actors::{Actor, SizeSpec};
+
+    #[test]
+    fn wide_rotated_previews_fit_without_changing_aspect_ratio() {
+        let mut actors = [act!(sprite("test/large"):
+            align(0.5, 0.5): xy(180.0, 220.0):
+            setsize(1000.0, 50.0): zoom(4.0): rotationz(90.0)
+        )];
+        fit_preview(&mut actors, [100.0, 100.0], [32.0, 32.0]);
+        let Actor::Sprite {
+            offset,
+            size: [SizeSpec::Px(width), SizeSpec::Px(_)],
+            scale,
+            ..
+        } = &actors[0]
+        else {
+            panic!("sprite")
+        };
+        assert_eq!(*offset, [100.0, 100.0]);
+        assert!((width * scale[0] - 32.0).abs() < 0.001);
+        assert_eq!(scale[0], scale[1], "fit keeps the original aspect ratio");
+    }
 
     #[test]
     fn preview_arrows_match_active_game_columns() {

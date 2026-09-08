@@ -462,6 +462,7 @@ pub(crate) fn gameplay_notefield_plan(
         }
     };
     let options = NotefieldOptions {
+        mine_size_scale: profile.mine_size_percent.clamp(10, 200) as f32 / 100.0,
         frame_features: NotefieldFrameFeatures {
             measure_line_mode,
             measure_cues: profile.measure_cues,

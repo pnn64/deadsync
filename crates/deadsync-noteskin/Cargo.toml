@@ -12,6 +12,7 @@ image = "0.25.10"
 log = "0.4.34"
 mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json.workspace = true
 smallvec = "1.16.0"
 twox-hash = "2.1.4"
 

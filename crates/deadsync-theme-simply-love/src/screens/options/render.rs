@@ -1507,6 +1507,11 @@ pub fn push_actors(
         state.ffmpeg_panel.as_ref(),
         state.active_color_index,
     );
+    crate::screens::components::shared::update_overlay::push(
+        actors,
+        state.workshop_panel.as_ref(),
+        state.active_color_index,
+    );
 }
 
 pub fn sync_updater_panels(
@@ -1514,6 +1519,7 @@ pub fn sync_updater_panels(
     updater: &SimplyLoveUpdaterView,
     update_changed: bool,
     ffmpeg_changed: bool,
+    workshop_changed: bool,
 ) {
     let revision = crate::i18n::revision();
     let locale_changed = state.updater_i18n_revision != revision;
@@ -1526,6 +1532,9 @@ pub fn sync_updater_panels(
             crate::screens::components::shared::ffmpeg_overlay::prepare(&updater.ffmpeg);
     }
     state.updater_i18n_revision = revision;
+    if workshop_changed || locale_changed {
+        state.workshop_panel = prepare_workshop(&updater.workshop);
+    }
 }
 
 pub fn get_actors(

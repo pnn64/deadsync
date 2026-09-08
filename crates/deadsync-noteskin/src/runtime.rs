@@ -2451,7 +2451,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
         receptor_pulse,
         column_xs,
         note_display_metrics,
-        animation_is_beat_based,
+        part_animation_is_beat_based: [animation_is_beat_based; crate::NOTE_ANIM_PART_COUNT],
         hold_let_go_gray_percent,
     }
 }
@@ -2566,7 +2566,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
     ))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NoteskinRuntime<T> {
     pub notes: Vec<T>,
     pub note_layers: Vec<Arc<[T]>>,
@@ -2593,8 +2593,144 @@ pub struct NoteskinRuntime<T> {
     pub roll_columns: Vec<HoldVisuals<T>>,
     pub hold: HoldVisuals<T>,
     pub roll: HoldVisuals<T>,
-    pub animation_is_beat_based: bool,
+    pub part_animation_is_beat_based: [bool; crate::NOTE_ANIM_PART_COUNT],
     pub note_display_metrics: NoteDisplayMetrics,
+}
+
+/// Independently selectable visual components of a noteskin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkinPart {
+    Arrows,
+    Receptors,
+    HoldActive,
+    HoldInactive,
+    RollActive,
+    RollInactive,
+    TapExplosions,
+    HoldExplosions,
+    Mines,
+    Lifts,
+}
+
+impl<T: Clone> NoteskinRuntime<T> {
+    /// Copy a compiled component, retaining the base skin's column layout.
+    pub fn apply_part(&mut self, source: &Self, part: SkinPart) {
+        use SkinPart::*;
+        match part {
+            Arrows => {
+                self.notes.clone_from(&source.notes);
+                self.note_layers.clone_from(&source.note_layers);
+            }
+            Lifts => self.lift_note_layers.clone_from(&source.lift_note_layers),
+            Receptors => {
+                self.receptor_off.clone_from(&source.receptor_off);
+                self.receptor_glow.clone_from(&source.receptor_glow);
+                self.receptor_idle_glow_layers
+                    .clone_from(&source.receptor_idle_glow_layers);
+                self.receptor_off_reverse
+                    .clone_from(&source.receptor_off_reverse);
+                self.receptor_glow_reverse
+                    .clone_from(&source.receptor_glow_reverse);
+                self.receptor_idle_glow_reverse
+                    .clone_from(&source.receptor_idle_glow_reverse);
+                self.receptor_step_behaviors
+                    .clone_from(&source.receptor_step_behaviors);
+                self.receptor_glow_behavior = source.receptor_glow_behavior;
+                self.receptor_idle_glow = source.receptor_idle_glow;
+                self.receptor_pulse = source.receptor_pulse;
+            }
+            Mines => {
+                self.mines.clone_from(&source.mines);
+                self.mine_fill_slots.clone_from(&source.mine_fill_slots);
+                self.mine_frames.clone_from(&source.mine_frames);
+                self.mine_hit_explosion
+                    .clone_from(&source.mine_hit_explosion);
+            }
+            TapExplosions => {
+                self.tap_explosions.clone_from(&source.tap_explosions);
+                self.tap_explosions_by_col
+                    .clone_from(&source.tap_explosions_by_col);
+            }
+            HoldActive | HoldInactive | RollActive | RollInactive => {
+                let (target, columns, original, source_columns) = match part {
+                    HoldActive | HoldInactive => (
+                        &mut self.hold,
+                        &mut self.hold_columns,
+                        &source.hold,
+                        &source.hold_columns,
+                    ),
+                    _ => (
+                        &mut self.roll,
+                        &mut self.roll_columns,
+                        &source.roll,
+                        &source.roll_columns,
+                    ),
+                };
+                for (target, original) in std::iter::once((target, original))
+                    .chain(columns.iter_mut().zip(source_columns))
+                {
+                    if matches!(part, HoldActive | RollActive) {
+                        target.head_active.clone_from(&original.head_active);
+                        target
+                            .head_active_layers
+                            .clone_from(&original.head_active_layers);
+                        target.body_active.clone_from(&original.body_active);
+                        target.topcap_active.clone_from(&original.topcap_active);
+                        target
+                            .bottomcap_active
+                            .clone_from(&original.bottomcap_active);
+                    } else {
+                        target.head_inactive.clone_from(&original.head_inactive);
+                        target
+                            .head_inactive_layers
+                            .clone_from(&original.head_inactive_layers);
+                        target.body_inactive.clone_from(&original.body_inactive);
+                        target.topcap_inactive.clone_from(&original.topcap_inactive);
+                        target
+                            .bottomcap_inactive
+                            .clone_from(&original.bottomcap_inactive);
+                    }
+                }
+            }
+            HoldExplosions => {
+                for (target, original) in std::iter::once((&mut self.hold, &source.hold))
+                    .chain(std::iter::once((&mut self.roll, &source.roll)))
+                    .chain(self.hold_columns.iter_mut().zip(&source.hold_columns))
+                    .chain(self.roll_columns.iter_mut().zip(&source.roll_columns))
+                {
+                    target.explosion.clone_from(&original.explosion);
+                }
+            }
+        }
+        let metrics = match part {
+            Arrows => &[NoteAnimPart::Tap, NoteAnimPart::Fake][..],
+            Lifts => &[NoteAnimPart::Lift],
+            Mines => &[NoteAnimPart::Mine],
+            HoldActive | HoldInactive => &[
+                NoteAnimPart::HoldHead,
+                NoteAnimPart::HoldTopCap,
+                NoteAnimPart::HoldBody,
+                NoteAnimPart::HoldBottomCap,
+                NoteAnimPart::HoldTail,
+            ],
+            RollActive | RollInactive => &[
+                NoteAnimPart::RollHead,
+                NoteAnimPart::RollTopCap,
+                NoteAnimPart::RollBody,
+                NoteAnimPart::RollBottomCap,
+                NoteAnimPart::RollTail,
+            ],
+            _ => &[],
+        };
+        for &part in metrics {
+            let index = part as usize;
+            self.part_animation_is_beat_based[index] = source.part_animation_is_beat_based[index];
+            self.note_display_metrics.part_animation[index] =
+                source.note_display_metrics.part_animation[index];
+            self.note_display_metrics.part_texture_translate[index] =
+                source.note_display_metrics.part_texture_translate[index];
+        }
+    }
 }
 
 #[inline(always)]
@@ -2760,7 +2896,7 @@ impl<T> NoteskinRuntime<T> {
             note_beat,
             anim.length,
             anim.vivid,
-            self.animation_is_beat_based,
+            self.part_animation_is_beat_based[part as usize],
         )
     }
 
@@ -3610,6 +3746,7 @@ mod tests {
     #[test]
     fn runtime_columns_compiled_builds_column_runtime_state() {
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -3706,6 +3843,7 @@ mod tests {
     #[test]
     fn tap_explosions_by_col_compiled_uses_down_cache_and_column_lookups() {
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -3750,6 +3888,7 @@ mod tests {
     #[test]
     fn runtime_compiled_assembles_post_column_state() {
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -3876,6 +4015,7 @@ mod tests {
         std::fs::write(&fake_texture, []).expect("write fake texture");
 
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4103,6 +4243,7 @@ mod tests {
         std::fs::write(&actor_path, []).unwrap();
 
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: vec![search_dir],
@@ -4165,6 +4306,7 @@ mod tests {
     #[test]
     fn actor_sprite_resolution_suppresses_blank_requests() {
         let data = itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -4201,6 +4343,7 @@ mod tests {
     #[test]
     fn first_actor_sprite_slot_uses_texture_loader_for_non_lua_paths() {
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -4221,6 +4364,7 @@ mod tests {
     #[test]
     fn actor_file_resolver_loads_non_lua_paths() {
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -4277,6 +4421,7 @@ mod tests {
         let texture_path = search_dir.join("Tap Note.png");
         std::fs::write(&texture_path, []).unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![search_dir],
@@ -4370,6 +4515,7 @@ mod tests {
         std::fs::write(&texture_path, []).unwrap();
         let actor_path = search_dir.join("Down Tap Note.lua");
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![search_dir],
@@ -4433,6 +4579,7 @@ mod tests {
         let texture_path = root.join("Tap Note.png");
         std::fs::write(&texture_path, []).unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4470,6 +4617,7 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("Tap Note.png"), []).unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4532,6 +4680,7 @@ mod tests {
         let texture_path = root.join("Model Texture.png");
         std::fs::write(&texture_path, []).unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4604,6 +4753,7 @@ mod tests {
         std::fs::write(&child_path, []).unwrap();
         std::fs::write(&arg_path, []).unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4653,6 +4803,7 @@ mod tests {
         )
         .unwrap();
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: vec![root.clone()],
@@ -4697,6 +4848,7 @@ mod tests {
     #[test]
     fn ref_decl_skips_nonmatching_actor_condition() {
         let data = crate::itg::NoteskinData {
+            overrides: Vec::new(),
             name: "default".to_string(),
             metrics: crate::itg::IniData::default(),
             search_dirs: Vec::new(),
@@ -5246,7 +5398,7 @@ mod tests {
             ..NotePartTextureTranslate::default()
         };
         let runtime = NoteskinRuntime {
-            animation_is_beat_based: true,
+            part_animation_is_beat_based: [true; crate::NOTE_ANIM_PART_COUNT],
             note_display_metrics: metrics,
             ..empty_runtime()
         };
@@ -5316,8 +5468,59 @@ mod tests {
             roll_columns: Vec::new(),
             hold: HoldVisuals::default(),
             roll: HoldVisuals::default(),
-            animation_is_beat_based: false,
+            part_animation_is_beat_based: [false; crate::NOTE_ANIM_PART_COUNT],
             note_display_metrics: NoteDisplayMetrics::default(),
+        }
+    }
+
+    #[test]
+    fn components_mix_without_replacing_layout_or_other_hold_states() {
+        use super::SkinPart;
+        let mut base = empty_runtime();
+        base.column_xs = vec![-96, -32, 32, 96];
+        base.notes = vec![Slot(1)];
+        base.hold.head_inactive = Some(Slot(2));
+        base.hold.body_inactive = Some(Slot(3));
+        base.hold_columns = vec![base.hold.clone()];
+        let mut source = empty_runtime();
+        source.column_xs = vec![0];
+        source.notes = vec![Slot(4)];
+        source.note_layers = vec![Arc::from([Slot(4), Slot(5)])];
+        source.hold.head_active = Some(Slot(6));
+        source.hold.body_active = Some(Slot(7));
+        source.hold.explosion = Some(Slot(8));
+        source.hold_columns = vec![source.hold.clone()];
+        source.mines = vec![Some(Slot(9))];
+        source.mine_frames = vec![Some(Slot(10))];
+        source.note_display_metrics.part_animation[NoteAnimPart::Tap as usize].length = 4.0;
+        source.part_animation_is_beat_based[NoteAnimPart::Tap as usize] = true;
+        base.apply_part(&source, SkinPart::Arrows);
+        base.apply_part(&source, SkinPart::HoldActive);
+        base.apply_part(&source, SkinPart::Mines);
+        base.apply_part(&source, SkinPart::HoldExplosions);
+        assert_eq!(base.column_xs, [-96, -32, 32, 96]);
+        assert_eq!(base.note_layers[0].as_ref(), [Slot(4), Slot(5)]);
+        assert_eq!(
+            base.note_display_metrics.part_animation[NoteAnimPart::Tap as usize].length,
+            4.0
+        );
+        assert_eq!(
+            base.tap_note_uv_phase(0.0, 1.0, 0.0),
+            0.25,
+            "the arrows retain their provider's beat clock"
+        );
+        let hold = base.hold_visuals_for_col(0, false);
+        assert_eq!(hold.body_active, Some(Slot(7)));
+        assert_eq!(hold.body_inactive, Some(Slot(3)));
+        assert_eq!(hold.head_inactive, Some(Slot(2)));
+        assert_eq!(hold.explosion, Some(Slot(8)));
+        let mut uploaded = Vec::new();
+        base.for_each_slot(|slot| uploaded.push(slot.0));
+        for id in [4, 5, 6, 7, 8, 9, 10] {
+            assert!(
+                uploaded.contains(&id),
+                "component slot {id} reaches texture/model prewarming"
+            );
         }
     }
 }

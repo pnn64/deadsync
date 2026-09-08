@@ -379,6 +379,7 @@ impl App {
                 self.updater_view.view(),
                 change.update,
                 change.ffmpeg,
+                change.workshop,
             );
             screens::options::handle_input(
                 &mut self.state.screens.options_state,

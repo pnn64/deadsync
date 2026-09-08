@@ -94,15 +94,12 @@ fn main_visible_items_match_updater_capabilities_and_are_stable() {
     let first = visible_items(&state);
     let second = visible_items(&state);
     assert!(std::ptr::eq(first, second));
-    assert!(first.iter().any(|item| item.id == ItemId::CheckForUpdates));
+    assert!(first.iter().all(|item| item.id != ItemId::CheckForUpdates));
     assert!(first.iter().any(|item| item.id == ItemId::RollBackVersion));
-    assert!(
-        first
-            .iter()
-            .any(|item| item.id == ItemId::DownloadVideoSupport)
-    );
+    assert!(first.iter().any(|item| item.id == ItemId::Downloads));
 
     let unavailable = build_visible_items(SimplyLoveUpdaterCapabilities::default());
+    assert!(unavailable.iter().any(|item| item.id == ItemId::Downloads));
     assert!(unavailable.iter().all(|item| !matches!(
         item.id,
         ItemId::CheckForUpdates | ItemId::RollBackVersion | ItemId::DownloadVideoSupport
@@ -265,21 +262,22 @@ fn updater_panels_replace_only_for_changed_slots() {
     let mut updater = SimplyLoveUpdaterView {
         update: crate::views::SimplyLoveUpdatePhase::Checking,
         ffmpeg: crate::views::SimplyLoveFfmpegPhase::Checking,
+        ..SimplyLoveUpdaterView::default()
     };
-    sync_updater_panels(&mut state, &updater, true, true);
+    sync_updater_panels(&mut state, &updater, true, true, false);
     assert!(state.update_panel.is_some());
     assert!(state.ffmpeg_panel.is_some());
 
     updater.update = crate::views::SimplyLoveUpdatePhase::Idle;
     updater.ffmpeg = crate::views::SimplyLoveFfmpegPhase::Idle;
-    sync_updater_panels(&mut state, &updater, false, false);
+    sync_updater_panels(&mut state, &updater, false, false, false);
     assert!(state.update_panel.is_some());
     assert!(state.ffmpeg_panel.is_some());
 
-    sync_updater_panels(&mut state, &updater, true, false);
+    sync_updater_panels(&mut state, &updater, true, false, false);
     assert!(state.update_panel.is_none());
     assert!(state.ffmpeg_panel.is_some());
-    sync_updater_panels(&mut state, &updater, false, true);
+    sync_updater_panels(&mut state, &updater, false, true, false);
     assert!(state.ffmpeg_panel.is_none());
 }
 
@@ -289,12 +287,13 @@ fn updater_panels_rebuild_for_a_new_locale_revision() {
     let mut updater = SimplyLoveUpdaterView {
         update: crate::views::SimplyLoveUpdatePhase::Checking,
         ffmpeg: crate::views::SimplyLoveFfmpegPhase::Checking,
+        ..SimplyLoveUpdaterView::default()
     };
-    sync_updater_panels(&mut state, &updater, true, true);
+    sync_updater_panels(&mut state, &updater, true, true, false);
     updater.update = crate::views::SimplyLoveUpdatePhase::Idle;
     updater.ffmpeg = crate::views::SimplyLoveFfmpegPhase::Idle;
     state.updater_i18n_revision = u64::MAX;
-    sync_updater_panels(&mut state, &updater, false, false);
+    sync_updater_panels(&mut state, &updater, false, false, false);
     assert!(state.update_panel.is_none());
     assert!(state.ffmpeg_panel.is_none());
 }
@@ -3505,4 +3504,100 @@ fn graphics_aspect_change_is_independent_of_resolution() {
             })
         )] if (*ratio - 4.0 / 3.0).abs() <= f32::EPSILON
     ));
+}
+
+#[test]
+fn downloads_navigation_dispatches_updates_video_then_workshop() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.selected = visible_items(&state)
+        .iter()
+        .position(|i| i.id == ItemId::Downloads)
+        .unwrap();
+    press(&mut state, &asset_manager, VirtualAction::p1_start);
+    assert_eq!(state.pending_submenu_kind, Some(SubmenuKind::Downloads));
+    state.submenu_transition = SubmenuTransition::None;
+    state.view = OptionsView::Submenu(SubmenuKind::Downloads);
+    for (index, expected) in [
+        crate::SimplyLoveUpdaterRequest::CheckForUpdates,
+        crate::SimplyLoveUpdaterRequest::CheckFfmpegAvailability,
+        crate::SimplyLoveUpdaterRequest::InstallWorkshop,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        state.sub_selected = index;
+        let effect = activate_current_selection(&mut state, &asset_manager);
+        assert!(
+            matches!(effect, ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(request)) if request == expected)
+        );
+    }
+    state.sub_selected = 0;
+    state.updater_capabilities.app_update = false;
+    assert!(matches!(
+        activate_current_selection(&mut state, &asset_manager),
+        ThemeEffect::None
+    ));
+    state.sub_selected = 1;
+    state.updater_capabilities.ffmpeg_install = false;
+    assert!(matches!(
+        activate_current_selection(&mut state, &asset_manager),
+        ThemeEffect::None
+    ));
+    state.sub_selected = 2;
+    assert!(matches!(
+        activate_current_selection(&mut state, &asset_manager),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
+            crate::SimplyLoveUpdaterRequest::InstallWorkshop
+        ))
+    ));
+    state.sub_selected = 3;
+    activate_current_selection(&mut state, &asset_manager);
+    assert_eq!(state.submenu_transition, SubmenuTransition::FadeOutToMain);
+}
+
+#[test]
+fn workshop_modal_blocks_navigation_and_exposes_cancel_retry_dismiss() {
+    use crate::SimplyLoveUpdaterRequest as Request;
+    use crate::screens::components::shared::update_overlay::InputOutcome;
+    use crate::views::SimplyLoveWorkshopPhase as Phase;
+    let back = input_event(VirtualAction::p1_back, true);
+    let start = input_event(VirtualAction::p1_start, true);
+    assert_eq!(
+        workshop_input(
+            &Phase::Downloading {
+                written: 12,
+                total: 30
+            },
+            &back
+        ),
+        InputOutcome::Request(Request::DismissWorkshop)
+    );
+    assert_eq!(
+        workshop_input(&Phase::Publishing, &back),
+        InputOutcome::Consumed
+    );
+    assert_eq!(
+        workshop_input(
+            &Phase::Error {
+                detail: "network".into()
+            },
+            &start
+        ),
+        InputOutcome::Request(Request::InstallWorkshop)
+    );
+    assert_eq!(
+        workshop_input(&Phase::Installed, &start),
+        InputOutcome::Request(Request::DismissWorkshop)
+    );
+    let mut state = init();
+    let mut view = SimplyLoveUpdaterView::default();
+    view.workshop = Phase::Preparing { done: 2, total: 10 };
+    sync_updater_panels(&mut state, &view, false, false, true);
+    assert!(state.workshop_panel.is_some());
+    view.workshop = Phase::Idle;
+    sync_updater_panels(&mut state, &view, false, false, false);
+    assert!(state.workshop_panel.is_some());
+    sync_updater_panels(&mut state, &view, false, false, true);
+    assert!(state.workshop_panel.is_none());
 }

@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1123"
+version = "0.5.1126"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1526,6 +1526,7 @@ dependencies = [
  "log",
  "mlua",
  "serde",
+ "serde_json",
  "smallvec",
  "twox-hash",
 ]
@@ -1733,7 +1734,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1123"
+version = "0.5.1126"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1782,6 +1783,7 @@ dependencies = [
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
+ "deadsync-noteskin",
  "deadsync-version",
  "flate2",
  "libc",
@@ -1799,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1123"
+version = "0.5.1126"
 dependencies = [
  "log",
  "semver",

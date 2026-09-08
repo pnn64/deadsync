@@ -902,6 +902,8 @@ pub enum SimplyLoveDebugRequest {
 /// Updater work requested by Simply Love and executed by the process shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveUpdaterRequest {
+    InstallWorkshop,
+    DismissWorkshop,
     CheckForUpdates,
     CheckForRollback,
     DownloadUpdate,

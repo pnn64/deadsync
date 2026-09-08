@@ -3084,56 +3084,64 @@ pub(crate) fn gameplay_noteskin_assets(
     num_players: usize,
     runtime_profiles: &[profile_data::Profile; MAX_PLAYERS],
 ) -> GameplayNoteskinAssets {
+    use deadsync_noteskin::runtime::SkinPart;
     let style = Style {
         num_cols: cols_per_player,
         num_players: 1,
     };
+    // Compose once on the song-load worker. The selected slots then share the
+    // existing prewarm, upload and song-lifetime ownership paths.
     let noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return None;
         }
-        let skin = runtime_profiles[player].noteskin.to_string();
-        noteskin::load_itg_skin_cached(&style, &skin).ok()
-    });
-    let mine_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return None;
-        }
-        let skin = runtime_profiles[player]
-            .resolved_mine_noteskin()
-            .to_string();
-        noteskin::load_itg_skin_cached(&style, &skin)
-            .ok()
-            .or_else(|| noteskin[player].clone())
-    });
-    let receptor_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return None;
-        }
-        let skin = runtime_profiles[player]
-            .resolved_receptor_noteskin()
-            .to_string();
-        noteskin::load_itg_skin_cached(&style, &skin)
-            .ok()
-            .or_else(|| noteskin[player].clone())
-    });
-    let tap_explosion_noteskin: [Option<Arc<Noteskin>>; MAX_PLAYERS] =
-        std::array::from_fn(|player| {
-            if player >= num_players {
-                return None;
+        let profile = &runtime_profiles[player];
+        let mut options = profile.current_player_options();
+        profile_data::migrate_noteskin_parts(&mut options);
+        let skin = options.noteskin.as_str();
+        let mut result = noteskin::load_itg_skin_cached(&style, skin)
+            .or_else(|error| {
+                log::warn!("Cannot load noteskin '{skin}': {error}; using the bundled default");
+                noteskin::load_itg_skin_cached(&style, profile_data::NoteSkin::DEFAULT_NAME)
+            })
+            .ok()?;
+        for (part, selection) in [
+            (SkinPart::Arrows, &options.arrow_noteskin),
+            (SkinPart::Receptors, &options.receptor_noteskin),
+            (SkinPart::HoldActive, &options.hold_active_noteskin),
+            (SkinPart::HoldInactive, &options.hold_inactive_noteskin),
+            (SkinPart::RollActive, &options.roll_active_noteskin),
+            (SkinPart::RollInactive, &options.roll_inactive_noteskin),
+            (SkinPart::TapExplosions, &options.tap_explosion_noteskin),
+            (SkinPart::HoldExplosions, &options.hold_explosion_noteskin),
+            (SkinPart::Mines, &options.mine_noteskin),
+            (SkinPart::Lifts, &options.lift_noteskin),
+        ] {
+            let Some(selection) = selection else { continue };
+            if selection.is_none_choice() {
+                continue;
             }
-            let Some(skin) = runtime_profiles[player].resolved_tap_explosion_noteskin() else {
-                return None;
-            };
-            noteskin::load_itg_skin_cached(&style, skin.as_str())
-                .ok()
-                .or_else(|| noteskin[player].clone())
-        });
+            match noteskin::load_itg_skin_cached(&style, selection.as_str()) {
+                Ok(source) => Arc::make_mut(&mut result).apply_part(&source, part),
+                Err(error) => log::warn!(
+                    "Cannot load {part:?} from '{selection}': {error}; using the base component"
+                ),
+            }
+        }
+        Some(result)
+    });
+    let tap_explosion_noteskin = std::array::from_fn(|player| {
+        if runtime_profiles[player].tap_explosion_noteskin_hidden() {
+            None
+        } else {
+            noteskin[player].clone()
+        }
+    });
     GameplayNoteskinAssets {
-        noteskin,
-        mine_noteskin,
-        receptor_noteskin,
+        mine_noteskin: noteskin.clone(),
+        receptor_noteskin: noteskin.clone(),
         tap_explosion_noteskin,
+        noteskin,
     }
 }
 

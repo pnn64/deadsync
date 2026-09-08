@@ -1051,9 +1051,17 @@ fn noteskin_catalog_view(dirs: &AppDirs) -> NoteskinCatalogView {
     } else {
         "dance"
     };
-    NoteskinCatalogView {
-        names: deadsync_noteskin::itg::discover_skins(&roots, game),
+    let mut names = deadsync_noteskin::itg::discover_skins(&roots, game);
+    if game == "dance" {
+        for pack in deadsync_assets::noteskin::pack_catalog().iter() {
+            for skin in &pack.manifest.skins {
+                if !names.contains(&skin.id) {
+                    names.push(skin.id.clone());
+                }
+            }
+        }
     }
+    NoteskinCatalogView { names }
 }
 
 const fn bookkeeping_view(bookkeeping: crate::coin::Bookkeeping) -> BookkeepingView {
@@ -1627,13 +1635,13 @@ pub struct App {
     select_music_ready_reload_generation: u64,
     options_song_pack_generation: u64,
     /// Game-thread-owned, app-lifetime updater cursor with one action slot and
-    /// one `FFmpeg` slot. It warms during App construction, then two atomic
+    /// `FFmpeg` and Workshop slots. It warms during App construction; atomic
     /// revision reads gate all phase locking, deep cloning, and shell-view
     /// conversion. A miss replaces only the changed slot on an Options frame
     /// or input event; there is no growth, eviction, pruning, cross-thread
     /// mutation, or gameplay-frame destruction. Source revisions provide the
     /// instrumentation, and worst-case refresh work is one clone of each
-    /// service's latest published phase. Both slots drop at App shutdown.
+    /// service's latest published phase. All slots drop at App shutdown.
     updater_view: updater::RuntimeCursor,
     /// Last download row generation integrated into Select Music. Rows are
     /// rebuilt only while the overlay is visible and the worker changes them.
@@ -5161,7 +5169,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Updater(request) => {
-                    updater::execute(request);
+                    updater::execute(request, &self.dirs);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::ShowOverlay(mode)) => {
@@ -7028,6 +7036,7 @@ impl App {
                     self.updater_view.view(),
                     change.update,
                     change.ffmpeg,
+                    change.workshop,
                 );
                 options::push_actors(
                     &mut actors,
@@ -9940,6 +9949,12 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
     use deadsync_simfile::media::{BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR};
     let cwd = std::env::current_dir().ok();
     let media_roots = |name| dirs.media_roots(name, cwd.as_deref());
+    if let Err(error) = deadsync_updater::workshop::migrate(
+        &dirs.workshop_dir(cwd.as_deref()),
+        &media_roots("noteskin-packs"),
+    ) {
+        log::warn!("Cannot relocate HURG-IIDX's Workshop: {error}");
+    }
     deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
     deadsync_assets::init_paths(dirs.asset_paths(cwd.as_deref()))?;
     deadsync_profile::app_runtime::init_paths(

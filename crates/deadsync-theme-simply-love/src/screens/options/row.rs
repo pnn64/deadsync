@@ -2,6 +2,9 @@ use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SubRowId {
+    CheckForUpdates,
+    DownloadVideoSupport,
+    DownloadWorkshop,
     // Arcade Options
     CoinMode,
     EventMode,

@@ -24,11 +24,15 @@ pub enum ItemId {
     FoldersOptions,
     DownloadPacks,
     ReloadSongsCourses,
-    CheckForUpdates,
     RollBackVersion,
-    DownloadVideoSupport,
+    Downloads,
     Credits,
     Exit,
+
+    // Downloads submenu
+    CheckForUpdates,
+    DownloadVideoSupport,
+    DownloadWorkshop,
 
     // Arcade Options submenu
     CoinMode,
@@ -354,8 +358,7 @@ pub(super) fn visible_items(state: &State) -> &[&'static Item] {
 
 const fn item_visible(id: ItemId, capabilities: SimplyLoveUpdaterCapabilities) -> bool {
     match id {
-        ItemId::CheckForUpdates | ItemId::RollBackVersion => capabilities.app_update,
-        ItemId::DownloadVideoSupport => capabilities.ffmpeg_install,
+        ItemId::RollBackVersion => capabilities.app_update,
         _ => true,
     }
 }
@@ -611,14 +614,6 @@ pub const ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::CheckForUpdates,
-        name: lookup_key("Options", "CheckForUpdates"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsHelp",
-            "CheckForUpdatesHelp",
-        ))],
-    },
-    Item {
         id: ItemId::RollBackVersion,
         name: lookup_key("Options", "RollBackVersion"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -627,12 +622,9 @@ pub const ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::DownloadVideoSupport,
-        name: lookup_key("Options", "DownloadVideoSupport"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsHelp",
-            "DownloadVideoSupportHelp",
-        ))],
+        id: ItemId::Downloads,
+        name: lookup_key("Downloads", "Title"),
+        help: &[HelpEntry::Paragraph(lookup_key("Downloads", "Help"))],
     },
     Item {
         id: ItemId::Credits,

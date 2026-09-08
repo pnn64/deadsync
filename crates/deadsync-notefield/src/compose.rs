@@ -164,6 +164,7 @@ pub struct NotefieldSongLuaView<'a> {
 /// Profile-derived behavior and resolved asset availability in canonical terms.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NotefieldOptions {
+    pub mine_size_scale: f32,
     pub frame_features: NotefieldFrameFeatures,
     pub notefield_offset: [f32; 2],
     pub judgment_offset: [f32; 2],
@@ -426,7 +427,7 @@ fn prepare_notes<'a, S>(
             request.visual.elapsed_screen_s,
             request.chart.visible_beat,
             base.note_display_metrics.part_animation[part as usize],
-            base.animation_is_beat_based,
+            base.part_animation_is_beat_based[part as usize],
         )
     });
     let mine_part_phase_caches = NoteAnimPart::ALL.map(|part| {
@@ -434,7 +435,7 @@ fn prepare_notes<'a, S>(
             request.visual.elapsed_screen_s,
             request.chart.visible_beat,
             mine.note_display_metrics.part_animation[part as usize],
-            mine.animation_is_beat_based,
+            mine.part_animation_is_beat_based[part as usize],
         )
     });
     let travel = scroll_travel(ScrollTravelRequest {

@@ -1736,25 +1736,17 @@ pub(super) fn activate_current_selection(
                     queue_sfx(state, "assets/sounds/start.ogg");
                     return start_reload_songs_and_courses(state);
                 }
-                ItemId::CheckForUpdates => {
-                    queue_sfx(state, "assets/sounds/start.ogg");
-                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
-                        crate::SimplyLoveUpdaterRequest::CheckForUpdates,
-                    ));
-                }
                 ItemId::RollBackVersion => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
                         crate::SimplyLoveUpdaterRequest::CheckForRollback,
                     ));
                 }
-                ItemId::DownloadVideoSupport => {
+                ItemId::Downloads => {
                     queue_sfx(state, "assets/sounds/start.ogg");
-                    // Probe ffmpeg/ffprobe on a worker thread — the lookup
-                    // spawns subprocesses and would stutter the UI thread.
-                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
-                        crate::SimplyLoveUpdaterRequest::CheckFfmpegAvailability,
-                    ));
+                    state.pending_submenu_kind = Some(SubmenuKind::Downloads);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
                 }
                 ItemId::Credits => {
                     queue_sfx(state, "assets/sounds/start.ogg");
@@ -1774,6 +1766,24 @@ pub(super) fn activate_current_selection(
                 return ThemeEffect::None;
             }
             let selected_row = state.sub_selected.min(total.saturating_sub(1));
+            if kind == SubmenuKind::Downloads
+                && let Some(row) = submenu_visible_row_to_actual(state, kind, selected_row)
+                    .and_then(|index| DOWNLOADS_ROWS.get(index))
+            {
+                if is_submenu_row_disabled(state, kind, row.id) {
+                    return ThemeEffect::None;
+                }
+                let request = match row.id {
+                    SubRowId::CheckForUpdates => crate::SimplyLoveUpdaterRequest::CheckForUpdates,
+                    SubRowId::DownloadVideoSupport => {
+                        crate::SimplyLoveUpdaterRequest::CheckFfmpegAvailability
+                    }
+                    SubRowId::DownloadWorkshop => crate::SimplyLoveUpdaterRequest::InstallWorkshop,
+                    _ => return ThemeEffect::None,
+                };
+                queue_sfx(state, "assets/sounds/start.ogg");
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(request));
+            }
             if matches!(kind, SubmenuKind::SelectMusic)
                 && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
             {
@@ -2102,6 +2112,14 @@ fn handle_input_impl(
     effects: &mut Vec<ThemeEffect>,
 ) -> ThemeEffect {
     use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
+
+    match workshop_input(&updater.workshop, ev) {
+        update_overlay::InputOutcome::Passthrough => {}
+        update_overlay::InputOutcome::Consumed => return ThemeEffect::None,
+        update_overlay::InputOutcome::Request(request) => {
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(request));
+        }
+    }
 
     match update_overlay::handle_input(&updater.update, ev) {
         update_overlay::InputOutcome::Passthrough => {}

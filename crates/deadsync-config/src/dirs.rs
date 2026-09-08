@@ -296,8 +296,31 @@ impl AppDirs {
         roots
     }
 
+    /// Locate Workshop content inside the game assets, including portable installs.
+    pub fn workshop_dir(&self, cwd: Option<&Path>) -> PathBuf {
+        let roots = cwd
+            .into_iter()
+            .flat_map(|cwd| [cwd.to_path_buf(), cwd.join("deadsync")])
+            .chain(std::iter::once(self.exe_dir.clone()));
+        roots
+            .map(|root| root.join("assets/noteskins"))
+            .find(|root| root.is_dir())
+            .unwrap_or_else(|| self.exe_dir.join("assets/noteskins"))
+            .join("hurg")
+    }
+
     /// Prepare the asset subsystem's overlay and cache paths at startup.
     pub fn asset_paths(&self, cwd: Option<&Path>) -> AssetPaths {
+        // The install destination wins over older copies (including cargo's
+        // copied assets), so a successful download activates that exact pack.
+        let mut pack_root = self.workshop_dir(cwd);
+        pack_root.pop();
+        let mut noteskin_pack_roots = vec![pack_root];
+        for root in self.media_roots("assets/noteskins", cwd) {
+            if !noteskin_pack_roots.contains(&root) {
+                noteskin_pack_roots.push(root);
+            }
+        }
         let mut search_roots = Vec::with_capacity(4);
         let mut graphic_roots = Vec::with_capacity(3);
         if !self.portable {
@@ -315,6 +338,7 @@ impl AppDirs {
             graphic_roots,
             texture_roots: [self.data_dir.join("assets"), self.exe_dir.join("assets")],
             noteskin_roots: self.noteskin_roots(),
+            noteskin_pack_roots,
             noteskin_cache: self.noteskin_cache_dir(),
             banner_cache: self.banner_cache_dir(),
             cdtitle_cache: self.cdtitle_cache_dir(),
@@ -336,6 +360,7 @@ pub struct AssetPaths {
     pub graphic_roots: Vec<PathBuf>,
     pub texture_roots: [PathBuf; 2],
     pub noteskin_roots: Vec<PathBuf>,
+    pub noteskin_pack_roots: Vec<PathBuf>,
     pub noteskin_cache: PathBuf,
     pub banner_cache: PathBuf,
     pub cdtitle_cache: PathBuf,
@@ -367,6 +392,43 @@ impl AssetPaths {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn workshop_uses_game_assets_in_portable_and_installed_layouts() {
+        let root =
+            std::env::temp_dir().join(format!("deadsync-workshop-paths-{}", std::process::id()));
+        let game = root.join("game");
+        let checkout = root.join("checkout");
+        std::fs::create_dir_all(game.join("assets/noteskins")).unwrap();
+        std::fs::create_dir_all(checkout.join("deadsync/assets/noteskins")).unwrap();
+        for portable in [false, true] {
+            let dirs = AppDirs {
+                data_dir: root.join("user-data"),
+                cache_dir: root.join("cache"),
+                exe_dir: game.clone(),
+                portable,
+            };
+            assert_eq!(dirs.workshop_dir(None), game.join("assets/noteskins/hurg"));
+            assert_eq!(
+                dirs.workshop_dir(Some(&checkout)),
+                checkout.join("deadsync/assets/noteskins/hurg")
+            );
+            assert_eq!(
+                dirs.workshop_dir(Some(&root.join("unrelated"))),
+                game.join("assets/noteskins/hurg")
+            );
+            assert!(
+                dirs.asset_paths(None)
+                    .noteskin_pack_roots
+                    .contains(&game.join("assets/noteskins"))
+            );
+            assert_eq!(
+                dirs.asset_paths(Some(&checkout)).noteskin_pack_roots[0],
+                checkout.join("deadsync/assets/noteskins"),
+                "new installs must take precedence over older copied assets"
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn runtime_root_uses_parent_profile_dir_for_cargo_test_binaries() {
         let root =

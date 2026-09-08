@@ -52,7 +52,7 @@ pub fn itg_resolve_model_texture_path(
                 return Some(ItgResolvedModelTexture::from_path(model_path.to_path_buf()));
             }
             ItgModelTextureKind::Animated => {
-                return itg_resolve_animated_texture_ini(model_path);
+                return itg_resolve_animated_texture_ini(data, model_path);
             }
             ItgModelTextureKind::Other => {}
         }
@@ -75,7 +75,7 @@ pub fn itg_resolve_model_texture_path(
                 return Some(ItgResolvedModelTexture::from_path(candidate_path));
             }
             ItgModelTextureKind::Animated => {
-                if let Some(resolved) = itg_resolve_animated_texture_ini(&candidate_path) {
+                if let Some(resolved) = itg_resolve_animated_texture_ini(data, &candidate_path) {
                     return Some(resolved);
                 }
             }
@@ -91,7 +91,7 @@ pub fn itg_resolve_model_texture_path(
             .unwrap_or_default();
         match itg_model_texture_kind(ext) {
             ItgModelTextureKind::Image => Some(ItgResolvedModelTexture::from_path(path)),
-            ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(&path),
+            ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(data, &path),
             ItgModelTextureKind::Other => None,
         }
     })
@@ -127,16 +127,16 @@ fn itg_resolve_relative_or_noteskin_path(
     let rel = itg_normalized_asset_ref(raw)?;
     let rel_path = Path::new(&rel);
     if rel_path.is_absolute() && rel_path.is_file() {
-        return Some(rel_path.to_path_buf());
+        return Some(data.override_path(rel_path.to_path_buf()));
     }
     if let Some(parent) = base_file.parent()
         && let Some(path) = itg_resolve_relative_file(parent, rel_path)
     {
-        return Some(path);
+        return Some(data.override_path(path));
     }
     for dir in &data.search_dirs {
         if let Some(path) = itg_resolve_relative_file(dir, rel_path) {
-            return Some(path);
+            return Some(data.override_path(path));
         }
     }
     data.resolve_path("", &rel)
@@ -184,7 +184,10 @@ fn itg_find_child_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     None
 }
 
-fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTexture> {
+fn itg_resolve_animated_texture_ini(
+    data: &noteskin_itg::NoteskinData,
+    path: &Path,
+) -> Option<ItgResolvedModelTexture> {
     let ini = noteskin_itg::IniData::parse_file(path).ok()?;
     let first_frame_idx = if ini.get("AnimatedTexture", "Frame0000").is_some() {
         0
@@ -199,14 +202,7 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
             "Frame0001"
         },
     )?;
-    let rel = itg_normalized_asset_ref(frame)?;
-    let rel_path = Path::new(&rel);
-    let texture_path = if rel_path.is_absolute() && rel_path.is_file() {
-        rel_path.to_path_buf()
-    } else {
-        let base = path.parent()?;
-        itg_resolve_relative_file(base, rel_path)?
-    };
+    let texture_path = itg_resolve_relative_or_noteskin_path(data, path, frame)?;
     let tex_velocity_x = ini
         .get("AnimatedTexture", "TexVelocityX")
         .and_then(noteskin_itg::parse_ini_float)
@@ -380,6 +376,7 @@ pub fn itg_load_model_slots_from_path<T>(
         ));
     };
     let data = noteskin_itg::NoteskinData {
+        overrides: Vec::new(),
         name: "shared-model".to_string(),
         metrics: noteskin_itg::IniData::default(),
         search_dirs: vec![search_dir.to_path_buf()],
@@ -605,7 +602,7 @@ fn itg_resolve_model_material_texture(
         .unwrap_or_default();
     match itg_model_texture_kind(ext) {
         ItgModelTextureKind::Image => Some(ItgResolvedModelTexture::from_path(texture_path)),
-        ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(&texture_path),
+        ItgModelTextureKind::Animated => itg_resolve_animated_texture_ini(data, &texture_path),
         ItgModelTextureKind::Other if texture_path.is_file() => {
             itg_resolve_model_texture_path(data, &texture_path)
         }
@@ -1037,6 +1034,7 @@ Materials: 1
         )
         .unwrap();
         let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
             name: "test".to_string(),
             metrics: noteskin_itg::IniData::default(),
             search_dirs: vec![root.clone()],

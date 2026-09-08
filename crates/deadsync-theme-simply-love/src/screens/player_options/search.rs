@@ -19,8 +19,10 @@ const Z_PANEL: i16 = 1452;
 const Z_TEXT: i16 = 1453;
 
 /// A single ranked search result.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub(super) struct SettingMatch {
+    pub choice_index: Option<usize>,
+    thumb: Option<super::pack_options::Thumb>,
     pub row_id: RowId,
     pub pane: OptionsPane,
     pub label: Arc<str>,
@@ -35,6 +37,8 @@ impl SettingMatch {
     fn new(row_id: RowId, pane: OptionsPane, label: String, score: i32) -> Self {
         let label: Arc<str> = label.into();
         Self {
+            choice_index: None,
+            thumb: None,
             row_id,
             pane,
             score,
@@ -51,6 +55,7 @@ impl SettingMatch {
 /// Live state of the search overlay.
 #[derive(Clone, Debug)]
 pub(super) struct SettingSearchOpen {
+    pub component: Option<RowId>,
     pub query: String,
     pub matches: Vec<SettingMatch>,
     pub selected_index: usize,
@@ -181,12 +186,55 @@ pub(super) fn open(state: &mut State, opener_player: usize) {
     state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
     state.search = SettingSearchState::Open(SettingSearchOpen {
+        component: None,
         query: String::new(),
         matches,
         selected_index: 0,
         blink_t: 0.0,
         opener_player,
     });
+}
+
+/// Open the selected component's grouped, searchable choice list.
+pub(super) fn open_component(state: &mut State, player: usize, row: RowId) {
+    let matches = component_matches(state, row, player, "");
+    let selected_index = state.pane().row_map.row(row).selected_choice_index[player];
+    state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
+    state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];
+    state.search = SettingSearchState::Open(SettingSearchOpen {
+        component: Some(row),
+        query: String::new(),
+        matches,
+        selected_index,
+        blink_t: 0.0,
+        opener_player: player,
+    });
+}
+
+fn component_matches(state: &State, row: RowId, player: usize, query: &str) -> Vec<SettingMatch> {
+    let q = fuzzy::prepare_query(query);
+    let mut matches = Vec::new();
+    for (index, label) in state.pane().row_map.row(row).choices.iter().enumerate() {
+        let score = if q.is_empty() {
+            0
+        } else {
+            let Some(score) =
+                fuzzy::best_match_score(&q, &fuzzy::fold_diacritics(label.as_str()), &[])
+            else {
+                continue;
+            };
+            score
+        };
+        let mut item = SettingMatch::new(row, OptionsPane::Display, label.to_string(), score);
+        item.choice_index = Some(index);
+        item.thumb = state.pack_menu.choice_thumb(state, player, row, index);
+        item.pane_text = Arc::from("");
+        matches.push(item);
+    }
+    if !q.is_empty() {
+        matches.sort_by(|a, b| b.score.cmp(&a.score));
+    }
+    matches
 }
 
 /// Close the overlay, clearing hold state so nothing leaks into the screen below.
@@ -213,7 +261,10 @@ fn refresh(state: &mut State) {
         return;
     };
     let query = open.query.clone();
-    let matches = rebuild_matches(state, &query);
+    let matches = match open.component {
+        Some(row) => component_matches(state, row, open.opener_player, &query),
+        None => rebuild_matches(state, &query),
+    };
     if let SettingSearchState::Open(open) = &mut state.search {
         open.matches = matches;
         open.selected_index = open
@@ -256,13 +307,29 @@ pub(super) fn backspace(state: &mut State) {
 
 pub(super) fn move_selection(state: &mut State, delta: isize) {
     if let SettingSearchState::Open(open) = &mut state.search {
-        let shown = open.matches.len().min(SEARCH_MAX_RESULTS);
+        let shown = if open.component.is_some() {
+            open.matches.len()
+        } else {
+            open.matches.len().min(SEARCH_MAX_RESULTS)
+        };
         if shown == 0 {
             return;
         }
         let cur = open.selected_index.min(shown - 1) as isize;
         open.selected_index = (cur + delta).rem_euclid(shown as isize) as usize;
     }
+}
+
+pub(super) fn visible_range(open: &SettingSearchOpen) -> std::ops::Range<usize> {
+    let shown = open.matches.len().min(SEARCH_MAX_RESULTS);
+    let first = if open.component.is_some() {
+        open.selected_index
+            .saturating_sub(SEARCH_MAX_RESULTS / 2)
+            .min(open.matches.len().saturating_sub(shown))
+    } else {
+        0
+    };
+    first..first + shown
 }
 
 /// Ghost completion for the focused match: `(full_label, typed_prefix)`.
@@ -371,7 +438,10 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         diffuse(PANEL_BG[0], PANEL_BG[1], PANEL_BG[2], 1.0): z(Z_PANEL)
     ));
 
-    let title = tr("PlayerOptions", "SettingSearchTitle");
+    let title = open.component.map_or_else(
+        || tr("PlayerOptions", "SettingSearchTitle"),
+        |row| state.pane().row_map.row(row).name.get(),
+    );
     actors.push(act!(text:
         font("wendy"): settext(title):
         align(0.5, 0.5): xy(cx, top + 20.0): zoom(0.4):
@@ -392,7 +462,14 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
     ));
     if open.query.is_empty() {
-        let placeholder = tr("PlayerOptions", "SettingSearchPlaceholder");
+        let placeholder = tr(
+            "PlayerOptions",
+            if open.component.is_some() {
+                "SkinSearchPlaceholder"
+            } else {
+                "SettingSearchPlaceholder"
+            },
+        );
         actors.push(act!(text:
             font("miso"): settext(placeholder):
             align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
@@ -448,11 +525,13 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
             diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(left)
         ));
     }
-    let shown = open.matches.len().min(SEARCH_MAX_RESULTS);
+    let range = visible_range(open);
+    let shown = range.len();
+    let first = range.start;
     for i in 0..shown {
-        let m = &open.matches[i];
+        let m = &open.matches[first + i];
         let y = (i as f32).mul_add(row_step, list_top);
-        let focused = i == open.selected_index;
+        let focused = first + i == open.selected_index;
         if focused {
             actors.push(act!(quad:
                 align(0.0, 0.5): xy(cx - panel_w * 0.5 + 8.0, y):
@@ -468,10 +547,43 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         } else {
             ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
+        if open.component == Some(RowId::MineSkin) {
+            if let Some(index) = m.choice_index {
+                let name = state
+                    .pack_menu
+                    .mine_choice(index)
+                    .unwrap_or(&state.player_options[open.opener_player].noteskin);
+                super::render::draw_live_mine(
+                    actors,
+                    state,
+                    name.as_str(),
+                    [list_x + 10.0, y],
+                    18.0,
+                    1.0,
+                    Z_TEXT + 1,
+                );
+            }
+        } else if let Some(thumb) = &m.thumb {
+            let uv = thumb.uv;
+            actors.push(act!(sprite(Arc::clone(&thumb.key)):
+                align(0.5, 0.5): xy(list_x + 10.0, y): setsize(18.0, 18.0):
+                customtexturerect(uv[0], uv[1], uv[2], uv[3]): z(Z_TEXT + 1)
+            ));
+        }
+        let choice_x = if open.component.is_some() {
+            list_x + 24.0
+        } else {
+            list_x
+        };
+        let choice_width = if open.component.is_some() {
+            panel_w - 64.0
+        } else {
+            panel_w * 0.62
+        };
         actors.push(act!(text:
             font("miso"): settext(Arc::clone(&m.row_text[usize::from(focused)])):
-            align(0.0, 0.5): xy(list_x, y): zoom(0.85):
-            maxwidth(panel_w * 0.62):
+            align(0.0, 0.5): xy(choice_x, y): zoom(0.85):
+            maxwidth(choice_width):
             diffuse(text_rgb[0], text_rgb[1], text_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(left)
         ));
         actors.push(act!(text:
@@ -498,7 +610,9 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
                 diffuse(WHITE[0], WHITE[1], WHITE[2], 1.0): z(Z_TEXT): horizalign(left)
             ));
         }
-        if let Some(help) = help_text(state, m) {
+        if open.component.is_none()
+            && let Some(help) = help_text(state, m)
+        {
             actors.push(act!(text:
                 font("miso"): settext(help):
                 align(0.0, 0.0): xy(list_x, value_y + 14.0): zoom(0.72):
@@ -508,7 +622,14 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         }
     }
 
-    let footer = tr("PlayerOptions", "SettingSearchFooter");
+    let footer = tr(
+        "PlayerOptions",
+        if open.component.is_some() {
+            "SkinSearchFooter"
+        } else {
+            "SettingSearchFooter"
+        },
+    );
     actors.push(act!(text:
         font("miso"): settext(footer):
         align(0.5, 0.5): xy(cx, panel_h.mul_add(0.5, cy) - 14.0): zoom(0.7):

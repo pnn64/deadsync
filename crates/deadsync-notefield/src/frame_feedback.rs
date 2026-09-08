@@ -556,7 +556,7 @@ mod tests {
             roll_columns: Vec::new(),
             hold: HoldVisuals::default(),
             roll: HoldVisuals::default(),
-            animation_is_beat_based: false,
+            part_animation_is_beat_based: [false; deadsync_noteskin::NOTE_ANIM_PART_COUNT],
             note_display_metrics: NoteDisplayMetrics::default(),
         }
     }
@@ -785,6 +785,7 @@ mod tests {
 
     fn options() -> NotefieldOptions {
         NotefieldOptions {
+            mine_size_scale: 1.0,
             frame_features: NotefieldFrameFeatures {
                 measure_line_mode: MeasureLineMode::Off,
                 measure_cues: false,

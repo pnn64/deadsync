@@ -101,6 +101,8 @@ pub(crate) mod qr_login;
 use pack_sync::*;
 mod download_packs;
 use download_packs::*;
+mod downloads;
+use downloads::*;
 mod judgment_palettes;
 use judgment_palettes::*;
 mod layout;

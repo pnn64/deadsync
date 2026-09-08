@@ -174,7 +174,11 @@ pub(super) fn apply_profile_defaults(
         row.selected_choice_index[player_idx] = row
             .choices
             .iter()
-            .position(|c| c.eq_ignore_ascii_case(profile.noteskin.as_str()))
+            .position(|c| {
+                c.eq_ignore_ascii_case(deadsync_noteskin::pack::base_name(
+                    profile.noteskin.as_str(),
+                ))
+            })
             .or_else(|| {
                 row.choices
                     .iter()

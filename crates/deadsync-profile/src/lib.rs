@@ -6176,6 +6176,11 @@ impl NoteSkin {
         &self.raw
     }
 
+    /// Return the skin name without optional workshop choices.
+    pub fn name(&self) -> &str {
+        self.raw.split_once('?').map_or(&self.raw, |(name, _)| name)
+    }
+
     #[inline(always)]
     #[must_use]
     pub fn is_none_choice(&self) -> bool {
@@ -6213,6 +6218,60 @@ pub fn resolve_noteskin_choice<'a>(
     fallback: &'a NoteSkin,
 ) -> &'a NoteSkin {
     noteskin.unwrap_or(fallback)
+}
+
+/// Move legacy Workshop choices out of the base skin, preserving explicit overrides.
+pub fn migrate_noteskin_parts(options: &mut PlayerOptionsData) {
+    let raw = options.noteskin.as_str();
+    let Some((base, query)) = raw.split_once('?') else {
+        return;
+    };
+    let base = base.to_string();
+    let choices: Vec<_> = query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .collect();
+    let part = |slot: &str| {
+        choices
+            .iter()
+            .find(|(key, _)| *key == slot)
+            .map(|(_, value)| NoteSkin::new(&format!("{base}?{slot}={value}")))
+    };
+    let arrows = part("arrows");
+    let receptors = part("receptors");
+    let hold_active = part("hold_active");
+    let hold_inactive = part("hold_inactive");
+    let roll_active = part("roll_active");
+    let roll_inactive = part("roll_inactive");
+    let tap_explosions = part("tap_explosions");
+    let hold_explosions = part("hold_explosions");
+    let lifts = part("lifts");
+    // The old size option changed the mine model, not just its scale. Retain that
+    // model in the migrated mine selection; new size controls scale any provider.
+    let mine_query: Vec<_> = choices
+        .iter()
+        .filter(|(key, _)| matches!(*key, "mines" | "mine_size"))
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect();
+    let mines = (!mine_query.is_empty())
+        .then(|| NoteSkin::new(&format!("{base}?{}", mine_query.join("&"))));
+    for (target, legacy) in [
+        (&mut options.arrow_noteskin, arrows),
+        (&mut options.receptor_noteskin, receptors),
+        (&mut options.hold_active_noteskin, hold_active),
+        (&mut options.hold_inactive_noteskin, hold_inactive),
+        (&mut options.roll_active_noteskin, roll_active),
+        (&mut options.roll_inactive_noteskin, roll_inactive),
+        (&mut options.tap_explosion_noteskin, tap_explosions),
+        (&mut options.hold_explosion_noteskin, hold_explosions),
+        (&mut options.mine_noteskin, mines),
+        (&mut options.lift_noteskin, lifts),
+    ] {
+        if target.is_none() {
+            *target = legacy;
+        }
+    }
+    options.noteskin = NoteSkin::new(&base);
 }
 
 #[inline(always)]
@@ -6301,7 +6360,7 @@ fn write_evaluation_mods_text(
         }
     }
     output.write_str(", ")?;
-    output.write_str(profile.noteskin.as_str())
+    output.write_str(profile.noteskin.name())
 }
 
 #[must_use]
@@ -7271,6 +7330,14 @@ pub struct PlayerOptionsData {
     pub combo_mode: ComboMode,
     pub carry_combo_between_songs: bool,
     pub noteskin: NoteSkin,
+    pub arrow_noteskin: Option<NoteSkin>,
+    pub hold_active_noteskin: Option<NoteSkin>,
+    pub hold_inactive_noteskin: Option<NoteSkin>,
+    pub roll_active_noteskin: Option<NoteSkin>,
+    pub roll_inactive_noteskin: Option<NoteSkin>,
+    pub hold_explosion_noteskin: Option<NoteSkin>,
+    pub lift_noteskin: Option<NoteSkin>,
+    pub mine_size_percent: i32,
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
     pub tap_explosion_noteskin: Option<NoteSkin>,
@@ -7417,6 +7484,14 @@ fn default_player_options() -> PlayerOptionsData {
         combo_mode: ComboMode::default(),
         carry_combo_between_songs: true,
         noteskin: NoteSkin::default(),
+        arrow_noteskin: None,
+        hold_active_noteskin: None,
+        hold_inactive_noteskin: None,
+        roll_active_noteskin: None,
+        roll_inactive_noteskin: None,
+        hold_explosion_noteskin: None,
+        lift_noteskin: None,
+        mine_size_percent: 100,
         mine_noteskin: None,
         receptor_noteskin: None,
         tap_explosion_noteskin: None,
@@ -7736,6 +7811,21 @@ where
     options.receptor_noteskin = get("ReceptorSkin").and_then(|s| NoteSkin::from_str(&s).ok());
     options.tap_explosion_noteskin =
         get("TapExplosionSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.arrow_noteskin = get("ArrowSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.hold_active_noteskin = get("HoldActiveSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.hold_inactive_noteskin =
+        get("HoldInactiveSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.roll_active_noteskin = get("RollActiveSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.roll_inactive_noteskin =
+        get("RollInactiveSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.hold_explosion_noteskin =
+        get("HoldExplosionSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.lift_noteskin = get("LiftSkin").and_then(|s| NoteSkin::from_str(&s).ok());
+    options.mine_size_percent = get("MineSizePercent")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(100)
+        .clamp(10, 200);
+    migrate_noteskin_parts(options);
     let tap_explosion_mask_version = get("TapExplosionMaskVersion")
         .and_then(|s| s.parse::<u8>().ok())
         .unwrap_or(1);
@@ -8699,6 +8789,57 @@ pub fn append_player_options_section(
         i32::from(options.carry_combo_between_songs)
     );
     let _ = write!(content, "NoteSkin={}\n", options.noteskin);
+    let _ = writeln!(
+        content,
+        "ArrowSkin={}",
+        options.arrow_noteskin.as_ref().map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "HoldActiveSkin={}",
+        options
+            .hold_active_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "HoldInactiveSkin={}",
+        options
+            .hold_inactive_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "RollActiveSkin={}",
+        options
+            .roll_active_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "RollInactiveSkin={}",
+        options
+            .roll_inactive_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "HoldExplosionSkin={}",
+        options
+            .hold_explosion_noteskin
+            .as_ref()
+            .map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(
+        content,
+        "LiftSkin={}",
+        options.lift_noteskin.as_ref().map_or("", NoteSkin::as_str)
+    );
+    let _ = writeln!(content, "MineSizePercent={}", options.mine_size_percent);
     let _ = write!(
         content,
         "MineSkin={}\n",
@@ -9029,6 +9170,14 @@ pub struct Profile {
     pub favorited_packs: HashSet<String>,
     pub favorited_series: HashSet<String>,
     pub noteskin: NoteSkin,
+    pub arrow_noteskin: Option<NoteSkin>,
+    pub hold_active_noteskin: Option<NoteSkin>,
+    pub hold_inactive_noteskin: Option<NoteSkin>,
+    pub roll_active_noteskin: Option<NoteSkin>,
+    pub roll_inactive_noteskin: Option<NoteSkin>,
+    pub hold_explosion_noteskin: Option<NoteSkin>,
+    pub lift_noteskin: Option<NoteSkin>,
+    pub mine_size_percent: i32,
     pub mine_noteskin: Option<NoteSkin>,
     pub receptor_noteskin: Option<NoteSkin>,
     pub tap_explosion_noteskin: Option<NoteSkin>,
@@ -9251,6 +9400,14 @@ impl Default for Profile {
             favorited_packs: HashSet::new(),
             favorited_series: HashSet::new(),
             noteskin: player_options.noteskin.clone(),
+            arrow_noteskin: player_options.arrow_noteskin.clone(),
+            hold_active_noteskin: player_options.hold_active_noteskin.clone(),
+            hold_inactive_noteskin: player_options.hold_inactive_noteskin.clone(),
+            roll_active_noteskin: player_options.roll_active_noteskin.clone(),
+            roll_inactive_noteskin: player_options.roll_inactive_noteskin.clone(),
+            hold_explosion_noteskin: player_options.hold_explosion_noteskin.clone(),
+            lift_noteskin: player_options.lift_noteskin.clone(),
+            mine_size_percent: player_options.mine_size_percent,
             mine_noteskin: player_options.mine_noteskin.clone(),
             receptor_noteskin: player_options.receptor_noteskin.clone(),
             tap_explosion_noteskin: player_options.tap_explosion_noteskin.clone(),
@@ -10212,6 +10369,14 @@ impl Profile {
             combo_mode: self.combo_mode,
             carry_combo_between_songs: self.carry_combo_between_songs,
             noteskin: self.noteskin.clone(),
+            arrow_noteskin: self.arrow_noteskin.clone(),
+            hold_active_noteskin: self.hold_active_noteskin.clone(),
+            hold_inactive_noteskin: self.hold_inactive_noteskin.clone(),
+            roll_active_noteskin: self.roll_active_noteskin.clone(),
+            roll_inactive_noteskin: self.roll_inactive_noteskin.clone(),
+            hold_explosion_noteskin: self.hold_explosion_noteskin.clone(),
+            lift_noteskin: self.lift_noteskin.clone(),
+            mine_size_percent: self.mine_size_percent,
             mine_noteskin: self.mine_noteskin.clone(),
             receptor_noteskin: self.receptor_noteskin.clone(),
             tap_explosion_noteskin: self.tap_explosion_noteskin.clone(),
@@ -10350,6 +10515,19 @@ impl Profile {
         self.combo_mode = options.combo_mode;
         self.carry_combo_between_songs = options.carry_combo_between_songs;
         self.noteskin = options.noteskin.clone();
+        self.arrow_noteskin.clone_from(&options.arrow_noteskin);
+        self.hold_active_noteskin
+            .clone_from(&options.hold_active_noteskin);
+        self.hold_inactive_noteskin
+            .clone_from(&options.hold_inactive_noteskin);
+        self.roll_active_noteskin
+            .clone_from(&options.roll_active_noteskin);
+        self.roll_inactive_noteskin
+            .clone_from(&options.roll_inactive_noteskin);
+        self.hold_explosion_noteskin
+            .clone_from(&options.hold_explosion_noteskin);
+        self.lift_noteskin.clone_from(&options.lift_noteskin);
+        self.mine_size_percent = options.mine_size_percent;
         self.mine_noteskin.clone_from(&options.mine_noteskin);
         self.receptor_noteskin
             .clone_from(&options.receptor_noteskin);
@@ -15094,6 +15272,39 @@ ApiKey = gs-key
         assert_eq!(NoteSkin::new(" Default ").as_str(), NoteSkin::DEFAULT_NAME);
         assert_eq!(NoteSkin::none_choice().as_str(), NoteSkin::NONE_NAME);
         assert!(NoteSkin::from_str("").is_err());
+    }
+
+    #[test]
+    fn workshop_selection_survives_profile_storage_with_a_readable_summary() {
+        let options = PlayerOptionsData {
+            noteskin: NoteSkin::new("cel-workshop?arrows=ddr-vivid&mines=blue"),
+            ..PlayerOptionsData::default()
+        };
+        let mut content = String::new();
+        append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+        let values: HashMap<_, _> = content
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect();
+        let loaded = load_player_options_section(
+            true,
+            |key| values.get(key).map(|value| value.to_string()),
+            &PlayerOptionsData::default(),
+        )
+        .unwrap();
+        assert_eq!(loaded.noteskin.as_str(), "cel-workshop");
+        assert_eq!(
+            loaded.arrow_noteskin.as_ref().unwrap().as_str(),
+            "cel-workshop?arrows=ddr-vivid"
+        );
+        assert_eq!(
+            loaded.mine_noteskin.as_ref().unwrap().as_str(),
+            "cel-workshop?mines=blue"
+        );
+        let profile = profile_with_player_options(&loaded);
+        let summary = evaluation_mods_text(&profile, loaded.scroll_speed);
+        assert!(summary.contains("cel-workshop"));
+        assert!(!summary.contains('?'));
     }
 
     #[test]

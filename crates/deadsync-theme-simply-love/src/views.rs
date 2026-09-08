@@ -1623,11 +1623,33 @@ pub enum SimplyLoveFfmpegPhase {
     },
 }
 
+/// Workshop installation progress prepared by the shell.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum SimplyLoveWorkshopPhase {
+    #[default]
+    Idle,
+    Downloading {
+        written: u64,
+        total: u64,
+    },
+    Preparing {
+        done: usize,
+        total: usize,
+    },
+    Publishing,
+    Cancelling,
+    Installed,
+    Error {
+        detail: String,
+    },
+}
+
 /// One shell-prepared snapshot of the updater services used by Options.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SimplyLoveUpdaterView {
     pub update: SimplyLoveUpdatePhase,
     pub ffmpeg: SimplyLoveFfmpegPhase,
+    pub workshop: SimplyLoveWorkshopPhase,
 }
 
 impl Default for SimplyLoveUpdaterView {
@@ -1635,6 +1657,7 @@ impl Default for SimplyLoveUpdaterView {
         Self {
             update: SimplyLoveUpdatePhase::Idle,
             ffmpeg: SimplyLoveFfmpegPhase::Idle,
+            workshop: SimplyLoveWorkshopPhase::Idle,
         }
     }
 }

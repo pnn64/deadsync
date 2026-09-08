@@ -1040,6 +1040,7 @@ return skin
         .unwrap();
 
         let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
             name: "sch".to_string(),
             metrics: noteskin_itg::IniData::default(),
             search_dirs: vec![skin_dir],

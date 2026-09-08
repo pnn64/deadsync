@@ -36,6 +36,7 @@ mod inline_nav;
 mod input;
 mod layout;
 mod noteskins;
+mod pack_options;
 mod pane;
 mod panes;
 mod profile;
@@ -89,6 +90,13 @@ pub use row::{FixedStepchart, RowId};
 pub use state::State;
 
 pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
+    state.pack_menu.update_mines(
+        &state.player_options,
+        state.active,
+        &state.search,
+        &state.noteskin.cache,
+        state.cols_per_player,
+    );
     prepare_row_titles(state);
     prepare_speed_values(state, asset_manager);
     prepare_speed_headers(state, asset_manager);
@@ -316,7 +324,10 @@ fn init_with_noteskin_prewarm(
             profile_data::MAX_HEART_RATE_MAX,
         ),
     ];
-    let player_options = [p1.options, p2.options];
+    let mut player_options = [p1.options, p2.options];
+    for options in &mut player_options {
+        profile_data::migrate_noteskin_parts(options);
+    }
     let active = active_players(play_style, player_side, joined);
     let persisted_player_idx = persisted_player_idx(play_style, player_side);
     let cols_per_player = play_style.cols_per_player();
@@ -339,6 +350,7 @@ fn init_with_noteskin_prewarm(
     });
 
     let noteskin_names = noteskin_catalog.names;
+    let mut pack_menu = pack_options::PackMenu::new(&noteskin::pack_catalog());
     let smx_bg_pack_names = smx_gif_catalog.background_packs;
     let smx_judge_pack_names = smx_gif_catalog.judgment_packs;
     let mut main_row_map = build_rows(
@@ -429,6 +441,8 @@ fn init_with_noteskin_prewarm(
     // a per-pane merge step.
     let mut p1_masks = PlayerOptionMasks::default();
     let mut p2_masks = PlayerOptionMasks::default();
+
+    pack_menu.add_rows(&mut display_row_map, &player_options);
     apply_profile_defaults(&mut main_row_map, &player_options[P1], P1, &mut p1_masks);
     apply_profile_defaults(&mut main_row_map, &player_options[P2], P2, &mut p2_masks);
     apply_profile_defaults(&mut display_row_map, &player_options[P1], P1, &mut p1_masks);
@@ -513,6 +527,7 @@ fn init_with_noteskin_prewarm(
         heart_rate_choice_ids,
         heart_rate_readings: heart_rate_devices.readings,
         noteskin,
+        pack_menu,
         preview_time: 0.0,
         preview_beat: 0.0,
         help_anim_time: [0.0; PLAYER_SLOTS],
@@ -535,6 +550,9 @@ fn init_with_noteskin_prewarm(
     sync_speed_mod_type_rows(&mut state);
     sync_heart_rate_selections(&mut state);
     sync_max_heart_rate_selection(&mut state);
+    for player in 0..PLAYER_SLOTS {
+        pack_options::sync_player(&mut state, player);
+    }
     state
 }
 

@@ -840,6 +840,56 @@ pub fn handle_input(
 ) {
     // The open overlay owns all input.
     if state.search.is_open() {
+        let search::SettingSearchState::Open(open) = &state.search else {
+            return;
+        };
+        if open.component.is_none() || !ev.pressed {
+            return;
+        }
+        let player = open.opener_player;
+        match (player, ev.action) {
+            (P1, VirtualAction::p1_up | VirtualAction::p1_menu_up)
+            | (P2, VirtualAction::p2_up | VirtualAction::p2_menu_up) => {
+                search::move_selection(state, -1)
+            }
+            (P1, VirtualAction::p1_down | VirtualAction::p1_menu_down)
+            | (P2, VirtualAction::p2_down | VirtualAction::p2_menu_down) => {
+                search::move_selection(state, 1)
+            }
+            (P1, VirtualAction::p1_left | VirtualAction::p1_menu_left)
+            | (P2, VirtualAction::p2_left | VirtualAction::p2_menu_left) => {
+                search::move_selection(state, -(search::SEARCH_MAX_RESULTS as isize))
+            }
+            (P1, VirtualAction::p1_right | VirtualAction::p1_menu_right)
+            | (P2, VirtualAction::p2_right | VirtualAction::p2_menu_right) => {
+                search::move_selection(state, search::SEARCH_MAX_RESULTS as isize)
+            }
+            (P1, VirtualAction::p1_start) | (P2, VirtualAction::p2_start) => {
+                commit_search_jump(state)
+            }
+            (P1, VirtualAction::p1_back) | (P2, VirtualAction::p2_back) => search::close(state),
+            _ => {}
+        }
+        append_pending_effects(state, ThemeEffect::None, effects);
+        return;
+    }
+    let starter = match ev.action {
+        VirtualAction::p1_start => Some(P1),
+        VirtualAction::p2_start => Some(P2),
+        _ => None,
+    };
+    if ev.pressed
+        && !state.pane_transition.is_active()
+        && let Some(player) = starter.filter(|&player| state.active[player])
+        && !state.pane().arcade_row_focus[player]
+        && let Some(&row) = state
+            .pane()
+            .row_map
+            .display_order()
+            .get(state.pane().selected_row[player])
+        && super::pack_options::slot_for_row(row).is_some_and(|slot| slot != 9)
+    {
+        search::open_component(state, player, row);
         return;
     }
     let effect = handle_input_inner(state, asset_manager, ev);
@@ -856,7 +906,7 @@ pub fn handle_raw_key_event(
     key: Option<&deadlib_platform::input::RawKeyboardEvent>,
     text: Option<&str>,
     ctrl_held: bool,
-    _effects: &mut Vec<ThemeEffect>,
+    effects: &mut Vec<ThemeEffect>,
 ) -> bool {
     use deadlib_platform::input::KeyCode;
 
@@ -875,19 +925,36 @@ pub fn handle_raw_key_event(
 
     if let Some(key) = key {
         if key.pressed {
+            let component = matches!(
+                &state.search,
+                search::SettingSearchState::Open(open) if open.component.is_some()
+            );
             match key.code {
                 KeyCode::Escape => search::close(state),
                 KeyCode::Backspace => {
                     // Only edits the query; Escape is the way out.
                     search::backspace(state);
                 }
+                KeyCode::ArrowLeft if component => {
+                    search::move_selection(state, -(search::SEARCH_MAX_RESULTS as isize))
+                }
+                KeyCode::ArrowRight if component => {
+                    search::move_selection(state, search::SEARCH_MAX_RESULTS as isize)
+                }
                 KeyCode::Tab | KeyCode::ArrowRight => search::accept_ghost(state),
                 KeyCode::ArrowUp => search::move_selection(state, -1),
                 KeyCode::ArrowDown => search::move_selection(state, 1),
+                KeyCode::PageUp => {
+                    search::move_selection(state, -(search::SEARCH_MAX_RESULTS as isize))
+                }
+                KeyCode::PageDown => {
+                    search::move_selection(state, search::SEARCH_MAX_RESULTS as isize)
+                }
                 KeyCode::Enter | KeyCode::NumpadEnter => commit_search_jump(state),
                 _ => {}
             }
         }
+        append_pending_effects(state, ThemeEffect::None, effects);
         return true;
     }
 
@@ -915,13 +982,22 @@ fn search_opener_player(state: &State) -> usize {
 /// Jump the opener's cursor to the focused result and close the overlay.
 fn commit_search_jump(state: &mut State) {
     let target = match &state.search {
-        search::SettingSearchState::Open(open) => {
-            search::focused_match(open).map(|m| (m.pane, m.row_id, open.opener_player))
-        }
+        search::SettingSearchState::Open(open) => search::focused_match(open)
+            .map(|m| (m.pane, m.row_id, open.opener_player, m.choice_index)),
         search::SettingSearchState::Hidden => None,
     };
-    if let Some((pane, row_id, player_idx)) = target {
-        jump_to_setting(state, pane, row_id, player_idx);
+    if let Some((pane, row_id, player_idx, choice)) = target {
+        if let Some(index) = choice {
+            let current = state.pane().row_map.row(row_id).selected_choice_index[player_idx];
+            choice::dispatch_behavior_delta(
+                state,
+                player_idx,
+                index as isize - current as isize,
+                NavWrap::Clamp,
+            );
+        } else {
+            jump_to_setting(state, pane, row_id, player_idx);
+        }
     }
     search::close(state);
 }

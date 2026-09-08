@@ -26,6 +26,7 @@ pub(super) fn available_update_tag() -> Option<String> {
 pub(super) struct RuntimeCursor {
     update_revision: u64,
     ffmpeg_revision: u64,
+    workshop_revision: u64,
     view: SimplyLoveUpdaterView,
 }
 
@@ -33,6 +34,7 @@ pub(super) struct RuntimeCursor {
 pub(super) struct RuntimeChange {
     pub(super) update: bool,
     pub(super) ffmpeg: bool,
+    pub(super) workshop: bool,
 }
 
 impl RuntimeCursor {
@@ -40,6 +42,7 @@ impl RuntimeCursor {
         let mut cursor = Self {
             update_revision: u64::MAX,
             ffmpeg_revision: u64::MAX,
+            workshop_revision: u64::MAX,
             view: SimplyLoveUpdaterView::default(),
         };
         let _ = cursor.refresh();
@@ -59,7 +62,17 @@ impl RuntimeCursor {
             ffmpeg::phase_revision(),
             || ffmpeg_phase(ffmpeg::current()),
         );
-        RuntimeChange { update, ffmpeg }
+        let workshop = replace_on_revision(
+            &mut self.workshop_revision,
+            &mut self.view.workshop,
+            deadsync_updater::workshop::phase_revision(),
+            || workshop_phase(deadsync_updater::workshop::current()),
+        );
+        RuntimeChange {
+            update,
+            ffmpeg,
+            workshop,
+        }
     }
 
     #[inline(always)]
@@ -82,8 +95,13 @@ fn replace_on_revision<T>(
     true
 }
 
-pub(super) fn execute(request: SimplyLoveUpdaterRequest) {
+pub(super) fn execute(request: SimplyLoveUpdaterRequest, dirs: &deadsync_config::dirs::AppDirs) {
     match request {
+        SimplyLoveUpdaterRequest::InstallWorkshop => deadsync_updater::workshop::request_install(
+            dirs.workshop_dir(std::env::current_dir().ok().as_deref()),
+            deadsync_assets::noteskin::refresh_packs,
+        ),
+        SimplyLoveUpdaterRequest::DismissWorkshop => deadsync_updater::workshop::dismiss(),
         SimplyLoveUpdaterRequest::CheckForUpdates => action::request_check_now(),
         SimplyLoveUpdaterRequest::CheckForRollback => action::request_rollback_check(),
         SimplyLoveUpdaterRequest::DownloadUpdate => action::request_download(),
@@ -260,5 +278,21 @@ mod tests {
         assert_eq!(seen, 8);
         assert_eq!(value, "replacement");
         assert_eq!(builds.get(), 1);
+    }
+}
+
+fn workshop_phase(
+    phase: deadsync_updater::workshop::Phase,
+) -> deadsync_theme_simply_love::views::SimplyLoveWorkshopPhase {
+    use deadsync_theme_simply_love::views::SimplyLoveWorkshopPhase as View;
+    use deadsync_updater::workshop::Phase;
+    match phase {
+        Phase::Idle => View::Idle,
+        Phase::Downloading { written, total } => View::Downloading { written, total },
+        Phase::Preparing { done, total } => View::Preparing { done, total },
+        Phase::Publishing => View::Publishing,
+        Phase::Cancelling => View::Cancelling,
+        Phase::Installed => View::Installed,
+        Phase::Error { detail } => View::Error { detail },
     }
 }

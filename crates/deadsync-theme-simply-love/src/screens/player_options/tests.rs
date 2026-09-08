@@ -42,6 +42,7 @@ pub(super) mod tests {
         use std::sync::Once;
         static INIT: Once = Once::new();
         INIT.call_once(|| {
+            crate::tests::init_paths();
             crate::i18n::init_for_tests();
         });
     }
@@ -117,10 +118,7 @@ pub(super) mod tests {
 
         assert!(state.cache.is_empty());
         assert!(state.previews.iter().all(|preview| {
-            preview.base.is_none()
-                && preview.mine.is_none()
-                && preview.receptor.is_none()
-                && preview.tap_explosion.is_none()
+            preview.base.is_none() && preview.receptor.is_none() && preview.tap_explosion.is_none()
         }));
     }
 
@@ -1800,6 +1798,313 @@ pub(super) mod tests {
             test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]),
         );
         (state, asset_manager)
+    }
+
+    #[test]
+    fn workshop_choices_restore_and_persist_independently_across_panes() {
+        use super::super::{choice, pack_options, search};
+        use deadsync_noteskin::pack::{Choice, InstalledPack, Manifest, Skin};
+        use deadsync_profile::NoteSkin;
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_versus_state();
+        let packs = [InstalledPack {
+            root: PathBuf::from("sample-pack"),
+            fingerprint: "fixture".into(),
+            manifest: Manifest {
+                schema: 1,
+                id: "sample".into(),
+                version: "1".into(),
+                source: "fixture".into(),
+                skins: ["sample-cel", "sample-metal"]
+                    .into_iter()
+                    .map(|id| Skin {
+                        id: id.into(),
+                        base: id.into(),
+                        preview: format!("{id}.png"),
+                        options: ["arrows", "mines", "receptors", "tap_explosions"]
+                            .into_iter()
+                            .flat_map(|slot| {
+                                ["base", "blue", "red"].into_iter().enumerate().map(
+                                    move |(index, id)| Choice {
+                                        slot: slot.into(),
+                                        id: id.into(),
+                                        label: id.into(),
+                                        cell: index as u16,
+                                        files: Vec::new(),
+                                        metrics: Vec::new(),
+                                    },
+                                )
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            },
+        }];
+        state.pack_menu = pack_options::PackMenu::new(&packs);
+        for pane in &mut state.panes {
+            if let Some(row) = pane.row_map.get_mut(RowId::NoteSkin) {
+                row.replace_choices(vec![
+                    "default".into(),
+                    "cel".into(),
+                    "sample-cel".into(),
+                    "sample-metal".into(),
+                ]);
+            }
+        }
+        state.pack_menu.add_rows(
+            &mut state.panes[OptionsPane::Display.index()].row_map,
+            &state.player_options,
+        );
+        state.row_titles = std::array::from_fn(|index| {
+            super::super::compile_row_titles(&state.panes[index].row_map, crate::i18n::revision())
+        });
+        state.player_options[P1].noteskin = NoteSkin::new("sample-cel?arrows=blue");
+        state.player_options[P2].noteskin = NoteSkin::new("sample-metal?arrows=red");
+        for player in [P1, P2] {
+            deadsync_profile::migrate_noteskin_parts(&mut state.player_options[player]);
+            pack_options::sync_player(&mut state, player);
+        }
+        assert!(
+            state.panes[OptionsPane::Main.index()]
+                .row_map
+                .get(RowId::SkinArrows)
+                .is_none()
+        );
+        choice::apply_pane(&mut state, OptionsPane::Display);
+        for id in [
+            RowId::MineSkin,
+            RowId::ReceptorSkin,
+            RowId::TapExplosionSkin,
+        ] {
+            assert_eq!(
+                state
+                    .pane()
+                    .row_map
+                    .display_order()
+                    .iter()
+                    .filter(|&&row| row == id)
+                    .count(),
+                1
+            );
+        }
+        let p2 = state.player_options[P2].clone();
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let row = RowId::SkinArrows;
+        state.pane_mut().selected_row[P1] = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == row)
+            .unwrap();
+        search::open_component(&mut state, P1, row);
+        search::add_text(&mut state, "sample metal red");
+        let search::SettingSearchState::Open(open) = &state.search else {
+            panic!("component picker is open")
+        };
+        assert_eq!(open.matches[0].label.as_ref(), "sample metal / red");
+        assert!(
+            super::get_actors(&state, &asset_manager)
+                .iter()
+                .any(|actor| matches!(
+                    actor,
+                    deadlib_present::actors::Actor::Sprite {
+                        uv_rect: Some(_),
+                        ..
+                    }
+                ))
+        );
+        search_key(
+            &mut state,
+            Some(&raw_key(deadlib_platform::input::KeyCode::Enter)),
+            None,
+            false,
+        );
+        assert!(!state.search.is_open());
+        assert_eq!(
+            state.player_options[P1]
+                .arrow_noteskin
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "sample-metal?arrows=red"
+        );
+        assert_eq!(state.player_options[P1].noteskin.as_str(), "sample-cel");
+        assert_eq!(state.player_options[P2], p2);
+
+        // Changing the main skin leaves explicit component choices fixed.
+        choice::apply_pane(&mut state, OptionsPane::Main);
+        let row = RowId::NoteSkin;
+        state.pane_mut().selected_row[P1] = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == row)
+            .unwrap();
+        choice::dispatch_behavior_delta(&mut state, P1, -1, super::super::NavWrap::Wrap);
+        assert_eq!(state.player_options[P1].noteskin.as_str(), "cel");
+        assert_eq!(
+            state.player_options[P1]
+                .arrow_noteskin
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "sample-metal?arrows=red"
+        );
+        choice::apply_pane(&mut state, OptionsPane::Display);
+        let row = RowId::MineSkin;
+        state.pane_mut().selected_row[P1] = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == row)
+            .unwrap();
+        search::open_component(&mut state, P1, row);
+        search_key(
+            &mut state,
+            Some(&raw_key(deadlib_platform::input::KeyCode::ArrowRight)),
+            None,
+            false,
+        );
+        let search::SettingSearchState::Open(open) = &state.search else {
+            panic!("picker is open")
+        };
+        assert_eq!(
+            open.selected_index, 8,
+            "Right browses beyond the first page"
+        );
+        search::close(&mut state);
+        let old = state.player_options[P1].clone();
+        search::open_component(&mut state, P1, row);
+        search::add_text(&mut state, "sample cel blue");
+        search::close(&mut state);
+        assert_eq!(
+            state.player_options[P1], old,
+            "cancel does not apply a highlighted choice"
+        );
+    }
+
+    fn check_mine_preview(state: &mut super::State, name: &str) {
+        use deadlib_present::actors::{Actor, SizeSpec};
+        let mut first_frame = None;
+        let mut animated = false;
+        for time in [0.0, 0.17, 0.43, 0.79] {
+            state.preview_time = time;
+            state.preview_beat = time * 2.0;
+            let mut actors = Vec::new();
+            super::super::render::draw_live_mine(
+                &mut actors,
+                state,
+                name,
+                [100.0, 100.0],
+                18.0,
+                1.0,
+                102,
+            );
+            assert!(!actors.is_empty(), "{name} has a live preview");
+            let frame = format!("{actors:?}");
+            if let Some(first) = &first_frame {
+                animated |= first != &frame;
+            } else {
+                first_frame = Some(frame);
+            }
+            let inside = |x: f32, y: f32| {
+                assert!((91.0 - 0.01..=109.0 + 0.01).contains(&x), "{name}: x={x}");
+                assert!((91.0 - 0.01..=109.0 + 0.01).contains(&y), "{name}: y={y}");
+            };
+            for actor in &actors {
+                match actor {
+                    Actor::TexturedMesh {
+                        offset,
+                        local_transform,
+                        vertices,
+                        ..
+                    } => {
+                        for v in vertices.iter() {
+                            let p = local_transform.transform_point3(glam::Vec3::from(v.pos));
+                            inside(p.x + offset[0], p.y + offset[1]);
+                        }
+                    }
+                    Actor::Sprite {
+                        offset,
+                        size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                        scale,
+                        rot_z_deg,
+                        ..
+                    } => {
+                        let rotation = glam::Mat2::from_angle(rot_z_deg.to_radians());
+                        for x in [-0.5, 0.5] {
+                            for y in [-0.5, 0.5] {
+                                let p =
+                                    rotation * glam::Vec2::new(x * w * scale[0], y * h * scale[1]);
+                                inside(p.x + offset[0], p.y + offset[1]);
+                            }
+                        }
+                    }
+                    _ => panic!("unexpected mine actor"),
+                }
+            }
+        }
+        assert!(animated, "{name} must advance its animation");
+    }
+
+    #[test]
+    fn mine_previews_animate_inside_picker_bounds() {
+        ensure_i18n();
+        let (mut state, _) = setup_versus_state();
+        for name in ["cel", "metal", "ddr-rainbow"] {
+            let skin = deadsync_assets::noteskin::load_itg_skin_cached(
+                &deadsync_noteskin::Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                name,
+            )
+            .unwrap();
+            state.noteskin.cache.insert(name.into(), skin);
+            check_mine_preview(&mut state, name);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires assets/noteskins/hurg with the installed Workshop"]
+    fn workshop_mine_previews_load_animated_bounded_textures() {
+        ensure_i18n();
+        let (mut state, _) = setup_versus_state();
+        let wanted = ["metal-workshop?mines=d-a-n-k", "cel-workshop?mines=base"];
+        for name in wanted {
+            assert!(deadsync_assets::noteskin::is_pack_skin(name));
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        while wanted.iter().any(|name| {
+            state
+                .pack_menu
+                .mines
+                .get(name)
+                .is_none_or(|p| p.skin.is_none())
+        }) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "mine worker timed out"
+            );
+            state
+                .pack_menu
+                .mines
+                .update(&wanted, &state.noteskin.cache, 4);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        for name in wanted {
+            let preview = state.pack_menu.mines.get(name).unwrap();
+            assert!(!preview.textures.is_empty());
+            assert!(preview.textures.len() <= 2);
+            for (_, key) in &preview.textures {
+                let texture = deadlib_assets::generated_texture(key).unwrap();
+                assert!(texture.image.width() <= 512 && texture.image.height() <= 512);
+            }
+            check_mine_preview(&mut state, name);
+        }
     }
 
     #[test]
@@ -3677,7 +3982,10 @@ pub(super) mod tests {
             // as a regression guard for *new* orphans without flagging the
             // pre-existing one. Remove this skip when GameplayExtrasMore is
             // either built or deleted.
-            if id == RowId::GameplayExtrasMore {
+            // Pack rows are constructed from installed manifests, outside pane builders.
+            if id == RowId::GameplayExtrasMore
+                || super::super::pack_options::slot_for_row(id).is_some()
+            {
                 continue;
             }
             assert!(

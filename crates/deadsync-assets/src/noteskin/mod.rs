@@ -10,6 +10,7 @@ use self::texture::{
 };
 #[cfg(test)]
 use self::texture::{itg_apply_state_properties_from_script, itg_register_texture_dims_for_path};
+use deadsync_noteskin::pack::{self, InstalledPack, Selection};
 pub use deadsync_noteskin::{
     AnimationRate, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
     GlowEffect, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
@@ -26,7 +27,72 @@ use deadsync_noteskin::{
 use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, RwLock};
+
+// Session catalog snapshots, capped at 16 skins / 256 MiB of previews. Startup
+// discovers metadata; a Downloads worker may replace it after loading previews.
+// RwLock publishes immutable Arc snapshots to menu/load workers. No gameplay
+// scanning or eviction; old metadata is freed when its last menu/load owner drops.
+// Stable lookup takes one read lock and clones one Arc. Refresh logs skin count.
+static PACKS: OnceLock<RwLock<Arc<[InstalledPack]>>> = OnceLock::new();
+
+pub fn pack_catalog() -> Arc<[InstalledPack]> {
+    let Some(paths) = crate::PATHS.get() else {
+        return Arc::from([]);
+    };
+    Arc::clone(
+        &PACKS
+            .get_or_init(|| RwLock::new(pack::discover(&paths.noteskin_pack_roots).into()))
+            .read()
+            .expect("noteskin catalog lock poisoned"),
+    )
+}
+
+/// Reload installed packs and queue their previews from a Downloads worker.
+///
+/// # Errors
+/// Returns an error if asset paths are unavailable or a preview cannot be decoded.
+pub fn refresh_packs(installed: &Path) -> Result<(), String> {
+    let paths = crate::PATHS
+        .get()
+        .ok_or("asset paths are not initialized")?;
+    let packs = pack::discover(&paths.noteskin_pack_roots);
+    let installed = installed.canonicalize().map_err(|e| e.to_string())?;
+    if !packs.iter().any(|pack| pack.root == installed) {
+        return Err("Installed pack could not be activated: check duplicate skin IDs and the 16-skin preview limit".into());
+    }
+    let mut previews = Vec::new();
+    for pack in &packs {
+        for skin in &pack.manifest.skins {
+            let path = pack.root.join(&skin.preview);
+            let mut reader = image::ImageReader::open(&path).map_err(|e| e.to_string())?;
+            let mut limits = image::Limits::default();
+            limits.max_image_width = Some(2048);
+            limits.max_image_height = Some(2048);
+            limits.max_alloc = Some(32 * 1024 * 1024);
+            reader.limits(limits);
+            let image = reader.decode().map_err(|e| e.to_string())?.into_rgba8();
+            previews.push((crate::textures::canonical_texture_key(&path), image));
+        }
+    }
+    for (key, image) in previews {
+        deadlib_assets::register_generated_texture(
+            &key,
+            image,
+            deadlib_render_core::SamplerDesc::default(),
+        );
+    }
+    log::info!("Loaded {} installed noteskin packs", packs.len());
+    *PACKS
+        .get_or_init(|| RwLock::new(Arc::from([])))
+        .write()
+        .expect("noteskin catalog lock poisoned") = packs.into();
+    Ok(())
+}
+
+pub fn is_pack_skin(skin: &str) -> bool {
+    pack_catalog().iter().any(|pack| pack.skin(skin).is_some())
+}
 
 pub type TapExplosion = deadsync_noteskin::TapExplosion<SpriteSlot>;
 pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
@@ -106,6 +172,13 @@ pub fn song_lua_noteskin_names() -> Vec<String> {
 }
 
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
+    if let Some(pack) = pack_catalog().iter().find(|pack| pack.skin(skin).is_some()) {
+        let selection = Selection::parse(skin).map_err(|e| e.to_string())?;
+        let key = pack.runtime_key(&selection);
+        return ITG_SKIN_CACHE
+            .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
+            .get_or_load(style, &key, || load_pack_skin(pack, &selection, style));
+    }
     ITG_SKIN_CACHE
         .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
         .get_or_load(style, skin, || load_itg_skin(style, skin))
@@ -144,6 +217,10 @@ pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
 }
 
 pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
+    if let Some(pack) = pack_catalog().iter().find(|pack| pack.skin(skin).is_some()) {
+        let selection = Selection::parse(skin).map_err(|e| e.to_string())?;
+        return load_pack_skin(pack, &selection, style);
+    }
     let roots = noteskin_roots();
     let game = style.game_name();
     let loaded = noteskin_itg::load_itg_skin_from_roots(&roots, game, skin, |root, game, skin| {
@@ -166,6 +243,22 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
         );
     }
     Ok(loaded.value)
+}
+
+fn load_pack_skin(
+    pack: &InstalledPack,
+    selection: &Selection,
+    style: &Style,
+) -> Result<Noteskin, String> {
+    if style.game_name() != "dance" {
+        return Err("this noteskin pack only supports dance".into());
+    }
+    let data = pack
+        .resolve(selection, &noteskin_roots())
+        .map_err(|e| e.to_string())?;
+    let bundle =
+        noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, "dance", &data)?;
+    load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors)
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
@@ -210,7 +303,7 @@ fn apply_note_animation(noteskin: &mut Noteskin, quantizations: usize) {
         quantizations,
         tap_animation,
         tap_translate,
-        noteskin.animation_is_beat_based,
+        noteskin.part_animation_is_beat_based[NoteAnimPart::Tap as usize],
     );
     for (note, layers) in noteskin.notes.iter_mut().zip(&noteskin.note_layers) {
         if let Some(first) = layers.first() {
@@ -226,7 +319,7 @@ fn apply_note_animation(noteskin: &mut Noteskin, quantizations: usize) {
         quantizations,
         lift_animation,
         lift_translate,
-        noteskin.animation_is_beat_based,
+        noteskin.part_animation_is_beat_based[NoteAnimPart::Lift as usize],
     );
 }
 
@@ -2689,7 +2782,7 @@ return skin
         };
         let ns = load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
         assert!(
-            ns.animation_is_beat_based,
+            ns.part_animation_is_beat_based[NoteAnimPart::Mine as usize],
             "cel metrics use beat-based noteskin animation"
         );
         assert!(

@@ -13,11 +13,13 @@ pub mod itg;
 pub mod lua;
 pub mod mine;
 pub mod model;
+pub mod pack;
 pub mod parts;
 pub mod receptor;
 pub mod runtime;
 pub mod script;
 pub mod sprite;
+pub mod workshop;
 
 pub use draw::{
     ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
