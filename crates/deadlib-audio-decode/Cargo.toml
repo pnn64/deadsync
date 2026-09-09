@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-platform = { path = "../deadlib-platform" }
 ogg = "0.9.2"
 opusic-c = "1.6.1"
 rubato = "5.0.0"

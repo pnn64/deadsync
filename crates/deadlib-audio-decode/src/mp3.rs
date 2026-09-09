@@ -75,14 +75,16 @@ fn probe_format(
     let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let mut hint = Hint::new();
     hint.with_extension("mp3");
-    symphonia::default::get_probe()
-        .probe(
-            &hint,
-            mss,
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .map_err(|e| format!("Cannot probe MP3 '{}': {e}", path.display()).into())
+    deadlib_platform::logging::with_file_context(path, || {
+        symphonia::default::get_probe()
+            .probe(
+                &hint,
+                mss,
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .map_err(|e| format!("Cannot probe MP3 '{}': {e}", path.display()).into())
+    })
 }
 
 #[inline]

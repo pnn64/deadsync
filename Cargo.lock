@@ -1109,6 +1109,7 @@ dependencies = [
 name = "deadlib-audio-decode"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
  "ogg 0.9.2",
  "opusic-c",
  "rubato",
@@ -1294,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1127"
+version = "0.5.1128"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1734,7 +1735,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1127"
+version = "0.5.1128"
 dependencies = [
  "bitflags 2.13.1",
  "chrono",
@@ -1801,7 +1802,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1127"
+version = "0.5.1128"
 dependencies = [
  "log",
  "semver",

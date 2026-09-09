@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::num::NonZeroUsize;
@@ -17,6 +18,39 @@ const MAX_LOG_FILES: usize = 3;
 static FILE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(true);
 static LOG_FILE: OnceLock<Mutex<Option<File>>> = OnceLock::new();
 static LOG_FILE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+thread_local! {
+    static FILE_CONTEXT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+struct FileContext(Option<PathBuf>);
+
+impl Drop for FileContext {
+    fn drop(&mut self) {
+        FILE_CONTEXT.set(self.0.take());
+    }
+}
+
+/// Adds the source path to logs emitted synchronously by `read`, including
+/// dependency logs. Each worker has its own context; nested calls and unwinding
+/// restore the previous path.
+pub fn with_file_context<T>(path: &Path, read: impl FnOnce() -> T) -> T {
+    let _context = FileContext(FILE_CONTEXT.replace(Some(path.to_owned())));
+    read()
+}
+
+fn format_record(buf: &mut env_logger::fmt::Formatter, record: &log::Record<'_>) -> io::Result<()> {
+    FILE_CONTEXT.with_borrow(|path| {
+        let mut format = env_logger::fmt::ConfigurableFormat::default();
+        match path {
+            Some(path) => {
+                format.suffix("").format(buf, record)?;
+                writeln!(buf, " [file: {}]", path.display())
+            }
+            None => format.format(buf, record),
+        }
+    })
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct StartupBuildInfo {
@@ -386,6 +420,7 @@ pub fn init(file_logging_enabled: bool, log_file_path: PathBuf) {
     reset_log_file();
     let mut builder = env_logger::builder();
     builder
+        .format(format_record)
         .filter_level(log::LevelFilter::Trace)
         // Keep GPU stack internals quiet even when the app log level is Trace.
         .filter_module("wgpu", log::LevelFilter::Warn)

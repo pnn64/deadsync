@@ -67,14 +67,16 @@ fn probe_format(
     let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let mut hint = Hint::new();
     hint.with_extension("ogg");
-    symphonia::default::get_probe()
-        .probe(
-            &hint,
-            mss,
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()).into())
+    deadlib_platform::logging::with_file_context(path, || {
+        symphonia::default::get_probe()
+            .probe(
+                &hint,
+                mss,
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .map_err(|e| format!("Cannot probe OGG '{}': {e}", path.display()).into())
+    })
 }
 
 // Ogg requires a granule position of u64::MAX only when a page completes no

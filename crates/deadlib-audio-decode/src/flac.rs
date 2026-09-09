@@ -59,14 +59,16 @@ fn probe_format(
     let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
     let mut hint = Hint::new();
     hint.with_extension("flac");
-    symphonia::default::get_probe()
-        .probe(
-            &hint,
-            mss,
-            FormatOptions::default(),
-            MetadataOptions::default(),
-        )
-        .map_err(|e| format!("Cannot probe FLAC '{}': {e}", path.display()).into())
+    deadlib_platform::logging::with_file_context(path, || {
+        symphonia::default::get_probe()
+            .probe(
+                &hint,
+                mss,
+                FormatOptions::default(),
+                MetadataOptions::default(),
+            )
+            .map_err(|e| format!("Cannot probe FLAC '{}': {e}", path.display()).into())
+    })
 }
 
 fn flac_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
