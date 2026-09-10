@@ -19,6 +19,7 @@ use crate::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
+use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
@@ -222,6 +223,9 @@ pub struct State {
     bg: visual_style_bg::State,
     /// The directional control being held, for hold-to-repeat (see `update`).
     held: Option<HeldNav>,
+    /// Up / Down currently held, for the Up+Down "tare" chord.
+    raise_held: bool,
+    lower_held: bool,
 }
 
 /// A held directional control and its repeat timer.
@@ -430,10 +434,15 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         return EditResult::Handled;
     }
 
-    // Directional presses (both views): arm the hold for repeat, then step.
+    // Directional presses (both views): track the hold for repeat, and detect
+    // the Up+Down chord, whose second key tares the focused threshold to the
+    // live reading instead of stepping it.
     if let Some(ui) = ui_action(ev.action) {
-        begin_hold(state, ui, fine);
-        perform_ui_action(state, ui, fine);
+        if note_press(state, ui, fine) {
+            tare_focused(state);
+        } else {
+            perform_ui_action(state, ui, fine);
+        }
         return EditResult::Handled;
     }
 
@@ -487,6 +496,24 @@ fn perform_ui_action(state: &mut State, ui: UiAction, fine: bool) {
     }
 }
 
+/// Record a directional press: (re)start its hold-repeat timer and track the
+/// Up/Down pair. Returns true when this press completed the Up+Down chord.
+fn note_press(state: &mut State, ui: UiAction, fine: bool) -> bool {
+    match ui {
+        UiAction::Raise => state.raise_held = true,
+        UiAction::Lower => state.lower_held = true,
+        UiAction::PrevBar | UiAction::NextBar => {}
+    }
+    if state.raise_held && state.lower_held {
+        // A chord is a one-shot: neither key keeps stepping afterwards, even
+        // if they are released one at a time.
+        state.held = None;
+        return true;
+    }
+    begin_hold(state, ui, fine);
+    false
+}
+
 /// (Re)start the hold-repeat timer for a directional press.
 fn begin_hold(state: &mut State, ui: UiAction, fine: bool) {
     let mut held = HeldNav {
@@ -508,6 +535,11 @@ fn note_release(state: &mut State, action: VirtualAction) {
     let Some(ui) = ui_action(action) else {
         return;
     };
+    match ui {
+        UiAction::Raise => state.raise_held = false,
+        UiAction::Lower => state.lower_held = false,
+        UiAction::PrevBar | UiAction::NextBar => {}
+    }
     if state.held.is_some_and(|h| h.ui == ui) {
         state.held = None;
     }
@@ -516,6 +548,87 @@ fn note_release(state: &mut State, action: VirtualAction) {
 /// Forget any held direction (view change, modal open, screen exit).
 const fn clear_hold(state: &mut State) {
     state.held = None;
+    state.raise_held = false;
+    state.lower_held = false;
+}
+
+/// Snap the focused threshold(s) to the live reading ("tare": put a reference
+/// weight on a panel, then press Up+Down, or `0` on a keyboard). Simple view: every sensor of the
+/// cursor panel goes to its own reading on per-sensor pads; on load-cell pads
+/// the focused side of the press/release pair goes to the panel's reading,
+/// with the lock dragging the partner as usual. Advanced view: the focused
+/// sensor alone. Clamped to the editable range like any edit.
+fn tare_focused(state: &mut State) -> bool {
+    if state.saving.is_some() || state.profiles_mode {
+        return false;
+    }
+    if let Some(dev) = state.advanced {
+        let targets = advanced_targets(state);
+        let Some(&AdvTarget::Sensor { button, sensor }) = targets.get(state.adv_sel) else {
+            return false;
+        };
+        let Some(sv) = pad_by_device(state, dev)
+            .and_then(|pad| pad.buttons.get(button))
+            .and_then(|bar| bar.sensors.get(sensor))
+            .copied()
+        else {
+            return false;
+        };
+        let current = current_sensor_threshold(state, dev, button, sv.firmware_index)
+            .unwrap_or(sv.raw_threshold);
+        let delta = i32::from(sv.raw_value) - i32::from(current);
+        adjust_sensor_threshold(state, dev, button, sensor, delta);
+        return true;
+    }
+    let Some(slot) = selected_slot(state) else {
+        return false;
+    };
+    let Some(pad) = state.pads.get(slot.pad) else {
+        return false;
+    };
+    let device = pad.device_id;
+    let bar = &pad.buttons[slot.button];
+    if pad.supports_advanced && bar.release_threshold.is_none() && !bar.sensors.is_empty() {
+        // Per-sensor pad: each sensor to its own reading, so the panel trips
+        // at exactly this load however it is spread across the sensors.
+        let sensors: SmallVec<[(usize, u16, u16); 12]> = bar
+            .sensors
+            .iter()
+            .map(|sv| (sv.firmware_index, sv.raw_threshold, sv.raw_value))
+            .collect();
+        for (fw, live, reading) in sensors {
+            let current = current_sensor_threshold(state, device, slot.button, fw).unwrap_or(live);
+            set_sensor_threshold(state, device, slot.button, fw, current, i32::from(reading));
+        }
+        return true;
+    }
+    let reading = i32::from(bar.aggregate_value);
+    let current = match bar.release_threshold {
+        None => {
+            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold)
+        }
+        Some(live_release) => {
+            let (press, release) = pending_threshold_pair(state, device, slot.button)
+                .unwrap_or((bar.aggregate_threshold, live_release));
+            match slot.kind {
+                ThresholdKind::Press => press,
+                ThresholdKind::Release => release,
+            }
+        }
+    };
+    adjust_simple_threshold(state, reading - i32::from(current));
+    true
+}
+
+/// Keyboard `0` (main row or numpad) tares like the Up+Down chord, for
+/// keyboard users who'd rather not chord. Returns whether the key was
+/// consumed.
+pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> bool {
+    state.fsr_enabled
+        && key.pressed
+        && !key.repeat
+        && matches!(key.code, KeyCode::Digit0 | KeyCode::Numpad0)
+        && tare_focused(state)
 }
 
 /// Whether saving is available for the cursor pad (set by the app each frame).
@@ -2301,7 +2414,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             // the embedded numbers to the edit constants.
             line(
                 actors,
-                "Up/Down - Threshold +/- 5 (Shift +/- 1)",
+                "Up/Down - Threshold +/- 5 (Shift +/- 1)   Up+Down or 0 - Tare to live reading",
                 bottom - 70.0,
             );
             // Combine the Start action (Advanced, or the press/release lock on
@@ -2341,7 +2454,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         } => {
             line(
                 actors,
-                "Left/Right - Select   Up/Down - Adjust (Shift = fine)",
+                "Left/Right - Select   Up/Down - Adjust (Shift = fine)   Up+Down or 0 - Tare",
                 bottom - 70.0,
             );
             let action_line = match (supports_toggle, save_available) {
@@ -3306,8 +3419,10 @@ mod tests {
     #[test]
     fn static_footer_numbers_match_edit_constants() {
         assert_eq!(
-            "Up/Down - Threshold +/- 5 (Shift +/- 1)",
-            format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)")
+            "Up/Down - Threshold +/- 5 (Shift +/- 1)   Up+Down or 0 - Tare to live reading",
+            format!(
+                "Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)   Up+Down or 0 - Tare to live reading"
+            )
         );
         assert_eq!(
             "&START; Press/Release lock: ON (keeps them 10 apart)",
@@ -3743,7 +3858,7 @@ mod tests {
         assert!(!take_commands(&mut s).is_empty());
     }
 
-    // ── Hold-to-repeat ──
+    // ── Hold-to-repeat + tare ──
 
     fn ev_release(action: VirtualAction) -> InputEvent {
         ev_from(action, InputSource::Keyboard, false)
@@ -3832,6 +3947,42 @@ mod tests {
     }
 
     #[test]
+    fn up_plus_down_tares_the_cursor_panel_to_its_reading() {
+        let mut s = with_pad();
+        for (i, sv) in s.pads[0].buttons[0].sensors.iter_mut().enumerate() {
+            sv.raw_value = 100 + i as u16 * 10;
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        let mut got: Vec<(usize, u16)> = take_commands(&mut s)
+            .into_iter()
+            .map(|c| match c {
+                PadCommand::Threshold {
+                    button: 0,
+                    sensor: Some(fw),
+                    value,
+                    ..
+                } => (fw, value),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        got.sort_unstable();
+        // Every sensor lands on its own reading, not a shared panel value.
+        assert_eq!(got, vec![(0, 100), (1, 110), (2, 120), (3, 130)]);
+        // The chord is one-shot: neither held key keeps stepping.
+        update(&mut s, 1.0);
+        assert!(take_commands(&mut s).is_empty());
+        // Releasing one key and pressing it again re-chords (still both held).
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_down), false);
+        s.pads[0].buttons[0].sensors[0].raw_value = 90;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert_eq!(
+            current_sensor_threshold(&s, s.pads[0].device_id, 0, 0),
+            Some(90)
+        );
+    }
+
+    #[test]
     fn simple_step_shifts_each_sensor_separately_and_clamps() {
         let mut s = with_pad();
         // Sensors tuned apart in Advanced: 30 / 40 / 50 / 248 (near the 250 cap).
@@ -3852,5 +4003,76 @@ mod tests {
         update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
         assert_eq!(pending(&s), vec![Some(40), Some(50), Some(60), Some(250)]);
         assert_eq!(take_commands(&mut s).len(), 4);
+    }
+
+    #[test]
+    fn up_plus_down_in_advanced_tares_the_focused_sensor() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert!(s.advanced.is_some());
+        s.pads[0].buttons[0].sensors[0].raw_value = 77;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(
+            matches!(
+                cmds[..],
+                [PadCommand::Threshold {
+                    button: 0,
+                    sensor: Some(0),
+                    value: 77,
+                    ..
+                }]
+            ),
+            "{cmds:?}"
+        );
+    }
+
+    #[test]
+    fn tare_on_a_load_cell_slot_moves_only_the_focused_threshold() {
+        let mut s = init();
+        set_pads(&mut s, vec![load_cell_pad(0)]);
+        // Landing slot is button 0's release (low) threshold.
+        s.pads[0].buttons[0].aggregate_value = 50;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(
+            matches!(
+                cmds[..],
+                [PadCommand::ThresholdPair {
+                    button: 0,
+                    press: 80,
+                    release: 50,
+                    ..
+                }]
+            ),
+            "{cmds:?}"
+        );
+    }
+
+    #[test]
+    fn zero_key_tares_like_the_chord() {
+        let mut s = with_pad();
+        set_fsr_enabled(&mut s, true);
+        s.pads[0].buttons[0].sensors[0].raw_value = 66;
+        let now = Instant::now();
+        let key = |code: KeyCode, repeat: bool| RawKeyboardEvent {
+            code,
+            pressed: true,
+            repeat,
+            timestamp: now,
+            host_nanos: 0,
+        };
+        // OS auto-repeat of a held 0 is ignored; a fresh press tares.
+        assert!(!handle_raw_key_event(&mut s, &key(KeyCode::Digit0, true)));
+        assert!(take_commands(&mut s).is_empty());
+        assert!(handle_raw_key_event(&mut s, &key(KeyCode::Numpad0, false)));
+        assert_eq!(
+            current_sensor_threshold(&s, s.pads[0].device_id, 0, 0),
+            Some(66)
+        );
+        // Other keys pass through.
+        assert!(!handle_raw_key_event(&mut s, &key(KeyCode::Digit1, false)));
     }
 }
