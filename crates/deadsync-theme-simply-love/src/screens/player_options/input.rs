@@ -761,8 +761,16 @@ fn handle_input_inner(
                 return action;
             }
         }
-        VirtualAction::p1_select if ev.pressed && arcade_style => {
-            handle_arcade_prev_event(state, asset_manager, active, P1);
+        VirtualAction::p1_select if arcade_style => {
+            // Select = previous row; held, it repeats upward like a held Up.
+            if ev.pressed {
+                handle_arcade_prev_event(state, asset_manager, active, P1);
+                if active[P1] {
+                    on_nav_press(state, P1, NavDirection::Up);
+                }
+            } else {
+                on_nav_release(state, P1, NavDirection::Up);
+            }
             return ThemeEffect::None;
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
@@ -823,8 +831,16 @@ fn handle_input_inner(
                 return action;
             }
         }
-        VirtualAction::p2_select if ev.pressed && arcade_style => {
-            handle_arcade_prev_event(state, asset_manager, active, P2);
+        VirtualAction::p2_select if arcade_style => {
+            // Select = previous row; held, it repeats upward like a held Up.
+            if ev.pressed {
+                handle_arcade_prev_event(state, asset_manager, active, P2);
+                if active[P2] {
+                    on_nav_press(state, P2, NavDirection::Up);
+                }
+            } else {
+                on_nav_release(state, P2, NavDirection::Up);
+            }
             return ThemeEffect::None;
         }
         _ => {}
