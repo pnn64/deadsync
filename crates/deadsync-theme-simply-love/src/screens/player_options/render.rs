@@ -622,7 +622,6 @@ pub(super) const Z_ROW_PREVIEW: i16 = 102;
 /// Receptor noteskin preview (drawn above the row preview layer).
 pub(super) const Z_RECEPTOR_PREVIEW: i16 = 106;
 /// Tap-explosion noteskin preview, the topmost preview layer.
-pub(super) const Z_EXPLOSION_PREVIEW: i16 = 107;
 /// Speed-mod overlay text, drawn on top of all preview layers.
 pub(super) const Z_SPEED_MOD_TEXT: i16 = 121;
 
@@ -994,10 +993,7 @@ pub(super) fn draw_single_value_with_preview(actors: &mut Vec<Actor>, rc: &RowCt
             draw_noteskin_family_preview(actors, rc, primary_player_idx);
         }
         id if super::pack_options::slot_for_row(id).is_some() => {
-            draw_pack_thumb(actors, rc, primary_player_idx);
-            if rc.fc.show_p2 && primary_player_idx != P2 {
-                draw_pack_thumb(actors, rc, P2);
-            }
+            draw_noteskin_family_preview(actors, rc, primary_player_idx);
         }
         RowId::ComboFont => draw_combo_preview(actors, rc, primary_player_idx),
         RowId::HeartRateMonitor => draw_heart_rate_preview(actors, rc, primary_player_idx),
@@ -1242,22 +1238,6 @@ fn draw_held_graphic_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_playe
     }
 }
 
-fn draw_pack_thumb(actors: &mut Vec<Actor>, rc: &RowCtx, player: usize) -> bool {
-    let Some(thumb) = rc.fc.state.pack_menu.preview(player, rc.row.id) else {
-        return false;
-    };
-    draw_thumb(
-        actors,
-        rc.fc.state,
-        thumb,
-        [rc.fc.preview_x[player], rc.current_row_y],
-        32.0,
-        rc.a,
-        Z_ROW_PREVIEW,
-    );
-    true
-}
-
 pub(super) fn draw_thumb(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -1267,30 +1247,23 @@ pub(super) fn draw_thumb(
     alpha: f32,
     z: i16,
 ) {
-    use super::pack_options::Thumb;
-    match thumb {
-        Thumb::Sprite { key, uv } => actors.push(act!(sprite(Arc::clone(key)):
-            align(0.5, 0.5): xy(center[0], center[1]):
-            setsize(size, size): customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(1.0, 1.0, 1.0, alpha): z(z)
-        )),
-        Thumb::Note { skin, part } => {
-            let first = actors.len();
-            draw_noteskin_note(
-                actors,
-                state,
-                skin,
-                *part,
-                Quantization::Q4th as usize,
-                0.0,
-                center,
-                size,
-                alpha,
-                z,
-            );
-            fit_preview(&mut actors[first..], center, [size, size]);
-        }
+    draw_live_preview(
+        actors,
+        state,
+        &thumb.name,
+        thumb.part,
+        center,
+        size,
+        alpha,
+        z,
+    );
+}
+
+fn preview_skin<'a>(state: &'a State, name: &str, part: usize) -> Option<&'a Noteskin> {
+    if let Some(preview) = state.noteskin.components.get(name, part) {
+        return preview.skin.as_deref().filter(|_| preview.ready);
     }
+    state.noteskin.cache.get(name).map(Arc::as_ref)
 }
 
 fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
@@ -1299,60 +1272,55 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
             continue;
         }
         let first = actors.len();
-        let mine = matches!(rc.row.id, RowId::MineSkin | RowId::SkinMineSize);
-        if mine || !draw_pack_thumb(actors, rc, player) {
-            let previews = &rc.fc.state.noteskin.previews[player];
-            let center = rc.fc.preview_x[player];
-            match rc.row.id {
-                RowId::NoteSkin => {
-                    if let Some(ns) = previews.base.as_deref() {
-                        draw_noteskin_preview(actors, rc, ns, center);
-                    }
+        let state = rc.fc.state;
+        let options = &state.player_options[player];
+        let center = rc.fc.preview_x[player];
+        match rc.row.id {
+            RowId::NoteSkin => {
+                if let Some(skin) = preview_skin(state, options.noteskin.as_str(), 0) {
+                    draw_noteskin_preview(actors, rc, skin, center);
                 }
-                RowId::MineSkin | RowId::SkinMineSize => {
-                    let options = &rc.fc.state.player_options[player];
-                    let name = options.mine_noteskin.as_ref().unwrap_or(&options.noteskin);
-                    let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-                    // The size row demonstrates 10–200% within one row's fixed space.
-                    let size = if rc.row.id == RowId::SkinMineSize {
-                        size * options.mine_size_percent.clamp(10, 200) as f32 / 200.0
-                    } else {
-                        size
-                    };
-                    draw_live_mine(
+            }
+            RowId::ReceptorSkin => {
+                let name = options
+                    .receptor_noteskin
+                    .as_ref()
+                    .unwrap_or(&options.noteskin);
+                if let Some(skin) = preview_skin(state, name.as_str(), 1) {
+                    draw_receptor_preview(actors, rc, skin, center);
+                }
+            }
+            RowId::MineSkin | RowId::SkinMineSize => {
+                let name = options.mine_noteskin.as_ref().unwrap_or(&options.noteskin);
+                let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+                let size = if rc.row.id == RowId::SkinMineSize {
+                    size * options.mine_size_percent.clamp(10, 200) as f32 / 200.0
+                } else {
+                    size
+                };
+                draw_live_preview(
+                    actors,
+                    state,
+                    name.as_str(),
+                    8,
+                    [center, rc.current_row_y],
+                    size,
+                    rc.a,
+                    Z_ROW_PREVIEW,
+                );
+            }
+            _ => {
+                if let Some(thumb) = state.pack_menu.preview(player, rc.row.id) {
+                    draw_thumb(
                         actors,
-                        rc.fc.state,
-                        name.as_str(),
+                        state,
+                        thumb,
                         [center, rc.current_row_y],
-                        size,
+                        32.0,
                         rc.a,
                         Z_ROW_PREVIEW,
                     );
                 }
-                RowId::ReceptorSkin => {
-                    if let Some(ns) = previews.receptor.as_deref().or(previews.base.as_deref()) {
-                        draw_receptor_preview(actors, rc, ns, center);
-                    }
-                }
-                RowId::TapExplosionSkin => {
-                    if !deadsync_profile::tap_explosion_skin_hidden(
-                        rc.fc.state.player_options[player]
-                            .tap_explosion_noteskin
-                            .as_ref(),
-                    ) && let Some(ns) = previews
-                        .tap_explosion
-                        .as_deref()
-                        .or(previews.base.as_deref())
-                    {
-                        let receptor = previews
-                            .receptor
-                            .as_deref()
-                            .or(previews.base.as_deref())
-                            .unwrap_or(ns);
-                        draw_tap_explosion_preview(actors, rc, ns, receptor, center);
-                    }
-                }
-                _ => {}
             }
         }
         let width = if matches!(rc.row.id, RowId::NoteSkin | RowId::ReceptorSkin) {
@@ -1362,7 +1330,7 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
         };
         fit_preview(
             &mut actors[first..],
-            [rc.fc.preview_x[player], rc.current_row_y],
+            [center, rc.current_row_y],
             [width, 32.0],
         );
         if primary_player_idx == P2 {
@@ -1471,10 +1439,6 @@ fn draw_noteskin_note(
     let Some(primary) = slots.first() else { return };
     let note_scale = target_height / primary.logical_size()[1].max(1.0);
     for (layer_idx, slot) in slots.iter().enumerate() {
-        let draw = slot.model_draw_at(elapsed, beat);
-        if !draw.visible {
-            continue;
-        }
         let frame = slot.frame_index_from_phase(phase);
         let uv_elapsed = if slot.model.is_some() { phase } else { elapsed };
         let uv = slot.uv_for_frame_at(frame, uv_elapsed);
@@ -1485,59 +1449,18 @@ fn draw_noteskin_note(
             uv[3] + translation[1],
         ];
         let logical = slot.logical_size();
-        let size = [logical[0] * note_scale, logical[1] * note_scale];
-        let blend = if draw.blend_add {
-            BlendMode::Add
-        } else {
-            BlendMode::Alpha
-        };
-        let z = z + layer_idx as i16;
-        if let Some(actor) = noteskin_model_actor_from_draw(
+        draw_preview_slot(
+            actors,
             slot,
-            draw,
+            preview_slot_draw(slot, elapsed, beat),
             center,
-            size,
+            [logical[0] * note_scale, logical[1] * note_scale],
             uv,
             -slot.def.rotation_deg as f32,
             [1.0, 1.0, 1.0, alpha],
-            blend,
-            z,
-        ) {
-            actors.push(actor);
-            continue;
-        }
-        let size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
-        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
-            continue;
-        }
-        let [sin_r, cos_r] = slot.base_rot_sin_cos();
-        let ox = draw.pos[0] * note_scale;
-        let oy = draw.pos[1] * note_scale;
-        let pos = [
-            center[0] + ox * cos_r - oy * sin_r,
-            center[1] + ox * sin_r + oy * cos_r,
-        ];
-        let color = [
-            draw.tint[0],
-            draw.tint[1],
-            draw.tint[2],
-            draw.tint[3] * alpha,
-        ];
-        let mut actor = act!(sprite(slot.texture_key_shared()):
-            align(0.5, 0.5): xy(pos[0], pos[1]): setsize(size[0], size[1]):
-            zoomx(slot_preview_zoom_x(slot, draw.zoom[0].signum())):
-            zoomy(slot_preview_zoom_y(slot, draw.zoom[1].signum())):
-            rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(color[0], color[1], color[2], color[3]): z(z)
+            BlendMode::Alpha,
+            z + layer_idx as i16,
         );
-        if let Actor::Sprite {
-            blend: actor_blend, ..
-        } = &mut actor
-        {
-            *actor_blend = blend;
-        }
-        actors.push(actor);
     }
 }
 
@@ -1561,48 +1484,25 @@ fn draw_noteskin_preview(actors: &mut Vec<Actor>, rc: &RowCtx, ns: &Noteskin, ce
     }
 }
 
-pub(super) fn draw_live_mine(
+pub(super) fn draw_live_preview(
     actors: &mut Vec<Actor>,
     state: &State,
     name: &str,
+    part: usize,
     center: [f32; 2],
     size: f32,
     alpha: f32,
     z: i16,
-) {
-    let preview = state.pack_menu.mines.get(name);
-    let skin = state
-        .noteskin
-        .cache
-        .get(name)
-        .or_else(|| preview.and_then(|preview| preview.skin.as_ref()));
-    let Some(skin) = skin else { return };
+) -> bool {
+    let Some(skin) = preview_skin(state, name, part) else {
+        return false;
+    };
     let first = actors.len();
-    draw_mine_preview(actors, state, skin, center, size, alpha, z);
-    for actor in &mut actors[first..] {
-        if let Some(preview) = preview {
-            match actor {
-                Actor::Sprite { source, .. } => {
-                    if let Some((_, alias)) = preview
-                        .textures
-                        .iter()
-                        .find(|(key, _)| Some(key.as_ref()) == source.texture_key())
-                    {
-                        *source = deadlib_present::actors::SpriteSource::Texture(Arc::clone(alias));
-                    }
-                }
-                Actor::TexturedMesh { texture: key, .. } => {
-                    if let Some((_, alias)) =
-                        preview.textures.iter().find(|(source, _)| source == key)
-                    {
-                        *key = Arc::clone(alias);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
+    // Leave room for tap-explosion zoom commands inside the fixed icon bounds.
+    let target = if part == 6 { size * 0.9 } else { size };
+    draw_skin_part(actors, state, skin, part, center, target, alpha, z);
     fit_preview(&mut actors[first..], center, [size, size]);
+    true
 }
 
 /// Fit the complete animated geometry, including rotated sprites and model transforms.
@@ -1782,243 +1682,297 @@ fn slot_preview_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
     if slot.def.mirror_v { -zoom } else { zoom }
 }
 
-fn draw_receptor_preview(
+#[allow(clippy::too_many_arguments)]
+fn draw_skin_part(
     actors: &mut Vec<Actor>,
-    rc: &RowCtx,
-    receptor_ns: &Noteskin,
-    center_x: f32,
+    state: &State,
+    skin: &Noteskin,
+    part: usize,
+    center: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
 ) {
-    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let receptor_color = receptor_ns
-        .receptor_pulse
-        .color_for_beat(rc.fc.state.preview_beat);
-    let color = [
-        receptor_color[0],
-        receptor_color[1],
-        receptor_color[2],
-        receptor_color[3] * rc.a,
-    ];
-    for &(col, _, x_mult) in preview_arrows(receptor_ns.column_xs.len()) {
-        let Some(receptor_slot) = receptor_ns.receptor_off.get(col) else {
-            continue;
-        };
-        let center = [x_mult.mul_add(target_height, center_x), rc.current_row_y];
-        draw_receptor_slot_preview(
+    match part {
+        0 | 10 => draw_noteskin_note(
             actors,
-            rc,
-            receptor_slot,
+            state,
+            skin,
+            if part == 10 {
+                NoteAnimPart::Lift
+            } else {
+                NoteAnimPart::Tap
+            },
+            Quantization::Q4th as usize,
+            0.0,
             center,
-            color,
-            BlendMode::Alpha,
-            i32::from(Z_RECEPTOR_PREVIEW),
-        );
-
-        let idle_alpha = receptor_ns
-            .receptor_idle_glow
-            .alpha(rc.fc.state.preview_beat, false);
-        if idle_alpha > f32::EPSILON
-            && let Some(glow_slot) = receptor_ns
-                .receptor_glow
-                .get(col)
-                .and_then(|slot| slot.as_ref())
-        {
-            draw_receptor_slot_preview(
+            size,
+            alpha,
+            z,
+        ),
+        1 => draw_receptor_note(actors, state, skin, 0, center, size, alpha, z),
+        6 => draw_tap_explosion_preview(actors, state, skin, center, size, alpha, z),
+        8 => draw_mine_preview(actors, state, skin, center, size, alpha, z),
+        _ => {
+            let (slot, anim) = match part {
+                2 => (skin.hold.body_active.as_ref(), Some(NoteAnimPart::HoldBody)),
+                3 => (
+                    skin.hold.body_inactive.as_ref(),
+                    Some(NoteAnimPart::HoldBody),
+                ),
+                4 => (skin.roll.body_active.as_ref(), Some(NoteAnimPart::RollBody)),
+                5 => (
+                    skin.roll.body_inactive.as_ref(),
+                    Some(NoteAnimPart::RollBody),
+                ),
+                7 => (skin.hold.explosion.as_ref(), None),
+                _ => return,
+            };
+            let Some(slot) = slot else { return };
+            let elapsed = state.preview_time;
+            let beat = state.preview_beat;
+            let phase = anim.map(|part| skin.part_uv_phase(part, elapsed, beat, 0.0));
+            let frame = phase.map_or_else(
+                || slot.frame_index(elapsed, beat),
+                |phase| slot.frame_index_from_phase(phase),
+            );
+            let uv_time = if slot.model.is_some() {
+                phase.unwrap_or(elapsed)
+            } else {
+                elapsed
+            };
+            let uv = slot.uv_for_frame_at(frame, uv_time);
+            let logical = slot.logical_size();
+            let scale = size / logical[1].max(1.0);
+            draw_preview_slot(
                 actors,
-                rc,
-                glow_slot,
+                slot,
+                preview_slot_draw(slot, elapsed, beat),
                 center,
-                [1.0, 1.0, 1.0, idle_alpha * rc.a],
-                BlendMode::Add,
-                i32::from(Z_RECEPTOR_PREVIEW) + 1,
+                [logical[0] * scale, logical[1] * scale],
+                uv,
+                -slot.def.rotation_deg as f32,
+                [1.0, 1.0, 1.0, alpha],
+                BlendMode::Alpha,
+                z,
             );
         }
     }
 }
 
-fn draw_receptor_slot_preview(
-    actors: &mut Vec<Actor>,
-    rc: &RowCtx,
+fn preview_slot_draw(
     slot: &SpriteSlot,
+    elapsed: f32,
+    beat: f32,
+) -> deadsync_noteskin::ModelDrawState {
+    let mut draw = slot.model_draw_at(elapsed, beat);
+    if let Some(glow) = slot.model_glow_with_draw(draw, elapsed, beat, 1.0) {
+        draw.glow = glow;
+    }
+    draw
+}
+
+// Model and sprite transforms share one path, including diffuse/glow effects.
+// Explosion commands supply their sampled draw state instead of the idle state.
+#[allow(clippy::too_many_arguments)]
+fn draw_preview_slot(
+    actors: &mut Vec<Actor>,
+    slot: &SpriteSlot,
+    draw: deadsync_noteskin::ModelDrawState,
     center: [f32; 2],
+    size: [f32; 2],
+    uv: [f32; 4],
+    rotation: f32,
     color: [f32; 4],
     blend: BlendMode,
-    z: i32,
+    z: i16,
 ) {
-    let elapsed = rc.fc.state.preview_time;
-    let beat = rc.fc.state.preview_beat;
-    let frame = slot.frame_index(elapsed, beat);
-    let uv = slot.uv_for_frame_at(frame, elapsed);
-    let draw = slot.model_draw_at(elapsed, beat);
     if !draw.visible {
         return;
     }
-    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let logical = slot.logical_size();
-    let width = logical[0].max(1.0);
-    let height = logical[1].max(1.0);
-    let scale = if height > f32::EPSILON {
-        target_height / height
+    let blend = if draw.blend_add {
+        BlendMode::Add
     } else {
-        NOTESKIN_PREVIEW_SCALE
+        blend
     };
-    let size = [width * scale, target_height];
-    let tint = [
-        color[0] * draw.tint[0],
-        color[1] * draw.tint[1],
-        color[2] * draw.tint[2],
-        color[3] * draw.tint[3],
-    ];
-    if let Some(model_actor) = noteskin_model_actor(
-        slot,
-        center,
-        size,
-        uv,
-        -slot.def.rotation_deg as f32,
-        elapsed,
-        beat,
-        tint,
-        blend,
-        z as i16,
-    ) {
-        actors.push(model_actor);
-        return;
-    }
-
-    let [sin_r, cos_r] = slot.base_rot_sin_cos();
-    let offset = [
-        (draw.pos[1] * scale).mul_add(-sin_r, draw.pos[0] * scale * cos_r),
-        (draw.pos[1] * scale).mul_add(cos_r, draw.pos[0] * scale * sin_r),
-    ];
-    let sprite_size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
-    if sprite_size[0] <= f32::EPSILON || sprite_size[1] <= f32::EPSILON {
-        return;
-    }
-    let mut actor = act!(sprite(slot.texture_key_shared()):
-        align(0.5, 0.5):
-        xy(center[0] + offset[0], center[1] + offset[1]):
-        setsize(sprite_size[0], sprite_size[1]):
-        zoomx(slot_preview_zoom_x(slot, 1.0)):
-        zoomy(slot_preview_zoom_y(slot, 1.0)):
-        rotationz(draw.rot[2] - slot.def.rotation_deg as f32):
-        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-        diffuse(tint[0], tint[1], tint[2], tint[3]):
-        z(z)
-    );
-    if let Actor::Sprite {
-        blend: actor_blend, ..
-    } = &mut actor
+    let mut actor = if let Some(actor) =
+        noteskin_model_actor_from_draw(slot, draw, center, size, uv, rotation, color, blend, z)
     {
-        *actor_blend = blend;
+        actor
+    } else {
+        let logical = slot.logical_size();
+        let ox = draw.pos[0] * size[0] / logical[0].max(1.0);
+        let oy = draw.pos[1] * size[1] / logical[1].max(1.0);
+        let (sin, cos) = rotation.to_radians().sin_cos();
+        let pos = [
+            center[0] + ox * cos - oy * sin,
+            center[1] + ox * sin + oy * cos,
+        ];
+        let size = [size[0] * draw.zoom[0].abs(), size[1] * draw.zoom[1].abs()];
+        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+            return;
+        }
+        let tint = std::array::from_fn::<_, 4, _>(|i| color[i] * draw.tint[i]);
+        let mut actor = act!(sprite(slot.texture_key_shared()):
+            align(0.5, 0.5): xy(pos[0], pos[1]): setsize(size[0], size[1]):
+            zoomx(slot_preview_zoom_x(slot, draw.zoom[0].signum())):
+            zoomy(slot_preview_zoom_y(slot, draw.zoom[1].signum())):
+            rotationz(draw.rot[2] + rotation):
+            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
+            diffuse(tint[0], tint[1], tint[2], tint[3]): z(z)
+        );
+        if let Actor::Sprite {
+            blend: actor_blend, ..
+        } = &mut actor
+        {
+            *actor_blend = blend;
+        }
+        actor
+    };
+    match &mut actor {
+        Actor::Sprite { glow, .. } | Actor::TexturedMesh { glow, .. } => {
+            *glow = [
+                draw.glow[0],
+                draw.glow[1],
+                draw.glow[2],
+                draw.glow[3] * color[3],
+            ];
+        }
+        _ => {}
     }
     actors.push(actor);
 }
 
-#[allow(clippy::too_many_lines)]
+fn draw_receptor_preview(actors: &mut Vec<Actor>, rc: &RowCtx, skin: &Noteskin, center_x: f32) {
+    let size = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
+    for &(col, _, x_mult) in preview_arrows(skin.column_xs.len()) {
+        draw_receptor_note(
+            actors,
+            rc.fc.state,
+            skin,
+            col,
+            [x_mult.mul_add(size, center_x), rc.current_row_y],
+            size,
+            rc.a,
+            Z_RECEPTOR_PREVIEW,
+        );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_receptor_note(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    skin: &Noteskin,
+    col: usize,
+    center: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
+) {
+    let elapsed = state.preview_time;
+    let beat = state.preview_beat;
+    let pulse = skin.receptor_pulse.color_for_beat(beat);
+    let idle = skin.receptor_idle_glow.alpha(beat, false);
+    for (index, slot, color) in [
+        (
+            0,
+            skin.receptor_off.get(col),
+            [pulse[0], pulse[1], pulse[2], pulse[3] * alpha],
+        ),
+        (
+            1,
+            skin.receptor_idle_glow_layers
+                .get(col)
+                .and_then(Option::as_ref)
+                .or_else(|| skin.receptor_glow.get(col).and_then(Option::as_ref)),
+            [1.0, 1.0, 1.0, idle * alpha],
+        ),
+    ] {
+        let Some(slot) = slot else { continue };
+        if color[3] <= f32::EPSILON {
+            continue;
+        }
+        let frame = slot.frame_index(elapsed, beat);
+        let uv = slot.uv_for_frame_at(frame, elapsed);
+        let logical = slot.logical_size();
+        let scale = size / logical[1].max(1.0);
+        draw_preview_slot(
+            actors,
+            slot,
+            preview_slot_draw(slot, elapsed, beat),
+            center,
+            [logical[0] * scale, logical[1] * scale],
+            uv,
+            -slot.def.rotation_deg as f32,
+            color,
+            if index == 0 {
+                BlendMode::Alpha
+            } else {
+                BlendMode::Add
+            },
+            z + index,
+        );
+    }
+}
+
 fn draw_tap_explosion_preview(
     actors: &mut Vec<Actor>,
-    rc: &RowCtx,
-    explosion_ns: &Noteskin,
-    receptor_ns: &Noteskin,
-    center_x: f32,
+    state: &State,
+    skin: &Noteskin,
+    center: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
 ) {
-    let preview_time = rc.fc.state.preview_time * TAP_EXPLOSION_PREVIEW_SPEED;
-    let preview_beat = rc.fc.state.preview_beat * TAP_EXPLOSION_PREVIEW_SPEED;
-    let Some(explosion) = explosion_ns
+    let Some(explosion) = skin
         .tap_explosions
         .get("W1")
-        .or_else(|| explosion_ns.tap_explosions.values().next())
+        .or_else(|| skin.tap_explosions.values().next())
     else {
         return;
     };
+    let time = state.preview_time * TAP_EXPLOSION_PREVIEW_SPEED;
+    let beat = state.preview_beat * TAP_EXPLOSION_PREVIEW_SPEED;
     let duration = explosion.duration();
-    let anim_time = if duration > f32::EPSILON {
-        preview_time.rem_euclid(duration)
+    let elapsed = if duration > f32::EPSILON {
+        time.rem_euclid(duration)
     } else {
         0.0
     };
-    let explosion_visual = explosion.animation.state_at(anim_time);
-    if !explosion_visual.visible {
-        return;
-    }
-    let slot = &explosion.slot;
-    let beat_for_anim = if slot.source.is_beat_based() {
-        anim_time.max(0.0)
-    } else {
-        preview_beat
-    };
-    let frame = slot.frame_index(anim_time, beat_for_anim);
-    let uv_elapsed = if slot.model.is_some() {
-        anim_time
-    } else {
-        preview_time
-    };
-    let uv = slot.uv_for_frame_at(frame, uv_elapsed);
-    let logical = slot.logical_size();
-    let width = logical[0].max(1.0);
-    let height = logical[1].max(1.0);
-    let target_height = NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE * NOTESKIN_PREVIEW_SCALE;
-    let scale = if height > f32::EPSILON {
-        target_height / height
-    } else {
-        NOTESKIN_PREVIEW_SCALE
-    };
-    let size = [width * scale, target_height];
-    let rotation_deg = receptor_ns
-        .receptor_off
-        .first()
-        .map(|slot| slot.def.rotation_deg as f32)
-        .unwrap_or(0.0);
-    let color = [
-        explosion_visual.diffuse[0],
-        explosion_visual.diffuse[1],
-        explosion_visual.diffuse[2],
-        explosion_visual.diffuse[3] * rc.a,
-    ];
-    let blend = if explosion.animation.blend_add {
-        BlendMode::Add
-    } else {
-        BlendMode::Alpha
-    };
-    if let Some(model_actor) = noteskin_model_actor(
-        slot,
-        [center_x, rc.current_row_y],
-        [
-            size[0] * explosion_visual.zoom.max(0.0),
-            size[1] * explosion_visual.zoom.max(0.0),
-        ],
-        uv,
-        -rotation_deg,
-        anim_time,
-        beat_for_anim,
-        color,
-        blend,
-        107,
-    ) {
-        actors.push(model_actor);
-    } else if matches!(blend, BlendMode::Add) {
-        actors.push(act!(sprite(slot.texture_key_shared()):
-            align(0.5, 0.5):
-            xy(center_x, rc.current_row_y):
-            setsize(size[0], size[1]):
-            zoom(explosion_visual.zoom):
-            rotationz(-rotation_deg):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(color[0], color[1], color[2], color[3]):
-            blend(add):
-            z(Z_EXPLOSION_PREVIEW)
-        ));
-    } else {
-        actors.push(act!(sprite(slot.texture_key_shared()):
-            align(0.5, 0.5):
-            xy(center_x, rc.current_row_y):
-            setsize(size[0], size[1]):
-            zoom(explosion_visual.zoom):
-            rotationz(-rotation_deg):
-            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-            diffuse(color[0], color[1], color[2], color[3]):
-            blend(normal):
-            z(Z_EXPLOSION_PREVIEW)
-        ));
+    let scale = size / explosion.slot.logical_size()[1].max(1.0);
+    for (index, layer) in explosion.layers.iter().enumerate() {
+        let visual = layer.animation.state_at(elapsed);
+        let slot = &layer.slot;
+        let frame_beat = if slot.source.is_beat_based() {
+            elapsed
+        } else {
+            beat
+        };
+        let frame = slot.frame_index(elapsed, frame_beat);
+        let uv = slot.uv_for_frame_at(frame, if slot.model.is_some() { elapsed } else { time });
+        let logical = slot.logical_size();
+        let draw = deadsync_noteskin::ModelDrawState {
+            zoom: [visual.zoom, visual.zoom, 1.0],
+            rot: [0.0, 0.0, visual.rotation_z],
+            tint: visual.diffuse,
+            glow: visual.glow,
+            visible: visual.visible,
+            blend_add: layer.animation.blend_add,
+            ..Default::default()
+        };
+        draw_preview_slot(
+            actors,
+            slot,
+            draw,
+            center,
+            [logical[0] * scale, logical[1] * scale],
+            uv,
+            -slot.def.rotation_deg as f32,
+            [1.0, 1.0, 1.0, alpha],
+            BlendMode::Alpha,
+            z + index as i16,
+        );
     }
 }
 

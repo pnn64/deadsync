@@ -22,7 +22,7 @@ const Z_TEXT: i16 = 1453;
 #[derive(Clone, Debug)]
 pub(super) struct SettingMatch {
     pub choice_index: Option<usize>,
-    thumb: Option<super::pack_options::Thumb>,
+    pub thumb: Option<super::pack_options::Thumb>,
     pub row_id: RowId,
     pub pane: OptionsPane,
     pub label: Arc<str>,
@@ -547,23 +547,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         } else {
             ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
-        if open.component == Some(RowId::MineSkin) {
-            if let Some(index) = m.choice_index {
-                let name = state
-                    .pack_menu
-                    .mine_choice(index)
-                    .unwrap_or(&state.player_options[open.opener_player].noteskin);
-                super::render::draw_live_mine(
-                    actors,
-                    state,
-                    name.as_str(),
-                    [list_x + 10.0, y],
-                    18.0,
-                    1.0,
-                    Z_TEXT + 1,
-                );
-            }
-        } else if let Some(thumb) = &m.thumb {
+        if let Some(thumb) = &m.thumb {
             super::render::draw_thumb(
                 actors,
                 state,

@@ -58,40 +58,24 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     }
 }
 
-/// Decode a small menu preview on a worker, retaining the source texture's UV layout.
+/// Decode a resolved texture on a worker using the ordinary asset pixel pipeline.
 ///
 /// # Errors
-/// Returns an error for unreadable, malformed, or oversized source images.
-pub fn decode_preview_texture(
+/// Returns an error for unreadable or malformed source images.
+pub fn decode_texture_key(
     key: &str,
     model: bool,
 ) -> Result<(image::RgbaImage, SamplerDesc), String> {
-    let (image, sampler) = if let Some(texture) = deadlib_assets::generated_texture(key) {
-        ((*texture.image).clone(), texture.sampler)
+    if let Some(texture) = deadlib_assets::generated_texture(key) {
+        Ok(((*texture.image).clone(), texture.sampler))
     } else {
         let path =
             texture_key_source_path(key, key, |path| crate::paths().resolve_asset_path(path));
-        let mut reader = image::ImageReader::open(path).map_err(|error| error.to_string())?;
-        let mut limits = image::Limits::default();
-        limits.max_alloc = Some(64 * 1024 * 1024);
-        limits.max_image_width = Some(4096);
-        limits.max_image_height = Some(4096);
-        reader.limits(limits);
-        let mut image = reader
-            .decode()
-            .map_err(|error| error.to_string())?
-            .into_rgba8();
         let hints = parse_texture_hints(key);
-        deadlib_assets::apply_texture_hints(&mut image, &hints);
-        (image, texture_key_sampler(&hints, model))
-    };
-    // A preview is at most 32 screen pixels; keep animated sheets within 1 MiB.
-    let image = if image.width() > 512 || image.height() > 512 {
-        image::imageops::thumbnail(&image, 512, 512)
-    } else {
-        image
-    };
-    Ok((image, sampler))
+        let image = deadlib_assets::decode_texture_image(&path, &hints)
+            .map_err(|error| error.to_string())?;
+        Ok((image, texture_key_sampler(&hints, model)))
+    }
 }
 
 pub fn initial_texture_jobs(

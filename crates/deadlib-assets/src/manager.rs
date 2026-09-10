@@ -177,6 +177,16 @@ impl AssetManager {
         self.texture_store.queue_texture_upload(key, image);
     }
 
+    pub fn queue_texture_upload_with_sampler(
+        &mut self,
+        key: String,
+        image: RgbaImage,
+        sampler: SamplerDesc,
+    ) {
+        self.texture_store
+            .queue_texture_upload_with_sampler(key, image, sampler);
+    }
+
     pub fn queue_video_frame_upload(
         &mut self,
         handle: TextureHandle,

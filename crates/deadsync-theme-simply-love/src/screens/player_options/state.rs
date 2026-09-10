@@ -204,17 +204,6 @@ pub struct PlayerOptionMasks {
     pub tap_explosion: TapExplosionMask,
 }
 
-/// Loaded noteskin previews for a single player slot.
-///
-/// Stored as `[PlayerNoteskinPreviews; PLAYER_SLOTS]` on `NoteskinState` (one
-/// entry per player slot).
-#[derive(Clone, Default)]
-pub(super) struct PlayerNoteskinPreviews {
-    pub(super) base: Option<Arc<Noteskin>>,
-    pub(super) receptor: Option<Arc<Noteskin>>,
-    pub(super) tap_explosion: Option<Arc<Noteskin>>,
-}
-
 /// Screen-lifetime noteskin preview cache owned by the app/game thread.
 ///
 /// This is single-thread-only and is warmed with the ordinary noteskin catalog
@@ -226,11 +215,11 @@ pub(super) struct PlayerNoteskinPreviews {
 /// weak references, so it does not extend that lifetime. The underlying loader
 /// reports failed loads through its existing warnings; cache hits need no
 /// per-frame instrumentation because their worst-case work is a bounded hash
-/// lookup and `Arc` clone. PackMenu owns the separate bounded live mine previews;
-/// other optional pack components use atlas previews.
+/// lookup and `Arc` clone. The bounded component cache loads cold choices from
+/// any provider and submits native textures through the ordinary asset queue.
 pub(super) struct NoteskinState {
     pub(super) cache: HashMap<String, Arc<Noteskin>>,
-    pub(super) previews: [PlayerNoteskinPreviews; PLAYER_SLOTS],
+    pub(super) components: super::noteskins::SkinPreviews,
 }
 
 /// Per-player navigation key hold/repeat timing.

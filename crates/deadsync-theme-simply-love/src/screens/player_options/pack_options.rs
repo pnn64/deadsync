@@ -55,55 +55,28 @@ fn parts(options: &PlayerOptionsData) -> [Option<&NoteSkin>; 11] {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum Thumb {
-    Sprite {
-        key: Arc<str>,
-        uv: [f32; 4],
-    },
-    Note {
-        skin: Arc<Noteskin>,
-        part: NoteAnimPart,
-    },
+pub(super) struct Thumb {
+    pub name: Arc<str>,
+    pub part: usize,
 }
 
-struct MenuSkin {
-    skin: Skin,
-    atlas: Arc<str>,
-}
-
-/// Screen-owned catalog, built once at entry from bundled skins and at most 16
-/// pack skins. Input selects existing IDs and thumbnail handles; no image decode,
-/// compilation or catalog walks occur during rendering. The catalog and its fixed
-/// player preview slots drop on screen exit. A bounded worker cache loads live
-/// mine previews; full gameplay components warm at song load.
+/// Screen-owned choice catalog. Providers supply IDs and labels; all components
+/// use the same runtime, texture loader, and preview renderer.
 pub(super) struct PackMenu {
-    pub mines: MinePreviews,
-    skins: Vec<MenuSkin>,
+    skins: Vec<Skin>,
     choices: [Vec<Option<NoteSkin>>; 11],
     parts: [[Option<Thumb>; 11]; PLAYER_SLOTS],
-    base: [Option<Thumb>; PLAYER_SLOTS],
 }
 
 impl PackMenu {
     pub fn new(packs: &[InstalledPack]) -> Self {
-        let skins = packs
-            .iter()
-            .flat_map(|pack| {
-                pack.manifest.skins.iter().map(|skin| MenuSkin {
-                    atlas: deadsync_assets::textures::canonical_texture_key(
-                        pack.root.join(&skin.preview),
-                    )
-                    .into(),
-                    skin: skin.clone(),
-                })
-            })
-            .collect();
         Self {
-            mines: MinePreviews::default(),
-            skins,
+            skins: packs
+                .iter()
+                .flat_map(|pack| pack.manifest.skins.iter().cloned())
+                .collect(),
             choices: std::array::from_fn(|_| Vec::new()),
             parts: std::array::from_fn(|_| std::array::from_fn(|_| None)),
-            base: std::array::from_fn(|_| None),
         }
     }
 
@@ -136,28 +109,23 @@ impl PackMenu {
                     labels.push(tr("PlayerOptions", "NoTapExplosionLabel").to_string());
                 }
                 for name in &names {
-                    if self.skins.iter().any(|skin| skin.skin.id == *name) {
+                    if self.skins.iter().any(|skin| skin.id == *name) {
                         continue;
                     }
                     choices.push(Some(NoteSkin::new(name)));
                     labels.push(format!("{} / {name}", tr("PlayerOptions", "SkinBundled")));
                 }
-                for skin in self
-                    .skins
-                    .iter()
-                    .filter(|skin| names.contains(&skin.skin.id))
-                {
-                    let family = family_label(&skin.skin.id);
+                for skin in self.skins.iter().filter(|skin| names.contains(&skin.id)) {
+                    let family = family_label(&skin.id);
                     for choice in skin
-                        .skin
                         .options
                         .iter()
                         .filter(|choice| choice.slot == SLOTS[slot])
                     {
                         let value = if choice.id == "base" {
-                            skin.skin.id.clone()
+                            skin.id.clone()
                         } else {
-                            format!("{}?{}={}", skin.skin.id, SLOTS[slot], choice.id)
+                            format!("{}?{}={}", skin.id, SLOTS[slot], choice.id)
                         };
                         choices.push(Some(NoteSkin::new(&value)));
                         let label = if choice.id == "base" {
@@ -210,76 +178,81 @@ impl PackMenu {
         }
     }
 
-    fn thumb(&self, raw: &str, slot: usize) -> Option<Thumb> {
-        let selection = Selection::parse(raw).ok()?;
-        let skin = self
-            .skins
-            .iter()
-            .find(|skin| skin.skin.id == selection.skin)?;
-        let id = selection
-            .options
-            .get(SLOTS[slot])
-            .map_or("base", String::as_str);
-        let choice = skin
-            .skin
-            .options
-            .iter()
-            .find(|choice| choice.slot == SLOTS[slot] && choice.id == id)?;
-        let x = f32::from(choice.cell % 32) / 32.0;
-        let y = f32::from(choice.cell / 32) / 32.0;
-        Some(Thumb::Sprite {
-            key: Arc::clone(&skin.atlas),
-            uv: [x, y, x + 1.0 / 32.0, y + 1.0 / 32.0],
-        })
-    }
-
     pub fn preview(&self, player: usize, row: RowId) -> Option<&Thumb> {
-        if row == RowId::NoteSkin {
-            return self.base[player].as_ref();
-        }
         self.parts[player][slot_for_row(row)?].as_ref()
     }
 
-    pub fn update_mines(
-        &mut self,
+    pub fn update_previews(
+        &self,
         players: &[PlayerOptionsData; PLAYER_SLOTS],
         active: [bool; PLAYER_SLOTS],
+        focused: [Option<RowId>; PLAYER_SLOTS],
         search: &search::SettingSearchState,
-        bundled: &HashMap<String, Arc<Noteskin>>,
+        noteskin: &mut NoteskinState,
         cols: usize,
+        assets: &mut AssetManager,
     ) {
-        let mut wanted =
-            smallvec::SmallVec::<[&str; PLAYER_SLOTS + search::SEARCH_MAX_RESULTS]>::new();
-        for (player, options) in players.iter().enumerate() {
-            if active[player] {
-                wanted.push(
-                    options
-                        .mine_noteskin
-                        .as_ref()
-                        .unwrap_or(&options.noteskin)
-                        .as_str(),
-                );
+        let mut wanted = smallvec::SmallVec::<[(&str, usize); 40]>::new();
+        for player in 0..PLAYER_SLOTS {
+            if active[player]
+                && let Some(thumb) = focused[player].and_then(|row| self.preview(player, row))
+            {
+                wanted.push((thumb.name.as_ref(), thumb.part));
             }
         }
-        if let search::SettingSearchState::Open(open) = search
-            && open.component == Some(RowId::MineSkin)
-        {
-            for item in &open.matches[search::visible_range(open)] {
-                if let Some(choice) = item.choice_index.and_then(|i| self.choices[8].get(i)) {
-                    wanted.push(
-                        choice
-                            .as_ref()
-                            .unwrap_or(&players[open.opener_player].noteskin)
-                            .as_str(),
-                    );
+        if let search::SettingSearchState::Open(open) = search {
+            let range = search::visible_range(open);
+            // The highlighted result loads before the rest of its page.
+            for offset in 0..range.len() {
+                let index = range.start
+                    + (open.selected_index.saturating_sub(range.start) + offset) % range.len();
+                if let Some(thumb) = &open.matches[index].thumb {
+                    wanted.push((thumb.name.as_ref(), thumb.part));
                 }
             }
         }
-        self.mines.update(&wanted, bundled, cols);
-    }
-
-    pub fn mine_choice(&self, index: usize) -> Option<&NoteSkin> {
-        self.choices[8].get(index)?.as_ref()
+        for (player, options) in players.iter().enumerate() {
+            if active[player] {
+                wanted.push((options.noteskin.as_str(), 0));
+                for thumb in self.parts[player].iter().flatten() {
+                    let entry = (thumb.name.as_ref(), thumb.part);
+                    if !wanted.contains(&entry) {
+                        wanted.push(entry);
+                    }
+                }
+            }
+        }
+        // Preload adjacent choices while the current arrow is on screen.
+        for player in 0..PLAYER_SLOTS {
+            if !active[player] {
+                continue;
+            }
+            let Some(thumb) = focused[player].and_then(|row| self.preview(player, row)) else {
+                continue;
+            };
+            let choices = &self.choices[thumb.part];
+            let index = choices
+                .iter()
+                .position(|choice| {
+                    choice
+                        .as_ref()
+                        .is_some_and(|choice| choice.as_str() == thumb.name.as_ref())
+                })
+                .unwrap_or(0);
+            for delta in [-1isize, 1, -2, 2] {
+                let index =
+                    (index as isize + delta).rem_euclid(choices.len().max(1) as isize) as usize;
+                if let Some(Some(choice)) = choices.get(index)
+                    && !choice.is_none_choice()
+                    && !wanted.contains(&(choice.as_str(), thumb.part))
+                {
+                    wanted.push((choice.as_str(), thumb.part));
+                }
+            }
+        }
+        noteskin
+            .components
+            .update(&wanted, &noteskin.cache, cols, assets);
     }
 
     pub fn choice_thumb(
@@ -289,57 +262,24 @@ impl PackMenu {
         row: RowId,
         index: usize,
     ) -> Option<Thumb> {
-        let slot = slot_for_row(row)?;
-        if slot == 8 {
-            return None;
-        }
-        let choice = self.choices[slot]
+        let part = slot_for_row(row)?;
+        let choice = self.choices[part]
             .get(index)?
             .as_ref()
             .unwrap_or(&state.player_options[player].noteskin);
-        self.thumb(choice.as_str(), slot)
-            .or_else(|| bundled_thumb(state.noteskin.cache.get(choice.as_str())?, slot))
+        (!choice.is_none_choice()).then(|| Thumb {
+            name: Arc::from(choice.as_str()),
+            part,
+        })
     }
 }
 
-fn bundled_thumb(skin: &Arc<Noteskin>, slot: usize) -> Option<Thumb> {
-    if matches!(slot, 0 | 10) {
-        return Some(Thumb::Note {
-            skin: Arc::clone(skin),
-            part: if slot == 10 {
-                NoteAnimPart::Lift
-            } else {
-                NoteAnimPart::Tap
-            },
-        });
-    }
-    let sprite = match slot {
-        1 => skin.receptor_off.first(),
-        2 => skin.hold.body_active.as_ref(),
-        3 => skin.hold.body_inactive.as_ref(),
-        4 => skin.roll.body_active.as_ref(),
-        5 => skin.roll.body_inactive.as_ref(),
-        6 => skin
-            .tap_explosions
-            .values()
-            .next()
-            .map(|explosion| &explosion.slot),
-        7 => skin.hold.explosion.as_ref(),
-        _ => None,
-    }?;
-    Some(Thumb::Sprite {
-        key: sprite.texture_key_shared(),
-        uv: sprite.uv_for_frame_at(0, 0.0),
-    })
-}
-
-fn stored_label(skins: &[MenuSkin], raw: &str) -> Option<String> {
+fn stored_label(skins: &[Skin], raw: &str) -> Option<String> {
     let selection = Selection::parse(raw).ok()?;
-    let skin = skins.iter().find(|skin| skin.skin.id == selection.skin)?;
+    let skin = skins.iter().find(|skin| skin.id == selection.skin)?;
     let mut label = family_label(&selection.skin);
     for (slot, id) in &selection.options {
         let choice = skin
-            .skin
             .options
             .iter()
             .find(|choice| choice.slot == *slot && choice.id == *id)?;
@@ -359,23 +299,14 @@ fn family_label(id: &str) -> String {
 pub(super) fn sync_player(state: &mut State, player: usize) {
     let options = &state.player_options[player];
     let selected = parts(options);
-    state.pack_menu.base[player] = state.pack_menu.thumb(options.noteskin.as_str(), 0);
     for slot in 0..SLOTS.len() {
         let preview_slot = if slot == 9 { 8 } else { slot };
-        let raw = selected[preview_slot].unwrap_or(&options.noteskin).as_str();
-        state.pack_menu.parts[player][slot] = if matches!(slot, 8 | 9) {
-            None
-        } else {
-            state.pack_menu.thumb(raw, preview_slot)
-        };
-        // Existing bundled receptor/mine/explosion rows retain their live previews.
-        if !matches!(slot, 1 | 6 | 8 | 9) && state.pack_menu.parts[player][slot].is_none() {
-            state.pack_menu.parts[player][slot] = state
-                .noteskin
-                .cache
-                .get(raw)
-                .and_then(|skin| bundled_thumb(skin, preview_slot));
-        }
+        let choice = selected[preview_slot].unwrap_or(&options.noteskin);
+        state.pack_menu.parts[player][slot] =
+            (slot != 9 && !choice.is_none_choice()).then(|| Thumb {
+                name: Arc::from(choice.as_str()),
+                part: preview_slot,
+            });
         let index = if slot == 9 {
             (options.mine_size_percent.clamp(10, 200) - 10) as usize
         } else {
@@ -414,12 +345,6 @@ pub(super) fn apply_part(
     } else {
         *part_mut(&mut state.player_options[player], slot) =
             state.pack_menu.choices[slot][index].clone();
-        sync_noteskin_previews_for_player(
-            &mut state.noteskin,
-            &state.player_options[player],
-            player,
-            state.cols_per_player,
-        );
     }
     sync_player(state, player);
     Outcome::persisted_with_visibility()

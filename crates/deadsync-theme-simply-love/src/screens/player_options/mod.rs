@@ -90,18 +90,32 @@ pub use row::{FixedStepchart, RowId};
 pub use state::State;
 
 pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
-    state.pack_menu.update_mines(
-        &state.player_options,
-        state.active,
-        &state.search,
-        &state.noteskin.cache,
-        state.cols_per_player,
-    );
     prepare_row_titles(state);
     prepare_speed_values(state, asset_manager);
     prepare_speed_headers(state, asset_manager);
     prepare_music_rate_text(state);
     prepare_choice_layouts(state, asset_manager);
+}
+
+/// Poll component workers before the app drains the ordinary texture upload queue.
+pub fn prepare_previews(state: &mut State, asset_manager: &mut AssetManager) {
+    let focused = std::array::from_fn(|player| {
+        state
+            .pane()
+            .row_map
+            .display_order()
+            .get(state.pane().selected_row[player])
+            .copied()
+    });
+    state.pack_menu.update_previews(
+        &state.player_options,
+        state.active,
+        focused,
+        &state.search,
+        &mut state.noteskin,
+        state.cols_per_player,
+        asset_manager,
+    );
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

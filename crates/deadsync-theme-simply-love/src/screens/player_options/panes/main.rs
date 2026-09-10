@@ -210,12 +210,6 @@ const NOTE_SKIN: CustomBinding = CustomBinding {
                     choice.to_string()
                 };
                 state.player_options[player_idx].noteskin = NoteSkin::new(&name);
-                sync_noteskin_previews_for_player(
-                    &mut state.noteskin,
-                    &state.player_options[player_idx],
-                    player_idx,
-                    state.cols_per_player,
-                );
             },
         )
     },

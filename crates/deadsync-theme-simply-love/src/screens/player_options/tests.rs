@@ -129,9 +129,7 @@ pub(super) mod tests {
         );
 
         assert!(state.cache.is_empty());
-        assert!(state.previews.iter().all(|preview| {
-            preview.base.is_none() && preview.receptor.is_none() && preview.tap_explosion.is_none()
-        }));
+        assert!(state.components.get("cel", 0).is_none());
     }
 
     fn test_row(
@@ -2036,15 +2034,12 @@ pub(super) mod tests {
             ] {
                 // Inherited P1 and explicit P2 choices use the same component.
                 for player in [P1, P2] {
-                    let pack_options::Thumb::Note {
-                        skin: selected,
-                        part: selected_part,
-                    } = state.pack_menu.preview(player, row).unwrap()
-                    else {
-                        panic!("{name}: component must render note geometry")
-                    };
-                    assert!(Arc::ptr_eq(selected, &skin));
-                    assert_eq!(*selected_part, part);
+                    let selected = state.pack_menu.preview(player, row).unwrap();
+                    assert_eq!(selected.name.as_ref(), name);
+                    assert_eq!(
+                        selected.part,
+                        if part == NoteAnimPart::Lift { 10 } else { 0 }
+                    );
                 }
                 let mut first_frame = None;
                 let mut animated = false;
@@ -2108,10 +2103,11 @@ pub(super) mod tests {
             state.preview_time = time;
             state.preview_beat = time * 2.0;
             let mut actors = Vec::new();
-            super::super::render::draw_live_mine(
+            super::super::render::draw_live_preview(
                 &mut actors,
                 state,
                 name,
+                8,
                 [100.0, 100.0],
                 18.0,
                 1.0,
@@ -2192,42 +2188,242 @@ pub(super) mod tests {
         }
     }
 
+    #[cfg(target_os = "windows")]
     #[test]
+    #[allow(deprecated)] // One hidden window exercises the actual upload queue.
     #[ignore = "requires assets/noteskins/hurg with the installed Workshop"]
-    fn workshop_mine_previews_load_animated_bounded_textures() {
+    fn workshop_components_animate_in_rows_and_picker() {
+        use super::super::{pack_options, render};
+        use deadlib_present::actors::Actor;
+        use deadsync_profile::NoteSkin;
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let window = event_loop
+            .create_window(
+                winit::window::Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(64, 64)),
+            )
+            .unwrap();
+        let mut backend = deadlib_render::create_backend(
+            deadlib_render_core::BackendType::Software,
+            Arc::new(window),
+            deadlib_render_core::ProjectionMatrix::IDENTITY,
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            false,
+        )
+        .unwrap();
+        let mut assets = AssetManager::new();
         ensure_i18n();
         let (mut state, _) = setup_versus_state();
-        let wanted = ["metal-workshop?mines=d-a-n-k", "cel-workshop?mines=base"];
-        for name in wanted {
-            assert!(deadsync_assets::noteskin::is_pack_skin(name));
-        }
-        let deadline = std::time::Instant::now() + Duration::from_secs(30);
-        while wanted.iter().any(|name| {
-            state
-                .pack_menu
-                .mines
-                .get(name)
-                .is_none_or(|p| p.skin.is_none())
-        }) {
+        let parts = [
+            (0, RowId::SkinArrows),
+            (1, RowId::ReceptorSkin),
+            (2, RowId::SkinHoldActive),
+            (3, RowId::SkinHoldInactive),
+            (4, RowId::SkinRollActive),
+            (5, RowId::SkinRollInactive),
+            (6, RowId::TapExplosionSkin),
+            (7, RowId::SkinHoldExplosions),
+            (8, RowId::MineSkin),
+            (10, RowId::SkinLifts),
+        ];
+        for family in ["cel-workshop", "metal-workshop"] {
+            assert!(deadsync_assets::noteskin::is_pack_skin(family));
+            state.pack_menu =
+                pack_options::PackMenu::new(&deadsync_assets::noteskin::pack_catalog());
+            state.player_options[P1].noteskin = NoteSkin::new(family);
+            let rows = &mut state.panes[OptionsPane::Display.index()].row_map;
+            rows.get_mut(RowId::NoteSkin)
+                .unwrap()
+                .replace_choices(vec![family.into()]);
+            state.pack_menu.add_rows(rows, &state.player_options);
+            pack_options::sync_player(&mut state, P1);
+            let bright = format!("{family}?arrows=bright-td-vibrant");
+            state.player_options[P1].arrow_noteskin = Some(NoteSkin::new(&bright));
+            state.active = [true, false];
+            state.current_pane = OptionsPane::Display;
+            pack_options::sync_player(&mut state, P1);
+            state.pane_mut().selected_row[P1] = state
+                .pane()
+                .row_map
+                .display_order()
+                .iter()
+                .position(|&row| row == RowId::SkinArrows)
+                .unwrap();
+            super::super::prepare_previews(&mut state, &mut assets);
             assert!(
-                std::time::Instant::now() < deadline,
-                "mine worker timed out"
+                state.noteskin.components.get(&bright, 0).is_some(),
+                "the real menu preparation must request the selected HURG arrow"
             );
-            state
-                .pack_menu
-                .mines
-                .update(&wanted, &state.noteskin.cache, 4);
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        for name in wanted {
-            let preview = state.pack_menu.mines.get(name).unwrap();
-            assert!(!preview.textures.is_empty());
-            assert!(preview.textures.len() <= 2);
-            for (_, key) in &preview.textures {
-                let texture = deadlib_assets::generated_texture(key).unwrap();
-                assert!(texture.image.width() <= 512 && texture.image.height() <= 512);
+            state.player_options[P1].arrow_noteskin = None;
+            pack_options::sync_player(&mut state, P1);
+            let mut names: Vec<_> = parts
+                .iter()
+                .map(|&(part, _)| (family.to_string(), part))
+                .collect();
+            names.extend([
+                (format!("{family}?arrows=rgb"), 0),
+                (format!("{family}?arrows=bright-td-vibrant"), 0),
+                (format!("{family}?hold_active=rgb"), 2),
+                (format!("{family}?hold_inactive=rgb"), 3),
+                (format!("{family}?roll_active=rgb"), 4),
+                (format!("{family}?roll_inactive=rgb"), 5),
+                (format!("{family}?hold_explosions=glow-default"), 7),
+                (format!("{family}?lifts=spectrum"), 10),
+            ]);
+            if family == "metal-workshop" {
+                names.push((format!("{family}?mines=d-a-n-k"), 8));
             }
-            check_mine_preview(&mut state, name);
+            let wanted: Vec<_> = names
+                .iter()
+                .map(|(name, part)| (name.as_str(), *part))
+                .collect();
+            let deadline = std::time::Instant::now() + Duration::from_secs(120);
+            while wanted.iter().any(|&(name, part)| {
+                state
+                    .noteskin
+                    .components
+                    .get(name, part)
+                    .is_none_or(|p| !p.ready)
+            }) {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "Workshop preview worker timed out: {family}"
+                );
+                state
+                    .noteskin
+                    .components
+                    .update(&wanted, &state.noteskin.cache, 4, &mut assets);
+                for &(name, part) in &wanted {
+                    if state
+                        .noteskin
+                        .components
+                        .get(name, part)
+                        .is_some_and(|p| !p.ready)
+                    {
+                        let mut cold = Vec::new();
+                        render::draw_thumb(
+                            &mut cold,
+                            &state,
+                            &pack_options::Thumb {
+                                name: Arc::from(name),
+                                part,
+                            },
+                            [100.0; 2],
+                            32.0,
+                            1.0,
+                            102,
+                        );
+                        assert!(
+                            cold.is_empty(),
+                            "{name}: never substitute an atlas while loading"
+                        );
+                    }
+                }
+                assets.drain_texture_uploads(
+                    &mut backend,
+                    deadlib_assets::upload::TextureUploadBudget {
+                        max_uploads: 2,
+                        max_bytes: 8 * 1024 * 1024,
+                    },
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            for &(name, part) in &wanted {
+                let preview = state.noteskin.components.get(name, part).unwrap();
+                for key in &preview.textures {
+                    let handle = assets.texture_context().texture_handle(key);
+                    let Some(deadlib_render::Texture::Software(texture)) =
+                        assets.textures().get(&handle)
+                    else {
+                        panic!("{name}: native texture must be uploaded");
+                    };
+                    let (source, _) =
+                        deadsync_assets::textures::decode_texture_key(key, false).unwrap();
+                    assert_eq!(
+                        texture.image, source,
+                        "{name}: preview must retain every native pixel"
+                    );
+                    if name.contains("bright-td-vibrant") {
+                        assert!(
+                            texture.image.width() > 256 && texture.image.height() > 256,
+                            "regression: shrinking a sheet destroys frame resolution"
+                        );
+                    }
+                }
+                let mut first_frame = None;
+                let mut animated = false;
+                for time in [0.0, 0.17, 0.43, 0.79, 1.23] {
+                    state.preview_time = time;
+                    state.preview_beat = time * 2.0;
+                    for size in [18.0, 32.0] {
+                        let mut actors = Vec::new();
+                        assert!(render::draw_live_preview(
+                            &mut actors,
+                            &state,
+                            name,
+                            part,
+                            [100.0; 2],
+                            size,
+                            1.0,
+                            102
+                        ));
+                        assert!(!actors.is_empty(), "{name} part {part}");
+                        assert_preview_bounds(&actors, name, size);
+                        for actor in &actors {
+                            let key = match actor {
+                                Actor::Sprite { source, .. } => source.texture_key().unwrap(),
+                                Actor::TexturedMesh { texture, .. } => texture,
+                                _ => panic!("unexpected preview actor"),
+                            };
+                            assert!(
+                                preview.textures.iter().any(|source| source.as_ref() == key),
+                                "{name}: preview must use the ordinary source texture: {key}"
+                            );
+                        }
+                        if size == 18.0 {
+                            let frame = format!("{actors:?}");
+                            if let Some(first) = &first_frame {
+                                animated |= first != &frame;
+                            } else {
+                                first_frame = Some(frame);
+                            }
+                        }
+                        if name == family && part != 8 {
+                            let row = parts.iter().find(|&&(slot, _)| slot == part).unwrap().1;
+                            let thumb = if size == 18.0 {
+                                state.pack_menu.choice_thumb(&state, P1, row, 0).unwrap()
+                            } else {
+                                state.pack_menu.preview(P1, row).unwrap().clone()
+                            };
+                            let mut thumbnail = Vec::new();
+                            render::draw_thumb(
+                                &mut thumbnail,
+                                &state,
+                                &thumb,
+                                [100.0; 2],
+                                size,
+                                1.0,
+                                102,
+                            );
+                            assert_eq!(
+                                format!("{thumbnail:?}"),
+                                format!("{actors:?}"),
+                                "{family}: row/picker must use the live component"
+                            );
+                        }
+                    }
+                }
+                if matches!(part, 0 | 1 | 6 | 7 | 8 | 10) {
+                    assert!(animated, "{name} part {part} must advance its animation");
+                }
+            }
         }
     }
 

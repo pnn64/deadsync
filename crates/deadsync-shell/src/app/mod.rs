@@ -3908,6 +3908,11 @@ impl App {
             frame_policy.show_course_individual_scores,
             frame_policy.show_select_music_video_banners,
         );
+        if self.state.screens.current_screen == CurrentScreen::PlayerOptions
+            && let Some(state) = self.state.screens.player_options_state.as_mut()
+        {
+            player_options::prepare_previews(state, &mut self.asset_manager);
+        }
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let (mut actors, clear_color, gameplay_segments) =

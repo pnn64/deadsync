@@ -2,135 +2,336 @@ use super::*;
 use deadsync_noteskin::Style;
 use deadsync_profile as profile_data;
 
-// Two selected mines plus the eight visible picker entries. One worker loads at
-// a time; misses never do I/O on the menu thread. Only unused entries are replaced.
-// Runtime ownership ends at screen exit. Twenty fixed texture keys cap retained
-// preview pixels at 20 MiB (plus GPU copies), reused across screens. Completion
-// queues at most two uploads through the normal upload budget. Failed loads log
-// once per entry; frames only poll one channel and inspect ten cached names.
-const MINE_PREVIEW_COUNT: usize = PLAYER_SLOTS + search::SEARCH_MAX_RESULTS;
+// Screen-owned component cache shared by every noteskin provider. Entry and
+// neighboring-choice warmup use the ordinary runtime loader on one worker.
+// Forty entries bound retained runtimes; one pending component owns decoded
+// images, capped at 128 MiB. Source textures keep their native pixels and keys:
+// the normal asset upload queue owns them after handoff, reuses shared textures,
+// and retains GPU resources for the session, bounded by the installed asset set.
+// Two images / 8 MiB are submitted per frame (one oversized image may progress).
+// No file access or decoding occurs on a menu frame. Only unwanted entries are
+// replaced; runtime Arcs drop at replacement/screen exit. Failures log once per
+// entry. A cold preview stays empty until its actual textures have uploaded.
+const PREVIEW_COUNT: usize = 40;
+const PREVIEW_BYTES: usize = 128 * 1024 * 1024;
 
-#[derive(Default)]
-pub(super) struct MinePreviews {
-    entries: [Option<MinePreview>; MINE_PREVIEW_COUNT],
-    loading: Option<(usize, std::sync::mpsc::Receiver<Result<LoadedMine, String>>)>,
+pub(super) struct SkinPreviews {
+    entries: [Option<SkinPreview>; PREVIEW_COUNT],
+    loading: Option<(
+        usize,
+        std::sync::mpsc::Receiver<Result<LoadedPreview, String>>,
+    )>,
+    pending: Option<(usize, LoadedPreview)>,
 }
 
-pub(super) struct MinePreview {
+impl Default for SkinPreviews {
+    fn default() -> Self {
+        Self {
+            entries: std::array::from_fn(|_| None),
+            loading: None,
+            pending: None,
+        }
+    }
+}
+
+pub(super) struct SkinPreview {
     name: String,
+    part: usize,
     pub skin: Option<Arc<Noteskin>>,
-    pub textures: Vec<(Arc<str>, Arc<str>)>,
+    pub textures: Vec<Arc<str>>,
+    pub ready: bool,
+    requested: bool,
 }
 
-struct LoadedMine {
+struct LoadedPreview {
     skin: Arc<Noteskin>,
     textures: Vec<(Arc<str>, image::RgbaImage, deadlib_render_core::SamplerDesc)>,
 }
 
-impl MinePreviews {
-    pub fn get(&self, name: &str) -> Option<&MinePreview> {
+impl SkinPreviews {
+    pub fn get(&self, name: &str, part: usize) -> Option<&SkinPreview> {
         self.entries
             .iter()
             .flatten()
-            .find(|entry| entry.name == name)
+            .find(|entry| entry.name == name && entry.part == part)
     }
 
+    // The stages are kept together to make reservation, upload, and readiness
+    // ordering explicit: queued textures must never make a component drawable.
     pub fn update(
         &mut self,
-        wanted: &[&str],
-        bundled: &HashMap<String, Arc<Noteskin>>,
+        wanted: &[(&str, usize)],
+        cached: &HashMap<String, Arc<Noteskin>>,
         cols: usize,
+        assets: &mut AssetManager,
     ) {
         if let Some((index, receiver)) = &self.loading {
             match receiver.try_recv() {
-                Ok(result) => {
+                Ok(Ok(loaded)) => {
                     let entry = self.entries[*index]
                         .as_mut()
-                        .expect("loading slot is reserved");
-                    match result {
-                        Ok(loaded) => {
-                            for (layer, (source, image, sampler)) in
-                                loaded.textures.into_iter().enumerate()
-                            {
-                                let key: Arc<str> = format!("__menu_mine_{index}_{layer}").into();
-                                deadlib_assets::register_generated_texture(&key, image, sampler);
-                                entry.textures.push((source, key));
-                            }
-                            entry.skin = Some(loaded.skin);
-                        }
-                        Err(error) => log::warn!("Cannot preview mine '{}': {error}", entry.name),
-                    }
+                        .expect("worker slot is reserved");
+                    entry.textures = preview_textures(&loaded.skin, entry.part)
+                        .into_iter()
+                        .map(|(key, _)| key)
+                        .collect();
+                    entry.skin = Some(Arc::clone(&loaded.skin));
+                    self.pending = Some((*index, loaded));
                     self.loading = None;
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Ok(Err(error)) => {
+                    log::warn!("Cannot load noteskin preview: {error}");
+                    self.loading = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    log::warn!("Mine preview worker disconnected");
+                    log::warn!("Noteskin preview worker disconnected");
                     self.loading = None;
                 }
             }
         }
-        let Some(&name) = wanted
-            .iter()
-            .find(|&&name| !bundled.contains_key(name) && self.get(name).is_none())
-        else {
-            return;
-        };
-        let Some(index) = self.entries.iter().position(|entry| {
-            entry
+        if let Some((index, loaded)) = &mut self.pending {
+            let entry = self.entries[*index]
                 .as_ref()
-                .is_none_or(|entry| !wanted.contains(&entry.name.as_str()))
+                .expect("upload slot is reserved");
+            if wanted.contains(&(entry.name.as_str(), entry.part)) {
+                let mut bytes = 0;
+                for _ in 0..2 {
+                    let Some((_, image, _)) = loaded.textures.last() else {
+                        break;
+                    };
+                    let size = image.as_raw().len();
+                    if bytes > 0 && bytes + size > 8 * 1024 * 1024 {
+                        break;
+                    }
+                    let (key, image, sampler) = loaded.textures.pop().expect("image exists");
+                    if !assets.has_uploaded_texture_key(&key)
+                        && !assets.has_pending_texture_upload(&key)
+                    {
+                        bytes += size;
+                        assets.queue_texture_upload_with_sampler(key.to_string(), image, sampler);
+                    }
+                }
+                if loaded.textures.is_empty() {
+                    self.pending = None;
+                }
+            } else {
+                self.entries[*index] = None;
+                self.pending = None;
+            }
+        }
+        for &(name, part) in wanted {
+            if self.get(name, part).is_some() {
+                continue;
+            }
+            let Some(index) = self.entries.iter().enumerate().position(|(index, entry)| {
+                !self
+                    .loading
+                    .as_ref()
+                    .is_some_and(|(active, _)| *active == index)
+                    && !self
+                        .pending
+                        .as_ref()
+                        .is_some_and(|(active, _)| *active == index)
+                    && entry
+                        .as_ref()
+                        .is_none_or(|entry| !wanted.contains(&(entry.name.as_str(), entry.part)))
+            }) else {
+                break;
+            };
+            let skin = cached.get(name).cloned().or_else(|| {
+                self.entries
+                    .iter()
+                    .flatten()
+                    .find(|entry| entry.name == name)
+                    .and_then(|entry| entry.skin.clone())
+            });
+            let textures = skin
+                .as_ref()
+                .map(|skin| {
+                    preview_textures(skin, part)
+                        .into_iter()
+                        .map(|(key, _)| key)
+                        .collect()
+                })
+                .unwrap_or_default();
+            self.entries[index] = Some(SkinPreview {
+                name: name.to_string(),
+                part,
+                skin,
+                textures,
+                ready: false,
+                requested: false,
+            });
+        }
+        for entry in self.entries.iter_mut().flatten() {
+            if !entry.ready
+                && entry.skin.is_some()
+                && entry
+                    .textures
+                    .iter()
+                    .all(|key| assets.has_uploaded_texture_key(key))
+            {
+                entry.ready = true;
+            }
+        }
+        if self.loading.is_some() || self.pending.is_some() {
+            return;
+        }
+        let Some(index) = wanted.iter().find_map(|&(name, part)| {
+            self.entries.iter().position(|entry| {
+                entry.as_ref().is_some_and(|entry| {
+                    entry.name == name && entry.part == part && !entry.ready && !entry.requested
+                })
+            })
         }) else {
             return;
         };
-        self.entries[index] = Some(MinePreview {
-            name: name.to_string(),
-            skin: None,
-            textures: Vec::with_capacity(2),
-        });
-        let name = name.to_string();
+        let entry = self.entries[index].as_mut().expect("entry was found");
+        entry.requested = true;
+        let name = entry.name.clone();
+        let part = entry.part;
+        let skin = entry.skin.clone();
+        let uploaded: Vec<_> = entry
+            .textures
+            .iter()
+            .filter(|key| {
+                assets.has_uploaded_texture_key(key) || assets.has_pending_texture_upload(key)
+            })
+            .cloned()
+            .collect();
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         match std::thread::Builder::new()
-            .name("mine-preview".into())
+            .name("skin-preview".into())
             .spawn(move || {
-                let _ = sender.send(load_mine_preview(&name, cols));
+                let result = load_skin_preview(&name, part, cols, skin, &uploaded)
+                    .map_err(|error| format!("{name} (part {part}): {error}"));
+                let _ = sender.send(result);
             }) {
             Ok(_) => self.loading = Some((index, receiver)),
-            Err(error) => log::warn!("Cannot start mine preview worker: {error}"),
+            Err(error) => log::warn!("Cannot start noteskin preview worker: {error}"),
         }
     }
 }
 
-fn load_mine_preview(name: &str, cols: usize) -> Result<LoadedMine, String> {
-    let skin = noteskin::load_itg_skin_cached(
-        &Style {
-            num_cols: cols,
-            num_players: 1,
-        },
-        name,
-    )?;
-    let col = usize::from(skin.mines.len() > 1 || skin.mine_frames.len() > 1);
-    let mut textures = Vec::with_capacity(2);
-    for slot in [skin.mines.get(col), skin.mine_frames.get(col)]
-        .into_iter()
-        .flatten()
-        .flatten()
-    {
+fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
+    let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
+    let mut add = |slot: &SpriteSlot| {
         let key = slot.texture_key_shared();
-        if textures.iter().any(|(source, _, _)| *source == key) {
+        if let Some((_, model)) = textures.iter_mut().find(|(source, _)| *source == key) {
+            *model |= slot.model.is_some();
+        } else {
+            textures.push((key, slot.model.is_some()));
+        }
+    };
+    match part {
+        0 | 10 => {
+            let layers = if part == 10 {
+                &skin.lift_note_layers
+            } else {
+                &skin.note_layers
+            };
+            for slot in layers.iter().flat_map(|layers| layers.iter()) {
+                add(slot);
+            }
+        }
+        1 => {
+            for slot in &skin.receptor_off {
+                add(slot);
+            }
+            for slot in skin
+                .receptor_glow
+                .iter()
+                .chain(&skin.receptor_idle_glow_layers)
+                .flatten()
+            {
+                add(slot);
+            }
+        }
+        2 => {
+            if let Some(slot) = &skin.hold.body_active {
+                add(slot);
+            }
+        }
+        3 => {
+            if let Some(slot) = &skin.hold.body_inactive {
+                add(slot);
+            }
+        }
+        4 => {
+            if let Some(slot) = &skin.roll.body_active {
+                add(slot);
+            }
+        }
+        5 => {
+            if let Some(slot) = &skin.roll.body_inactive {
+                add(slot);
+            }
+        }
+        6 => {
+            if let Some(explosion) = skin
+                .tap_explosions
+                .get("W1")
+                .or_else(|| skin.tap_explosions.values().next())
+            {
+                for layer in explosion.layers.iter() {
+                    add(&layer.slot);
+                }
+            }
+        }
+        7 => {
+            if let Some(slot) = &skin.hold.explosion {
+                add(slot);
+            }
+        }
+        8 => {
+            let col = usize::from(skin.mines.len() > 1 || skin.mine_frames.len() > 1);
+            if let Some(slot) = skin.mines.get(col).and_then(Option::as_ref) {
+                add(slot);
+            }
+            if let Some(slot) = skin.mine_frames.get(col).and_then(Option::as_ref) {
+                add(slot);
+            }
+        }
+        _ => {}
+    }
+    textures
+}
+
+fn load_skin_preview(
+    name: &str,
+    part: usize,
+    cols: usize,
+    cached: Option<Arc<Noteskin>>,
+    uploaded: &[Arc<str>],
+) -> Result<LoadedPreview, String> {
+    let skin = match cached {
+        Some(skin) => skin,
+        None => noteskin::load_itg_skin_cached(
+            &Style {
+                num_cols: cols,
+                num_players: 1,
+            },
+            name,
+        )?,
+    };
+    let mut textures = Vec::new();
+    let mut bytes = 0;
+    for (key, model) in preview_textures(&skin, part) {
+        if uploaded.contains(&key) {
             continue;
         }
-        let (image, sampler) =
-            deadsync_assets::textures::decode_preview_texture(&key, slot.model.is_some())?;
+        let (image, sampler) = deadsync_assets::textures::decode_texture_key(&key, model)?;
+        bytes += image.as_raw().len();
+        if bytes > PREVIEW_BYTES {
+            return Err("component exceeds 128 MiB of decoded textures".into());
+        }
         textures.push((key, image, sampler));
     }
-    Ok(LoadedMine { skin, textures })
+    Ok(LoadedPreview { skin, textures })
 }
 
 pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
-    // Catalog warmup uses pack atlases; live mines load separately on a worker.
-    if noteskin::is_pack_skin(skin) {
-        return None;
-    }
     let style = Style {
         num_cols: cols_per_player,
         num_players: 1,
@@ -186,9 +387,17 @@ pub(super) fn preview_noteskin_names(
     }
     for options in player_options {
         push_noteskin_name_once(&mut names, &options.noteskin);
-        for skin in [&options.arrow_noteskin, &options.lift_noteskin]
-            .into_iter()
-            .flatten()
+        for skin in [
+            &options.arrow_noteskin,
+            &options.lift_noteskin,
+            &options.hold_active_noteskin,
+            &options.hold_inactive_noteskin,
+            &options.roll_active_noteskin,
+            &options.roll_inactive_noteskin,
+            &options.hold_explosion_noteskin,
+        ]
+        .into_iter()
+        .flatten()
         {
             push_noteskin_name_once(&mut names, skin);
         }
@@ -211,34 +420,16 @@ pub(super) fn init_noteskin_state(
     player_options: &[profile_data::PlayerOptionsData; PLAYER_SLOTS],
     prewarm_catalog: bool,
 ) -> NoteskinState {
-    if !prewarm_catalog {
-        return NoteskinState {
-            cache: HashMap::new(),
-            previews: std::array::from_fn(|_| PlayerNoteskinPreviews::default()),
-        };
+    let cache = if prewarm_catalog {
+        let names = preview_noteskin_names(noteskin_names.to_vec(), player_options);
+        build_noteskin_cache(cols_per_player, &names)
+    } else {
+        HashMap::new()
+    };
+    NoteskinState {
+        cache,
+        components: SkinPreviews::default(),
     }
-
-    let initial_names = preview_noteskin_names(noteskin_names.to_vec(), player_options);
-    let mut cache = build_noteskin_cache(cols_per_player, &initial_names);
-    let previews = std::array::from_fn(|i| {
-        let profile_noteskin = &player_options[i].noteskin;
-        PlayerNoteskinPreviews {
-            base: cached_or_load_noteskin(&mut cache, profile_noteskin, cols_per_player),
-            receptor: resolved_noteskin_override_preview(
-                &mut cache,
-                profile_noteskin,
-                player_options[i].receptor_noteskin.as_ref(),
-                cols_per_player,
-            ),
-            tap_explosion: resolved_tap_explosion_preview(
-                &mut cache,
-                profile_noteskin,
-                player_options[i].tap_explosion_noteskin.as_ref(),
-                cols_per_player,
-            ),
-        }
-    });
-    NoteskinState { cache, previews }
 }
 
 pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_data::NoteSkin) {
@@ -251,121 +442,64 @@ pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_da
     }
 }
 
-pub(super) fn cached_noteskin(
-    cache: &HashMap<String, Arc<Noteskin>>,
-    skin: &profile_data::NoteSkin,
-) -> Option<Arc<Noteskin>> {
-    cache.get(skin.as_str()).cloned()
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub(super) fn fallback_noteskin(cache: &HashMap<String, Arc<Noteskin>>) -> Option<Arc<Noteskin>> {
-    cache
-        .get(profile_data::NoteSkin::DEFAULT_NAME)
-        .cloned()
-        .or_else(|| cache.values().next().cloned())
-}
-
-pub(super) fn cached_or_load_noteskin(
-    cache: &mut HashMap<String, Arc<Noteskin>>,
-    skin: &profile_data::NoteSkin,
-    cols_per_player: usize,
-) -> Option<Arc<Noteskin>> {
-    if noteskin::is_pack_skin(skin.as_str()) {
-        return None;
+    #[test]
+    fn preview_uploads_wait_for_residency_and_keep_native_keys() {
+        crate::tests::init_paths();
+        let skin = noteskin::load_itg_skin_cached(
+            &Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            "cel",
+        )
+        .unwrap();
+        let keys: Vec<Arc<str>> = (0..5)
+            .map(|i| format!("fixture-native-{i}").into())
+            .collect();
+        let mut previews = SkinPreviews::default();
+        previews.entries[0] = Some(SkinPreview {
+            name: "fixture".into(),
+            part: 6,
+            skin: Some(Arc::clone(&skin)),
+            textures: keys.clone(),
+            ready: false,
+            requested: true,
+        });
+        previews.pending = Some((
+            0,
+            LoadedPreview {
+                skin,
+                textures: keys
+                    .iter()
+                    .map(|key| {
+                        (
+                            Arc::clone(key),
+                            image::RgbaImage::new(1024, 1024),
+                            deadlib_render_core::SamplerDesc::default(),
+                        )
+                    })
+                    .collect(),
+            },
+        ));
+        let mut assets = AssetManager::new();
+        for count in [2, 4, 5] {
+            previews.update(&[("fixture", 6)], &HashMap::new(), 4, &mut assets);
+            assert_eq!(
+                keys.iter()
+                    .filter(|key| assets.has_pending_texture_upload(key))
+                    .count(),
+                count
+            );
+            assert!(
+                !previews.get("fixture", 6).unwrap().ready,
+                "queued images are not resident textures"
+            );
+            assert!(previews.get("fixture", 0).is_none());
+        }
+        assert!(previews.pending.is_none());
     }
-    if let Some(ns) = cached_noteskin(cache, skin) {
-        return Some(ns);
-    }
-
-    if let Some(loaded) = load_noteskin_cached(skin.as_str(), cols_per_player) {
-        cache.insert(skin.as_str().to_string(), loaded.clone());
-        return Some(loaded);
-    }
-
-    if let Some(ns) = fallback_noteskin(cache) {
-        return Some(ns);
-    }
-
-    if !skin
-        .as_str()
-        .eq_ignore_ascii_case(profile_data::NoteSkin::DEFAULT_NAME)
-        && let Some(loaded) =
-            load_noteskin_cached(profile_data::NoteSkin::DEFAULT_NAME, cols_per_player)
-    {
-        cache.insert(
-            profile_data::NoteSkin::DEFAULT_NAME.to_string(),
-            loaded.clone(),
-        );
-        return Some(loaded);
-    }
-
-    fallback_noteskin(cache)
-}
-
-pub(super) fn cached_or_load_noteskin_exact(
-    cache: &mut HashMap<String, Arc<Noteskin>>,
-    skin: &profile_data::NoteSkin,
-    cols_per_player: usize,
-) -> Option<Arc<Noteskin>> {
-    if let Some(ns) = cached_noteskin(cache, skin) {
-        return Some(ns);
-    }
-
-    let loaded = load_noteskin_cached(skin.as_str(), cols_per_player)?;
-    cache.insert(skin.as_str().to_string(), loaded.clone());
-    Some(loaded)
-}
-
-pub(super) fn resolved_noteskin_override_preview(
-    cache: &mut HashMap<String, Arc<Noteskin>>,
-    noteskin: &profile_data::NoteSkin,
-    override_noteskin: Option<&profile_data::NoteSkin>,
-    cols_per_player: usize,
-) -> Option<Arc<Noteskin>> {
-    if let Some(override_noteskin) = override_noteskin
-        && let Some(ns) = cached_or_load_noteskin_exact(cache, override_noteskin, cols_per_player)
-    {
-        return Some(ns);
-    }
-
-    cached_or_load_noteskin(cache, noteskin, cols_per_player)
-}
-
-pub(super) fn resolved_tap_explosion_preview(
-    cache: &mut HashMap<String, Arc<Noteskin>>,
-    noteskin: &profile_data::NoteSkin,
-    tap_explosion_noteskin: Option<&profile_data::NoteSkin>,
-    cols_per_player: usize,
-) -> Option<Arc<Noteskin>> {
-    if tap_explosion_noteskin.is_some_and(profile_data::NoteSkin::is_none_choice) {
-        return None;
-    }
-
-    resolved_noteskin_override_preview(cache, noteskin, tap_explosion_noteskin, cols_per_player)
-}
-
-pub(super) fn sync_noteskin_previews_for_player(
-    noteskin: &mut NoteskinState,
-    options: &profile_data::PlayerOptionsData,
-    player_idx: usize,
-    cols_per_player: usize,
-) {
-    let noteskin_setting = options.noteskin.clone();
-    let receptor_noteskin_setting = options.receptor_noteskin.clone();
-    let tap_explosion_noteskin_setting = options.tap_explosion_noteskin.clone();
-    let previews = &mut noteskin.previews[player_idx];
-    previews.base =
-        cached_or_load_noteskin(&mut noteskin.cache, &noteskin_setting, cols_per_player);
-    previews.receptor = resolved_noteskin_override_preview(
-        &mut noteskin.cache,
-        &noteskin_setting,
-        receptor_noteskin_setting.as_ref(),
-        cols_per_player,
-    );
-    previews.tap_explosion = resolved_tap_explosion_preview(
-        &mut noteskin.cache,
-        &noteskin_setting,
-        tap_explosion_noteskin_setting.as_ref(),
-        cols_per_player,
-    );
 }
