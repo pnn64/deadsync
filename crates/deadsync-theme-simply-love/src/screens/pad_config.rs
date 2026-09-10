@@ -1763,6 +1763,27 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     );
 
     let Some(live_release) = bar.release_threshold else {
+        // Per-sensor pads: nudge every sensor by the step on its own, so
+        // offsets tuned in Advanced survive a Simple-view adjustment.
+        if pad.supports_advanced && !bar.sensors.is_empty() {
+            let sensors: SmallVec<[(usize, u16); 12]> = bar
+                .sensors
+                .iter()
+                .map(|sv| (sv.firmware_index, sv.raw_threshold))
+                .collect();
+            for (fw, live) in sensors {
+                let current = current_sensor_threshold(state, device, button, fw).unwrap_or(live);
+                set_sensor_threshold(
+                    state,
+                    device,
+                    button,
+                    fw,
+                    current,
+                    i32::from(current) + delta,
+                );
+            }
+            return;
+        }
         // Single-threshold button: the backend derives its own release side.
         let current =
             pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
@@ -1858,14 +1879,32 @@ fn adjust_sensor_threshold(
     let Some(bar) = pad.buttons.get(button) else {
         return;
     };
-    let (min, max) = (bar.min_raw_threshold, bar.max_raw_threshold);
     let Some(sv) = bar.sensors.get(disp) else {
         return;
     };
     let fw = sv.firmware_index;
     let live = sv.raw_threshold;
     let current = current_sensor_threshold(state, dev, button, fw).unwrap_or(live);
-    let next = (i32::from(current) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+    set_sensor_threshold(state, dev, button, fw, current, i32::from(current) + delta);
+}
+
+/// Queue one sensor's threshold, clamped to the button's editable range;
+/// a no-op when it wouldn't change from `current`.
+fn set_sensor_threshold(
+    state: &mut State,
+    dev: PadDeviceId,
+    button: usize,
+    fw: usize,
+    current: u16,
+    value: i32,
+) {
+    let Some(bar) = pad_by_device(state, dev).and_then(|p| p.buttons.get(button)) else {
+        return;
+    };
+    let next = value.clamp(
+        i32::from(bar.min_raw_threshold),
+        i32::from(bar.max_raw_threshold),
+    ) as u16;
     if next == current {
         return;
     }
@@ -2910,7 +2949,7 @@ mod tests {
             cmds[0],
             PadCommand::Threshold {
                 button: 0,
-                sensor: None,
+                sensor: Some(_),
                 ..
             }
         ));
@@ -2961,21 +3000,26 @@ mod tests {
     #[test]
     fn raise_lower_step_clamp_and_dedup() {
         let mut s = with_pad();
-        // Two raises in one frame collapse to a single queued command (+5 each).
+        // Two raises in one frame collapse to one queued command per sensor
+        // (+5 each), never a pile-up.
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 1);
-        assert!(matches!(cmds[0], PadCommand::Threshold { value: 40, .. })); // 30 -> 40
+        assert_eq!(cmds.len(), 4);
+        assert!(
+            cmds.iter()
+                .all(|c| matches!(c, PadCommand::Threshold { value: 40, .. })) // 30 -> 40
+        );
         // Lowering past the minimum clamps at min_raw_threshold (5).
         for _ in 0..20 {
             apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
         }
         let cmds = take_commands(&mut s);
-        assert!(matches!(
-            cmds.last().unwrap(),
-            PadCommand::Threshold { value: 5, .. }
-        ));
+        assert_eq!(cmds.len(), 4);
+        assert!(
+            cmds.iter()
+                .all(|c| matches!(c, PadCommand::Threshold { value: 5, .. }))
+        );
     }
 
     #[test]
@@ -2999,13 +3043,14 @@ mod tests {
         );
         assert_eq!(r, EditResult::Handled);
         assert!(take_commands(&mut s).is_empty());
-        // A dedicated menu control from the same gamepad does edit.
+        // A dedicated menu control from the same gamepad does edit (one
+        // command per sensor of the cursor panel).
         apply_edit(
             &mut s,
             &ev_from(VirtualAction::p1_menu_up, InputSource::Gamepad, true),
             false,
         );
-        assert_eq!(take_commands(&mut s).len(), 1);
+        assert_eq!(take_commands(&mut s).len(), 4);
     }
 
     #[test]
@@ -3024,7 +3069,7 @@ mod tests {
     fn p2_actions_also_drive_the_ui() {
         let mut s = with_pad();
         apply_edit(&mut s, &ev(VirtualAction::p2_up), false);
-        assert_eq!(take_commands(&mut s).len(), 1);
+        assert_eq!(take_commands(&mut s).len(), 4);
     }
 
     // ── Back / exit ──
@@ -3704,11 +3749,9 @@ mod tests {
         ev_from(action, InputSource::Keyboard, false)
     }
 
+    /// The pending threshold for the cursor pad's button 0, sensor 0.
     fn pending_threshold_value(s: &State) -> Option<u16> {
-        s.pending.iter().find_map(|c| match c {
-            PadCommand::Threshold { value, .. } => Some(*value),
-            _ => None,
-        })
+        current_sensor_threshold(s, s.pads[0].device_id, 0, 0)
     }
 
     #[test]
@@ -3786,5 +3829,28 @@ mod tests {
         apply_edit(&mut s, &ev_release(VirtualAction::p1_down), false);
         update(&mut s, 1.0);
         assert_eq!(s.profiles_sel, 3);
+    }
+
+    #[test]
+    fn simple_step_shifts_each_sensor_separately_and_clamps() {
+        let mut s = with_pad();
+        // Sensors tuned apart in Advanced: 30 / 40 / 50 / 248 (near the 250 cap).
+        let thresholds = [30u16, 40, 50, 248];
+        for (sv, t) in s.pads[0].buttons[0].sensors.iter_mut().zip(thresholds) {
+            sv.raw_threshold = t;
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let dev = s.pads[0].device_id;
+        let pending = |s: &State| -> Vec<Option<u16>> {
+            (0..4)
+                .map(|fw| current_sensor_threshold(s, dev, 0, fw))
+                .collect()
+        };
+        assert_eq!(pending(&s), vec![Some(35), Some(45), Some(55), Some(250)]);
+        // A held repeat keeps stepping from the pending values, per sensor;
+        // the sensor already at the cap stays there (no new command).
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(pending(&s), vec![Some(40), Some(50), Some(60), Some(250)]);
+        assert_eq!(take_commands(&mut s).len(), 4);
     }
 }
