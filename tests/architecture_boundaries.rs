@@ -3520,7 +3520,7 @@ fn select_music_session_runtime_is_shell_prepared() {
     assert!(runtime_shell.contains("let profiles = profile_views_dirty.then("));
     assert!(runtime_shell.contains(".then(deadsync_profile::runtime_favorite_snapshot)"));
     assert!(runtime_shell.contains("fn select_music_pad_profiles("));
-    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs(profile_id)"));
+    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs()"));
     assert!(runtime_shell.contains(".profiles_stale("));
 
     let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
@@ -3556,11 +3556,11 @@ fn select_music_session_runtime_is_shell_prepared() {
         "SimplyLoveProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
         "SimplyLoveHardwareRequest::RenameSmxPadConfig",
-        "profile::rename_pad_config(&profile_id, &old_name, &new_name)",
+        "profile::rename_pad_config(&old_name, &new_name)",
         "SimplyLoveHardwareRequest::SetSmxPadConfigDefault",
-        "profile::set_default_pad_config(&profile_id, &serial, &name)",
+        "profile::set_default_pad_config(&serial, &name)",
         "SimplyLoveHardwareRequest::DeleteSmxPadConfig",
-        "profile::delete_pad_config(&profile_id, &name)",
+        "profile::delete_pad_config(&name)",
     ] {
         assert!(
             executor.contains(execution),

@@ -643,8 +643,8 @@ pub const fn set_managed_active(state: &mut State, active: bool) {
 }
 
 /// Open the "save this pad as a profile" name-entry box. No-op if there are no
-/// pads, if already saving, or if the cursor pad can't be saved (no profile).
-/// Works in both the Simple and Advanced views.
+/// pads, if already saving, or if the cursor pad can't be saved (not an
+/// in-session SMX pad). Works in both the Simple and Advanced views.
 pub fn begin_save(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
@@ -663,7 +663,7 @@ pub fn set_profiles(state: &mut State, profiles: Vec<ProfileListEntry>) {
 }
 
 /// Open the "Profiles" management list over the current view. Same gating as
-/// `begin_save` (in-session SMX pad with a local profile).
+/// `begin_save` (in-session SMX pad).
 pub const fn begin_profiles(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;

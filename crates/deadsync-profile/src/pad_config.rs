@@ -1,9 +1,12 @@
-//! User pad-config profile data and serialization.
+//! Machine-global pad-config data, serialization, and legacy migration.
 //!
-//! Each local profile can store several named pad configs in `padconfig.ini`.
-//! A config holds the backend, optional pad type, provenance serial, default
-//! serial associations, an optional global default, and opaque key/value
-//! settings owned by the input backend.
+//! The machine stores several named pad configs in one `padconfig.ini`,
+//! shared by every player (pad thresholds describe the physical pads, not a
+//! player). A config holds the backend, optional pad type, provenance serial,
+//! default serial associations, an optional global default, and opaque
+//! key/value settings owned by the input backend. Configs previously lived in
+//! each local profile's `padconfig.ini`; [`migrate_machine_store`] merges
+//! those into the machine store once.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -32,6 +35,7 @@ const META_KEYS: [&str; 6] = [
 
 pub const PAD_CONFIG_FILE: &str = "padconfig.ini";
 
+/// Legacy per-profile store location, read only by [`migrate_machine_store`].
 #[inline(always)]
 #[must_use]
 pub fn pad_config_path(profile_dir: &Path) -> PathBuf {
@@ -314,70 +318,134 @@ pub fn load_path(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
     Ok(parse(&content))
 }
 
-#[must_use]
-pub fn load_dir(profile_dir: &Path) -> Vec<PadConfigProfile> {
-    load_path(&pad_config_path(profile_dir)).unwrap_or_default()
-}
-
-pub fn pad_config_path_for_profile_id(
-    root: &Path,
-    profile_id: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> PathBuf {
-    pad_config_path(&crate::runtime_profile_dir_for_id(
-        root, profile_id, duplicate,
-    ))
-}
-
-pub fn load_profile_id(
-    root: &Path,
-    profile_id: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Vec<PadConfigProfile> {
-    load_path(&pad_config_path_for_profile_id(root, profile_id, duplicate)).unwrap_or_default()
-}
-
 pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
     deadlib_platform::atomic_write::write_atomic(path, serialize(profiles).as_bytes())
 }
 
-pub fn save_dir(profile_dir: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
-    save_path(&pad_config_path(profile_dir), profiles)
+/// Merge per-profile pad-config lists into one machine-global list.
+///
+/// `sources` is ordered newest-first (file mtime); earlier sources win every
+/// conflict:
+/// - A config that matches an already-merged one (same name ignoring case,
+///   backend, pad type, and settings) folds into it, contributing any serial
+///   defaults not already claimed.
+/// - A name collision between *different* configs keeps both, renaming the
+///   later one with a " (2)"-style suffix.
+/// - Each serial keeps one default and each backend one global default: the
+///   newest source claiming it.
+#[must_use]
+/// Name a migrated config after the profile it came from, so the merged
+/// list still says whose tuning each entry is ("ddrcoder - Left"). An empty
+/// owner leaves the name alone.
+#[must_use]
+pub fn migrated_config_name(owner: &str, name: &str) -> String {
+    let owner = owner.trim();
+    if owner.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{owner} - {name}")
+    }
 }
 
-pub fn save_profile_id(
-    root: &Path,
-    profile_id: &str,
-    profiles: &[PadConfigProfile],
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> std::io::Result<()> {
-    save_path(
-        &pad_config_path_for_profile_id(root, profile_id, duplicate),
-        profiles,
-    )
+/// Merge legacy per-profile config lists, newest source first, into one
+/// machine list. Each source is `(owner, configs)`; every config is renamed
+/// via [`migrated_config_name`] so it keeps its provenance.
+pub fn merge_for_migration(sources: Vec<(String, Vec<PadConfigProfile>)>) -> Vec<PadConfigProfile> {
+    let mut merged: Vec<PadConfigProfile> = Vec::new();
+    for (owner, source) in sources {
+        for mut profile in source {
+            profile.name = migrated_config_name(&owner, &profile.name);
+            profile
+                .default_for_serials
+                .retain(|serial| !merged.iter().any(|m| is_default_for(m, serial)));
+            if profile.global_default
+                && merged
+                    .iter()
+                    .any(|m| m.global_default && m.backend == profile.backend)
+            {
+                profile.global_default = false;
+            }
+            if let Some(existing) = merged.iter_mut().find(|m| {
+                m.name.eq_ignore_ascii_case(&profile.name)
+                    && m.backend == profile.backend
+                    && m.pad_type == profile.pad_type
+                    && m.settings == profile.settings
+            }) {
+                existing
+                    .default_for_serials
+                    .append(&mut profile.default_for_serials);
+                existing.global_default |= profile.global_default;
+                continue;
+            }
+            let mut name = profile.name.clone();
+            let mut n = 1;
+            while merged.iter().any(|m| m.name.eq_ignore_ascii_case(&name)) {
+                n += 1;
+                name = format!("{} ({n})", profile.name);
+            }
+            profile.name = name;
+            merged.push(profile);
+        }
+    }
+    merged.sort_by(|a, b| unicode_case_insensitive_cmp(&a.name, &b.name));
+    merged
 }
 
-#[derive(Debug)]
-pub struct PadConfigIoError {
-    pub path: PathBuf,
-    pub error: std::io::Error,
+/// One-time migration into the machine-global store at `machine_path`: merge
+/// every per-profile `padconfig.ini` under `profiles_root` (newest file
+/// first) and write the result, each config renamed after its profile (the
+/// `profile.ini` display name, else the folder name). The machine file's
+/// existence marks the migration done, so an empty file is written even when
+/// there is nothing to migrate. Legacy per-profile files are left in place
+/// untouched, so rolling back to a per-profile build loses nothing.
+///
+/// Returns `None` when the machine store already exists, otherwise the number
+/// of migrated configs.
+pub fn migrate_machine_store(
+    machine_path: &Path,
+    profiles_root: &Path,
+) -> std::io::Result<Option<usize>> {
+    if machine_path.exists() {
+        return Ok(None);
+    }
+    let mut sources: Vec<(
+        std::time::SystemTime,
+        std::ffi::OsString,
+        String,
+        Vec<PadConfigProfile>,
+    )> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(profiles_root) {
+        for entry in entries.flatten() {
+            let path = pad_config_path(&entry.path());
+            let Ok(list) = load_path(&path) else { continue };
+            if list.is_empty() {
+                continue;
+            }
+            let modified = std::fs::metadata(&path)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let owner = crate::read_profile_identity_dir(&entry.path())
+                .1
+                .unwrap_or_else(|| entry.file_name().to_string_lossy().into_owned());
+            sources.push((modified, entry.file_name(), owner, list));
+        }
+    }
+    // Newest profile first; directory name breaks mtime ties so the merge is
+    // deterministic regardless of read_dir order.
+    sources.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let merged = merge_for_migration(
+        sources
+            .into_iter()
+            .map(|(_, _, owner, list)| (owner, list))
+            .collect(),
+    );
+    if let Some(parent) = machine_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    save_path(machine_path, &merged)?;
+    Ok(Some(merged.len()))
 }
 
-const fn pad_config_io_error(path: PathBuf, error: std::io::Error) -> PadConfigIoError {
-    PadConfigIoError { path, error }
-}
-
-pub fn save_profile_id_report(
-    root: &Path,
-    profile_id: &str,
-    profiles: &[PadConfigProfile],
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Result<(), PadConfigIoError> {
-    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
-    save_path(&path, profiles).map_err(|error| pad_config_io_error(path, error))
-}
-
-#[allow(clippy::too_many_arguments)]
 pub fn upsert_path(
     path: &Path,
     name: &str,
@@ -403,75 +471,6 @@ pub fn upsert_path(
     Ok(changed)
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn upsert_dir(
-    profile_dir: &Path,
-    name: &str,
-    backend: &str,
-    pad_type: Option<String>,
-    serial: Option<String>,
-    make_default: bool,
-    settings: Vec<(String, String)>,
-) -> std::io::Result<bool> {
-    upsert_path(
-        &pad_config_path(profile_dir),
-        name,
-        backend,
-        pad_type,
-        serial,
-        make_default,
-        settings,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn upsert_profile_id(
-    root: &Path,
-    profile_id: &str,
-    name: &str,
-    backend: &str,
-    pad_type: Option<String>,
-    serial: Option<String>,
-    make_default: bool,
-    settings: Vec<(String, String)>,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> std::io::Result<bool> {
-    upsert_path(
-        &pad_config_path_for_profile_id(root, profile_id, duplicate),
-        name,
-        backend,
-        pad_type,
-        serial,
-        make_default,
-        settings,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn upsert_profile_id_report(
-    root: &Path,
-    profile_id: &str,
-    name: &str,
-    backend: &str,
-    pad_type: Option<String>,
-    serial: Option<String>,
-    make_default: bool,
-    settings: Vec<(String, String)>,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Result<bool, PadConfigIoError> {
-    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
-    upsert_path(
-        &path,
-        name,
-        backend,
-        pad_type,
-        serial,
-        make_default,
-        settings,
-    )
-    .map_err(|error| pad_config_io_error(path, error))
-}
-
 pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = set_default_config(&mut list, serial, name);
@@ -479,35 +478,6 @@ pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Resul
         save_path(path, &list)?;
     }
     Ok(changed)
-}
-
-pub fn set_default_dir(profile_dir: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
-    set_default_path(&pad_config_path(profile_dir), serial, name)
-}
-
-pub fn set_default_profile_id(
-    root: &Path,
-    profile_id: &str,
-    serial: &str,
-    name: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> std::io::Result<bool> {
-    set_default_path(
-        &pad_config_path_for_profile_id(root, profile_id, duplicate),
-        serial,
-        name,
-    )
-}
-
-pub fn set_default_profile_id_report(
-    root: &Path,
-    profile_id: &str,
-    serial: &str,
-    name: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Result<bool, PadConfigIoError> {
-    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
-    set_default_path(&path, serial, name).map_err(|error| pad_config_io_error(path, error))
 }
 
 pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
@@ -519,35 +489,6 @@ pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
     Ok(changed)
 }
 
-pub fn rename_dir(profile_dir: &Path, old: &str, new: &str) -> std::io::Result<bool> {
-    rename_path(&pad_config_path(profile_dir), old, new)
-}
-
-pub fn rename_profile_id(
-    root: &Path,
-    profile_id: &str,
-    old: &str,
-    new: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> std::io::Result<bool> {
-    rename_path(
-        &pad_config_path_for_profile_id(root, profile_id, duplicate),
-        old,
-        new,
-    )
-}
-
-pub fn rename_profile_id_report(
-    root: &Path,
-    profile_id: &str,
-    old: &str,
-    new: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Result<bool, PadConfigIoError> {
-    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
-    rename_path(&path, old, new).map_err(|error| pad_config_io_error(path, error))
-}
-
 pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = delete_config(&mut list, name);
@@ -555,32 +496,6 @@ pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
         save_path(path, &list)?;
     }
     Ok(changed)
-}
-
-pub fn delete_dir(profile_dir: &Path, name: &str) -> std::io::Result<bool> {
-    delete_path(&pad_config_path(profile_dir), name)
-}
-
-pub fn delete_profile_id(
-    root: &Path,
-    profile_id: &str,
-    name: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> std::io::Result<bool> {
-    delete_path(
-        &pad_config_path_for_profile_id(root, profile_id, duplicate),
-        name,
-    )
-}
-
-pub fn delete_profile_id_report(
-    root: &Path,
-    profile_id: &str,
-    name: &str,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Result<bool, PadConfigIoError> {
-    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
-    delete_path(&path, name).map_err(|error| pad_config_io_error(path, error))
 }
 
 #[cfg(test)]
@@ -806,6 +721,156 @@ Panel0.FsrLow=1 2 3 4
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "B");
         assert!(!delete_config(&mut list, "missing"));
+    }
+
+    #[test]
+    fn migration_merge_unions_identical_configs_and_their_defaults() {
+        let newest = vec![sample("Soft", "smx", Some("fsr"), Some("S1"), &["S1"])];
+        let older = vec![sample("soft", "smx", Some("fsr"), Some("S1"), &["S2"])];
+        let merged = merge_for_migration(vec![(String::new(), newest), (String::new(), older)]);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].name, "Soft");
+        assert_eq!(merged[0].default_for_serials, ["S1", "S2"]);
+    }
+
+    #[test]
+    fn migration_merge_keeps_conflicting_configs_under_suffixed_names() {
+        let newest = vec![sample("Soft", "smx", Some("fsr"), Some("S1"), &[])];
+        let mut conflicting = sample("Soft", "smx", Some("fsr"), Some("S1"), &[]);
+        conflicting.settings[1].1 = "9".to_owned();
+        let merged = merge_for_migration(vec![
+            (String::new(), newest),
+            (String::new(), vec![conflicting]),
+        ]);
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].name, "Soft");
+        assert_eq!(merged[1].name, "Soft (2)");
+        assert_eq!(merged[1].settings[1].1, "9");
+    }
+
+    #[test]
+    fn migration_merge_gives_each_serial_and_backend_one_default() {
+        // Both profiles claim S1; the newest source wins. Both carry a global
+        // default for the same backend; again the newest wins.
+        let mut newest = sample("New", "smx", Some("fsr"), Some("S1"), &["S1"]);
+        newest.global_default = true;
+        let mut older = sample("Old", "smx", Some("fsr"), Some("S1"), &["S1", "S2"]);
+        older.global_default = true;
+        let mut other_backend = sample("Fsrio", "fsrio", None, None, &[]);
+        other_backend.global_default = true;
+        let merged = merge_for_migration(vec![
+            (String::new(), vec![newest]),
+            (String::new(), vec![older, other_backend]),
+        ]);
+        assert_eq!(merged.len(), 3);
+        let by_name = |name: &str| merged.iter().find(|p| p.name == name).unwrap();
+        assert_eq!(by_name("New").default_for_serials, ["S1"]);
+        assert!(by_name("New").global_default);
+        assert_eq!(by_name("Old").default_for_serials, ["S2"]);
+        assert!(!by_name("Old").global_default);
+        // A different backend keeps its own global default.
+        assert!(by_name("Fsrio").global_default);
+    }
+
+    #[test]
+    fn migration_names_configs_after_their_profile() {
+        assert_eq!(migrated_config_name("ddrcoder", "Left"), "ddrcoder - Left");
+        assert_eq!(migrated_config_name("  ", "Left"), "Left");
+        // Identical tunings from two profiles stay apart under their owners'
+        // names; the serial default still goes to the newest source only.
+        let newest = vec![sample("Soft", "smx", Some("fsr"), Some("S1"), &["S1"])];
+        let older = vec![sample("Soft", "smx", Some("fsr"), Some("S1"), &["S1"])];
+        let merged = merge_for_migration(vec![
+            ("bob".to_owned(), newest),
+            ("alice".to_owned(), older),
+        ]);
+        let names: Vec<&str> = merged.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["alice - Soft", "bob - Soft"]);
+        assert!(merged[0].default_for_serials.is_empty());
+        assert_eq!(merged[1].default_for_serials, ["S1"]);
+    }
+
+    fn unique_temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-padcfg-{tag}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[test]
+    fn migrate_machine_store_merges_profile_files_newest_first() {
+        let root = unique_temp_dir("migrate");
+        let profiles_root = root.join("profiles");
+        let machine = root.join("save").join(PAD_CONFIG_FILE);
+
+        let older_dir = profiles_root.join("alice");
+        std::fs::create_dir_all(&older_dir).expect("create profile dir");
+        // The display name in profile.ini names the migrated configs; a folder
+        // without one (bob, below) falls back to its folder name.
+        std::fs::write(
+            crate::profile_ini_path(&older_dir),
+            "[UserProfile]\nDisplayName=Alice B\n",
+        )
+        .expect("write profile.ini");
+        save_path(
+            &pad_config_path(&older_dir),
+            &[sample("Soft", "smx", Some("fsr"), Some("S1"), &["S1"])],
+        )
+        .expect("write older configs");
+        // Ensure a strictly newer mtime for the second file: filetimes on some
+        // filesystems are coarse, so set it explicitly via a future mtime.
+        let newer_dir = profiles_root.join("bob");
+        std::fs::create_dir_all(&newer_dir).expect("create profile dir");
+        save_path(
+            &pad_config_path(&newer_dir),
+            &[sample("Hard", "smx", Some("fsr"), Some("S1"), &["S1"])],
+        )
+        .expect("write newer configs");
+        let newer = std::fs::File::options()
+            .append(true)
+            .open(pad_config_path(&newer_dir))
+            .expect("open newer file");
+        newer
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
+            .expect("bump mtime");
+
+        let migrated = migrate_machine_store(&machine, &profiles_root).expect("migrate");
+        assert_eq!(migrated, Some(2));
+        let merged = load_path(&machine).expect("read machine store");
+        assert_eq!(merged.len(), 2);
+        // The newer file's claim on S1 wins; names carry their profile.
+        let hard = merged.iter().find(|p| p.name == "bob - Hard").unwrap();
+        let soft = merged.iter().find(|p| p.name == "Alice B - Soft").unwrap();
+        assert_eq!(hard.default_for_serials, ["S1"]);
+        assert!(soft.default_for_serials.is_empty());
+
+        // A second call sees the machine store and does nothing.
+        assert_eq!(
+            migrate_machine_store(&machine, &profiles_root).expect("re-run"),
+            None
+        );
+        // Legacy files stay in place for rollback.
+        assert!(pad_config_path(&older_dir).exists());
+
+        std::fs::remove_dir_all(root).expect("cleanup temp dir");
+    }
+
+    #[test]
+    fn migrate_machine_store_writes_an_empty_marker_without_legacy_files() {
+        let root = unique_temp_dir("empty");
+        let machine = root.join("save").join(PAD_CONFIG_FILE);
+        let migrated =
+            migrate_machine_store(&machine, &root.join("missing-profiles")).expect("migrate");
+        assert_eq!(migrated, Some(0));
+        assert!(machine.exists());
+        assert_eq!(load_path(&machine).expect("read machine store"), Vec::new());
+        std::fs::remove_dir_all(root).expect("cleanup temp dir");
     }
 
     #[test]

@@ -35,13 +35,11 @@ pub enum PadConfigIntent {
 pub struct PadConfigSignature {
     pub preset: SmxPadPreset,
     pub serial: String,
-    pub profile_id: Option<String>,
     pub pad_type: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq)]
 struct ProfilesSig {
-    profile_id: Option<String>,
     pad_type: Option<String>,
 }
 
@@ -100,15 +98,11 @@ impl PadConfigSync {
         pad: usize,
         preset: SmxPadPreset,
         serial: &str,
-        profile_id: Option<&str>,
         pad_type: Option<&str>,
     ) -> bool {
         match self.signature.get(pad).and_then(Option::as_ref) {
             Some(sig) => {
-                sig.preset == preset
-                    && sig.serial == serial
-                    && sig.profile_id.as_deref() == profile_id
-                    && sig.pad_type.as_deref() == pad_type
+                sig.preset == preset && sig.serial == serial && sig.pad_type.as_deref() == pad_type
             }
             None => false,
         }
@@ -122,19 +116,12 @@ impl PadConfigSync {
 
     /// Whether `profiles[pad]` needs rebuilding for these inputs.
     #[must_use]
-    pub fn profiles_stale(
-        &self,
-        pad: usize,
-        profile_id: Option<&str>,
-        pad_type: Option<&str>,
-    ) -> bool {
+    pub fn profiles_stale(&self, pad: usize, pad_type: Option<&str>) -> bool {
         if pad >= 2 {
             return false;
         }
         match &self.profiles_sig[pad] {
-            Some(sig) => {
-                sig.profile_id.as_deref() != profile_id || sig.pad_type.as_deref() != pad_type
-            }
+            Some(sig) => sig.pad_type.as_deref() != pad_type,
             None => true,
         }
     }
@@ -143,7 +130,6 @@ impl PadConfigSync {
     pub fn store_profiles(
         &mut self,
         pad: usize,
-        profile_id: Option<String>,
         pad_type: Option<String>,
         list: Vec<PadConfigProfile>,
     ) {
@@ -151,10 +137,7 @@ impl PadConfigSync {
             return;
         }
         self.profiles[pad] = list;
-        self.profiles_sig[pad] = Some(ProfilesSig {
-            profile_id,
-            pad_type,
-        });
+        self.profiles_sig[pad] = Some(ProfilesSig { pad_type });
     }
 
     /// The cached saved-config list for a pad.
@@ -183,49 +166,41 @@ mod tests {
         }
     }
 
+    fn sig(preset: SmxPadPreset) -> PadConfigSignature {
+        PadConfigSignature {
+            preset,
+            serial: "S".to_owned(),
+            pad_type: Some("fsr".to_owned()),
+        }
+    }
+
     #[test]
     fn profiles_reload_only_when_inputs_change() {
         let mut s = PadConfigSync::default();
-        assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
-        s.store_profiles(
-            0,
-            Some("p1".to_owned()),
-            Some("fsr".to_owned()),
-            vec![cfg("A")],
-        );
-        assert!(!s.profiles_stale(0, Some("p1"), Some("fsr")));
+        assert!(s.profiles_stale(0, Some("fsr")));
+        s.store_profiles(0, Some("fsr".to_owned()), vec![cfg("A")]);
+        assert!(!s.profiles_stale(0, Some("fsr")));
         assert_eq!(s.profiles_for(0).len(), 1);
-        assert!(s.profiles_stale(0, Some("p2"), Some("fsr")));
-        assert!(s.profiles_stale(0, Some("p1"), Some("loadcell")));
-        assert!(s.profiles_stale(1, Some("p1"), Some("fsr")));
+        assert!(s.profiles_stale(0, Some("loadcell")));
+        assert!(s.profiles_stale(1, Some("fsr")));
     }
 
     #[test]
     fn invalidate_drops_cached_profiles() {
         let mut s = PadConfigSync::default();
-        s.store_profiles(1, Some("p1".to_owned()), None, vec![cfg("A")]);
-        assert!(!s.profiles_stale(1, Some("p1"), None));
+        s.store_profiles(1, None, vec![cfg("A")]);
+        assert!(!s.profiles_stale(1, None));
         s.apply_intent(PadConfigIntent::Invalidate { pad: 1 });
-        assert!(s.profiles_stale(1, Some("p1"), None));
+        assert!(s.profiles_stale(1, None));
     }
 
     #[test]
     fn refresh_list_rebuilds_list_without_touching_resolve_signature() {
         let mut s = PadConfigSync::default();
-        s.signature[0] = Some(PadConfigSignature {
-            preset: SmxPadPreset::Medium,
-            serial: "S".to_owned(),
-            profile_id: Some("p1".to_owned()),
-            pad_type: Some("fsr".to_owned()),
-        });
-        s.store_profiles(
-            0,
-            Some("p1".to_owned()),
-            Some("fsr".to_owned()),
-            vec![cfg("A")],
-        );
+        s.signature[0] = Some(sig(SmxPadPreset::Medium));
+        s.store_profiles(0, Some("fsr".to_owned()), vec![cfg("A")]);
         s.apply_intent(PadConfigIntent::RefreshList { pad: 0 });
-        assert!(s.profiles_stale(0, Some("p1"), Some("fsr")));
+        assert!(s.profiles_stale(0, Some("fsr")));
         assert!(s.signature[0].is_some());
     }
 
@@ -233,12 +208,7 @@ mod tests {
     fn reset_signatures_clears_all_so_managed_resolve_reruns() {
         let mut s = PadConfigSync::default();
         for pad in 0..2 {
-            s.signature[pad] = Some(PadConfigSignature {
-                preset: SmxPadPreset::Medium,
-                serial: "S".to_owned(),
-                profile_id: Some("p1".to_owned()),
-                pad_type: Some("fsr".to_owned()),
-            });
+            s.signature[pad] = Some(sig(SmxPadPreset::Medium));
         }
         s.reset_signatures();
         assert!(s.signature[0].is_none());
@@ -248,12 +218,7 @@ mod tests {
     #[test]
     fn override_keeps_signature_so_only_a_session_reset_reresolves() {
         let mut s = PadConfigSync::default();
-        s.signature[0] = Some(PadConfigSignature {
-            preset: SmxPadPreset::Low,
-            serial: "S".to_owned(),
-            profile_id: Some("p".to_owned()),
-            pad_type: Some("fsr".to_owned()),
-        });
+        s.signature[0] = Some(sig(SmxPadPreset::Low));
         s.apply_intent(PadConfigIntent::Override {
             pad: 0,
             applied: AppliedPadConfig {
@@ -270,19 +235,13 @@ mod tests {
     #[test]
     fn signature_matches_compares_every_field_by_borrow() {
         let mut s = PadConfigSync::default();
-        assert!(!s.signature_matches(0, SmxPadPreset::Low, "S1", Some("p1"), Some("fsr")));
-        s.signature[0] = Some(PadConfigSignature {
-            preset: SmxPadPreset::Medium,
-            serial: "S1".to_owned(),
-            profile_id: Some("p1".to_owned()),
-            pad_type: Some("fsr".to_owned()),
-        });
-        assert!(s.signature_matches(0, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
-        assert!(!s.signature_matches(0, SmxPadPreset::High, "S1", Some("p1"), Some("fsr")));
-        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S2", Some("p1"), Some("fsr")));
-        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S1", None, Some("fsr")));
-        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S1", Some("p1"), None));
-        assert!(!s.signature_matches(1, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
-        assert!(!s.signature_matches(9, SmxPadPreset::Medium, "S1", Some("p1"), Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Low, "S", Some("fsr")));
+        s.signature[0] = Some(sig(SmxPadPreset::Medium));
+        assert!(s.signature_matches(0, SmxPadPreset::Medium, "S", Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::High, "S", Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S2", Some("fsr")));
+        assert!(!s.signature_matches(0, SmxPadPreset::Medium, "S", None));
+        assert!(!s.signature_matches(1, SmxPadPreset::Medium, "S", Some("fsr")));
+        assert!(!s.signature_matches(9, SmxPadPreset::Medium, "S", Some("fsr")));
     }
 }
