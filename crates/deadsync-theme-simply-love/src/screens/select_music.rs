@@ -1486,7 +1486,6 @@ pub enum SmxPadProfileEvent {
     },
     Captured {
         pad: usize,
-        profile_id: String,
         name: String,
         overwrite: bool,
     },
@@ -5148,16 +5147,15 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
 }
 
 /// Quick-recall "Pad Profile" menu items: for each connected, in-play SMX pad,
-/// the built-in presets, plus (if that pad maps to a local profile) its saved
-/// configs. A guest pad still gets the presets so the player can pick a
-/// sensitivity for the session. Selecting one applies it to that physical pad.
-/// `None` hides the category.
+/// the built-in presets plus the machine's saved configs (the store is
+/// machine-global, so a guest pad lists them too). Selecting one applies it to
+/// that physical pad. `None` hides the category.
 fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::Item>> {
     if !state.policy.fsr_profiles {
         return None;
     }
     let style = state.session.play_style;
-    let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
+    let mut pads: Vec<(bool, usize)> = Vec::new(); // (p2, slot)
     for slot in 0..2 {
         if !state.smx_pads[slot].connected {
             continue;
@@ -5182,17 +5180,14 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         if !in_play {
             continue;
         }
-        let pid = state.profiles.pad_profile_ids[slot]
-            .as_deref()
-            .map(str::to_owned);
-        pads.push((is_p2, pid, slot));
+        pads.push((is_p2, slot));
     }
     if pads.is_empty() {
         return None;
     }
     let show_side = pads.len() > 1;
     let mut items = Vec::new();
-    for (p2, pid, slot) in &pads {
+    for (p2, slot) in &pads {
         let prefix = if show_side {
             if *p2 { "P2 " } else { "P1 " }
         } else {
@@ -5216,9 +5211,6 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
                 active,
             ));
         }
-        // Saved configs only for a pad that maps to a local profile (a guest pad
-        // gets presets only).
-        let Some(_) = pid else { continue };
         for c in &state.pad_profiles[*slot] {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
@@ -9946,7 +9938,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
         pad_config::EditResult::SetDefaultProfile => perform_pad_profile_set_default(state),
         pad_config::EditResult::Handled => {
             // Select opens the Profiles management list. begin_profiles self-gates
-            // on `save_available` (set by the app: in-session + local profile).
+            // on `save_available` (set by the app: in-session SMX pad).
             if ev.pressed
                 && matches!(
                     ev.action,
@@ -9975,12 +9967,8 @@ fn request_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &
             name: name.to_owned(),
         }
     } else {
-        let Some(pid) = state.profiles.pad_profile_id(slot) else {
-            return false;
-        };
         crate::SimplyLoveHardwareRequest::ApplySmxPadConfig {
             pad: slot,
-            profile_id: pid.to_owned(),
             name: name.to_owned(),
         }
     };
@@ -9988,25 +9976,19 @@ fn request_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &
     true
 }
 
-/// Pure decision behind [`refresh_sibling_pad_list`]: given the edited `slot`, the
-/// profile it was edited under, and the sibling slot's presence + profile, return
-/// the intent to queue for the sibling — or `None` when the sibling isn't present
-/// or doesn't share the edited profile. Kept free of the global SMX/session reads
-/// so it can be unit-tested.
+/// Pure decision behind [`refresh_sibling_pad_list`]: given the edited `slot`
+/// and the sibling slot's presence, return the intent to queue for the sibling
+/// — or `None` when the sibling isn't present. Kept free of the global
+/// SMX/session reads so it can be unit-tested.
 fn sibling_refresh_intent(
     slot: usize,
     sibling_connected: bool,
-    sibling_profile: Option<&str>,
-    edited_profile: &str,
     reresolve: bool,
 ) -> Option<PadConfigIntent> {
-    if slot >= 2 {
+    if slot >= 2 || !sibling_connected {
         return None;
     }
     let other = 1 - slot;
-    if !sibling_connected || sibling_profile != Some(edited_profile) {
-        return None;
-    }
     Some(if reresolve {
         PadConfigIntent::Invalidate { pad: other }
     } else {
@@ -10014,42 +9996,24 @@ fn sibling_refresh_intent(
     })
 }
 
-fn sibling_refresh_for_state(
-    state: &State,
-    slot: usize,
-    profile_id: &str,
-    reresolve: bool,
-) -> Option<PadConfigIntent> {
-    if slot >= 2 {
-        return None;
-    }
-    let other = 1 - slot;
-    sibling_refresh_intent(
-        slot,
-        state.smx_pads[other].connected,
-        state.profiles.pad_profile_id(other),
-        profile_id,
-        reresolve,
-    )
-}
-
-/// After a management edit to a profile's `padconfig.ini`, queue a refresh for the
-/// *other* pad slot when it views the same profile (always the case in Doubles,
-/// where both pads share the one joined player's profile). The config list is
-/// cached per pad slot, so without this a config added/renamed/deleted via one pad
-/// stays invisible in the sibling pad's list until something else invalidates it.
-/// `reresolve` picks the stronger `Invalidate` (re-resolve + rebuild) for edits
-/// that can change what the sibling should apply (delete); otherwise a list-only
+/// After a management edit to the machine's `padconfig.ini`, queue a refresh
+/// for the *other* pad slot — the store is machine-global, so every edit is
+/// visible to both pads. The config list is cached per pad slot, so without
+/// this a config added/renamed/deleted via one pad stays invisible in the
+/// sibling pad's list until something else invalidates it. `reresolve` picks
+/// the stronger `Invalidate` (re-resolve + rebuild) for edits that can change
+/// what the sibling should apply (delete); otherwise a list-only
 /// `RefreshList`.
-fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, reresolve: bool) {
-    if let Some(intent) = sibling_refresh_for_state(state, slot, profile_id, reresolve) {
+fn refresh_sibling_pad_list(state: &mut State, slot: usize, reresolve: bool) {
+    let connected = slot < 2 && state.smx_pads[1 - slot].connected;
+    if let Some(intent) = sibling_refresh_intent(slot, connected, reresolve) {
         state.pad_config_intents.push(intent);
     }
 }
 
-/// Handle a confirmed save box: rename an existing config, or capture the cursor
-/// pad's live tuning as a new named config in the active player's profile. SMX
-/// pads only; no-op for a Guest (no profile to save to).
+/// Handle a confirmed save box: rename an existing config, or capture the
+/// cursor pad's live tuning as a new named config in the machine-global store.
+/// SMX pads only.
 fn perform_pad_profile_save(state: &mut State) {
     let Some(draft) = pad_config::take_save(&mut state.pad_config_overlay) else {
         return;
@@ -10068,19 +10032,13 @@ fn perform_pad_profile_save(state: &mut State) {
     let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.clone()) else {
         return;
     };
-    // Player side is the slot, not the raw jumper bit (the serial below still
-    // comes from whichever pad occupies this slot).
-    let Some(profile_id) = state.profiles.pad_profile_id(slot).map(str::to_owned) else {
-        return; // Guest: no profile to save to.
-    };
     // Rename: just relabel the existing config (and honor the default toggle,
     // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
         queue_hardware(
             state,
             crate::SimplyLoveHardwareRequest::RenameSmxPadConfig {
-                profile_id: profile_id.clone(),
-                serial: serial,
+                serial,
                 old_name: old.clone(),
                 new_name: name.clone(),
                 set_default: draft.set_default,
@@ -10107,14 +10065,14 @@ fn perform_pad_profile_save(state: &mut State) {
                     pad,
                     applied: AppliedPadConfig {
                         preset: false,
-                        name: name,
+                        name,
                     },
                 });
             }
         }
-        // The rename changed a name the sibling pad (same profile, e.g. Doubles)
-        // also lists; refresh its cached copy so it doesn't show the stale name.
-        refresh_sibling_pad_list(state, slot, &profile_id, false);
+        // The rename changed a name the sibling pad also lists; refresh its
+        // cached copy so it doesn't show the stale name.
+        refresh_sibling_pad_list(state, slot, false);
         queue_sfx(state, "assets/sounds/start.ogg");
         return;
     }
@@ -10122,7 +10080,6 @@ fn perform_pad_profile_save(state: &mut State) {
         state,
         crate::SimplyLoveHardwareRequest::CaptureSmxPadConfig {
             pad: slot,
-            profile_id,
             name,
             set_default: draft.set_default,
             overwrite: false,
@@ -10130,34 +10087,25 @@ fn perform_pad_profile_save(state: &mut State) {
     );
 }
 
-/// Resolve the profiles-list cursor to `(profile_id, config_name, smx_slot)` for
-/// the management actions. `None` unless the cursor pad is an in-session SMX pad
-/// with a local profile and the cursor is on a saved config (not "save new").
-fn pad_overlay_profile_target(state: &State) -> Option<(String, String, usize)> {
+/// Resolve the profiles-list cursor to `(config_name, smx_slot)` for the
+/// management actions. `None` unless the cursor pad is an in-session SMX pad
+/// and the cursor is on a saved config (not "save new").
+fn pad_overlay_profile_target(state: &State) -> Option<(String, usize)> {
     let device = pad_config::selected_device(&state.pad_config_overlay)?;
     if device.backend != deadsync_input::fsr::BackendKind::Smx {
         return None;
     }
     let name = pad_config::selected_profile_name(&state.pad_config_overlay)?;
-    // Player side is the slot (device.index), not the raw jumper bit.
-    let profile_id = state
-        .profiles
-        .pad_profile_id(device.index)
-        .map(str::to_owned)?;
-    Some((profile_id, name, device.index))
+    Some((name, device.index))
 }
 
 fn perform_pad_profile_apply(state: &mut State) {
-    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+    let Some((name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
     queue_hardware(
         state,
-        crate::SimplyLoveHardwareRequest::ApplySmxPadConfig {
-            pad: slot,
-            profile_id,
-            name,
-        },
+        crate::SimplyLoveHardwareRequest::ApplySmxPadConfig { pad: slot, name },
     );
 }
 
@@ -10165,14 +10113,13 @@ fn perform_pad_profile_apply(state: &mut State) {
 /// name / default / serial. Lets the user re-capture into an existing profile
 /// without retyping the name.
 fn perform_pad_profile_overwrite(state: &mut State) {
-    let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
+    let Some((name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
     queue_hardware(
         state,
         crate::SimplyLoveHardwareRequest::CaptureSmxPadConfig {
             pad: slot,
-            profile_id,
             name,
             set_default: false,
             overwrite: true,
@@ -10181,18 +10128,14 @@ fn perform_pad_profile_overwrite(state: &mut State) {
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
-    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
+    if let Some((name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
         let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.clone()) else {
             return;
         };
         queue_hardware(
             state,
-            crate::SimplyLoveHardwareRequest::SetSmxPadConfigDefault {
-                profile_id,
-                serial,
-                name,
-            },
+            crate::SimplyLoveHardwareRequest::SetSmxPadConfigDefault { serial, name },
         );
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
@@ -10204,22 +10147,19 @@ fn perform_pad_profile_set_default(state: &mut State) {
 }
 
 fn perform_pad_profile_delete(state: &mut State) {
-    if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
+    if let Some((name, slot)) = pad_overlay_profile_target(state) {
         queue_hardware(
             state,
-            crate::SimplyLoveHardwareRequest::DeleteSmxPadConfig {
-                profile_id: profile_id.clone(),
-                name: name,
-            },
+            crate::SimplyLoveHardwareRequest::DeleteSmxPadConfig { name },
         );
         // It may have been this pad's active/default config; re-resolve so the
         // controller falls back (and the marker updates).
         state
             .pad_config_intents
             .push(PadConfigIntent::Invalidate { pad: slot });
-        // The delete removes the config for every pad sharing this profile; the
-        // sibling (e.g. Doubles) re-resolves too in case it was that pad's default.
-        refresh_sibling_pad_list(state, slot, &profile_id, true);
+        // The delete removes the config for every pad; the sibling re-resolves
+        // too in case it was that pad's default.
+        refresh_sibling_pad_list(state, slot, true);
         queue_sfx(state, "assets/sounds/start.ogg");
     }
 }
@@ -11874,7 +11814,6 @@ fn process_smx_pad_profile_events(state: &mut State) {
             }
             SmxPadProfileEvent::Captured {
                 pad,
-                profile_id,
                 name,
                 overwrite,
             } => {
@@ -11893,7 +11832,7 @@ fn process_smx_pad_profile_events(state: &mut State) {
                             name,
                         },
                     });
-                    refresh_sibling_pad_list(state, pad, &profile_id, false);
+                    refresh_sibling_pad_list(state, pad, false);
                 }
             }
         }
@@ -17081,7 +17020,6 @@ mod tests {
                     display_names: ["Alice".into(), "Bob".into()],
                     avatar_texture_keys: [Some("alice-avatar".into()), None],
                     local_profile_ids: [Some("alice".into()), None],
-                    pad_profile_ids: [Some("alice".into()), Some("alice".into())],
                 }),
                 favorites: None,
                 pad_profiles: Some([
@@ -17195,7 +17133,6 @@ mod tests {
                 .local_profile_id(profile_data::PlayerSide::P1),
             Some("alice")
         );
-        assert_eq!(state.profiles.pad_profile_id(1), Some("alice"));
         assert_eq!(super::pad_profile_rows(&state, 0)[0].name, "Tournament");
         assert!(super::pad_profile_rows(&state, 0)[0].is_default);
         assert!(state.policy.media.show_previews);
@@ -17319,36 +17256,32 @@ mod tests {
     }
 
     #[test]
-    fn sibling_refresh_intent_targets_other_slot_when_profile_matches() {
+    fn sibling_refresh_intent_targets_other_slot() {
         use super::{PadConfigIntent, sibling_refresh_intent};
         // Same profile + connected sibling: save/rename (reresolve=false) refreshes
         // the *other* slot's list; delete (reresolve=true) re-resolves it.
         assert!(matches!(
-            sibling_refresh_intent(0, true, Some("p"), "p", false),
+            sibling_refresh_intent(0, true, false),
             Some(PadConfigIntent::RefreshList { pad: 1 })
         ));
         assert!(matches!(
-            sibling_refresh_intent(0, true, Some("p"), "p", true),
+            sibling_refresh_intent(0, true, true),
             Some(PadConfigIntent::Invalidate { pad: 1 })
         ));
         // Symmetric: editing slot 1 targets slot 0.
         assert!(matches!(
-            sibling_refresh_intent(1, true, Some("p"), "p", false),
+            sibling_refresh_intent(1, true, false),
             Some(PadConfigIntent::RefreshList { pad: 0 })
         ));
     }
 
     #[test]
-    fn sibling_refresh_intent_skips_unrelated_or_absent_sibling() {
+    fn sibling_refresh_intent_skips_absent_sibling() {
         use super::sibling_refresh_intent;
-        // Different profile (two single-player profiles) → leave the sibling alone.
-        assert!(sibling_refresh_intent(0, true, Some("other"), "p", false).is_none());
-        // Sibling not connected → nothing to refresh.
-        assert!(sibling_refresh_intent(0, false, Some("p"), "p", false).is_none());
-        // Sibling has no joined profile (Guest) → nothing to refresh.
-        assert!(sibling_refresh_intent(0, true, None, "p", false).is_none());
-        // Out-of-range editing slot is a no-op (and never underflows).
-        assert!(sibling_refresh_intent(2, true, Some("p"), "p", false).is_none());
+
+        assert!(sibling_refresh_intent(0, false, false).is_none());
+
+        assert!(sibling_refresh_intent(2, true, false).is_none());
     }
 
     #[test]

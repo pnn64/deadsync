@@ -908,7 +908,6 @@ pub struct SelectMusicProfileView {
     pub display_names: [Arc<str>; 2],
     pub avatar_texture_keys: [Option<Arc<str>>; 2],
     pub local_profile_ids: [Option<Arc<str>>; 2],
-    pub pad_profile_ids: [Option<Arc<str>>; 2],
 }
 
 /// One shell-prepared saved pad config shown in Select Music's quick menu.
@@ -929,11 +928,6 @@ impl SelectMusicProfileView {
     #[must_use]
     pub fn local_profile_id(&self, side: deadsync_profile::PlayerSide) -> Option<&str> {
         self.local_profile_ids[deadsync_profile::player_side_index(side)].as_deref()
-    }
-
-    #[inline(always)]
-    pub fn pad_profile_id(&self, pad: usize) -> Option<&str> {
-        self.pad_profile_ids.get(pad).and_then(Option::as_deref)
     }
 }
 

@@ -5354,13 +5354,9 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::ApplySmxPadConfig {
-                        pad,
-                        profile_id,
-                        name,
-                    },
+                    SimplyLoveHardwareRequest::ApplySmxPadConfig { pad, name },
                 ) => {
-                    if crate::smx_config::apply_smx_saved_pad_config(pad, &profile_id, &name) {
+                    if crate::smx_config::apply_smx_saved_pad_config(pad, &name) {
                         self.state
                             .screens
                             .select_music_state
@@ -5376,25 +5372,18 @@ impl App {
                 SimplyLoveRuntimeRequest::Hardware(
                     SimplyLoveHardwareRequest::CaptureSmxPadConfig {
                         pad,
-                        profile_id,
                         name,
                         set_default,
                         overwrite,
                     },
                 ) => {
-                    if crate::smx_config::capture_smx_pad_config(
-                        pad,
-                        &profile_id,
-                        &name,
-                        set_default,
-                    ) {
+                    if crate::smx_config::capture_smx_pad_config(pad, &name, set_default) {
                         self.state
                             .screens
                             .select_music_state
                             .smx_pad_profile_events
                             .push(select_music::SmxPadProfileEvent::Captured {
                                 pad,
-                                profile_id,
                                 name,
                                 overwrite,
                             });
@@ -5403,33 +5392,28 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Hardware(
                     SimplyLoveHardwareRequest::RenameSmxPadConfig {
-                        profile_id,
                         serial,
                         old_name,
                         new_name,
                         set_default,
                     },
                 ) => {
-                    profile::rename_pad_config(&profile_id, &old_name, &new_name);
+                    profile::rename_pad_config(&old_name, &new_name);
                     if set_default {
-                        profile::set_default_pad_config(&profile_id, &serial, &new_name);
+                        profile::set_default_pad_config(&serial, &new_name);
                     }
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::SetSmxPadConfigDefault {
-                        profile_id,
-                        serial,
-                        name,
-                    },
+                    SimplyLoveHardwareRequest::SetSmxPadConfigDefault { serial, name },
                 ) => {
-                    profile::set_default_pad_config(&profile_id, &serial, &name);
+                    profile::set_default_pad_config(&serial, &name);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(
-                    SimplyLoveHardwareRequest::DeleteSmxPadConfig { profile_id, name },
+                    SimplyLoveHardwareRequest::DeleteSmxPadConfig { name },
                 ) => {
-                    profile::delete_pad_config(&profile_id, &name);
+                    profile::delete_pad_config(&name);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(
@@ -10002,6 +9986,7 @@ pub fn init_paths(dirs: &AppDirs) -> Result<(), &'static str> {
     deadsync_profile::app_runtime::init_paths(
         dirs.profiles_root(),
         dirs.default_player_options_path(),
+        dirs.pad_config_path(),
     )?;
     deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
         song_cache: dirs.song_cache_dir(),

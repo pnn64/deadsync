@@ -864,30 +864,25 @@ pub enum SimplyLoveHardwareRequest {
     },
     ApplySmxPadConfig {
         pad: usize,
-        profile_id: String,
         name: String,
     },
     CaptureSmxPadConfig {
         pad: usize,
-        profile_id: String,
         name: String,
         set_default: bool,
         overwrite: bool,
     },
     RenameSmxPadConfig {
-        profile_id: String,
         serial: String,
         old_name: String,
         new_name: String,
         set_default: bool,
     },
     SetSmxPadConfigDefault {
-        profile_id: String,
         serial: String,
         name: String,
     },
     DeleteSmxPadConfig {
-        profile_id: String,
         name: String,
     },
     SetSmxPlayerLights([Option<[u8; 3]>; 2]),

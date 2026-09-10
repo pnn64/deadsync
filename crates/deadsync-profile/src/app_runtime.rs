@@ -21,13 +21,22 @@ use crate::{
 struct ProfilePaths {
     root: PathBuf,
     defaults: PathBuf,
+    pad_config: PathBuf,
 }
 static PATHS: std::sync::OnceLock<ProfilePaths> = std::sync::OnceLock::new();
 
 /// Install profile and default-option paths before profile loading or worker startup.
-pub fn init_paths(root: PathBuf, defaults: PathBuf) -> Result<(), &'static str> {
+pub fn init_paths(
+    root: PathBuf,
+    defaults: PathBuf,
+    pad_config: PathBuf,
+) -> Result<(), &'static str> {
     PATHS
-        .set(ProfilePaths { root, defaults })
+        .set(ProfilePaths {
+            root,
+            defaults,
+            pad_config,
+        })
         .map_err(|_| "profile paths already initialized")
 }
 
@@ -1677,24 +1686,62 @@ pub fn delete_local_profile_from_config(id: &str) -> Result<(), std::io::Error> 
     )
 }
 
-pub fn load_pad_configs(profile_id: &str) -> Vec<PadConfigProfile> {
-    pad_config::load_profile_id(&profiles_root(), profile_id, warn_duplicate_profile_guid)
+/// Machine-global pad config store (`save/padconfig.ini` under the data dir).
+pub fn machine_pad_config_path() -> PathBuf {
+    PATHS
+        .get()
+        .expect("profile paths initialized at startup")
+        .pad_config
+        .clone()
 }
 
-pub fn save_pad_configs(profile_id: &str, profiles: &[PadConfigProfile]) {
-    if let Err(error) = pad_config::save_profile_id_report(
-        &profiles_root(),
-        profile_id,
-        profiles,
-        warn_duplicate_profile_guid,
-    ) {
-        warn!("Failed to save {}: {}", error.path.display(), error.error);
+/// Merge legacy per-profile pad configs into the machine store. Called at
+/// startup and again by every pad-config accessor (cheap once done), so the
+/// store is ready no matter which path touches it first. The machine file's
+/// existence marks the migration done; a failed write (e.g. disk full) leaves
+/// the flag unset so a later call retries instead of permanently orphaning
+/// the legacy configs.
+pub fn migrate_pad_configs() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static MIGRATED: AtomicBool = AtomicBool::new(false);
+    if MIGRATED.load(Ordering::Acquire) {
+        return;
+    }
+    let path = machine_pad_config_path();
+    match pad_config::migrate_machine_store(&path, &profiles_root()) {
+        Ok(migrated) => {
+            if let Some(count) = migrated
+                && count > 0
+            {
+                info!(
+                    "Migrated {count} pad config(s) from per-profile files into '{}'.",
+                    path.display()
+                );
+            }
+            MIGRATED.store(true, Ordering::Release);
+        }
+        Err(error) => warn!(
+            "Failed to migrate pad configs into '{}': {error}",
+            path.display()
+        ),
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+fn warn_pad_config_save(result: std::io::Result<bool>) {
+    if let Err(error) = result {
+        warn!(
+            "Failed to save {}: {error}",
+            machine_pad_config_path().display()
+        );
+    }
+}
+
+pub fn load_pad_configs() -> Vec<PadConfigProfile> {
+    migrate_pad_configs();
+    pad_config::load_path(&machine_pad_config_path()).unwrap_or_default()
+}
+
 pub fn upsert_pad_config(
-    profile_id: &str,
     name: &str,
     backend: &str,
     pad_type: Option<String>,
@@ -1702,54 +1749,39 @@ pub fn upsert_pad_config(
     make_default: bool,
     settings: Vec<(String, String)>,
 ) {
-    if let Err(error) = pad_config::upsert_profile_id_report(
-        &profiles_root(),
-        profile_id,
+    migrate_pad_configs();
+    warn_pad_config_save(pad_config::upsert_path(
+        &machine_pad_config_path(),
         name,
         backend,
         pad_type,
         serial,
         make_default,
         settings,
-        warn_duplicate_profile_guid,
-    ) {
-        warn!("Failed to save {}: {}", error.path.display(), error.error);
-    }
+    ));
 }
 
-pub fn set_default_pad_config(profile_id: &str, serial: &str, name: &str) {
-    if let Err(error) = pad_config::set_default_profile_id_report(
-        &profiles_root(),
-        profile_id,
+pub fn set_default_pad_config(serial: &str, name: &str) {
+    migrate_pad_configs();
+    warn_pad_config_save(pad_config::set_default_path(
+        &machine_pad_config_path(),
         serial,
         name,
-        warn_duplicate_profile_guid,
-    ) {
-        warn!("Failed to save {}: {}", error.path.display(), error.error);
-    }
+    ));
 }
 
-pub fn rename_pad_config(profile_id: &str, old: &str, new: &str) {
-    if let Err(error) = pad_config::rename_profile_id_report(
-        &profiles_root(),
-        profile_id,
+pub fn rename_pad_config(old: &str, new: &str) {
+    migrate_pad_configs();
+    warn_pad_config_save(pad_config::rename_path(
+        &machine_pad_config_path(),
         old,
         new,
-        warn_duplicate_profile_guid,
-    ) {
-        warn!("Failed to save {}: {}", error.path.display(), error.error);
-    }
+    ));
 }
 
-pub fn delete_pad_config(profile_id: &str, name: &str) {
-    if let Err(error) = pad_config::delete_profile_id_report(
-        &profiles_root(),
-        profile_id,
-        name,
-        warn_duplicate_profile_guid,
-    ) {
-        warn!("Failed to save {}: {}", error.path.display(), error.error);
-    }
+pub fn delete_pad_config(name: &str) {
+    migrate_pad_configs();
+    warn_pad_config_save(pad_config::delete_path(&machine_pad_config_path(), name));
 }
 
 pub fn log_profile_stats_load_error(path: &Path, error: ProfileStatsLoadError) {
@@ -2056,8 +2088,12 @@ mod tests {
     fn wheel_score_read_does_not_deadlock_with_leaderboard_worker() {
         let data =
             std::env::temp_dir().join(format!("deadsync-profile-paths-{}", std::process::id()));
-        init_paths(data.join("profiles"), data.join("defaults.ini"))
-            .expect("initialize isolated profile test paths");
+        init_paths(
+            data.join("profiles"),
+            data.join("defaults.ini"),
+            data.join("padconfig.ini"),
+        )
+        .expect("initialize isolated profile test paths");
         let profile_id = "test-deadlock-wheel-profile";
         let chart_hash = "feedface";
         let seeded = deadsync_score::CachedScore {

@@ -286,31 +286,24 @@ impl App {
     fn select_music_pad_profiles(
         &mut self,
         session: SelectMusicSessionView,
-        profiles: &profile_data::MusicProfileSnapshot,
     ) -> Option<[Vec<SelectMusicPadProfileView>; 2]> {
         let state = &self.state.screens.select_music_state;
         if !select_music::pad_profile_menu_visible(state) {
             return None;
         }
 
-        let active: [bool; 2] = std::array::from_fn(|pad| {
-            state.smx_pads[pad].connected
-                && pad_in_play(session, pad)
-                && profiles.pad_profile_ids[pad].is_some()
-        });
+        let active: [bool; 2] =
+            std::array::from_fn(|pad| state.smx_pads[pad].connected && pad_in_play(session, pad));
         for pad in 0..2 {
             if !active[pad] {
                 continue;
             }
             let smx = &state.smx_pads[pad];
-            let profile_id = profiles.pad_profile_ids[pad]
-                .as_deref()
-                .expect("active pad profile should have an id");
             if self
                 .pad_config_sync
-                .profiles_stale(pad, Some(profile_id), smx.pad_type.as_deref())
+                .profiles_stale(pad, smx.pad_type.as_deref())
             {
-                let configs = deadsync_profile::compat::load_pad_configs(profile_id)
+                let configs = deadsync_profile::compat::load_pad_configs()
                     .into_iter()
                     .filter(|config| {
                         profile_data::pad_config::config_matches(
@@ -320,12 +313,8 @@ impl App {
                         )
                     })
                     .collect();
-                self.pad_config_sync.store_profiles(
-                    pad,
-                    Some(profile_id.to_owned()),
-                    smx.pad_type.clone(),
-                    configs,
-                );
+                self.pad_config_sync
+                    .store_profiles(pad, smx.pad_type.clone(), configs);
             }
         }
 
@@ -593,16 +582,12 @@ impl App {
                 .local_profile_ids
                 .each_ref()
                 .map(|id| id.as_ref().map(Arc::clone)),
-            pad_profile_ids: profile_snapshot
-                .pad_profile_ids
-                .each_ref()
-                .map(|id| id.as_ref().map(Arc::clone)),
         });
         let favorites = (profile_views_dirty
             && select_music::local_profile_ids(&self.state.screens.select_music_state)
                 != &profile_snapshot.local_profile_ids)
             .then(deadsync_profile::runtime_favorite_snapshot);
-        let pad_profiles = self.select_music_pad_profiles(session_view, &profile_snapshot);
+        let pad_profiles = self.select_music_pad_profiles(session_view);
         let settings = self
             .select_music_settings_rebuild
             .then(|| policy.settings_view());

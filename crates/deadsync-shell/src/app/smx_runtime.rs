@@ -112,20 +112,13 @@ impl App {
             pad_config::set_pads(target, pads);
             pad_config::set_managed_active(target, plan.managed_active);
 
-            // Saving / profile management is only offered in-session, for a cursor
-            // pad that is an SMX pad mapped to a joined local profile (the Options
-            // screen never has a profile). Resolve it once and reuse for both the
-            // save gate and the management list. Capture the cursor device (Copy)
-            // so the later `smx_applied` read doesn't alias the `target` borrow.
+            // Saving / profile management is only offered in-session, for a
+            // cursor pad that is an SMX pad (the machine-global store needs no
+            // joined profile). Capture the cursor device (Copy) so the later
+            // `smx_applied` read doesn't alias the `target` borrow.
             let cursor_dev =
                 pad_config_profile_cursor(target_kind, pad_config::selected_device(target));
-            let cursor_profile = cursor_dev.and_then(|dev| {
-                // Slot is the source of truth for player side (the SDK orders
-                // slot 0 = P1, slot 1 = P2 per the pad→player assignment), so map
-                // the config by slot, not the raw jumper bit.
-                profile::active_local_profile_id_for_pad(dev.index == 1)
-            });
-            pad_config::set_save_available(target, cursor_profile.is_some());
+            pad_config::set_save_available(target, cursor_dev.is_some());
             // Mark the config currently applied to the cursor pad's slot, read
             // straight from the authoritative controller (no screen-state alias).
             let active_name = cursor_dev.and_then(|dev| {
@@ -136,7 +129,7 @@ impl App {
             });
             // Cursor pad identity (Copy device → safe to read alongside the
             // controller borrow below). The config *list* only depends on the
-            // profile + sensor type; `is_default` is per-serial, computed per entry.
+            // sensor type; `is_default` is per-serial, computed per entry.
             let cursor_pad_type = cursor_dev
                 .and_then(|dev| deadsync_smx::pad_sensor_type(dev.index))
                 .map(|t| t.as_str().to_owned());
@@ -148,12 +141,12 @@ impl App {
             // Refresh the cached config list only when its inputs changed — no
             // per-frame `padconfig.ini` read. Management edits clear the cache via an
             // Invalidate intent (drained in `apply_smx_managed_preset`).
-            if let (Some(pid), Some(pad)) = (cursor_profile.as_deref(), cursor_slot)
+            if let Some(pad) = cursor_slot
                 && self
                     .pad_config_sync
-                    .profiles_stale(pad, Some(pid), cursor_pad_type.as_deref())
+                    .profiles_stale(pad, cursor_pad_type.as_deref())
             {
-                let list = deadsync_profile::compat::load_pad_configs(pid)
+                let list = deadsync_profile::compat::load_pad_configs()
                     .into_iter()
                     .filter(|c| {
                         pad_profile_data::config_matches(
@@ -163,23 +156,19 @@ impl App {
                         )
                     })
                     .collect();
-                self.pad_config_sync.store_profiles(
-                    pad,
-                    Some(pid.to_owned()),
-                    cursor_pad_type,
-                    list,
-                );
+                self.pad_config_sync
+                    .store_profiles(pad, cursor_pad_type, list);
             }
 
             // Build the overlay list from the cache; active/default are derived live
             // (cheap, no I/O) since they depend on the marker / this pad's serial.
             let profiles = match cursor_slot {
-                Some(pad) if cursor_profile.is_some() => pad_config_profile_entries(
+                Some(pad) => pad_config_profile_entries(
                     self.pad_config_sync.profiles_for(pad),
                     active_name.as_deref(),
                     cursor_serial.as_deref(),
                 ),
-                _ => Vec::new(),
+                None => Vec::new(),
             };
             // Re-borrow target (released for the controller access above).
             let target = target!();
@@ -188,12 +177,11 @@ impl App {
     }
 
     /// Drain UI intents, then (when "`DeadSync` manages pad config" is on) resolve
-    /// and apply the right pad config to each connected `StepManiaX` pad: this pad's
-    /// per-pad default → a global default → the machine built-in preset (also the
-    /// fallback for Guest / no-config players). Reactive: when the active player
-    /// changes, a no-config/guest player resets the pad to the machine preset. A
-    /// cheap per-pad signature avoids loading config files or rewriting the pad
-    /// unless something relevant changed (so manual edits aren't clobbered).
+    /// and apply the right pad config to each connected `StepManiaX` pad from the
+    /// machine-global store: this pad's per-pad default → a global default → the
+    /// machine built-in preset. A cheap per-pad signature avoids loading config
+    /// files or rewriting the pad unless something relevant changed (so manual
+    /// edits aren't clobbered).
     /// Finally mirror the markers to the screen. Off → `DeadSync` writes nothing.
     /// Auto-save the pad→player assignment when none is saved yet:
     /// - **Two pads, distinct jumpers:** persist the jumper-derived P1/P2 map.
@@ -365,10 +353,6 @@ impl App {
                 self.pad_config_sync.signature[pad] = None;
                 continue;
             }
-            // In Doubles both pads belong to the one joined player; otherwise the
-            // pad maps to its own side. Side is the slot (the SDK orders slot 0 =
-            // P1, slot 1 = P2 per the pad→player assignment), not the raw jumper.
-            let profile_id = profile::active_local_profile_id_for_pad(pad == 1);
             let pad_type = deadsync_smx::pad_sensor_type(pad).map(|t| t.as_str().to_owned());
             // Compare against the cached signature by borrow: the steady-state
             // path allocates nothing just to find that nothing changed. The owned
@@ -377,14 +361,12 @@ impl App {
                 pad,
                 policy.default_pad_config,
                 &info.serial,
-                profile_id.as_deref(),
                 pad_type.as_deref(),
             ) {
                 continue; // nothing relevant changed — no file I/O, no rewrite
             }
             let (applied, label) = resolve_smx_pad_config(
                 pad,
-                profile_id.as_deref(),
                 pad_type.as_deref(),
                 &info.serial,
                 policy.default_pad_config,
@@ -394,13 +376,12 @@ impl App {
             // pad type becoming known), not every frame. The primary diagnostic for
             // "why did this pad get this config" on hardware we can't test here.
             log::debug!(
-                "SMX: pad {pad} resolved {} '{}' (serial={}, fw={}, type={}, profile={:?}, applied={applied})",
+                "SMX: pad {pad} resolved {} '{}' (serial={}, fw={}, type={}, applied={applied})",
                 if label.preset { "preset" } else { "config" },
                 label.name,
                 info.serial,
                 info.firmware_version,
                 pad_type.as_deref().unwrap_or("unknown"),
-                profile_id.as_deref(),
             );
             // Record what deadsync resolved so the UI can flag the active
             // preset/config. NOT gated on the write ACK: the resolution is what we
@@ -413,7 +394,6 @@ impl App {
                 self.pad_config_sync.signature[pad] = Some(PadConfigSignature {
                     preset: policy.default_pad_config,
                     serial: info.serial,
-                    profile_id,
                     pad_type,
                 });
             }

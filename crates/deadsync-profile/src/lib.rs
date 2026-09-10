@@ -2335,7 +2335,6 @@ pub struct MusicProfileSnapshot {
     pub music_rate: f32,
     pub avatar_texture_keys: [Option<Arc<str>>; PLAYER_SLOTS],
     pub local_profile_ids: [Option<Arc<str>>; PLAYER_SLOTS],
-    pub pad_profile_ids: [Option<Arc<str>>; PLAYER_SLOTS],
 }
 
 /// Reuses an immutable selection profile snapshot while every source field and
@@ -2495,10 +2494,6 @@ fn music_profile_snapshot_from_parts(
     let local_profile_ids = std::array::from_fn(|side_idx| {
         active_profile_local_id(&active_profiles[side_idx]).map(Arc::<str>::from)
     });
-    let pad_profile_ids = std::array::from_fn(|pad| {
-        let side = side_for_physical_pad(play_style, player_side, pad == 1);
-        local_profile_ids[player_side_index(side)].clone()
-    });
     MusicProfileSnapshot {
         scorebox: scorebox_runtime_view(
             profiles,
@@ -2518,7 +2513,6 @@ fn music_profile_snapshot_from_parts(
                 .map(Arc::<str>::from)
         }),
         local_profile_ids,
-        pad_profile_ids,
     }
 }
 
@@ -2571,11 +2565,6 @@ fn music_profile_session_matches(
             view.joined == joined
                 && view.guest == active_profile_is_guest(active)
                 && snapshot.local_profile_ids[side_idx].as_deref() == persistent_profile_id
-        })
-        && (0..PLAYER_SLOTS).all(|pad| {
-            let side = side_for_physical_pad(play_style, player_side, pad == 1);
-            snapshot.pad_profile_ids[pad].as_deref()
-                == active_profile_local_id(&active_profiles[player_side_index(side)])
         })
 }
 
