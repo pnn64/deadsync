@@ -1,50 +1,87 @@
+use smallvec::SmallVec;
+use std::borrow::Cow;
+
 #[must_use]
 pub fn split_bgchange_sets_like_itg(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-    split_bgchange_sets(changes, entries)
+    let sets = bgchange_sets(changes, entries);
+    if sets.done {
+        return Vec::new();
+    }
+    let capacity = changes.bytes().filter(|&byte| byte == b',').count() + 1;
+    let mut out = Vec::with_capacity(capacity);
+    out.extend(sets.map(|fields| fields.into_iter().map(Cow::into_owned).collect()));
+    out
 }
 
-fn split_bgchange_sets(changes: &str, entries: &[String]) -> Vec<Vec<String>> {
-    if changes.is_empty() {
-        return Vec::new();
-    }
+/// A change has eleven standard fields. Only newline removal or wider legacy
+/// records need heap storage; ordinary fields borrow the decoded tag text.
+pub(crate) type BgChangeFields<'a> = SmallVec<[Cow<'a, str>; 11]>;
+
+/// Stream one change at a time so consumers can parse borrowed fields and stop
+/// early without allocating strings or a collection for the rest of the tag.
+pub(crate) fn bgchange_sets<'a>(changes: &'a str, entries: &'a [String]) -> BgChangeSets<'a> {
     let mut content_start = 0;
     skip_newline_sequence(changes.as_bytes(), &mut content_start);
-    if content_start == changes.len() {
-        return Vec::new();
+    BgChangeSets {
+        changes,
+        entries,
+        start: 0,
+        done: content_start == changes.len(),
     }
-    let set_capacity = changes
-        .as_bytes()
-        .iter()
-        .filter(|&&byte| byte == b',')
-        .count()
-        .saturating_add(1);
-    let mut out = Vec::with_capacity(set_capacity);
-    let mut start = 0usize;
-    let mut pnum = 0u8;
-    while start <= changes.len() {
-        if matches!(pnum, 1 | 7)
-            && let Some(end) = match_bgchange_entry_end(changes, start, entries)
-        {
-            push_bgchange_field_range(out.last_mut().unwrap(), changes, start, end);
-            start = end;
-            if let Some(&delim) = changes.as_bytes().get(start) {
-                pnum = if delim == b'=' { pnum + 1 } else { 0 };
-                start += 1;
+}
+
+pub(crate) struct BgChangeSets<'a> {
+    changes: &'a str,
+    entries: &'a [String],
+    start: usize,
+    done: bool,
+}
+
+impl<'a> Iterator for BgChangeSets<'a> {
+    type Item = BgChangeFields<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+        let mut fields = BgChangeFields::new();
+        let mut pnum = 0u8;
+        loop {
+            let matched_entry_end = matches!(pnum, 1 | 7)
+                .then(|| match_bgchange_entry_end(self.changes, self.start, self.entries))
+                .flatten();
+            let (end, delimiter) = if let Some(end) = matched_entry_end {
+                (end, self.changes.as_bytes().get(end).copied())
+            } else if let Some((end, delimiter)) = next_bgchange_delimiter(self.changes, self.start)
+            {
+                (end, Some(delimiter))
+            } else {
+                fields.push(bgchange_field_range(
+                    self.changes,
+                    self.start,
+                    self.changes.len(),
+                ));
+                self.done = true;
+                return Some(fields);
+            };
+            fields.push(bgchange_field_range(self.changes, self.start, end));
+            self.start = end;
+            if let Some(delimiter) = delimiter {
+                self.start += 1;
+                if delimiter == b',' {
+                    return Some(fields);
+                }
+                pnum += 1;
+                if pnum == 0 {
+                    // Preserve the legacy u8 field counter's release-mode
+                    // wrap: it starts another set even without a comma.
+                    return Some(fields);
+                }
             }
-            continue;
+            // An entry ending exactly at EOF follows the legacy parser's next
+            // iteration, which retains the final empty field.
         }
-        if pnum == 0 {
-            out.push(Vec::with_capacity(4));
-        }
-        let Some((end, delim)) = next_bgchange_delimiter(changes, start) else {
-            push_bgchange_field_range(out.last_mut().unwrap(), changes, start, changes.len());
-            break;
-        };
-        push_bgchange_field_range(out.last_mut().unwrap(), changes, start, end);
-        start = end + 1;
-        pnum = if delim == b'=' { pnum + 1 } else { 0 };
     }
-    out
 }
 
 #[inline]
@@ -58,16 +95,13 @@ fn next_bgchange_delimiter(changes: &str, start: usize) -> Option<(usize, u8)> {
         })
 }
 
-fn push_bgchange_field_range(fields: &mut Vec<String>, changes: &str, start: usize, end: usize) {
-    if fields.len() == 4 && fields.capacity() == 4 {
-        fields.reserve_exact(7);
-    }
+fn bgchange_field_range(changes: &str, start: usize, end: usize) -> Cow<'_, str> {
     let field = &changes[start..end];
-    fields.push(if field.as_bytes().contains(&b'\n') {
-        strip_newlines_owned(field)
+    if field.as_bytes().contains(&b'\n') {
+        Cow::Owned(strip_newlines_owned(field))
     } else {
-        field.to_string()
-    });
+        Cow::Borrowed(field)
+    }
 }
 
 fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> Option<usize> {

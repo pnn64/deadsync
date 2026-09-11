@@ -1,4 +1,4 @@
-use crate::bgchanges::split_bgchange_sets_like_itg;
+use crate::bgchanges::bgchange_sets;
 use crate::bgchanges::{
     bgchange_field_rejects_non_media, parse_bgchange_color, parse_bgchange_effect,
     parse_bgchange_rate, parse_bgchange_transition,
@@ -15,6 +15,7 @@ use crate::media::{
 use crate::tags::named_tag_values;
 use deadsync_chart::{SongBackgroundChange, SongBackgroundChangeTarget};
 use rssp::parse::{bgchanges_values, decode_bytes, unescape_tag};
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 #[must_use]
@@ -74,7 +75,7 @@ fn extract_foreground_change_sets_with(
     for raw in named_tag_values(simfile_data, &[b"#FGCHANGES:"]) {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
+        for fields in bgchange_sets(text.as_ref(), &entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -208,7 +209,7 @@ fn append_background_lua_changes<'a>(
     for raw in values {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in split_bgchange_sets_like_itg(text.as_ref(), entries) {
+        for fields in bgchange_sets(text.as_ref(), entries) {
             let Some(target) = fields.get(1) else {
                 continue;
             };
@@ -283,7 +284,7 @@ fn resolve_background_changes_from_values<'a>(
     for raw in values {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        for fields in split_bgchange_sets_like_itg(text.as_ref(), &entries) {
+        for fields in bgchange_sets(text.as_ref(), &entries) {
             let Some(change) = parse_background_change_set(
                 song_dir,
                 &fields,
@@ -370,7 +371,7 @@ fn summarize_bgchange_fallbacks(changes: &[SongBackgroundChange]) -> BgchangeFal
 
 fn parse_background_change_set(
     song_dir: &Path,
-    fields: &[String],
+    fields: &[Cow<'_, str>],
     song_movie_roots: &[PathBuf],
     random_movie_roots: &[PathBuf],
     bg_animation_roots: &[PathBuf],
@@ -395,15 +396,15 @@ fn parse_background_change_set(
         return None;
     }
     let mut change = SongBackgroundChange::new(start_beat, target);
-    change.rate = parse_bgchange_rate(fields.get(2).map(String::as_str));
+    change.rate = parse_bgchange_rate(fields.get(2).map(AsRef::as_ref));
     change.transition = parse_bgchange_transition(
-        fields.get(3).map(String::as_str),
-        fields.get(8).map(String::as_str),
+        fields.get(3).map(AsRef::as_ref),
+        fields.get(8).map(AsRef::as_ref),
     );
     change.effect = parse_bgchange_effect(
-        fields.get(4).map(String::as_str),
-        fields.get(5).map(String::as_str),
-        fields.get(6).map(String::as_str),
+        fields.get(4).map(AsRef::as_ref),
+        fields.get(5).map(AsRef::as_ref),
+        fields.get(6).map(AsRef::as_ref),
     );
     change.file2 = fields.get(7).and_then(|field| {
         resolve_bgchange_file_like_itg(song_dir, field, song_movie_roots, random_movie_roots)
@@ -562,17 +563,15 @@ fn bgchange_values_use_lua<'a>(
     values.into_iter().any(|raw| {
         let decoded = decode_bytes(raw);
         let text = unescape_tag(decoded.as_ref());
-        split_bgchange_sets_like_itg(text.as_ref(), entries)
-            .into_iter()
-            .any(|fields| {
-                fields
-                    .get(1)
-                    .is_some_and(|target| bgchange_target_uses_lua(song_dir, target))
-            })
+        bgchange_sets(text.as_ref(), entries).any(|fields| {
+            fields
+                .get(1)
+                .is_some_and(|target| bgchange_target_uses_lua(song_dir, target))
+        })
     })
 }
 
-fn parse_start_beat(fields: &[String]) -> Option<f32> {
+fn parse_start_beat(fields: &[Cow<'_, str>]) -> Option<f32> {
     fields
         .first()
         .and_then(|value| value.trim().parse::<f32>().ok())

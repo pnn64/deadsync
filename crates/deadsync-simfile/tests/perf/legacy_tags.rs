@@ -1,3 +1,6 @@
+// Frozen from ec9914795 (0.5.1134) for behavior and old/new benchmarks.
+#![allow(dead_code)]
+
 use rssp::parse::{decode_bytes, unescape_tag};
 
 #[must_use]
@@ -103,13 +106,27 @@ fn starts_with_ci(slice: &[u8], tag: &[u8]) -> bool {
 }
 
 #[inline(always)]
-fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
-    memchr::memchr(needle, slice)
+const fn find_byte(slice: &[u8], needle: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == needle {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 #[inline(always)]
-fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
-    memchr::memchr2(a, b, slice)
+const fn find_either_byte(slice: &[u8], a: u8, b: u8) -> Option<usize> {
+    let mut i = 0usize;
+    while i < slice.len() {
+        if slice[i] == a || slice[i] == b {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
 }
 
 #[inline(always)]
@@ -197,53 +214,4 @@ fn parse_tag_val(data: &[u8], tag_len: usize, allow_nl: bool) -> Option<(&[u8], 
     let slice = data.get(tag_len..)?;
     let (end, next) = scan_tag_end(slice, allow_nl)?;
     Some((&slice[..end], tag_len + next))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn extracts_case_insensitive_duplicate_tags() {
-        let data = b"ignored#TITLE:One;#artist:DJ;#title:Two;";
-        let values = extract_named_tag_values(data, &[b"#TITLE:"]);
-        assert_eq!(values, vec![b"One".as_slice(), b"Two".as_slice()]);
-    }
-
-    #[test]
-    fn extracts_escaped_semicolon_value() {
-        let data = b"#TITLE:One\\;Two;#SUBTITLE:x;";
-        let values = extract_named_tag_values(data, &[b"#TITLE:"]);
-        assert_eq!(values, vec![b"One\\;Two".as_slice()]);
-    }
-
-    #[test]
-    fn latest_tag_value_uses_last_decoded_value() {
-        let data = b"#CDIMAGE:old.png;#cdimage:new\\;image.png;";
-        assert_eq!(
-            latest_simfile_tag_value(data, b"#CDIMAGE:"),
-            "new;image.png"
-        );
-    }
-
-    #[test]
-    fn latest_tag_values_batch_independent_duplicate_tags() {
-        let data = b"#CDIMAGE:old.png;#DISCIMAGE:disc.png;#cdimage:new\\;image.png;";
-        let [cdimage, discimage] =
-            latest_simfile_tag_values(data, [b"#CDIMAGE:".as_slice(), b"#DISCIMAGE:".as_slice()]);
-
-        assert_eq!(cdimage, "new;image.png");
-        assert_eq!(discimage, "disc.png");
-    }
-
-    #[test]
-    fn lazy_named_values_can_stop_without_scanning_later_tags() {
-        let data = b"#FGCHANGES:first;#FGCHANGES:second;#FGCHANGES:third;";
-        let tags = [b"#FGCHANGES:".as_slice()];
-
-        assert_eq!(
-            named_tag_values(data, &tags).next(),
-            Some(b"first".as_slice())
-        );
-    }
 }

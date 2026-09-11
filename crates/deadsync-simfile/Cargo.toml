@@ -14,9 +14,11 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 image = "0.25.10"
 log = "0.4.34"
+memchr = "2.8.3"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 rustc-hash = "2.1.3"
 serde = { version = "1.0.229", features = ["derive"] }
+smallvec = "1.16.0"
 twox-hash = "2.1.4"
 
 [lints.clippy]

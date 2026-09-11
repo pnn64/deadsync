@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -163,11 +164,15 @@ pub fn gameplay_sync_prompt_text(input: GameplaySyncPromptText<'_>) -> String {
 #[inline(always)]
 #[must_use]
 pub fn format_offset_tag_value(value: f32) -> String {
+    format!("{:.3}", normalized_offset_tag_value(value))
+}
+
+fn normalized_offset_tag_value(value: f32) -> f32 {
     let mut v = quantize_sync_offset_seconds(value);
     if v.abs() < 0.000_5_f32 {
         v = 0.0;
     }
-    format!("{v:.3}")
+    v
 }
 
 pub fn rewrite_simfile_offset_tags(
@@ -182,6 +187,13 @@ pub fn rewrite_simfile_offset_tags(
     let mut i = 0usize;
 
     while i + TAG.len() <= len {
+        let Some(relative) = memchr::memchr(b'#', &simfile_bytes[i..]) else {
+            break;
+        };
+        i += relative;
+        if len - i < TAG.len() {
+            break;
+        }
         if simfile_bytes[i..i + TAG.len()].eq_ignore_ascii_case(TAG) {
             out.extend_from_slice(&simfile_bytes[cursor..i + TAG.len()]);
             let mut value_start = i + TAG.len();
@@ -193,13 +205,10 @@ pub fn rewrite_simfile_offset_tags(
             }
             out.extend_from_slice(&simfile_bytes[i + TAG.len()..value_start]);
 
-            let mut value_end = value_start;
-            while value_end < len && simfile_bytes[value_end] != b';' {
-                value_end += 1;
-            }
-            if value_end >= len {
+            let Some(relative_end) = memchr::memchr(b';', &simfile_bytes[value_start..]) else {
                 return Err("Malformed #OFFSET tag: missing ';' terminator".to_string());
-            }
+            };
+            let value_end = value_start + relative_end;
 
             let raw = &simfile_bytes[value_start..value_end];
             let Some(trim_start) = raw.iter().position(|b| !b.is_ascii_whitespace()) else {
@@ -219,7 +228,8 @@ pub fn rewrite_simfile_offset_tags(
             let new_value = parsed_value + delta;
 
             out.extend_from_slice(&raw[..trim_start]);
-            out.extend_from_slice(format_offset_tag_value(new_value).as_bytes());
+            write!(out, "{:.3}", normalized_offset_tag_value(new_value))
+                .expect("writing to a Vec cannot fail");
             out.extend_from_slice(&raw[trim_end..]);
             out.push(b';');
 
