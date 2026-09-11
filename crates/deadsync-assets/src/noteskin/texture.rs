@@ -28,9 +28,10 @@ use deadsync_noteskin::{
 };
 use image::image_dimensions;
 use log::warn;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc,
+    Arc, LazyLock, Mutex,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -901,7 +902,11 @@ pub fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
         return Some((meta.w, meta.h));
     }
     let path = resolve_asset_path(&PathBuf::from("assets").join(key));
-    image_dimensions(&path).ok()
+    let (w, h) = image_dimensions(&path).ok()?;
+    // Runtime construction precedes GPU upload. Retain the first header probe
+    // so shared sprites and component variants do not reopen the same image.
+    assets::register_texture_dims(key, w, h);
+    Some((w, h))
 }
 
 fn slot_is_beat_based(slot: &SpriteSlot) -> bool {
@@ -1009,9 +1014,56 @@ pub(super) fn itg_apply_state_properties_from_script(
     });
 }
 
-pub fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
+type MineSampleKey = (Arc<str>, [i32; 2], [i32; 2], Option<[i32; 2]>);
+type MineSamples = Option<Arc<[[f32; 4]]>>;
+pub(super) type MineSampleCache = Mutex<HashMap<MineSampleKey, MineSamples>>;
+const MAX_MINE_SAMPLES: usize = 512;
+// Load workers share sampled colours until the next runtime-cache clear. The
+// mutex covers lookup/insert only; decoding stays outside it. At most 512
+// regions (64 colours each, ~512 KiB plus keys) are retained; overflow bypasses
+// insertion, without pruning. Menu/gameplay transitions warm this data. Live
+// gameplay never constructs skins; a miss here performs image I/O and sampling.
+// Transition clearing frees the samples and logs the count. Hits only clone an
+// Arc; each runtime still receives independent sprite state.
+pub(super) static MINE_SAMPLES: LazyLock<MineSampleCache> =
+    LazyLock::new(|| Mutex::new(HashMap::with_capacity(MAX_MINE_SAMPLES)));
+
+pub(super) fn clear_mine_samples() {
+    let mut cache = MINE_SAMPLES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    log::debug!("Clearing {} noteskin mine sample regions", cache.len());
+    cache.clear();
+}
+
+pub fn mine_fill_slots(
+    mines: &[Option<SpriteSlot>],
+    samples: &MineSampleCache,
+) -> Vec<Option<SpriteSlot>> {
     crate_mine_fill_slots(mines, |mine| {
-        let colors = load_mine_gradient_colors(mine)?;
+        let key = (
+            mine.texture_key_shared(),
+            mine.def.src,
+            mine.def.size,
+            mine.source.frame_size(),
+        );
+        let cached = samples
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+            .cloned();
+        let colors = if let Some(cached) = cached {
+            cached
+        } else {
+            let colors = load_mine_gradient_colors(mine).map(Arc::<[[f32; 4]]>::from);
+            let mut cache = samples
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if cache.len() < MAX_MINE_SAMPLES {
+                cache.insert(key, colors.clone());
+            }
+            colors
+        }?;
         Some(build_mine_gradient_slot(&colors))
     })
 }

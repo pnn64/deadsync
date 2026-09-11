@@ -15,6 +15,7 @@ use crate::{
 };
 use crate::{actor, compiled, itg, model, receptor};
 use smallvec::SmallVec;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Index;
 use std::path::Path;
@@ -2466,33 +2467,44 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
 ) -> Result<NoteskinRuntime<T>, String> {
     let note_display_metrics = itg::note_display_metrics(&data.metrics);
     let animation_is_beat_based = itg::animation_is_beat_based(data);
+    // One load owns this small set of requested button/element pairs. Hold,
+    // roll, tap and mine effects often refer to the same Explosion actor tree.
+    // Resolve each once, then clone its slots before applying component state.
+    let resolved =
+        RefCell::new(HashMap::<String, HashMap<String, Vec<ItgResolvedSprite<T>>>>::new());
+    let resolve_sprites = |button: &str, element: &str| {
+        if let Some(sprites) = resolved
+            .borrow()
+            .get(button)
+            .and_then(|parts| parts.get(element))
+        {
+            return sprites.clone();
+        }
+        let sprites = itg_resolve_actor_sprites_with_ops_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            element,
+            style.steps_type(),
+            ops,
+        );
+        resolved
+            .borrow_mut()
+            .entry(button.to_string())
+            .or_default()
+            .insert(element.to_string(), sprites.clone());
+        sprites
+    };
     let columns = itg_runtime_columns_compiled(
         data,
         style,
         compiled,
         quantizations,
-        |button, element| {
-            itg_resolve_actor_sprites_with_ops_compiled(
-                data,
-                compiled,
-                compiled_actors,
-                button,
-                element,
-                style.steps_type(),
-                ops,
-            )
-        },
+        resolve_sprites,
         |button, element| {
             itg_resolved_slots_with_model_draw(
-                itg_resolve_actor_sprites_with_ops_compiled(
-                    data,
-                    compiled,
-                    compiled_actors,
-                    button,
-                    element,
-                    style.steps_type(),
-                    ops,
-                ),
+                resolve_sprites(button, element),
                 ops.apply_model_draw,
             )
         },
@@ -2515,17 +2527,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
         note_display_metrics,
         animation_is_beat_based,
         columns,
-        |button, element| {
-            itg_resolve_actor_sprites_with_ops_compiled(
-                data,
-                compiled,
-                compiled_actors,
-                button,
-                element,
-                style.steps_type(),
-                ops,
-            )
-        },
+        resolve_sprites,
         |wrapper_sprites,
          source_sprites,
          button,

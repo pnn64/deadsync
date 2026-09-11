@@ -1259,13 +1259,6 @@ pub(super) fn draw_thumb(
     );
 }
 
-fn preview_skin<'a>(state: &'a State, name: &str, part: usize) -> Option<&'a Noteskin> {
-    if let Some(preview) = state.noteskin.components.get(name, part) {
-        return preview.skin.as_deref().filter(|_| preview.ready);
-    }
-    state.noteskin.cache.get(name).map(Arc::as_ref)
-}
-
 fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_player_idx: usize) {
     for player in [primary_player_idx, P2] {
         if player == P2 && primary_player_idx != P2 && !rc.fc.show_p2 {
@@ -1277,7 +1270,7 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
         let center = rc.fc.preview_x[player];
         match rc.row.id {
             RowId::NoteSkin => {
-                if let Some(skin) = preview_skin(state, options.noteskin.as_str(), 0) {
+                if let Some(skin) = state.noteskin.cache.get(options.noteskin.as_str()) {
                     draw_noteskin_preview(actors, rc, skin, center);
                 }
             }
@@ -1286,7 +1279,7 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
                     .receptor_noteskin
                     .as_ref()
                     .unwrap_or(&options.noteskin);
-                if let Some(skin) = preview_skin(state, name.as_str(), 1) {
+                if let Some(skin) = state.noteskin.cache.get(name.as_str()) {
                     draw_receptor_preview(actors, rc, skin, center);
                 }
             }
@@ -1494,7 +1487,7 @@ pub(super) fn draw_live_preview(
     alpha: f32,
     z: i16,
 ) -> bool {
-    let Some(skin) = preview_skin(state, name, part) else {
+    let Some(skin) = state.noteskin.cache.get(name) else {
         return false;
     };
     let first = actors.len();

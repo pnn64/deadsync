@@ -261,12 +261,12 @@ fn source_paths(data: &noteskin_itg::NoteskinData) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            let is_actor_lua = path.is_file()
-                && path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
-                && path.file_name().is_none_or(|name| name != "NoteSkin.lua");
+            let is_actor_lua = path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+                && path.file_name().is_none_or(|name| name != "NoteSkin.lua")
+                && path.is_file();
             if is_actor_lua {
                 out.push(path);
             }
@@ -364,12 +364,12 @@ fn compile_actor_files(
             .map_err(|err| format!("failed to read '{}': {err}", dir.display()))?;
         for entry in entries.flatten() {
             let path = entry.path();
-            let is_lua = path.is_file()
-                && path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
-                && path.file_name().is_none_or(|name| name != "NoteSkin.lua");
+            let is_lua = path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+                && path.file_name().is_none_or(|name| name != "NoteSkin.lua")
+                && path.is_file();
             if !is_lua {
                 continue;
             }

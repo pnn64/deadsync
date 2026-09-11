@@ -129,7 +129,6 @@ pub(super) mod tests {
         );
 
         assert!(state.cache.is_empty());
-        assert!(state.components.get("cel", 0).is_none());
     }
 
     fn test_row(
@@ -2190,7 +2189,7 @@ pub(super) mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
-    #[allow(deprecated)] // One hidden window exercises the actual upload queue.
+    #[allow(deprecated)] // One hidden window exercises transition texture uploads.
     #[ignore = "requires assets/noteskins/hurg with the installed Workshop"]
     fn workshop_components_animate_in_rows_and_picker() {
         use super::super::{pack_options, render};
@@ -2244,25 +2243,77 @@ pub(super) mod tests {
                 .replace_choices(vec![family.into()]);
             state.pack_menu.add_rows(rows, &state.player_options);
             pack_options::sync_player(&mut state, P1);
-            let bright = format!("{family}?arrows=bright-td-vibrant");
-            state.player_options[P1].arrow_noteskin = Some(NoteSkin::new(&bright));
             state.active = [true, false];
             state.current_pane = OptionsPane::Display;
-            pack_options::sync_player(&mut state, P1);
-            state.pane_mut().selected_row[P1] = state
-                .pane()
-                .row_map
-                .display_order()
-                .iter()
-                .position(|&row| row == RowId::SkinArrows)
-                .unwrap();
-            super::super::prepare_previews(&mut state, &mut assets);
-            assert!(
-                state.noteskin.components.get(&bright, 0).is_some(),
-                "the real menu preparation must request the selected HURG arrow"
+            let started = std::time::Instant::now();
+            let textures = super::super::prewarm_noteskin_previews(&mut state);
+            let runtime_time = started.elapsed();
+            eprintln!(
+                "{family}: runtime preload {:.2}s",
+                runtime_time.as_secs_f64()
             );
-            state.player_options[P1].arrow_noteskin = None;
-            pack_options::sync_player(&mut state, P1);
+            let texture_count = textures.len();
+            deadsync_assets::textures::preload_texture_keys(
+                &mut assets,
+                &mut backend,
+                textures.clone(),
+            )
+            .unwrap();
+            eprintln!(
+                "{family}: texture preload {:.2}s",
+                (started.elapsed() - runtime_time).as_secs_f64()
+            );
+            assert!(
+                textures
+                    .iter()
+                    .all(|(key, _)| assets.has_uploaded_texture_key(key))
+            );
+            assert!(
+                textures
+                    .iter()
+                    .all(|(key, _)| !assets.has_pending_texture_upload(key))
+            );
+            let choices: Vec<_> = state
+                .pack_menu
+                .preview_choices()
+                .map(|(name, part)| (name.to_string(), part))
+                .collect();
+            assert!(choices.len() > 400, "exercise the whole Workshop catalog");
+            // Every choice must draw on its first frame, including choices outside
+            // the old 40-entry cache and both ends of a long picker list.
+            for (name, part) in choices.iter().rev().chain(&choices) {
+                assert!(
+                    state.noteskin.cache.contains_key(name),
+                    "{name}: runtime missing"
+                );
+                let mut actors = Vec::new();
+                assert!(render::draw_live_preview(
+                    &mut actors,
+                    &state,
+                    name,
+                    *part,
+                    [100.0; 2],
+                    32.0,
+                    1.0,
+                    102
+                ));
+                for actor in actors {
+                    let key = match &actor {
+                        Actor::Sprite { source, .. } => source.texture_key().unwrap(),
+                        Actor::TexturedMesh { texture, .. } => texture,
+                        _ => panic!("unexpected preview actor"),
+                    };
+                    assert!(
+                        assets.has_uploaded_texture_key(key),
+                        "{name}: texture missing on first frame: {key}"
+                    );
+                }
+            }
+            eprintln!(
+                "{family}: {} choices / {texture_count} textures ready in {:.2}s",
+                choices.len(),
+                started.elapsed().as_secs_f64()
+            );
             let mut names: Vec<_> = parts
                 .iter()
                 .map(|&(part, _)| (family.to_string(), part))
@@ -2284,68 +2335,25 @@ pub(super) mod tests {
                 .iter()
                 .map(|(name, part)| (name.as_str(), *part))
                 .collect();
-            let deadline = std::time::Instant::now() + Duration::from_secs(120);
-            while wanted.iter().any(|&(name, part)| {
-                state
-                    .noteskin
-                    .components
-                    .get(name, part)
-                    .is_none_or(|p| !p.ready)
-            }) {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "Workshop preview worker timed out: {family}"
-                );
-                state
-                    .noteskin
-                    .components
-                    .update(&wanted, &state.noteskin.cache, 4, &mut assets);
-                for &(name, part) in &wanted {
-                    if state
-                        .noteskin
-                        .components
-                        .get(name, part)
-                        .is_some_and(|p| !p.ready)
-                    {
-                        let mut cold = Vec::new();
-                        render::draw_thumb(
-                            &mut cold,
-                            &state,
-                            &pack_options::Thumb {
-                                name: Arc::from(name),
-                                part,
-                            },
-                            [100.0; 2],
-                            32.0,
-                            1.0,
-                            102,
-                        );
-                        assert!(
-                            cold.is_empty(),
-                            "{name}: never substitute an atlas while loading"
-                        );
-                    }
-                }
-                assets.drain_texture_uploads(
-                    &mut backend,
-                    deadlib_assets::upload::TextureUploadBudget {
-                        max_uploads: 2,
-                        max_bytes: 8 * 1024 * 1024,
-                    },
-                );
-                std::thread::sleep(Duration::from_millis(10));
-            }
             for &(name, part) in &wanted {
-                let preview = state.noteskin.components.get(name, part).unwrap();
-                for key in &preview.textures {
+                let skin = &state.noteskin.cache[name];
+                let preview_textures = super::super::noteskins::preview_textures(skin, part);
+                for (key, _) in &preview_textures {
                     let handle = assets.texture_context().texture_handle(key);
                     let Some(deadlib_render::Texture::Software(texture)) =
                         assets.textures().get(&handle)
                     else {
                         panic!("{name}: native texture must be uploaded");
                     };
-                    let (source, _) =
-                        deadsync_assets::textures::decode_texture_key(key, false).unwrap();
+                    let source = if let Some(generated) = deadlib_assets::generated_texture(key) {
+                        (*generated.image).clone()
+                    } else {
+                        deadlib_assets::decode_texture_image(
+                            std::path::Path::new(key.as_ref()),
+                            &deadlib_assets::parse_texture_hints(key),
+                        )
+                        .unwrap()
+                    };
                     assert_eq!(
                         texture.image, source,
                         "{name}: preview must retain every native pixel"
@@ -2383,7 +2391,9 @@ pub(super) mod tests {
                                 _ => panic!("unexpected preview actor"),
                             };
                             assert!(
-                                preview.textures.iter().any(|source| source.as_ref() == key),
+                                preview_textures
+                                    .iter()
+                                    .any(|(source, _)| source.as_ref() == key),
                                 "{name}: preview must use the ordinary source texture: {key}"
                             );
                         }
@@ -2424,6 +2434,20 @@ pub(super) mod tests {
                     assert!(animated, "{name} part {part} must advance its animation");
                 }
             }
+            // Re-entry drops screen runtimes and path caches, but reuses the
+            // compiled files and resident native textures, just like the app.
+            state.noteskin.cache.clear();
+            deadsync_assets::noteskin::clear_itg_runtime_caches();
+            let started = std::time::Instant::now();
+            let textures = super::super::prewarm_noteskin_previews(&mut state);
+            assert!(
+                textures
+                    .iter()
+                    .all(|(key, _)| assets.has_uploaded_texture_key(key))
+            );
+            deadsync_assets::textures::preload_texture_keys(&mut assets, &mut backend, textures)
+                .unwrap();
+            eprintln!("{family}: re-entry {:.2}s", started.elapsed().as_secs_f64());
         }
     }
 

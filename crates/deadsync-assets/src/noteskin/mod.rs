@@ -106,6 +106,7 @@ pub fn clear_itg_runtime_caches() {
     }
     noteskin_itg::clear_data_cache();
     noteskin_itg::clear_lookup_caches();
+    texture::clear_mine_samples();
 }
 
 fn noteskin_roots() -> Vec<PathBuf> {
@@ -253,11 +254,13 @@ fn load_pack_skin(
     if style.game_name() != "dance" {
         return Err("this noteskin pack only supports dance".into());
     }
-    let data = pack
+    let mut data = pack
         .resolve(selection, &noteskin_roots())
         .map_err(|e| e.to_string())?;
+    let runtime_name = std::mem::replace(&mut data.name, pack.compiler_key(selection));
     let bundle =
         noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, "dance", &data)?;
+    data.name = runtime_name;
     load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors)
 }
 
@@ -381,7 +384,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         apply_state: itg_apply_state_properties_from_commands,
         apply_loader_command: itg_apply_loader_command,
         apply_active_cmd: itg_slot_with_active_cmd,
-        mine_fill_slots,
+        mine_fill_slots: |mines| mine_fill_slots(mines, &texture::MINE_SAMPLES),
         base_zoom: itg_slot_base_zoom,
         model_info: itg_slot_model_info,
         texture_key: itg_slot_texture_key,
@@ -486,6 +489,67 @@ mod tests {
             .save(path)
             .unwrap();
         itg_register_texture_dims_for_path(path);
+    }
+
+    #[test]
+    fn texture_header_probe_is_reused_before_upload() {
+        init_asset_paths();
+        let root = temp_noteskin_root("header-cache");
+        let path = root.join("sheet 2x2.png");
+        image::RgbaImage::new(128, 96).save(&path).unwrap();
+        let key = super::texture::itg_texture_key(&path).unwrap();
+        assert!(crate::texture_dims(&key).is_none());
+        assert_eq!(super::texture::texture_dimensions(&key), Some((128, 96)));
+        // No GPU upload has happened. Removing the file proves that subsequent
+        // component construction uses the first probe, without reopening it.
+        fs::remove_file(&path).unwrap();
+        assert_eq!(super::texture::texture_dimensions(&key), Some((128, 96)));
+        assert_eq!(crate::sprite_sheet_dims(&key), (2, 2));
+        fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn mine_samples_reuse_sources_and_keep_regions_distinct() {
+        init_asset_paths();
+        let root = temp_noteskin_root("mine-samples");
+        let path = root.join("mine.png");
+        image::RgbaImage::from_fn(4, 2, |x, _| {
+            image::Rgba(if x < 2 {
+                [255, 0, 0, 255]
+            } else {
+                [0, 0, 255, 255]
+            })
+        })
+        .save(&path)
+        .unwrap();
+        let mut red = super::texture::itg_slot_from_path(&path).unwrap();
+        red.def.size = [2, 2];
+        let mut blue = red.clone();
+        blue.def.src = [2, 0];
+        let mines = [Some(red), Some(blue)];
+        let samples = Default::default();
+        let fills = super::texture::mine_fill_slots(&mines, &samples);
+        let keys: Vec<_> = fills
+            .iter()
+            .map(|slot| slot.as_ref().unwrap().texture_key())
+            .collect();
+        assert_ne!(keys[0], keys[1]);
+        fs::remove_file(&path).unwrap();
+        let reused = super::texture::mine_fill_slots(&mines, &samples);
+        assert_eq!(
+            keys,
+            reused
+                .iter()
+                .map(|slot| slot.as_ref().unwrap().texture_key())
+                .collect::<Vec<_>>()
+        );
+        samples.lock().unwrap().clear();
+        assert!(
+            super::texture::mine_fill_slots(&mines, &samples)
+                .iter()
+                .all(Option::is_none)
+        );
+        fs::remove_dir(&root).unwrap();
     }
 
     fn load_fixture_itg_skin(

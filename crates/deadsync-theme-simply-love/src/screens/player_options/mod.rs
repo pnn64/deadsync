@@ -97,27 +97,6 @@ pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_choice_layouts(state, asset_manager);
 }
 
-/// Poll component workers before the app drains the ordinary texture upload queue.
-pub fn prepare_previews(state: &mut State, asset_manager: &mut AssetManager) {
-    let focused = std::array::from_fn(|player| {
-        state
-            .pane()
-            .row_map
-            .display_order()
-            .get(state.pane().selected_row[player])
-            .copied()
-    });
-    state.pack_menu.update_previews(
-        &state.player_options,
-        state.active,
-        focused,
-        &state.search,
-        &mut state.noteskin,
-        state.cols_per_player,
-        asset_manager,
-    );
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HeartRateDeviceView {
     pub id: String,
@@ -279,23 +258,53 @@ pub fn init_for_gameplay(
     )
 }
 
-pub fn prewarm_noteskin_previews(state: &mut State) {
-    let noteskin_names = state.panes[OptionsPane::Main.index()]
+/// Loading-boundary work: retain every selectable runtime and return the unique
+/// native textures the shell must upload before showing Player Options.
+pub fn prewarm_noteskin_previews(state: &mut State) -> Vec<(Arc<str>, bool)> {
+    let names = state.panes[OptionsPane::Main.index()]
         .row_map
         .get(RowId::NoteSkin)
-        .map(|row| {
-            row.choices
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-        })
+        .map(|row| row.choices.iter().map(ToString::to_string).collect())
         .unwrap_or_default();
-    state.noteskin = init_noteskin_state(
-        state.cols_per_player,
-        &noteskin_names,
-        &state.player_options,
-        true,
+    let mut choices: HashMap<String, u16> = preview_noteskin_names(names, &state.player_options)
+        .into_iter()
+        .map(|name| (name, 0x5ff)) // All preview parts; slot 9 is only a size setting.
+        .collect();
+    for (name, part) in state.pack_menu.preview_choices() {
+        *choices.entry(name.to_string()).or_default() |= 1 << part;
+    }
+    let missing: Vec<_> = choices
+        .keys()
+        .filter(|name| !state.noteskin.cache.contains_key(*name))
+        .cloned()
+        .collect();
+    state
+        .noteskin
+        .cache
+        .extend(build_noteskin_cache(state.cols_per_player, &missing));
+
+    let mut textures: HashMap<Arc<str>, bool> = HashMap::new();
+    for (name, parts) in choices {
+        let Some(skin) = state.noteskin.cache.get(&name) else {
+            continue;
+        };
+        for part in 0..11 {
+            if parts & (1 << part) == 0 {
+                continue;
+            }
+            for (key, model) in preview_textures(skin, part) {
+                *textures.entry(key).or_default() |= model;
+            }
+        }
+    }
+    log::info!(
+        "Player Options warmed {} noteskin runtimes / {} native textures",
+        state.noteskin.cache.len(),
+        textures.len()
     );
+    let mut textures: Vec<_> = textures.into_iter().collect();
+    textures.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    textures
 }
 
 fn init_with_noteskin_prewarm(

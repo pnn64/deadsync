@@ -58,24 +58,38 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     }
 }
 
-/// Decode a resolved texture on a worker using the ordinary asset pixel pipeline.
+/// Decode and upload resolved native textures before entering a screen.
+/// Shared source keys are already deduplicated by the caller; resident textures
+/// are reused. The ordinary bounded decode workers stream directly to the GPU.
 ///
 /// # Errors
-/// Returns an error for unreadable or malformed source images.
-pub fn decode_texture_key(
-    key: &str,
-    model: bool,
-) -> Result<(image::RgbaImage, SamplerDesc), String> {
-    if let Some(texture) = deadlib_assets::generated_texture(key) {
-        Ok(((*texture.image).clone(), texture.sampler))
-    } else {
+/// Returns an error if a GPU texture cannot be created.
+pub fn preload_texture_keys(
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+    textures: impl IntoIterator<Item = (std::sync::Arc<str>, bool)>,
+) -> Result<(), deadlib_assets::AssetError> {
+    let mut jobs = Vec::new();
+    for (key, model) in textures {
+        if assets.has_uploaded_texture_key(&key)
+            || assets.load_generated_texture(backend, &key, None)?
+        {
+            continue;
+        }
         let path =
-            texture_key_source_path(key, key, |path| crate::paths().resolve_asset_path(path));
-        let hints = parse_texture_hints(key);
-        let image = deadlib_assets::decode_texture_image(&path, &hints)
-            .map_err(|error| error.to_string())?;
-        Ok((image, texture_key_sampler(&hints, model)))
+            texture_key_source_path(&key, &key, |path| crate::paths().resolve_asset_path(path));
+        let hints = parse_texture_hints(&key);
+        jobs.push(TextureDecodeJob {
+            key: key.to_string(),
+            path,
+            sampler: texture_key_sampler(&hints, model),
+            hints,
+        });
     }
+    if !jobs.is_empty() {
+        assets.load_textures(backend, jobs)?;
+    }
+    Ok(())
 }
 
 pub fn initial_texture_jobs(
@@ -452,7 +466,7 @@ fn noteskin_png_texture_entries(
         let mut dirs = vec![root.clone()];
         while let Some(dir) = dirs.pop() {
             // Pack atlases are queued separately. Variants and installer staging
-            // stay on disk until the selected components are compiled at song load.
+            // stay on disk until Player Options or gameplay transition warmup.
             if dir.join("pack.json").is_file()
                 || dir
                     .file_name()

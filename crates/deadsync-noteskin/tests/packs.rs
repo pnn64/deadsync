@@ -171,6 +171,36 @@ fn cache_identity_is_canonical_and_changes_with_selection_or_pack_revision() {
     fixture.write(&manifest);
     let updated = InstalledPack::load(&fixture.0).unwrap();
     assert_ne!(pack.runtime_key(&a), updated.runtime_key(&a));
+    assert_ne!(pack.compiler_key(&a), updated.compiler_key(&a));
+}
+
+#[test]
+fn png_variants_share_programs_but_keep_runtime_assets_independent() {
+    let fixture = Fixture::new();
+    let pack = InstalledPack::load(&fixture.0).unwrap();
+    let base = Selection::parse("sample-cel").unwrap();
+    let png = Selection::parse("sample-cel?mines=blue").unwrap();
+    assert_eq!(pack.compiler_key(&base), pack.compiler_key(&png));
+    assert_ne!(pack.runtime_key(&base), pack.runtime_key(&png));
+    let roots = [fixture.0.join("fallback")];
+    assert_ne!(
+        pack.resolve(&base, &roots)
+            .unwrap()
+            .resolve_path("", "_mine tex"),
+        pack.resolve(&png, &roots)
+            .unwrap()
+            .resolve_path("", "_mine tex")
+    );
+    // Metric changes may be read by Lua; model/INI/script swaps stay isolated too.
+    for name in ["sample-cel?arrows=blue", "sample-cel?mine_size=small"] {
+        let selection = Selection::parse(name).unwrap();
+        assert_ne!(pack.compiler_key(&base), pack.compiler_key(&selection));
+        assert_eq!(pack.compiler_key(&selection), pack.runtime_key(&selection));
+    }
+    assert_eq!(
+        pack.compiler_key(&Selection::parse("sample-cel?arrows=blue&mines=blue").unwrap()),
+        pack.compiler_key(&Selection::parse("sample-cel?arrows=blue").unwrap())
+    );
 }
 
 #[test]

@@ -819,6 +819,31 @@ struct PostSelectStageKey {
     video_banners: bool,
 }
 
+fn prewarm_option_previews(
+    state: &mut player_options::State,
+    assets: &mut AssetManager,
+    backend: &mut Option<renderer_backend::Backend>,
+) {
+    let started = Instant::now();
+    let textures = player_options::prewarm_noteskin_previews(state);
+    let runtime_time = started.elapsed();
+    let texture_started = Instant::now();
+    if let Some(backend) = backend
+        && let Err(error) =
+            deadsync_assets::textures::preload_texture_keys(assets, backend, textures)
+    {
+        warn!("Failed to preload Player Options textures: {error}");
+    }
+    let texture_time = texture_started.elapsed();
+    player_options::prepare_presentation(state, assets);
+    info!(
+        "Player Options previews ready in {:.3}s (runtimes {:.3}s, textures {:.3}s)",
+        started.elapsed().as_secs_f64(),
+        runtime_time.as_secs_f64(),
+        texture_time.as_secs_f64(),
+    );
+}
+
 fn sync_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
@@ -3908,11 +3933,6 @@ impl App {
             frame_policy.show_course_individual_scores,
             frame_policy.show_select_music_video_banners,
         );
-        if self.state.screens.current_screen == CurrentScreen::PlayerOptions
-            && let Some(state) = self.state.screens.player_options_state.as_mut()
-        {
-            player_options::prepare_previews(state, &mut self.asset_manager);
-        }
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let (mut actors, clear_color, gameplay_segments) =
@@ -8460,6 +8480,11 @@ impl App {
                 ));
             }
         }
+        if target == CurrentScreen::PlayerOptions
+            && let Some(state) = self.state.screens.player_options_state.as_mut()
+        {
+            prewarm_option_previews(state, &mut self.asset_manager, &mut self.backend);
+        }
     }
 
     fn sync_screen_color_index(&mut self, idx: i32) {
@@ -8570,7 +8595,11 @@ impl App {
                             "Failed to load practice payload for '{}': {}",
                             song_arc.title, e
                         );
-                        player_options::prewarm_noteskin_previews(&mut po_state);
+                        prewarm_option_previews(
+                            &mut po_state,
+                            &mut self.asset_manager,
+                            &mut self.backend,
+                        );
                         self.commit_screen_change(CurrentScreen::PlayerOptions);
                         self.state.screens.player_options_state = Some(po_state);
                         return commands;
@@ -8967,7 +8996,11 @@ impl App {
                                     "Failed to load gameplay payload for '{}': {}",
                                     song_arc.title, e
                                 );
-                                player_options::prewarm_noteskin_previews(&mut po_state);
+                                prewarm_option_previews(
+                                    &mut po_state,
+                                    &mut self.asset_manager,
+                                    &mut self.backend,
+                                );
                                 self.commit_screen_change(CurrentScreen::PlayerOptions);
                                 self.state.screens.player_options_state = Some(po_state);
                                 return commands;
@@ -9645,11 +9678,6 @@ impl App {
             );
             commands.push(Command::SetBanner(banner_path));
             commands.push(Command::SetCdTitle(None));
-        }
-        if target == CurrentScreen::PlayerOptions
-            && let Some(state) = self.state.screens.player_options_state.as_mut()
-        {
-            player_options::prepare_presentation(state, &self.asset_manager);
         }
         if prev == CurrentScreen::PlayerOptions && target != CurrentScreen::PlayerOptions {
             self.state.screens.player_options_state = None;

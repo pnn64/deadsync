@@ -215,11 +215,11 @@ pub struct PlayerOptionMasks {
 /// weak references, so it does not extend that lifetime. The underlying loader
 /// reports failed loads through its existing warnings; cache hits need no
 /// per-frame instrumentation because their worst-case work is a bounded hash
-/// lookup and `Arc` clone. The bounded component cache loads cold choices from
-/// any provider and submits native textures through the ordinary asset queue.
+/// lookup. Transition warmup also retains every component choice and uploads all
+/// of its native textures before this screen is presented. There is no on-demand
+/// loading or eviction while browsing; GPU textures live in the session asset store.
 pub(super) struct NoteskinState {
     pub(super) cache: HashMap<String, Arc<Noteskin>>,
-    pub(super) components: super::noteskins::SkinPreviews,
 }
 
 /// Per-player navigation key hold/repeat timing.

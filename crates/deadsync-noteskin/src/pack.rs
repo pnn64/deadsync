@@ -1,6 +1,6 @@
 //! Optional noteskin packs and per-player asset selections.
 
-use crate::itg::{IniData, NoteskinData, load_noteskin_data};
+use crate::itg::{IniData, NoteskinData, load_noteskin_data_cached};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
@@ -275,6 +275,31 @@ impl InstalledPack {
         format!("{}-{:016x}", selection.skin, hash.finish())
     }
 
+    /// PNG replacements change runtime textures, but not compiled Lua programs.
+    /// Keep metric and all other file changes in the compiler identity.
+    pub fn compiler_key(&self, selection: &Selection) -> String {
+        let mut program = selection.clone();
+        if let Some(skin) = self.skin(&selection.skin) {
+            program.options.retain(|slot, id| {
+                skin.options
+                    .iter()
+                    .find(|choice| choice.slot == *slot && choice.id == *id)
+                    .is_none_or(|choice| {
+                        !choice.metrics.is_empty()
+                            || choice.files.iter().any(|swap| {
+                                [&swap.source, &swap.target].into_iter().any(|path| {
+                                    !Path::new(path)
+                                        .extension()
+                                        .and_then(|ext| ext.to_str())
+                                        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                                })
+                            })
+                    })
+            });
+        }
+        self.runtime_key(&program)
+    }
+
     /// Resolve selected assets with the bundled common fallback.
     ///
     /// # Errors
@@ -314,12 +339,12 @@ impl InstalledPack {
             .unwrap_or("common");
         let common = roots
             .iter()
-            .find_map(|root| load_noteskin_data(root, "dance", fallback).ok())
+            .find_map(|root| load_noteskin_data_cached(root, "dance", fallback).ok())
             .ok_or_else(|| Error::Invalid(format!("missing noteskin fallback: {fallback}")))?;
         metrics.merge_missing_from(&common.metrics);
         let mut search_dirs = Vec::with_capacity(common.search_dirs.len() + 1);
         search_dirs.push(base);
-        search_dirs.extend(common.search_dirs);
+        search_dirs.extend(common.search_dirs.iter().cloned());
         Ok(NoteskinData {
             name: self.runtime_key(selection),
             metrics,

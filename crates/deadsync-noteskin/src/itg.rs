@@ -30,7 +30,13 @@ type PathLookupCache = BorrowMap<IniKey, BorrowMap<IniKey, Option<PathBuf>>>;
 type NoteskinDataCache = BorrowMap<NoteskinDataCacheKey, Arc<NoteskinData>>;
 
 static CHILD_DIR_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
-static FILE_PREFIX_CACHE: OnceLock<Mutex<PathLookupCache>> = OnceLock::new();
+// Transition/worker-owned source lookups, partitioned by any file / PNG only.
+// Mutexes protect lookup/insert; directory I/O runs outside the locks. Both hits
+// and misses live until clear_lookup_caches at a source or screen transition.
+// Capacity is the encountered directory/prefix set; there is no frame-time
+// insertion or eviction. Clearing drops paths and logs entry counts. A hit is
+// one borrowed hash lookup and a path clone; a cold lookup scans one directory.
+static FILE_PREFIX_CACHE: OnceLock<[Mutex<PathLookupCache>; 2]> = OnceLock::new();
 /// Process-wide noteskin source cache owned by transition/worker callers.
 ///
 /// A mutex serializes the short lookup/insert critical sections; file loading
@@ -176,11 +182,17 @@ pub fn clear_lookup_caches() {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
     }
-    if let Some(cache) = FILE_PREFIX_CACHE.get() {
-        cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
+    if let Some(caches) = FILE_PREFIX_CACHE.get() {
+        for cache in caches {
+            let mut cache = cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            log::debug!(
+                "Clearing {} noteskin path lookups",
+                cache.values().map(BorrowMap::len).sum::<usize>()
+            );
+            cache.clear();
+        }
     }
 }
 
@@ -501,7 +513,7 @@ impl NoteskinData {
 
     fn resolve_file_from_search_dirs(&self, prefix: &str) -> Option<PathBuf> {
         for dir in &self.search_dirs {
-            if let Some(path) = find_file_with_prefix(dir, prefix) {
+            if let Some(path) = find_file_with_prefix(dir, prefix, false) {
                 return Some(path);
             }
         }
@@ -512,38 +524,7 @@ impl NoteskinData {
 #[must_use]
 pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<PathBuf> {
     for dir in &data.search_dirs {
-        let Ok(entries) = fs::read_dir(dir) else {
-            continue;
-        };
-        let matching = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.is_file())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|s| s.to_str())
-                    .is_some_and(|name| {
-                        name.get(..prefix.len())
-                            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
-                            && name
-                                .get(name.len().saturating_sub(4)..)
-                                .is_some_and(|end| end.eq_ignore_ascii_case(".png"))
-                    })
-            })
-            .min_by(|left, right| {
-                let left = left
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("");
-                let right = right
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or("");
-                left.bytes()
-                    .map(|byte| byte.to_ascii_lowercase())
-                    .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()))
-            });
-        if let Some(path) = matching {
+        if let Some(path) = find_file_with_prefix(dir, prefix, true) {
             return Some(data.override_path(path));
         }
     }
@@ -1153,8 +1134,10 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     found
 }
 
-fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
-    let cache = FILE_PREFIX_CACHE.get_or_init(|| Mutex::new(BorrowMap::new()));
+fn find_file_with_prefix(dir: &Path, prefix: &str, png_only: bool) -> Option<PathBuf> {
+    let caches =
+        FILE_PREFIX_CACHE.get_or_init(|| std::array::from_fn(|_| Mutex::new(BorrowMap::new())));
+    let cache = &caches[usize::from(png_only)];
     if let Some(cached) = cached_path_lookup(cache, dir, prefix) {
         return cached;
     }
@@ -1166,9 +1149,13 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         let Some(name) = file_name.to_str() else {
             continue;
         };
-        if !name
-            .get(..prefix.len())
-            .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
+        if (png_only
+            && !name
+                .get(name.len().saturating_sub(4)..)
+                .is_some_and(|ext| ext.eq_ignore_ascii_case(".png")))
+            || !name
+                .get(..prefix.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(prefix))
         {
             continue;
         }
@@ -1191,7 +1178,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str) -> Option<PathBuf> {
         }
     }
 
-    if let Some(chosen) = chosen.as_ref().filter(|_| match_count > 1) {
+    if let Some(chosen) = chosen.as_ref().filter(|_| !png_only && match_count > 1) {
         warn!(
             "multiple noteskin files matched prefix '{}' in '{}'; using '{}', ignoring {} others",
             prefix,
@@ -1823,17 +1810,17 @@ mod tests {
         let dir = root.join("dance/default");
         fs::create_dir_all(&dir).unwrap();
 
-        assert!(find_file_with_prefix(&dir, "Tap Note").is_none());
+        assert!(find_file_with_prefix(&dir, "Tap Note", false).is_none());
         let path = dir.join("tap note alpha.PNG");
         fs::write(&path, []).unwrap();
         fs::write(dir.join("Tap Note Zulu.png"), []).unwrap();
         assert!(
-            find_file_with_prefix(&dir, "TAP NOTE").is_none(),
+            find_file_with_prefix(&dir, "TAP NOTE", false).is_none(),
             "missing file prefix result should remain cached until refresh"
         );
 
         clear_lookup_caches();
-        assert_eq!(find_file_with_prefix(&dir, "TAP NOTE"), Some(path));
+        assert_eq!(find_file_with_prefix(&dir, "TAP NOTE", false), Some(path));
         let _ = fs::remove_dir_all(&root);
         clear_lookup_caches();
     }
@@ -1859,8 +1846,11 @@ mod tests {
             super::find_child_dir_case_insensitive(&dir, "MIXED"),
             Some(skin.clone())
         );
-        assert_eq!(find_file_with_prefix(&skin, "tap note"), Some(path.clone()));
-        assert_eq!(find_file_with_prefix(&skin, "TAP NOTE"), Some(path));
+        assert_eq!(
+            find_file_with_prefix(&skin, "tap note", false),
+            Some(path.clone())
+        );
+        assert_eq!(find_file_with_prefix(&skin, "TAP NOTE", false), Some(path));
 
         let _ = fs::remove_dir_all(&root);
         clear_lookup_caches();
@@ -1868,12 +1858,15 @@ mod tests {
 
     #[test]
     fn find_texture_with_prefix_uses_png_matches_in_search_order() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
         let root = temp_root("texture-prefix");
         let first = root.join("dance/default");
         let second = root.join("common/default");
         fs::create_dir_all(&first).unwrap();
         fs::create_dir_all(&second).unwrap();
         fs::write(first.join("_arrow.ini"), []).unwrap();
+        fs::write(first.join("_arrow 0.lua"), []).unwrap();
         fs::write(first.join("_arrow z.png"), []).unwrap();
         fs::write(first.join("_arrow a.PNG"), []).unwrap();
         fs::write(second.join("_arrow first.png"), []).unwrap();
@@ -1881,14 +1874,39 @@ mod tests {
             overrides: Vec::new(),
             name: "test".to_string(),
             metrics: IniData::default(),
-            search_dirs: vec![first.clone(), second],
+            search_dirs: vec![first.clone(), second.clone()],
         };
 
+        assert_eq!(
+            find_file_with_prefix(&first, "_arrow", false),
+            Some(first.join("_arrow 0.lua"))
+        );
         assert_eq!(
             find_texture_with_prefix(&data, "_ARROW"),
             Some(first.join("_arrow a.PNG"))
         );
+        // A cached path belongs to the source directory, not to one variant.
+        let mut variant = data.clone();
+        variant
+            .overrides
+            .push((first.join("_arrow a.PNG"), second.join("_arrow first.png")));
+        assert_eq!(
+            find_texture_with_prefix(&variant, "_arrow"),
+            Some(second.join("_arrow first.png"))
+        );
+        assert_eq!(
+            find_texture_with_prefix(&data, "_arrow"),
+            Some(first.join("_arrow a.PNG"))
+        );
+
+        assert!(find_texture_with_prefix(&data, "_missing").is_none());
+        let added = first.join("_missing.png");
+        fs::write(&added, []).unwrap();
+        assert!(find_texture_with_prefix(&data, "_MISSING").is_none());
+        clear_lookup_caches();
+        assert_eq!(find_texture_with_prefix(&data, "_missing"), Some(added));
         let _ = fs::remove_dir_all(&root);
+        clear_lookup_caches();
     }
 
     #[test]

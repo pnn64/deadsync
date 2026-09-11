@@ -22,7 +22,7 @@ const Z_TEXT: i16 = 1453;
 #[derive(Clone, Debug)]
 pub(super) struct SettingMatch {
     pub choice_index: Option<usize>,
-    pub thumb: Option<super::pack_options::Thumb>,
+    thumb: Option<super::pack_options::Thumb>,
     pub row_id: RowId,
     pub pane: OptionsPane,
     pub label: Arc<str>,

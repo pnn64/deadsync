@@ -182,77 +182,12 @@ impl PackMenu {
         self.parts[player][slot_for_row(row)?].as_ref()
     }
 
-    pub fn update_previews(
-        &self,
-        players: &[PlayerOptionsData; PLAYER_SLOTS],
-        active: [bool; PLAYER_SLOTS],
-        focused: [Option<RowId>; PLAYER_SLOTS],
-        search: &search::SettingSearchState,
-        noteskin: &mut NoteskinState,
-        cols: usize,
-        assets: &mut AssetManager,
-    ) {
-        let mut wanted = smallvec::SmallVec::<[(&str, usize); 40]>::new();
-        for player in 0..PLAYER_SLOTS {
-            if active[player]
-                && let Some(thumb) = focused[player].and_then(|row| self.preview(player, row))
-            {
-                wanted.push((thumb.name.as_ref(), thumb.part));
-            }
-        }
-        if let search::SettingSearchState::Open(open) = search {
-            let range = search::visible_range(open);
-            // The highlighted result loads before the rest of its page.
-            for offset in 0..range.len() {
-                let index = range.start
-                    + (open.selected_index.saturating_sub(range.start) + offset) % range.len();
-                if let Some(thumb) = &open.matches[index].thumb {
-                    wanted.push((thumb.name.as_ref(), thumb.part));
-                }
-            }
-        }
-        for (player, options) in players.iter().enumerate() {
-            if active[player] {
-                wanted.push((options.noteskin.as_str(), 0));
-                for thumb in self.parts[player].iter().flatten() {
-                    let entry = (thumb.name.as_ref(), thumb.part);
-                    if !wanted.contains(&entry) {
-                        wanted.push(entry);
-                    }
-                }
-            }
-        }
-        // Preload adjacent choices while the current arrow is on screen.
-        for player in 0..PLAYER_SLOTS {
-            if !active[player] {
-                continue;
-            }
-            let Some(thumb) = focused[player].and_then(|row| self.preview(player, row)) else {
-                continue;
-            };
-            let choices = &self.choices[thumb.part];
-            let index = choices
-                .iter()
-                .position(|choice| {
-                    choice
-                        .as_ref()
-                        .is_some_and(|choice| choice.as_str() == thumb.name.as_ref())
-                })
-                .unwrap_or(0);
-            for delta in [-1isize, 1, -2, 2] {
-                let index =
-                    (index as isize + delta).rem_euclid(choices.len().max(1) as isize) as usize;
-                if let Some(Some(choice)) = choices.get(index)
-                    && !choice.is_none_choice()
-                    && !wanted.contains(&(choice.as_str(), thumb.part))
-                {
-                    wanted.push((choice.as_str(), thumb.part));
-                }
-            }
-        }
-        noteskin
-            .components
-            .update(&wanted, &noteskin.cache, cols, assets);
+    pub fn preview_choices(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.choices.iter().enumerate().flat_map(|(part, choices)| {
+            choices.iter().flatten().filter_map(move |choice| {
+                (!choice.is_none_choice()).then_some((choice.as_str(), part))
+            })
+        })
     }
 
     pub fn choice_thumb(
