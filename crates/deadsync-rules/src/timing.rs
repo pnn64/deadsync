@@ -4,6 +4,7 @@ use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use log::debug;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -577,8 +578,13 @@ pub struct FakeSegment {
 
 fn sorted_timing_table<T: Clone>(values: &[T], beat: impl Fn(&T) -> f32) -> Arc<[T]> {
     let mut output: Arc<[T]> = Arc::from(values);
-    Arc::make_mut(&mut output)
-        .sort_by(|a, b| beat(a).partial_cmp(&beat(b)).unwrap_or(Ordering::Less));
+    if !values
+        .windows(2)
+        .all(|pair| beat(&pair[0]) <= beat(&pair[1]))
+    {
+        Arc::make_mut(&mut output)
+            .sort_by(|a, b| beat(a).partial_cmp(&beat(b)).unwrap_or(Ordering::Less));
+    }
     output
 }
 
@@ -604,11 +610,15 @@ impl TimingData {
         segments: &TimingSegments,
         row_to_beat: &[f32],
     ) -> Self {
-        let mut parsed_bpms = segments.bpms.clone();
-        if parsed_bpms.is_empty() {
-            parsed_bpms.push((0.0, 60.0));
-        }
-        parsed_bpms.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
+        let parsed_bpms: Cow<'_, [(f32, f32)]> = if segments.bpms.is_empty() {
+            Cow::Borrowed(&[(0.0, 60.0)])
+        } else if segments.bpms.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
+            Cow::Borrowed(&segments.bpms)
+        } else {
+            let mut sorted = segments.bpms.clone();
+            sorted.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Less));
+            Cow::Owned(sorted)
+        };
 
         let stops = sorted_timing_table(&segments.stops, |segment| segment.beat);
         let delays = sorted_timing_table(&segments.delays, |segment| segment.beat);
@@ -627,7 +637,7 @@ impl TimingData {
         let mut last_bpm = parsed_bpms[0].1;
         let mut max_bpm = 0.0;
 
-        for &(beat, bpm) in &parsed_bpms {
+        for &(beat, bpm) in parsed_bpms.as_ref() {
             if beat > last_beat && last_bpm > 0.0 {
                 current_time = (beat - last_beat).mul_add(60.0 / last_bpm, current_time);
             }
@@ -644,7 +654,7 @@ impl TimingData {
         }
 
         let mut timing_with_stops = Self {
-            row_to_beat: Arc::new(vec![]),
+            row_to_beat: Arc::new(row_to_beat.to_vec()),
             beat_to_time: Arc::new(beat_to_time),
             stops,
             delays,
@@ -660,17 +670,25 @@ impl TimingData {
         };
 
         let mut beat_time_cache = BeatTimeCache::new(&timing_with_stops);
-        let re_beat_to_time: Vec<_> = timing_with_stops
-            .beat_to_time
-            .iter()
-            .map(|point| {
-                let mut new_point = *point;
-                new_point.time_ns = timing_with_stops
-                    .get_time_for_beat_internal_ns_cached(point.beat, &mut beat_time_cache);
-                new_point
-            })
-            .collect();
-        timing_with_stops.beat_to_time = Arc::new(re_beat_to_time);
+        // Time conversion reads each point's beat/BPM and the first point's
+        // offset. Keep that offset unchanged until every conversion is done;
+        // later timestamps can be overwritten in the uniquely owned buffer.
+        let mut first_time_ns = 0;
+        for index in 0..timing_with_stops.beat_to_time.len() {
+            let beat = timing_with_stops.beat_to_time[index].beat;
+            let time_ns =
+                timing_with_stops.get_time_for_beat_internal_ns_cached(beat, &mut beat_time_cache);
+            if index == 0 {
+                first_time_ns = time_ns;
+            } else {
+                Arc::get_mut(&mut timing_with_stops.beat_to_time)
+                    .expect("new timing points are uniquely owned")[index]
+                    .time_ns = time_ns;
+            }
+        }
+        Arc::get_mut(&mut timing_with_stops.beat_to_time)
+            .expect("new timing points are uniquely owned")[0]
+            .time_ns = first_time_ns;
 
         timing_with_stops.rebuild_speed_runtime();
 
@@ -692,9 +710,7 @@ impl TimingData {
             });
         }
 
-        let row_to_beat = row_to_beat.to_vec();
         debug!("TimingData processed {} note rows.", row_to_beat.len());
-        timing_with_stops.row_to_beat = Arc::new(row_to_beat);
 
         timing_with_stops
     }
@@ -913,6 +929,26 @@ impl TimingData {
     pub fn get_time_for_beat_ns(&self, target_beat: f32) -> i64 {
         self.get_time_for_beat_internal_ns(target_beat)
             .saturating_sub(self.global_offset_ns)
+    }
+
+    /// Whether row-grid queries can resume the beat-time cursor without
+    /// changing the result of independent conversions. The cursor recovers
+    /// its BPM from the last event's quantized row; subrow or duplicate BPMs
+    /// can resolve differently, so compatibility-sensitive callers fall back.
+    #[must_use]
+    pub fn supports_row_time_cache(&self) -> bool {
+        let mut previous = None;
+        for point in self.beat_to_time.iter() {
+            if !point.bpm.is_finite()
+                || point.bpm <= 0.0
+                || note_row_to_beat(beat_to_note_row(point.beat)) != point.beat
+                || previous.is_some_and(|beat| beat >= point.beat)
+            {
+                return false;
+            }
+            previous = Some(point.beat);
+        }
+        true
     }
 
     #[inline]
@@ -3378,3 +3414,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/timing_construction.rs"]
+mod construction_perf;

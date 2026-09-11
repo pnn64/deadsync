@@ -17321,4 +17321,7 @@ mod tests {
 
         assert_eq!(note_index, 2);
     }
+    mod pump_hold_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/pump_holds.rs"));
+    }
 }
