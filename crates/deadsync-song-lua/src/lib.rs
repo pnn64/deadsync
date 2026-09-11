@@ -4762,6 +4762,14 @@ mod tests {
     type TestOverlayActor = SongLuaOverlayActor<TestOverlayKind>;
     type TestCompiledSongLua = CompiledSongLua<TestOverlayActor>;
 
+    mod sampling_compile {
+        use super::*;
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/sampling_compile.rs"
+        ));
+    }
+
     fn test_sprite_overlay(path: PathBuf, decode_movie: bool) -> TestOverlayActor {
         TestOverlayActor {
             kind: TestOverlayKind::Sprite {

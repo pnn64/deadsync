@@ -1019,11 +1019,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn explosion_messages_append_sorted_unique_finite_lane_beats() {
+    fn explosion_eases_ignore_other_lanes_and_merge_overlapping_visibility() {
         let descs = [
             MultitapDesc {
                 lane: 3,
-                taps: vec![2.0, f32::NAN, 1.0],
+                taps: vec![1.0, 2.0],
                 peak: None,
             },
             MultitapDesc {
@@ -1037,22 +1037,16 @@ mod tests {
                 peak: None,
             },
         ];
-        let mut messages = vec![SongLuaMessageEvent {
-            beat: 0.0,
-            message: "existing".to_owned(),
-            persists: true,
-        }];
-
-        push_multitap_explosion_message_events(&mut messages, &descs, 3, "explosion");
-
-        assert_eq!(
-            messages.iter().map(|event| event.beat).collect::<Vec<_>>(),
-            [0.0, 1.0, 2.0, 3.0]
-        );
-        assert!(
-            messages[1..]
-                .iter()
-                .all(|event| event.message == "explosion" && !event.persists)
-        );
+        let baseline = SongLuaOverlayState {
+            visible: false,
+            ..Default::default()
+        };
+        let context = SongLuaCompileContext::new(".", "Multitap visibility");
+        let mut actual = Vec::new();
+        let mut expected = Vec::new();
+        push_multitap_explosion_eases(&mut actual, 7, baseline, &context, &descs, 3);
+        push_multitap_explosion_eases(&mut expected, 7, baseline, &context, &descs[2..], 3);
+        assert!(!actual.is_empty());
+        assert_eq!(actual, expected);
     }
 }

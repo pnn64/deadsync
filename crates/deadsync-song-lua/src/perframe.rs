@@ -1488,10 +1488,11 @@ fn merge_completed_scheduled_overlay_samples(
     if scheduled.is_empty() {
         return;
     }
-    let (mut completed, pending) = std::mem::take(scheduled)
-        .into_iter()
-        .partition(|sample| sample.end_beat <= beat + f32::EPSILON);
-    *scheduled = pending;
+    // Keep pending tweens (and their capacity) in place across sample ticks.
+    // The common case where none have completed does not allocate or move them.
+    let mut completed: Vec<_> = scheduled
+        .extract_if(.., |sample| sample.end_beat <= beat + f32::EPSILON)
+        .collect();
     if !completed.is_empty() {
         completed.sort_by(|left, right| left.end_beat.total_cmp(&right.end_beat));
         for sample in &completed {
@@ -1507,18 +1508,21 @@ fn merge_completed_scheduled_overlay_samples(
 }
 
 fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
-    samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
-    let mut merged: Vec<SongLuaOverlayUpdateSample> = Vec::with_capacity(samples.len());
-    for sample in samples.drain(..) {
-        if let Some(last) = merged.last_mut()
-            && (last.beat - sample.beat).abs() <= f32::EPSILON
-        {
-            *last = sample;
-        } else {
-            merged.push(sample);
-        }
+    // Sample tracks are normally already ordered. Avoid the stable sort's
+    // temporary allocation in that case; preserve stable ties when sorting.
+    if !samples.is_sorted_by(|left, right| left.beat.total_cmp(&right.beat).is_le()) {
+        samples.sort_by(|left, right| left.beat.total_cmp(&right.beat));
     }
-    *samples = merged;
+    samples.dedup_by(|next, previous| {
+        if (previous.beat - next.beat).abs() <= f32::EPSILON {
+            // Keep the last value AND timestamp so epsilon-connected runs
+            // collapse exactly as they do when replacing the last output item.
+            std::mem::swap(previous, next);
+            true
+        } else {
+            false
+        }
+    });
 }
 
 fn merge_scheduled_overlay_samples(
@@ -1684,7 +1688,7 @@ pub fn compile_update_functions<Kind>(
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
     let mut scheduled_overlay_samples = Vec::new();
-    let mut current_overlays = replay_overlays;
+    let mut current_overlays = replay_overlays.clone();
     capture_update_overlay_samples(
         lua,
         context,
@@ -1717,7 +1721,9 @@ pub fn compile_update_functions<Kind>(
         reset_tracked_capture_tables(lua, tracked_actors)?;
         reset_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        let mut replay_overlays = current_overlays.clone();
+        // Overlay count is fixed for this compiler run. Reuse the three state
+        // buffers while keeping prior, message-replayed and updated states apart.
+        replay_overlays.copy_from_slice(&current_overlays);
         let started =
             message_replay.advance(lua, context, overlays, &mut replay_overlays, next_beat)?;
         message_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
@@ -1733,7 +1739,7 @@ pub fn compile_update_functions<Kind>(
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
         restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
-        let mut update_overlays = replay_overlays.clone();
+        update_overlays.copy_from_slice(&replay_overlays);
         let next_masks = player_transform_masks(&player_tables)?;
         let prior_active = if player_samples.len() >= 2 {
             player_samples[player_samples.len() - 2]
@@ -1770,7 +1776,6 @@ pub fn compile_update_functions<Kind>(
         column_samples.push(read_note_column_transform_samples(lua)?);
         column_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        let mut next_overlays = replay_overlays;
         capture_update_overlay_samples(
             lua,
             context,
@@ -1778,7 +1783,7 @@ pub fn compile_update_functions<Kind>(
             &baseline_overlays,
             &current_overlays,
             &mut update_overlays,
-            &mut next_overlays,
+            &mut replay_overlays,
             &started,
             &mut overlay_tracks,
             &mut overlay_track_indices,
@@ -1788,7 +1793,7 @@ pub fn compile_update_functions<Kind>(
             &mut scheduled_overlay_samples,
         )?;
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
-        current_overlays = next_overlays;
+        std::mem::swap(&mut current_overlays, &mut replay_overlays);
         beat = next_beat;
     }
     if profile {
@@ -2130,6 +2135,10 @@ pub fn compile_perframes<Kind>(
     }
     Ok((out_eases, out_overlay_eases, info))
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/sampling.rs"]
+mod sampling_perf;
 
 #[cfg(test)]
 mod tests {
