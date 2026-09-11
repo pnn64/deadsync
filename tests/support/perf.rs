@@ -105,6 +105,22 @@ pub fn assert_no_churn(work: impl FnOnce()) {
     );
 }
 
+#[allow(dead_code)]
+pub fn assert_churn_budget(max_allocations: usize, max_bytes: usize, work: impl FnOnce()) {
+    let tracking = Tracking::start();
+    work();
+    let counts = COUNTS.get().expect("tracking is active");
+    drop(tracking);
+    assert!(
+        counts.allocs <= max_allocations
+            && counts.frees <= max_allocations
+            && counts.reallocs == 0
+            && counts.allocated_bytes <= max_bytes
+            && counts.freed_bytes <= max_bytes,
+        "allocation budget exceeded: {counts:?} (limit {max_allocations} calls, {max_bytes} bytes)"
+    );
+}
+
 pub fn measure<T>(name: &str, units: usize, mut work: impl FnMut() -> T) {
     const ITERATIONS: usize = 512;
     for _ in 0..64 {

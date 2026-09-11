@@ -69,6 +69,10 @@ const UPDATE_FN_ERROR_KEY: &str = "__songlua_update_function_error_reported";
 const UPDATE_CMD_ERROR_KEY: &str = "__songlua_update_command_error_reported";
 const UPDATE_QUEUE_ERROR_KEY: &str = "__songlua_update_queue_error_reported";
 
+#[cfg(test)]
+#[path = "../tests/perf/actor_state.rs"]
+mod actor_state_perf;
+
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
     pub players: [Table; LUA_PLAYERS],
@@ -1435,9 +1439,9 @@ fn snapshot_actor_state(
         let Value::String(key) = key else {
             continue;
         };
-        let key = key.to_str()?.to_string();
+        let key = key.to_str()?;
         if keep_key(&key) {
-            out.push((key, clone_lua_value(lua, value)?));
+            out.push((key.to_string(), clone_lua_value(lua, value)?));
         }
     }
     Ok(out)
@@ -1465,8 +1469,9 @@ fn restore_actor_state(
         let Value::String(key) = key else {
             continue;
         };
-        let key = key.to_str()?.to_string();
-        if clear_key(&key) {
+        // Keep Lua string handles alive until iteration finishes; only retained
+        // snapshot entries need an owned Rust key. Validate all string keys.
+        if clear_key(&key.to_str()?) {
             keys.push(key);
         }
     }
@@ -2628,7 +2633,7 @@ fn capture_immediate_vec3(
         block.set(key, table.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), table)
+    set_actor_capture_state(actor, key, table)
 }
 
 fn capture_immediate_vec4(
@@ -2651,7 +2656,7 @@ fn capture_immediate_vec4(
         block.set(key, table.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), table)
+    set_actor_capture_state(actor, key, table)
 }
 
 fn capture_immediate_vec5(
@@ -2674,7 +2679,7 @@ fn capture_immediate_vec5(
         block.set(key, table.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), table)
+    set_actor_capture_state(actor, key, table)
 }
 
 fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) -> mlua::Result<()> {
@@ -2693,7 +2698,7 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)
+    set_actor_capture_state(actor, key, value)
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
@@ -2704,7 +2709,7 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
         _ => None,
     };
     let prior_pos = current_pos_key
-        .map(|_| actor.get::<Option<f32>>(format!("__songlua_state_{key}")))
+        .map(|_| actor.get::<Option<f32>>(actor_capture_state_key(key).as_ref()))
         .transpose()?
         .flatten()
         .unwrap_or(0.0);
@@ -2751,11 +2756,7 @@ pub fn capture_block_set_bool(
     Ok(())
 }
 
-fn set_actor_capture_state(
-    actor: &Table,
-    key: &str,
-    value: impl mlua::IntoLua,
-) -> mlua::Result<()> {
+fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
     let state_key = match key {
         "x" => "__songlua_state_x",
         "y" => "__songlua_state_y",
@@ -2808,9 +2809,46 @@ fn set_actor_capture_state(
         "max_dimension_uses_zoom" => "__songlua_state_max_dimension_uses_zoom",
         "texture_filtering" => "__songlua_state_texture_filtering",
         "texture_wrapping" => "__songlua_state_texture_wrapping",
-        _ => return actor.set(format!("__songlua_state_{key}"), value),
+        "banner_scroll_percent" => "__songlua_state_banner_scroll_percent",
+        "banner_scrolling" => "__songlua_state_banner_scrolling",
+        "blend" => "__songlua_state_blend",
+        "custom_texture_rect" => "__songlua_state_custom_texture_rect",
+        "decode_movie" => "__songlua_state_decode_movie",
+        "diffuse" => "__songlua_state_diffuse",
+        "effect_clock" => "__songlua_state_effect_clock",
+        "effect_color1" => "__songlua_state_effect_color1",
+        "effect_color2" => "__songlua_state_effect_color2",
+        "effect_magnitude" => "__songlua_state_effect_magnitude",
+        "effect_mode" => "__songlua_state_effect_mode",
+        "effect_timing" => "__songlua_state_effect_timing",
+        "fov" => "__songlua_state_fov",
+        "glow" => "__songlua_state_glow",
+        "max_height" => "__songlua_state_max_height",
+        "max_width" => "__songlua_state_max_width",
+        "shadow_color" => "__songlua_state_shadow_color",
+        "shadow_len" => "__songlua_state_shadow_len",
+        "size" => "__songlua_state_size",
+        "sprite_state_index" => "__songlua_state_sprite_state_index",
+        "stretch_rect" => "__songlua_state_stretch_rect",
+        "texcoord_offset" => "__songlua_state_texcoord_offset",
+        "texcoord_velocity" => "__songlua_state_texcoord_velocity",
+        "text_align" => "__songlua_state_text_align",
+        "text_glow_mode" => "__songlua_state_text_glow_mode",
+        "vanishpoint" => "__songlua_state_vanishpoint",
+        "vert_spacing" => "__songlua_state_vert_spacing",
+        "vertex_colors" => "__songlua_state_vertex_colors",
+        "wrap_width_pixels" => "__songlua_state_wrap_width_pixels",
+        _ => return std::borrow::Cow::Owned(format!("__songlua_state_{key}")),
     };
-    actor.set(state_key, value)
+    std::borrow::Cow::Borrowed(state_key)
+}
+
+fn set_actor_capture_state(
+    actor: &Table,
+    key: &str,
+    value: impl mlua::IntoLua,
+) -> mlua::Result<()> {
+    actor.set(actor_capture_state_key(key).as_ref(), value)
 }
 
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
@@ -2938,7 +2976,7 @@ pub fn capture_block_set_vec4(
         block.set(key, value.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -2979,7 +3017,7 @@ pub fn capture_block_set_vec5(
         block.set(key, value.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -2989,7 +3027,7 @@ pub fn capture_block_set_u32(lua: &Lua, actor: &Table, key: &str, value: u32) ->
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -2999,7 +3037,7 @@ pub fn capture_block_set_i32(lua: &Lua, actor: &Table, key: &str, value: i32) ->
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -3017,7 +3055,7 @@ pub fn capture_block_set_vec2(
         block.set(key, value.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -3085,7 +3123,7 @@ pub fn capture_block_set_vec3(
         block.set(key, value.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -3118,7 +3156,7 @@ pub fn capture_block_set_string(
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
     }
-    actor.set(format!("__songlua_state_{key}"), value)?;
+    set_actor_capture_state(actor, key, value)?;
     Ok(())
 }
 
@@ -3969,6 +4007,7 @@ pub fn make_actor_add_f32_method(
     key: &'static str,
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
+    let state_key = actor_capture_state_key(key);
     lua.create_function(move |lua, (_self, delta): (Option<Value>, Option<Value>)| {
         let Some(delta) = delta.and_then(read_f32) else {
             return Ok(actor.clone());
@@ -3976,7 +4015,7 @@ pub fn make_actor_add_f32_method(
         let block = actor_current_capture_block(lua, &actor)?;
         let current = block
             .get::<Option<f32>>(key)?
-            .or(actor.get::<Option<f32>>(format!("__songlua_state_{key}"))?)
+            .or(actor.get::<Option<f32>>(state_key.as_ref())?)
             .unwrap_or(0.0);
         capture_block_set_f32(lua, &actor, key, current + delta)?;
         Ok(actor.clone())

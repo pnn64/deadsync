@@ -24,6 +24,10 @@ use crate::{
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
 const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 
+#[cfg(test)]
+#[path = "../tests/perf/dense_capture.rs"]
+mod dense_capture_perf;
+
 pub(crate) fn apply_startup_states<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -991,7 +995,7 @@ fn push_update_overlay_value(
     current: crate::SongLuaOverlayUpdateValue,
     next_beat: f32,
     next: crate::SongLuaOverlayUpdateValue,
-) {
+) -> usize {
     let key = (overlay_index, target);
     let track_index = match track_indices.get(&key).copied() {
         Some(index) => index,
@@ -1009,11 +1013,11 @@ fn push_update_overlay_value(
                     value: next,
                 }],
             });
-            return;
+            return index;
         }
     };
     if current == next {
-        return;
+        return track_index;
     }
     let track = &mut tracks[track_index];
     if track
@@ -1030,6 +1034,7 @@ fn push_update_overlay_value(
         beat: next_beat,
         value: next,
     });
+    track_index
 }
 
 fn overlay_state_update_value(
@@ -1245,6 +1250,20 @@ fn set_overlay_state_update_value(
     set_option!(StretchRect, Vec4, stretch_rect);
 }
 
+// Scratch belongs to one compilation and retains only its high-water storage.
+// Track indices stay stable because update tracks are append-only during capture.
+#[derive(Default)]
+struct OverlaySampleScratch {
+    reset_indices: Vec<usize>,
+    captured_tracks: Vec<bool>,
+    message_targets: Vec<(
+        usize,
+        SongLuaOverlayUpdateTarget,
+        SongLuaOverlayUpdateValue,
+        SongLuaOverlayUpdateValue,
+    )>,
+}
+
 fn capture_update_overlay_samples<Kind>(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1263,6 +1282,7 @@ fn capture_update_overlay_samples<Kind>(
     next_beat: f32,
     next_seconds: f64,
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
+    scratch: &mut OverlaySampleScratch,
 ) -> Result<(), String> {
     merge_completed_scheduled_overlay_samples(
         tracks,
@@ -1273,8 +1293,15 @@ fn capture_update_overlay_samples<Kind>(
         scheduled_samples,
         next_beat,
     );
-    let mut reset_indices = Vec::new();
-    let mut captured_targets = Vec::new();
+    scratch.reset_indices.clear();
+    scratch.captured_tracks.clear();
+    scratch.captured_tracks.resize(tracks.len(), false);
+    scratch.message_targets.clear();
+    let OverlaySampleScratch {
+        reset_indices,
+        captured_tracks,
+        message_targets,
+    } = scratch;
     crate::lua_util::drain_overlay_update_capture(
         lua,
         |overlay_index, values, scheduled, final_values| {
@@ -1297,12 +1324,11 @@ fn capture_update_overlay_samples<Kind>(
                 }
             }
             for (target, next) in values {
-                captured_targets.push((overlay_index, *target));
                 let current = from_states
                     .get(overlay_index)
                     .map(|state| overlay_state_update_value(state, *target))
                     .unwrap_or_else(|| overlay_state_update_value(baseline, *target));
-                push_update_overlay_value(
+                let track_index = push_update_overlay_value(
                     tracks,
                     track_indices,
                     overlay_index,
@@ -1312,6 +1338,12 @@ fn capture_update_overlay_samples<Kind>(
                     next_beat,
                     next.clone(),
                 );
+                // Tracks only append. Mark unchanged writes too: they still
+                // take precedence over a restored message on this tick.
+                if track_index >= captured_tracks.len() {
+                    captured_tracks.resize(track_index + 1, false);
+                }
+                captured_tracks[track_index] = true;
             }
             let message_seconds = next_seconds;
             let mut scheduled_values = std::collections::HashMap::new();
@@ -1352,28 +1384,29 @@ fn capture_update_overlay_samples<Kind>(
             Ok(())
         },
     )?;
-    let message_targets = track_indices
-        .iter()
-        .filter(|(target, _)| !captured_targets.contains(target))
-        .filter_map(|(&(overlay_index, target), &track_index)| {
-            let current = from_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, target))?;
-            let message = to_states
-                .get(overlay_index)
-                .map(|state| overlay_state_update_value(state, target))?;
-            let tracked = tracks
-                .get(track_index)
-                .and_then(|track| track.samples.last())
-                .map(|sample| &sample.value)?;
-            (*tracked != message).then_some((overlay_index, target, current, message))
-        })
-        .collect::<Vec<_>>();
+    message_targets.extend(
+        track_indices
+            .iter()
+            .filter(|(_, index)| !captured_tracks[**index])
+            .filter_map(|(&(overlay_index, target), &track_index)| {
+                let current = from_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, target))?;
+                let message = to_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, target))?;
+                let tracked = tracks
+                    .get(track_index)
+                    .and_then(|track| track.samples.last())
+                    .map(|sample| &sample.value)?;
+                (*tracked != message).then_some((overlay_index, target, current, message))
+            }),
+    );
     // Runtime update tracks are applied after message commands. Keep an existing
     // track synchronized when a message changes its target, otherwise a stale
     // sampled value can overwrite a later persistent action (notably Player
     // ActorProxy visibility in Step Your Game Up).
-    for (overlay_index, target, current, message) in message_targets {
+    for (overlay_index, target, current, message) in message_targets.drain(..) {
         push_update_overlay_value(
             tracks,
             track_indices,
@@ -1385,7 +1418,7 @@ fn capture_update_overlay_samples<Kind>(
             message,
         );
     }
-    for overlay_index in reset_indices {
+    for &overlay_index in reset_indices.iter() {
         reset_actor_capture(lua, &overlays[overlay_index].table).map_err(|err| err.to_string())?;
     }
     Ok(())
@@ -1688,6 +1721,7 @@ pub fn compile_update_functions<Kind>(
     let mut overlay_tracks = Vec::new();
     let mut overlay_track_indices = std::collections::HashMap::new();
     let mut scheduled_overlay_samples = Vec::new();
+    let mut overlay_sample_scratch = OverlaySampleScratch::default();
     let mut current_overlays = replay_overlays.clone();
     capture_update_overlay_samples(
         lua,
@@ -1704,6 +1738,7 @@ pub fn compile_update_functions<Kind>(
         start,
         f64::from(song_elapsed_seconds_at(start, context)),
         &mut scheduled_overlay_samples,
+        &mut overlay_sample_scratch,
     )?;
 
     let replay = update_function_replay_beats(context, start, end);
@@ -1791,6 +1826,7 @@ pub fn compile_update_functions<Kind>(
             next_beat,
             seconds,
             &mut scheduled_overlay_samples,
+            &mut overlay_sample_scratch,
         )?;
         overlay_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         std::mem::swap(&mut current_overlays, &mut replay_overlays);
