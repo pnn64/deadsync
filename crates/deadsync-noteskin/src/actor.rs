@@ -1,6 +1,7 @@
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -83,7 +84,7 @@ pub struct ItgLuaActorDecl {
 #[must_use]
 pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLuaActorDecl {
     let content = strip_lua_comments(content);
-    let content = content.as_str();
+    let content = content.as_ref();
     let mut decl = ItgLuaActorDecl::default();
     let arg0_aliases = parse_arg0_aliases(content);
     let command_context = command_context(content);
@@ -310,18 +311,20 @@ fn has_beat_fade_glow_signature(body: &str) -> bool {
         .all(|signature| find_compact_ascii_case_insensitive(body, signature).is_some())
 }
 
-fn strip_lua_comments(content: &str) -> String {
+fn strip_lua_comments(content: &str) -> Cow<'_, str> {
+    if !content.contains("--") {
+        return Cow::Borrowed(content);
+    }
     let bytes = content.as_bytes();
-    let mut out = Vec::with_capacity(content.len());
+    let mut out = Vec::new();
+    let mut copy_start = 0usize;
     let mut idx = 0usize;
     let mut quote = 0u8;
     while idx < bytes.len() {
         let byte = bytes[idx];
         if quote != 0 {
-            out.push(byte);
             if byte == b'\\' && idx + 1 < bytes.len() {
                 idx += 1;
-                out.push(bytes[idx]);
             } else if byte == quote {
                 quote = 0;
             }
@@ -330,16 +333,20 @@ fn strip_lua_comments(content: &str) -> String {
         }
         if matches!(byte, b'\'' | b'"') {
             quote = byte;
-            out.push(byte);
             idx += 1;
             continue;
         }
         if byte != b'-' || bytes.get(idx + 1) != Some(&b'-') {
-            out.push(byte);
             idx += 1;
             continue;
         }
 
+        // Only actual comments require an owned buffer. Copy unchanged source
+        // in spans, preserving quoted text and the original padding semantics.
+        if out.capacity() == 0 {
+            out.reserve(content.len());
+        }
+        out.extend_from_slice(&bytes[copy_start..idx]);
         let mut body = idx + 2;
         let mut equals = 0usize;
         if bytes.get(body) == Some(&b'[') {
@@ -372,8 +379,14 @@ fn strip_lua_comments(content: &str) -> String {
                 idx += 1;
             }
         }
+        copy_start = idx;
     }
-    String::from_utf8(out).expect("comment removal preserves valid UTF-8")
+    if copy_start == 0 {
+        Cow::Borrowed(content)
+    } else {
+        out.extend_from_slice(&bytes[copy_start..]);
+        Cow::Owned(String::from_utf8(out).expect("comment removal preserves valid UTF-8"))
+    }
 }
 
 #[must_use]
@@ -1214,7 +1227,7 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
         .map(|(param, arg)| {
             (
                 param.to_ascii_lowercase(),
-                context.resolve_command_arg(arg, &HashMap::new()),
+                context.resolve_command_arg(arg, &HashMap::new()).into_owned(),
             )
         })
         .collect::<HashMap<_, _>>();
@@ -1226,12 +1239,16 @@ fn resolve_helper_command(value: &str, context: &CommandContext) -> Option<Strin
 }
 
 impl CommandContext {
-    fn resolve_command_arg(&self, raw: &str, scope: &HashMap<String, String>) -> String {
+    fn resolve_command_arg<'a>(
+        &'a self,
+        raw: &'a str,
+        scope: &'a HashMap<String, String>,
+    ) -> Cow<'a, str> {
         let key = raw.trim().trim_matches('"').trim_matches('\'');
         get_ascii_lowercase_from_two(scope, &self.colors, key)
-            .cloned()
-            .or_else(|| parse_lua_color_expr(raw))
-            .unwrap_or_else(|| raw.trim().to_string())
+            .map(|value| Cow::Borrowed(value.as_str()))
+            .or_else(|| parse_lua_color_expr(raw).map(Cow::Owned))
+            .unwrap_or_else(|| Cow::Borrowed(raw.trim()))
     }
 }
 
@@ -1317,6 +1334,9 @@ fn parse_self_chain_commands_scoped(
                 cursor = name_start;
                 break;
             };
+            if out.capacity() == 0 {
+                out.reserve(body.len());
+            }
             if !out.is_empty() {
                 out.push(';');
             }
@@ -1504,21 +1524,7 @@ fn parse_lua_quoted(raw: &str) -> Option<String> {
 }
 
 fn find_matching(content: &str, open_idx: usize, open: char, close: char) -> Option<usize> {
-    let mut depth = 0usize;
-    for (idx, ch) in content
-        .char_indices()
-        .skip_while(|(idx, _)| *idx < open_idx)
-    {
-        if ch == open {
-            depth += 1;
-        } else if ch == close {
-            depth = depth.saturating_sub(1);
-            if depth == 0 {
-                return Some(idx);
-            }
-        }
-    }
-    None
+    crate::lua::itg_find_matching(content, open_idx, open, close)
 }
 
 const fn skip_ws(content: &str, mut idx: usize) -> usize {
@@ -1756,3 +1762,7 @@ return Def.ActorFrame .. {
         assert!(!is_lua_path(Path::new("Down Receptor")));
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/parsing.rs"]
+mod parsing_perf;

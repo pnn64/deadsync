@@ -18,14 +18,20 @@ pub fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
 
 #[must_use]
 pub fn itg_find_matching(content: &str, open_idx: usize, open: char, close: char) -> Option<usize> {
+    // Start at the requested byte instead of decoding the preceding source on
+    // every call. Off-boundary indices retain the old next-character behavior.
+    let mut start = open_idx.min(content.len());
+    while !content.is_char_boundary(start) {
+        start += 1;
+    }
     let mut depth = 0usize;
-    for (idx, ch) in content.char_indices().skip_while(|(i, _)| *i < open_idx) {
+    for (idx, ch) in content[start..].char_indices() {
         if ch == open {
             depth += 1;
         } else if ch == close {
             depth = depth.saturating_sub(1);
             if depth == 0 {
-                return Some(idx);
+                return Some(start + idx);
             }
         }
     }
