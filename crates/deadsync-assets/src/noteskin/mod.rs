@@ -106,7 +106,7 @@ pub fn clear_itg_runtime_caches() {
     }
     noteskin_itg::clear_data_cache();
     noteskin_itg::clear_lookup_caches();
-    texture::clear_mine_samples();
+    texture::clear_source_caches();
 }
 
 fn noteskin_roots() -> Vec<PathBuf> {
@@ -497,7 +497,7 @@ mod tests {
         let root = temp_noteskin_root("header-cache");
         let path = root.join("sheet 2x2.png");
         image::RgbaImage::new(128, 96).save(&path).unwrap();
-        let key = super::texture::itg_texture_key(&path).unwrap();
+        let key = super::texture::itg_texture_key(&path, &Default::default()).unwrap();
         assert!(crate::texture_dims(&key).is_none());
         assert_eq!(super::texture::texture_dimensions(&key), Some((128, 96)));
         // No GPU upload has happened. Removing the file proves that subsequent
@@ -505,6 +505,34 @@ mod tests {
         fs::remove_file(&path).unwrap();
         assert_eq!(super::texture::texture_dimensions(&key), Some((128, 96)));
         assert_eq!(crate::sprite_sheet_dims(&key), (2, 2));
+        fs::remove_dir(&root).unwrap();
+    }
+
+    #[test]
+    fn texture_path_cache_reuses_hits_and_misses_until_clear() {
+        use super::texture::itg_texture_key;
+        init_asset_paths();
+        let root = temp_noteskin_root("texture-keys");
+        let first = root.join("first.png");
+        let second = root.join("second.png");
+        let keys = Default::default();
+        fs::write(&first, []).unwrap();
+        let original = itg_texture_key(&first, &keys).unwrap();
+        assert_eq!(itg_texture_key(&second, &keys), None);
+        fs::rename(&first, &second).unwrap();
+        assert_eq!(itg_texture_key(&first, &keys), Some(original.clone()));
+        assert_eq!(itg_texture_key(&second, &keys), None);
+        keys.write().unwrap().clear();
+        assert_eq!(itg_texture_key(&first, &keys), None);
+        let renamed = itg_texture_key(&second, &keys).unwrap();
+        assert_ne!(renamed, original);
+        assert!(renamed.ends_with("/second.png"));
+        // Relative asset identities do not require an existing file.
+        assert_eq!(
+            itg_texture_key(Path::new("assets/noteskins/missing/tap.png"), &keys),
+            Some("noteskins/missing/tap.png".to_string())
+        );
+        fs::remove_file(&second).unwrap();
         fs::remove_dir(&root).unwrap();
     }
 

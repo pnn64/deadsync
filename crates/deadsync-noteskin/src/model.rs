@@ -755,7 +755,7 @@ pub fn itg_parse_milkshape_model_layers(
         material_textures.push((texture_line, itg_parse_model_material_flags(name)));
     }
 
-    let fallback_texture = itg_resolve_model_texture_path(data, path);
+    let fallback_texture = std::cell::OnceCell::new();
     let shared_bounds = if model_bounds[0].is_finite()
         && model_bounds[1].is_finite()
         && model_bounds[2].is_finite()
@@ -781,6 +781,7 @@ pub fn itg_parse_milkshape_model_layers(
         }
         .or_else(|| {
             fallback_texture
+                .get_or_init(|| itg_resolve_model_texture_path(data, path))
                 .clone()
                 .map(|resolved| (resolved, ItgModelMaterialFlags::default()))
         });

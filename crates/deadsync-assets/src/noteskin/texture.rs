@@ -28,10 +28,11 @@ use deadsync_noteskin::{
 };
 use image::image_dimensions;
 use log::warn;
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc, LazyLock, Mutex,
+    Arc, LazyLock, Mutex, RwLock,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -535,18 +536,46 @@ pub fn test_model_slot() -> SpriteSlot {
     }
 }
 
-pub fn itg_texture_key(path: &Path) -> Option<String> {
+pub(super) type TextureKeyCache = RwLock<FxHashMap<PathBuf, Option<String>>>;
+const MAX_TEXTURE_KEYS: usize = 4096;
+// Load workers retain path identities until a source/runtime-cache clear.
+// Readers run concurrently; path discovery and filesystem probes happen outside
+// the write lock. The 4096-entry cap saturates without eviction. Hits clone one
+// key; misses do path/I/O work only at load boundaries, never in gameplay.
+// clear_source_caches frees entries on the transition caller and logs counts.
+static TEXTURE_KEYS: LazyLock<TextureKeyCache> = LazyLock::new(|| {
+    RwLock::new(FxHashMap::with_capacity_and_hasher(
+        MAX_TEXTURE_KEYS,
+        Default::default(),
+    ))
+});
+
+pub fn itg_texture_key(path: &Path, keys: &TextureKeyCache) -> Option<String> {
+    if let Some(key) = keys
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(path)
+    {
+        return key.clone();
+    }
     let dirs = crate::paths();
     let asset_relative_path = dirs
         .strip_asset_prefix(path)
         .map(Path::to_path_buf)
         .or_else(|| path.strip_prefix("assets").ok().map(Path::to_path_buf))
         .or_else(|| workspace_asset_relative_path(path));
-    deadsync_noteskin::itg::texture_key_for_path(
+    let key = deadsync_noteskin::itg::texture_key_for_path(
         asset_relative_path.as_deref(),
         path,
-        path.is_file(),
-    )
+        asset_relative_path.is_none() && path.is_file(),
+    );
+    let mut keys = keys
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if keys.len() < MAX_TEXTURE_KEYS {
+        keys.insert(path.to_path_buf(), key.clone());
+    }
+    key
 }
 
 fn workspace_asset_relative_path(path: &Path) -> Option<PathBuf> {
@@ -579,7 +608,7 @@ fn workspace_asset_relative_path_from_base(path: &Path, base: &Path) -> Option<P
 }
 
 pub fn itg_register_texture_dims_for_path(path: &Path) {
-    let Some(key) = itg_texture_key(path) else {
+    let Some(key) = itg_texture_key(path, &TEXTURE_KEYS) else {
         return;
     };
     if assets::texture_dims(&key).is_some() {
@@ -762,7 +791,7 @@ fn apply_slot_plan(slot: &mut SpriteSlot, plan: SpriteSlotPlan) {
 pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
     itg_sprite_slot_plan_from_path(
         path,
-        itg_texture_key,
+        |path| itg_texture_key(path, &TEXTURE_KEYS),
         texture_dimensions,
         assets::texture_source_frame_dims_from_real,
     )
@@ -790,7 +819,7 @@ pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<Sprite
     itg_frame_sprite_slot_plan_from_path(
         path,
         frame,
-        itg_texture_key,
+        |path| itg_texture_key(path, &TEXTURE_KEYS),
         texture_dimensions,
         assets::sprite_sheet_dims,
         assets::texture_source_frame_dims_from_real,
@@ -872,7 +901,7 @@ pub fn itg_slot_from_path_animated(
         frame_indices,
         frame_delays,
         beat_based,
-        itg_texture_key,
+        |path| itg_texture_key(path, &TEXTURE_KEYS),
         texture_dimensions,
         assets::sprite_sheet_dims,
         assets::texture_source_frame_dims_from_real,
@@ -889,7 +918,7 @@ pub fn itg_slot_from_path_all_frames(
         path,
         frame_delay,
         beat_based,
-        itg_texture_key,
+        |path| itg_texture_key(path, &TEXTURE_KEYS),
         texture_dimensions,
         assets::sprite_sheet_dims,
         assets::texture_source_frame_dims_from_real,
@@ -1028,7 +1057,13 @@ const MAX_MINE_SAMPLES: usize = 512;
 pub(super) static MINE_SAMPLES: LazyLock<MineSampleCache> =
     LazyLock::new(|| Mutex::new(HashMap::with_capacity(MAX_MINE_SAMPLES)));
 
-pub(super) fn clear_mine_samples() {
+pub(super) fn clear_source_caches() {
+    let mut keys = TEXTURE_KEYS
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    log::debug!("Clearing {} noteskin texture paths", keys.len());
+    keys.clear();
+    drop(keys);
     let mut cache = MINE_SAMPLES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
