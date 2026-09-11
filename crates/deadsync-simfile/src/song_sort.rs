@@ -243,6 +243,49 @@ fn grouped_genre_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
 
 #[must_use]
 pub fn bpm_grouped_songs(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
+    // Compact indices keep the temporary to eight bytes per song. Preserve the
+    // original path for inputs whose positions cannot be represented by u32.
+    if songs.len() > u32::MAX as usize {
+        return bpm_grouped_songs_uncached(songs);
+    }
+    let mut order: Vec<_> = songs
+        .iter()
+        .enumerate()
+        .map(|(index, song)| (song_bpm_for_sort(song), index as u32))
+        .collect();
+    order.sort_unstable_by(|&(left_bpm, left), &(right_bpm, right)| {
+        left_bpm
+            .cmp(&right_bpm)
+            .then_with(|| song_title_cmp(&songs[left as usize], &songs[right as usize]))
+            .then_with(|| left.cmp(&right))
+    });
+
+    // Resolve the source position through earlier swaps. Keep the sorted BPM
+    // keys intact so grouping can reuse them without parsing the tags again.
+    for index in 0..order.len() {
+        let mut source = order[index].1 as usize;
+        while source < index {
+            source = order[source].1 as usize;
+        }
+        order[index].1 = source as u32;
+        songs.swap(index, source);
+    }
+    let runs =
+        || order.chunk_by(|left, right| bpm_bucket_range(left.0) == bpm_bucket_range(right.0));
+    let mut groups = Vec::with_capacity(runs().count());
+    let mut songs = songs.into_iter();
+    for run in runs() {
+        let (lo, hi) = bpm_bucket_range(run[0].0);
+        let grouped = songs.by_ref().take(run.len()).collect();
+        groups.push(GroupedSongs {
+            group: SongSortGroup::Bpm { lo, hi },
+            songs: grouped,
+        });
+    }
+    groups
+}
+
+fn bpm_grouped_songs_uncached(mut songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
     songs.sort_by(|left, right| {
         song_bpm_for_sort(left)
             .cmp(&song_bpm_for_sort(right))
@@ -380,9 +423,21 @@ fn alpha_grouped_songs(
     compare: impl Fn(&SongData, &SongData) -> Ordering,
     group_for: impl Fn(u8) -> SongSortGroup,
 ) -> Vec<GroupedSongs> {
-    let mut buckets: [Vec<Arc<SongData>>; ALPHA_GROUP_COUNT] = std::array::from_fn(|_| Vec::new());
-    for song in songs {
-        buckets[usize::from(bucket_for(&song))].push(song);
+    let mut counts = [0usize; ALPHA_GROUP_COUNT];
+    // Keep one byte per song so sizing the buckets does not require parsing
+    // title/artist prefixes twice. The temporary replaces repeated Vec growth.
+    let bucket_indices: Vec<_> = songs
+        .iter()
+        .map(|song| {
+            let bucket = bucket_for(song);
+            counts[usize::from(bucket)] += 1;
+            bucket
+        })
+        .collect();
+    let mut buckets: [Vec<Arc<SongData>>; ALPHA_GROUP_COUNT] =
+        std::array::from_fn(|bucket| Vec::with_capacity(counts[bucket]));
+    for (song, bucket) in songs.into_iter().zip(bucket_indices) {
+        buckets[usize::from(bucket)].push(song);
     }
     let group_count = buckets.iter().filter(|songs| !songs.is_empty()).count();
     let mut groups = Vec::with_capacity(group_count);
@@ -634,5 +689,8 @@ mod tests {
                 .map(|song| song.simfile_path.as_path())
                 .collect::<Vec<_>>()
         );
+    }
+    mod library_sort_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/library_sort.rs"));
     }
 }

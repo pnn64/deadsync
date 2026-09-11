@@ -17324,4 +17324,10 @@ mod tests {
     mod pump_hold_perf {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/pump_holds.rs"));
     }
+    mod crossover_row_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/crossover_rows.rs"
+        ));
+    }
 }

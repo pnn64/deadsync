@@ -289,6 +289,113 @@ pub fn build_crossover_rows<const LANES: usize>(
     note_range: (usize, usize),
     col_start: usize,
 ) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
+    let end = note_range.1.min(notes.len());
+    let start = note_range.0.min(end);
+    let notes = &notes[start..end];
+    // Tiny charts do not amortize counting rows and merging a separate tail list.
+    if notes.len() < 64 {
+        return build_crossover_rows_unordered(notes, (0, notes.len()), col_start);
+    }
+    let mut previous_row = None;
+    let mut previous_head = None;
+    let mut head_rows = 0;
+    let mut tail_count = 0;
+    for note in notes {
+        if previous_row.is_some_and(|row| row > note.row_index) {
+            return build_crossover_rows_unordered(notes, (0, notes.len()), col_start);
+        }
+        previous_row = Some(note.row_index);
+        if note.column < col_start
+            || note.column - col_start >= LANES
+            || crossover_note_char(note).is_none()
+        {
+            continue;
+        }
+        if previous_head != Some(note.row_index) {
+            head_rows += 1;
+            previous_head = Some(note.row_index);
+        }
+        tail_count += usize::from(note.hold.is_some());
+    }
+    let heads = notes.iter().enumerate().filter_map(|(index, note)| {
+        let lane = note.column.checked_sub(col_start)?;
+        if lane >= LANES {
+            return None;
+        }
+        Some((
+            note.row_index,
+            index,
+            note.beat,
+            lane,
+            crossover_note_char(note)?,
+        ))
+    });
+    if tail_count == 0 {
+        return crossover_rows_from_cells(heads, head_rows);
+    }
+    let mut tails = Vec::with_capacity(tail_count);
+    for (_, index, _, lane, _) in heads.clone() {
+        if let Some(hold) = &notes[index].hold {
+            tails.push((hold.end_row_index, index, hold.end_beat, lane, b'3'));
+        }
+    }
+    tails.sort_unstable_by_key(|cell| (cell.0, cell.1));
+
+    // Heads already follow chart order. Sort only tails, then merge by source
+    // note so same-row collisions retain the original head-before-tail order.
+    let mut heads = heads.peekable();
+    let mut tail_iter = tails.iter().copied().peekable();
+    let cells = std::iter::from_fn(move || {
+        let head_first = match (heads.peek(), tail_iter.peek()) {
+            (Some(head), Some(tail)) => (head.0, head.1) <= (tail.0, tail.1),
+            (Some(_), None) => true,
+            _ => false,
+        };
+        if head_first {
+            heads.next()
+        } else {
+            tail_iter.next()
+        }
+    });
+    let mut previous = None;
+    let row_count = cells
+        .clone()
+        .filter(|cell| {
+            let new_row = previous != Some(cell.0);
+            previous = Some(cell.0);
+            new_row
+        })
+        .count();
+    crossover_rows_from_cells(cells, row_count)
+}
+
+fn crossover_rows_from_cells<const LANES: usize>(
+    cells: impl Iterator<Item = (usize, usize, f32, usize, u8)>,
+    row_count: usize,
+) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
+    let mut row_arrays = Vec::with_capacity(row_count);
+    let mut row_to_beat = Vec::with_capacity(row_count);
+    let mut row_indices = Vec::with_capacity(row_count);
+    for (row_index, _, beat, lane, ch) in cells {
+        if row_indices.last().copied() != Some(row_index) {
+            row_arrays.push([b'0'; LANES]);
+            row_to_beat.push(beat);
+            row_indices.push(row_index);
+        }
+        apply_crossover_cell(
+            row_arrays.last_mut().expect("row inserted before cell"),
+            lane,
+            ch,
+        );
+    }
+    (row_arrays, row_to_beat, row_indices)
+}
+
+fn build_crossover_rows_unordered<const LANES: usize>(
+    notes: &[Note],
+    note_range: (usize, usize),
+    col_start: usize,
+) -> (Vec<[u8; LANES]>, Vec<f32>, Vec<usize>) {
     let (start, end) = note_range;
     let end = end.min(notes.len());
     let start = start.min(end);
