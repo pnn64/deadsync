@@ -9,90 +9,96 @@ pub fn enforce_max_simultaneous_notes(
     }
     debug_assert!(notes_row_sorted(notes));
 
-    let mut remove_idx = vec![false; notes.len()];
     let mut active_hold_ends: [Option<usize>; MAX_COLS] = [None; MAX_COLS];
-    let mut row_candidates = Vec::<(usize, usize)>::with_capacity(MAX_COLS);
-
-    let mut row_start = 0usize;
+    let mut inline_candidates = [(0usize, 0usize); MAX_COLS];
+    // Ordinary rows fit the lane domain. Compatibility inputs can contain
+    // arbitrarily many duplicate cells, so retain their former sorting policy.
+    let mut spill_candidates = Vec::new();
+    let mut write = 0;
+    let mut row_start = 0;
     while row_start < notes.len() {
         let row = notes[row_start].row_index;
         let mut row_end = row_start + 1;
         while row_end < notes.len() && notes[row_end].row_index == row {
             row_end += 1;
         }
-
         for held in active_hold_ends.iter_mut().take(cols) {
             if held.is_some_and(|end| end < row) {
                 *held = None;
             }
         }
-
-        let active_holds = active_hold_ends
+        let active_holds = active_hold_ends[..cols]
             .iter()
-            .take(cols)
             .filter(|end| end.is_some())
             .count();
-
-        row_candidates.clear();
+        spill_candidates.clear();
+        let mut count = 0;
         for (offset, note) in notes[row_start..row_end].iter().enumerate() {
-            let idx = row_start + offset;
-            if note.column < col_offset {
+            let Some(local) = local_player_col(note.column, col_offset, cols) else {
+                continue;
+            };
+            if !note_counts_for_simultaneous_limit(note) {
                 continue;
             }
-            let local_col = note.column - col_offset;
-            if local_col >= cols || !note_counts_for_simultaneous_limit(note) {
-                continue;
-            }
-            row_candidates.push((local_col, idx));
-        }
-
-        if row_candidates.is_empty() {
-            row_start = row_end;
-            continue;
-        }
-
-        row_candidates.sort_unstable_by_key(|(local_col, _)| *local_col);
-        let mut tracks_to_remove = active_holds
-            .saturating_add(row_candidates.len())
-            .saturating_sub(max_simultaneous);
-
-        if tracks_to_remove > 0 {
-            for &(_, idx) in &row_candidates {
-                if tracks_to_remove == 0 {
-                    break;
+            let candidate = (local, row_start + offset);
+            if count < MAX_COLS {
+                inline_candidates[count] = candidate;
+            } else {
+                if count == MAX_COLS {
+                    spill_candidates.extend_from_slice(&inline_candidates);
                 }
-                remove_idx[idx] = true;
-                tracks_to_remove -= 1;
+                spill_candidates.push(candidate);
             }
+            count += 1;
         }
-
-        for &(local_col, idx) in &row_candidates {
-            if remove_idx[idx] || !matches!(notes[idx].note_type, NoteType::Hold | NoteType::Roll) {
+        let candidates = if count <= MAX_COLS {
+            &mut inline_candidates[..count]
+        } else {
+            spill_candidates.as_mut_slice()
+        };
+        let remove_count = active_holds
+            .saturating_add(count)
+            .saturating_sub(max_simultaneous)
+            .min(count);
+        // Column order only selects a subset to reject. Keeping or rejecting
+        // every candidate needs no sort; per-lane hold maxima are order-free.
+        if remove_count > 0 && remove_count < count {
+            candidates.sort_unstable_by_key(|(local, _)| *local);
+        }
+        let (removed, kept) = candidates.split_at_mut(remove_count);
+        for &(local, index) in kept.iter() {
+            let note = &notes[index];
+            if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                 continue;
             }
-            let end_row = notes[idx]
-                .hold
-                .as_ref()
-                .map(|hold| hold.end_row_index)
-                .unwrap_or(row);
-            if active_hold_ends[local_col].is_none_or(|current| current < end_row) {
-                active_hold_ends[local_col] = Some(end_row);
+            let end_row = note.hold.as_ref().map_or(row, |hold| hold.end_row_index);
+            if active_hold_ends[local].is_none_or(|current| current < end_row) {
+                active_hold_ends[local] = Some(end_row);
             }
         }
-
+        if remove_count == 0 && write == row_start {
+            write = row_end;
+        } else {
+            // Decide the whole row before moving any notes. Compact only the
+            // retained prefix; no chart-sized bitmap or second full scan.
+            if remove_count < count {
+                removed.sort_unstable_by_key(|(_, index)| *index);
+            }
+            let mut removals = removed.iter().map(|&(_, index)| index).peekable();
+            for read in row_start..row_end {
+                if removals.peek() == Some(&read) {
+                    removals.next();
+                } else {
+                    if write != read {
+                        notes[write] = notes[read].clone();
+                    }
+                    write += 1;
+                }
+            }
+        }
         row_start = row_end;
     }
-
-    if remove_idx.iter().all(|remove| !*remove) {
-        return;
-    }
-
-    let mut idx = 0usize;
-    notes.retain(|_| {
-        let keep = !remove_idx[idx];
-        idx += 1;
-        keep
-    });
+    notes.truncate(write);
 }
 
 #[inline(always)]

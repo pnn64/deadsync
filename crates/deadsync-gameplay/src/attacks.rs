@@ -3440,6 +3440,59 @@ pub fn apply_chart_attack_transforms(
         return;
     }
 
+    if active_players == 1 {
+        let end = note_ranges[0].1.min(notes.len());
+        let start = note_ranges[0].0.min(end);
+        if start == 0 && end == notes.len() {
+            let attack_player = players[0];
+            apply_chart_attacks_for_mode(
+                notes,
+                attack_player.chart_attacks,
+                attack_player.attack_mode,
+                attack_player.timing_player,
+                0,
+                cols_per_player,
+                0,
+                base_seed,
+                song_length_seconds,
+            );
+            *note_ranges = [(0, notes.len()); MAX_PLAYERS];
+            return;
+        }
+    }
+    if active_players == 2 {
+        let [(first_start, first_end), (second_start, second_end)] = *note_ranges;
+        if first_start == 0
+            && first_end == second_start
+            && second_start <= second_end
+            && second_end == notes.len()
+        {
+            // Normal versus charts occupy adjacent ranges. Keep player one's
+            // allocation and move player two, preserving independent transforms.
+            let mut second_notes = notes.split_off(first_end);
+            for (player, player_notes) in [&mut *notes, &mut second_notes].into_iter().enumerate() {
+                let attack_player = players[player];
+                if attack_player.has_chart_attacks() {
+                    apply_chart_attacks_for_mode(
+                        player_notes,
+                        attack_player.chart_attacks,
+                        attack_player.attack_mode,
+                        attack_player.timing_player,
+                        player.saturating_mul(cols_per_player),
+                        cols_per_player,
+                        player,
+                        base_seed,
+                        song_length_seconds,
+                    );
+                }
+            }
+            let second_start = notes.len();
+            notes.append(&mut second_notes);
+            *note_ranges = [(0, second_start), (second_start, notes.len())];
+            return;
+        }
+    }
+
     let mut transformed = Vec::with_capacity(notes.len());
     let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
     for player in 0..active_players {

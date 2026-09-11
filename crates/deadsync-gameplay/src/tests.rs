@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod chart_transform_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/chart_transforms.rs"));
+    }
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::song_time::{
         INVALID_SONG_TIME_NS, song_time_ns_from_seconds, song_time_ns_to_seconds,

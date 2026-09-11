@@ -157,3 +157,8 @@ include!("effective.rs");
 include!("tests.rs");
 #[cfg(test)]
 include!("runtime_regression_tests.rs");
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;

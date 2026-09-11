@@ -2235,13 +2235,27 @@ fn hist_count_at(counts: &HistCounts, bin: i32) -> u32 {
 
 fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f32)> {
     let mut smoothed = Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
+    if worst_window_bin < 0 {
+        return smoothed;
+    }
+    let mut samples: [f32; 7] = std::array::from_fn(|index| {
+        let sample =
+            (-worst_window_bin + (index as i32 - 3)).clamp(-worst_window_bin, worst_window_bin);
+        hist_count_at(counts, sample) as f32
+    });
     for bin in -worst_window_bin..=worst_window_bin {
         let mut y = 0.0_f32;
-        for (offset, weight) in (-3..=3).zip(GAUSS7) {
-            let sample = (bin + offset).clamp(-worst_window_bin, worst_window_bin);
-            y = (hist_count_at(counts, sample) as f32).mul_add(weight, y);
+        for (sample, weight) in samples.into_iter().zip(GAUSS7) {
+            y = sample.mul_add(weight, y);
         }
         smoothed.push((bin, y));
+        if bin < worst_window_bin {
+            // Adjacent points share six counts. Retain the original FMA order
+            // and edge clamping, but look up and convert only the entering bin.
+            samples.rotate_left(1);
+            let sample = (bin + 4).clamp(-worst_window_bin, worst_window_bin);
+            samples[6] = hist_count_at(counts, sample) as f32;
+        }
     }
     smoothed
 }
@@ -2356,6 +2370,13 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod histogram_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/histogram.rs"
+        ));
+    }
 
     #[inline(always)]
     fn test_note(row_index: usize, column: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
