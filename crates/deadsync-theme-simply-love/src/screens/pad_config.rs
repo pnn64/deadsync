@@ -18,12 +18,14 @@ use crate::act;
 use crate::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::visual_style_bg;
+use crate::screens::input as screen_input;
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadCommand {
@@ -110,6 +112,15 @@ enum ThresholdKind {
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 const THRESHOLD_STEP: u16 = 5;
+
+/// Holding a direction keeps stepping: nothing repeats during the initial
+/// delay, then repeats start at the opening interval and each one shortens
+/// the next by the acceleration factor down to the floor, so a long sweep
+/// speeds up without making the first few steps twitchy.
+const HOLD_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(300);
+const HOLD_REPEAT_INTERVAL_START: Duration = Duration::from_millis(120);
+const HOLD_REPEAT_ACCEL: f32 = 0.88;
+const HOLD_REPEAT_INTERVAL_MIN: Duration = Duration::from_millis(30);
 
 /// Gap the press/release lock keeps between a load-cell panel's thresholds,
 /// matching the official SMX config tool's two-thumb slider (`MinimumDistance`).
@@ -209,6 +220,20 @@ pub struct State {
     return_screen: Option<Screen>,
     filter: PadFilter,
     bg: visual_style_bg::State,
+    /// The directional control being held, for hold-to-repeat (see `update`).
+    held: Option<HeldNav>,
+}
+
+/// A held directional control and its repeat timer.
+#[derive(Clone, Copy)]
+struct HeldNav {
+    ui: UiAction,
+    /// Shift state captured at the press; repeats reuse it.
+    fine: bool,
+    held_for: Duration,
+    next_repeat_at: Duration,
+    /// Interval to the next repeat; shrinks with each one.
+    interval: Duration,
 }
 
 /// Set where Back returns to (e.g. Song Select when opened from its menu).
@@ -284,8 +309,39 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
     std::mem::take(&mut state.pending)
 }
 
-pub const fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
+/// Advance hold-to-repeat: a held direction re-fires after an initial delay,
+/// then at a steady cadence, in the Simple / Advanced views and the profiles
+/// list. The name box ignores the hold (its Up/Down is a toggle).
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
+    tick_hold_repeat(state, dt);
     None
+}
+
+fn tick_hold_repeat(state: &mut State, dt: f32) {
+    if state.saving.is_some() {
+        return;
+    }
+    let Some(held) = state.held.as_mut() else {
+        return;
+    };
+    if !screen_input::advance_hold_repeat(
+        &mut held.held_for,
+        &mut held.next_repeat_at,
+        held.interval,
+        dt,
+    ) {
+        return;
+    }
+    held.interval = held
+        .interval
+        .mul_f32(HOLD_REPEAT_ACCEL)
+        .max(HOLD_REPEAT_INTERVAL_MIN);
+    let (ui, fine) = (held.ui, held.fine);
+    if state.profiles_mode {
+        profiles_nav(state, ui);
+    } else {
+        perform_ui_action(state, ui, fine);
+    }
 }
 
 #[must_use]
@@ -327,12 +383,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
 /// Apply an edit for a press. Shared by the full screen and the Song Select
 /// overlay. Returns whether Back at the top level asked to exit.
 pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult {
-    if !ev.pressed {
-        return EditResult::Handled;
-    }
     // Only keyboard or dedicated menu controls drive the UI; ignore raw pad
     // panels so testing a sensor doesn't move the cursor or change values.
     if ev.source == InputSource::Gamepad && !is_menu_control(ev.action) {
+        return EditResult::Handled;
+    }
+    if !ev.pressed {
+        note_release(state, ev.action);
         return EditResult::Handled;
     }
 
@@ -373,18 +430,27 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         return EditResult::Handled;
     }
 
-    if state.advanced.is_some() {
+    // Directional presses (both views): arm the hold for repeat, then step.
+    if let Some(ui) = ui_action(ev.action) {
+        begin_hold(state, ui, fine);
+        perform_ui_action(state, ui, fine);
+        return EditResult::Handled;
+    }
+
+    if let Some(dev) = state.advanced {
         if is_back(ev.action) {
             state.advanced = None;
             state.adv_sel = 0;
-        } else {
-            apply_advanced_edit(state, ev, fine);
+            clear_hold(state);
+        } else if is_start(ev.action) {
+            toggle_advanced_focused(state, dev);
         }
         return EditResult::Handled;
     }
 
     // Simple view.
     if is_back(ev.action) {
+        clear_hold(state);
         return EditResult::ExitToParent;
     }
     if is_start(ev.action) {
@@ -398,15 +464,58 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         }
         return EditResult::Handled;
     }
-    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
-    match ui_action(ev.action) {
-        Some(UiAction::PrevBar) => state.selected = (state.selected + total - 1) % total,
-        Some(UiAction::NextBar) => state.selected = (state.selected + 1) % total,
-        Some(UiAction::Raise) => adjust_simple_threshold(state, step),
-        Some(UiAction::Lower) => adjust_simple_threshold(state, -step),
-        None => {}
-    }
     EditResult::Handled
+}
+
+/// Run one directional action in whichever view is open. Shared by a press
+/// and its hold-repeats.
+fn perform_ui_action(state: &mut State, ui: UiAction, fine: bool) {
+    let total = total_bars(state);
+    if total == 0 {
+        return;
+    }
+    if let Some(dev) = state.advanced {
+        perform_advanced_ui_action(state, dev, ui, fine);
+        return;
+    }
+    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
+    match ui {
+        UiAction::PrevBar => state.selected = (state.selected + total - 1) % total,
+        UiAction::NextBar => state.selected = (state.selected + 1) % total,
+        UiAction::Raise => adjust_simple_threshold(state, step),
+        UiAction::Lower => adjust_simple_threshold(state, -step),
+    }
+}
+
+/// (Re)start the hold-repeat timer for a directional press.
+fn begin_hold(state: &mut State, ui: UiAction, fine: bool) {
+    let mut held = HeldNav {
+        ui,
+        fine,
+        held_for: Duration::ZERO,
+        next_repeat_at: HOLD_REPEAT_INITIAL_DELAY,
+        interval: HOLD_REPEAT_INTERVAL_START,
+    };
+    screen_input::reset_hold_repeat(
+        &mut held.held_for,
+        &mut held.next_repeat_at,
+        HOLD_REPEAT_INITIAL_DELAY,
+    );
+    state.held = Some(held);
+}
+
+fn note_release(state: &mut State, action: VirtualAction) {
+    let Some(ui) = ui_action(action) else {
+        return;
+    };
+    if state.held.is_some_and(|h| h.ui == ui) {
+        state.held = None;
+    }
+}
+
+/// Forget any held direction (view change, modal open, screen exit).
+const fn clear_hold(state: &mut State) {
+    state.held = None;
 }
 
 /// Whether saving is available for the cursor pad (set by the app each frame).
@@ -427,6 +536,7 @@ pub fn begin_save(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
+    clear_hold(state);
     state.saving = Some(SaveDraft::default());
 }
 
@@ -445,6 +555,7 @@ pub const fn begin_profiles(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
+    clear_hold(state);
     state.profiles_mode = true;
     state.profiles_sel = 0;
     state.delete_armed = false;
@@ -460,6 +571,7 @@ pub fn reset_modes(state: &mut State) {
     // The press/release lock returns to ON each time the editor is entered,
     // like the official tool; "at your own risk" mode is opt-in per session.
     state.threshold_lock_off = false;
+    clear_hold(state);
 }
 
 pub const fn is_profiles_mode(state: &State) -> bool {
@@ -516,7 +628,6 @@ pub fn delete_key(state: &mut State) -> bool {
 /// (Start) + set-default (Select); rename / delete arrive via raw keys. Back
 /// disarms a pending delete, else closes the list.
 fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
-    let count = state.profiles.len() + 1; // row 0 = "save current as new"
     if is_back(ev.action) {
         if state.delete_armed {
             state.delete_armed = false;
@@ -525,16 +636,9 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
         }
         return EditResult::Handled;
     }
-    match ui_action(ev.action) {
-        Some(UiAction::Raise | UiAction::PrevBar) => {
-            state.profiles_sel = (state.profiles_sel + count - 1) % count;
-            state.delete_armed = false;
-        }
-        Some(UiAction::Lower | UiAction::NextBar) => {
-            state.profiles_sel = (state.profiles_sel + 1) % count;
-            state.delete_armed = false;
-        }
-        None => {}
+    if let Some(ui) = ui_action(ev.action) {
+        profiles_nav(state, ui);
+        begin_hold(state, ui, false);
     }
     if state.profiles_sel == 0 {
         // "Save current as new" — Start or Select opens the name box.
@@ -550,6 +654,20 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
         return EditResult::SetDefaultProfile;
     }
     EditResult::Handled
+}
+
+/// Move the profiles-list cursor (Up/Left = previous, Down/Right = next).
+fn profiles_nav(state: &mut State, ui: UiAction) {
+    let count = state.profiles.len() + 1; // row 0 = "save current as new"
+    match ui {
+        UiAction::Raise | UiAction::PrevBar => {
+            state.profiles_sel = (state.profiles_sel + count - 1) % count;
+        }
+        UiAction::Lower | UiAction::NextBar => {
+            state.profiles_sel = (state.profiles_sel + 1) % count;
+        }
+    }
+    state.delete_armed = false;
 }
 
 pub const fn is_saving(state: &State) -> bool {
@@ -1452,7 +1570,7 @@ fn push_setting_row(
 
 // ─── Edit logic ──────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UiAction {
     PrevBar,
     NextBar,
@@ -1510,7 +1628,8 @@ fn advanced_targets(state: &State) -> SmallVec<[AdvTarget; 18]> {
     targets
 }
 
-fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
+/// Start in the Advanced view: toggle the focused sensor / control.
+fn toggle_advanced_focused(state: &mut State, dev: PadDeviceId) {
     let targets = advanced_targets(state);
     if targets.is_empty() {
         return;
@@ -1518,22 +1637,26 @@ fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
     if state.adv_sel >= targets.len() {
         state.adv_sel = targets.len() - 1;
     }
-    let Some(dev) = state.advanced else { return };
+    toggle_focused(state, dev, targets[state.adv_sel]);
+}
 
-    if is_start(ev.action) {
-        toggle_focused(state, dev, targets[state.adv_sel]);
+fn perform_advanced_ui_action(state: &mut State, dev: PadDeviceId, ui: UiAction, fine: bool) {
+    let targets = advanced_targets(state);
+    if targets.is_empty() {
         return;
     }
-    match ui_action(ev.action) {
-        Some(UiAction::PrevBar) => {
+    if state.adv_sel >= targets.len() {
+        state.adv_sel = targets.len() - 1;
+    }
+    match ui {
+        UiAction::PrevBar => {
             state.adv_sel = (state.adv_sel + targets.len() - 1) % targets.len();
         }
-        Some(UiAction::NextBar) => {
+        UiAction::NextBar => {
             state.adv_sel = (state.adv_sel + 1) % targets.len();
         }
-        Some(UiAction::Raise) => edit_focused(state, dev, targets[state.adv_sel], true, fine),
-        Some(UiAction::Lower) => edit_focused(state, dev, targets[state.adv_sel], false, fine),
-        None => {}
+        UiAction::Raise => edit_focused(state, dev, targets[state.adv_sel], true, fine),
+        UiAction::Lower => edit_focused(state, dev, targets[state.adv_sel], false, fine),
     }
 }
 
@@ -3573,5 +3696,95 @@ mod tests {
             ThemeEffect::None
         ));
         assert!(!take_commands(&mut s).is_empty());
+    }
+
+    // ── Hold-to-repeat ──
+
+    fn ev_release(action: VirtualAction) -> InputEvent {
+        ev_from(action, InputSource::Keyboard, false)
+    }
+
+    fn pending_threshold_value(s: &State) -> Option<u16> {
+        s.pending.iter().find_map(|c| match c {
+            PadCommand::Threshold { value, .. } => Some(*value),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn held_raise_repeats_after_the_initial_delay_until_released() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        assert_eq!(pending_threshold_value(&s), Some(35));
+        // Nothing repeats before the initial delay.
+        update(&mut s, 0.1);
+        assert_eq!(pending_threshold_value(&s), Some(35));
+        // Crossing the delay steps once more (the pending edit carries forward).
+        update(
+            &mut s,
+            HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() - 0.1 + 0.001,
+        );
+        assert_eq!(pending_threshold_value(&s), Some(40));
+        // Then once per interval. A repeat is scheduled with the interval in
+        // force when the previous one fired, and each fire shortens the next.
+        let slack = 0.001;
+        let gap_after_next = s.held.expect("still held").interval;
+        assert!(gap_after_next < HOLD_REPEAT_INTERVAL_START);
+        update(&mut s, HOLD_REPEAT_INTERVAL_START.as_secs_f32() + slack);
+        assert_eq!(pending_threshold_value(&s), Some(45));
+        assert!(s.held.expect("still held").interval < gap_after_next);
+        update(&mut s, gap_after_next.as_secs_f32() + slack);
+        assert_eq!(pending_threshold_value(&s), Some(50));
+        // Release stops it.
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_up), false);
+        update(&mut s, 1.0);
+        assert_eq!(pending_threshold_value(&s), Some(50));
+    }
+
+    #[test]
+    fn hold_repeat_moves_the_cursor_and_pauses_in_modals() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
+        assert_eq!(s.selected, 1);
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(s.selected, 2);
+        // Opening the profiles list drops the hold: no cursor drift behind it.
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        update(&mut s, 1.0);
+        assert_eq!(s.selected, 2);
+        // The name box ignores holds entirely: Down toggles the default once
+        // on the press, and holding it doesn't keep flipping it.
+        begin_save(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert!(s.saving.as_ref().is_some_and(|d| d.set_default));
+        update(&mut s, 1.0);
+        assert!(s.saving.as_ref().is_some_and(|d| d.set_default));
+    }
+
+    #[test]
+    fn profiles_list_hold_repeats_the_cursor() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        set_profiles(
+            &mut s,
+            (0..5)
+                .map(|i| ProfileListEntry {
+                    name: format!("cfg{i}"),
+                    is_default: false,
+                    is_active: false,
+                })
+                .collect(),
+        );
+        begin_profiles(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert_eq!(s.profiles_sel, 1);
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(s.profiles_sel, 2);
+        update(&mut s, HOLD_REPEAT_INTERVAL_START.as_secs_f32());
+        assert_eq!(s.profiles_sel, 3);
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_down), false);
+        update(&mut s, 1.0);
+        assert_eq!(s.profiles_sel, 3);
     }
 }
