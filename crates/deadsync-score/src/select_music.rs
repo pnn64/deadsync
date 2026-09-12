@@ -91,21 +91,30 @@ impl<'a> SongRankingIndex<'a> {
                 })
                 .map(|(song_ix, _)| (song_ix, workspace.song_play_counts[song_ix])),
         );
-        workspace
-            .popular
-            .sort_unstable_by(|(left_ix, left_count), (right_ix, right_count)| {
-                right_count.cmp(left_count).then_with(|| {
-                    if self.song_order_rank.len() == self.songs.len() {
-                        self.song_order_rank[*left_ix].cmp(&self.song_order_rank[*right_ix])
-                    } else {
-                        song_cmp(&self.songs[*left_ix], &self.songs[*right_ix])
-                            .then_with(|| left_ix.cmp(right_ix))
-                    }
-                })
-            });
-        workspace
-            .popular
-            .truncate(limit.min(workspace.popular.len()));
+        let compare = |(left_ix, left_count): &(usize, u32),
+                       (right_ix, right_count): &(usize, u32)| {
+            right_count.cmp(left_count).then_with(|| {
+                if self.song_order_rank.len() == self.songs.len() {
+                    self.song_order_rank[*left_ix].cmp(&self.song_order_rank[*right_ix])
+                } else {
+                    song_cmp(&self.songs[*left_ix], &self.songs[*right_ix])
+                        .then_with(|| left_ix.cmp(right_ix))
+                }
+            })
+        };
+        let keep = limit.min(workspace.popular.len());
+        if keep == 0 {
+            workspace.popular.clear();
+        } else if keep <= workspace.popular.len() / 2 {
+            // Select only the displayed prefix. Sorting almost the entire list
+            // still uses the original full sort to avoid an extra selection pass.
+            workspace.popular.select_nth_unstable_by(keep, compare);
+            workspace.popular.truncate(keep);
+            workspace.popular.sort_unstable_by(compare);
+        } else {
+            workspace.popular.sort_unstable_by(compare);
+            workspace.popular.truncate(keep);
+        }
     }
 
     pub fn rank_recent<H: AsRef<str>>(
@@ -724,5 +733,8 @@ mod tests {
             assert!(Arc::ptr_eq(&songs[*actual_ix], expected_song));
             assert_eq!(actual_grade, expected_grade);
         }
+    }
+    mod popularity_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/popularity.rs"));
     }
 }

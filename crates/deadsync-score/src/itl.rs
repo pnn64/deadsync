@@ -2018,55 +2018,82 @@ pub const fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
 
 #[inline(always)]
 fn rank_for_points(sorted_points: &[u32], points: u32) -> Option<u32> {
-    sorted_points
-        .iter()
-        .position(|value| *value == points)
-        .map(|idx| idx.saturating_add(1) as u32)
+    // The first equal score owns the competition rank, including ties. Keep
+    // rank one constant-time when many entries share the maximum score.
+    if sorted_points.first() == Some(&points) {
+        return Some(1);
+    }
+    let index = sorted_points.partition_point(|value| *value > points);
+    (sorted_points.get(index) == Some(&points)).then(|| index.saturating_add(1) as u32)
 }
 
 pub fn itl_rebuild_song_ranks(data: &mut ItlFileData) {
-    let mut points: Vec<u32> = data.hash_map.values().map(|entry| entry.points).collect();
-    points.sort_unstable_by(|a, b| b.cmp(a));
-
-    let mut points_single = Vec::with_capacity(points.len());
-    let mut points_double = Vec::with_capacity(points.len());
-    let mut unknown_points = Vec::new();
+    data.points.clear();
+    data.points.reserve(data.hash_map.len());
     let mut plays_single = 0usize;
     let mut plays_double = 0usize;
-
-    for entry in data.hash_map.values_mut() {
-        entry.rank = rank_for_points(points.as_slice(), entry.points);
+    for entry in data.hash_map.values() {
+        data.points.push(entry.points);
         if entry.steps_type.eq_ignore_ascii_case("single") {
-            points_single.push(entry.points);
-            plays_single = plays_single.saturating_add(1);
+            plays_single += 1;
         } else if entry.steps_type.eq_ignore_ascii_case("double") {
-            points_double.push(entry.points);
-            plays_double = plays_double.saturating_add(1);
+            plays_double += 1;
+        }
+    }
+
+    // Unknown charts join the more-played style; ties go to doubles. Count
+    // first so both persistent buffers can reserve exactly what they need.
+    let unknown_is_single = plays_single > plays_double;
+    let unknown_count = data.hash_map.len() - plays_single - plays_double;
+    data.points_single.clear();
+    data.points_double.clear();
+    data.points_single
+        .reserve(plays_single + if unknown_is_single { unknown_count } else { 0 });
+    data.points_double
+        .reserve(plays_double + if unknown_is_single { 0 } else { unknown_count });
+    for entry in data.hash_map.values() {
+        let is_single = if entry.steps_type.eq_ignore_ascii_case("single") {
+            true
+        } else if entry.steps_type.eq_ignore_ascii_case("double") {
+            false
         } else {
-            unknown_points.push(entry.points);
+            unknown_is_single
+        };
+        if is_single {
+            data.points_single.push(entry.points);
+        } else {
+            data.points_double.push(entry.points);
         }
     }
 
-    if plays_single > plays_double {
-        points_single.extend(unknown_points);
-    } else {
-        points_double.extend(unknown_points);
+    // Equal points always have competition rank one, in every style. Avoid
+    // sorting and looking up the same rank repeatedly for these profiles.
+    if data
+        .points
+        .first()
+        .is_none_or(|first| data.points.iter().all(|points| points == first))
+    {
+        for entry in data.hash_map.values_mut() {
+            entry.rank = Some(1);
+        }
+        return;
     }
 
-    points_single.sort_unstable_by(|a, b| b.cmp(a));
-    points_double.sort_unstable_by(|a, b| b.cmp(a));
-
+    data.points.sort_unstable_by(|a, b| b.cmp(a));
+    data.points_single.sort_unstable_by(|a, b| b.cmp(a));
+    data.points_double.sort_unstable_by(|a, b| b.cmp(a));
     for entry in data.hash_map.values_mut() {
-        if entry.steps_type.eq_ignore_ascii_case("single") {
-            entry.rank = rank_for_points(points_single.as_slice(), entry.points);
+        let points = if entry.steps_type.eq_ignore_ascii_case("single") {
+            &data.points_single
         } else if entry.steps_type.eq_ignore_ascii_case("double") {
-            entry.rank = rank_for_points(points_double.as_slice(), entry.points);
-        }
+            &data.points_double
+        } else {
+            &data.points
+        };
+        // Known styles need only their final rank; their old global rank was
+        // overwritten immediately. Unknown styles retain the global rank.
+        entry.rank = rank_for_points(points, entry.points);
     }
-
-    data.points = points;
-    data.points_single = points_single;
-    data.points_double = points_double;
 }
 
 #[must_use]
@@ -3226,5 +3253,8 @@ mod tests {
                 total_points: 150,
             }
         );
+    }
+    mod ranking_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/itl_ranking.rs"));
     }
 }

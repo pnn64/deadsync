@@ -10751,3 +10751,8 @@ mod tests {
         assert_eq!(error.error.as_deref(), Some("offline"));
     }
 }
+
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;
