@@ -1,6 +1,6 @@
 use rustc_hash::FxBuildHasher;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap};
 use std::fs;
 use std::hash::BuildHasher;
 use std::io::Read;
@@ -1041,6 +1041,116 @@ fn compare_local_replay_candidates(
         .then_with(|| a.ordinal.cmp(&b.ordinal))
 }
 
+// Constructed only for candidates without NaN scores, for which the existing
+// score/date/name/ordinal comparison is a total order. Reverse for best-first pop.
+struct BestReplayCandidate<'a>(LocalReplayCandidate<'a>);
+
+impl PartialEq for BestReplayCandidate<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for BestReplayCandidate<'_> {}
+
+impl PartialOrd for BestReplayCandidate<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BestReplayCandidate<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        compare_local_replay_candidates(&other.0, &self.0)
+    }
+}
+
+enum OrderedReplayCandidates<'a> {
+    Sorted(std::vec::IntoIter<LocalReplayCandidate<'a>>),
+    Heap {
+        candidates: BinaryHeap<BestReplayCandidate<'a>>,
+        remaining_before_sort: usize,
+    },
+}
+
+impl<'a> Iterator for OrderedReplayCandidates<'a> {
+    type Item = LocalReplayCandidate<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Sorted(candidates) => candidates.next(),
+            Self::Heap {
+                remaining_before_sort: 0,
+                ..
+            } => {
+                // Many unreadable winners can require most of the history.
+                // Sort the remaining buffer instead of paying for every pop.
+                let Self::Heap { candidates, .. } =
+                    std::mem::replace(self, Self::Sorted(Vec::new().into_iter()))
+                else {
+                    unreachable!("heap variant matched above")
+                };
+                let mut candidates: Vec<_> = candidates
+                    .into_vec()
+                    .into_iter()
+                    .map(|candidate| candidate.0)
+                    .collect();
+                candidates.sort_unstable_by(compare_local_replay_candidates);
+                *self = Self::Sorted(candidates.into_iter());
+                self.next()
+            }
+            Self::Heap {
+                candidates,
+                remaining_before_sort,
+            } => {
+                *remaining_before_sort -= 1;
+                candidates.pop().map(|candidate| candidate.0)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Sorted(candidates) => candidates.size_hint(),
+            Self::Heap { candidates, .. } => (candidates.len(), Some(candidates.len())),
+        }
+    }
+}
+
+impl ExactSizeIterator for OrderedReplayCandidates<'_> {}
+
+fn ordered_replay_candidates(
+    mut candidates: Vec<LocalReplayCandidate<'_>>,
+    max_entries: usize,
+) -> OrderedReplayCandidates<'_> {
+    if candidates.len() <= 64
+        || max_entries > candidates.len() / 8
+        || candidates
+            .iter()
+            .any(|candidate| candidate.score_percent.is_nan())
+    {
+        candidates.sort_unstable_by(compare_local_replay_candidates);
+        OrderedReplayCandidates::Sorted(candidates.into_iter())
+    } else if candidates.is_sorted_by(|a, b| compare_local_replay_candidates(a, b).is_le()) {
+        OrderedReplayCandidates::Sorted(candidates.into_iter())
+    } else if candidates.is_sorted_by(|a, b| compare_local_replay_candidates(a, b).is_gt()) {
+        candidates.reverse();
+        OrderedReplayCandidates::Sorted(candidates.into_iter())
+    } else {
+        // Vec's consuming map retains the candidate allocation. Heapifying is
+        // linear, and later pops continue past unreadable files as needed.
+        OrderedReplayCandidates::Heap {
+            candidates: BinaryHeap::from(
+                candidates
+                    .into_iter()
+                    .map(BestReplayCandidate)
+                    .collect::<Vec<_>>(),
+            ),
+            remaining_before_sort: max_entries.saturating_mul(4).max(16),
+        }
+    }
+}
+
 fn push_local_replay_candidates_from_dir<'a>(
     dir: &Path,
     chart_hash: &str,
@@ -1082,10 +1192,10 @@ fn push_local_replay_candidates_from_dir<'a>(
 }
 
 fn local_replay_entries(
-    mut candidates: Vec<LocalReplayCandidate<'_>>,
+    candidates: Vec<LocalReplayCandidate<'_>>,
     max_entries: usize,
 ) -> Vec<MachineReplayEntry> {
-    candidates.sort_unstable_by(compare_local_replay_candidates);
+    let candidates = ordered_replay_candidates(candidates, max_entries);
     let mut entries = Vec::with_capacity(max_entries.min(candidates.len()));
     for candidate in candidates {
         let Some(full) = read_local_score_entry(&candidate.path) else {
@@ -1660,4 +1770,12 @@ mod tests {
             ]
         );
     }
+}
+
+#[cfg(test)]
+mod candidates_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/replay_candidates.rs"
+    ));
 }

@@ -66,7 +66,36 @@ pub(crate) fn local_score_date_string(played_at_ms: i64) -> String {
     let Some(dt) = Local.timestamp_millis_opt(played_at_ms).single() else {
         return String::new();
     };
-    dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    format_local_score_datetime(dt.fixed_offset())
+}
+
+fn format_local_score_datetime(dt: chrono::DateTime<chrono::FixedOffset>) -> String {
+    use chrono::format::{Item, Numeric, Pad};
+    const ITEMS: [Item<'static>; 11] = [
+        Item::Numeric(Numeric::Year, Pad::Zero),
+        Item::Literal("-"),
+        Item::Numeric(Numeric::Month, Pad::Zero),
+        Item::Literal("-"),
+        Item::Numeric(Numeric::Day, Pad::Zero),
+        Item::Literal(" "),
+        Item::Numeric(Numeric::Hour, Pad::Zero),
+        Item::Literal(":"),
+        Item::Numeric(Numeric::Minute, Pad::Zero),
+        Item::Literal(":"),
+        Item::Numeric(Numeric::Second, Pad::Zero),
+    ];
+    let Some(local) = dt.naive_utc().checked_add_offset(*dt.offset()) else {
+        // DateTime formatting also supports local dates just outside NaiveDate's
+        // range. Preserve that behavior at the representable UTC boundaries.
+        return dt.format("%Y-%m-%d %H:%M:%S").to_string();
+    };
+    // Include room for Chrono's signed, six-digit years.
+    let mut out = String::with_capacity(22);
+    local
+        .format_with_items(ITEMS.iter())
+        .write_to(&mut out)
+        .expect("write local score date to String");
+    out
 }
 
 const LEADERBOARD_MONTH_ABBR: [&str; 12] = [
@@ -356,18 +385,7 @@ pub(crate) fn machine_leaderboard_entry(
 }
 
 pub(crate) fn machine_replay_entry(rank: u32, play: MachineReplayPlay) -> MachineReplayEntry {
-    let mut replay = Vec::with_capacity(play.replay.len());
-    for edge in play.replay {
-        if song_time_ns_invalid(edge.event_music_time_ns) {
-            continue;
-        }
-        replay.push(ReplayEdge {
-            event_music_time_ns: edge.event_music_time_ns,
-            lane_index: edge.lane,
-            pressed: edge.pressed,
-            source: edge.input_source(),
-        });
-    }
+    let replay = replay_edges_from_local(play.replay);
     MachineReplayEntry {
         rank,
         name: play.initials,
@@ -377,6 +395,20 @@ pub(crate) fn machine_replay_entry(rank: u32, play: MachineReplayPlay) -> Machin
         replay_beat0_time_ns: play.replay_beat0_time_ns,
         replay,
     }
+}
+
+fn replay_edges_from_local(replay: Vec<LocalReplayEdge>) -> Vec<ReplayEdge> {
+    // Consuming collection lets Vec reuse the equally sized edge allocation.
+    replay
+        .into_iter()
+        .filter(|edge| !song_time_ns_invalid(edge.event_music_time_ns))
+        .map(|edge| ReplayEdge {
+            event_music_time_ns: edge.event_music_time_ns,
+            lane_index: edge.lane,
+            pressed: edge.pressed,
+            source: edge.input_source(),
+        })
+        .collect()
 }
 
 #[inline(always)]
@@ -2239,4 +2271,12 @@ mod tests {
         assert_eq!(cache.in_flight.get(&queued.key), Some(&10));
         assert!(cache.pending_refresh.is_empty());
     }
+}
+
+#[cfg(test)]
+pub(crate) mod replay_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/replay_preparation.rs"
+    ));
 }
