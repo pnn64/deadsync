@@ -352,27 +352,19 @@ pub fn itg_animation_sprite_slot_plan_from_path(
     let (grid_x, grid_y) = sprite_sheet_dims(&key);
     let grid = (grid_x as usize, grid_y as usize);
     let source_frame = source_frame_dims(&key, dims.0, dims.1);
-    animation_sprite_slot_plan(
-        key.clone(),
-        dims,
-        grid,
+    let plan = sprite_animation_plan(
+        [dims.0, dims.1],
+        [grid.0, grid.1],
         frame0,
         frame_count,
         frame_indices,
         frame_delays,
         beat_based,
-        source_frame,
-        true,
-    )
-    .or_else(|| {
-        Some(frame_sprite_slot_plan(
-            key,
-            dims,
-            grid,
-            frame0,
-            source_frame,
-            true,
-        ))
+    );
+    Some(if let Some(plan) = plan {
+        animation_plan_to_slot_plan(key, dims, source_frame, plan, true)
+    } else {
+        frame_sprite_slot_plan(key, dims, grid, frame0, source_frame, true)
     })
 }
 
@@ -390,16 +382,17 @@ pub fn itg_all_frames_sprite_slot_plan_from_path(
     let (cols, rows) = sprite_sheet_dims(&key);
     let grid = (cols as usize, rows as usize);
     let source_frame = source_frame_dims(&key, dims.0, dims.1);
-    all_frames_sprite_slot_plan(
-        key.clone(),
-        dims,
-        grid,
+    let plan = sprite_all_frames_animation_plan(
+        [dims.0, dims.1],
+        [grid.0, grid.1],
         frame_delay,
         beat_based,
-        source_frame,
-        true,
-    )
-    .or_else(|| Some(atlas_sprite_slot_plan(key, dims, source_frame, true)))
+    );
+    Some(if let Some(plan) = plan {
+        animation_plan_to_slot_plan(key, dims, source_frame, plan, true)
+    } else {
+        atlas_sprite_slot_plan(key, dims, source_frame, true)
+    })
 }
 
 #[must_use]
@@ -726,14 +719,16 @@ pub fn sprite_all_frames_animation_plan(
     if frame_count <= 1 {
         return None;
     }
-    let delays = frame_delay.map(|delay| vec![delay.max(1e-6); frame_count]);
+    // The normalization helper repeats the first delay for missing entries;
+    // a single stack value describes every frame without a temporary Vec.
+    let delays = frame_delay.map(|delay| [delay.max(1e-6)]);
     sprite_animation_plan(
         tex_dims,
         [cols, rows],
         0,
         frame_count,
         None,
-        delays.as_deref(),
+        delays.as_ref().map(|delays| delays.as_slice()),
         beat_based,
     )
 }
@@ -1732,3 +1727,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/sprite_setup.rs"]
+mod preparation_perf;

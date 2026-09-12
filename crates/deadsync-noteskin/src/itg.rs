@@ -1117,18 +1117,24 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     let entries = fs::read_dir(parent).ok()?;
     let mut found = None;
     for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
         let matches = entry
             .file_name()
             .to_str()
             .is_some_and(|entry_name| entry_name.eq_ignore_ascii_case(name));
-        if matches {
-            found = Some(path);
-            break;
+        if !matches {
+            continue;
         }
+        // Directory enumeration already knows ordinary entry types. Follow
+        // links (and retain the metadata fallback on errors) as before.
+        let is_dir = match entry.file_type() {
+            Ok(kind) if !kind.is_symlink() => kind.is_dir(),
+            _ => entry.path().is_dir(),
+        };
+        if !is_dir {
+            continue;
+        }
+        found = Some(entry.path());
+        break;
     }
     cache_path_lookup(cache, parent, name, found.clone());
     found
@@ -1159,8 +1165,11 @@ fn find_file_with_prefix(dir: &Path, prefix: &str, png_only: bool) -> Option<Pat
         {
             continue;
         }
-        let path = entry.path();
-        if !path.is_file() {
+        let is_file = match entry.file_type() {
+            Ok(kind) if !kind.is_symlink() => kind.is_file(),
+            _ => entry.path().is_file(),
+        };
+        if !is_file {
             continue;
         }
         match_count += 1;
@@ -1174,7 +1183,7 @@ fn find_file_with_prefix(dir: &Path, prefix: &str, png_only: bool) -> Option<Pat
                 .lt(current.bytes().map(|byte| byte.to_ascii_lowercase()))
         });
         if comes_first {
-            chosen = Some(path);
+            chosen = Some(entry.path());
         }
     }
 
@@ -1217,7 +1226,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    static LOOKUP_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
+    pub(super) static LOOKUP_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn temp_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -1941,3 +1950,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/lookup.rs"]
+mod preparation_perf;

@@ -1150,8 +1150,10 @@ fn emit_tap_note_column<T: Clone>(
 ) -> Option<PreparedTapNoteColumn<T>> {
     sort_tap_note_layers(&mut layers, layer_info);
     let first = layers.first()?;
-    let shared_layers = shared_tap_note_layers(&layers);
     notes.extend((0..quantizations).map(|_| first.clone()));
+    // These resolved slots are owned by this column. Move them into shared
+    // storage instead of cloning every slot's Arc handles and fresh identity.
+    let shared_layers: Arc<[T]> = layers.into();
     note_layers.extend((0..quantizations).map(|_| Arc::clone(&shared_layers)));
     Some(PreparedTapNoteColumn { shared_layers })
 }
@@ -5526,3 +5528,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/tap_layers.rs"]
+mod preparation_perf;
