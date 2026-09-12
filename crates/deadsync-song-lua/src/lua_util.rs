@@ -1576,15 +1576,21 @@ fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Re
         .iter()
         .map(|(key, _)| key.as_str())
         .collect::<HashSet<_>>();
-    let mut remove = Vec::new();
-    for pair in globals.clone().pairs::<Value, Value>() {
+    let mut remove = smallvec::SmallVec::<[mlua::LuaString; 16]>::new();
+    for pair in globals.pairs::<Value, Value>() {
         let (key, value) = pair?;
         let Value::String(key) = key else {
             continue;
         };
-        let key = key.to_str()?;
-        if is_scalar_lua_value(&value) && !keys.contains(key.as_ref()) {
-            remove.push(key.to_string());
+        // Validate every string key before making any changes, including keys
+        // whose values are not scalar. Retain Lua handles instead of copying
+        // temporary key bytes into Rust strings.
+        let should_remove = {
+            let text = key.to_str()?;
+            is_scalar_lua_value(&value) && !keys.contains(text.as_ref())
+        };
+        if should_remove {
+            remove.push(key);
         }
     }
     for key in remove {
@@ -10542,10 +10548,13 @@ struct FunctionActionTableSnapshot {
 }
 
 fn snapshot_function_action_table(table: Table) -> mlua::Result<FunctionActionTableSnapshot> {
-    let entries = table
-        .clone()
-        .pairs::<Value, Value>()
-        .collect::<mlua::Result<Vec<_>>>()?;
+    let mut entries = Vec::new();
+    // Keep the traversal key on Lua's stack. `pairs` clones it for its Rust
+    // cursor, allocating a shared handle for each reference-valued key.
+    table.for_each::<Value, Value>(|key, value| {
+        entries.push((key, value));
+        Ok(())
+    })?;
     Ok(FunctionActionTableSnapshot { table, entries })
 }
 
@@ -10554,22 +10563,22 @@ fn snapshot_function_action_tables(
     function: &Function,
 ) -> mlua::Result<Vec<FunctionActionTableSnapshot>> {
     let globals = lua.globals();
-    let mut tables = vec![globals.clone()];
-    if let Some(environment) = function.environment() {
+    // Resolve the environment before snapshotting either table, preserving
+    // lookup/error order. The function environment may alias the globals.
+    let target = if let Some(environment) = function.environment() {
         let target = environment
             .raw_get::<Option<Table>>("__songlua_env_target")?
             .unwrap_or(environment);
-        if tables
-            .iter()
-            .all(|table| table.to_pointer() != target.to_pointer())
-        {
-            tables.push(target);
-        }
+        (target.to_pointer() != globals.to_pointer()).then_some(target)
+    } else {
+        None
+    };
+    let mut snapshots = Vec::with_capacity(1 + usize::from(target.is_some()));
+    snapshots.push(snapshot_function_action_table(globals)?);
+    if let Some(target) = target {
+        snapshots.push(snapshot_function_action_table(target)?);
     }
-    tables
-        .into_iter()
-        .map(snapshot_function_action_table)
-        .collect()
+    Ok(snapshots)
 }
 
 fn restore_function_action_tables(snapshots: Vec<FunctionActionTableSnapshot>) -> mlua::Result<()> {
@@ -10732,6 +10741,57 @@ fn cross_actor_effects(
     capture: &SongLuaFunctionActionCapture,
     source_index: usize,
 ) -> Vec<(usize, Vec<SongLuaOverlayCommandBlock>, Option<f32>)> {
+    // Captures normally arrive in strictly increasing actor order. Merge those
+    // lists directly, cloning each retained block list once. Keep the general
+    // path for unordered inputs and last-write-wins duplicate actor entries.
+    if capture
+        .overlay_aux
+        .windows(2)
+        .all(|pair| pair[0].0 < pair[1].0)
+        && capture
+            .overlay_blocks
+            .windows(2)
+            .all(|pair| pair[0].0 < pair[1].0)
+    {
+        let mut aux = capture
+            .overlay_aux
+            .iter()
+            .filter(|(index, _)| *index != source_index)
+            .peekable();
+        let mut blocks = capture
+            .overlay_blocks
+            .iter()
+            .filter(|(index, _)| *index != source_index)
+            .peekable();
+        if aux.peek().is_none() && blocks.peek().is_none() {
+            return Vec::new();
+        }
+        let mut effects =
+            Vec::with_capacity(capture.overlay_aux.len() + capture.overlay_blocks.len());
+        loop {
+            match (aux.peek(), blocks.peek()) {
+                (Some((aux_index, _)), Some((block_index, _))) if aux_index == block_index => {
+                    let &(index, value) = aux.next().unwrap();
+                    let (_, commands) = blocks.next().unwrap();
+                    effects.push((index, commands.clone(), Some(value)));
+                }
+                (Some((aux_index, _)), Some((block_index, _))) if aux_index > block_index => {
+                    let (index, commands) = blocks.next().unwrap();
+                    effects.push((*index, commands.clone(), None));
+                }
+                (Some(_), _) => {
+                    let &(index, value) = aux.next().unwrap();
+                    effects.push((index, Vec::new(), Some(value)));
+                }
+                (None, Some(_)) => {
+                    let (index, commands) = blocks.next().unwrap();
+                    effects.push((*index, commands.clone(), None));
+                }
+                (None, None) => break,
+            }
+        }
+        return effects;
+    }
     let mut effects = capture
         .overlay_aux
         .iter()
@@ -14357,3 +14417,15 @@ mod color_reads_perf;
 #[cfg(test)]
 #[path = "../tests/perf/sprite_keys.rs"]
 mod sprite_keys_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/scalar_restore.rs"]
+mod scalar_restore_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/action_snapshot.rs"]
+mod action_snapshot_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/cross_effects.rs"]
+mod cross_effects_perf;
