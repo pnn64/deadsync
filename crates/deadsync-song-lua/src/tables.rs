@@ -2156,14 +2156,21 @@ pub fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> 
     let out = lua.create_table()?;
     for (idx, value) in table.sequence_values::<Value>().enumerate() {
         let value = value?;
-        let text = if let Some(form) = form.as_deref()
+        let value = if let Some(form) = form.as_deref()
             && matches!(value, Value::Integer(_) | Value::Number(_))
         {
-            lua_text_value(format.call::<Value>((form, value))?)?
+            format.call::<Value>((form, value))?
         } else {
-            lua_text_value(value)?
+            value
         };
-        out.raw_set(idx + 1, text)?;
+        if let Value::String(text) = value {
+            // Preserve UTF-8 validation while transferring the existing Lua
+            // string instead of copying it through an owned Rust String.
+            text.to_str()?;
+            out.raw_set(idx + 1, text)?;
+        } else {
+            out.raw_set(idx + 1, lua_text_value(value)?)?;
+        }
     }
     Ok(Value::Table(out))
 }
@@ -2176,90 +2183,114 @@ pub fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Res
     Ok(out)
 }
 
-// Lua's mixed integer/float comparison is not transitive above 2^53.
-// Keep exact integers and their rounded float representations separately.
-#[derive(Eq, Hash, PartialEq)]
-enum DeduplicateKey {
-    Boolean(bool),
-    Integer(i64),
-    Number(u64),
-    IntegerAsNumber(u64),
-    String(mlua::LuaString),
-    Table(usize),
+// Separate compact key sets preserve Lua's non-transitive mixed-number
+// comparisons without storing a large tagged key for every numeric entry.
+struct DeduplicateIndex {
+    booleans: u8,
+    integers: std::collections::HashSet<i64>,
+    numbers: std::collections::HashSet<u64>,
+    integer_numbers: std::collections::HashSet<u64>,
+    strings: std::collections::HashSet<mlua::LuaString>,
+    tables: std::collections::HashSet<usize>,
 }
 
-#[expect(
-    clippy::mutable_key_type,
-    reason = "Lua strings hash immutable bytes; only their reference counts are mutable"
-)]
-fn insert_deduplicate_value(
-    seen: &mut std::collections::HashSet<DeduplicateKey>,
-    value: &Value,
-) -> bool {
-    fn number_bits(value: f64) -> u64 {
-        if value == 0.0 { 0 } else { value.to_bits() }
-    }
-    match value {
-        Value::Boolean(value) => seen.insert(DeduplicateKey::Boolean(*value)),
-        Value::Integer(value) => {
-            let bits = number_bits(*value as f64);
-            if seen.contains(&DeduplicateKey::Number(bits))
-                || !seen.insert(DeduplicateKey::Integer(*value))
-            {
-                return false;
+impl DeduplicateIndex {
+    fn from_prefix(prefix: &[Value]) -> Self {
+        let (mut integers, mut numbers, mut strings, mut tables) = (0, 0, 0, 0);
+        for value in prefix {
+            match value {
+                Value::Integer(_) => integers += 1,
+                Value::Number(value) if !value.is_nan() => numbers += 1,
+                Value::String(value) if value.to_str().is_ok() => strings += 1,
+                Value::Table(_) => tables += 1,
+                _ => {}
             }
-            seen.insert(DeduplicateKey::IntegerAsNumber(bits));
-            true
         }
-        Value::Number(value) if !value.is_nan() => {
-            let bits = number_bits(*value);
-            !seen.contains(&DeduplicateKey::IntegerAsNumber(bits))
-                && seen.insert(DeduplicateKey::Number(bits))
+        let mut index = Self {
+            booleans: 0,
+            integers: std::collections::HashSet::with_capacity(integers),
+            numbers: std::collections::HashSet::with_capacity(numbers),
+            integer_numbers: std::collections::HashSet::with_capacity(integers),
+            strings: std::collections::HashSet::with_capacity(strings),
+            tables: std::collections::HashSet::with_capacity(tables),
+        };
+        for value in prefix {
+            index.insert(value);
         }
-        Value::String(value) if value.to_str().is_ok() => {
-            seen.insert(DeduplicateKey::String(value.clone()))
-        }
-        Value::Table(value) => seen.insert(DeduplicateKey::Table(value.to_pointer() as usize)),
-        // NaNs, invalid UTF-8 strings and opaque values never compare equal in
-        // lua_values_equal. Sequence iteration stops before a nil value.
-        _ => true,
+        index
     }
+
+    fn insert(&mut self, value: &Value) -> bool {
+        fn number_bits(value: f64) -> u64 {
+            if value == 0.0 { 0 } else { value.to_bits() }
+        }
+        match value {
+            Value::Boolean(value) => {
+                let mask = 1 << u8::from(*value);
+                let new = self.booleans & mask == 0;
+                self.booleans |= mask;
+                new
+            }
+            Value::Integer(value) => {
+                let bits = number_bits(*value as f64);
+                if self.numbers.contains(&bits) || !self.integers.insert(*value) {
+                    return false;
+                }
+                self.integer_numbers.insert(bits);
+                true
+            }
+            Value::Number(value) if !value.is_nan() => {
+                let bits = number_bits(*value);
+                !self.integer_numbers.contains(&bits) && self.numbers.insert(bits)
+            }
+            Value::String(value) if value.to_str().is_ok() => self.strings.insert(value.clone()),
+            Value::Table(value) => self.tables.insert(value.to_pointer() as usize),
+            // These values never compare equal under lua_values_equal.
+            _ => true,
+        }
+    }
+}
+
+// Keep the larger index frame out of the short-list path. This is called once
+// after accepting the 33rd value; the remaining loop needs no mode check.
+#[inline(never)]
+fn finish_indexed_deduplication(
+    out: &Table,
+    mut out_index: usize,
+    prefix: Vec<Value>,
+    first: Value,
+    remaining: impl Iterator<Item = mlua::Result<Value>>,
+) -> mlua::Result<()> {
+    let mut index = DeduplicateIndex::from_prefix(&prefix);
+    drop(prefix);
+    index.insert(&first);
+    out.raw_set(out_index, first)?;
+    out_index += 1;
+    for value in remaining {
+        let value = value?;
+        if index.insert(&value) {
+            out.raw_set(out_index, value)?;
+            out_index += 1;
+        }
+    }
+    Ok(())
 }
 
 pub fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
     let out = lua.create_table()?;
     let mut seen = Vec::new();
-    let mut indexed = None;
     let mut out_index = 1;
-    for value in table.sequence_values::<Value>() {
+    let mut values = table.sequence_values::<Value>();
+    for value in values.by_ref() {
         let value = value?;
-        if let Some(index) = &mut indexed {
-            if !insert_deduplicate_value(index, &value) {
-                continue;
-            }
-        } else {
-            if seen.iter().any(|seen| lua_values_equal(seen, &value)) {
-                continue;
-            }
-            // Short lists retain the inexpensive linear path. Only accepted
-            // values enter the index, preserving order-dependent comparisons.
-            // Insert the 33rd value directly so the discarded Vec never grows.
-            if seen.len() == 32 && table.raw_len() >= 128 {
-                #[expect(
-                    clippy::mutable_key_type,
-                    reason = "Lua strings hash immutable bytes; only their reference counts are mutable"
-                )]
-                let mut index = std::collections::HashSet::with_capacity(64);
-                for value in &seen {
-                    insert_deduplicate_value(&mut index, value);
-                }
-                insert_deduplicate_value(&mut index, &value);
-                seen = Vec::new();
-                indexed = Some(index);
-            } else {
-                seen.push(value.clone());
-            }
+        if seen.iter().any(|seen| lua_values_equal(seen, &value)) {
+            continue;
         }
+        if seen.len() == 32 && table.raw_len() >= 128 {
+            finish_indexed_deduplication(&out, out_index, seen, value, values)?;
+            return Ok(out);
+        }
+        seen.push(value.clone());
         out.raw_set(out_index, value)?;
         out_index += 1;
     }
@@ -3084,3 +3115,11 @@ mod stringify_args_perf;
 #[cfg(test)]
 #[path = "../tests/perf/deduplicate.rs"]
 mod deduplicate_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/string_transfer.rs"]
+mod string_transfer_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/dedup_storage.rs"]
+mod dedup_storage_perf;

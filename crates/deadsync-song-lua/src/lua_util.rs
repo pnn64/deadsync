@@ -1521,18 +1521,18 @@ fn restore_actor_state(
     snapshot: Vec<(String, Value)>,
     clear_key: fn(&str) -> bool,
 ) -> mlua::Result<()> {
-    let mut keys = Vec::new();
-    for pair in actor.clone().pairs::<Value, Value>() {
-        let (key, _) = pair?;
+    let mut keys = smallvec::SmallVec::<[mlua::LuaString; 16]>::new();
+    actor.for_each::<Value, Value>(|key, _| {
         let Value::String(key) = key else {
-            continue;
+            return Ok(());
         };
         // Keep Lua string handles alive until iteration finishes; only retained
         // snapshot entries need an owned Rust key. Validate all string keys.
         if clear_key(&key.to_str()?) {
             keys.push(key);
         }
-    }
+        Ok(())
+    })?;
     for key in keys {
         actor.set(key, Value::Nil)?;
     }
@@ -14573,3 +14573,7 @@ mod global_snapshot_perf;
 #[cfg(test)]
 #[path = "../tests/perf/aux_lookup.rs"]
 mod aux_lookup_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/actor_restore.rs"]
+mod actor_restore_perf;
