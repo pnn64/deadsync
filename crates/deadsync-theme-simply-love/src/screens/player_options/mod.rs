@@ -302,7 +302,11 @@ pub fn set_noteskin_preview(
         } else {
             state.noteskin.ready_parts.insert(name.to_owned(), parts);
         }
-        if !state.noteskin.cache.contains_key(name) {
+        if let Some(cached) = state.noteskin.cache.get_mut(name) {
+            // A prepared snapshot can gain another component while existing
+            // native textures remain resident. Publish the expanded snapshot.
+            *cached = skin;
+        } else {
             state.noteskin.cache.insert(name.to_owned(), skin);
         }
     } else {

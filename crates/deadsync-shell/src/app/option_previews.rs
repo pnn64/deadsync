@@ -27,6 +27,7 @@ const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 struct Runtime {
     skin: Arc<Noteskin>,
     used: u64,
+    loaded_parts: u16,
     parts: u16,
     textures: Vec<(Arc<str>, bool)>,
     components: Vec<(u16, Vec<Arc<str>>)>,
@@ -34,6 +35,7 @@ struct Runtime {
 
 impl Runtime {
     fn set_parts(&mut self, parts: u16) {
+        let parts = parts & self.loaded_parts;
         if self.parts == parts {
             return;
         }
@@ -73,7 +75,7 @@ struct Resident {
 
 #[derive(Clone, PartialEq, Eq)]
 enum Work {
-    Skin(Arc<str>, usize),
+    Skin(Arc<str>, usize, u16),
     Texture(Arc<str>, bool),
 }
 
@@ -217,6 +219,22 @@ impl Service {
 
     fn next_work(&mut self, assets: &AssetManager) -> Option<Work> {
         for request in &self.requests {
+            let loaded = self
+                .runtimes
+                .get(&request.name)
+                .map_or(0, |runtime| runtime.loaded_parts);
+            if request.parts & !loaded != 0
+                && !self.failed_skins.contains(&request.name)
+                // Variants may share a compiler-cache file. Runtime preparation
+                // stays serial while overlapping it with native image decoding.
+                && !self.pending.iter().any(|pending| matches!(pending.work, Work::Skin(..)))
+            {
+                return Some(Work::Skin(
+                    request.name.clone(),
+                    self.cols,
+                    request.parts | loaded,
+                ));
+            }
             if let Some(runtime) = self.runtimes.get_mut(&request.name) {
                 runtime.set_parts(request.parts);
                 for (key, model) in &runtime.textures {
@@ -227,16 +245,6 @@ impl Service {
                     {
                         return Some(Work::Texture(key.clone(), *model));
                     }
-                }
-            } else {
-                let work = Work::Skin(request.name.clone(), self.cols);
-                if !self.failed_skins.contains(&request.name)
-                    && !self.pending.iter().any(|pending| pending.work == work)
-                    // Variants can share a compiler-cache file. Keep runtime
-                    // construction serial while overlapping it with decoding.
-                    && !self.pending.iter().any(|pending| matches!(pending.work, Work::Skin(..)))
-                {
-                    return Some(work);
                 }
             }
         }
@@ -256,12 +264,13 @@ impl Service {
                     "texture"
                 };
                 let result = match task {
-                    Work::Skin(name, cols) => noteskin::load_itg_skin_cached(
+                    Work::Skin(name, cols, parts) => noteskin::load_itg_preview(
                         &Style {
                             num_cols: cols,
                             num_players: 1,
                         },
                         &name,
+                        native_parts(parts),
                     )
                     .map(Ready::Skin),
                     Work::Texture(key, model) => decode(&key, model),
@@ -310,13 +319,18 @@ impl Service {
             return;
         }
         match (&pending.work, result) {
-            (Work::Skin(name, cols), Ok(Ready::Skin(skin)))
+            (Work::Skin(name, cols, parts), Ok(Ready::Skin(skin)))
                 if *cols == self.cols && !name.is_empty() =>
             {
-                if !self.requests.iter().any(|request| request.name == *name) {
+                let Some(requested_parts) = self
+                    .requests
+                    .iter()
+                    .find(|request| request.name == *name)
+                    .map(|request| request.parts)
+                else {
                     return;
-                }
-                if self.runtimes.len() >= MAX_RUNTIMES {
+                };
+                if self.runtimes.len() >= MAX_RUNTIMES && !self.runtimes.contains_key(name) {
                     let oldest = self
                         .runtimes
                         .iter()
@@ -332,16 +346,18 @@ impl Service {
                         return;
                     }
                 }
-                self.runtimes.insert(
-                    name.clone(),
-                    Runtime {
-                        skin,
-                        used: self.tick,
-                        parts: 0,
-                        textures: Vec::new(),
-                        components: Vec::new(),
-                    },
-                );
+                let mut runtime = Runtime {
+                    skin,
+                    used: self.tick,
+                    loaded_parts: *parts,
+                    parts: 0,
+                    textures: Vec::new(),
+                    components: Vec::new(),
+                };
+                // Publish readiness immediately, even if another focused job
+                // fills the last worker slot before next_work visits this name.
+                runtime.set_parts(requested_parts);
+                self.runtimes.insert(name.clone(), runtime);
             }
             (Work::Texture(key, _), Ok(Ready::Texture(image, sampler))) => {
                 // Navigation may have made the decode obsolete while it ran.
@@ -410,7 +426,7 @@ impl Service {
 
     fn fail(&mut self, work: &Work, error: &str) {
         let key = match work {
-            Work::Skin(name, _) => {
+            Work::Skin(name, ..) => {
                 self.failed_skins.insert(name.clone());
                 name
             }
@@ -421,6 +437,27 @@ impl Service {
         };
         log::warn!("Cannot prepare options preview '{key}': {error}");
     }
+}
+
+fn native_parts(bits: u16) -> deadsync_noteskin::runtime::SkinParts {
+    use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+    [
+        SkinPart::Arrows,
+        SkinPart::Receptors,
+        SkinPart::HoldActive,
+        SkinPart::HoldInactive,
+        SkinPart::RollActive,
+        SkinPart::RollInactive,
+        SkinPart::TapExplosions,
+        SkinPart::HoldExplosions,
+        SkinPart::Mines,
+        SkinPart::Mines,
+        SkinPart::Lifts,
+    ]
+    .into_iter()
+    .enumerate()
+    .filter(|(index, _)| bits & (1 << index) != 0)
+    .fold(SkinParts::default(), |parts, (_, part)| parts.with(part))
 }
 
 fn eviction_candidate(
@@ -604,6 +641,63 @@ mod tests {
             })
             .collect();
         assert!(choices.len() > MAX_RUNTIMES);
+        // Compare construction only; neither path retains a full runtime in the
+        // gameplay cache. Alternate order with filesystem/compiler caches warm.
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        {
+            let name = &choices[0].name;
+            let partial = noteskin::load_itg_preview(&style, name, native_parts(1)).unwrap();
+            assert!(partial.receptor_off.is_empty());
+            let gameplay = noteskin::load_itg_skin_cached(&style, name).unwrap();
+            assert!(
+                !gameplay.receptor_off.is_empty(),
+                "preview must not populate the gameplay cache"
+            );
+            assert!(!Arc::ptr_eq(&partial, &gameplay));
+            let reused = noteskin::load_itg_preview(&style, name, native_parts(1)).unwrap();
+            assert!(
+                Arc::ptr_eq(&reused, &gameplay),
+                "reuse a resident full gameplay runtime"
+            );
+        }
+        for request in &choices {
+            drop(noteskin::load_itg_skin(&style, &request.name).unwrap());
+            drop(noteskin::load_itg_preview(&style, &request.name, native_parts(1)).unwrap());
+        }
+        let mut preparation = [Duration::ZERO; 2];
+        let mut slots = [0usize; 2];
+        for round in 0..3 {
+            for (index, request) in choices.iter().enumerate() {
+                for mode in [0, 1].map(|mode| (mode + index + round) % 2) {
+                    let started = Instant::now();
+                    let skin = if mode == 0 {
+                        Arc::new(noteskin::load_itg_skin(&style, &request.name).unwrap())
+                    } else {
+                        noteskin::load_itg_preview(&style, &request.name, native_parts(1)).unwrap()
+                    };
+                    preparation[mode] += started.elapsed();
+                    skin.for_each_slot(|_| slots[mode] += 1);
+                    if mode == 1 {
+                        assert!(!skin.notes.is_empty());
+                        assert!(skin.receptor_off.is_empty());
+                        assert!(skin.hold_columns.is_empty());
+                        assert!(skin.mines.is_empty());
+                        assert!(skin.mine_hit_explosion.is_none());
+                    }
+                }
+            }
+        }
+        let samples = choices.len() * 3;
+        eprintln!(
+            "Workshop runtime preparation ({samples} loads, mean): full {:.3}ms, arrows {:.3}ms; slot references {}/{}",
+            preparation[0].as_secs_f64() * 1000.0 / samples as f64,
+            preparation[1].as_secs_f64() * 1000.0 / samples as f64,
+            slots[0] / samples,
+            slots[1] / samples
+        );
         let mut peak = 0;
         let mut max_tick = Duration::ZERO;
         for (page, choices) in choices.chunks(8).enumerate() {
@@ -638,10 +732,7 @@ mod tests {
                 if service.pending.is_empty()
                     && choices.iter().all(|request| {
                         service.runtimes.get(&request.name).is_some_and(|runtime| {
-                            runtime
-                                .textures
-                                .iter()
-                                .all(|(key, _)| assets.has_uploaded_texture_key(key))
+                            runtime.ready_parts(&assets) & request.parts == request.parts
                         })
                     })
                 {
@@ -694,17 +785,48 @@ mod tests {
             assert_eq!(texture.image, source, "preview keeps original pixels");
         }
 
-        let runtime = service.runtimes.get_mut(&name).unwrap();
-        runtime.set_parts(1 | (1 << 8));
+        let expanded_parts = 1 | (1 << 8);
+        service.requests[0].parts = expanded_parts;
+        service.update_cache(4, &mut assets, &mut backend);
         assert_eq!(
-            runtime.ready_parts(&assets) & 1,
+            service.runtimes[&name].ready_parts(&assets),
             1,
-            "a ready arrow does not disappear while its mine texture is loading"
+            "a missing component must not become ready via an empty texture list"
         );
-        assert_eq!(
-            runtime.ready_parts(&assets) & (1 << 8),
-            0,
-            "the new component waits for its own native texture"
+        assert!(
+            Arc::ptr_eq(&skin, &service.runtimes[&name].skin),
+            "the old snapshot stays visible while native components load"
+        );
+        let started = Instant::now();
+        loop {
+            service.update_cache(4, &mut assets, &mut backend);
+            if gpu {
+                backend.draw(&frame, assets.textures(), true).unwrap();
+            }
+            let runtime = &service.runtimes[&name];
+            assert_eq!(
+                runtime.ready_parts(&assets) & 1,
+                1,
+                "a ready arrow must remain visible throughout component expansion"
+            );
+            assert!(service.failed_skins.is_empty());
+            assert!(service.failed_textures.is_empty());
+            assert!(service.resident_bytes <= TEXTURE_BUDGET);
+            if service.pending.is_empty() && runtime.ready_parts(&assets) == expanded_parts {
+                assert!(!Arc::ptr_eq(&skin, &runtime.skin));
+                assert!(!runtime.skin.notes.is_empty());
+                assert!(!runtime.skin.mines.is_empty());
+                break;
+            }
+            assert!(
+                started.elapsed() < Duration::from_secs(30),
+                "component expansion stalled"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        eprintln!(
+            "Workshop component expansion {:.3}ms; arrow remained ready",
+            started.elapsed().as_secs_f64() * 1000.0
         );
 
         // The first page has been evicted. Warm an adjacent choice using the

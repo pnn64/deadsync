@@ -173,7 +173,14 @@ pub(super) mod tests {
         super::super::set_noteskin_preview(&mut state, "default", 1, Some(skin.clone()));
         assert!(super::super::noteskins::ready_preview(&state, "default", 0).is_some());
         assert!(super::super::noteskins::ready_preview(&state, "default", 10).is_none());
-        super::super::set_noteskin_preview(&mut state, "default", (1 << 10) | 1, Some(skin));
+        let expanded = Arc::new((*skin).clone());
+        super::super::set_noteskin_preview(
+            &mut state,
+            "default",
+            (1 << 10) | 1,
+            Some(expanded.clone()),
+        );
+        assert!(Arc::ptr_eq(&state.noteskin.cache["default"], &expanded));
         assert!(super::super::noteskins::ready_preview(&state, "default", 10).is_some());
     }
 
@@ -2342,14 +2349,18 @@ pub(super) mod tests {
             // Do not eagerly retain the entire Workshop in this regression test.
             state.noteskin.cache.clear();
             for (name, part) in &names {
-                let skin = deadsync_assets::noteskin::load_itg_skin_cached(
-                    &deadsync_noteskin::Style {
-                        num_cols: 4,
-                        num_players: 1,
-                    },
-                    name,
-                )
-                .unwrap();
+                // Keep the baseline out of the weak gameplay cache: the preview
+                // must exercise selective loading, not reuse this full runtime.
+                let skin = Arc::new(
+                    deadsync_assets::noteskin::load_itg_skin(
+                        &deadsync_noteskin::Style {
+                            num_cols: 4,
+                            num_players: 1,
+                        },
+                        name,
+                    )
+                    .unwrap(),
+                );
                 let textures = super::super::noteskin_preview_textures(&skin, 1 << part);
                 deadsync_assets::textures::preload_texture_keys(
                     &mut assets,
@@ -2364,8 +2375,32 @@ pub(super) mod tests {
                 .map(|(name, part)| (name.as_str(), *part))
                 .collect();
             for &(name, part) in &wanted {
-                let skin = &state.noteskin.cache[name];
-                let preview_textures = super::super::noteskins::preview_textures(skin, part);
+                use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+                let skin = state.noteskin.cache[name].clone();
+                let native_part = match part {
+                    0 => SkinPart::Arrows,
+                    1 => SkinPart::Receptors,
+                    2 => SkinPart::HoldActive,
+                    3 => SkinPart::HoldInactive,
+                    4 => SkinPart::RollActive,
+                    5 => SkinPart::RollInactive,
+                    6 => SkinPart::TapExplosions,
+                    7 => SkinPart::HoldExplosions,
+                    8 => SkinPart::Mines,
+                    10 => SkinPart::Lifts,
+                    _ => unreachable!(),
+                };
+                let partial = deadsync_assets::noteskin::load_itg_preview(
+                    &deadsync_noteskin::Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    name,
+                    SkinParts::default().with(native_part),
+                )
+                .unwrap();
+                assert!(partial.mine_hit_explosion.is_none());
+                let preview_textures = super::super::noteskins::preview_textures(&skin, part);
                 for (key, _) in &preview_textures {
                     let handle = assets.texture_context().texture_handle(key);
                     let Some(deadlib_render::Texture::Software(texture)) =
@@ -2411,6 +2446,24 @@ pub(super) mod tests {
                             102
                         ));
                         assert!(!actors.is_empty(), "{name} part {part}");
+                        state.noteskin.cache.insert(name.into(), partial.clone());
+                        let mut selected = Vec::new();
+                        assert!(render::draw_live_preview(
+                            &mut selected,
+                            &state,
+                            name,
+                            part,
+                            [100.0; 2],
+                            size,
+                            1.0,
+                            102
+                        ));
+                        assert_eq!(
+                            format!("{selected:?}"),
+                            format!("{actors:?}"),
+                            "{name} part {part} at {time}s: selective and full native loaders must render identically"
+                        );
+                        state.noteskin.cache.insert(name.into(), skin.clone());
                         assert_preview_bounds(&actors, name, size);
                         for actor in &actors {
                             let key = match actor {

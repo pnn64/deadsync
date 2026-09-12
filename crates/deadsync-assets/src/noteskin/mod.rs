@@ -11,6 +11,7 @@ use self::texture::{
 #[cfg(test)]
 use self::texture::{itg_apply_state_properties_from_script, itg_register_texture_dims_for_path};
 use deadsync_noteskin::pack::{self, InstalledPack, Selection};
+use deadsync_noteskin::runtime::SkinParts;
 pub use deadsync_noteskin::{
     AnimationRate, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
     GlowEffect, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
@@ -165,6 +166,29 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
         .get_or_load(style, skin, || load_itg_skin(style, skin))
 }
 
+/// Load native preview components, reusing a full gameplay runtime when resident.
+/// A partial result is never inserted in the gameplay runtime cache. Its omitted
+/// fields are empty; use it only for the requested components' presentation.
+pub fn load_itg_preview(
+    style: &Style,
+    skin: &str,
+    parts: SkinParts,
+) -> Result<Arc<Noteskin>, String> {
+    let catalog = pack_catalog();
+    let key = if let Some(pack) = catalog.iter().find(|pack| pack.skin(skin).is_some()) {
+        pack.runtime_key(&Selection::parse(skin).map_err(|e| e.to_string())?)
+    } else {
+        skin.to_owned()
+    };
+    if let Some(cached) = ITG_SKIN_CACHE
+        .get()
+        .and_then(|cache| cache.get(style, &key))
+    {
+        return Ok(cached);
+    }
+    load_itg_skin_parts(style, skin, Some(parts)).map(Arc::new)
+}
+
 pub type CompileAllItgSummary = noteskin_compiler::CompileAllItgSummary;
 
 pub fn compile_all_itg_caches_with_progress<F>(mut on_progress: F) -> CompileAllItgSummary
@@ -198,19 +222,27 @@ pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
 }
 
 pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
+    load_itg_skin_parts(style, skin, None)
+}
+
+fn load_itg_skin_parts(
+    style: &Style,
+    skin: &str,
+    parts: Option<SkinParts>,
+) -> Result<Noteskin, String> {
     if let Some(pack) = pack_catalog().iter().find(|pack| pack.skin(skin).is_some()) {
         let selection = Selection::parse(skin).map_err(|e| e.to_string())?;
-        return load_pack_skin(pack, &selection, style);
+        return load_pack_skin_parts(pack, &selection, style, parts);
     }
     let roots = noteskin_roots();
     let game = style.game_name();
     let loaded = noteskin_itg::load_itg_skin_from_roots(&roots, game, skin, |root, game, skin| {
-        load_itg(root, game, skin, style)
+        load_itg_parts(root, game, skin, style, parts)
     })
     .or_else(|requested_error| {
         if game == "pump" {
             noteskin_itg::load_itg_default_from_roots(&roots, game, |root, game, skin| {
-                load_itg(root, game, skin, style)
+                load_itg_parts(root, game, skin, style, parts)
             })
             .map_err(|_| requested_error)
         } else {
@@ -231,6 +263,15 @@ fn load_pack_skin(
     selection: &Selection,
     style: &Style,
 ) -> Result<Noteskin, String> {
+    load_pack_skin_parts(pack, selection, style, None)
+}
+
+fn load_pack_skin_parts(
+    pack: &InstalledPack,
+    selection: &Selection,
+    style: &Style,
+    parts: Option<SkinParts>,
+) -> Result<Noteskin, String> {
     if style.game_name() != "dance" {
         return Err("this noteskin pack only supports dance".into());
     }
@@ -241,35 +282,59 @@ fn load_pack_skin(
     let bundle =
         noteskin_compiler::load_or_compile(&crate::paths().noteskin_cache, "dance", &data)?;
     data.name = runtime_name;
-    load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors)
+    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, parts)
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
+    load_itg_parts(root, game, skin, style, None)
+}
+
+fn load_itg_parts(
+    root: &Path,
+    game: &str,
+    skin: &str,
+    style: &Style,
+    parts: Option<SkinParts>,
+) -> Result<Noteskin, String> {
     let data = noteskin_itg::load_noteskin_data_cached(root, game, skin)?;
     let cache_dir = &crate::paths().noteskin_cache;
     let bundle = noteskin_compiler::load_or_compile(cache_dir, game, &data)?;
-    load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors).map_err(|err| {
-        format!(
-            "failed to load compiled noteskin '{}/{}': {}",
-            game, data.name, err
-        )
-    })
+    load_itg_sprite_noteskin_parts_compiled(&data, style, &bundle.loader, &bundle.actors, parts)
+        .map_err(|err| {
+            format!(
+                "failed to load compiled noteskin '{}/{}': {}",
+                game, data.name, err
+            )
+        })
 }
 
-fn load_itg_sprite_noteskin_compiled(
+fn load_itg_sprite_noteskin_parts_compiled(
     data: &noteskin_itg::NoteskinData,
     style: &Style,
     compiled: &noteskin_compiled::CompiledLoader,
     compiled_actors: &noteskin_compiled::CompiledActors,
+    parts: Option<SkinParts>,
 ) -> Result<Noteskin, String> {
-    let mut noteskin = deadsync_noteskin::itg_noteskin_runtime_with_ops_compiled(
-        data,
-        *style,
-        compiled,
-        compiled_actors,
-        NUM_QUANTIZATIONS,
-        itg_compiled_sprite_ops(),
-    )?;
+    let mut noteskin = if let Some(parts) = parts {
+        deadsync_noteskin::runtime::itg_noteskin_preview_with_ops_compiled(
+            data,
+            *style,
+            compiled,
+            compiled_actors,
+            NUM_QUANTIZATIONS,
+            itg_compiled_sprite_ops(),
+            parts,
+        )
+    } else {
+        deadsync_noteskin::itg_noteskin_runtime_with_ops_compiled(
+            data,
+            *style,
+            compiled,
+            compiled_actors,
+            NUM_QUANTIZATIONS,
+            itg_compiled_sprite_ops(),
+        )
+    }?;
     apply_note_animation(&mut noteskin, NUM_QUANTIZATIONS);
     Ok(noteskin)
 }
@@ -459,6 +524,44 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn native_arrow_preview_omits_unrelated_components() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        init_asset_paths();
+        for (num_cols, name) in [(4, "default"), (4, "cel"), (4, "metal"), (5, "default")] {
+            let style = Style {
+                num_cols,
+                num_players: 1,
+            };
+            let full = load_itg_skin(&style, name).unwrap();
+            let partial = super::load_itg_skin_parts(
+                &style,
+                name,
+                Some(SkinParts::default().with(SkinPart::Arrows)),
+            )
+            .unwrap();
+            assert_eq!(partial.notes.len(), full.notes.len());
+            for (actual, expected) in partial.notes.iter().zip(&full.notes) {
+                assert_eq!(actual.texture_key(), expected.texture_key());
+                assert_eq!(format!("{:?}", actual.def), format!("{:?}", expected.def));
+                assert_eq!(actual.logical_size(), expected.logical_size());
+                assert_eq!(actual.base_rot_sin_cos(), expected.base_rot_sin_cos());
+                assert_eq!(actual.uv_velocity, expected.uv_velocity);
+            }
+            assert!(partial.lift_note_layers.is_empty());
+            assert!(partial.receptor_off.is_empty());
+            assert!(partial.hold_columns.is_empty());
+            assert!(partial.roll_columns.is_empty());
+            assert!(partial.mines.is_empty());
+            assert!(partial.mine_fill_slots.is_empty());
+            assert!(partial.tap_explosions_by_col.is_empty());
+            assert!(partial.mine_hit_explosion.is_none());
+            assert!(partial.hold.explosion.is_none());
+            assert!(!full.receptor_off.is_empty());
+            assert!(!full.hold_columns.is_empty());
+        }
     }
 
     fn write_noteskin_png(path: &Path) {

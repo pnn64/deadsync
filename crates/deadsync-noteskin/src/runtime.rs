@@ -2074,6 +2074,35 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
     style: crate::Style,
     compiled: &compiled::CompiledLoader,
     quantizations: usize,
+    resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+    resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
+    resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
+    resolve_prefix_slot: impl FnMut(&str) -> Option<T>,
+    apply_receptor_init: impl FnMut(&mut T, &str),
+    receptor_base_zoom: impl FnMut(&T) -> f32,
+    tap_layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+) -> Result<ItgRuntimeColumns<T>, String> {
+    itg_runtime_columns_selected(
+        data,
+        style,
+        compiled,
+        quantizations,
+        resolve_sprites,
+        resolve_slots,
+        resolve_direct_slot,
+        resolve_prefix_slot,
+        apply_receptor_init,
+        receptor_base_zoom,
+        tap_layer_info,
+        RuntimeLoad::GAMEPLAY,
+    )
+}
+
+fn itg_runtime_columns_selected<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    quantizations: usize,
     mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
     mut resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
     mut resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
@@ -2081,107 +2110,163 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
     mut apply_receptor_init: impl FnMut(&mut T, &str),
     mut receptor_base_zoom: impl FnMut(&T) -> f32,
     mut tap_layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+    load: RuntimeLoad,
 ) -> Result<ItgRuntimeColumns<T>, String> {
-    let mut notes = Vec::with_capacity(style.num_cols * quantizations);
-    let mut note_layers = Vec::with_capacity(style.num_cols * quantizations);
-    let mut lift_note_layers: Vec<Arc<[T]>> = Vec::with_capacity(style.num_cols * quantizations);
-    let mut receptor_off = Vec::with_capacity(style.num_cols);
-    let mut receptor_glow = Vec::with_capacity(style.num_cols);
-    let mut receptor_idle_glow_layers = Vec::with_capacity(style.num_cols);
-    let mut receptor_off_reverse = Vec::with_capacity(style.num_cols);
-    let mut receptor_glow_reverse = Vec::with_capacity(style.num_cols);
-    let mut receptor_idle_glow_reverse = Vec::with_capacity(style.num_cols);
-    let mut receptor_step_behaviors = Vec::with_capacity(style.num_cols);
-    let mut mines = Vec::with_capacity(style.num_cols);
-    let mut mine_frames = Vec::with_capacity(style.num_cols);
-    let mut hold_columns = Vec::with_capacity(style.num_cols);
-    let mut roll_columns = Vec::with_capacity(style.num_cols);
+    let mut notes = Vec::new();
+    let mut note_layers = Vec::new();
+    let mut lift_note_layers: Vec<Arc<[T]>> = Vec::new();
+    let mut receptor_off = Vec::new();
+    let mut receptor_glow = Vec::new();
+    let mut receptor_idle_glow_layers = Vec::new();
+    let mut receptor_off_reverse = Vec::new();
+    let mut receptor_glow_reverse = Vec::new();
+    let mut receptor_idle_glow_reverse = Vec::new();
+    let mut receptor_step_behaviors = Vec::new();
+    let mut mines = Vec::new();
+    let mut mine_frames = Vec::new();
+    let mut hold_columns = Vec::new();
+    let mut roll_columns = Vec::new();
     let mut receptor_pulse_command: Option<String> = None;
     let mut receptor_idle_glow = ReceptorIdleGlow::None;
 
+    if load.has(SkinPart::Arrows) || load.has(SkinPart::Lifts) {
+        notes.reserve(style.num_cols * quantizations);
+        note_layers.reserve(style.num_cols * quantizations);
+    }
+    if load.has(SkinPart::Lifts) {
+        lift_note_layers.reserve(style.num_cols * quantizations);
+    }
+    if load.has(SkinPart::Receptors) {
+        receptor_off.reserve(style.num_cols);
+        receptor_glow.reserve(style.num_cols);
+        receptor_idle_glow_layers.reserve(style.num_cols);
+        receptor_off_reverse.reserve(style.num_cols);
+        receptor_glow_reverse.reserve(style.num_cols);
+        receptor_idle_glow_reverse.reserve(style.num_cols);
+        receptor_step_behaviors.reserve(style.num_cols);
+    }
+    if load.has(SkinPart::Mines) {
+        mines.reserve(style.num_cols);
+        mine_frames.reserve(style.num_cols);
+    }
+    let bodies = load.has(SkinPart::HoldActive)
+        || load.has(SkinPart::HoldInactive)
+        || load.has(SkinPart::RollActive)
+        || load.has(SkinPart::RollInactive);
+    if bodies {
+        hold_columns.reserve(style.num_cols);
+        roll_columns.reserve(style.num_cols);
+    }
+
     for col in 0..style.num_cols {
         let button = itg::button_for_col(style.num_cols, col);
-        let note_sprites = resolve_slots(button, "Tap Note");
-        let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
-        let note_column = emit_tap_note_column(
-            note_sprites,
-            quantizations,
-            &mut tap_layer_info,
-            &mut notes,
-            &mut note_layers,
-        )
-        .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
-        let lift_sprites = resolve_slots(button, "Tap Lift");
-        let lift_layers_for_col =
-            itg_lift_layers_for_col_shared(lift_sprites, &note_column.shared_layers);
-        for _ in 0..quantizations {
-            lift_note_layers.push(Arc::clone(&lift_layers_for_col));
-        }
-
-        let receptor_sprites = resolve_sprites(button, "Receptor");
-        let receptor_fallback = resolve_prefix_slot("_receptor");
-        let rflash_fallback = resolve_prefix_slot("_rflash");
-        let glow_fallback = resolve_prefix_slot("_glow");
-        let receptor_column = itg_receptor_column(
-            &receptor_sprites,
-            &data.metrics,
-            || receptor_fallback,
-            || rflash_fallback,
-            || glow_fallback,
-            &mut apply_receptor_init,
-            &mut receptor_base_zoom,
-        )
-        .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
-        if receptor_pulse_command.is_none() {
-            receptor_pulse_command.clone_from(&receptor_column.pulse_command);
-        }
-        if receptor_idle_glow == ReceptorIdleGlow::None {
-            receptor_idle_glow = receptor_column.idle_glow;
-        }
-        receptor_off.push(receptor_column.off);
-        receptor_glow.push(receptor_column.glow);
-        receptor_idle_glow_layers.push(receptor_column.idle_glow_layer);
-        receptor_off_reverse.push(receptor_column.off_reverse);
-        receptor_glow_reverse.push(receptor_column.glow_reverse);
-        receptor_idle_glow_reverse.push(receptor_column.idle_glow_reverse);
-        receptor_step_behaviors.push(receptor_column.step_behaviors);
-
-        let mine_sprites = resolve_slots(button, "Tap Mine");
-        let mine_fallback = resolve_prefix_slot("_mine");
-        let (mine_fill, mine_frame) = itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
-        mines.push(mine_fill);
-        mine_frames.push(mine_frame);
-
-        let mut resolve_head_slots = |element: &str| {
-            let slots = resolve_slots(button, element);
-            itg_hold_head_layers(slots)
-        };
-        let mut resolve_single_slot = |element: &str| {
-            let request = compiled.load_request(button, element);
-            itg_first_resolved_slot_or_fallback(
-                resolve_sprites(button, element),
-                request.blank,
-                || resolve_direct_slot(&request.load_button, &request.load_element),
+        if load.has(SkinPart::Arrows) || load.has(SkinPart::Lifts) {
+            let note_sprites = resolve_slots(button, "Tap Note");
+            let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
+            let note_column = emit_tap_note_column(
+                note_sprites,
+                quantizations,
+                &mut tap_layer_info,
+                &mut notes,
+                &mut note_layers,
             )
-        };
-        let hold_parts = itg_hold_visual_parts(
-            ItgHoldKind::Hold,
-            |element| compiled.load_request(button, element).maps_head_to_tap(),
-            &mut resolve_head_slots,
-            &mut resolve_single_slot,
-        );
-        let hold_visual = itg_hold_visuals_from_parts(hold_parts);
+            .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
+            if load.has(SkinPart::Lifts) {
+                let lift_sprites = resolve_slots(button, "Tap Lift");
+                let lift_layers_for_col =
+                    itg_lift_layers_for_col_shared(lift_sprites, &note_column.shared_layers);
+                for _ in 0..quantizations {
+                    lift_note_layers.push(Arc::clone(&lift_layers_for_col));
+                }
+            }
+        }
 
-        let roll_parts = itg_hold_visual_parts(
-            ItgHoldKind::Roll,
-            |element| compiled.load_request(button, element).maps_head_to_tap(),
-            &mut resolve_head_slots,
-            &mut resolve_single_slot,
-        );
-        let roll_visual = itg_roll_visuals_from_parts(roll_parts, &hold_visual);
+        if load.has(SkinPart::Receptors) {
+            let receptor_sprites = resolve_sprites(button, "Receptor");
+            let receptor_fallback = resolve_prefix_slot("_receptor");
+            let rflash_fallback = resolve_prefix_slot("_rflash");
+            let glow_fallback = resolve_prefix_slot("_glow");
+            let receptor_column = itg_receptor_column(
+                &receptor_sprites,
+                &data.metrics,
+                || receptor_fallback,
+                || rflash_fallback,
+                || glow_fallback,
+                &mut apply_receptor_init,
+                &mut receptor_base_zoom,
+            )
+            .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
+            if receptor_pulse_command.is_none() {
+                receptor_pulse_command.clone_from(&receptor_column.pulse_command);
+            }
+            if receptor_idle_glow == ReceptorIdleGlow::None {
+                receptor_idle_glow = receptor_column.idle_glow;
+            }
+            receptor_off.push(receptor_column.off);
+            receptor_glow.push(receptor_column.glow);
+            receptor_idle_glow_layers.push(receptor_column.idle_glow_layer);
+            receptor_off_reverse.push(receptor_column.off_reverse);
+            receptor_glow_reverse.push(receptor_column.glow_reverse);
+            receptor_idle_glow_reverse.push(receptor_column.idle_glow_reverse);
+            receptor_step_behaviors.push(receptor_column.step_behaviors);
+        }
 
-        hold_columns.push(hold_visual);
-        roll_columns.push(roll_visual);
+        if load.has(SkinPart::Mines) {
+            let mine_sprites = resolve_slots(button, "Tap Mine");
+            let mine_fallback = resolve_prefix_slot("_mine");
+            let (mine_fill, mine_frame) =
+                itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
+            mines.push(mine_fill);
+            mine_frames.push(mine_frame);
+        }
+
+        if bodies {
+            let mut resolve_head_slots = |element: &str| {
+                let slots = resolve_slots(button, element);
+                itg_hold_head_layers(slots)
+            };
+            let mut resolve_single_slot = |element: &str| {
+                if load.preview
+                    && !match element {
+                        "Hold Body Active" => {
+                            load.has(SkinPart::HoldActive) || load.has(SkinPart::RollActive)
+                        }
+                        "Hold Body Inactive" => bodies,
+                        "Roll Body Active" => load.has(SkinPart::RollActive),
+                        "Roll Body Inactive" => {
+                            load.has(SkinPart::RollActive) || load.has(SkinPart::RollInactive)
+                        }
+                        _ => false,
+                    }
+                {
+                    return None;
+                }
+                let request = compiled.load_request(button, element);
+                itg_first_resolved_slot_or_fallback(
+                    resolve_sprites(button, element),
+                    request.blank,
+                    || resolve_direct_slot(&request.load_button, &request.load_element),
+                )
+            };
+            let hold_parts = itg_hold_visual_parts(
+                ItgHoldKind::Hold,
+                |element| load.preview || compiled.load_request(button, element).maps_head_to_tap(),
+                &mut resolve_head_slots,
+                &mut resolve_single_slot,
+            );
+            let hold_visual = itg_hold_visuals_from_parts(hold_parts);
+
+            let roll_parts = itg_hold_visual_parts(
+                ItgHoldKind::Roll,
+                |element| load.preview || compiled.load_request(button, element).maps_head_to_tap(),
+                &mut resolve_head_slots,
+                &mut resolve_single_slot,
+            );
+            let roll_visual = itg_roll_visuals_from_parts(roll_parts, &hold_visual);
+
+            hold_columns.push(hold_visual);
+            roll_columns.push(roll_visual);
+        }
     }
 
     Ok(ItgRuntimeColumns {
@@ -2277,6 +2362,49 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
     note_display_metrics: NoteDisplayMetrics,
     animation_is_beat_based: bool,
     columns: ItgRuntimeColumns<T>,
+    resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+    resolve_hold_explosion: impl FnMut(
+        &[ItgResolvedSprite<T>],
+        &[ItgResolvedSprite<T>],
+        &str,
+        &str,
+        &str,
+        bool,
+        Option<&str>,
+        Option<&str>,
+        Option<&T>,
+    ) -> Option<T>,
+    resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
+    resolve_actor_first_sprite: impl FnMut(&str, &str) -> Option<T>,
+    mine_fill_slots: impl FnMut(&[Option<T>]) -> Vec<Option<T>>,
+    texture_key: impl FnMut(&T) -> String,
+    apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+) -> NoteskinRuntime<T> {
+    itg_noteskin_runtime_selected(
+        data,
+        style,
+        compiled,
+        note_display_metrics,
+        animation_is_beat_based,
+        columns,
+        resolve_sprites,
+        resolve_hold_explosion,
+        resolve_direct_slot,
+        resolve_actor_first_sprite,
+        mine_fill_slots,
+        texture_key,
+        apply_active_cmd,
+        RuntimeLoad::GAMEPLAY,
+    )
+}
+
+fn itg_noteskin_runtime_selected<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    note_display_metrics: NoteDisplayMetrics,
+    animation_is_beat_based: bool,
+    columns: ItgRuntimeColumns<T>,
     mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
     mut resolve_hold_explosion: impl FnMut(
         &[ItgResolvedSprite<T>],
@@ -2294,6 +2422,7 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
     mut mine_fill_slots: impl FnMut(&[Option<T>]) -> Vec<Option<T>>,
     mut texture_key: impl FnMut(&T) -> String,
     mut apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+    load: RuntimeLoad,
 ) -> NoteskinRuntime<T> {
     let ItgRuntimeColumns {
         notes,
@@ -2317,115 +2446,139 @@ pub fn itg_noteskin_runtime_compiled<T: Clone>(
     let base_button = if style.is_pump() { "Center" } else { "Down" };
     let (mut hold, mut roll) = default_hold_visuals(&hold_columns, &roll_columns, down_col);
 
-    let explosion_sprites = resolve_sprites(base_button, "Explosion");
-    let hold_explosion_request = compiled.load_request(base_button, "Hold Explosion");
-    let roll_explosion_request = compiled.load_request(base_button, "Roll Explosion");
-    let hold_explosion_blank = hold_explosion_request.blank;
-    let roll_explosion_blank = roll_explosion_request.blank;
-    let hold_explosion_sprites = resolve_sprites(base_button, "Hold Explosion");
-    hold.explosion = resolve_hold_explosion(
-        &explosion_sprites,
-        &hold_explosion_sprites,
-        base_button,
-        "holdingoncommand",
-        "hold explosion",
-        hold_explosion_blank,
-        Some("Hold Explosion"),
-        Some("_down hold explosion"),
-        None,
-    );
-    let roll_explosion_sprites = resolve_sprites(base_button, "Roll Explosion");
-    let roll_explosion = resolve_hold_explosion(
-        &explosion_sprites,
-        &roll_explosion_sprites,
-        base_button,
-        "rolloncommand",
-        "roll explosion",
-        roll_explosion_blank,
-        Some("Roll Explosion"),
-        Some("_down hold explosion"),
-        None,
-    );
-    roll.explosion = itg_roll_explosion_from_resolved_layers(
-        &explosion_sprites,
-        roll_explosion_blank,
-        roll_explosion,
-        hold.explosion.clone(),
-        &mut texture_key,
-        |key| {
-            data.metrics
-                .get("HoldGhostArrow", key)
-                .map(ToString::to_string)
-        },
-        &mut apply_active_cmd,
-    );
-
-    {
-        let mut resolve_hold_explosion_for_button =
-            |button: &str,
-             active_key: &str,
-             element_hint: &str,
-             request_element: &str,
-             fallback: Option<&T>| {
-                let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
-                    explosion_sprites.clone()
-                } else {
-                    resolve_sprites(button, "Explosion")
-                };
-                let request = compiled.load_request(button, request_element);
-                let source_sprites = if request.blank {
-                    Vec::new()
-                } else {
-                    resolve_sprites(button, request_element)
-                };
-                resolve_hold_explosion(
-                    &column_explosion_sprites,
-                    &source_sprites,
-                    button,
-                    active_key,
-                    element_hint,
-                    request.blank,
-                    None,
-                    None,
-                    fallback,
-                )
-            };
-        itg_apply_hold_explosions_by_col(
-            style.num_cols,
-            &mut hold_columns,
-            &mut roll_columns,
-            hold.explosion.as_ref(),
-            roll.explosion.as_ref(),
-            &mut resolve_hold_explosion_for_button,
+    let explosion_sprites =
+        if !load.preview || load.has(SkinPart::TapExplosions) || load.has(SkinPart::HoldExplosions)
+        {
+            resolve_sprites(base_button, "Explosion")
+        } else {
+            Vec::new()
+        };
+    if !load.preview || load.has(SkinPart::HoldExplosions) {
+        let hold_explosion_request = compiled.load_request(base_button, "Hold Explosion");
+        let hold_explosion_blank = hold_explosion_request.blank;
+        let hold_explosion_sprites = resolve_sprites(base_button, "Hold Explosion");
+        hold.explosion = resolve_hold_explosion(
+            &explosion_sprites,
+            &hold_explosion_sprites,
+            base_button,
+            "holdingoncommand",
+            "hold explosion",
+            hold_explosion_blank,
+            Some("Hold Explosion"),
+            Some("_down hold explosion"),
+            None,
         );
-    }
+        if !load.preview {
+            let roll_explosion_blank = compiled.load_request(base_button, "Roll Explosion").blank;
+            let roll_explosion_sprites = resolve_sprites(base_button, "Roll Explosion");
+            let roll_explosion = resolve_hold_explosion(
+                &explosion_sprites,
+                &roll_explosion_sprites,
+                base_button,
+                "rolloncommand",
+                "roll explosion",
+                roll_explosion_blank,
+                Some("Roll Explosion"),
+                Some("_down hold explosion"),
+                None,
+            );
+            roll.explosion = itg_roll_explosion_from_resolved_layers(
+                &explosion_sprites,
+                roll_explosion_blank,
+                roll_explosion,
+                hold.explosion.clone(),
+                &mut texture_key,
+                |key| {
+                    data.metrics
+                        .get("HoldGhostArrow", key)
+                        .map(ToString::to_string)
+                },
+                &mut apply_active_cmd,
+            );
 
-    let tap_explosions_by_col = itg_tap_explosions_by_col_compiled(
-        data,
-        style,
-        compiled,
-        &explosion_sprites,
-        |button, element| resolve_sprites(button, element),
-    );
-    let mine_hit_explosion = itg_hit_mine_explosion_from_layers(
-        &explosion_sprites,
-        || resolve_direct_slot(base_button, "HitMine Explosion"),
-        || resolve_actor_first_sprite(base_button, "HitMine Explosion"),
-        data.metrics
-            .get("GhostArrowBright", "HitMineCommand")
-            .map(str::to_string),
-    );
+            {
+                let mut resolve_hold_explosion_for_button =
+                    |button: &str,
+                     active_key: &str,
+                     element_hint: &str,
+                     request_element: &str,
+                     fallback: Option<&T>| {
+                        let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
+                            explosion_sprites.clone()
+                        } else {
+                            resolve_sprites(button, "Explosion")
+                        };
+                        let request = compiled.load_request(button, request_element);
+                        let source_sprites = if request.blank {
+                            Vec::new()
+                        } else {
+                            resolve_sprites(button, request_element)
+                        };
+                        resolve_hold_explosion(
+                            &column_explosion_sprites,
+                            &source_sprites,
+                            button,
+                            active_key,
+                            element_hint,
+                            request.blank,
+                            None,
+                            None,
+                            fallback,
+                        )
+                    };
+                itg_apply_hold_explosions_by_col(
+                    style.num_cols,
+                    &mut hold_columns,
+                    &mut roll_columns,
+                    hold.explosion.as_ref(),
+                    roll.explosion.as_ref(),
+                    &mut resolve_hold_explosion_for_button,
+                );
+            }
+        }
+    }
+    let tap_explosions_by_col = if load.has(SkinPart::TapExplosions) {
+        itg_tap_explosions_by_col_compiled(
+            data,
+            style,
+            compiled,
+            &explosion_sprites,
+            |button, element| resolve_sprites(button, element),
+        )
+    } else {
+        Vec::new()
+    };
+    let mine_hit_explosion = if !load.preview {
+        itg_hit_mine_explosion_from_layers(
+            &explosion_sprites,
+            || resolve_direct_slot(base_button, "HitMine Explosion"),
+            || resolve_actor_first_sprite(base_button, "HitMine Explosion"),
+            data.metrics
+                .get("GhostArrowBright", "HitMineCommand")
+                .map(str::to_string),
+        )
+    } else {
+        None
+    };
     let tap_explosions = default_tap_explosions(&tap_explosions_by_col, down_col);
     let hold_let_go_gray_percent =
         crate::parts::clamped_hold_let_go_gray_percent(&note_display_metrics);
-    let receptor = resolve_sprites(base_button, "Receptor");
+    let receptor = if load.has(SkinPart::Receptors) {
+        resolve_sprites(base_button, "Receptor")
+    } else {
+        Vec::new()
+    };
     let receptor_glow_behavior = itg_receptor_glow_behavior_from_layers(&receptor, |metric_key| {
         data.metrics
             .get("ReceptorOverlay", metric_key)
             .map(str::to_string)
     });
     let receptor_pulse = itg_receptor_pulse_from_command(receptor_pulse_command.as_deref());
-    let mine_fill_slots = mine_fill_slots(&mines);
+    let mine_fill_slots = if !load.preview {
+        mine_fill_slots(&mines)
+    } else {
+        Vec::new()
+    };
     let column_xs = crate::parts::itg_column_xs(style.num_cols);
 
     NoteskinRuntime {
@@ -2467,6 +2620,51 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
     quantizations: usize,
     ops: ItgCompiledSpriteOps<T>,
 ) -> Result<NoteskinRuntime<T>, String> {
+    itg_noteskin_runtime_with_ops_selected(
+        data,
+        style,
+        compiled,
+        compiled_actors,
+        quantizations,
+        ops,
+        RuntimeLoad::GAMEPLAY,
+    )
+}
+
+/// Build only requested preview components, preserving native loader commands,
+/// fallbacks, and animation. Omitted gameplay fields remain empty.
+pub fn itg_noteskin_preview_with_ops_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    quantizations: usize,
+    ops: ItgCompiledSpriteOps<T>,
+    parts: SkinParts,
+) -> Result<NoteskinRuntime<T>, String> {
+    itg_noteskin_runtime_with_ops_selected(
+        data,
+        style,
+        compiled,
+        compiled_actors,
+        quantizations,
+        ops,
+        RuntimeLoad {
+            parts,
+            preview: true,
+        },
+    )
+}
+
+fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    quantizations: usize,
+    ops: ItgCompiledSpriteOps<T>,
+    load: RuntimeLoad,
+) -> Result<NoteskinRuntime<T>, String> {
     let note_display_metrics = itg::note_display_metrics(&data.metrics);
     let animation_is_beat_based = itg::animation_is_beat_based(data);
     // One load owns this small set of requested button/element pairs. Hold,
@@ -2498,7 +2696,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
             .insert(element.to_string(), sprites.clone());
         sprites
     };
-    let columns = itg_runtime_columns_compiled(
+    let columns = itg_runtime_columns_selected(
         data,
         style,
         compiled,
@@ -2520,9 +2718,10 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
         ops.apply_parent_command,
         ops.base_zoom,
         ops.model_info,
+        load,
     )?;
 
-    Ok(itg_noteskin_runtime_compiled(
+    Ok(itg_noteskin_runtime_selected(
         data,
         style,
         compiled,
@@ -2567,6 +2766,7 @@ pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
         ops.mine_fill_slots,
         ops.texture_key,
         ops.apply_active_cmd,
+        load,
     ))
 }
 
@@ -2614,6 +2814,41 @@ pub enum SkinPart {
     HoldExplosions,
     Mines,
     Lifts,
+}
+
+/// Components to resolve through the native noteskin loader.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SkinParts(u16);
+
+impl SkinParts {
+    pub const ALL: Self = Self((1 << 10) - 1);
+
+    #[must_use]
+    pub const fn with(self, part: SkinPart) -> Self {
+        Self(self.0 | (1 << part as u16))
+    }
+
+    #[must_use]
+    pub const fn contains(self, part: SkinPart) -> bool {
+        self.0 & (1 << part as u16) != 0
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RuntimeLoad {
+    parts: SkinParts,
+    preview: bool,
+}
+
+impl RuntimeLoad {
+    const GAMEPLAY: Self = Self {
+        parts: SkinParts::ALL,
+        preview: false,
+    };
+
+    const fn has(self, part: SkinPart) -> bool {
+        self.parts.contains(part)
+    }
 }
 
 impl<T: Clone> NoteskinRuntime<T> {

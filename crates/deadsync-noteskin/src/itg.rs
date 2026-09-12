@@ -139,6 +139,15 @@ impl<T> Default for ItgSkinRuntimeCache<T> {
 }
 
 impl<T> ItgSkinRuntimeCache<T> {
+    /// Borrow an existing full runtime without constructing one on a cache miss.
+    pub fn get(&self, style: &Style, skin: &str) -> Option<Arc<T>> {
+        self.entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&itg_skin_cache_key(style, skin))
+            .and_then(Weak::upgrade)
+    }
+
     pub fn clear(&self) {
         self.entries
             .lock()
@@ -1581,6 +1590,7 @@ mod tests {
             num_players: 1,
         };
         let mut loads = 0usize;
+        assert!(cache.get(&style, "cel").is_none());
 
         let first = cache
             .get_or_load(&style, " CeL ", || {
@@ -1598,9 +1608,22 @@ mod tests {
         assert_eq!(loads, 1);
         assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(first.as_str(), "loaded");
+        assert!(Arc::ptr_eq(&first, &cache.get(&style, " CeL ").unwrap()));
+        assert!(
+            cache
+                .get(
+                    &Style {
+                        num_cols: 5,
+                        ..style
+                    },
+                    "cel"
+                )
+                .is_none()
+        );
 
         drop(first);
         drop(second);
+        assert!(cache.get(&style, "cel").is_none());
         let released = cache
             .get_or_load(&style, "cel", || {
                 loads += 1;
