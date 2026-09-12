@@ -9783,10 +9783,9 @@ fn song_lua_proxy_expand_retained(children: &mut Vec<Actor>) {
             index += 1;
             continue;
         };
-        children.remove(index);
-        for child in frame.children().iter().rev() {
-            children.insert(index, child.clone());
-        }
+        // The exact-size iterator lets Vec move the tail once and reserve at
+        // most once, instead of shifting every large Actor for every child.
+        children.splice(index..index + 1, frame.children().iter().cloned());
         // Inspect the inserted actors too in case a retained static fragment
         // contains another identity retained frame.
     }
@@ -11290,358 +11289,127 @@ fn song_lua_player_layer_z(
 }
 
 fn song_lua_style_capture_actor(
-    actor: Actor,
+    mut actor: Actor,
     capture_tint: [f32; 4],
     blend: Option<BlendMode>,
     z_shift: i16,
 ) -> Actor {
+    song_lua_style_capture_actor_in_place(&mut actor, capture_tint, blend, z_shift);
+    actor
+}
+
+fn song_lua_style_capture_actor_in_place(
+    actor: &mut Actor,
+    capture_tint: [f32; 4],
+    blend: Option<BlendMode>,
+    z_shift: i16,
+) {
+    // Only live style fields change. Keep child Vec/Box storage and shared
+    // geometry in place, including the style boundary of shared wrappers.
     match actor {
         Actor::Sprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint: actor_tint,
+            tint,
             glow,
-            z,
-            cell,
-            grid,
-            uv_rect,
-            visible,
-            flip_x,
-            flip_y,
-            cropleft,
-            cropright,
-            croptop,
-            cropbottom,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            blend: actor_blend,
-            mask_source,
-            mask_dest,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-            skew,
-            local_offset,
-            local_offset_rot_sin_cos,
-            texcoordvelocity,
-            animate,
-            state_delay,
-            scale,
-            shadow_len,
             shadow_color,
-            effect,
-        } => Actor::Sprite {
-            align,
-            offset,
-            world_z,
-            size,
-            source,
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            glow: song_lua_capture_tint(glow, capture_tint),
-            z: song_lua_add_z(z, z_shift),
-            cell,
-            grid,
-            uv_rect,
-            visible,
-            flip_x,
-            flip_y,
-            cropleft,
-            cropright,
-            croptop,
-            cropbottom,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            blend: blend.unwrap_or(actor_blend),
-            mask_source,
-            mask_dest,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-            skew,
-            local_offset,
-            local_offset_rot_sin_cos,
-            texcoordvelocity,
-            animate,
-            state_delay,
-            scale,
-            shadow_len,
-            shadow_color: song_lua_capture_tint(shadow_color, capture_tint),
-            effect,
-        },
+            blend: actor_blend,
+            z,
+            ..
+        } => {
+            *tint = song_lua_capture_tint(*tint, capture_tint);
+            *glow = song_lua_capture_tint(*glow, capture_tint);
+            *shadow_color = song_lua_capture_tint(*shadow_color, capture_tint);
+            *actor_blend = blend.unwrap_or(*actor_blend);
+            *z = song_lua_add_z(*z, z_shift);
+        }
         Actor::Text {
-            align,
-            offset,
-            local_transform,
             color,
             stroke_color,
             glow,
-            font,
-            content,
-            attributes,
-            align_text,
-            z,
-            scale,
-            fit_width,
-            fit_height,
-            line_spacing,
-            wrap_width_pixels,
-            max_width,
-            max_height,
-            max_w_pre_zoom,
-            max_h_pre_zoom,
-            jitter,
-            distortion,
-            clip,
-            mask_dest,
-            blend: actor_blend,
-            shadow_len,
             shadow_color,
-            effect,
-        } => Actor::Text {
-            align,
-            offset,
-            local_transform,
-            color: song_lua_capture_tint(color, capture_tint),
-            stroke_color: stroke_color.map(|color| song_lua_capture_tint(color, capture_tint)),
-            glow: song_lua_capture_tint(glow, capture_tint),
-            font,
-            content,
-            attributes,
-            align_text,
-            z: song_lua_add_z(z, z_shift),
-            scale,
-            fit_width,
-            fit_height,
-            line_spacing,
-            wrap_width_pixels,
-            max_width,
-            max_height,
-            max_w_pre_zoom,
-            max_h_pre_zoom,
-            jitter,
-            distortion,
-            clip,
-            mask_dest,
-            blend: blend.unwrap_or(actor_blend),
-            shadow_len,
-            shadow_color: song_lua_capture_tint(shadow_color, capture_tint),
-            effect,
-        },
-        Actor::Mesh {
-            align,
-            offset,
-            size,
-            tint: actor_tint,
-            vertices,
-            visible,
             blend: actor_blend,
             z,
-        } => Actor::Mesh {
-            align,
-            offset,
-            size,
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            vertices,
-            visible,
-            blend: blend.unwrap_or(actor_blend),
-            z: song_lua_add_z(z, z_shift),
-        },
-        Actor::ReusableMesh {
-            align,
-            offset,
-            size,
-            tint,
-            vertices,
-            visible,
-            blend: actor_blend,
-            z,
-        } => Actor::ReusableMesh {
-            align,
-            offset,
-            size,
-            tint: song_lua_capture_tint(tint, capture_tint),
-            vertices,
-            visible,
-            blend: blend.unwrap_or(actor_blend),
-            z: song_lua_add_z(z, z_shift),
-        },
-        Actor::TexturedMesh {
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint: actor_tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend: actor_blend,
-            z,
-        } => Actor::TexturedMesh {
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            glow: song_lua_capture_tint(glow, capture_tint),
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend: blend.unwrap_or(actor_blend),
-            z: song_lua_add_z(z, z_shift),
-        },
-        Actor::ReusableTexturedMesh {
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint: actor_tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend: actor_blend,
-            z,
-        } => Actor::ReusableTexturedMesh {
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            glow: song_lua_capture_tint(glow, capture_tint),
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend: blend.unwrap_or(actor_blend),
-            z: song_lua_add_z(z, z_shift),
-        },
-        Actor::Frame {
-            align,
-            offset,
-            size,
-            children,
-            background,
-            z,
-        } => Actor::Frame {
-            align,
-            offset,
-            size,
-            children: children
-                .into_iter()
-                .map(|child| song_lua_style_capture_actor(child, capture_tint, blend, z_shift))
-                .collect(),
-            background,
-            z: song_lua_add_z(z, z_shift),
-        },
-        Actor::SharedFrame {
-            align,
-            offset,
-            size,
-            children,
-            background,
-            z,
-            tint: actor_tint,
-            blend: actor_blend,
-        } => Actor::SharedFrame {
-            align,
-            offset,
-            size,
-            children,
-            background,
-            z: song_lua_add_z(z, z_shift),
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            blend: blend.or(actor_blend),
-        },
-        Actor::SharedTransform {
-            transform,
-            source_view_proj,
-            children,
-            z,
-            tint: actor_tint,
-            blend: actor_blend,
-        } => Actor::SharedTransform {
-            transform,
-            source_view_proj,
-            children,
-            z: song_lua_add_z(z, z_shift),
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            blend: blend.or(actor_blend),
-        },
-        Actor::RetainedFrame {
-            align,
-            offset,
-            size,
-            frame,
-            z,
-            tint: actor_tint,
-            blend: actor_blend,
-            visible,
-        } => Actor::RetainedFrame {
-            align,
-            offset,
-            size,
-            frame,
-            z: song_lua_add_z(z, z_shift),
-            tint: song_lua_capture_tint(actor_tint, capture_tint),
-            blend: blend.or(actor_blend),
-            visible,
-        },
-        Actor::Camera {
-            view_proj,
-            children,
-        } => Actor::Camera {
-            view_proj,
-            children: children
-                .into_iter()
-                .map(|child| song_lua_style_capture_actor(child, capture_tint, blend, z_shift))
-                .collect(),
-        },
-        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
-        Actor::CameraPop => Actor::CameraPop,
-        Actor::Shadow {
-            len,
-            color,
-            mut child,
+            ..
         } => {
-            let actor = std::mem::replace(child.as_mut(), Actor::CameraPop);
-            *child = song_lua_style_capture_actor(actor, capture_tint, blend, z_shift);
-            Actor::Shadow {
-                len,
-                color: song_lua_capture_tint(color, capture_tint),
-                child,
+            *color = song_lua_capture_tint(*color, capture_tint);
+            *stroke_color = stroke_color.map(|color| song_lua_capture_tint(color, capture_tint));
+            *glow = song_lua_capture_tint(*glow, capture_tint);
+            *shadow_color = song_lua_capture_tint(*shadow_color, capture_tint);
+            *actor_blend = blend.unwrap_or(*actor_blend);
+            *z = song_lua_add_z(*z, z_shift);
+        }
+        Actor::Mesh {
+            tint,
+            blend: actor_blend,
+            z,
+            ..
+        }
+        | Actor::ReusableMesh {
+            tint,
+            blend: actor_blend,
+            z,
+            ..
+        } => {
+            *tint = song_lua_capture_tint(*tint, capture_tint);
+            *actor_blend = blend.unwrap_or(*actor_blend);
+            *z = song_lua_add_z(*z, z_shift);
+        }
+        Actor::TexturedMesh {
+            tint,
+            glow,
+            blend: actor_blend,
+            z,
+            ..
+        }
+        | Actor::ReusableTexturedMesh {
+            tint,
+            glow,
+            blend: actor_blend,
+            z,
+            ..
+        } => {
+            *tint = song_lua_capture_tint(*tint, capture_tint);
+            *glow = song_lua_capture_tint(*glow, capture_tint);
+            *actor_blend = blend.unwrap_or(*actor_blend);
+            *z = song_lua_add_z(*z, z_shift);
+        }
+        Actor::Frame { children, z, .. } => {
+            *z = song_lua_add_z(*z, z_shift);
+            for child in children {
+                song_lua_style_capture_actor_in_place(child, capture_tint, blend, z_shift);
             }
         }
+        Actor::SharedFrame {
+            tint,
+            blend: actor_blend,
+            z,
+            ..
+        }
+        | Actor::SharedTransform {
+            tint,
+            blend: actor_blend,
+            z,
+            ..
+        }
+        | Actor::RetainedFrame {
+            tint,
+            blend: actor_blend,
+            z,
+            ..
+        } => {
+            *tint = song_lua_capture_tint(*tint, capture_tint);
+            *actor_blend = blend.or(*actor_blend);
+            *z = song_lua_add_z(*z, z_shift);
+        }
+        Actor::Camera { children, .. } => {
+            for child in children {
+                song_lua_style_capture_actor_in_place(child, capture_tint, blend, z_shift);
+            }
+        }
+        Actor::Shadow { color, child, .. } => {
+            *color = song_lua_capture_tint(*color, capture_tint);
+            song_lua_style_capture_actor_in_place(child, capture_tint, blend, z_shift);
+        }
+        Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
@@ -28747,5 +28515,26 @@ mod tests {
             banner_visibility(profile_data::PlayStyle::Double, 8, true, true, both, empty),
             (false, false)
         );
+    }
+}
+
+/// Access to the production capture paths for differential integration tests.
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub mod actor_capture_test_support {
+    use super::*;
+
+    pub const PLAYER_ACTOR_CAPACITY: usize = PLAYER_ACTOR_SCRATCH_CAPACITY;
+
+    pub fn style(actor: Actor, tint: [f32; 4], blend: Option<BlendMode>, z: i16) -> Actor {
+        song_lua_style_capture_actor(actor, tint, blend, z)
+    }
+
+    pub fn expand(children: &mut Vec<Actor>) {
+        song_lua_proxy_expand_retained(children);
+    }
+
+    pub fn normalize(children: &mut Vec<Actor>) {
+        song_lua_proxy_local_children_in_place(children);
     }
 }

@@ -54,368 +54,47 @@ fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
 }
 
 #[must_use]
-pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
+pub fn song_lua_player_y_fold_actor(mut actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
     if !pivot_x.is_finite() || !rotation_y_deg.is_finite() || rotation_y_deg.abs() <= f32::EPSILON {
         return actor;
     }
-    let cos_y = rotation_y_deg.to_radians().cos();
+    // One cosine for the owned tree; mutate its existing storage so large Actor
+    // payloads do not travel through a by-value recursive call at every node.
+    song_lua_player_y_fold_actor_in_place(&mut actor, pivot_x, rotation_y_deg.to_radians().cos());
+    actor
+}
+
+fn song_lua_player_y_fold_actor_in_place(actor: &mut Actor, pivot_x: f32, cos_y: f32) {
     match actor {
-        Actor::Sprite {
-            align,
-            mut offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            z,
-            cell,
-            grid,
-            uv_rect,
-            visible,
-            flip_x,
-            flip_y,
-            cropleft,
-            cropright,
-            croptop,
-            cropbottom,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            blend,
-            mask_source,
-            mask_dest,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-            skew,
-            local_offset,
-            local_offset_rot_sin_cos,
-            texcoordvelocity,
-            animate,
-            state_delay,
-            scale,
-            shadow_len,
-            shadow_color,
-            effect,
-        } => {
+        Actor::Sprite { offset, .. }
+        | Actor::Mesh { offset, .. }
+        | Actor::ReusableMesh { offset, .. }
+        | Actor::TexturedMesh { offset, .. }
+        | Actor::ReusableTexturedMesh { offset, .. }
+        | Actor::SharedFrame { offset, .. }
+        | Actor::RetainedFrame { offset, .. } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Sprite {
-                align,
-                offset,
-                world_z,
-                size,
-                source,
-                tint,
-                glow,
-                z,
-                cell,
-                grid,
-                uv_rect,
-                visible,
-                flip_x,
-                flip_y,
-                cropleft,
-                cropright,
-                croptop,
-                cropbottom,
-                fadeleft,
-                faderight,
-                fadetop,
-                fadebottom,
-                blend,
-                mask_source,
-                mask_dest,
-                rot_x_deg,
-                rot_y_deg,
-                rot_z_deg,
-                skew,
-                local_offset,
-                local_offset_rot_sin_cos,
-                texcoordvelocity,
-                animate,
-                state_delay,
-                scale,
-                shadow_len,
-                shadow_color,
-                effect,
-            }
         }
-        Actor::Text {
-            align,
-            mut offset,
-            local_transform,
-            color,
-            stroke_color,
-            glow,
-            font,
-            content,
-            attributes,
-            align_text,
-            z,
-            mut scale,
-            fit_width,
-            fit_height,
-            line_spacing,
-            wrap_width_pixels,
-            max_width,
-            max_height,
-            max_w_pre_zoom,
-            max_h_pre_zoom,
-            jitter,
-            distortion,
-            clip,
-            mask_dest,
-            blend,
-            shadow_len,
-            shadow_color,
-            effect,
-        } => {
+        Actor::Text { offset, scale, .. } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
             scale[0] *= cos_y;
-            Actor::Text {
-                align,
-                offset,
-                local_transform,
-                color,
-                stroke_color,
-                glow,
-                font,
-                content,
-                attributes,
-                align_text,
-                z,
-                scale,
-                fit_width,
-                fit_height,
-                line_spacing,
-                wrap_width_pixels,
-                max_width,
-                max_height,
-                max_w_pre_zoom,
-                max_h_pre_zoom,
-                jitter,
-                distortion,
-                clip,
-                mask_dest,
-                blend,
-                shadow_len,
-                shadow_color,
-                effect,
-            }
-        }
-        Actor::Mesh {
-            align,
-            mut offset,
-            size,
-            tint,
-            vertices,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Mesh {
-                align,
-                offset,
-                size,
-                tint,
-                vertices,
-                visible,
-                blend,
-                z,
-            }
-        }
-        Actor::ReusableMesh {
-            align,
-            mut offset,
-            size,
-            tint,
-            vertices,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::ReusableMesh {
-                align,
-                offset,
-                size,
-                tint,
-                vertices,
-                visible,
-                blend,
-                z,
-            }
-        }
-        Actor::TexturedMesh {
-            align,
-            mut offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::TexturedMesh {
-                align,
-                offset,
-                world_z,
-                size,
-                local_transform,
-                texture,
-                tint,
-                glow,
-                vertices,
-                geom_cache_key,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                depth_test,
-                visible,
-                blend,
-                z,
-            }
-        }
-        Actor::ReusableTexturedMesh {
-            align,
-            mut offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::ReusableTexturedMesh {
-                align,
-                offset,
-                world_z,
-                size,
-                local_transform,
-                texture,
-                tint,
-                glow,
-                vertices,
-                geom_cache_key,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                depth_test,
-                visible,
-                blend,
-                z,
-            }
         }
         Actor::Frame {
-            mut offset,
-            children,
-            align,
-            size,
-            background,
-            z,
+            offset, children, ..
         } => {
             offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Frame {
-                align,
-                offset,
-                size,
-                children: children
-                    .into_iter()
-                    .map(|child| song_lua_player_y_fold_actor(child, pivot_x, rotation_y_deg))
-                    .collect(),
-                background,
-                z,
+            for child in children {
+                song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y);
             }
         }
-        Actor::SharedFrame {
-            mut offset,
-            children,
-            align,
-            size,
-            background,
-            z,
-            tint,
-            blend,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::SharedFrame {
-                align,
-                offset,
-                size,
-                children,
-                background,
-                z,
-                tint,
-                blend,
+        Actor::Camera { children, .. } => {
+            for child in children {
+                song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y);
             }
         }
-        Actor::RetainedFrame {
-            align,
-            mut offset,
-            size,
-            frame,
-            z,
-            tint,
-            blend,
-            visible,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::RetainedFrame {
-                align,
-                offset,
-                size,
-                frame,
-                z,
-                tint,
-                blend,
-                visible,
-            }
-        }
-        actor @ Actor::SharedTransform { .. } => actor,
-        Actor::Camera {
-            view_proj,
-            children,
-        } => Actor::Camera {
-            view_proj,
-            children: children
-                .into_iter()
-                .map(|child| song_lua_player_y_fold_actor(child, pivot_x, rotation_y_deg))
-                .collect(),
-        },
-        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
-        Actor::CameraPop => Actor::CameraPop,
-        Actor::Shadow {
-            len,
-            color,
-            mut child,
-        } => {
-            let actor = std::mem::replace(child.as_mut(), Actor::CameraPop);
-            *child = song_lua_player_y_fold_actor(actor, pivot_x, rotation_y_deg);
-            Actor::Shadow { len, color, child }
-        }
+        Actor::Shadow { child, .. } => song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y),
+        // Shared subtrees keep their established wrapper boundary.
+        Actor::SharedTransform { .. } | Actor::CameraPush { .. } | Actor::CameraPop => {}
     }
 }
 
