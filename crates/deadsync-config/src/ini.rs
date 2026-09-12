@@ -24,44 +24,32 @@ impl SimpleIni {
     pub fn load_str(&mut self, content: &str) {
         self.sections.clear();
 
-        let mut parsed_sections = Vec::<(String, Vec<(String, String)>)>::new();
-        let mut current_section = None;
-
-        for raw_line in content.lines() {
-            let line = raw_line.trim();
-            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-                continue;
+        let mut entries = ini_entries(content).peekable();
+        let mut values = Vec::new();
+        while let Some(entry) = entries.next() {
+            let (name, first) = match entry {
+                IniEntry::Section(name) => (
+                    name,
+                    entries.next_if(|entry| matches!(entry, IniEntry::Property(..))),
+                ),
+                IniEntry::Property(..) => ("", Some(entry)),
+            };
+            while let Some(IniEntry::Property(key, value)) =
+                entries.next_if(|entry| matches!(entry, IniEntry::Property(..)))
+            {
+                values.push((key, value));
             }
-
-            if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
-                let name = &line[1..line.len() - 1];
-                parsed_sections.push((name.trim().to_string(), Vec::new()));
-                current_section = Some(parsed_sections.len() - 1);
-                continue;
+            // Stage borrowed properties for one section, reserving its final map
+            // once. Reuse this buffer across sections instead of retaining copies.
+            let properties = self.sections.entry(name.to_owned()).or_default();
+            properties.reserve(values.len() + usize::from(first.is_some()));
+            if let Some(IniEntry::Property(key, value)) = first {
+                properties.insert(key.to_owned(), value.to_owned());
             }
-
-            if let Some(eq_idx) = line.find('=') {
-                let (key_raw, value_raw) = line.split_at(eq_idx);
-                let key = key_raw.trim();
-                if key.is_empty() {
-                    continue;
-                }
-                let value = value_raw[1..].trim().to_string();
-                let section_index = *current_section.get_or_insert_with(|| {
-                    parsed_sections.push((String::new(), Vec::new()));
-                    parsed_sections.len() - 1
-                });
-                parsed_sections[section_index]
-                    .1
-                    .push((key.to_string(), value));
+            for &(key, value) in &values {
+                properties.insert(key.to_owned(), value.to_owned());
             }
-        }
-
-        self.sections.reserve(parsed_sections.len());
-        for (section, values) in parsed_sections {
-            let properties = self.sections.entry(section).or_default();
-            properties.reserve(values.len());
-            properties.extend(values);
+            values.clear();
         }
     }
 
@@ -86,6 +74,42 @@ impl SimpleIni {
     pub fn into_sections(self) -> IniSections {
         self.sections
     }
+}
+
+enum IniEntry<'a> {
+    Section(&'a str),
+    Property(&'a str, &'a str),
+}
+
+fn ini_entries(content: &str) -> impl Iterator<Item = IniEntry<'_>> {
+    content.lines().filter_map(|raw| {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+            return None;
+        }
+        if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
+            return Some(IniEntry::Section(line[1..line.len() - 1].trim()));
+        }
+        let (key, value) = line.split_once('=')?;
+        let key = key.trim();
+        (!key.is_empty()).then(|| IniEntry::Property(key, value.trim()))
+    })
+}
+
+/// Read a single INI value without allocating a map or copying unrelated text.
+/// Repeated sections merge and the last matching key wins, as in `SimpleIni`.
+#[must_use]
+pub fn ini_value<'a>(content: &'a str, section: &str, key: &str) -> Option<&'a str> {
+    let mut selected = section.is_empty();
+    let mut value = None;
+    for entry in ini_entries(content) {
+        match entry {
+            IniEntry::Section(name) => selected = name == section,
+            IniEntry::Property(name, text) if selected && name == key => value = Some(text),
+            IniEntry::Property(..) => {}
+        }
+    }
+    value
 }
 
 /// Unescape INI string escape sequences used by localized string values.

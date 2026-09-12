@@ -1,4 +1,4 @@
-use deadsync_config::ini::{SimpleIni, unescape_ini_value};
+use deadsync_config::ini::{SimpleIni, ini_value, unescape_ini_value};
 use deadsync_config::theme::{LanguageFlag, resolve_language_locale};
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
@@ -52,12 +52,10 @@ fn load_ini_to_map(path: &Path) -> LanguageMap {
 }
 
 fn native_name(path: &Path, locale_code: &str) -> String {
-    let mut ini = SimpleIni::new();
-    match ini.load(path) {
-        Ok(()) => ini
-            .get("Meta", "NativeName")
+    match std::fs::read_to_string(path) {
+        Ok(content) => ini_value(&content, "Meta", "NativeName")
             .unwrap_or(locale_code)
-            .to_string(),
+            .to_owned(),
         Err(e) => {
             log::warn!("Failed to load language file {}: {e}", path.display());
             locale_code.to_string()
@@ -159,6 +157,49 @@ pub fn load_for_tests(locale: &str) -> LanguageBundle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_names_match_full_ini_loading_and_keep_file_fallbacks() {
+        let bundled = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/languages");
+        for path in std::fs::read_dir(bundled)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+        {
+            if path.extension().is_some_and(|ext| ext == "ini") {
+                let mut ini = SimpleIni::new();
+                ini.load(&path).unwrap();
+                assert_eq!(
+                    native_name(&path, "fallback"),
+                    ini.get("Meta", "NativeName").unwrap_or("fallback")
+                );
+            }
+        }
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-native-name-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("locale.ini");
+        assert_eq!(native_name(&path, "fallback"), "fallback");
+        for (bytes, expected) in [
+            (b"[Other]\nNativeName=ignored".as_slice(), "fallback"),
+            (
+                b"[Meta]\nNativeName=first\n[Other]\nNativeName=no\n[Meta]\nNativeName=last",
+                "last",
+            ),
+            (b"[Meta]\nNativeName=", ""),
+            (b"\xff", "fallback"),
+        ] {
+            std::fs::write(&path, bytes).unwrap();
+            assert_eq!(native_name(&path, "fallback"), expected);
+        }
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(dir).unwrap();
+    }
 
     #[test]
     fn raw_os_locale_uses_first_colon_separated_locale() {

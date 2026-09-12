@@ -43,6 +43,9 @@ pub mod pad_config;
 pub mod pad_config_sync;
 pub mod update;
 
+mod profile_ini;
+use profile_ini::ProfileIni;
+
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
@@ -3165,64 +3168,6 @@ pub fn profile_side_has_favorited_pack(
     pack_name: &str,
 ) -> bool {
     profile_has_favorited_pack(&profiles[player_side_index(side)], pack_name)
-}
-
-#[derive(Debug, Default)]
-struct ProfileIni {
-    sections: HashMap<String, HashMap<String, String>>,
-}
-
-impl ProfileIni {
-    fn load(path: &Path) -> Result<Self, std::io::Error> {
-        let content = fs::read_to_string(path)?;
-        Ok(Self::parse(content.as_str()))
-    }
-
-    fn parse(content: &str) -> Self {
-        let mut ini = Self::default();
-        let mut current_section: Option<String> = None;
-
-        for raw_line in content.lines() {
-            let line = raw_line.trim();
-            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-                continue;
-            }
-
-            if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
-                let section = line[1..line.len() - 1].trim().to_string();
-                current_section = Some(section.clone());
-                ini.sections.entry(section).or_default();
-                continue;
-            }
-
-            let Some(eq_idx) = line.find('=') else {
-                continue;
-            };
-            let key = line[..eq_idx].trim();
-            if key.is_empty() {
-                continue;
-            }
-            let value = line[eq_idx + 1..].trim().to_string();
-            let section = current_section.clone().unwrap_or_default();
-            ini.sections
-                .entry(section)
-                .or_default()
-                .insert(key.to_string(), value);
-        }
-
-        ini
-    }
-
-    fn get(&self, section: &str, key: &str) -> Option<String> {
-        self.sections
-            .get(section)
-            .and_then(|section| section.get(key))
-            .cloned()
-    }
-
-    fn section_has_any(&self, section: &str) -> bool {
-        self.sections.get(section).is_some_and(|s| !s.is_empty())
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
