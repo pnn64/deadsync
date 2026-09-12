@@ -177,24 +177,29 @@ pub fn search_lobby_text() -> String {
 
 #[must_use]
 pub fn create_lobby_text(machine: &Value, password: &str) -> String {
-    outbound_event_text(
-        EVENT_CREATE_LOBBY,
-        &serde_json::json!({
-            "machine": machine,
-            "password": password,
-        }),
-    )
+    #[derive(Serialize)]
+    struct Data<'a> {
+        machine: &'a Value,
+        password: &'a str,
+    }
+    serialize_outbound_data(EVENT_CREATE_LOBBY, &Data { machine, password })
 }
 
 #[must_use]
 pub fn join_lobby_text(machine: &Value, code: &str, password: &str) -> String {
-    outbound_event_text(
+    #[derive(Serialize)]
+    struct Data<'a> {
+        machine: &'a Value,
+        code: &'a str,
+        password: &'a str,
+    }
+    serialize_outbound_data(
         EVENT_JOIN_LOBBY,
-        &serde_json::json!({
-            "machine": machine,
-            "code": code,
-            "password": password,
-        }),
+        &Data {
+            machine,
+            code,
+            password,
+        },
     )
 }
 
@@ -206,22 +211,58 @@ pub fn leave_lobby_text() -> String {
 
 #[must_use]
 pub fn update_machine_text(machine: &Value) -> String {
-    outbound_event_text(
-        EVENT_UPDATE_MACHINE,
-        &serde_json::json!({
-            "machine": machine,
-        }),
-    )
+    #[derive(Serialize)]
+    struct Data<'a> {
+        machine: &'a Value,
+    }
+    serialize_outbound_data(EVENT_UPDATE_MACHINE, &Data { machine })
 }
 
 #[must_use]
 pub fn select_song_text(song_info: &LobbySongInfo) -> String {
-    outbound_event_text(
+    // Keep the old Value object's field order and f32-to-f64 conversion,
+    // so direct serialization produces the same bytes on the wire.
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Song<'a> {
+        song_path: &'a str,
+        title: &'a Option<String>,
+        artist: &'a Option<String>,
+        song_length: Option<f64>,
+        chart_hash: &'a Option<String>,
+        chart_type: &'a Option<String>,
+        chart_label: &'a Option<String>,
+        rate: Option<f64>,
+    }
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Data<'a> {
+        song_info: Song<'a>,
+    }
+    serialize_outbound_data(
         EVENT_SELECT_SONG,
-        &serde_json::json!({
-            "songInfo": song_info,
-        }),
+        &Data {
+            song_info: Song {
+                song_path: &song_info.song_path,
+                title: &song_info.title,
+                artist: &song_info.artist,
+                song_length: song_info.song_length_seconds.map(f64::from),
+                chart_hash: &song_info.chart_hash,
+                chart_type: &song_info.chart_type,
+                chart_label: &song_info.chart_label,
+                rate: song_info.rate.map(f64::from),
+            },
+        },
     )
+}
+
+fn serialize_outbound_data(event: &str, data: &impl Serialize) -> String {
+    #[derive(Serialize)]
+    struct Envelope<'a, T> {
+        event: &'a str,
+        data: &'a T,
+    }
+    serde_json::to_string(&Envelope { event, data }).expect("serialize lobby outbound envelope")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -443,16 +484,11 @@ where
 
 #[must_use]
 pub fn lobby_profile_name(name: &str) -> String {
-    let trimmed = name.trim();
-    if trimmed.is_empty() {
-        return format!("{LOBBY_PROFILE_PREFIX}Player");
-    }
-    let prefix_tag: String = trimmed.chars().take(4).collect();
-    if prefix_tag.eq_ignore_ascii_case("[DS]") {
-        trimmed.to_string()
-    } else {
-        format!("{LOBBY_PROFILE_PREFIX}{trimmed}")
-    }
+    let parts = lobby_profile_name_parts(name);
+    let mut out = String::with_capacity(parts.prefix.len() + parts.body.len());
+    out.push_str(parts.prefix);
+    out.push_str(parts.body);
+    out
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -583,8 +619,43 @@ pub fn lobby_machine_state_value(
     player1: Option<LobbyMachinePlayer>,
     player2: Option<LobbyMachinePlayer>,
 ) -> Value {
-    serde_json::to_value(LobbyMachineState { player1, player2 })
-        .expect("serialize lobby machine state")
+    // These players are owned: move their strings into the JSON object instead
+    // of serializing through borrowed strings and copying each one.
+    let mut object = serde_json::Map::with_capacity(2);
+    object.insert(
+        "player1".into(),
+        player1.map_or(Value::Null, machine_player_value),
+    );
+    object.insert(
+        "player2".into(),
+        player2.map_or(Value::Null, machine_player_value),
+    );
+    Value::Object(object)
+}
+
+fn machine_player_value(player: LobbyMachinePlayer) -> Value {
+    let mut object = serde_json::Map::with_capacity(7);
+    for (key, value) in [
+        ("playerId", Value::String(player.player_id)),
+        ("profileName", Value::String(player.profile_name)),
+        ("screenName", Value::String(player.screen_name)),
+        ("ready", Value::Bool(player.ready)),
+        (
+            "judgments",
+            serde_json::to_value(player.judgments).expect("serialize lobby judgments"),
+        ),
+        (
+            "score",
+            serde_json::to_value(player.score).expect("serialize lobby score"),
+        ),
+        (
+            "exScore",
+            serde_json::to_value(player.ex_score).expect("serialize lobby score"),
+        ),
+    ] {
+        object.insert(key.into(), value);
+    }
+    Value::Object(object)
 }
 
 pub struct LocalLobbyPlayer<'a> {
@@ -3328,4 +3399,12 @@ mod tests {
         assert!(!status.success);
         assert_eq!(status.message.as_deref(), Some("Bad password"));
     }
+}
+
+#[cfg(test)]
+mod outbound_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/lobby_outbound.rs"
+    ));
 }
