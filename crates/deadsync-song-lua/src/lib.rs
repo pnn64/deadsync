@@ -2117,29 +2117,49 @@ pub fn sprite_image_frame_size(
 }
 
 pub fn song_lua_halign_value(value: &mlua::Value) -> Option<f32> {
-    read_f32(value.clone()).or_else(|| {
-        read_string(value.clone()).and_then(|raw| {
-            match song_lua_align_token(raw.as_str()).as_str() {
-                "left" => Some(0.0),
-                "center" | "middle" => Some(0.5),
-                "right" => Some(1.0),
-                _ => None,
-            }
-        })
-    })
+    song_lua_alignment_value(value, "left", "right")
 }
 
 pub fn song_lua_valign_value(value: &mlua::Value) -> Option<f32> {
-    read_f32(value.clone()).or_else(|| {
-        read_string(value.clone()).and_then(|raw| {
-            match song_lua_align_token(raw.as_str()).as_str() {
-                "top" => Some(0.0),
-                "center" | "middle" => Some(0.5),
-                "bottom" => Some(1.0),
-                _ => None,
-            }
-        })
-    })
+    song_lua_alignment_value(value, "top", "bottom")
+}
+
+fn song_lua_alignment_value(value: &mlua::Value, near: &str, far: &str) -> Option<f32> {
+    let mlua::Value::String(text) = value else {
+        return match value {
+            mlua::Value::Integer(_) | mlua::Value::Number(_) => read_f32(value.clone()),
+            _ => None,
+        };
+    };
+    let text = text.to_str().ok()?;
+    if let Ok(number) = text.trim().parse::<f32>() {
+        return Some(number);
+    }
+    let text = borrowed_alignment_token(&text);
+    if text.eq_ignore_ascii_case(near) {
+        Some(0.0)
+    } else if text.eq_ignore_ascii_case("center") || text.eq_ignore_ascii_case("middle") {
+        Some(0.5)
+    } else if text.eq_ignore_ascii_case(far) {
+        Some(1.0)
+    } else {
+        None
+    }
+}
+
+fn borrowed_alignment_token(raw: &str) -> &str {
+    let mut token = raw.trim().trim_matches('"').trim_matches('\'');
+    // Match the original repeated-prefix stripping order without case-folding
+    // the whole string. Lua and numeric-string conversion semantics stay intact.
+    for prefix in ["horizalign_", "vertalign_"] {
+        while token
+            .get(..prefix.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(prefix))
+        {
+            token = &token[prefix.len()..];
+        }
+    }
+    token
 }
 
 #[must_use]
@@ -2154,7 +2174,10 @@ pub fn song_lua_align_token(raw: &str) -> String {
 }
 
 pub fn song_lua_text_align_value(value: &mlua::Value) -> Option<TextAlign> {
-    read_string(value.clone()).and_then(|raw| parse_overlay_text_align(raw.as_str()))
+    let mlua::Value::String(text) = value else {
+        return None;
+    };
+    parse_overlay_text_align(&text.to_str().ok()?)
 }
 
 #[must_use]
@@ -21059,3 +21082,7 @@ mod state_perf;
 #[cfg(test)]
 #[path = "../tests/perf/column_capture.rs"]
 mod column_capture_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/alignment_access.rs"]
+mod alignment_access_perf;

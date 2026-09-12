@@ -510,9 +510,9 @@ fn install_speedmod_state_method(
         lua.create_function(move |_, args: MultiValue| {
             if let Some(value) = method_arg(&args, 0).cloned() {
                 if matches!(value, Value::Nil) {
-                    set_player_speedmod(&owner, key.as_str(), None)?;
+                    set_player_speedmod_with_key(&owner, &key, &value_key, None)?;
                 } else if let Some(value) = read_f32(value) {
-                    set_player_speedmod(&owner, key.as_str(), Some(value))?;
+                    set_player_speedmod_with_key(&owner, &key, &value_key, Some(value))?;
                 }
                 return Ok(Value::Table(owner.clone()));
             }
@@ -535,13 +535,38 @@ fn install_speedmod_state_method(
 }
 
 fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Result<()> {
-    let value_key = format!("__songlua_speedmod_{key}");
+    // FromString produces these five keys; installed methods already retain
+    // their full field key. Preserve the fallback for other internal callers.
+    let value_key = match key {
+        "xmod" => "__songlua_speedmod_xmod",
+        "cmod" => "__songlua_speedmod_cmod",
+        "mmod" => "__songlua_speedmod_mmod",
+        "amod" => "__songlua_speedmod_amod",
+        "camod" => "__songlua_speedmod_camod",
+        _ => {
+            return set_player_speedmod_with_key(
+                owner,
+                key,
+                &format!("__songlua_speedmod_{key}"),
+                value,
+            );
+        }
+    };
+    set_player_speedmod_with_key(owner, key, value_key, value)
+}
+
+fn set_player_speedmod_with_key(
+    owner: &Table,
+    key: &str,
+    value_key: &str,
+    value: Option<f32>,
+) -> mlua::Result<()> {
     if let Some(value) = value {
         owner.raw_set("__songlua_speedmod_active", key)?;
-        owner.raw_set(value_key.as_str(), value)?;
+        owner.raw_set(value_key, value)?;
     } else {
         owner.raw_set("__songlua_speedmod_active", "none")?;
-        owner.raw_set(value_key.as_str(), Value::Nil)?;
+        owner.raw_set(value_key, Value::Nil)?;
     }
     Ok(())
 }
@@ -1273,3 +1298,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/mod_tokens.rs"]
 mod mod_tokens_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/speed_access.rs"]
+mod speed_access_perf;
