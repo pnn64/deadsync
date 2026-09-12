@@ -87,6 +87,8 @@ pub struct SongLuaOverlayCompileActor<Kind> {
 struct SongLuaOverlayUpdateCapture {
     actor_indices: HashMap<usize, usize>,
     active_broadcast: Option<String>,
+    // Scoped with active_broadcast so nested dispatch restores both together.
+    active_broadcast_command: Option<mlua::LuaString>,
     runtime_broadcasts: Vec<(f32, String, bool)>,
     touched: Vec<usize>,
     touched_flags: Vec<bool>,
@@ -116,6 +118,7 @@ impl SongLuaOverlayUpdateCapture {
         Self {
             actor_indices,
             active_broadcast: None,
+            active_broadcast_command: None,
             runtime_broadcasts: Vec::new(),
             touched: Vec::with_capacity(actor_count),
             touched_flags: vec![false; actor_count],
@@ -189,10 +192,12 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
-        self.record_stateful_message(actor, beat, target, value.clone(), 0.0, 0.0, None, None);
         let Some(index) = self.touch(actor) else {
             return false;
         };
+        if self.active_broadcast.is_some() {
+            self.record_stateful_message(actor, beat, target, value.clone(), 0.0, 0.0, None, None);
+        }
         Self::replace_value(&mut self.final_values[index], target, value.clone());
         Self::replace_value(&mut self.values[index], target, value);
         true
@@ -221,19 +226,21 @@ impl SongLuaOverlayUpdateCapture {
         target: SongLuaOverlayUpdateTarget,
         value: SongLuaOverlayUpdateValue,
     ) -> bool {
-        self.record_stateful_message(
-            actor,
-            beat,
-            target,
-            value.clone(),
-            delay_seconds,
-            duration_seconds,
-            easing.clone(),
-            opt1,
-        );
         let Some(index) = self.touch(actor) else {
             return false;
         };
+        if self.active_broadcast.is_some() {
+            self.record_stateful_message(
+                actor,
+                beat,
+                target,
+                value.clone(),
+                delay_seconds,
+                duration_seconds,
+                easing.clone(),
+                opt1,
+            );
+        }
         Self::replace_value(&mut self.final_values[index], target, value.clone());
         self.scheduled[index].push(SongLuaScheduledOverlayUpdate {
             delay_seconds,
@@ -418,13 +425,16 @@ fn record_overlay_update_capture(
         {
             return false;
         }
-        capture.active_broadcast.as_deref().is_some_and(|message| {
-            actor
-                .get::<Option<Function>>(format!("{message}MessageCommand"))
-                .ok()
-                .flatten()
-                .is_some()
-        })
+        capture
+            .active_broadcast_command
+            .as_ref()
+            .is_some_and(|command| {
+                actor
+                    .get::<Option<Function>>(command)
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
     };
     // The receiving actor's own command is compiled as a timed message block.
     // Mutations to other actors must remain in the sequential capture because
@@ -484,13 +494,16 @@ fn record_overlay_update_capture_immediate(
         {
             return false;
         }
-        capture.active_broadcast.as_deref().is_some_and(|message| {
-            actor
-                .get::<Option<Function>>(format!("{message}MessageCommand"))
-                .ok()
-                .flatten()
-                .is_some()
-        })
+        capture
+            .active_broadcast_command
+            .as_ref()
+            .is_some_and(|command| {
+                actor
+                    .get::<Option<Function>>(command)
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
     };
     if direct_message_actor {
         return true;
@@ -518,9 +531,11 @@ pub fn reset_overlay_compile_actor_capture_tables<Kind>(
     lua: &Lua,
     overlays: &[SongLuaOverlayCompileActor<Kind>],
 ) -> Result<(), String> {
-    let indices: Vec<_> = (0..overlays.len()).collect();
-    let tables = overlay_compile_actor_tables_for_indices(overlays, &indices);
-    reset_indexed_actor_capture_tables(lua, &tables)
+    // This runs for every per-frame sample; borrow actors directly.
+    for overlay in overlays {
+        reset_actor_capture(lua, &overlay.table).map_err(|err| err.to_string())?;
+    }
+    Ok(())
 }
 
 pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
@@ -1725,11 +1740,23 @@ pub fn broadcast_song_lua_message(
             .runtime_broadcasts
             .push((beat, message.to_string(), params.is_some()));
     }
+    // Keep the Lua key itself: converting a Rust string for each property
+    // lookup also allocates for long names. Prepare it before changing scope.
+    let command_key = if lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_some() {
+        Some(lua.create_string(&command)?)
+    } else {
+        None
+    };
     let previous_broadcast = globals.raw_get::<Value>(ACTIVE_BROADCAST_KEY)?;
     globals.raw_set(ACTIVE_BROADCAST_KEY, message)?;
     let capture_broadcast = lua
         .app_data_mut::<SongLuaOverlayUpdateCapture>()
-        .map(|mut capture| capture.active_broadcast.replace(message.to_string()));
+        .map(|mut capture| {
+            let previous = capture.active_broadcast.replace(message.to_string());
+            let previous_command =
+                std::mem::replace(&mut capture.active_broadcast_command, command_key);
+            (previous, previous_command)
+        });
     let result = || {
         let registry = song_lua_actor_registry(lua)?;
         let mut actors = Vec::with_capacity(registry.raw_len());
@@ -1751,10 +1778,11 @@ pub fn broadcast_song_lua_message(
         })
     };
     let result = result();
-    if let Some(previous) = capture_broadcast
+    if let Some((previous, previous_command)) = capture_broadcast
         && let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
     {
         capture.active_broadcast = previous;
+        capture.active_broadcast_command = previous_command;
     }
     let restore = globals.raw_set(ACTIVE_BROADCAST_KEY, previous_broadcast);
     restore?;
@@ -14249,3 +14277,7 @@ pub fn method_arg_offset(args: &MultiValue) -> usize {
 #[cfg(test)]
 #[path = "../tests/perf/stateful_storage.rs"]
 mod stateful_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/capture_dispatch.rs"]
+mod capture_dispatch_perf;
