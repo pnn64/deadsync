@@ -703,11 +703,23 @@ fn set_install_phase(pack_id: u64, phase: InstallPhase, message: Option<String>)
 
 fn set_install_progress(pack_id: u64, downloaded_bytes: u64, total_bytes: u64) {
     let mut runtime = lock_runtime();
-    update_install(&mut runtime, pack_id, |install| {
+    update_install_progress(&mut runtime, pack_id, downloaded_bytes, total_bytes);
+}
+
+fn update_install_progress(
+    runtime: &mut RuntimeState,
+    pack_id: u64,
+    downloaded_bytes: u64,
+    total_bytes: u64,
+) {
+    update_install(runtime, pack_id, |install| {
         install.phase = InstallPhase::Downloading;
         install.downloaded_bytes = downloaded_bytes;
         install.total_bytes = total_bytes;
-        install.message = Some("Downloading pack archive...".to_string());
+        const MESSAGE: &str = "Downloading pack archive...";
+        if install.message.as_deref() != Some(MESSAGE) {
+            install.message = Some(MESSAGE.to_string());
+        }
     });
 }
 
@@ -724,14 +736,13 @@ fn update_install(
     pack_id: u64,
     update: impl FnOnce(&mut InstallSnapshot),
 ) {
-    let mut snapshot = (*runtime.snapshot).clone();
-    if let Some(install) = snapshot
+    if let Some(index) = runtime
+        .snapshot
         .installs
-        .iter_mut()
-        .find(|install| install.pack_id == pack_id)
+        .iter()
+        .position(|install| install.pack_id == pack_id)
     {
-        update(install);
-        runtime.snapshot = Arc::new(snapshot);
+        update(&mut Arc::make_mut(&mut runtime.snapshot).installs[index]);
     }
 }
 
@@ -892,18 +903,19 @@ fn extract_archive(
             .by_index(idx)
             .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
         let parts = portable_archive_parts(entry.name())?;
-        if parts.first().is_none_or(|prefix| prefix != &plan.prefix) {
+        if parts
+            .iter()
+            .next()
+            .is_none_or(|prefix| prefix != plan.prefix)
+        {
             return Err(StepManiaOnlineError::Archive(
                 "archive roots changed while extracting".to_string(),
             ));
         }
-        let relative = &parts[1..];
-        if relative.is_empty() {
+        if parts.len == 1 {
             continue;
         }
-        let output = relative
-            .iter()
-            .fold(staging.to_path_buf(), |path, part| path.join(part));
+        let output = parts.output_path(staging);
         let is_dir = entry.is_dir() || entry.name().ends_with('\\');
         if is_dir {
             fs::create_dir_all(&output)
@@ -989,7 +1001,8 @@ fn inspect_archive(
         }
         let parts = portable_archive_parts(entry.name())?;
         let entry_prefix = parts
-            .first()
+            .iter()
+            .next()
             .ok_or_else(|| StepManiaOnlineError::Archive("entry has no path".to_string()))?;
         match &prefix {
             Some(expected) if expected != entry_prefix => {
@@ -997,13 +1010,13 @@ fn inspect_archive(
                     "archive does not have one top-level pack directory".to_string(),
                 ));
             }
-            None => prefix = Some(entry_prefix.clone()),
+            None => prefix = Some(entry_prefix.to_string()),
             _ => {}
         }
         if is_dir {
             continue;
         }
-        if parts.len() == 1 {
+        if parts.len == 1 {
             return Err(StepManiaOnlineError::Archive(
                 "archive contains a file outside its pack directory".to_string(),
             ));
@@ -1016,14 +1029,14 @@ fn inspect_archive(
                 "uncompressed content exceeds {uncompressed_limit} bytes"
             )));
         }
-        let output_key = parts[1..].join("/").to_lowercase();
+        let output_key = parts.output_key();
         if !output_files.insert(output_key) {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' duplicates another output path",
                 entry.name()
             )));
         }
-        has_simfile |= is_simfile(parts.last().map(String::as_str).unwrap_or_default());
+        has_simfile |= is_simfile(parts.iter().next_back().unwrap_or_default());
     }
     if !has_simfile {
         return Err(StepManiaOnlineError::Archive(
@@ -1035,18 +1048,56 @@ fn inspect_archive(
     })
 }
 
-fn portable_archive_parts(name: &str) -> Result<Vec<String>, StepManiaOnlineError> {
+#[derive(Debug)]
+struct ArchiveParts<'a> {
+    name: &'a str,
+    len: usize,
+}
+
+impl ArchiveParts<'_> {
+    fn iter(&self) -> impl DoubleEndedIterator<Item = &str> + Clone {
+        self.name.split(['/', '\\']).filter(|part| !part.is_empty())
+    }
+
+    fn output_key(&self) -> String {
+        let mut key = String::with_capacity(self.name.len());
+        for part in self.iter().skip(1) {
+            if !key.is_empty() {
+                key.push('/');
+            }
+            key.push_str(part);
+        }
+        if key.is_ascii() {
+            key.make_ascii_lowercase();
+            key
+        } else {
+            // Keep str's contextual Unicode casing (for example final sigma).
+            key.to_lowercase()
+        }
+    }
+
+    fn output_path(&self, root: &Path) -> PathBuf {
+        let mut path = PathBuf::with_capacity(root.as_os_str().len() + 1 + self.name.len());
+        path.push(root);
+        for part in self.iter().skip(1) {
+            path.push(part);
+        }
+        path
+    }
+}
+
+fn portable_archive_parts(name: &str) -> Result<ArchiveParts<'_>, StepManiaOnlineError> {
     if name.is_empty() || name.starts_with('/') || name.starts_with('\\') || name.contains('\0') {
         return Err(StepManiaOnlineError::Archive(format!(
             "entry '{name}' has an invalid path"
         )));
     }
-    let mut parts = Vec::new();
+    let mut len = 0;
     for part in name.split(['/', '\\']) {
         if part.is_empty() {
             continue;
         }
-        let is_prefix = parts.is_empty();
+        let is_prefix = len == 0;
         let drive_prefix = is_prefix
             && part.len() == 2
             && part.as_bytes()[0].is_ascii_alphabetic()
@@ -1062,14 +1113,14 @@ fn portable_archive_parts(name: &str) -> Result<Vec<String>, StepManiaOnlineErro
                 "entry '{name}' has an invalid path component"
             )));
         }
-        parts.push(part.to_string());
+        len += 1;
     }
-    if parts.is_empty() {
+    if len == 0 {
         return Err(StepManiaOnlineError::Archive(format!(
             "entry '{name}' has no path components"
         )));
     }
-    Ok(parts)
+    Ok(ArchiveParts { name, len })
 }
 
 fn safe_unix_entry_type(mode: Option<u32>, is_dir: bool) -> bool {
@@ -1102,15 +1153,18 @@ fn sanitized_pack_name(raw: &str, pack_id: u64) -> (String, bool) {
     let trimmed = raw.trim();
     let mut changed = trimmed != raw;
     let mut output = String::with_capacity(trimmed.len().min(DESTINATION_MAX_CHARS));
+    let mut output_chars = 0;
     for ch in trimmed.chars() {
         let replacement = invalid_path_char(ch) || matches!(ch, '/' | '\\');
         if replacement {
             changed = true;
             if !output.ends_with('_') {
                 output.push('_');
+                output_chars += 1;
             }
-        } else if output.chars().count() < DESTINATION_MAX_CHARS {
+        } else if output_chars < DESTINATION_MAX_CHARS {
             output.push(ch);
+            output_chars += 1;
         } else {
             changed = true;
         }
@@ -1133,7 +1187,7 @@ fn sanitized_pack_name(raw: &str, pack_id: u64) -> (String, bool) {
         changed = true;
     }
     if changed {
-        output = with_pack_id(output.as_str(), pack_id);
+        append_pack_id(&mut output, pack_id);
     }
     (output, changed)
 }
@@ -1150,6 +1204,17 @@ fn with_pack_id(name: &str, pack_id: u64) -> String {
     base.truncate(clean_len);
     base.push_str(suffix.as_str());
     base
+}
+
+fn append_pack_id(name: &mut String, pack_id: u64) {
+    let suffix_len = 7 + pack_id.checked_ilog10().unwrap_or(0) as usize + 1;
+    let keep = DESTINATION_MAX_CHARS.saturating_sub(suffix_len);
+    if let Some((end, _)) = name.char_indices().nth(keep) {
+        name.truncate(end);
+    }
+    name.truncate(name.trim_end_matches([' ', '.']).len());
+    name.reserve(suffix_len);
+    write!(name, " [SMO {pack_id}]").expect("writing to a String cannot fail");
 }
 
 fn choose_destination(root: &Path, pack: &PackInfo) -> Result<PathBuf, StepManiaOnlineError> {
@@ -1458,4 +1523,12 @@ mod tests {
         assert!(error.to_string().contains("contains no .sm"));
         fs::remove_dir_all(root).expect("clean fixture root");
     }
+}
+
+#[cfg(test)]
+mod preparation_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/smo_preparation.rs"
+    ));
 }
