@@ -1044,6 +1044,238 @@ fn wide_add_track(orig_track: usize, row: usize, rows_per_beat: usize, cols: usi
     add_track as usize
 }
 
+// Appended taps have unique cells, so the final unstable sort cannot reorder
+// equal keys. Duplicate/unsorted compatibility inputs retain their old path.
+fn notes_have_unique_sorted_cells(notes: &[Note]) -> bool {
+    notes
+        .windows(2)
+        .all(|pair| (pair[0].row_index, pair[0].column) < (pair[1].row_index, pair[1].column))
+}
+
+fn set_batched_row_tap(
+    notes: &mut Vec<Note>,
+    timing: &TimingData,
+    row_range: std::ops::Range<usize>,
+    original_len: usize,
+    col_offset: usize,
+    cols: usize,
+    local: usize,
+) -> Option<usize> {
+    let row = notes[row_range.start].row_index;
+    let column = col_offset.saturating_add(local);
+    let tap = added_tap_note(timing, row, column)?;
+    match notes[row_range.clone()].binary_search_by_key(&column, |note| note.column) {
+        Ok(index) => notes[row_range.start + index] = tap,
+        Err(_) => {
+            if notes.len() == original_len {
+                // Reserve only after a tap qualifies. Replacements need no
+                // storage, and dense charts often admit no additions at all.
+                notes.reserve(insert_row_reserve(&notes[..original_len], col_offset, cols));
+            }
+            notes.push(tap);
+        }
+    }
+    Some(column - col_offset)
+}
+
+fn apply_wide_insert_batched(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    let original_len = notes.len();
+    let rows_per_beat = ROWS_PER_BEAT.max(1) as usize;
+    let half_beat = rows_per_beat / 2;
+    let even_beat_stride = rows_per_beat.saturating_mul(2);
+    let mut active_ends = [None; MAX_COLS];
+    let mut cursor = 0;
+    while cursor < original_len {
+        let start = cursor;
+        let row = notes[start].row_index;
+        cursor += 1;
+        while cursor < original_len && notes[cursor].row_index == row {
+            cursor += 1;
+        }
+        let summary = tap_insert_row_slice(&notes[start..cursor], col_offset, cols);
+        let held = active_hold_mask(&active_ends, row, cols) & !summary.nonempty;
+        let mut added = None;
+        // New taps share an already occupied row, so they cannot change the
+        // spacing query for a later row. Search only the sorted source prefix.
+        if summary.nonempty != 0
+            && row.is_multiple_of(even_beat_stride)
+            && held == 0
+            && summary.taps.count_ones() == 1
+            && !sorted_player_range_has_note(
+                &notes[..original_len],
+                row.saturating_sub(half_beat).saturating_add(1),
+                row.saturating_add(half_beat),
+                Some(row),
+                col_offset,
+                cols,
+            )
+        {
+            let track = summary.taps.trailing_zeros() as usize;
+            let mut target = wide_add_track(track, row, rows_per_beat, cols);
+            if summary.nonfake & (1u64 << target) != 0 {
+                target = (target + 1) % cols;
+            }
+            added = set_batched_row_tap(
+                notes,
+                timing_player,
+                start..cursor,
+                original_len,
+                col_offset,
+                cols,
+                target,
+            );
+        }
+        update_active_holds(&notes[start..cursor], col_offset, cols, &mut active_ends);
+        if let Some(target) = added {
+            active_ends[target] = None;
+        }
+    }
+    if notes.len() != original_len {
+        sort_player_notes(notes);
+    }
+}
+
+fn apply_stomp_insert_batched(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    let original_len = notes.len();
+    let half_beat = (ROWS_PER_BEAT.max(1) as usize) / 2;
+    let mut active_ends = [None; MAX_COLS];
+    let mut cursor = 0;
+    while cursor < original_len {
+        let start = cursor;
+        let row = notes[start].row_index;
+        cursor += 1;
+        while cursor < original_len && notes[cursor].row_index == row {
+            cursor += 1;
+        }
+        let summary = tap_insert_row_slice(&notes[start..cursor], col_offset, cols);
+        let held = active_hold_mask(&active_ends, row, cols) & !summary.nonempty;
+        let mut added = None;
+        // Each addition shares a row with a nonfake tap/lift, which already
+        // blocks that row in subsequent spacing queries.
+        if summary.nonempty != 0
+            && summary.taps.count_ones() == 1
+            && !sorted_player_range_has_tap(
+                &notes[..original_len],
+                row.saturating_sub(half_beat).saturating_add(1),
+                row.saturating_add(half_beat).saturating_sub(1),
+                row,
+                col_offset,
+                cols,
+            )
+            && held == 0
+        {
+            let track = summary.taps.trailing_zeros() as usize;
+            let target = stomp_mirror_track(track, cols);
+            added = set_batched_row_tap(
+                notes,
+                timing_player,
+                start..cursor,
+                original_len,
+                col_offset,
+                cols,
+                target,
+            );
+        }
+        update_active_holds(&notes[start..cursor], col_offset, cols, &mut active_ends);
+        if let Some(target) = added {
+            active_ends[target] = None;
+        }
+    }
+    if notes.len() != original_len {
+        sort_player_notes(notes);
+    }
+}
+
+fn apply_echo_insert_batched(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+) {
+    let interval = (ROWS_PER_BEAT.max(1) as usize) / 2;
+    if interval == 0 {
+        return;
+    }
+    let original_len = notes.len();
+    let max_row = notes
+        .iter()
+        .rev()
+        .find_map(|note| local_player_col(note.column, col_offset, cols).map(|_| note.row_index))
+        .unwrap_or(0);
+    let end_row = max_row.saturating_add(1);
+    let mut active_ends = [None; MAX_COLS];
+    let mut cursor = 0;
+    let mut echo_track = None;
+    let mut row = 0usize;
+    while row <= end_row {
+        while cursor < original_len && notes[cursor].row_index <= row {
+            let start = cursor;
+            let note_row = notes[start].row_index;
+            cursor += 1;
+            while cursor < original_len && notes[cursor].row_index == note_row {
+                cursor += 1;
+            }
+            update_active_holds(&notes[start..cursor], col_offset, cols, &mut active_ends);
+        }
+        let mut summary = tap_insert_row(&notes[..original_len], row, col_offset, cols);
+        // Only the most recent appended echo can be on the current grid row.
+        // Earlier echoes are behind us; the spacing check forbids a source
+        // cell in an echo's lane (or any other player lane) on its new row.
+        if notes.len() > original_len {
+            let last = notes.last().expect("an appended echo exists");
+            if last.row_index == row {
+                let local = last.column - col_offset;
+                let bit = 1u64 << local;
+                summary.nonempty |= bit;
+                summary.nonfake |= bit;
+                summary.taps |= bit;
+                active_ends[local] = None;
+            }
+        }
+        if summary.nonempty != 0 {
+            if summary.taps != 0 {
+                echo_track = Some(summary.taps.trailing_zeros() as usize);
+            }
+            if let Some(track) = echo_track {
+                let window_end = row.saturating_add(interval.saturating_mul(2));
+                let row_echo = row.saturating_add(interval);
+                let held = active_hold_mask(&active_ends, row_echo, cols);
+                if !sorted_player_range_has_note(
+                    &notes[..original_len],
+                    row.saturating_add(1),
+                    window_end.saturating_sub(1),
+                    None,
+                    col_offset,
+                    cols,
+                ) && held.count_ones() < 2
+                    && held & (1u64 << track) == 0
+                    && let Some(tap) = added_tap_note(timing_player, row_echo, col_offset + track)
+                {
+                    if notes.len() == original_len {
+                        let grid_rows = (end_row / interval).saturating_add(1);
+                        notes.reserve(grid_rows.min(original_len.max(1)));
+                    }
+                    notes.push(tap);
+                }
+            }
+        }
+        row = row.saturating_add(interval);
+    }
+    if notes.len() != original_len {
+        sort_player_notes(notes);
+    }
+}
+
 fn apply_wide_insert_unordered(
     notes: &mut Vec<Note>,
     timing_player: &TimingData,
@@ -1167,7 +1399,9 @@ pub fn apply_wide_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_row_col_sorted(notes) {
+    if notes_have_unique_sorted_cells(notes) {
+        apply_wide_insert_batched(notes, timing_player, col_offset, cols);
+    } else if notes_row_col_sorted(notes) {
         apply_wide_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
         apply_wide_insert_unordered(notes, timing_player, col_offset, cols);
@@ -1282,7 +1516,9 @@ pub fn apply_stomp_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_row_col_sorted(notes) {
+    if notes_have_unique_sorted_cells(notes) {
+        apply_stomp_insert_batched(notes, timing_player, col_offset, cols);
+    } else if notes_row_col_sorted(notes) {
         apply_stomp_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
         apply_stomp_insert_unordered(notes, timing_player, col_offset, cols);
@@ -1435,7 +1671,9 @@ pub fn apply_echo_insert(
     if cols == 0 || cols > MAX_COLS {
         return;
     }
-    if notes_row_col_sorted(notes) {
+    if notes_have_unique_sorted_cells(notes) {
+        apply_echo_insert_batched(notes, timing_player, col_offset, cols);
+    } else if notes_row_col_sorted(notes) {
         apply_echo_insert_sorted(notes, timing_player, col_offset, cols);
     } else {
         apply_echo_insert_unordered(notes, timing_player, col_offset, cols);

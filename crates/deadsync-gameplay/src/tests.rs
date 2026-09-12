@@ -2,6 +2,10 @@
 mod tests {
     use super::*;
 
+    mod tap_insertion_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/tap_insertion.rs"));
+    }
+
     mod preparation_perf {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/preparation.rs"));
     }
