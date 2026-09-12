@@ -1096,10 +1096,7 @@ pub fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 
 pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let children = lua.create_table()?;
-    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
-        let (key, value) = pair?;
-        children.set(key, value)?;
-    }
+    actor_children(lua, actor)?.for_each::<Value, Value>(|key, value| children.set(key, value))?;
     merge_actor_sequence_children(lua, actor, &children)?;
     Ok(children)
 }
@@ -1113,10 +1110,11 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         };
         seen.push(&mut out, child);
     }
-    for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
-        let (_, value) = pair?;
+    // Named keys do not participate in child identity or first-seen order.
+    // Raw callback traversal avoids retaining a cloned iterator key.
+    actor_children(lua, actor)?.for_each::<Value, Value>(|_, value| {
         let Value::Table(child) = value else {
-            continue;
+            return Ok(());
         };
         if actor_is_child_group(&child)? {
             for group_value in child.sequence_values::<Value>() {
@@ -1127,7 +1125,8 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         } else {
             seen.push(&mut out, child);
         }
-    }
+        Ok(())
+    })?;
     Ok(out)
 }
 
@@ -12631,28 +12630,33 @@ fn global_actor_references(lua: &Lua) -> Result<HashSet<usize>, String> {
     let globals_pointer = globals.to_pointer() as usize;
     let registry_pointer = registry.to_pointer() as usize;
     let mut referenced = HashSet::new();
-    for pair in globals.clone().pairs::<Value, Value>() {
-        let (_, Value::Table(table)) = pair.map_err(|err| err.to_string())? else {
-            continue;
-        };
-        let pointer = table.to_pointer() as usize;
-        if actor_pointers.contains(&pointer) {
-            referenced.insert(pointer);
-            continue;
-        }
-        if pointer == globals_pointer || pointer == registry_pointer {
-            continue;
-        }
-        for pair in table.pairs::<Value, Value>() {
-            let (_, Value::Table(value)) = pair.map_err(|err| err.to_string())? else {
-                continue;
+    // Inspect only the same two table levels as before. Keys are irrelevant
+    // to reachability, so avoid the pair iterator's cloned cursor handles.
+    globals
+        .for_each::<Value, Value>(|_, value| {
+            let Value::Table(table) = value else {
+                return Ok(());
             };
-            let pointer = value.to_pointer() as usize;
+            let pointer = table.to_pointer() as usize;
             if actor_pointers.contains(&pointer) {
                 referenced.insert(pointer);
+                return Ok(());
             }
-        }
-    }
+            if pointer == globals_pointer || pointer == registry_pointer {
+                return Ok(());
+            }
+            table.for_each::<Value, Value>(|_, value| {
+                let Value::Table(value) = value else {
+                    return Ok(());
+                };
+                let pointer = value.to_pointer() as usize;
+                if actor_pointers.contains(&pointer) {
+                    referenced.insert(pointer);
+                }
+                Ok(())
+            })
+        })
+        .map_err(|err| err.to_string())?;
     Ok(referenced)
 }
 
@@ -14429,3 +14433,11 @@ mod action_snapshot_perf;
 #[cfg(test)]
 #[path = "../tests/perf/cross_effects.rs"]
 mod cross_effects_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/child_tables.rs"]
+mod child_tables_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/global_references.rs"]
+mod global_references_perf;

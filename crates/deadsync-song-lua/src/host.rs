@@ -117,10 +117,11 @@ pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
     match value {
         Value::Table(table) => {
             let cloned = lua.create_table()?;
-            for pair in table.pairs::<Value, Value>() {
-                let (key, value) = pair?;
-                cloned.set(clone_lua_value(lua, key)?, clone_lua_value(lua, value)?)?;
-            }
+            // Keep the traversal key on Lua's stack instead of cloning a Rust
+            // cursor handle for every reference-valued key at every depth.
+            table.for_each::<Value, Value>(|key, value| {
+                cloned.set(clone_lua_value(lua, key)?, clone_lua_value(lua, value)?)
+            })?;
             Ok(Value::Table(cloned))
         }
         other => Ok(other),
@@ -1767,3 +1768,7 @@ pub fn install_cmd_helpers(lua: &Lua) -> mlua::Result<()> {
     )?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/value_clone.rs"]
+mod value_clone_perf;
