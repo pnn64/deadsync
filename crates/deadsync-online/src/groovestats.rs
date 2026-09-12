@@ -36,7 +36,8 @@ use deadsync_score::{
     leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
     validate_score_import_credentials,
 };
-use serde_json::{Map as JsonMap, Value as JsonValue};
+use serde::ser::SerializeMap as _;
+use std::collections::BTreeMap;
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
 const GROOVESTATS_API_SERVICE_URL: &str = "https://apiservice.groovestats.com/api/";
@@ -1974,6 +1975,24 @@ impl GrooveStatsSubmitPlayerDraft {
     }
 
     #[must_use]
+    pub fn into_player_job(self, token: u64) -> GrooveStatsSubmitPlayerJob {
+        GrooveStatsSubmitPlayerJob {
+            side: self.side,
+            slot: self.slot,
+            chart_hash: self.chart_hash,
+            username: self.username,
+            profile_name: self.profile_name,
+            profile_id: self.profile_id,
+            token,
+            itl_score_hundredths: self.itl_score_hundredths,
+            show_ex_score: self.show_ex_score,
+            score_10000: self.payload.score,
+            rate_hundredths: self.payload.rate,
+            comment: self.payload.comment,
+        }
+    }
+
+    #[must_use]
     pub fn player_request(&self) -> GrooveStatsSubmitPlayerRequest {
         GrooveStatsSubmitPlayerRequest {
             slot: self.slot,
@@ -2091,13 +2110,64 @@ pub fn submit_gameplay_players(
 pub struct GrooveStatsSubmitRequestParts {
     pub headers: Vec<(String, String)>,
     pub query: Vec<(String, String)>,
-    pub body: JsonValue,
+    /// Encoded JSON, ready to transmit without building an intermediate value tree.
+    pub body: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub struct GrooveStatsSubmitRequest {
     pub players: Vec<GrooveStatsSubmitPlayerJob>,
     pub parts: GrooveStatsSubmitRequestParts,
+}
+
+struct SubmitBody<'a>(BTreeMap<u8, &'a GrooveStatsSubmitPlayerPayload>);
+
+impl Serialize for SubmitBody<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        struct PlayerKey(u8);
+        impl Serialize for PlayerKey {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.collect_str(&format_args!("player{}", self.0))
+            }
+        }
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (&slot, payload) in &self.0 {
+            map.serialize_entry(&PlayerKey(slot), payload)?;
+        }
+        map.end()
+    }
+}
+
+fn submit_request_parts_from_players<'a>(
+    players: impl ExactSizeIterator<Item = (u8, &'a str, String, &'a GrooveStatsSubmitPlayerPayload)>,
+) -> GrooveStatsSubmitRequestParts {
+    let mut payloads = BTreeMap::new();
+    let mut headers = Vec::with_capacity(players.len());
+    let mut query = Vec::with_capacity(players.len() + 1);
+    query.push((
+        "maxLeaderboardResults".to_string(),
+        GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+    ));
+    for (slot, chart_hash, api_key, payload) in players {
+        headers.push((format!("x-api-key-player-{slot}"), api_key));
+        query.push((format!("chartHashP{slot}"), chart_hash.to_string()));
+        // Match JSON object insertion: the last payload for a slot wins, while
+        // headers and query parameters keep their original order and duplicates.
+        payloads.insert(slot, payload);
+    }
+    // The fixed schema fits within 1 KiB/player, leaving space for ordinary
+    // escaping. Very large escaped strings can grow the output normally.
+    let capacity = payloads.values().fold(2usize, |size, payload| {
+        size + 1024 + payload.comment.len() + payload.player_options.len()
+    });
+    let mut body = Vec::with_capacity(capacity);
+    serde_json::to_writer(&mut body, &SubmitBody(payloads))
+        .expect("serialize GrooveStats submit body");
+    GrooveStatsSubmitRequestParts {
+        headers,
+        query,
+        body,
+    }
 }
 
 #[must_use]
@@ -2107,51 +2177,34 @@ pub struct GrooveStatsSubmitRequest {
 pub fn submit_request_parts(
     players: &[GrooveStatsSubmitPlayerRequest],
 ) -> GrooveStatsSubmitRequestParts {
-    let mut body = JsonMap::with_capacity(players.len());
-    let mut headers = Vec::with_capacity(players.len());
-    let mut query = Vec::with_capacity(players.len() + 1);
-    query.push((
-        "maxLeaderboardResults".to_string(),
-        GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
-    ));
-
-    for player in players {
-        headers.push((
-            format!("x-api-key-player-{}", player.slot),
+    submit_request_parts_from_players(players.iter().map(|player| {
+        (
+            player.slot,
+            player.chart_hash.as_str(),
             player.api_key.clone(),
-        ));
-        query.push((
-            format!("chartHashP{}", player.slot),
-            player.chart_hash.clone(),
-        ));
-        body.insert(
-            format!("player{}", player.slot),
-            serde_json::to_value(&player.payload)
-                .expect("serialize GrooveStats submit player payload"),
-        );
-    }
-
-    GrooveStatsSubmitRequestParts {
-        headers,
-        query,
-        body: JsonValue::Object(body),
-    }
+            &player.payload,
+        )
+    }))
 }
 
 #[must_use]
 pub fn submit_request_from_drafts(
-    players: Vec<(GrooveStatsSubmitPlayerDraft, u64)>,
+    mut players: Vec<(GrooveStatsSubmitPlayerDraft, u64)>,
 ) -> GrooveStatsSubmitRequest {
-    let request_players: Vec<_> = players
-        .iter()
-        .map(|(player, _)| player.player_request())
-        .collect();
+    let parts = submit_request_parts_from_players(players.iter_mut().map(|(player, _)| {
+        (
+            player.slot,
+            player.chart_hash.as_str(),
+            std::mem::take(&mut player.api_key),
+            &player.payload,
+        )
+    }));
     GrooveStatsSubmitRequest {
         players: players
             .into_iter()
-            .map(|(player, token)| player.player_job(token))
+            .map(|(player, token)| player.into_player_job(token))
             .collect(),
-        parts: submit_request_parts(&request_players),
+        parts,
     }
 }
 
@@ -2199,15 +2252,14 @@ pub fn retry_submit_request(
         rate_hundredths: entry.payload.rate,
         comment: entry.payload.comment.clone(),
     };
-    let request_player = GrooveStatsSubmitPlayerRequest {
-        slot: entry.slot,
-        chart_hash: entry.chart_hash.clone(),
-        api_key: entry.api_key.clone(),
-        payload: entry.payload.clone(),
-    };
     GrooveStatsSubmitRequest {
         players: vec![player],
-        parts: submit_request_parts(&[request_player]),
+        parts: submit_request_parts_from_players(std::iter::once((
+            entry.slot,
+            entry.chart_hash.as_str(),
+            entry.api_key.clone(),
+            &entry.payload,
+        ))),
     }
 }
 
@@ -3008,49 +3060,95 @@ pub struct GrooveStatsSubmitUnlockPlan {
     pub downloads: Vec<GrooveStatsUnlockDownload>,
 }
 
-#[must_use]
-pub fn unlock_downloads_from_submit_event(
+fn unlock_events<'a>(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &'a GrooveStatsSubmitApiPlayer,
+) -> impl Iterator<Item = &'a GrooveStatsSubmitApiEvent> + Clone {
+    [
+        response.srpg.as_ref(),
+        response
+            .itl
+            .as_ref()
+            .filter(|_| player.itl_score_hundredths.is_some()),
+    ]
+    .into_iter()
+    .flatten()
+}
+
+fn unlock_quests(event: &GrooveStatsSubmitApiEvent) -> &[GrooveStatsSubmitApiQuest] {
+    event
+        .progress
+        .as_ref()
+        .map_or(&[], |progress| progress.quests_completed.as_slice())
+}
+
+fn download_count(event: &GrooveStatsSubmitApiEvent) -> usize {
+    unlock_quests(event)
+        .iter()
+        .filter(|quest| !quest.song_download_url.trim().is_empty())
+        .count()
+}
+
+fn append_unlock_downloads(
+    out: &mut Vec<GrooveStatsUnlockDownload>,
     event: &GrooveStatsSubmitApiEvent,
     profile_name: &str,
     separate_by_player: bool,
-) -> Vec<GrooveStatsUnlockDownload> {
-    let Some(progress) = event.progress.as_ref() else {
-        return Vec::new();
-    };
+) {
     let event_name = event_name_or_unknown(event.name.as_str());
     let profile_name = if profile_name.trim().is_empty() {
         "NoName"
     } else {
         profile_name.trim()
     };
+    for quest in unlock_quests(event) {
+        let url = quest.song_download_url.trim();
+        if url.is_empty() {
+            continue;
+        }
+        let title = quest.title.trim();
+        let suffix_len = if separate_by_player {
+            3 + profile_name.len()
+        } else {
+            0
+        };
+        let mut download_name =
+            String::with_capacity(3 + event_name.len() + title.len() + suffix_len);
+        download_name.push('[');
+        download_name.push_str(event_name);
+        download_name.push_str("] ");
+        download_name.push_str(title);
+        let mut pack_name = String::with_capacity(event_name.len() + 8 + suffix_len);
+        pack_name.push_str(event_name);
+        pack_name.push_str(" Unlocks");
+        if separate_by_player {
+            download_name.push_str(" - ");
+            download_name.push_str(profile_name);
+            pack_name.push_str(" - ");
+            pack_name.push_str(profile_name);
+        }
+        download_name.truncate(download_name.trim_end().len());
+        out.push(GrooveStatsUnlockDownload {
+            url: url.to_string(),
+            download_name,
+            pack_name,
+        });
+    }
+}
 
-    progress
-        .quests_completed
-        .iter()
-        .filter_map(|quest| {
-            let url = quest.song_download_url.trim();
-            if url.is_empty() {
-                return None;
-            }
-            let title = quest.title.trim();
-            let (download_name, pack_name) = if separate_by_player {
-                (
-                    format!("[{event_name}] {title} - {profile_name}"),
-                    format!("{event_name} Unlocks - {profile_name}"),
-                )
-            } else {
-                (
-                    format!("[{event_name}] {title}"),
-                    format!("{event_name} Unlocks"),
-                )
-            };
-            Some(GrooveStatsUnlockDownload {
-                url: url.to_string(),
-                download_name: download_name.trim_end().to_string(),
-                pack_name,
-            })
-        })
-        .collect()
+#[must_use]
+pub fn unlock_downloads_from_submit_event(
+    event: &GrooveStatsSubmitApiEvent,
+    profile_name: &str,
+    separate_by_player: bool,
+) -> Vec<GrooveStatsUnlockDownload> {
+    let count = download_count(event);
+    if count == 0 {
+        return Vec::new();
+    }
+    let mut downloads = Vec::with_capacity(count);
+    append_unlock_downloads(&mut downloads, event, profile_name, separate_by_player);
+    downloads
 }
 
 #[must_use]
@@ -3060,24 +3158,32 @@ pub fn submit_unlock_plan_from_response(
     auto_download_unlocks: bool,
     separate_unlocks_by_player: bool,
 ) -> GrooveStatsSubmitUnlockPlan {
-    let itl_folder_groups = itl_unlock_folder_groups_from_submit_response(player, response)
-        .into_iter()
-        .map(<[std::string::String]>::to_vec)
+    let itl_quests = response
+        .itl
+        .as_ref()
+        .filter(|_| player.itl_score_hundredths.is_some())
+        .map_or(&[][..], unlock_quests);
+    let itl_folder_groups = itl_quests
+        .iter()
+        .map(|quest| quest.song_download_folders.as_slice())
+        .map(<[String]>::to_vec)
         .collect();
-    let downloads = if auto_download_unlocks {
-        unlock_events_from_submit_response(player, response)
-            .into_iter()
-            .flat_map(|event| {
-                unlock_downloads_from_submit_event(
+    let mut downloads = Vec::new();
+    if auto_download_unlocks {
+        let events = unlock_events(player, response);
+        let count = events.clone().map(download_count).sum();
+        if count != 0 {
+            downloads.reserve_exact(count);
+            for event in events {
+                append_unlock_downloads(
+                    &mut downloads,
                     event,
                     player.profile_name.as_str(),
                     separate_unlocks_by_player,
-                )
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+                );
+            }
+        }
+    }
     GrooveStatsSubmitUnlockPlan {
         itl_folder_groups,
         downloads,
@@ -3088,10 +3194,19 @@ pub fn submit_score_request(
     service: Service,
     headers: &[(String, String)],
     query: &[(String, String)],
-    body: &serde_json::Value,
+    body: &[u8],
+) -> Result<GrooveStatsSubmitRequestSuccess, GrooveStatsSubmitRequestError> {
+    submit_score_request_to_url(&score_submit_url(service), headers, query, body)
+}
+
+fn submit_score_request_to_url(
+    url: &str,
+    headers: &[(String, String)],
+    query: &[(String, String)],
+    body: &[u8],
 ) -> Result<GrooveStatsSubmitRequestSuccess, GrooveStatsSubmitRequestError> {
     let mut request = network::get_groovestats_agent()
-        .post(&score_submit_url(service))
+        .post(url)
         .header("Content-Type", "application/json");
     for (name, value) in headers {
         request = request.header(name, value);
@@ -3100,7 +3215,7 @@ pub fn submit_score_request(
         request = request.query(name, value);
     }
 
-    let response = request.send_json(body).map_err(|error| {
+    let response = request.send(body).map_err(|error| {
         let message = format!("network error: {error}");
         GrooveStatsSubmitRequestError::Transport {
             timed_out: network::is_timeout_message(message.as_str()),
@@ -4855,8 +4970,9 @@ mod tests {
                 ("chartHashP2".to_string(), "hash-p2".to_string()),
             ]
         );
-        assert_eq!(parts.body["player1"]["score"], 9_975);
-        assert_eq!(parts.body["player2"]["rate"], 150);
+        let body: serde_json::Value = serde_json::from_slice(&parts.body).unwrap();
+        assert_eq!(body["player1"]["score"], 9_975);
+        assert_eq!(body["player2"]["rate"], 150);
     }
 
     #[test]
@@ -5970,4 +6086,12 @@ mod tests {
         assert_eq!(response.error, "bad api key");
         assert!(response.player_for_slot(1).is_none());
     }
+}
+
+#[cfg(test)]
+mod preparation_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/groovestats_preparation.rs"
+    ));
 }
