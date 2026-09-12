@@ -138,31 +138,39 @@ impl SongLuaOverlayUpdateCapture {
         easing: Option<String>,
         opt1: Option<f32>,
     ) {
-        let Some(message) = self.active_broadcast.clone() else {
+        if self.active_broadcast.is_none() {
             return;
-        };
+        }
         let Some(index) = self.touch(actor) else {
             return;
         };
-        self.stateful_messages
-            .entry(message.clone())
-            .or_default()
-            .entry(index)
-            .or_default()
-            .insert(target);
-        self.stateful_writes
-            .entry(message)
-            .or_default()
-            .push(SongLuaStatefulMessageWrite {
-                overlay_index: index,
-                beat,
-                target,
-                value,
-                delay_seconds,
-                duration_seconds,
-                easing,
-                opt1,
-            });
+        let message = self
+            .active_broadcast
+            .as_deref()
+            .expect("broadcast is active");
+        if let Some(targets) = self.stateful_messages.get_mut(message) {
+            targets.entry(index).or_default().insert(target);
+        } else {
+            self.stateful_messages.insert(
+                message.to_owned(),
+                BTreeMap::from([(index, BTreeSet::from([target]))]),
+            );
+        }
+        let write = SongLuaStatefulMessageWrite {
+            overlay_index: index,
+            beat,
+            target,
+            value,
+            delay_seconds,
+            duration_seconds,
+            easing,
+            opt1,
+        };
+        if let Some(writes) = self.stateful_writes.get_mut(message) {
+            writes.push(write);
+        } else {
+            self.stateful_writes.insert(message.to_owned(), vec![write]);
+        }
     }
 
     fn touch(&mut self, actor: &Table) -> Option<usize> {
@@ -14237,3 +14245,7 @@ pub fn method_arg(args: &MultiValue, index: usize) -> Option<&Value> {
 pub fn method_arg_offset(args: &MultiValue) -> usize {
     usize::from(matches!(args.front(), Some(Value::Table(_))))
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/stateful_storage.rs"]
+mod stateful_storage_perf;

@@ -1371,6 +1371,57 @@ struct OverlaySampleScratch {
     )>,
 }
 
+fn append_scheduled_overlay_updates(
+    scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
+    context: &SongLuaCompileContext,
+    update_states: &[SongLuaOverlayState],
+    overlay_index: usize,
+    scheduled: &[crate::lua_util::SongLuaScheduledOverlayUpdate],
+    message_seconds: f64,
+) {
+    if scheduled.is_empty() {
+        return;
+    }
+    // Targets are contiguous enum discriminants through StretchRect.
+    // Borrow prior writes; only emitted samples need owned values.
+    let mut scheduled_values: [Option<&SongLuaOverlayUpdateValue>;
+        SongLuaOverlayUpdateTarget::StretchRect as usize + 1] =
+        [None; SongLuaOverlayUpdateTarget::StretchRect as usize + 1];
+    for update in scheduled {
+        let from = scheduled_values[update.target as usize]
+            .cloned()
+            .or_else(|| {
+                update_states
+                    .get(overlay_index)
+                    .map(|state| overlay_state_update_value(state, update.target))
+            })
+            .unwrap_or(SongLuaOverlayUpdateValue::None);
+        scheduled_samples.push(SongLuaScheduledOverlaySample {
+            overlay_index,
+            target: update.target,
+            start_seconds: message_seconds + f64::from(update.delay_seconds),
+            end_seconds: message_seconds
+                + f64::from(update.delay_seconds)
+                + f64::from(update.duration_seconds),
+            start_beat: song_beat_at_elapsed_seconds(
+                (message_seconds + f64::from(update.delay_seconds)) as f32,
+                context,
+            ),
+            end_beat: song_beat_at_elapsed_seconds(
+                (message_seconds
+                    + f64::from(update.delay_seconds)
+                    + f64::from(update.duration_seconds)) as f32,
+                context,
+            ),
+            easing: update.easing.clone(),
+            opt1: update.opt1,
+            from,
+            value: update.value.clone(),
+        });
+        scheduled_values[update.target as usize] = Some(&update.value);
+    }
+}
+
 fn capture_update_overlay_samples<Kind>(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -1452,42 +1503,14 @@ fn capture_update_overlay_samples<Kind>(
                 }
                 captured_tracks[track_index] = true;
             }
-            let message_seconds = next_seconds;
-            let mut scheduled_values = std::collections::HashMap::new();
-            for update in scheduled {
-                let from = scheduled_values
-                    .get(&update.target)
-                    .cloned()
-                    .or_else(|| {
-                        update_states
-                            .get(overlay_index)
-                            .map(|state| overlay_state_update_value(state, update.target))
-                    })
-                    .unwrap_or(SongLuaOverlayUpdateValue::None);
-                scheduled_samples.push(SongLuaScheduledOverlaySample {
-                    overlay_index,
-                    target: update.target,
-                    start_seconds: message_seconds + f64::from(update.delay_seconds),
-                    end_seconds: message_seconds
-                        + f64::from(update.delay_seconds)
-                        + f64::from(update.duration_seconds),
-                    start_beat: song_beat_at_elapsed_seconds(
-                        (message_seconds + f64::from(update.delay_seconds)) as f32,
-                        context,
-                    ),
-                    end_beat: song_beat_at_elapsed_seconds(
-                        (message_seconds
-                            + f64::from(update.delay_seconds)
-                            + f64::from(update.duration_seconds)) as f32,
-                        context,
-                    ),
-                    easing: update.easing.clone(),
-                    opt1: update.opt1,
-                    from,
-                    value: update.value.clone(),
-                });
-                scheduled_values.insert(update.target, update.value.clone());
-            }
+            append_scheduled_overlay_updates(
+                scheduled_samples,
+                context,
+                update_states,
+                overlay_index,
+                scheduled,
+                next_seconds,
+            );
             Ok(())
         },
     )?;
@@ -1860,7 +1883,7 @@ pub fn compile_update_functions<Kind>(
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     let mut replay_overlays = baseline_overlays.clone();
     let started = message_replay.advance(lua, context, overlays, &mut replay_overlays, start)?;
-    restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
+    restore_started_message_states(lua, overlays, &replay_overlays, started)?;
     let mut update_overlays = replay_overlays.clone();
     let baseline_players = current_perframe_player_states(&player_tables)?;
     let baseline_mods = current_update_mod_states_with_note_columns(lua, &option_tables)?;
@@ -1883,7 +1906,7 @@ pub fn compile_update_functions<Kind>(
         &baseline_overlays,
         &mut update_overlays,
         &mut current_overlays,
-        &started,
+        started,
         &mut overlay_tracks,
         &mut overlay_track_indices,
         start,
@@ -1925,7 +1948,7 @@ pub fn compile_update_functions<Kind>(
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, delta_seconds)?;
         update_ms += stage.map_or(0.0, |started| started.elapsed().as_secs_f64() * 1000.0);
         let stage = profile.then(Instant::now);
-        restore_started_message_states(lua, overlays, &replay_overlays, &started)?;
+        restore_started_message_states(lua, overlays, &replay_overlays, started)?;
         update_overlays.copy_from_slice(&replay_overlays);
         let next_masks = player_transform_masks(&player_tables)?;
         let prior_active = if player_samples.len() >= 2 {
@@ -1971,7 +1994,7 @@ pub fn compile_update_functions<Kind>(
             &current_overlays,
             &mut update_overlays,
             &mut replay_overlays,
-            &started,
+            started,
             &mut overlay_tracks,
             &mut overlay_track_indices,
             beat,
@@ -2070,11 +2093,43 @@ struct SongLuaPerframeActiveMessage {
     base: SongLuaOverlayState,
 }
 
+// Reused for one replay. Result indices are unique and sorted for binary search.
+#[derive(Default)]
+struct StartedOverlayIndices {
+    indices: Vec<usize>,
+    seen: Vec<bool>,
+}
+
+impl StartedOverlayIndices {
+    fn clear(&mut self) {
+        for &index in &self.indices {
+            self.seen[index] = false;
+        }
+        self.indices.clear();
+    }
+
+    fn insert(&mut self, index: usize, overlay_count: usize) {
+        if self.seen.is_empty() {
+            self.seen.resize(overlay_count, false);
+        }
+        if !self.seen[index] {
+            self.seen[index] = true;
+            self.indices.push(index);
+        }
+    }
+
+    fn as_sorted_slice(&mut self) -> &[usize] {
+        self.indices.sort_unstable();
+        &self.indices
+    }
+}
+
 struct SongLuaPerframeMessageReplay<'a> {
     messages: &'a [SongLuaMessageEvent],
     order: Vec<usize>,
     next: usize,
     active: Vec<Option<SongLuaPerframeActiveMessage>>,
+    started: StartedOverlayIndices,
 }
 
 impl<'a> SongLuaPerframeMessageReplay<'a> {
@@ -2086,6 +2141,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
             order,
             next: 0,
             active: vec![None; overlay_count],
+            started: StartedOverlayIndices::default(),
         }
     }
 
@@ -2096,8 +2152,8 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
         overlays: &mut [SongLuaOverlayCompileActor<Kind>],
         states: &mut [SongLuaOverlayState],
         beat: f32,
-    ) -> Result<Vec<usize>, String> {
-        let mut started = Vec::new();
+    ) -> Result<&[usize], String> {
+        self.started.clear();
         while let Some(&event_index) = self.order.get(self.next) {
             let event = &self.messages[event_index];
             let event_beat = event.beat;
@@ -2139,7 +2195,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                     start_beat: event_beat,
                     base,
                 });
-                started.push(overlay_index);
+                self.started.insert(overlay_index, self.active.len());
                 apply_perframe_active_message(
                     lua,
                     context,
@@ -2166,9 +2222,7 @@ impl<'a> SongLuaPerframeMessageReplay<'a> {
                 *state = actor_overlay_initial_state(&overlay.table)?;
             }
         }
-        started.sort_unstable();
-        started.dedup();
-        Ok(started)
+        Ok(self.started.as_sorted_slice())
     }
 }
 
@@ -2377,3 +2431,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/update_timeline.rs"]
 mod update_timeline_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/overlay_storage.rs"]
+mod overlay_storage_perf;
