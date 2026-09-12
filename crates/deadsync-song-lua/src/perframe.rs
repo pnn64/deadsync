@@ -10,7 +10,7 @@ use crate::{
     SongLuaOverlayUpdateTrack, SongLuaOverlayUpdateValue, SongLuaSpanMode,
     SongLuaStatefulMessageCapture, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
     actor_overlay_initial_state, actor_tree_has_update_functions,
-    column_transform_windows_from_samples, compile_song_runtime_delta_values,
+    append_column_transform_windows_from_samples, compile_song_runtime_delta_values,
     compile_song_runtime_values, overlay_delta_pair_from_states, overlay_state_after_blocks,
     push_unique_compile_detail, read_f32, read_note_column_transform_samples, reset_actor_capture,
     reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
@@ -521,26 +521,88 @@ pub fn update_function_sample_step(len: f32) -> f32 {
     (len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32).max(1.0 / 192.0)
 }
 
-fn update_function_replay_beats(
+pub(crate) fn update_function_replay_beats(
     context: &SongLuaCompileContext,
     start: f32,
     end: f32,
 ) -> Vec<(f64, f64)> {
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     let end_seconds = f64::from(song_elapsed_seconds_at(end, context));
-    let mut out = vec![(f64::from(start), 0.0)];
     let frame_count = ((end_seconds - start_seconds) * f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
         .ceil()
         .max(0.0) as usize;
+    // Empty timing maps have no prefix to reuse. Keep their original build
+    // path: pre-sizing this case regressed allocator-sensitive benchmarks.
+    if context.song_timing_bpms.is_empty() {
+        let mut out = vec![(f64::from(start), 0.0)];
+        let mut previous_seconds = start_seconds;
+        for frame in 1..=frame_count {
+            let seconds = (start_seconds + frame as f64 / f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
+                .min(end_seconds);
+            out.push((
+                crate::song_beat_at_seconds64(seconds, context),
+                seconds - previous_seconds,
+            ));
+            previous_seconds = seconds;
+        }
+        return out;
+    }
+    let mut out = Vec::with_capacity(frame_count.saturating_add(1));
+    out.push((f64::from(start), 0.0));
+    if frame_count == 0 {
+        return out;
+    }
     let mut previous_seconds = start_seconds;
-    for frame in 1..=frame_count {
+    let rate = f64::from(song_music_rate(context));
+    let mut cursor_beat = 0.0;
+    let mut cursor_seconds = 0.0;
+    let mut bpm = context
+        .song_timing_bpms
+        .first()
+        .filter(|(beat, bpm)| *beat <= 0.0 && *bpm > 0.0)
+        .map_or_else(
+            || {
+                f64::from(context.song_display_bpms[0].max(context.song_display_bpms[1]))
+                    .max(f64::from(f32::EPSILON) * 60.0)
+            },
+            |segment| f64::from(segment.1),
+        );
+    let mut segments = context.song_timing_bpms.as_slice();
+    let ordered = rate.is_finite()
+        && rate > 0.0
+        && bpm.is_finite()
+        && segments
+            .iter()
+            .all(|(beat, bpm)| beat.is_finite() && bpm.is_finite() && *bpm > 0.0)
+        && segments.is_sorted_by(|left, right| left.0 <= right.0);
+    // Each timestamp uses the original frame formula. Only the immutable BPM
+    // prefix is retained; accumulated delta rounding cannot move a boundary.
+    for index in 0..frame_count {
+        let frame = index + 1;
         let seconds = (start_seconds + frame as f64 / f64::from(SONG_LUA_UPDATE_REFERENCE_FPS))
             .min(end_seconds);
-        out.push((
-            crate::song_beat_at_seconds64(seconds, context),
-            seconds - previous_seconds,
-        ));
+        let beat = if ordered {
+            let target = seconds * rate;
+            while let Some((&(segment_beat, segment_bpm), rest)) = segments.split_first() {
+                let segment_beat = f64::from(segment_beat);
+                let next_seconds = cursor_seconds + (segment_beat - cursor_beat) * 60.0 / bpm;
+                if next_seconds > target {
+                    break;
+                }
+                cursor_beat = segment_beat;
+                cursor_seconds = next_seconds;
+                bpm = f64::from(segment_bpm).max(f64::EPSILON);
+                segments = rest;
+            }
+            cursor_beat + (target - cursor_seconds) * bpm / 60.0
+        } else {
+            // Public compile contexts can contain unordered or invalid timing.
+            // Preserve their existing conversion semantics.
+            crate::song_beat_at_seconds64(seconds, context)
+        };
+        let delta = seconds - previous_seconds;
         previous_seconds = seconds;
+        out.push((beat, delta));
     }
     out
 }
@@ -1966,7 +2028,8 @@ pub fn compile_update_functions<Kind>(
         );
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);
-        column_transforms.extend(column_transform_windows_from_samples(
+        append_column_transform_windows_from_samples(
+            &mut column_transforms,
             from_columns,
             to_columns,
             SongLuaColumnOffsetBuildParams {
@@ -1979,7 +2042,7 @@ pub fn compile_update_functions<Kind>(
                 opt1: None,
                 opt2: None,
             },
-        ));
+        );
     }
     merge_scheduled_overlay_samples(
         &mut overlay_tracks,

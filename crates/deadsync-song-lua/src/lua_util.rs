@@ -9391,7 +9391,8 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
     let points = spline
         .get::<Table>("__songlua_spline_points")
         .map_err(|err| err.to_string())?;
-    let mut points_out = Vec::with_capacity(size);
+    let mut first_y = None::<f32>;
+    let mut valid = true;
     for index in 1..=size {
         let Some(point) = points
             .raw_get::<Option<Table>>(index)
@@ -9404,12 +9405,16 @@ pub fn note_column_pos_offset_y(actor: &Table) -> Result<Option<f32>, String> {
         let (Some(x), Some(point_y)) = (x, point_y) else {
             return Ok(None);
         };
-        points_out.push([x, point_y]);
+        // Keep reading after a geometric mismatch: a later malformed table
+        // must still produce the same lookup error as the collecting path.
+        valid &= x.is_finite() && point_y.is_finite() && x.abs() <= 0.001;
+        if let Some(first_y) = first_y {
+            valid &= (point_y - first_y).abs() <= 0.001;
+        } else {
+            first_y = Some(point_y);
+        }
     }
-    Ok(crate::note_column_pos_offset_y_from_points(
-        &mode,
-        &points_out,
-    ))
+    Ok(if valid { first_y } else { None })
 }
 
 pub fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {

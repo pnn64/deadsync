@@ -4638,6 +4638,89 @@ pub fn column_transform_windows_from_samples(
     to_samples: &[SongLuaColumnTransformSample],
     params: SongLuaColumnOffsetBuildParams,
 ) -> Vec<SongLuaColumnOffsetWindow> {
+    let mut out = Vec::new();
+    append_column_transform_windows_from_samples(&mut out, from_samples, to_samples, params);
+    out
+}
+
+fn column_transform_sample_key(
+    sample: &SongLuaColumnTransformSample,
+) -> (usize, usize, SongLuaColumnTransformTarget) {
+    (sample.player, sample.column, sample.target)
+}
+
+fn take_column_transform_value(
+    samples: &mut &[SongLuaColumnTransformSample],
+    key: (usize, usize, SongLuaColumnTransformTarget),
+) -> f32 {
+    let Some(first) = samples
+        .first()
+        .filter(|sample| column_transform_sample_key(sample) == key)
+    else {
+        return key.2.baseline();
+    };
+    let value = first.value;
+    // The original lookup used the first occurrence, including duplicate keys.
+    while let Some((first, rest)) = samples.split_first() {
+        if column_transform_sample_key(first) != key {
+            break;
+        }
+        *samples = rest;
+    }
+    value
+}
+
+pub(crate) fn append_column_transform_windows_from_samples(
+    out: &mut Vec<SongLuaColumnOffsetWindow>,
+    from_samples: &[SongLuaColumnTransformSample],
+    to_samples: &[SongLuaColumnTransformSample],
+    params: SongLuaColumnOffsetBuildParams,
+) {
+    // Capture visits players, columns, and targets in key order. Merge those
+    // samples directly, without collecting keys or rescanning each input.
+    let ordered = |samples: &[SongLuaColumnTransformSample]| {
+        samples.is_sorted_by(|left, right| {
+            column_transform_sample_key(left) <= column_transform_sample_key(right)
+        })
+    };
+    if ordered(from_samples) && ordered(to_samples) {
+        let mut from = from_samples;
+        let mut to = to_samples;
+        while !from.is_empty() || !to.is_empty() {
+            let key = match (from.first(), to.first()) {
+                (Some(left), Some(right)) => {
+                    column_transform_sample_key(left).min(column_transform_sample_key(right))
+                }
+                (Some(sample), None) | (None, Some(sample)) => column_transform_sample_key(sample),
+                (None, None) => break,
+            };
+            let from_y = take_column_transform_value(&mut from, key);
+            let to_y = take_column_transform_value(&mut to, key);
+            let baseline = key.2.baseline();
+            if (from_y - baseline).abs() <= f32::EPSILON && (to_y - baseline).abs() <= f32::EPSILON
+            {
+                continue;
+            }
+            out.push(SongLuaColumnOffsetWindow {
+                unit: params.unit,
+                start: params.start,
+                limit: params.limit,
+                span_mode: params.span_mode,
+                player: key.0,
+                column: key.1,
+                target: key.2,
+                from_y,
+                to_y,
+                easing: params.easing.clone(),
+                sustain: params.sustain,
+                opt1: params.opt1,
+                opt2: params.opt2,
+            });
+        }
+        return;
+    }
+    // Public callers may supply arbitrary order. Retain their first-write and
+    // sorted-output semantics using the existing fallback.
     let mut keys = Vec::<(usize, usize, SongLuaColumnTransformTarget)>::new();
     for sample in from_samples.iter().chain(to_samples.iter()) {
         let key = (sample.player, sample.column, sample.target);
@@ -4647,7 +4730,6 @@ pub fn column_transform_windows_from_samples(
     }
     keys.sort_unstable();
 
-    let mut out = Vec::new();
     for (player, column, target) in keys {
         let from_y = column_transform_sample_value(from_samples, player, column, target);
         let to_y = column_transform_sample_value(to_samples, player, column, target);
@@ -4671,7 +4753,6 @@ pub fn column_transform_windows_from_samples(
             opt2: params.opt2,
         });
     }
-    out
 }
 
 fn column_transform_sample_value(
@@ -20974,3 +21055,7 @@ mod perf;
 #[cfg(test)]
 #[path = "../tests/perf/state_perf.rs"]
 mod state_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/column_capture.rs"]
+mod column_capture_perf;
