@@ -1,6 +1,11 @@
 pub mod cabinet_chart;
 pub mod gameplay;
 
+#[cfg(test)]
+#[path = "../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod perf;
+
 mod fusion;
 mod gpb;
 mod hid_blue_dot;

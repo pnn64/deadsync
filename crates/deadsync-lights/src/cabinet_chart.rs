@@ -5,7 +5,7 @@ use deadsync_chart::{
 };
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
-use deadsync_rules::timing::TimingData;
+use deadsync_rules::timing::{BeatTimeCache, TimingData};
 
 use crate::CabinetLight;
 
@@ -193,14 +193,17 @@ fn build_cabinet_light_events(
     charts: &[GameplayChartData],
     pack_sync_offset_seconds: f32,
 ) -> Vec<CabinetLightEvent> {
-    // The result is song-lifetime storage. Reserve its conservative maximum
-    // once so construction cannot grow repeatedly; generated bass emits at
-    // most two events per source note. The final unstable sort is sufficient
-    // because equal-time light blinks commute in the runtime bitmask.
+    // The result lives for the song. Count eligible notes and bass rows rather
+    // than reserving two bass events for every note in a chord. Timing can
+    // reject more rows, so this remains an upper bound without timing twice.
     let event_capacity = match plan {
-        CabinetLightPlan::Explicit { .. } => {
-            charts.first().map_or(0, |chart| chart.parsed_notes.len())
-        }
+        CabinetLightPlan::Explicit { .. } => charts.first().map_or(0, |chart| {
+            chart
+                .parsed_notes
+                .iter()
+                .filter(|note| explicit_light_note(note.note_type) && note.column < 6)
+                .count()
+        }),
         CabinetLightPlan::Generated {
             marquee_ix,
             bass_ix,
@@ -211,12 +214,17 @@ fn build_cabinet_light_events(
             } else {
                 charts.get(1).unwrap_or(marquee)
             };
-            marquee
-                .parsed_notes
-                .len()
-                .saturating_add(bass.parsed_notes.len().saturating_mul(2))
+            if std::ptr::eq(marquee, bass) {
+                generated_event_capacity(marquee, true, true)
+            } else {
+                generated_event_capacity(marquee, true, false)
+                    .saturating_add(generated_event_capacity(bass, false, true))
+            }
         }),
     };
+    if event_capacity == 0 {
+        return Vec::new();
+    }
     let mut events = Vec::with_capacity(event_capacity);
     let pack_sync_offset_ns = timing_offset_ns(pack_sync_offset_seconds);
     match plan {
@@ -238,17 +246,40 @@ fn build_cabinet_light_events(
             } else {
                 charts.get(1).unwrap_or(marquee)
             };
-            push_generated_marquee_events(&mut events, marquee, pack_sync_offset_ns);
-            push_generated_bass_events(
-                &mut events,
-                bass,
-                pack_sync_offset_ns,
-                marquee_ix == bass_ix,
-            );
+            if std::ptr::eq(marquee, bass) {
+                push_shared_generated_events(
+                    &mut events,
+                    marquee,
+                    pack_sync_offset_ns,
+                    marquee_ix == bass_ix,
+                );
+            } else {
+                push_generated_marquee_events(&mut events, marquee, pack_sync_offset_ns);
+                push_generated_bass_events(&mut events, bass, pack_sync_offset_ns, false);
+            }
         }
     }
-    events.sort_unstable_by_key(|event| event.time_ns);
+    // Fused generation usually emits in time order. Rewinds or unusual timing
+    // still need sorting. Equal-time blinks commute in the runtime bitmask.
+    if !events.is_sorted_by_key(|event| event.time_ns) {
+        events.sort_unstable_by_key(|event| event.time_ns);
+    }
     events
+}
+
+fn generated_event_capacity(chart: &GameplayChartData, marquee: bool, bass: bool) -> usize {
+    let mut count = 0usize;
+    let mut last_row = usize::MAX;
+    for note in &chart.parsed_notes {
+        if generated_light_note(note.note_type) {
+            count = count.saturating_add(usize::from(marquee));
+            if bass && note.row_index != last_row {
+                count = count.saturating_add(2);
+                last_row = note.row_index;
+            }
+        }
+    }
+    count
 }
 
 fn push_explicit_cabinet_events(
@@ -256,7 +287,7 @@ fn push_explicit_cabinet_events(
     chart: &GameplayChartData,
     pack_sync_offset_ns: SongTimeNs,
 ) {
-    let timing = &chart.timing;
+    let mut times = LightRowTimes::new(chart, false, pack_sync_offset_ns);
     for note in &chart.parsed_notes {
         if !explicit_light_note(note.note_type) {
             continue;
@@ -264,9 +295,7 @@ fn push_explicit_cabinet_events(
         let Some(light) = explicit_cabinet_light_for_col(note.column) else {
             continue;
         };
-        if let Some(time_ns) =
-            light_note_time_ns(timing, note.row_index, false, pack_sync_offset_ns)
-        {
+        if let Some(time_ns) = times.get(note.row_index) {
             events.push(CabinetLightEvent {
                 time_ns,
                 row_index: note.row_index,
@@ -282,7 +311,7 @@ fn push_generated_marquee_events(
     chart: &GameplayChartData,
     pack_sync_offset_ns: SongTimeNs,
 ) {
-    let timing = &chart.timing;
+    let mut times = LightRowTimes::new(chart, true, pack_sync_offset_ns);
     for note in &chart.parsed_notes {
         if !generated_light_note(note.note_type) {
             continue;
@@ -290,8 +319,7 @@ fn push_generated_marquee_events(
         let Some(light) = cabinet_light_for_col(note.column % 4) else {
             continue;
         };
-        if let Some(time_ns) = light_note_time_ns(timing, note.row_index, true, pack_sync_offset_ns)
-        {
+        if let Some(time_ns) = times.get(note.row_index) {
             events.push(CabinetLightEvent {
                 time_ns,
                 row_index: note.row_index,
@@ -308,14 +336,13 @@ fn push_generated_bass_events(
     pack_sync_offset_ns: SongTimeNs,
     simplify_candidate: bool,
 ) {
-    let timing = &chart.timing;
+    let mut times = LightRowTimes::new(chart, true, pack_sync_offset_ns);
     let mut last_row = usize::MAX;
     for note in &chart.parsed_notes {
         if note.row_index == last_row || !generated_light_note(note.note_type) {
             continue;
         }
-        let Some(time_ns) = light_note_time_ns(timing, note.row_index, true, pack_sync_offset_ns)
-        else {
+        let Some(time_ns) = times.get(note.row_index) else {
             continue;
         };
         for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
@@ -330,29 +357,99 @@ fn push_generated_bass_events(
     }
 }
 
+fn push_shared_generated_events(
+    events: &mut Vec<CabinetLightEvent>,
+    chart: &GameplayChartData,
+    pack_sync_offset_ns: SongTimeNs,
+    simplify_candidate: bool,
+) {
+    let mut times = LightRowTimes::new(chart, true, pack_sync_offset_ns);
+    let mut last_bass_row = usize::MAX;
+    for note in &chart.parsed_notes {
+        if !generated_light_note(note.note_type) {
+            continue;
+        }
+        let Some(time_ns) = times.get(note.row_index) else {
+            continue;
+        };
+        if let Some(light) = cabinet_light_for_col(note.column % 4) {
+            events.push(CabinetLightEvent {
+                time_ns,
+                row_index: note.row_index,
+                light,
+                simplify_bass_candidate: false,
+            });
+        }
+        if note.row_index != last_bass_row {
+            for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
+                events.push(CabinetLightEvent {
+                    time_ns,
+                    row_index: note.row_index,
+                    light,
+                    simplify_bass_candidate: simplify_candidate,
+                });
+            }
+            last_bass_row = note.row_index;
+        }
+    }
+}
+
 #[inline(always)]
 fn timing_offset_ns(seconds: f32) -> SongTimeNs {
     let nanos = f64::from(seconds) * 1_000_000_000.0;
     nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as SongTimeNs
 }
 
-fn light_note_time_ns(
-    timing: &TimingData,
-    row_index: usize,
+struct LightRowTimes<'a> {
+    timing: &'a TimingData,
+    cursor: Option<BeatTimeCache>,
+    previous: Option<(usize, Option<SongTimeNs>)>,
     skip_fake_rows: bool,
     pack_sync_offset_ns: SongTimeNs,
-) -> Option<SongTimeNs> {
-    let beat = timing.get_beat_for_row(row_index)?;
-    // `is_judgable_at_beat` already rejects fake rows. The old extra fake
-    // query repeated the same partition-point search for every valid event.
-    if skip_fake_rows && !timing.is_judgable_at_beat(beat) {
-        return None;
+}
+
+impl<'a> LightRowTimes<'a> {
+    fn new(
+        chart: &'a GameplayChartData,
+        skip_fake_rows: bool,
+        pack_sync_offset_ns: SongTimeNs,
+    ) -> Self {
+        let timing = &chart.timing;
+        Self {
+            timing,
+            // Amortize validation over a batch; ambiguous BPM boundaries use
+            // independent conversions. The cursor also handles row rewinds.
+            cursor: (chart.parsed_notes.len() >= 16 && timing.supports_row_time_cache())
+                .then(|| BeatTimeCache::new(timing)),
+            previous: None,
+            skip_fake_rows,
+            pack_sync_offset_ns,
+        }
     }
-    Some(
-        timing
-            .get_time_for_beat_ns(beat)
-            .saturating_sub(pack_sync_offset_ns),
-    )
+
+    fn get(&mut self, row_index: usize) -> Option<SongTimeNs> {
+        if let Some((previous_row, time)) = self.previous
+            && previous_row == row_index
+        {
+            return time;
+        }
+        let time = self.time_for_row(row_index);
+        self.previous = Some((row_index, time));
+        time
+    }
+
+    fn time_for_row(&mut self, row_index: usize) -> Option<SongTimeNs> {
+        let beat = self.timing.get_beat_for_row(row_index)?;
+        if self.skip_fake_rows && !self.timing.is_judgable_at_beat(beat) {
+            return None;
+        }
+        let time = if let Some(cursor) = &mut self.cursor {
+            self.timing.get_time_for_beat_ns_cached(beat, cursor)
+        } else {
+            self.timing.get_time_for_beat_ns(beat)
+        };
+        Some(time.saturating_sub(self.pack_sync_offset_ns))
+    }
 }
 
 const fn generated_light_note(note_type: NoteType) -> bool {
@@ -393,6 +490,13 @@ mod tests {
         ArrowStats, ChartData, GameplayChartData, SongData, StaminaCounts, TechCounts,
     };
     use deadsync_rules::timing::{TimingData, TimingSegments};
+
+    mod performance {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/cabinet_lights.rs"
+        ));
+    }
 
     fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
         ParsedNote {
