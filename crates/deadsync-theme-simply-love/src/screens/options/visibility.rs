@@ -6,7 +6,9 @@ use super::*;
 pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
         (SubmenuKind::Bookkeeping, _) => true,
-        (SubmenuKind::Downloads, SubRowId::CheckForUpdates) => !state.updater_capabilities.app_update,
+        (SubmenuKind::Downloads, SubRowId::CheckForUpdates) => {
+            !state.updater_capabilities.app_update
+        }
         (SubmenuKind::Downloads, SubRowId::DownloadVideoSupport) => {
             !state.updater_capabilities.ffmpeg_install
         }

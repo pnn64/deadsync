@@ -132,6 +132,7 @@ mod tests {
             deadsync_profile::app_runtime::init_paths(
                 dirs.profiles_root(),
                 dirs.default_player_options_path(),
+                dirs.pad_config_path(),
             )
             .expect("initialize fixture profiles");
             deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {

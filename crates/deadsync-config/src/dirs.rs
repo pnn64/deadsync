@@ -35,6 +35,14 @@ impl AppDirs {
         self.data_dir.join("save").join("profiles")
     }
 
+    /// Machine-global saved pad configs. Pad thresholds describe the physical
+    /// pads wired to this machine, so they live beside the other machine-level
+    /// save data rather than inside any player profile.
+    #[must_use]
+    pub fn pad_config_path(&self) -> PathBuf {
+        self.data_dir.join("save").join("padconfig.ini")
+    }
+
     #[must_use]
     pub fn screenshots_dir(&self) -> PathBuf {
         self.data_dir.join("save").join("screenshots")

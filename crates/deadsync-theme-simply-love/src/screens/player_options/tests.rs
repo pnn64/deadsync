@@ -2735,6 +2735,52 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn held_arcade_select_repeats_previous_row() {
+        ensure_i18n();
+        let now = std::time::Instant::now();
+        let select = |pressed: bool| {
+            deadsync_input::InputEvent::new(
+                deadsync_input::VirtualAction::p1_select,
+                0,
+                pressed,
+                deadsync_core::input::InputSource::Keyboard,
+                now,
+                0,
+                now,
+                now,
+            )
+        };
+        let (mut state, asset_manager) = setup_state();
+        state.policy.arcade_navigation = true;
+        super::super::prepare_presentation(&mut state, &asset_manager);
+        let start_row = 3;
+        assert!(state.pane().row_map.len() > start_row);
+        state.pane_mut().selected_row[P1] = start_row;
+        state.pane_mut().prev_selected_row[P1] = start_row;
+        let mut effects = Vec::new();
+
+        // Select steps up one row and arms the hold.
+        super::super::input::handle_input(&mut state, &asset_manager, &select(true), &mut effects);
+        let after_press = state.pane().selected_row[P1];
+        assert!(after_press < start_row);
+
+        // Held past the initial delay it keeps climbing.
+        update(
+            &mut state,
+            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
+            &asset_manager,
+            &mut effects,
+        );
+        let after_repeat = state.pane().selected_row[P1];
+        assert!(after_repeat < after_press);
+
+        // Release stops it.
+        super::super::input::handle_input(&mut state, &asset_manager, &select(false), &mut effects);
+        update(&mut state, 1.0, &asset_manager, &mut effects);
+        assert_eq!(state.pane().selected_row[P1], after_repeat);
+    }
+
+    #[test]
     fn arcade_next_row_geometry_prepares_once() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();

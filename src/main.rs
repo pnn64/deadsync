@@ -264,6 +264,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
     profile::load();
+    // One-time merge of legacy per-profile pad configs into the machine store,
+    // done at startup so the store is ready before any pad-config consumer.
+    profile::migrate_pad_configs();
     let (audio, music_clock) = match deadsync_audio_stream::init(
         deadlib_audio::InitConfig {
             output_device_index: cfg.audio_output_device_index,
