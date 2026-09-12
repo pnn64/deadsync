@@ -116,18 +116,22 @@ pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
     });
     let capacity = BASE_LEN + device_len + if binding.uuid.is_some() { UUID_LEN } else { 0 };
     let mut s = String::with_capacity(capacity);
+    write_gamepad_code_binding_token(&mut s, binding);
+    s
+}
+
+fn write_gamepad_code_binding_token(s: &mut String, binding: GamepadCodeBinding) {
     use std::fmt::Write;
-    let _ = write!(&mut s, "PadCode[0x{:08X}]", binding.code_u32);
+    let _ = write!(s, "PadCode[0x{:08X}]", binding.code_u32);
     if let Some(device) = binding.device {
-        let _ = write!(&mut s, "@{device}");
+        let _ = write!(s, "@{device}");
     }
     if let Some(uuid) = binding.uuid {
         s.push('#');
         for b in &uuid {
-            let _ = write!(&mut s, "{b:02X}");
+            let _ = write!(s, "{b:02X}");
         }
     }
-    s
 }
 
 pub fn parse_gamepad_code_binding(t: &str) -> Option<GamepadCodeBinding> {
@@ -951,3 +955,8 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;

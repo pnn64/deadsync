@@ -154,18 +154,32 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
 
 #[must_use]
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
-    let mut lines = Vec::with_capacity(ALL_VIRTUAL_ACTIONS.len());
-    for action in ALL_VIRTUAL_ACTIONS {
-        let key_name = crate::action_to_ini_key(action);
-        let mut tokens: Vec<String> = Vec::new();
-        let mut i = 0;
-        while let Some(binding) = keymap.binding_at(action, i) {
-            tokens.push(binding_to_token(binding));
-            i += 1;
+    ALL_VIRTUAL_ACTIONS
+        .iter()
+        .map(|&action| {
+            let mut value = String::new();
+            write_binding_list(&mut value, keymap.bindings_for_action(action));
+            (crate::action_to_ini_key(action), value)
+        })
+        .collect()
+}
+
+fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
+    for (index, &binding) in bindings.iter().enumerate() {
+        if index != 0 {
+            content.push(',');
         }
-        lines.push((key_name, tokens.join(",")));
+        match binding {
+            InputBinding::Key(code) => write!(content, "KeyCode::{code:?}").unwrap(),
+            InputBinding::PadDir(dir) => write!(content, "PadDir::{dir:?}").unwrap(),
+            InputBinding::PadDirOn { device, dir } => {
+                write!(content, "Pad{device}::Dir::{dir:?}").unwrap()
+            }
+            InputBinding::GamepadCode(binding) => {
+                crate::write_gamepad_code_binding_token(content, binding)
+            }
+        }
     }
-    lines
 }
 
 pub fn write_default_keymap_ini_section(content: &mut String) {
@@ -178,8 +192,11 @@ pub fn write_default_keymap_ini_section(content: &mut String) {
 
 pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
     content.push_str("[Keymaps]\n");
-    for (key, value) in keymap_ini_lines(keymap) {
-        writeln!(content, "{key}={value}").expect("writing into String cannot fail");
+    for action in ALL_VIRTUAL_ACTIONS {
+        content.push_str(crate::action_to_ini_key(action));
+        content.push('=');
+        write_binding_list(content, keymap.bindings_for_action(action));
+        content.push('\n');
     }
     content.push('\n');
 }
@@ -585,41 +602,37 @@ fn remove_matching_input_binding(bindings: &mut Vec<InputBinding>, binding: Inpu
 
 #[inline(always)]
 fn keymap_contains_binding(keymap: &Keymap, binding: InputBinding) -> bool {
-    for act in ALL_VIRTUAL_ACTIONS {
-        let mut i = 0;
-        while let Some(existing) = keymap.binding_at(act, i) {
-            if existing == binding {
-                return true;
-            }
-            i += 1;
-        }
+    if let InputBinding::Key(code) = binding {
+        return keymap.keycode_mapped(code);
     }
-    false
+    ALL_VIRTUAL_ACTIONS
+        .iter()
+        .any(|&action| keymap.bindings_for_action(action).contains(&binding))
 }
 
 #[inline(always)]
 pub fn restore_available_default_bindings(keymap: &mut Keymap) {
+    let mut scratch = Vec::new();
     for act in ALL_VIRTUAL_ACTIONS {
         let Some(default_binding) = default_binding_for_action(act) else {
             continue;
         };
-        let mut bindings = load_action_bindings(keymap, act);
-        if let Some(slot) = bindings
+        let bindings = keymap.bindings_for_action(act);
+        let slot = bindings
             .iter()
-            .position(|binding| *binding == default_binding)
-        {
-            if slot != 0 {
-                bindings.remove(slot);
-                bindings.insert(0, default_binding);
-                keymap.bind(act, &bindings);
-            }
+            .position(|binding| *binding == default_binding);
+        if slot == Some(0) || (slot.is_none() && keymap_contains_binding(keymap, default_binding)) {
             continue;
         }
-        if keymap_contains_binding(keymap, default_binding) {
-            continue;
+        // Only actions that change need owned scratch; share it across repairs.
+        scratch.clear();
+        scratch.reserve(bindings.len() + usize::from(slot.is_none()));
+        scratch.extend_from_slice(bindings);
+        if let Some(slot) = slot {
+            scratch.remove(slot);
         }
-        bindings.insert(0, default_binding);
-        keymap.bind(act, &bindings);
+        scratch.insert(0, default_binding);
+        keymap.bind(act, &scratch);
     }
 }
 
@@ -1405,4 +1418,12 @@ mod tests {
         let token = binding_to_token(binding);
         assert_eq!(parse_binding_token(&token), Some(binding));
     }
+}
+
+#[cfg(test)]
+mod preparation_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/keymap_preparation.rs"
+    ));
 }

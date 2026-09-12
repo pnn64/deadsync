@@ -493,6 +493,20 @@ impl Keymap {
         self.add_rev(action, inputs);
     }
 
+    #[inline]
+    pub(crate) fn bindings_for_action(&self, action: VirtualAction) -> &[InputBinding] {
+        self.map.get(&action).map_or(&[], Vec::as_slice)
+    }
+
+    /// Compares ordered bindings for every action, treating missing and empty
+    /// lists alike, as INI serialization does. Reverse lookup storage is ignored.
+    #[must_use]
+    pub fn has_same_bindings(&self, other: &Self) -> bool {
+        crate::ALL_VIRTUAL_ACTIONS
+            .iter()
+            .all(|&action| self.bindings_for_action(action) == other.bindings_for_action(action))
+    }
+
     /// Returns the first keyboard key bound to this virtual action, if any.
     /// This reflects the first `KeyCode::...` token listed for the action
     /// in `deadsync.ini` (or the hardcoded default keymap).

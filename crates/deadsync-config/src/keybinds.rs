@@ -1,9 +1,8 @@
 use crate::ini::SimpleIni;
 use crate::runtime::save_without_keymaps;
 use deadsync_input::{
-    InputBinding, Keymap, VirtualAction, cleared_keymap, get_keymap, keymap_ini_lines,
-    load_keymap_from_ini_entries, set_keymap, updated_keymap_unique_gamepad,
-    updated_keymap_unique_keyboard,
+    InputBinding, Keymap, VirtualAction, cleared_keymap, get_keymap, load_keymap_from_ini_entries,
+    set_keymap, updated_keymap_unique_gamepad, updated_keymap_unique_keyboard,
 };
 use winit::keyboard::KeyCode;
 
@@ -87,7 +86,7 @@ pub fn clear_keymap_binding_saved(action: VirtualAction, index: usize) -> bool {
 }
 
 fn set_keymap_if_changed(current: &Keymap, new_map: Keymap) -> bool {
-    let changed = keymap_ini_lines(current) != keymap_ini_lines(&new_map);
+    let changed = !current.has_same_bindings(&new_map);
     if changed {
         set_keymap(new_map);
     }
@@ -97,6 +96,7 @@ fn set_keymap_if_changed(current: &Keymap, new_map: Keymap) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_input::keymap_ini_lines;
 
     #[test]
     fn keymap_change_detection_uses_serialized_bindings() {
