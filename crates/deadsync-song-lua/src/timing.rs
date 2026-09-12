@@ -92,26 +92,23 @@ pub fn worst_judgment_from_offsets(value: Value) -> i32 {
     worst
 }
 
-fn timing_offsets_from_value(value: Value) -> Vec<f32> {
-    if let Some(offset) = read_f32(value.clone()) {
-        return vec![offset];
-    }
+fn timing_offsets_from_value(value: Value) -> impl Iterator<Item = f32> {
     let Value::Table(table) = value else {
-        return Vec::new();
+        return [read_f32(value), None].into_iter().flatten();
     };
-    let mut offsets = Vec::new();
+    let mut offsets = [None, None];
     if let Ok(value) = table.raw_get::<Value>(2)
         && let Some(offset) = read_f32(value)
     {
-        offsets.push(offset);
+        offsets[0] = Some(offset);
     }
     if matches!(table.raw_get::<Value>(6), Ok(value) if truthy(&value))
         && let Ok(value) = table.raw_get::<Value>(7)
         && let Some(offset) = read_f32(value)
     {
-        offsets.push(offset);
+        offsets[1] = Some(offset);
     }
-    offsets
+    offsets.into_iter().flatten()
 }
 
 #[cfg(test)]
@@ -141,3 +138,7 @@ mod tests {
         assert_eq!(timing_window_name(Value::Integer(8)), None);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/judgment_offsets.rs"]
+mod judgment_offsets_perf;

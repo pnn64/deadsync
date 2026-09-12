@@ -635,12 +635,19 @@ pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSampl
 
 #[must_use]
 pub fn perframe_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
+    perframe_sample_iter(start, end).collect()
+}
+
+fn perframe_sample_iter(start: f32, end: f32) -> impl Iterator<Item = SongLuaPerframeSample> {
     let step = perframe_segment_step(end - start);
     let eps = (0.5 * step).min(0.25 * (end - start)).max(1.0e-4_f32);
-    let mut out = Vec::new();
     let mut beat = start;
     let mut prev_eval = None::<f32>;
-    loop {
+    let mut done = false;
+    std::iter::from_fn(move || {
+        if done {
+            return None;
+        }
         let eval_beat = if beat <= start + f32::EPSILON {
             (start + eps).min(end - eps)
         } else if beat >= end - f32::EPSILON {
@@ -651,21 +658,22 @@ pub fn perframe_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
         let delta_beats = prev_eval
             .map(|prev| (eval_beat - prev).abs())
             .unwrap_or(0.0);
-        out.push(SongLuaPerframeSample {
+        let sample = SongLuaPerframeSample {
             beat,
             eval_beat,
             delta_beats,
-        });
+        };
         prev_eval = Some(eval_beat);
         if beat >= end - f32::EPSILON {
-            break;
+            done = true;
+        } else {
+            beat = (beat + step).min(end);
+            if beat > end {
+                beat = end;
+            }
         }
-        beat = (beat + step).min(end);
-        if beat > end {
-            beat = end;
-        }
-    }
-    out
+        Some(sample)
+    })
 }
 
 pub fn unsupported_perframe_info(entries: &[SongLuaPerframeEntry]) -> SongLuaCompileInfo {
@@ -2304,6 +2312,66 @@ fn apply_perframe_active_message<Kind>(
     Ok(())
 }
 
+// Only adjacent snapshots are needed to emit a sampled segment. Keep their
+// capacity across windows instead of retaining every sample until the end.
+#[derive(Default)]
+struct PerframeSnapshot {
+    beat: f32,
+    players: [SongLuaPerframePlayerState; LUA_PLAYERS],
+    overlays: Vec<SongLuaOverlayState>,
+}
+
+impl PerframeSnapshot {
+    fn capture<Kind>(
+        &mut self,
+        beat: f32,
+        players: &[Option<Table>; LUA_PLAYERS],
+        overlays: &[SongLuaOverlayCompileActor<Kind>],
+    ) -> Result<(), String> {
+        self.beat = beat;
+        self.players = current_perframe_player_states(players)?;
+        self.overlays.clear();
+        self.overlays.reserve_exact(overlays.len());
+        for overlay in overlays {
+            self.overlays
+                .push(actor_overlay_initial_state(&overlay.table)?);
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn push_segment(
+        &self,
+        next: &Self,
+        end: f32,
+        out_eases: &mut Vec<SongLuaEaseWindow>,
+        out_overlay_eases: &mut Vec<SongLuaOverlayEase>,
+        baseline_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
+        baseline_overlays: &[SongLuaOverlayState],
+    ) {
+        if end <= self.beat {
+            return;
+        }
+        push_perframe_player_targets(
+            out_eases,
+            self.beat,
+            end,
+            &self.players,
+            &next.players,
+            baseline_players,
+        );
+        push_perframe_overlay_targets(
+            out_overlay_eases,
+            self.beat,
+            end,
+            &self.overlays,
+            &next.overlays,
+            baseline_overlays,
+            false,
+        );
+    }
+}
+
 pub fn compile_perframes<Kind>(
     lua: &Lua,
     prefix_table: Option<Table>,
@@ -2339,6 +2407,8 @@ pub fn compile_perframes<Kind>(
     let mut saw_recognized_side_effect = false;
     let mut message_replay = SongLuaPerframeMessageReplay::new(messages, overlays.len());
     let mut message_states = baseline_overlays.clone();
+    let mut previous = PerframeSnapshot::default();
+    let mut current = PerframeSnapshot::default();
 
     for window in boundaries.windows(2) {
         let [start, end] = [window[0], window[1]];
@@ -2347,26 +2417,23 @@ pub fn compile_perframes<Kind>(
         }
         let active = active_perframe_entries(&entries, start, end);
         if active.is_empty() {
-            let current_players = current_perframe_player_states(&player_tables)?;
-            let current_overlays = current_overlay_compile_actor_states(overlays)?;
-            message_states.clone_from(&current_overlays);
+            current.capture(start, &player_tables, overlays)?;
+            message_states.clone_from(&current.overlays);
             push_perframe_static_targets(
                 &mut out_eases,
                 &mut out_overlay_eases,
                 start,
                 end,
-                &current_players,
-                &current_overlays,
+                &current.players,
+                &current.overlays,
                 &baseline_players,
                 &baseline_overlays,
             );
             continue;
         }
 
-        let mut sample_beats = Vec::new();
-        let mut player_samples = Vec::new();
-        let mut overlay_samples = Vec::new();
-        for sample in perframe_samples(start, end) {
+        let mut has_previous = false;
+        for sample in perframe_sample_iter(start, end) {
             let delta_seconds = beat_span_seconds(
                 context,
                 sample.eval_beat - sample.delta_beats,
@@ -2390,23 +2457,32 @@ pub fn compile_perframes<Kind>(
                     delta_seconds,
                 )?;
             }
-            sample_beats.push(sample.beat);
-            player_samples.push(current_perframe_player_states(&player_tables)?);
-            let current_overlays = current_overlay_compile_actor_states(overlays)?;
-            message_states.clone_from(&current_overlays);
-            overlay_samples.push(current_overlays);
+            current.capture(sample.beat, &player_tables, overlays)?;
+            message_states.clone_from(&current.overlays);
+            if has_previous {
+                previous.push_segment(
+                    &current,
+                    current.beat,
+                    &mut out_eases,
+                    &mut out_overlay_eases,
+                    &baseline_players,
+                    &baseline_overlays,
+                );
+            }
+            std::mem::swap(&mut previous, &mut current);
+            has_previous = true;
         }
 
-        push_sampled_perframe_targets(
-            &mut out_eases,
-            &mut out_overlay_eases,
-            end,
-            &sample_beats,
-            &player_samples,
-            &overlay_samples,
-            &baseline_players,
-            &baseline_overlays,
-        );
+        if has_previous {
+            previous.push_segment(
+                &previous,
+                end,
+                &mut out_eases,
+                &mut out_overlay_eases,
+                &baseline_players,
+                &baseline_overlays,
+            );
+        }
     }
 
     let mut info = SongLuaCompileInfo::default();
@@ -2474,3 +2550,7 @@ mod overlay_storage_perf;
 #[cfg(test)]
 #[path = "../tests/perf/completed_work.rs"]
 mod completed_work_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/perframe_stream.rs"]
+mod perframe_stream_perf;

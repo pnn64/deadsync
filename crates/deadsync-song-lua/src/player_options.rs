@@ -298,6 +298,27 @@ pub fn normalize_player_option_key(text: &str) -> String {
         .collect()
 }
 
+pub(crate) fn with_normalized_player_option_key<T>(
+    text: &str,
+    use_key: impl FnOnce(&str) -> T,
+) -> T {
+    if text
+        .bytes()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+    {
+        return use_key(text);
+    }
+    // Mod names are usually short; discard non-ASCII bytes just as the public
+    // normalizer discards non-ASCII characters, without allocating a String.
+    let mut key = smallvec::SmallVec::<[u8; 64]>::new();
+    key.extend(
+        text.bytes()
+            .filter(u8::is_ascii_alphanumeric)
+            .map(|byte| byte.to_ascii_lowercase()),
+    );
+    use_key(std::str::from_utf8(&key).expect("normalized key contains only ASCII"))
+}
+
 #[must_use]
 pub fn parse_player_speed_option(text: &str) -> Option<(&'static str, f32)> {
     let text = text.trim();

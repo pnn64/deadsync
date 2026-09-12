@@ -462,19 +462,19 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     } else {
         (None, text)
     };
-    let key = normalize_player_option_key(name);
-    if key.is_empty() {
-        return Ok(());
-    }
-
-    let state = player_option_state(lua, owner)?;
-    let value = if player_option_uses_bool(key.as_str()) {
-        Value::Boolean(amount != Some(0.0))
-    } else {
-        Value::Number(f64::from(amount.unwrap_or(1.0)))
-    };
-    state.set(key.as_str(), value)?;
-    player_option_speeds(lua, owner)?.set(key.as_str(), speed)
+    crate::player_options::with_normalized_player_option_key(name, |key| {
+        if key.is_empty() {
+            return Ok(());
+        }
+        let state = player_option_state(lua, owner)?;
+        let value = if player_option_uses_bool(key) {
+            Value::Boolean(amount != Some(0.0))
+        } else {
+            Value::Number(f64::from(amount.unwrap_or(1.0)))
+        };
+        state.set(key, value)?;
+        player_option_speeds(lua, owner)?.set(key, speed)
+    })
 }
 
 fn apply_player_speed_option(owner: &Table, text: &str) -> mlua::Result<bool> {
@@ -1269,3 +1269,7 @@ mod tests {
         assert_eq!(player_option_number(&lua, &options, "drunk").unwrap(), 0.5);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/mod_tokens.rs"]
+mod mod_tokens_perf;
