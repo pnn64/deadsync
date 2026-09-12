@@ -1551,15 +1551,17 @@ fn is_scalar_lua_value(value: &Value) -> bool {
 
 fn snapshot_scalar_globals(lua: &Lua) -> mlua::Result<Vec<(String, Value)>> {
     let mut out = Vec::new();
-    for pair in lua.globals().pairs::<Value, Value>() {
-        let (key, value) = pair?;
+    // Non-scalar globals need no retained key. Raw callback traversal avoids
+    // the iterator's shared-handle allocation for those ignored entries.
+    lua.globals().for_each::<Value, Value>(|key, value| {
         let Value::String(key) = key else {
-            continue;
+            return Ok(());
         };
         if is_scalar_lua_value(&value) {
             out.push((key.to_str()?.to_string(), value));
         }
-    }
+        Ok(())
+    })?;
     Ok(out)
 }
 
@@ -1781,7 +1783,7 @@ pub fn broadcast_song_lua_message(
     if message.trim().is_empty() {
         return Ok(());
     }
-    let command = format!("{message}MessageCommand");
+    let command = ActorCommandName::new(message, "MessageCommand");
     let globals = lua.globals();
     let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
     if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
@@ -1792,7 +1794,7 @@ pub fn broadcast_song_lua_message(
     // Keep the Lua key itself: converting a Rust string for each property
     // lookup also allocates for long names. Prepare it before changing scope.
     let command_key = if lua.app_data_ref::<SongLuaOverlayUpdateCapture>().is_some() {
-        Some(lua.create_string(&command)?)
+        Some(lua.create_string(command.as_str())?)
     } else {
         None
     };
@@ -2294,7 +2296,12 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 .get::<Option<f32>>("__songlua_capture_cursor")?
                 .unwrap_or(0.0),
         )?;
-        let result = run_actor_message_with_params(lua, actor, &format!("{name}Command"), None);
+        let result = run_actor_message_with_params(
+            lua,
+            actor,
+            &ActorCommandName::new(&name, "Command"),
+            None,
+        );
         actor.set(immediate_start_key, previous_immediate_start)?;
         result?;
     }
@@ -4145,6 +4152,56 @@ pub fn make_actor_tween_method(
     })
 }
 
+// Most actor command keys fit here. Long keys get one exact-sized allocation.
+enum ActorCommandName {
+    Inline { bytes: [u8; 128], len: usize },
+    Heap(String),
+}
+
+impl ActorCommandName {
+    fn new(name: &str, suffix: &str) -> Self {
+        let len = name.len() + suffix.len();
+        if len <= 128 {
+            let mut bytes = [0; 128];
+            bytes[..name.len()].copy_from_slice(name.as_bytes());
+            bytes[name.len()..len].copy_from_slice(suffix.as_bytes());
+            Self::Inline { bytes, len }
+        } else {
+            Self::Heap(Self::owned(name, suffix))
+        }
+    }
+
+    fn owned(name: &str, suffix: &str) -> String {
+        let mut key = String::with_capacity(name.len() + suffix.len());
+        key.push_str(name);
+        key.push_str(suffix);
+        key
+    }
+
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Inline { bytes, len } => {
+                std::str::from_utf8(&bytes[..*len]).expect("concatenated UTF-8 strings")
+            }
+            Self::Heap(key) => key.as_str(),
+        }
+    }
+}
+
+impl std::ops::Deref for ActorCommandName {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl mlua::IntoLua for ActorCommandName {
+    fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
+        lua.create_string(self.as_str()).map(Value::String)
+    }
+}
+
 pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     actor.set(
         "SetTarget",
@@ -4177,7 +4234,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |_, (_self, name, function): (Table, String, Function)| {
-                actor.set(format!("{name}Command"), function)?;
+                actor.set(ActorCommandName::new(&name, "Command"), function)?;
                 Ok(actor.clone())
             }
         })?,
@@ -4187,7 +4244,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         lua.create_function({
             let actor = actor.clone();
             move |_, (_self, name): (Table, String)| {
-                actor.set(format!("{name}Command"), Value::Nil)?;
+                actor.set(ActorCommandName::new(&name, "Command"), Value::Nil)?;
                 Ok(actor.clone())
             }
         })?,
@@ -4201,7 +4258,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(Value::Nil);
                 };
                 Ok(actor
-                    .get::<Option<Function>>(format!("{name}Command"))?
+                    .get::<Option<Function>>(ActorCommandName::new(&name, "Command"))?
                     .map_or(Value::Nil, Value::Function))
             }
         })?,
@@ -4313,7 +4370,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 let active = actor_active_commands(lua, &actor)?;
-                let command = format!("{name}Command");
+                let command = ActorCommandName::new(&name, "Command");
                 if active
                     .get::<Option<bool>>(command.as_str())?
                     .unwrap_or(false)
@@ -4368,7 +4425,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 let params = method_arg(&args, 1).cloned();
-                let command_name = format!("{name}Command");
+                let command_name = ActorCommandName::owned(&name, "Command");
                 if actor
                     .get::<Option<bool>>("__songlua_propagate_commands")?
                     .unwrap_or(false)
@@ -4402,7 +4459,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                 let Some(name) = method_arg(&args, 0).cloned().and_then(read_string) else {
                     return Ok(actor.clone());
                 };
-                let command = format!("{name}Command");
+                let command = ActorCommandName::new(&name, "Command");
                 run_named_command_on_children_recursively(
                     lua,
                     &actor,
@@ -4422,7 +4479,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 let params = method_arg(&args, 1).cloned();
-                let command = format!("{name}Command");
+                let command = ActorCommandName::new(&name, "Command");
                 for child in actor_direct_children(lua, &actor)? {
                     run_actor_named_command_with_drain_and_params(
                         lua,
@@ -4445,7 +4502,12 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     return Ok(actor.clone());
                 };
                 let params = method_arg(&args, 1).cloned();
-                run_named_command_on_leaves(lua, &actor, &format!("{name}Command"), params)?;
+                run_named_command_on_leaves(
+                    lua,
+                    &actor,
+                    &ActorCommandName::new(&name, "Command"),
+                    params,
+                )?;
                 Ok(actor.clone())
             }
         })?,
@@ -10598,19 +10660,51 @@ fn restore_function_action_tables(snapshots: Vec<FunctionActionTableSnapshot>) -
     Ok(())
 }
 
-fn captured_actor_aux_change(
-    actor: &Table,
-    snapshots: &[(Table, Vec<(String, Value)>)],
-) -> Option<f32> {
+struct ActorAuxSnapshots<'a> {
+    snapshots: &'a [(Table, Vec<(String, Value)>)],
+    indices: Option<rustc_hash::FxHashMap<usize, usize>>,
+}
+
+impl<'a> ActorAuxSnapshots<'a> {
+    fn new(snapshots: &'a [(Table, Vec<(String, Value)>)], queries: usize) -> Self {
+        // Small captures and sparse queries keep the allocation-free scan.
+        let indices = (snapshots.len() >= 32 && queries >= 32).then(|| {
+            let mut indices = rustc_hash::FxHashMap::with_capacity_and_hasher(
+                snapshots.len(),
+                Default::default(),
+            );
+            for (index, (actor, _)) in snapshots.iter().enumerate() {
+                // The original scan uses the first snapshot for duplicate actors.
+                indices.entry(actor.to_pointer() as usize).or_insert(index);
+            }
+            indices
+        });
+        Self { snapshots, indices }
+    }
+
+    fn state_for(&self, pointer: usize) -> Option<&[(String, Value)]> {
+        if let Some(indices) = &self.indices {
+            indices
+                .get(&pointer)
+                .map(|&index| self.snapshots[index].1.as_slice())
+        } else {
+            self.snapshots
+                .iter()
+                .find(|(actor, _)| actor.to_pointer() as usize == pointer)
+                .map(|(_, state)| state.as_slice())
+        }
+    }
+}
+
+fn captured_actor_aux_change(actor: &Table, snapshots: &ActorAuxSnapshots<'_>) -> Option<f32> {
     let current = actor
         .get::<Option<f32>>("__songlua_aux")
         .ok()
         .flatten()
         .unwrap_or(0.0);
     let previous = snapshots
-        .iter()
-        .find(|(snapshot_actor, _)| snapshot_actor.to_pointer() == actor.to_pointer())
-        .and_then(|(_, state)| state.iter().find(|(key, _)| key == "__songlua_aux"))
+        .state_for(actor.to_pointer() as usize)
+        .and_then(|state| state.iter().find(|(key, _)| key == "__songlua_aux"))
         .and_then(|(_, value)| read_f32(value.clone()))
         .unwrap_or(0.0);
     (current != previous).then_some(current)
@@ -10682,17 +10776,21 @@ fn capture_function_action_blocks_inner(
         .map(|(index, actor)| (*index, actor.clone()))
         .collect();
     let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
+    let aux_snapshots = ActorAuxSnapshots::new(
+        &state_snapshot,
+        overlay_tables.len() + tracked_indices.len(),
+    );
     let overlay_aux = overlay_tables
         .iter()
         .filter_map(|(index, actor)| {
-            captured_actor_aux_change(actor, &state_snapshot).map(|aux| (*index, aux))
+            captured_actor_aux_change(actor, &aux_snapshots).map(|aux| (*index, aux))
         })
         .collect();
     let tracked_aux = tracked_indices
         .iter()
         .filter_map(|&index| {
             tracked_actors.get(index).and_then(|tracked| {
-                captured_actor_aux_change(&tracked.table, &state_snapshot).map(|aux| (index, aux))
+                captured_actor_aux_change(&tracked.table, &aux_snapshots).map(|aux| (index, aux))
             })
         })
         .collect();
@@ -14463,3 +14561,15 @@ mod children_clear_perf;
 #[cfg(test)]
 #[path = "../tests/perf/message_discovery.rs"]
 mod message_discovery_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/command_names.rs"]
+mod command_names_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/global_snapshot.rs"]
+mod global_snapshot_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/aux_lookup.rs"]
+mod aux_lookup_perf;
