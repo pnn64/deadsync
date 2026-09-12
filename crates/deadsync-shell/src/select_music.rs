@@ -195,9 +195,6 @@ pub(crate) fn profile_view() -> SelectMusicProfileView {
             profile::active_local_profile_id_for_side(deadsync_profile::player_side_for_index(idx))
                 .map(Arc::<str>::from)
         }),
-        pad_profile_ids: std::array::from_fn(|idx| {
-            profile::active_local_profile_id_for_pad(idx == 1).map(Arc::<str>::from)
-        }),
     }
 }
 

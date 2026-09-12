@@ -126,11 +126,11 @@ pub fn apply_smx_pad_preset(pad: usize, name: &str) -> bool {
         .is_ok_and(|preset| deadsync_smx::apply_preset(pad, preset))
 }
 
-pub fn apply_smx_saved_pad_config(pad: usize, profile_id: &str, name: &str) -> bool {
+pub fn apply_smx_saved_pad_config(pad: usize, name: &str) -> bool {
     if pad >= 2 || !deadsync_smx::get_info(pad).connected {
         return false;
     }
-    let configs = deadsync_profile::compat::load_pad_configs(profile_id);
+    let configs = deadsync_profile::compat::load_pad_configs();
     configs
         .iter()
         .find(|config| config.name == name)
@@ -138,7 +138,7 @@ pub fn apply_smx_saved_pad_config(pad: usize, profile_id: &str, name: &str) -> b
         .is_some_and(|data| deadsync_smx::apply_config_data(pad, &data))
 }
 
-pub fn capture_smx_pad_config(pad: usize, profile_id: &str, name: &str, set_default: bool) -> bool {
+pub fn capture_smx_pad_config(pad: usize, name: &str, set_default: bool) -> bool {
     if pad >= 2 {
         return false;
     }
@@ -151,7 +151,6 @@ pub fn capture_smx_pad_config(pad: usize, profile_id: &str, name: &str, set_defa
     };
     let pad_type = deadsync_smx::pad_sensor_type(pad).map(|kind| kind.as_str().to_owned());
     deadsync_profile::compat::upsert_pad_config(
-        profile_id,
         name,
         deadsync_smx::BACKEND_ID,
         pad_type,
@@ -290,7 +289,6 @@ pub const fn smx_light_brightness_plan(
 
 pub fn resolve_smx_pad_config(
     pad: usize,
-    profile_id: Option<&str>,
     pad_type: Option<&str>,
     serial: &str,
     preset: SmxPadPreset,
@@ -299,10 +297,7 @@ pub fn resolve_smx_pad_config(
         preset: true,
         name: preset.as_str().to_owned(),
     };
-    let Some(profile_id) = profile_id else {
-        return (deadsync_smx::apply_preset(pad, preset), preset_label);
-    };
-    let configs = deadsync_profile::compat::load_pad_configs(profile_id);
+    let configs = deadsync_profile::compat::load_pad_configs();
     match pad_config::resolve(&configs, deadsync_smx::BACKEND_ID, pad_type, serial).and_then(
         |config| {
             deadsync_smx::PadConfigData::from_settings(&config.settings)
