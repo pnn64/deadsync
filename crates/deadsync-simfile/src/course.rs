@@ -392,11 +392,11 @@ pub fn resolve_course_stage(
             let song_key = song.trim().to_ascii_lowercase();
             let resolved = if let Some(group) = group.as_deref().map(str::trim) {
                 let group_key = group.to_ascii_lowercase();
-                by_group_song.get(&(group_key, song_key)).cloned()
+                by_group_song.get(&(group_key, song_key))
             } else {
-                by_song.get(&song_key).cloned()
+                by_song.get(&song_key)
             }?;
-            course_candidates(std::slice::from_ref(&resolved), entry, chart_type)
+            course_candidates(std::slice::from_ref(resolved), entry, chart_type)
         }
         CourseSong::SortPick { .. } | CourseSong::RandomAny => {
             course_candidates(all_songs, entry, chart_type)
@@ -407,12 +407,7 @@ pub fn resolve_course_stage(
             .map(|(_, songs)| course_candidates(songs, entry, chart_type))
             .unwrap_or_default(),
         CourseSong::Select(select) => {
-            let pool = select_song_pool(select, all_songs, songs_by_group);
-            let mut candidates = course_candidates(&pool, entry, chart_type);
-            candidates
-                .items
-                .retain(|candidate| song_select_matches(&candidate.song, select));
-            candidates
+            select_course_candidates(select, all_songs, songs_by_group, entry, chart_type)
         }
         CourseSong::Unknown { .. } => return None,
     };
@@ -449,14 +444,14 @@ pub fn resolve_course_stage(
         .get(candidate.chart_indices.clone())?
         .get(chart_pick)?;
     let chart_index = shifted_chart_index(
-        &candidate.song,
+        candidate.song,
         base_chart,
         entry,
         chart_type,
         course_difficulty,
     );
     Some(ResolvedCourseStage {
-        song: candidate.song,
+        song: candidate.song.clone(),
         chart_index,
         modifiers: entry.modifiers.clone(),
         gain_seconds: entry.gain_seconds,
@@ -465,7 +460,7 @@ pub fn resolve_course_stage(
 }
 
 fn avoid_course_repeats(
-    candidates: &mut Vec<CourseCandidate>,
+    candidates: &mut Vec<CourseCandidate<'_>>,
     course_type: CourseType,
     random_sort: bool,
     selected_song_keys: &[String],
@@ -511,43 +506,57 @@ fn avoid_course_repeats(
 }
 
 #[derive(Clone)]
-struct CourseCandidate {
-    song: Arc<SongData>,
+struct CourseCandidate<'a> {
+    song: &'a Arc<SongData>,
     song_key: OnceCell<String>,
     chart_indices: std::ops::Range<usize>,
     source_index: usize,
 }
 
-impl CourseCandidate {
+impl CourseCandidate<'_> {
     fn song_key(&self) -> &str {
         self.song_key
-            .get_or_init(|| song_unique_key(&self.song))
+            .get_or_init(|| song_unique_key(self.song))
             .as_str()
     }
 }
 
 #[derive(Clone, Default)]
-struct CourseCandidates {
-    items: Vec<CourseCandidate>,
+struct CourseCandidates<'a> {
+    items: Vec<CourseCandidate<'a>>,
     chart_indices: Vec<usize>,
 }
 
-fn course_candidates(
-    songs: &[Arc<SongData>],
+fn course_candidates<'a>(
+    songs: &'a [Arc<SongData>],
     entry: &CourseEntry,
     chart_type: &str,
-) -> CourseCandidates {
-    let chart_capacity = songs.iter().map(|song| song.charts.len()).sum();
+) -> CourseCandidates<'a> {
+    course_candidates_from_songs(songs.iter().enumerate(), entry, chart_type)
+}
+
+fn course_candidates_from_songs<'a>(
+    songs: impl Iterator<Item = (usize, &'a Arc<SongData>)> + Clone,
+    entry: &CourseEntry,
+    chart_type: &str,
+) -> CourseCandidates<'a> {
+    let (song_capacity, chart_capacity) =
+        songs.clone().fold((0, 0), |(songs, charts), (_, song)| {
+            (songs + 1, charts + song.charts.len())
+        });
+    if chart_capacity == 0 {
+        return CourseCandidates::default();
+    }
     let mut candidates = CourseCandidates {
-        items: Vec::with_capacity(songs.len()),
+        items: Vec::with_capacity(song_capacity),
         chart_indices: Vec::with_capacity(chart_capacity),
     };
-    for (source_index, song) in songs.iter().enumerate() {
+    for (source_index, song) in songs {
         let chart_indices =
             append_matching_chart_indices(song, entry, chart_type, &mut candidates.chart_indices);
         if !chart_indices.is_empty() {
             candidates.items.push(CourseCandidate {
-                song: song.clone(),
+                song,
                 song_key: OnceCell::new(),
                 chart_indices,
                 source_index,
@@ -638,21 +647,76 @@ fn chart_difficulty(chart: &ChartData) -> Option<Difficulty> {
     })
 }
 
-fn select_song_pool(
+fn select_course_candidates<'a>(
     select: &SongSelect,
-    all_songs: &[Arc<SongData>],
-    songs_by_group: &HashMap<String, Vec<Arc<SongData>>>,
-) -> Vec<Arc<SongData>> {
-    if select.groups.is_empty() {
-        return all_songs.to_vec();
+    all_songs: &'a [Arc<SongData>],
+    songs_by_group: &'a HashMap<String, Vec<Arc<SongData>>>,
+    entry: &CourseEntry,
+    chart_type: &str,
+) -> CourseCandidates<'a> {
+    // Borrow the pool, retaining group order and duplicates. Enumerate before
+    // filtering so ranked ties retain their original source order.
+    let songs = select
+        .groups
+        .is_empty()
+        .then_some(all_songs)
+        .into_iter()
+        .flatten()
+        .chain(
+            select
+                .groups
+                .iter()
+                .filter_map(|group| songs_by_group.get(group))
+                .flatten(),
+        );
+    if select.titles.is_empty()
+        && select.artists.is_empty()
+        && select.genres.is_empty()
+        && select.bpm_range.is_none()
+        && select.duration_range.is_none()
+    {
+        return course_candidates_from_songs(songs.enumerate(), entry, chart_type);
     }
-    let mut songs = Vec::new();
-    for group in &select.groups {
-        if let Some(group_songs) = songs_by_group.get(group) {
-            songs.extend(group_songs.iter().cloned());
+    filtered_course_candidates(songs.enumerate(), select, entry, chart_type)
+}
+
+fn filtered_course_candidates<'a>(
+    songs: impl Iterator<Item = (usize, &'a Arc<SongData>)> + Clone,
+    select: &SongSelect,
+    entry: &CourseEntry,
+    chart_type: &str,
+) -> CourseCandidates<'a> {
+    let song_capacity = songs.clone().count();
+    let mut candidates = CourseCandidates::default();
+    let mut chart_capacity = 0;
+    for (source_index, song) in songs {
+        if song.charts.is_empty() || !song_select_matches(song, select) {
+            continue;
         }
+        // Reserve once, only after a match. Use the pool's upper bound for
+        // records, avoiding both growth churn and a second metadata/BPM parse.
+        if candidates.items.is_empty() {
+            candidates.items.reserve_exact(song_capacity);
+        }
+        chart_capacity += song.charts.len();
+        candidates.items.push(CourseCandidate {
+            song,
+            song_key: OnceCell::new(),
+            chart_indices: 0..0,
+            source_index,
+        });
     }
-    songs
+    candidates.chart_indices = Vec::with_capacity(chart_capacity);
+    candidates.items.retain_mut(|candidate| {
+        candidate.chart_indices = append_matching_chart_indices(
+            candidate.song,
+            entry,
+            chart_type,
+            &mut candidates.chart_indices,
+        );
+        !candidate.chart_indices.is_empty()
+    });
+    candidates
 }
 
 fn song_select_matches(song: &SongData, select: &SongSelect) -> bool {
@@ -697,8 +761,8 @@ fn song_select_matches(song: &SongData, select: &SongSelect) -> bool {
     true
 }
 
-fn pick_course_candidate(
-    candidates: &mut Vec<CourseCandidate>,
+fn pick_course_candidate<'a>(
+    candidates: &mut Vec<CourseCandidate<'a>>,
     sort: Option<SongSort>,
     pick: usize,
     song_play_counts: &HashMap<String, u32>,
@@ -706,7 +770,7 @@ fn pick_course_candidate(
     random_seed: u64,
     course_path: &Path,
     entry_index: usize,
-) -> Option<CourseCandidate> {
+) -> Option<CourseCandidate<'a>> {
     if candidates.is_empty() {
         return None;
     }
@@ -730,7 +794,7 @@ enum RankedCourseCandidates<'a> {
 }
 
 fn ranked_course_candidates<'a>(
-    candidates: &[CourseCandidate],
+    candidates: &[CourseCandidate<'_>],
     sort: SongSort,
     song_play_counts: &HashMap<String, u32>,
     song_grade_counts: &'a HashMap<String, CourseGradeCounts>,
@@ -772,7 +836,7 @@ fn ranked_course_candidates<'a>(
 fn compare_ranked_course_candidates<T: Ord>(
     left: &(T, usize),
     right: &(T, usize),
-    candidates: &[CourseCandidate],
+    candidates: &[CourseCandidate<'_>],
     descending: bool,
 ) -> std::cmp::Ordering {
     let order = if descending {
@@ -789,7 +853,7 @@ fn compare_ranked_course_candidates<T: Ord>(
 
 fn select_ranked_course_candidate(
     ranked: &mut RankedCourseCandidates<'_>,
-    candidates: &[CourseCandidate],
+    candidates: &[CourseCandidate<'_>],
     sort: SongSort,
     pick: usize,
 ) -> usize {
@@ -811,7 +875,7 @@ fn select_ranked_course_candidate(
 }
 
 fn selected_course_candidate_index(
-    candidates: &[CourseCandidate],
+    candidates: &[CourseCandidate<'_>],
     sort: SongSort,
     pick: usize,
     song_play_counts: &HashMap<String, u32>,
@@ -819,6 +883,46 @@ fn selected_course_candidate_index(
 ) -> Option<usize> {
     if pick >= candidates.len() {
         return None;
+    }
+    if candidates.len() == 1 {
+        return Some(0);
+    }
+    if pick == 0 || pick == candidates.len() - 1 {
+        let descending = matches!(sort, SongSort::MostPlays | SongSort::TopGrades);
+        let last = pick != 0;
+        let index = match sort {
+            SongSort::MostPlays | SongSort::FewestPlays => extreme_course_candidate(
+                candidates.iter().enumerate().map(|(index, candidate)| {
+                    (
+                        song_play_counts
+                            .get(candidate.song_key())
+                            .copied()
+                            .unwrap_or(0),
+                        index,
+                    )
+                }),
+                candidates,
+                descending,
+                last,
+            ),
+            SongSort::TopGrades | SongSort::LowestGrades => {
+                static EMPTY: CourseGradeCounts = [0; 19];
+                extreme_course_candidate(
+                    candidates.iter().enumerate().map(|(index, candidate)| {
+                        (
+                            song_grade_counts
+                                .get(candidate.song_key())
+                                .unwrap_or(&EMPTY),
+                            index,
+                        )
+                    }),
+                    candidates,
+                    descending,
+                    last,
+                )
+            }
+        };
+        return Some(index);
     }
     let mut ranked =
         ranked_course_candidates(candidates, sort, song_play_counts, song_grade_counts);
@@ -828,6 +932,24 @@ fn selected_course_candidate_index(
         sort,
         pick,
     ))
+}
+
+fn extreme_course_candidate<T: Ord>(
+    ranked: impl Iterator<Item = (T, usize)>,
+    candidates: &[CourseCandidate<'_>],
+    descending: bool,
+    last: bool,
+) -> usize {
+    let compare = |left: &(T, usize), right: &(T, usize)| {
+        compare_ranked_course_candidates(left, right, candidates, descending)
+    };
+    // Source indices break ties for both ends, just as in nth selection.
+    let selected = if last {
+        ranked.max_by(compare)
+    } else {
+        ranked.min_by(compare)
+    };
+    selected.expect("nonempty course candidates").1
 }
 
 pub fn push_song_bpm_range(min_bpm: &mut Option<f64>, max_bpm: &mut Option<f64>, song: &SongData) {
@@ -1303,7 +1425,7 @@ mod tests {
         dir
     }
 
-    fn fixed_course(group: Option<&str>, song: &str) -> CourseFile {
+    pub(super) fn fixed_course(group: Option<&str>, song: &str) -> CourseFile {
         CourseFile {
             name: "Course".to_string(),
             name_translit: String::new(),
@@ -1329,7 +1451,7 @@ mod tests {
         }
     }
 
-    fn test_song() -> SongData {
+    pub(super) fn test_song() -> SongData {
         SongData {
             simfile_path: PathBuf::from("song.ssc"),
             title: String::new(),
@@ -1364,7 +1486,12 @@ mod tests {
         }
     }
 
-    fn test_chart(difficulty: &str, meter: u32, has_note_data: bool, hash: &str) -> ChartData {
+    pub(super) fn test_chart(
+        difficulty: &str,
+        meter: u32,
+        has_note_data: bool,
+        hash: &str,
+    ) -> ChartData {
         ChartData {
             chart_type: "dance-single".to_string(),
             difficulty: difficulty.to_string(),
@@ -1420,9 +1547,9 @@ mod tests {
         Arc::new(song)
     }
 
-    fn course_candidate(song: &Arc<SongData>, source_index: usize) -> CourseCandidate {
+    fn course_candidate(song: &Arc<SongData>, source_index: usize) -> CourseCandidate<'_> {
         CourseCandidate {
-            song: song.clone(),
+            song,
             song_key: OnceCell::new(),
             chart_indices: 0..1,
             source_index,
@@ -1883,7 +2010,7 @@ mod tests {
         let mut candidates = all.clone();
         avoid_course_repeats(&mut candidates, CourseType::Endless, true, &selected);
         assert_eq!(candidates.len(), 1);
-        assert!(Arc::ptr_eq(&candidates[0].song, &c));
+        assert!(Arc::ptr_eq(candidates[0].song, &c));
 
         let mut exhausted = all.clone();
         let all_selected = vec![
@@ -1896,7 +2023,7 @@ mod tests {
         assert!(
             exhausted
                 .iter()
-                .all(|candidate| !Arc::ptr_eq(&candidate.song, &c))
+                .all(|candidate| !Arc::ptr_eq(candidate.song, &c))
         );
 
         let mut sorted = all;
@@ -1929,7 +2056,7 @@ mod tests {
             0,
         )
         .expect("top grades");
-        assert!(Arc::ptr_eq(&top.song, &a));
+        assert!(Arc::ptr_eq(top.song, &a));
 
         let lowest = pick_course_candidate(
             &mut candidates.clone(),
@@ -1942,7 +2069,7 @@ mod tests {
             0,
         )
         .expect("lowest grades");
-        assert!(Arc::ptr_eq(&lowest.song, &b));
+        assert!(Arc::ptr_eq(lowest.song, &b));
     }
 
     #[test]
@@ -2056,3 +2183,7 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/course_selection.rs"]
+mod selection_perf;
