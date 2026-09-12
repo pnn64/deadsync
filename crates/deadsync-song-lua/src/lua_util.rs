@@ -1034,6 +1034,48 @@ pub fn read_child_index(value: &Value) -> Option<usize> {
     }
 }
 
+// Inline storage intentionally avoids an allocation for small actor lists.
+#[allow(clippy::large_enum_variant)]
+enum ActorChildPointers {
+    Small(smallvec::SmallVec<[usize; 32]>),
+    Large(rustc_hash::FxHashSet<usize>),
+}
+
+impl ActorChildPointers {
+    fn push(&mut self, out: &mut Vec<Table>, child: Table) {
+        if self.insert(child.to_pointer() as usize) {
+            out.push(child);
+        }
+    }
+
+    fn new() -> Self {
+        Self::Small(smallvec::SmallVec::new())
+    }
+
+    fn insert(&mut self, pointer: usize) -> bool {
+        match self {
+            Self::Small(pointers) => {
+                if pointers.contains(&pointer) {
+                    return false;
+                }
+                if pointers.len() < 32 {
+                    pointers.push(pointer);
+                } else {
+                    // Small actor lists need no membership allocation. Large
+                    // lists switch to hashing instead of quadratic scans.
+                    let mut set =
+                        rustc_hash::FxHashSet::with_capacity_and_hasher(64, Default::default());
+                    set.extend(pointers.iter().copied());
+                    set.insert(pointer);
+                    *self = Self::Large(set);
+                }
+                true
+            }
+            Self::Large(pointers) => pointers.insert(pointer),
+        }
+    }
+}
+
 pub fn push_unique_actor_child(out: &mut Vec<Table>, seen: &mut Vec<usize>, child: Table) {
     let ptr = child.to_pointer() as usize;
     if seen.contains(&ptr) {
@@ -1064,12 +1106,12 @@ pub fn actor_named_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 
 pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table>> {
     let mut out = Vec::new();
-    let mut seen = Vec::new();
+    let mut seen = ActorChildPointers::new();
     for value in actor.sequence_values::<Value>() {
         let Value::Table(child) = value? else {
             continue;
         };
-        push_unique_actor_child(&mut out, &mut seen, child);
+        seen.push(&mut out, child);
     }
     for pair in actor_children(lua, actor)?.pairs::<Value, Value>() {
         let (_, value) = pair?;
@@ -1079,11 +1121,11 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         if actor_is_child_group(&child)? {
             for group_value in child.sequence_values::<Value>() {
                 if let Value::Table(group_child) = group_value? {
-                    push_unique_actor_child(&mut out, &mut seen, group_child);
+                    seen.push(&mut out, group_child);
                 }
             }
         } else {
-            push_unique_actor_child(&mut out, &mut seen, child);
+            seen.push(&mut out, child);
         }
     }
     Ok(out)
@@ -14281,3 +14323,7 @@ mod stateful_storage_perf;
 #[cfg(test)]
 #[path = "../tests/perf/capture_dispatch.rs"]
 mod capture_dispatch_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/child_walk.rs"]
+mod child_walk_perf;

@@ -38,6 +38,7 @@ pub(super) fn capture_update_overlay_samples<Kind>(
         reset_indices,
         captured_tracks,
         message_targets,
+        ..
     } = scratch;
     crate::lua_util::drain_overlay_update_capture(
         lua,

@@ -300,25 +300,54 @@ pub fn normalize_player_option_key(text: &str) -> String {
 
 #[must_use]
 pub fn parse_player_speed_option(text: &str) -> Option<(&'static str, f32)> {
-    let compact: String = text
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .map(|ch| ch.to_ascii_lowercase())
-        .collect();
-    if let Some(value) = compact
-        .strip_suffix('x')
-        .and_then(|raw| raw.parse::<f32>().ok())
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if !text.chars().any(char::is_whitespace) {
+        return parse_compact_player_speed_option(text);
+    }
+    // FromString checks every mod token, including non-speed modifiers. Most
+    // need no copy; spaced tokens fit inline, with a heap fallback for long input.
+    let mut compact = smallvec::SmallVec::<[u8; 64]>::new();
+    if text.is_ascii() {
+        compact.extend(
+            text.bytes()
+                .filter(|byte| !matches!(byte, b' ' | b'\t'..=b'\r')),
+        );
+    } else {
+        for ch in text.chars().filter(|ch| !ch.is_whitespace()) {
+            if ch.is_ascii() {
+                compact.push(ch as u8);
+            } else {
+                let mut bytes = [0; 4];
+                compact.extend_from_slice(ch.encode_utf8(&mut bytes).as_bytes());
+            }
+        }
+    }
+    parse_compact_player_speed_option(
+        std::str::from_utf8(&compact).expect("copied UTF-8 characters"),
+    )
+}
+
+fn parse_compact_player_speed_option(text: &str) -> Option<(&'static str, f32)> {
+    if let Some(raw) = text.strip_suffix(['x', 'X'])
+        && let Ok(value) = raw.parse::<f32>()
     {
         return Some(("xmod", value));
     }
     for (prefix, key) in [("ca", "camod"), ("c", "cmod"), ("m", "mmod"), ("a", "amod")] {
-        if let Some(value) = compact
-            .strip_prefix(prefix)
+        let from_prefix = text
+            .get(..prefix.len())
+            .filter(|head| head.eq_ignore_ascii_case(prefix))
+            .map(|_| &text[prefix.len()..]);
+        if let Some(value) = from_prefix
             .and_then(|raw| raw.parse::<f32>().ok())
             .or_else(|| {
-                compact
-                    .strip_suffix(prefix)
-                    .and_then(|raw| raw.parse::<f32>().ok())
+                let end = text.len().checked_sub(prefix.len())?;
+                text.get(end..)
+                    .filter(|tail| tail.eq_ignore_ascii_case(prefix))?;
+                text[..end].parse::<f32>().ok()
             })
         {
             return Some((key, value));
@@ -524,3 +553,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/speed_parse.rs"]
+mod speed_parse_perf;

@@ -1361,6 +1361,7 @@ fn set_overlay_state_update_value(
 // Track indices stay stable because update tracks are append-only during capture.
 #[derive(Default)]
 struct OverlaySampleScratch {
+    completed: Vec<SongLuaScheduledOverlaySample>,
     reset_indices: Vec<usize>,
     captured_tracks: Vec<bool>,
     message_targets: Vec<(
@@ -1442,7 +1443,7 @@ fn capture_update_overlay_samples<Kind>(
     scheduled_samples: &mut Vec<SongLuaScheduledOverlaySample>,
     scratch: &mut OverlaySampleScratch,
 ) -> Result<(), String> {
-    merge_completed_scheduled_overlay_samples(
+    merge_completed_scheduled_overlay_samples_into(
         tracks,
         track_indices,
         baseline,
@@ -1450,6 +1451,7 @@ fn capture_update_overlay_samples<Kind>(
         to_states,
         scheduled_samples,
         next_beat,
+        &mut scratch.completed,
     );
     scratch.reset_indices.clear();
     scratch.captured_tracks.clear();
@@ -1459,6 +1461,7 @@ fn capture_update_overlay_samples<Kind>(
         reset_indices,
         captured_tracks,
         message_targets,
+        ..
     } = scratch;
     crate::lua_util::drain_overlay_update_capture(
         lua,
@@ -1640,6 +1643,7 @@ fn apply_scheduled_overlay_states<Kind>(
     Ok(())
 }
 
+#[cfg(test)]
 fn merge_completed_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
@@ -1649,17 +1653,39 @@ fn merge_completed_scheduled_overlay_samples(
     scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
     beat: f32,
 ) {
+    merge_completed_scheduled_overlay_samples_into(
+        tracks,
+        track_indices,
+        baseline,
+        update_states,
+        to_states,
+        scheduled,
+        beat,
+        &mut Vec::new(),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn merge_completed_scheduled_overlay_samples_into(
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    baseline: &[SongLuaOverlayState],
+    update_states: &mut [SongLuaOverlayState],
+    to_states: &mut [SongLuaOverlayState],
+    scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
+    beat: f32,
+    completed: &mut Vec<SongLuaScheduledOverlaySample>,
+) {
+    completed.clear();
     if scheduled.is_empty() {
         return;
     }
     // Keep pending tweens (and their capacity) in place across sample ticks.
     // The common case where none have completed does not allocate or move them.
-    let mut completed: Vec<_> = scheduled
-        .extract_if(.., |sample| sample.end_beat <= beat + f32::EPSILON)
-        .collect();
+    completed.extend(scheduled.extract_if(.., |sample| sample.end_beat <= beat + f32::EPSILON));
     if !completed.is_empty() {
         completed.sort_by(|left, right| left.end_beat.total_cmp(&right.end_beat));
-        for sample in &completed {
+        for sample in completed.iter() {
             if let Some(state) = update_states.get_mut(sample.overlay_index) {
                 set_overlay_state_update_value(state, sample.target, &sample.value);
             }
@@ -1667,7 +1693,7 @@ fn merge_completed_scheduled_overlay_samples(
                 set_overlay_state_update_value(state, sample.target, &sample.value);
             }
         }
-        merge_scheduled_overlay_samples(tracks, track_indices, baseline, completed);
+        merge_scheduled_overlay_samples_from_buffer(tracks, track_indices, baseline, completed);
     }
 }
 
@@ -1708,11 +1734,20 @@ fn merge_scheduled_overlay_samples(
     baseline: &[SongLuaOverlayState],
     mut scheduled: Vec<SongLuaScheduledOverlaySample>,
 ) {
+    merge_scheduled_overlay_samples_from_buffer(tracks, track_indices, baseline, &mut scheduled);
+}
+
+fn merge_scheduled_overlay_samples_from_buffer(
+    tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
+    track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
+    baseline: &[SongLuaOverlayState],
+    scheduled: &mut Vec<SongLuaScheduledOverlaySample>,
+) {
     for track in tracks.iter_mut() {
         sort_overlay_update_samples(&mut track.samples);
     }
     scheduled.sort_by(|left, right| left.start_beat.total_cmp(&right.start_beat));
-    for sample in scheduled {
+    for sample in scheduled.drain(..) {
         let track_index = *track_indices
             .entry((sample.overlay_index, sample.target))
             .or_insert_with(|| {
@@ -2435,3 +2470,7 @@ mod update_timeline_perf;
 #[cfg(test)]
 #[path = "../tests/perf/overlay_storage.rs"]
 mod overlay_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/completed_work.rs"]
+mod completed_work_perf;
