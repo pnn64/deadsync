@@ -79,6 +79,29 @@ pub struct OnlineItlSelfCacheUpdate {
     pub profile_snapshot: Option<(String, OnlineItlSelfCacheMap)>,
 }
 
+// Retain owned keys on updates and probe deletions with a borrowed key. Only a
+// new entry needs owned strings; changed profiles still return a full snapshot.
+fn set_online_itl_value(
+    values: &mut OnlineItlSelfCacheMap,
+    key: &OnlineItlSelfScoreKeyRef<'_>,
+    value: Option<u32>,
+) -> bool {
+    let Some(value) = value else {
+        return values.remove(key).is_some();
+    };
+    if let Some(previous) = values.get_mut(key) {
+        return std::mem::replace(previous, value) != value;
+    }
+    values.insert(
+        OnlineItlSelfScoreKey {
+            chart_hash: key.chart_hash.to_owned(),
+            api_key: key.api_key.to_owned(),
+        },
+        value,
+    );
+    true
+}
+
 impl OnlineItlSelfCacheState {
     #[inline(always)]
     #[must_use]
@@ -108,15 +131,11 @@ impl OnlineItlSelfCacheState {
             };
         }
 
-        let key = OnlineItlSelfScoreKey {
-            chart_hash: chart_hash.to_string(),
-            api_key: api_key.to_string(),
+        let key = OnlineItlSelfScoreKeyRef {
+            chart_hash,
+            api_key,
         };
-        let session_changed = if let Some(value) = value {
-            self.session_by_key.insert(key.clone(), value) != Some(value)
-        } else {
-            self.session_by_key.remove(&key).is_some()
-        };
+        let session_changed = set_online_itl_value(&mut self.session_by_key, &key, value);
 
         let Some(profile_id) = profile_id.map(str::trim).filter(|id| !id.is_empty()) else {
             return OnlineItlSelfCacheUpdate {
@@ -130,11 +149,7 @@ impl OnlineItlSelfCacheState {
                 profile_snapshot: None,
             };
         };
-        let profile_changed = if let Some(value) = value {
-            profile_values.insert(key, value) != Some(value)
-        } else {
-            profile_values.remove(&key).is_some()
-        };
+        let profile_changed = set_online_itl_value(profile_values, &key, value);
 
         OnlineItlSelfCacheUpdate {
             changed: session_changed || profile_changed,
@@ -483,6 +498,14 @@ pub struct OnlineItlOverallRankCacheKey {
     pub self_score_generation: u64,
 }
 
+#[derive(Clone, Copy)]
+struct OnlineItlOverallRankCacheKeyRef<'a> {
+    api_key: &'a str,
+    profile_id: Option<&'a str>,
+    song_cache_generation: u64,
+    self_score_generation: u64,
+}
+
 #[derive(Clone)]
 struct OnlineItlOverallRankCacheEntry {
     key: OnlineItlOverallRankCacheKey,
@@ -493,6 +516,23 @@ struct OnlineItlOverallRankCacheEntry {
 struct OnlineItlOverallRankCacheState {
     p1: Option<OnlineItlOverallRankCacheEntry>,
     p2: Option<OnlineItlOverallRankCacheEntry>,
+}
+
+impl OnlineItlOverallRankCacheState {
+    fn get(
+        &self,
+        side_idx: usize,
+        key: OnlineItlOverallRankCacheKeyRef<'_>,
+    ) -> Option<Arc<OnlineItlOverallRanks>> {
+        online_itl_overall_rank_entry_for_side(self, side_idx)
+            .filter(|entry| {
+                entry.key.api_key == key.api_key
+                    && entry.key.profile_id.as_deref() == key.profile_id
+                    && entry.key.song_cache_generation == key.song_cache_generation
+                    && entry.key.self_score_generation == key.self_score_generation
+            })
+            .map(|entry| entry.ranks.clone())
+    }
 }
 
 #[inline(always)]
@@ -528,10 +568,25 @@ pub fn cached_online_itl_overall_ranks_for_side(
     side_idx: usize,
     key: &OnlineItlOverallRankCacheKey,
 ) -> Option<Arc<OnlineItlOverallRanks>> {
-    let cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
-    online_itl_overall_rank_entry_for_side(&cache, side_idx)
-        .filter(|entry| entry.key == *key)
-        .map(|entry| entry.ranks.clone())
+    cached_online_itl_overall_ranks_for_side_ref(
+        side_idx,
+        OnlineItlOverallRankCacheKeyRef {
+            api_key: &key.api_key,
+            profile_id: key.profile_id.as_deref(),
+            song_cache_generation: key.song_cache_generation,
+            self_score_generation: key.self_score_generation,
+        },
+    )
+}
+
+fn cached_online_itl_overall_ranks_for_side_ref(
+    side_idx: usize,
+    key: OnlineItlOverallRankCacheKeyRef<'_>,
+) -> Option<Arc<OnlineItlOverallRanks>> {
+    ONLINE_ITL_OVERALL_RANK_CACHE
+        .lock()
+        .unwrap()
+        .get(side_idx, key)
 }
 
 /// # Panics
@@ -578,15 +633,22 @@ where
     }
 
     let self_score_generation = online_itl_self_score_generation();
-    let key = OnlineItlOverallRankCacheKey {
-        api_key: api_key.to_string(),
-        profile_id: profile_id.map(str::to_string),
+    let key = OnlineItlOverallRankCacheKeyRef {
+        api_key,
+        profile_id,
         song_cache_generation,
         self_score_generation,
     };
-    if let Some(ranks) = cached_online_itl_overall_ranks_for_side(side_idx, &key) {
+    if let Some(ranks) = cached_online_itl_overall_ranks_for_side_ref(side_idx, key) {
         return ranks;
     }
+    // Cache hits borrow both IDs. Only a replacement entry needs owned keys.
+    let key = OnlineItlOverallRankCacheKey {
+        api_key: api_key.to_owned(),
+        profile_id: profile_id.map(str::to_owned),
+        song_cache_generation,
+        self_score_generation,
+    };
 
     let by_chart_score = online_itl_self_scores_by_chart_for_api(profile_id, api_key);
     let ranks = Arc::new(itl_overall_ranks_from_song_cache(
@@ -1889,11 +1951,10 @@ pub fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_scor
     passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
 }
 
-fn apply_itl_overall_ranks(
-    out: &mut OnlineItlOverallRanks,
-    mut by_chart_points: Vec<(String, u32)>,
-) {
-    by_chart_points.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+fn apply_itl_overall_ranks(out: &mut OnlineItlOverallRanks, mut by_chart_points: Vec<(&str, u32)>) {
+    // Equal points share a rank, so hash ordering within a tie has no effect.
+    // Keep only borrowed hashes in the sorting buffers.
+    by_chart_points.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.1));
     let mut prev_points = None;
     let mut prev_rank = 0u32;
     for (idx, (chart_hash, points)) in by_chart_points.into_iter().enumerate() {
@@ -1902,7 +1963,11 @@ fn apply_itl_overall_ranks(
         } else {
             idx.saturating_add(1) as u32
         };
-        out.insert(chart_hash, rank);
+        if let Some(previous) = out.get_mut(chart_hash) {
+            *previous = rank;
+        } else {
+            out.insert(chart_hash.to_owned(), rank);
+        }
         prev_points = Some(points);
         prev_rank = rank;
     }
@@ -1938,16 +2003,18 @@ pub fn itl_overall_ranks_from_song_cache(
                 if itl_steps_type_from_chart_type(chart.chart_type.as_str())
                     .eq_ignore_ascii_case("double")
                 {
-                    double_points.push((chart.short_hash.clone(), points));
+                    double_points.push((chart.short_hash.as_str(), points));
                 } else {
-                    single_points.push((chart.short_hash.clone(), points));
+                    single_points.push((chart.short_hash.as_str(), points));
                 }
             }
         }
     }
 
+    // Repeated charts still contribute to ranks, but each scored hash owns
+    // at most one output entry. Bound the table by both input counts.
     let mut ranks = OnlineItlOverallRanks::with_capacity_and_hasher(
-        single_points.len() + double_points.len(),
+        (single_points.len() + double_points.len()).min(by_chart_score.len()),
         FxBuildHasher,
     );
     apply_itl_overall_ranks(&mut ranks, single_points);
@@ -3256,5 +3323,8 @@ mod tests {
     }
     mod ranking_perf {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/itl_ranking.rs"));
+    }
+    mod online_cache_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/online_itl.rs"));
     }
 }
