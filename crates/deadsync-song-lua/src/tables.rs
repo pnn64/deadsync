@@ -2087,17 +2087,19 @@ pub fn display_bpms_for_args(
 }
 
 pub fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
     if separator.is_empty() {
+        let table = lua.create_table_with_capacity(text.chars().count().max(1), 0)?;
         if text.is_empty() {
             table.raw_set(1, "")?;
         } else {
+            let mut encoded = [0; 4];
             for (idx, value) in text.chars().enumerate() {
-                table.raw_set(idx + 1, value.to_string())?;
+                table.raw_set(idx + 1, &*value.encode_utf8(&mut encoded))?;
             }
         }
         return Ok(table);
     }
+    let table = lua.create_table()?;
     for (idx, value) in text.split(separator).enumerate() {
         table.raw_set(idx + 1, value)?;
     }
@@ -2143,7 +2145,7 @@ pub fn create_range_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
 }
 
 pub fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> {
-    let Some(Value::Table(table)) = args.front().cloned() else {
+    let Some(Value::Table(table)) = args.front() else {
         return Ok(Value::Nil);
     };
     let form = args.get(1).cloned().and_then(read_string);
@@ -2157,10 +2159,7 @@ pub fn stringify_lua_table(lua: &Lua, args: &MultiValue) -> mlua::Result<Value> 
         let text = if let Some(form) = form.as_deref()
             && matches!(value, Value::Integer(_) | Value::Number(_))
         {
-            let mut call_args = MultiValue::new();
-            call_args.push_back(Value::String(lua.create_string(form)?));
-            call_args.push_back(value);
-            lua_text_value(format.call::<Value>(call_args)?)?
+            lua_text_value(format.call::<Value>((form, value))?)?
         } else {
             lua_text_value(value)?
         };
@@ -2177,16 +2176,90 @@ pub fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Res
     Ok(out)
 }
 
+// Lua's mixed integer/float comparison is not transitive above 2^53.
+// Keep exact integers and their rounded float representations separately.
+#[derive(Eq, Hash, PartialEq)]
+enum DeduplicateKey {
+    Boolean(bool),
+    Integer(i64),
+    Number(u64),
+    IntegerAsNumber(u64),
+    String(mlua::LuaString),
+    Table(usize),
+}
+
+#[expect(
+    clippy::mutable_key_type,
+    reason = "Lua strings hash immutable bytes; only their reference counts are mutable"
+)]
+fn insert_deduplicate_value(
+    seen: &mut std::collections::HashSet<DeduplicateKey>,
+    value: &Value,
+) -> bool {
+    fn number_bits(value: f64) -> u64 {
+        if value == 0.0 { 0 } else { value.to_bits() }
+    }
+    match value {
+        Value::Boolean(value) => seen.insert(DeduplicateKey::Boolean(*value)),
+        Value::Integer(value) => {
+            let bits = number_bits(*value as f64);
+            if seen.contains(&DeduplicateKey::Number(bits))
+                || !seen.insert(DeduplicateKey::Integer(*value))
+            {
+                return false;
+            }
+            seen.insert(DeduplicateKey::IntegerAsNumber(bits));
+            true
+        }
+        Value::Number(value) if !value.is_nan() => {
+            let bits = number_bits(*value);
+            !seen.contains(&DeduplicateKey::IntegerAsNumber(bits))
+                && seen.insert(DeduplicateKey::Number(bits))
+        }
+        Value::String(value) if value.to_str().is_ok() => {
+            seen.insert(DeduplicateKey::String(value.clone()))
+        }
+        Value::Table(value) => seen.insert(DeduplicateKey::Table(value.to_pointer() as usize)),
+        // NaNs, invalid UTF-8 strings and opaque values never compare equal in
+        // lua_values_equal. Sequence iteration stops before a nil value.
+        _ => true,
+    }
+}
+
 pub fn deduplicate_lua_table(lua: &Lua, table: &Table) -> mlua::Result<Table> {
     let out = lua.create_table()?;
     let mut seen = Vec::new();
+    let mut indexed = None;
     let mut out_index = 1;
     for value in table.sequence_values::<Value>() {
         let value = value?;
-        if seen.iter().any(|seen| lua_values_equal(seen, &value)) {
-            continue;
+        if let Some(index) = &mut indexed {
+            if !insert_deduplicate_value(index, &value) {
+                continue;
+            }
+        } else {
+            if seen.iter().any(|seen| lua_values_equal(seen, &value)) {
+                continue;
+            }
+            // Short lists retain the inexpensive linear path. Only accepted
+            // values enter the index, preserving order-dependent comparisons.
+            // Insert the 33rd value directly so the discarded Vec never grows.
+            if seen.len() == 32 && table.raw_len() >= 128 {
+                #[expect(
+                    clippy::mutable_key_type,
+                    reason = "Lua strings hash immutable bytes; only their reference counts are mutable"
+                )]
+                let mut index = std::collections::HashSet::with_capacity(64);
+                for value in &seen {
+                    insert_deduplicate_value(&mut index, value);
+                }
+                insert_deduplicate_value(&mut index, &value);
+                seen = Vec::new();
+                indexed = Some(index);
+            } else {
+                seen.push(value.clone());
+            }
         }
-        seen.push(value.clone());
         out.raw_set(out_index, value)?;
         out_index += 1;
     }
@@ -2999,3 +3072,15 @@ mod tests {
         assert_eq!(rate, 1.5);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/split_chars.rs"]
+mod split_chars_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/stringify_args.rs"]
+mod stringify_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/deduplicate.rs"]
+mod deduplicate_perf;
