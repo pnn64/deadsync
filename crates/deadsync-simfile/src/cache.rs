@@ -891,12 +891,10 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
             continue;
         };
         let timing_segments: TimingSegments = chart.timing_segments.clone().into();
-        let timing = TimingData::from_segments(
-            -chart.offset,
-            global_offset_seconds,
-            &timing_segments,
-            &chart.row_to_beat,
-        );
+        // Only the two resolved beats are queried; this temporary timing does
+        // not need its own copy of the chart's full row table.
+        let timing =
+            TimingData::from_segments(-chart.offset, global_offset_seconds, &timing_segments, &[]);
         let first_sec = timing.get_time_for_beat(first_beat);
         if first_sec.is_finite() {
             first = first.min(first_sec);
@@ -1140,47 +1138,67 @@ pub fn build_chart_totals(
     parsed_notes: &[CachedParsedNote],
     timing: &TimingData,
 ) -> (i32, u32, u32, u32) {
+    build_chart_totals_with_rows(parsed_notes, timing, |row| timing.get_beat_for_row(row))
+}
+
+fn build_chart_totals_with_rows(
+    parsed_notes: &[CachedParsedNote],
+    timing: &TimingData,
+    beat_for_row: impl Fn(usize) -> Option<f32>,
+) -> (i32, u32, u32, u32) {
     let mut holds_total = 0u32;
     let mut rolls_total = 0u32;
     let mut mines_total = 0u32;
-    let mut rows: Vec<usize> = Vec::with_capacity(parsed_notes.len());
-    for parsed in parsed_notes {
-        let row_index = parsed.row_index as usize;
-        let Some(beat) = timing.get_beat_for_row(row_index) else {
+    // Parsed charts are ordered by row. Count each scoring row directly and
+    // share its timing checks across chords; retain a fallback for callers
+    // supplying unordered cached/imported notes.
+    let ordered = parsed_notes
+        .windows(2)
+        .all(|pair| pair[0].row_index <= pair[1].row_index);
+    let mut rows = if ordered {
+        Vec::new()
+    } else {
+        Vec::with_capacity(parsed_notes.len())
+    };
+    let mut row_count = 0usize;
+    for group in parsed_notes.chunk_by(|a, b| a.row_index == b.row_index) {
+        let row_index = group[0].row_index as usize;
+        let Some(beat) = beat_for_row(row_index) else {
             continue;
         };
-        let explicit_fake_tap = parsed.note_type == CachedNoteType::Fake;
-        let fake_by_segment = timing.is_fake_at_beat(beat);
-        let is_fake = explicit_fake_tap || fake_by_segment;
-        let note_type = if explicit_fake_tap {
-            NoteType::Tap
-        } else {
-            parsed.note_type.into()
-        };
-        let can_be_judged = !is_fake && timing.is_judgable_at_beat(beat);
-        if !can_be_judged {
+        if !timing.is_judgable_at_beat(beat) {
             continue;
         }
-        match note_type {
-            NoteType::Hold => {
-                holds_total = holds_total.saturating_add(1);
-                rows.push(row_index);
+        let mut scoring_row = false;
+        for parsed in group {
+            match parsed.note_type {
+                CachedNoteType::Hold => {
+                    holds_total = holds_total.saturating_add(1);
+                    scoring_row = true;
+                }
+                CachedNoteType::Roll => {
+                    rolls_total = rolls_total.saturating_add(1);
+                    scoring_row = true;
+                }
+                CachedNoteType::Mine => mines_total = mines_total.saturating_add(1),
+                CachedNoteType::Tap | CachedNoteType::Lift => scoring_row = true,
+                CachedNoteType::Fake => {}
             }
-            NoteType::Roll => {
-                rolls_total = rolls_total.saturating_add(1);
-                rows.push(row_index);
-            }
-            NoteType::Mine => {
-                mines_total = mines_total.saturating_add(1);
-            }
-            NoteType::Tap | NoteType::Lift | NoteType::Fake => {
+        }
+        if scoring_row {
+            if ordered {
+                row_count += 1;
+            } else {
                 rows.push(row_index);
             }
         }
     }
-    rows.sort_unstable();
-    rows.dedup();
-    let possible_i64 = i64::try_from(rows.len()).unwrap_or(i64::MAX) * 5
+    if !ordered {
+        rows.sort_unstable();
+        rows.dedup();
+        row_count = rows.len();
+    }
+    let possible_i64 = i64::try_from(row_count).unwrap_or(i64::MAX) * 5
         + i64::from(holds_total) * i64::from(HOLD_SCORE_HELD)
         + i64::from(rolls_total) * i64::from(HOLD_SCORE_HELD);
     (
@@ -1200,8 +1218,18 @@ pub fn chart_has_attacks(attacks: Option<&str>) -> bool {
 #[must_use]
 pub fn build_measure_seconds(timing: &TimingData, measure_count: usize) -> Vec<f32> {
     let mut seconds = Vec::with_capacity(measure_count);
-    for measure in 0..measure_count {
-        seconds.push(timing.get_time_for_beat((measure as f32) * 4.0));
+    // Measures advance monotonically. Guard cursor compatibility for duplicate,
+    // subrow, and invalid BPMs, and keep short lists on the direct path.
+    if measure_count >= 16 && timing.supports_row_time_cache() {
+        let mut cache = deadsync_rules::timing::BeatTimeCache::new(timing);
+        for measure in 0..measure_count {
+            let time_ns = timing.get_time_for_beat_ns_cached((measure as f32) * 4.0, &mut cache);
+            seconds.push((time_ns as f64 * 1.0e-9) as f32);
+        }
+    } else {
+        for measure in 0..measure_count {
+            seconds.push(timing.get_time_for_beat((measure as f32) * 4.0));
+        }
     }
     seconds
 }
@@ -1234,14 +1262,14 @@ pub fn build_gameplay_chart_from_payload(
 
 pub fn build_chart_meta(chart: SerializableChartData, global_offset_seconds: f32) -> ChartData {
     let timing_segments: TimingSegments = chart.timing_segments.into();
-    let timing = TimingData::from_segments(
-        -chart.offset,
-        global_offset_seconds,
-        &timing_segments,
-        &chart.row_to_beat,
-    );
+    // Totals borrow the source row table below; the temporary timing only
+    // answers beat-based queries and need not copy that potentially large table.
+    let timing =
+        TimingData::from_segments(-chart.offset, global_offset_seconds, &timing_segments, &[]);
     let (possible_grade_points, holds_total, rolls_total, mines_total) =
-        build_chart_totals(&chart.parsed_notes, &timing);
+        build_chart_totals_with_rows(&chart.parsed_notes, &timing, |row| {
+            chart.row_to_beat.get(row).copied()
+        });
     let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
     let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
     let has_chart_attacks = chart_has_attacks(chart.chart_attacks.as_deref());
@@ -1345,14 +1373,13 @@ fn compute_cached_chart_meta(
     global_offset_seconds: f32,
 ) -> ComputedCachedChartMeta {
     let timing_segments: TimingSegments = chart.timing_segments.clone().into();
-    let timing = TimingData::from_segments(
-        -chart.offset,
-        global_offset_seconds,
-        &timing_segments,
-        &chart.row_to_beat,
-    );
+    // Keep the row table borrowed for totals instead of cloning it into timing.
+    let timing =
+        TimingData::from_segments(-chart.offset, global_offset_seconds, &timing_segments, &[]);
     let (possible_grade_points, holds_total, rolls_total, mines_total) =
-        build_chart_totals(&chart.parsed_notes, &timing);
+        build_chart_totals_with_rows(&chart.parsed_notes, &timing, |row| {
+            chart.row_to_beat.get(row).copied()
+        });
     let first_second = 0.0_f32.min(timing.get_time_for_beat(0.0));
     let measure_seconds_vec = build_measure_seconds(&timing, chart.measure_nps_vec.len());
     ComputedCachedChartMeta {
@@ -3295,6 +3322,13 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    mod metadata_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/chart_metadata.rs"
+        ));
     }
 
     fn test_serializable_chart(
