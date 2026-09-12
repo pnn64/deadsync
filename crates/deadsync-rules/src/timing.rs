@@ -1948,8 +1948,31 @@ pub fn build_scatter_points(
     cols_per_player: usize,
     foot_by_row: Option<&[(usize, ScatterFoot)]>,
 ) -> Vec<ScatterPoint> {
-    debug_assert!(foot_by_row.is_none_or(|rows| rows.windows(2).all(|pair| pair[0].0 < pair[1].0)));
     let mut out = Vec::with_capacity(notes.len());
+    visit_scatter_points(
+        notes,
+        note_time_cache_ns,
+        col_offset,
+        cols_per_player,
+        foot_by_row,
+        |point| out.push(point),
+    );
+    out
+}
+
+/// Visits one point per judged row without allocating a scatter buffer.
+/// Callers can consume points directly or write into their own reusable buffer.
+/// `foot_by_row` follows the sorted-row contract of [`build_scatter_points`].
+#[inline(always)]
+pub fn visit_scatter_points(
+    notes: &[Note],
+    note_time_cache_ns: &[i64],
+    col_offset: usize,
+    cols_per_player: usize,
+    foot_by_row: Option<&[(usize, ScatterFoot)]>,
+    mut visit: impl FnMut(ScatterPoint),
+) {
+    debug_assert!(foot_by_row.is_none_or(|rows| rows.windows(2).all(|pair| pair[0].0 < pair[1].0)));
     let mut row_start = 0usize;
     let mut foot_row_idx = 0usize;
 
@@ -2007,7 +2030,7 @@ pub fn build_scatter_points(
             Some(judgment.time_error_ms)
         };
 
-        out.push(ScatterPoint {
+        visit(ScatterPoint {
             time_sec: t,
             offset_ms,
             direction_code,
@@ -2019,8 +2042,6 @@ pub fn build_scatter_points(
 
         row_start = row_end;
     }
-
-    out
 }
 
 #[inline(always)]

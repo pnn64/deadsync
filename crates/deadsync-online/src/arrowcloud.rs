@@ -1871,37 +1871,27 @@ pub struct ArrowCloudSpeed {
 pub struct ArrowCloudModifiers {
     #[serde(rename = "visualDelay")]
     pub visual_delay: i32,
-    pub acceleration: Vec<String>,
-    pub appearance: Vec<String>,
-    pub effect: Vec<String>,
+    pub acceleration: Vec<&'static str>,
+    pub appearance: Vec<&'static str>,
+    pub effect: Vec<&'static str>,
     pub mini: i32,
-    pub turn: String,
+    pub turn: &'static str,
     #[serde(rename = "disabledWindows")]
-    pub disabled_windows: String,
+    pub disabled_windows: &'static str,
     pub speed: ArrowCloudSpeed,
-    pub perspective: String,
+    pub perspective: &'static str,
     pub noteskin: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scroll: Option<String>,
+    pub scroll: Option<&'static str>,
 }
 
-#[inline(always)]
-fn mask_labels_u8(mask: u8, names: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    for (i, name) in names.iter().enumerate() {
-        if (mask & (1u8 << i)) != 0 {
-            out.push((*name).to_string());
-        }
-    }
-    out
-}
-
-#[inline(always)]
-fn mask_labels_u16(mask: u16, names: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    for (i, name) in names.iter().enumerate() {
-        if (mask & (1u16 << i)) != 0 {
-            out.push((*name).to_string());
+#[inline]
+fn mask_labels(mask: u16, names: &'static [&'static str]) -> Vec<&'static str> {
+    let mask = mask & ((1 << names.len()) - 1);
+    let mut out = Vec::with_capacity(mask.count_ones() as usize);
+    for (i, &name) in names.iter().enumerate() {
+        if (mask & (1 << i)) != 0 {
+            out.push(name);
         }
     }
     out
@@ -1925,17 +1915,17 @@ pub const fn turn_label(turn: profile_data::TurnOption) -> &'static str {
 
 #[inline(always)]
 #[must_use]
-pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<String> {
+pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<&'static str> {
     if scroll.contains(profile_data::ScrollOption::Reverse) {
-        Some("Reverse".to_string())
+        Some("Reverse")
     } else if scroll.contains(profile_data::ScrollOption::Split) {
-        Some("Split".to_string())
+        Some("Split")
     } else if scroll.contains(profile_data::ScrollOption::Alternate) {
-        Some("Alternate".to_string())
+        Some("Alternate")
     } else if scroll.contains(profile_data::ScrollOption::Cross) {
-        Some("Cross".to_string())
+        Some("Cross")
     } else if scroll.contains(profile_data::ScrollOption::Centered) {
-        Some("Centered".to_string())
+        Some("Centered")
     } else {
         None
     }
@@ -1964,23 +1954,29 @@ pub fn speed_payload(speed: ScrollSpeedSetting) -> ArrowCloudSpeed {
 pub fn modifiers_from_profile(profile: &Profile) -> ArrowCloudModifiers {
     ArrowCloudModifiers {
         visual_delay: profile.visual_delay_ms,
-        acceleration: mask_labels_u8(
-            profile.accel_effects_active_mask.bits(),
+        acceleration: mask_labels(
+            u16::from(profile.accel_effects_active_mask.bits()),
             &ARROWCLOUD_ACCEL_NAMES,
         ),
-        appearance: mask_labels_u8(
-            profile.appearance_effects_active_mask.bits(),
+        appearance: mask_labels(
+            u16::from(profile.appearance_effects_active_mask.bits()),
             &ARROWCLOUD_APPEARANCE_NAMES,
         ),
-        effect: mask_labels_u16(
+        effect: mask_labels(
             profile.visual_effects_active_mask.bits(),
             &ARROWCLOUD_EFFECT_NAMES,
         ),
         mini: profile.mini_percent.clamp(-100, 150),
-        turn: turn_label(profile.turn_option).to_string(),
-        disabled_windows: "None".to_string(),
+        turn: turn_label(profile.turn_option),
+        disabled_windows: "None",
         speed: speed_payload(profile.scroll_speed),
-        perspective: profile.perspective.to_string(),
+        perspective: match profile.perspective {
+            profile_data::Perspective::Overhead => "Overhead",
+            profile_data::Perspective::Hallway => "Hallway",
+            profile_data::Perspective::Distant => "Distant",
+            profile_data::Perspective::Incoming => "Incoming",
+            profile_data::Perspective::Space => "Space",
+        },
         noteskin: profile.noteskin.as_str().to_string(),
         scroll: scroll_label(profile.scroll_option),
     }
@@ -2017,16 +2013,7 @@ pub struct ArrowCloudNpsInfo {
     pub points: Vec<ArrowCloudNpsPoint>,
 }
 
-fn life_lerp_at(life_history: &[(f32, f32)], start_time: f32, sample_time: f32) -> f32 {
-    let Some(&(_, start_life)) = life_history.first() else {
-        return 0.0;
-    };
-    let start_life = start_life.clamp(0.0, 1.0);
-    if sample_time <= start_time {
-        return start_life;
-    }
-
-    let records = &life_history[life_history.partition_point(|&(time, _)| time < start_time)..];
+fn life_lerp_at(records: &[(f32, f32)], start_life: f32, start_time: f32, sample_time: f32) -> f32 {
     let later_ix = records.partition_point(|&(time, _)| time <= sample_time);
     let (earlier_time, earlier_life) = if later_ix == 0 {
         (start_time, start_life)
@@ -2069,18 +2056,27 @@ pub fn lifebar_points(
     } else {
         1.0
     };
+    let start_life = life_history[0].1.clamp(0.0, 1.0);
+    let mut records = None;
     let mut out = Vec::with_capacity(point_count);
     for i in 0..point_count {
         let sample = i as f32;
         let x = sample.mul_add(x_step, chart_start_second);
         let sample_music_time = (sample * life_step).mul_add(music_rate, chart_start_second);
+        let life = if sample_music_time <= chart_start_second {
+            start_life
+        } else {
+            // Every sample shares this lower bound. Delay its search until a
+            // sample needs interpolation (a one-point graph usually does not).
+            let records = records.get_or_insert_with(|| {
+                &life_history
+                    [life_history.partition_point(|&(time, _)| time < chart_start_second)..]
+            });
+            life_lerp_at(records, start_life, chart_start_second, sample_music_time)
+        };
         out.push(ArrowCloudLifePoint {
             x: f64::from(x),
-            y: f64::from(life_lerp_at(
-                life_history,
-                chart_start_second,
-                sample_music_time,
-            )),
+            y: f64::from(life),
         });
     }
     out
@@ -2171,25 +2167,61 @@ pub fn timing_data_from_scatter(
 ) -> Vec<ArrowCloudTimingDatum> {
     let mut out = Vec::with_capacity(scatter.len());
     for point in scatter {
-        if !point.time_sec.is_finite() {
-            continue;
+        if let Some(datum) = timing_datum(point, fail_time_s) {
+            out.push(datum);
         }
-        if let Some(fail_time) = fail_time_s
-            && point.time_sec > fail_time
-        {
-            continue;
-        }
-        let value = if let Some(offset_ms) = point.offset_ms {
-            if !offset_ms.is_finite() {
-                continue;
-            }
-            ArrowCloudTimingOffset::Seconds(f64::from(offset_ms / 1000.0))
-        } else {
-            ArrowCloudTimingOffset::Miss("Miss")
-        };
-        out.push((f64::from(point.time_sec), value));
     }
     out
+}
+
+#[must_use]
+fn timing_data_from_notes(
+    notes: &[Note],
+    note_times: &[i64],
+    col_offset: usize,
+    cols_per_player: usize,
+    fail_time_s: Option<f32>,
+    row_capacity: usize,
+) -> Vec<ArrowCloudTimingDatum> {
+    let mut out = Vec::new();
+    deadsync_rules::timing::visit_scatter_points(
+        notes,
+        note_times,
+        col_offset,
+        cols_per_player,
+        None,
+        |point| {
+            if let Some(datum) = timing_datum(&point, fail_time_s) {
+                if out.capacity() == 0 {
+                    // Scoring already counted judged rows. Use that capacity
+                    // hint without rescanning the chart; Vec can still grow if
+                    // callers supply incomplete counts. Empty results allocate
+                    // nothing, and oversized hints cannot exceed note count.
+                    out.reserve_exact(row_capacity.clamp(1, notes.len()));
+                }
+                out.push(datum);
+            }
+        },
+    );
+    out
+}
+
+#[inline]
+fn timing_datum(point: &ScatterPoint, fail_time_s: Option<f32>) -> Option<ArrowCloudTimingDatum> {
+    if !point.time_sec.is_finite()
+        || fail_time_s.is_some_and(|fail_time| point.time_sec > fail_time)
+    {
+        return None;
+    }
+    let value = if let Some(offset_ms) = point.offset_ms {
+        if !offset_ms.is_finite() {
+            return None;
+        }
+        ArrowCloudTimingOffset::Seconds(f64::from(offset_ms / 1000.0))
+    } else {
+        ArrowCloudTimingOffset::Miss("Miss")
+    };
+    Some((f64::from(point.time_sec), value))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -2405,13 +2437,6 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
     let first_second = input.density_first_second.min(0.0);
     let last_second = input.density_last_second.max(first_second);
     let chart_start_second = input.song_first_second;
-    let scatter = deadsync_rules::timing::build_scatter_points(
-        input.notes,
-        input.note_times,
-        input.col_offset,
-        input.cols_per_player,
-        None,
-    );
     let fail_time_s = input.fail_time_ns.map(song_time_ns_to_seconds);
 
     payload_from_parts(ArrowCloudPayloadParts {
@@ -2420,7 +2445,18 @@ pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) ->
         pack: input.pack_group.to_string(),
         music_length_seconds: input.music_length_seconds,
         hash: input.chart_hash,
-        timing_data: timing_data_from_scatter(&scatter, fail_time_s),
+        timing_data: timing_data_from_notes(
+            input.notes,
+            input.note_times,
+            input.col_offset,
+            input.cols_per_player,
+            fail_time_s,
+            input
+                .submit_stats
+                .judgment_counts
+                .iter()
+                .fold(0usize, |sum, &count| sum.saturating_add(count as usize)),
+        ),
         difficulty: input.difficulty,
         stepartist: input.stepartist,
         submit_stats: input.submit_stats,
@@ -3637,13 +3673,13 @@ mod tests {
                 appearance: Vec::new(),
                 effect: Vec::new(),
                 mini: 0,
-                turn: "None".to_string(),
-                disabled_windows: "None".to_string(),
+                turn: "None",
+                disabled_windows: "None",
                 speed: ArrowCloudSpeed {
                     value: 600.0,
                     speed_type: "C",
                 },
-                perspective: "Overhead".to_string(),
+                perspective: "Overhead",
                 noteskin: "cel".to_string(),
                 scroll: None,
             },
@@ -3708,13 +3744,13 @@ mod tests {
                 appearance: Vec::new(),
                 effect: Vec::new(),
                 mini: 0,
-                turn: "None".to_string(),
-                disabled_windows: "None".to_string(),
+                turn: "None",
+                disabled_windows: "None",
                 speed: ArrowCloudSpeed {
                     value: 600.0,
                     speed_type: "C",
                 },
-                perspective: "Overhead".to_string(),
+                perspective: "Overhead",
                 noteskin: "cel".to_string(),
                 scroll: None,
             },
@@ -4341,13 +4377,13 @@ mod tests {
                 appearance: Vec::new(),
                 effect: Vec::new(),
                 mini: 0,
-                turn: "None".to_string(),
-                disabled_windows: "None".to_string(),
+                turn: "None",
+                disabled_windows: "None",
                 speed: ArrowCloudSpeed {
                     value: 600.0,
                     speed_type: "C",
                 },
-                perspective: "Overhead".to_string(),
+                perspective: "Overhead",
                 noteskin: "cel".to_string(),
                 scroll: None,
             },
@@ -4614,4 +4650,12 @@ mod tests {
         );
         assert!(result_dialog_urls_from_body(&oversized).is_empty());
     }
+}
+
+#[cfg(test)]
+mod preparation_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/arrowcloud_preparation.rs"
+    ));
 }
