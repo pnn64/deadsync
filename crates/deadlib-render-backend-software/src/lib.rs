@@ -12,6 +12,9 @@ use rayon::prelude::*;
 use std::{error::Error, num::NonZeroU32, sync::Arc, time::Instant};
 use winit::{dpi::PhysicalSize, window::Window};
 
+mod texture_upload;
+use texture_upload::{texture_is_opaque, update_yuv420_image, yuv420_to_rgba};
+
 const SOFTWARE_ROW_CHUNK: usize = 32;
 // Staging wins once enough row workers would otherwise repeat every transform.
 const MIN_STAGE_MESH_STRIPES: usize = 12;
@@ -466,7 +469,7 @@ pub fn update_yuv420_texture(
     texture: &mut Texture,
     upload: Yuv420Upload<'_>,
 ) -> Result<(), Box<dyn Error>> {
-    texture.image = yuv420_to_rgba(upload)?;
+    update_yuv420_image(&mut texture.image, upload)?;
     texture.opaque = true;
     texture.yuv420 = true;
     Ok(())
@@ -476,54 +479,6 @@ pub fn update_yuv420_texture(
 #[must_use]
 pub const fn texture_is_yuv420(texture: &Texture) -> bool {
     texture.yuv420
-}
-
-fn yuv420_to_rgba(upload: Yuv420Upload<'_>) -> Result<RgbaImage, Box<dyn Error>> {
-    if !upload.is_valid() {
-        return Err(std::io::Error::other("invalid YUV420 planes").into());
-    }
-
-    let width = upload.width as usize;
-    let height = upload.height as usize;
-    let luma_len = width * height;
-
-    let mut rgba = vec![0; luma_len * 4];
-    for row in 0..height {
-        let chroma_row = row / 2 * (width / 2);
-        for col in 0..width {
-            let pixel = row * width + col;
-            let chroma = chroma_row + col / 2;
-            let y =
-                (f32::from(upload.y[pixel]) / 255.0).mul_add(upload.levels[0], upload.levels[1]);
-            let u =
-                (f32::from(upload.u[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
-            let v =
-                (f32::from(upload.v[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
-            let out = &mut rgba[pixel * 4..pixel * 4 + 4];
-            out[0] = (upload.coeffs[0].mul_add(v, y).clamp(0.0, 1.0) * 255.0).round() as u8;
-            out[1] = (upload.coeffs[2]
-                .mul_add(v, upload.coeffs[1].mul_add(u, y))
-                .clamp(0.0, 1.0)
-                * 255.0)
-                .round() as u8;
-            out[2] = (upload.coeffs[3].mul_add(u, y).clamp(0.0, 1.0) * 255.0).round() as u8;
-            out[3] = 255;
-        }
-    }
-    RgbaImage::from_raw(upload.width, upload.height, rgba)
-        .ok_or_else(|| std::io::Error::other("invalid converted YUV420 image").into())
-}
-
-#[inline]
-fn texture_is_opaque(image: &RgbaImage) -> bool {
-    image.width() != 0
-        && image.height() != 0
-        && image
-            .as_raw()
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .all(|pixel| pixel[3] == 255)
 }
 
 struct ResolvedTextures<'a, T: TextureLookup + Sync> {
