@@ -94,6 +94,7 @@ const fn output_mode_choice(mode: deadlib_audio_core::AudioOutputMode) -> AudioO
     match mode {
         deadlib_audio_core::AudioOutputMode::Auto => AudioOutputModeChoice::Auto,
         deadlib_audio_core::AudioOutputMode::Shared => AudioOutputModeChoice::Shared,
+        deadlib_audio_core::AudioOutputMode::SharedLowLatency => AudioOutputModeChoice::SharedLowLatency,
         deadlib_audio_core::AudioOutputMode::Exclusive => AudioOutputModeChoice::Exclusive,
     }
 }
@@ -102,6 +103,7 @@ const fn output_mode(choice: AudioOutputModeChoice) -> deadlib_audio_core::Audio
     match choice {
         AudioOutputModeChoice::Auto => deadlib_audio_core::AudioOutputMode::Auto,
         AudioOutputModeChoice::Shared => deadlib_audio_core::AudioOutputMode::Shared,
+        AudioOutputModeChoice::SharedLowLatency => deadlib_audio_core::AudioOutputMode::SharedLowLatency,
         AudioOutputModeChoice::Exclusive => deadlib_audio_core::AudioOutputMode::Exclusive,
     }
 }
@@ -194,6 +196,7 @@ mod tests {
         for choice in [
             AudioOutputModeChoice::Auto,
             AudioOutputModeChoice::Shared,
+            AudioOutputModeChoice::SharedLowLatency,
             AudioOutputModeChoice::Exclusive,
         ] {
             assert_eq!(output_mode_choice(output_mode(choice)), choice);

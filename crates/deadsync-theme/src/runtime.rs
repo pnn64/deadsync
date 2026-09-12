@@ -67,6 +67,7 @@ pub enum AudioOutputModeChoice {
     #[default]
     Auto,
     Shared,
+    SharedLowLatency,
     Exclusive,
 }
 
@@ -78,7 +79,7 @@ impl AudioOutputModeChoice {
     pub const fn choice_index(self) -> usize {
         match self {
             Self::Auto => 0,
-            Self::Shared | Self::Exclusive => 1,
+            Self::Shared | Self::SharedLowLatency | Self::Exclusive => 1,
         }
     }
 
@@ -86,6 +87,30 @@ impl AudioOutputModeChoice {
     #[must_use]
     pub const fn from_choice(index: usize) -> Self {
         if index == 1 { Self::Shared } else { Self::Auto }
+    }
+
+    #[cfg(windows)]
+    #[inline(always)]
+    #[must_use]
+    pub const fn windows_choice_index(self) -> usize {
+        match self {
+            Self::Auto => 0,
+            Self::Shared => 1,
+            Self::SharedLowLatency => 2,
+            Self::Exclusive => 3,
+        }
+    }
+
+    #[cfg(windows)]
+    #[inline(always)]
+    #[must_use]
+    pub const fn from_windows_choice(index: usize) -> Self {
+        match index {
+            1 => Self::Shared,
+            2 => Self::SharedLowLatency,
+            3 => Self::Exclusive,
+            _ => Self::Auto,
+        }
     }
 
     #[inline(always)]

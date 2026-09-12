@@ -919,6 +919,9 @@ pub(super) fn apply_submenu_choice_delta(
                 action = Some(ThemeEffect::None);
             }
             SubRowId::AudioOutputMode => {
+                #[cfg(windows)]
+                let mode = AudioOutputModeChoice::from_windows_choice(new_index);
+                #[cfg(not(windows))]
                 let mode = AudioOutputModeChoice::from_choice(new_index);
                 state.audio_options.output_mode = mode;
                 queue_audio(state, AudioRequest::SetOutputMode(mode));

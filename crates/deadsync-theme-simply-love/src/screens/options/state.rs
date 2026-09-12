@@ -1299,10 +1299,14 @@ pub fn init(view: OptionsInitView) -> State {
     );
     set_sound_choice_index(&mut state, SubRowId::SoundDevice, sound_device_idx);
     let output_mode = state.audio_options.output_mode;
+    #[cfg(windows)]
+    let output_mode_index = output_mode.windows_choice_index();
+    #[cfg(not(windows))]
+    let output_mode_index = output_mode.choice_index();
     set_sound_choice_index(
         &mut state,
         SubRowId::AudioOutputMode,
-        output_mode.choice_index(),
+        output_mode_index,
     );
     #[cfg(target_os = "linux")]
     let linux_backend_idx =

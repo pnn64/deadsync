@@ -80,6 +80,7 @@ pub struct AudioOptions {
     pub assist_tick_volume: u8,
     pub output_device_index: Option<u16>,
     pub sample_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
     pub rate_mod_preserves_pitch: bool,
     pub enable_replaygain: bool,
     pub write_current_screen: bool,
@@ -100,6 +101,7 @@ impl Default for AudioOptions {
             assist_tick_volume: DEFAULT_ASSIST_TICK_VOLUME,
             output_device_index: None,
             sample_rate_hz: None,
+            buffer_size_frames: None,
             rate_mod_preserves_pitch: DEFAULT_RATE_MOD_PRESERVES_PITCH,
             enable_replaygain: DEFAULT_ENABLE_REPLAYGAIN,
             write_current_screen: DEFAULT_WRITE_CURRENT_SCREEN,
@@ -113,6 +115,7 @@ pub struct AudioDeviceOptions<'a> {
     pub output_device_index: Option<u16>,
     pub output_mode: &'a str,
     pub sample_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,6 +192,10 @@ pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptio
             .get("Options", "AudioSampleRateHz")
             .and_then(parse_auto_audio_sample_rate_hz)
             .unwrap_or(default.sample_rate_hz),
+        buffer_size_frames: conf
+            .get("Options", "AudioBufferSizeFrames")
+            .and_then(parse_auto_audio_sample_rate_hz)
+            .unwrap_or(default.buffer_size_frames),
         rate_mod_preserves_pitch: parse_u8_bool_or_default(
             conf.get("Options", "RateModPreservesPitch"),
             default.rate_mod_preserves_pitch,
@@ -219,6 +226,11 @@ pub fn push_audio_device_option_lines(content: &mut String, options: AudioDevice
         content,
         "AudioSampleRateHz",
         optional_audio_sample_rate_hz_value(options.sample_rate_hz),
+    );
+    push_line(
+        content,
+        "AudioBufferSizeFrames",
+        optional_audio_sample_rate_hz_value(options.buffer_size_frames),
     );
 }
 
@@ -336,6 +348,7 @@ mod tests {
             assist_tick_volume: 50,
             output_device_index: None,
             sample_rate_hz: None,
+            buffer_size_frames: None,
             rate_mod_preserves_pitch: true,
             enable_replaygain: false,
             write_current_screen: false,
@@ -433,6 +446,7 @@ mod tests {
                 output_device_index: Some(2),
                 output_mode: "Exclusive",
                 sample_rate_hz: Some(48_000),
+                buffer_size_frames: Some(512),
             },
         );
 
@@ -442,6 +456,7 @@ mod tests {
                 "AudioOutputDevice=2\n",
                 "AudioOutputMode=Exclusive\n",
                 "AudioSampleRateHz=48000\n",
+                "AudioBufferSizeFrames=512\n",
             ),
         );
     }

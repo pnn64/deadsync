@@ -28,6 +28,7 @@ pub struct InitConfig {
     #[cfg(target_os = "linux")]
     pub linux_backend: LinuxAudioBackend,
     pub sample_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +98,7 @@ struct WasapiBackendHint {
     pub device_id: Option<String>,
     pub device_name: String,
     pub requested_rate_hz: Option<u32>,
+    pub buffer_size_frames: Option<u32>,
     pub output_mode: AudioOutputMode,
 }
 
@@ -677,6 +679,7 @@ fn build_audio_launch(cfg: &InitConfig) -> (Vec<OutputDeviceProbe>, NativeBacken
                 device_id,
                 device_name,
                 requested_rate_hz,
+                buffer_size_frames: cfg.buffer_size_frames,
                 output_mode,
             }),
         },
@@ -698,7 +701,9 @@ fn start_linux_alsa_backend(
 > {
     let access_mode = match alsa.output_mode {
         AudioOutputMode::Exclusive => linux_alsa::AlsaAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => linux_alsa::AlsaAccessMode::Shared,
+        AudioOutputMode::Auto | AudioOutputMode::Shared | AudioOutputMode::SharedLowLatency => {
+            linux_alsa::AlsaAccessMode::Shared
+        }
     };
     let prep = linux_alsa::prepare(
         alsa.pcm_id.clone(),
@@ -1133,15 +1138,19 @@ fn start_wasapi_backend(
     ),
     String,
 > {
-    let access_mode = match wasapi.output_mode {
-        AudioOutputMode::Exclusive => windows_wasapi::WasapiAccessMode::Exclusive,
-        AudioOutputMode::Auto | AudioOutputMode::Shared => windows_wasapi::WasapiAccessMode::Shared,
+    let backend_mode = match wasapi.output_mode {
+        AudioOutputMode::Auto | AudioOutputMode::Shared => {
+            windows_wasapi::WasapiBackendMode::Shared
+        }
+        AudioOutputMode::SharedLowLatency => windows_wasapi::WasapiBackendMode::SharedLowLatency,
+        AudioOutputMode::Exclusive => windows_wasapi::WasapiBackendMode::Exclusive,
     };
     let prep = windows_wasapi::prepare(
         wasapi.device_id.clone(),
         wasapi.device_name.clone(),
         wasapi.requested_rate_hz,
-        access_mode,
+        wasapi.buffer_size_frames,
+        backend_mode,
     )
     .map_err(|err| {
         format!(

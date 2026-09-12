@@ -338,6 +338,7 @@ const fn apply_audio_opts(
     cfg.assist_tick_volume = loaded.assist_tick_volume;
     cfg.audio_output_device_index = loaded.output_device_index;
     cfg.audio_sample_rate_hz = loaded.sample_rate_hz;
+    cfg.audio_buffer_size_frames = loaded.buffer_size_frames;
     cfg.rate_mod_preserves_pitch = loaded.rate_mod_preserves_pitch;
     cfg.enable_replaygain = loaded.enable_replaygain;
     cfg.write_current_screen = loaded.write_current_screen;
