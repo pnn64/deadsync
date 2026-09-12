@@ -1204,14 +1204,8 @@ pub fn remove_all_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         actor.raw_set(index, Value::Nil)?;
     }
     let children = actor_children(lua, actor)?;
-    let mut keys = Vec::new();
-    for pair in children.pairs::<Value, Value>() {
-        let (key, _) = pair?;
-        keys.push(key);
-    }
-    for key in keys {
-        children.set(key, Value::Nil)?;
-    }
+    // Retain the registry's identity, metatable, and reusable capacity.
+    children.clear()?;
     Ok(())
 }
 
@@ -2282,12 +2276,14 @@ pub fn drain_actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         let Some(name) = queue.raw_get::<Option<String>>(1)? else {
             break;
         };
-        let len = queue.raw_len();
-        for index in 1..len {
-            let value = queue.raw_get::<Value>(index + 1)?;
-            queue.raw_set(index, value)?;
+        // Shift inside Lua, avoiding a Rust handle and two Lua API crossings
+        // per remaining item. Remove before dispatch so callbacks observe the
+        // same queue and can append, replace, or recursively drain it.
+        if queue.raw_len() == 1 {
+            queue.raw_set(1, Value::Nil)?;
+        } else {
+            queue.raw_remove(1_i64)?;
         }
-        queue.raw_set(len, Value::Nil)?;
         // Effect setters bypass the tween queue, but a queued command itself
         // begins at the current queue cursor. Preserve that command-local now.
         let immediate_start_key = "__songlua_capture_immediate_start";
@@ -2536,22 +2532,34 @@ pub struct SongLuaCapturedMessageCommands {
     pub skipped: Vec<String>,
 }
 
+fn for_each_actor_message_command(
+    actor: &Table,
+    mut visit: impl FnMut(&str, Function),
+) -> mlua::Result<()> {
+    // Filter values before borrowing/allocating names. Keep keys on Lua's stack
+    // and copy only selected names into the caller's pre-execution snapshot.
+    actor.for_each::<Value, Value>(|key, value| {
+        let (Value::String(key), Value::Function(command)) = (key, value) else {
+            return Ok(());
+        };
+        let Ok(name) = key.to_str() else {
+            return Ok(());
+        };
+        if name.ends_with("MessageCommand") {
+            visit(&name, command);
+        }
+        Ok(())
+    })
+}
+
 pub fn capture_actor_message_commands(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaCapturedMessageCommands, String> {
     let mut out = SongLuaCapturedMessageCommands::default();
     let mut command_names = Vec::new();
-    for pair in actor.clone().pairs::<Value, Value>() {
-        let (key, value) = pair.map_err(|err| err.to_string())?;
-        let Some(name) = read_string(key) else {
-            continue;
-        };
-        if !name.ends_with("MessageCommand") || !matches!(value, Value::Function(_)) {
-            continue;
-        }
-        command_names.push(name);
-    }
+    for_each_actor_message_command(actor, |name, _| command_names.push(name.to_owned()))
+        .map_err(|err| err.to_string())?;
     command_names.sort_unstable();
 
     // Capturing a command resets and restores fields on the actor table. Do not
@@ -10824,17 +10832,19 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         .collect::<Vec<_>>();
     let mut commands = Vec::new();
     for (source_index, source) in overlays.iter().enumerate() {
-        for pair in source.table.clone().pairs::<Value, Value>() {
-            let (key, value) = pair.map_err(|err| err.to_string())?;
-            let (Some(name), Value::Function(function)) = (read_string(key), value) else {
-                continue;
-            };
-            let Some(message) = name.strip_suffix("MessageCommand") else {
-                continue;
-            };
-            let message = message.to_string();
-            commands.push((source_index, source.table.clone(), name, message, function));
-        }
+        for_each_actor_message_command(&source.table, |name, function| {
+            let message = name
+                .strip_suffix("MessageCommand")
+                .expect("filtered suffix");
+            commands.push((
+                source_index,
+                source.table.clone(),
+                name.to_owned(),
+                message.to_owned(),
+                function,
+            ));
+        })
+        .map_err(|err| err.to_string())?;
     }
 
     let mut additions = Vec::new();
@@ -14441,3 +14451,15 @@ mod child_tables_perf;
 #[cfg(test)]
 #[path = "../tests/perf/global_references.rs"]
 mod global_references_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/queue_drain.rs"]
+mod queue_drain_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/children_clear.rs"]
+mod children_clear_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/message_discovery.rs"]
+mod message_discovery_perf;
