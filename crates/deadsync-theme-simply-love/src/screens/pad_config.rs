@@ -18,12 +18,15 @@ use crate::act;
 use crate::color;
 use crate::screens::Screen;
 use crate::screens::components::shared::visual_style_bg;
+use crate::screens::input as screen_input;
+use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
+use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PadCommand {
@@ -110,6 +113,15 @@ enum ThresholdKind {
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 const THRESHOLD_STEP: u16 = 5;
+
+/// Holding a direction keeps stepping: nothing repeats during the initial
+/// delay, then repeats start at the opening interval and each one shortens
+/// the next by the acceleration factor down to the floor, so a long sweep
+/// speeds up without making the first few steps twitchy.
+const HOLD_REPEAT_INITIAL_DELAY: Duration = Duration::from_millis(300);
+const HOLD_REPEAT_INTERVAL_START: Duration = Duration::from_millis(120);
+const HOLD_REPEAT_ACCEL: f32 = 0.88;
+const HOLD_REPEAT_INTERVAL_MIN: Duration = Duration::from_millis(30);
 
 /// Gap the press/release lock keeps between a load-cell panel's thresholds,
 /// matching the official SMX config tool's two-thumb slider (`MinimumDistance`).
@@ -209,6 +221,23 @@ pub struct State {
     return_screen: Option<Screen>,
     filter: PadFilter,
     bg: visual_style_bg::State,
+    /// The directional control being held, for hold-to-repeat (see `update`).
+    held: Option<HeldNav>,
+    /// Up / Down currently held, for the Up+Down "tare" chord.
+    raise_held: bool,
+    lower_held: bool,
+}
+
+/// A held directional control and its repeat timer.
+#[derive(Clone, Copy)]
+struct HeldNav {
+    ui: UiAction,
+    /// Shift state captured at the press; repeats reuse it.
+    fine: bool,
+    held_for: Duration,
+    next_repeat_at: Duration,
+    /// Interval to the next repeat; shrinks with each one.
+    interval: Duration,
 }
 
 /// Set where Back returns to (e.g. Song Select when opened from its menu).
@@ -284,8 +313,39 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
     std::mem::take(&mut state.pending)
 }
 
-pub const fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
+/// Advance hold-to-repeat: a held direction re-fires after an initial delay,
+/// then at a steady cadence, in the Simple / Advanced views and the profiles
+/// list. The name box ignores the hold (its Up/Down is a toggle).
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
+    tick_hold_repeat(state, dt);
     None
+}
+
+fn tick_hold_repeat(state: &mut State, dt: f32) {
+    if state.saving.is_some() {
+        return;
+    }
+    let Some(held) = state.held.as_mut() else {
+        return;
+    };
+    if !screen_input::advance_hold_repeat(
+        &mut held.held_for,
+        &mut held.next_repeat_at,
+        held.interval,
+        dt,
+    ) {
+        return;
+    }
+    held.interval = held
+        .interval
+        .mul_f32(HOLD_REPEAT_ACCEL)
+        .max(HOLD_REPEAT_INTERVAL_MIN);
+    let (ui, fine) = (held.ui, held.fine);
+    if state.profiles_mode {
+        profiles_nav(state, ui);
+    } else {
+        perform_ui_action(state, ui, fine);
+    }
 }
 
 #[must_use]
@@ -327,12 +387,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
 /// Apply an edit for a press. Shared by the full screen and the Song Select
 /// overlay. Returns whether Back at the top level asked to exit.
 pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult {
-    if !ev.pressed {
-        return EditResult::Handled;
-    }
     // Only keyboard or dedicated menu controls drive the UI; ignore raw pad
     // panels so testing a sensor doesn't move the cursor or change values.
     if ev.source == InputSource::Gamepad && !is_menu_control(ev.action) {
+        return EditResult::Handled;
+    }
+    if !ev.pressed {
+        note_release(state, ev.action);
         return EditResult::Handled;
     }
 
@@ -373,18 +434,32 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         return EditResult::Handled;
     }
 
-    if state.advanced.is_some() {
+    // Directional presses (both views): track the hold for repeat, and detect
+    // the Up+Down chord, whose second key tares the focused threshold to the
+    // live reading instead of stepping it.
+    if let Some(ui) = ui_action(ev.action) {
+        if note_press(state, ui, fine) {
+            tare_focused(state);
+        } else {
+            perform_ui_action(state, ui, fine);
+        }
+        return EditResult::Handled;
+    }
+
+    if let Some(dev) = state.advanced {
         if is_back(ev.action) {
             state.advanced = None;
             state.adv_sel = 0;
-        } else {
-            apply_advanced_edit(state, ev, fine);
+            clear_hold(state);
+        } else if is_start(ev.action) {
+            toggle_advanced_focused(state, dev);
         }
         return EditResult::Handled;
     }
 
     // Simple view.
     if is_back(ev.action) {
+        clear_hold(state);
         return EditResult::ExitToParent;
     }
     if is_start(ev.action) {
@@ -398,15 +473,162 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
         }
         return EditResult::Handled;
     }
-    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
-    match ui_action(ev.action) {
-        Some(UiAction::PrevBar) => state.selected = (state.selected + total - 1) % total,
-        Some(UiAction::NextBar) => state.selected = (state.selected + 1) % total,
-        Some(UiAction::Raise) => adjust_simple_threshold(state, step),
-        Some(UiAction::Lower) => adjust_simple_threshold(state, -step),
-        None => {}
-    }
     EditResult::Handled
+}
+
+/// Run one directional action in whichever view is open. Shared by a press
+/// and its hold-repeats.
+fn perform_ui_action(state: &mut State, ui: UiAction, fine: bool) {
+    let total = total_bars(state);
+    if total == 0 {
+        return;
+    }
+    if let Some(dev) = state.advanced {
+        perform_advanced_ui_action(state, dev, ui, fine);
+        return;
+    }
+    let step = if fine { 1 } else { i32::from(THRESHOLD_STEP) };
+    match ui {
+        UiAction::PrevBar => state.selected = (state.selected + total - 1) % total,
+        UiAction::NextBar => state.selected = (state.selected + 1) % total,
+        UiAction::Raise => adjust_simple_threshold(state, step),
+        UiAction::Lower => adjust_simple_threshold(state, -step),
+    }
+}
+
+/// Record a directional press: (re)start its hold-repeat timer and track the
+/// Up/Down pair. Returns true when this press completed the Up+Down chord.
+fn note_press(state: &mut State, ui: UiAction, fine: bool) -> bool {
+    match ui {
+        UiAction::Raise => state.raise_held = true,
+        UiAction::Lower => state.lower_held = true,
+        UiAction::PrevBar | UiAction::NextBar => {}
+    }
+    if state.raise_held && state.lower_held {
+        // A chord is a one-shot: neither key keeps stepping afterwards, even
+        // if they are released one at a time.
+        state.held = None;
+        return true;
+    }
+    begin_hold(state, ui, fine);
+    false
+}
+
+/// (Re)start the hold-repeat timer for a directional press.
+fn begin_hold(state: &mut State, ui: UiAction, fine: bool) {
+    let mut held = HeldNav {
+        ui,
+        fine,
+        held_for: Duration::ZERO,
+        next_repeat_at: HOLD_REPEAT_INITIAL_DELAY,
+        interval: HOLD_REPEAT_INTERVAL_START,
+    };
+    screen_input::reset_hold_repeat(
+        &mut held.held_for,
+        &mut held.next_repeat_at,
+        HOLD_REPEAT_INITIAL_DELAY,
+    );
+    state.held = Some(held);
+}
+
+fn note_release(state: &mut State, action: VirtualAction) {
+    let Some(ui) = ui_action(action) else {
+        return;
+    };
+    match ui {
+        UiAction::Raise => state.raise_held = false,
+        UiAction::Lower => state.lower_held = false,
+        UiAction::PrevBar | UiAction::NextBar => {}
+    }
+    if state.held.is_some_and(|h| h.ui == ui) {
+        state.held = None;
+    }
+}
+
+/// Forget any held direction (view change, modal open, screen exit).
+const fn clear_hold(state: &mut State) {
+    state.held = None;
+    state.raise_held = false;
+    state.lower_held = false;
+}
+
+/// Snap the focused threshold(s) to the live reading ("tare": put a reference
+/// weight on a panel, then press Up+Down, or `0` on a keyboard). Simple view: every sensor of the
+/// cursor panel goes to its own reading on per-sensor pads; on load-cell pads
+/// the focused side of the press/release pair goes to the panel's reading,
+/// with the lock dragging the partner as usual. Advanced view: the focused
+/// sensor alone. Clamped to the editable range like any edit.
+fn tare_focused(state: &mut State) -> bool {
+    if state.saving.is_some() || state.profiles_mode {
+        return false;
+    }
+    if let Some(dev) = state.advanced {
+        let targets = advanced_targets(state);
+        let Some(&AdvTarget::Sensor { button, sensor }) = targets.get(state.adv_sel) else {
+            return false;
+        };
+        let Some(sv) = pad_by_device(state, dev)
+            .and_then(|pad| pad.buttons.get(button))
+            .and_then(|bar| bar.sensors.get(sensor))
+            .copied()
+        else {
+            return false;
+        };
+        let current = current_sensor_threshold(state, dev, button, sv.firmware_index)
+            .unwrap_or(sv.raw_threshold);
+        let delta = i32::from(sv.raw_value) - i32::from(current);
+        adjust_sensor_threshold(state, dev, button, sensor, delta);
+        return true;
+    }
+    let Some(slot) = selected_slot(state) else {
+        return false;
+    };
+    let Some(pad) = state.pads.get(slot.pad) else {
+        return false;
+    };
+    let device = pad.device_id;
+    let bar = &pad.buttons[slot.button];
+    if pad.supports_advanced && bar.release_threshold.is_none() && !bar.sensors.is_empty() {
+        // Per-sensor pad: each sensor to its own reading, so the panel trips
+        // at exactly this load however it is spread across the sensors.
+        let sensors: SmallVec<[(usize, u16, u16); 12]> = bar
+            .sensors
+            .iter()
+            .map(|sv| (sv.firmware_index, sv.raw_threshold, sv.raw_value))
+            .collect();
+        for (fw, live, reading) in sensors {
+            let current = current_sensor_threshold(state, device, slot.button, fw).unwrap_or(live);
+            set_sensor_threshold(state, device, slot.button, fw, current, i32::from(reading));
+        }
+        return true;
+    }
+    let reading = i32::from(bar.aggregate_value);
+    let current = match bar.release_threshold {
+        None => {
+            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold)
+        }
+        Some(live_release) => {
+            let (press, release) = pending_threshold_pair(state, device, slot.button)
+                .unwrap_or((bar.aggregate_threshold, live_release));
+            match slot.kind {
+                ThresholdKind::Press => press,
+                ThresholdKind::Release => release,
+            }
+        }
+    };
+    adjust_simple_threshold(state, reading - i32::from(current));
+    true
+}
+
+/// Keyboard `0` (main row or numpad) tares like the Up+Down chord, for
+/// keyboard users who'd rather not chord. Returns whether the key was
+/// consumed.
+pub fn handle_raw_key_event(state: &mut State, key: &RawKeyboardEvent) -> bool {
+    state.fsr_enabled
+        && key.pressed
+        && !key.repeat
+        && matches!(key.code, KeyCode::Digit0 | KeyCode::Numpad0)
+        && tare_focused(state)
 }
 
 /// Whether saving is available for the cursor pad (set by the app each frame).
@@ -427,6 +649,7 @@ pub fn begin_save(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
+    clear_hold(state);
     state.saving = Some(SaveDraft::default());
 }
 
@@ -445,6 +668,7 @@ pub const fn begin_profiles(state: &mut State) {
     if !state.save_available || state.pads.is_empty() || state.saving.is_some() {
         return;
     }
+    clear_hold(state);
     state.profiles_mode = true;
     state.profiles_sel = 0;
     state.delete_armed = false;
@@ -460,6 +684,7 @@ pub fn reset_modes(state: &mut State) {
     // The press/release lock returns to ON each time the editor is entered,
     // like the official tool; "at your own risk" mode is opt-in per session.
     state.threshold_lock_off = false;
+    clear_hold(state);
 }
 
 pub const fn is_profiles_mode(state: &State) -> bool {
@@ -516,7 +741,6 @@ pub fn delete_key(state: &mut State) -> bool {
 /// (Start) + set-default (Select); rename / delete arrive via raw keys. Back
 /// disarms a pending delete, else closes the list.
 fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
-    let count = state.profiles.len() + 1; // row 0 = "save current as new"
     if is_back(ev.action) {
         if state.delete_armed {
             state.delete_armed = false;
@@ -525,16 +749,9 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
         }
         return EditResult::Handled;
     }
-    match ui_action(ev.action) {
-        Some(UiAction::Raise | UiAction::PrevBar) => {
-            state.profiles_sel = (state.profiles_sel + count - 1) % count;
-            state.delete_armed = false;
-        }
-        Some(UiAction::Lower | UiAction::NextBar) => {
-            state.profiles_sel = (state.profiles_sel + 1) % count;
-            state.delete_armed = false;
-        }
-        None => {}
+    if let Some(ui) = ui_action(ev.action) {
+        profiles_nav(state, ui);
+        begin_hold(state, ui, false);
     }
     if state.profiles_sel == 0 {
         // "Save current as new" — Start or Select opens the name box.
@@ -550,6 +767,20 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
         return EditResult::SetDefaultProfile;
     }
     EditResult::Handled
+}
+
+/// Move the profiles-list cursor (Up/Left = previous, Down/Right = next).
+fn profiles_nav(state: &mut State, ui: UiAction) {
+    let count = state.profiles.len() + 1; // row 0 = "save current as new"
+    match ui {
+        UiAction::Raise | UiAction::PrevBar => {
+            state.profiles_sel = (state.profiles_sel + count - 1) % count;
+        }
+        UiAction::Lower | UiAction::NextBar => {
+            state.profiles_sel = (state.profiles_sel + 1) % count;
+        }
+    }
+    state.delete_armed = false;
 }
 
 pub const fn is_saving(state: &State) -> bool {
@@ -1452,7 +1683,7 @@ fn push_setting_row(
 
 // ─── Edit logic ──────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum UiAction {
     PrevBar,
     NextBar,
@@ -1510,7 +1741,8 @@ fn advanced_targets(state: &State) -> SmallVec<[AdvTarget; 18]> {
     targets
 }
 
-fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
+/// Start in the Advanced view: toggle the focused sensor / control.
+fn toggle_advanced_focused(state: &mut State, dev: PadDeviceId) {
     let targets = advanced_targets(state);
     if targets.is_empty() {
         return;
@@ -1518,22 +1750,26 @@ fn apply_advanced_edit(state: &mut State, ev: &InputEvent, fine: bool) {
     if state.adv_sel >= targets.len() {
         state.adv_sel = targets.len() - 1;
     }
-    let Some(dev) = state.advanced else { return };
+    toggle_focused(state, dev, targets[state.adv_sel]);
+}
 
-    if is_start(ev.action) {
-        toggle_focused(state, dev, targets[state.adv_sel]);
+fn perform_advanced_ui_action(state: &mut State, dev: PadDeviceId, ui: UiAction, fine: bool) {
+    let targets = advanced_targets(state);
+    if targets.is_empty() {
         return;
     }
-    match ui_action(ev.action) {
-        Some(UiAction::PrevBar) => {
+    if state.adv_sel >= targets.len() {
+        state.adv_sel = targets.len() - 1;
+    }
+    match ui {
+        UiAction::PrevBar => {
             state.adv_sel = (state.adv_sel + targets.len() - 1) % targets.len();
         }
-        Some(UiAction::NextBar) => {
+        UiAction::NextBar => {
             state.adv_sel = (state.adv_sel + 1) % targets.len();
         }
-        Some(UiAction::Raise) => edit_focused(state, dev, targets[state.adv_sel], true, fine),
-        Some(UiAction::Lower) => edit_focused(state, dev, targets[state.adv_sel], false, fine),
-        None => {}
+        UiAction::Raise => edit_focused(state, dev, targets[state.adv_sel], true, fine),
+        UiAction::Lower => edit_focused(state, dev, targets[state.adv_sel], false, fine),
     }
 }
 
@@ -1640,6 +1876,27 @@ fn adjust_simple_threshold(state: &mut State, delta: i32) {
     );
 
     let Some(live_release) = bar.release_threshold else {
+        // Per-sensor pads: nudge every sensor by the step on its own, so
+        // offsets tuned in Advanced survive a Simple-view adjustment.
+        if pad.supports_advanced && !bar.sensors.is_empty() {
+            let sensors: SmallVec<[(usize, u16); 12]> = bar
+                .sensors
+                .iter()
+                .map(|sv| (sv.firmware_index, sv.raw_threshold))
+                .collect();
+            for (fw, live) in sensors {
+                let current = current_sensor_threshold(state, device, button, fw).unwrap_or(live);
+                set_sensor_threshold(
+                    state,
+                    device,
+                    button,
+                    fw,
+                    current,
+                    i32::from(current) + delta,
+                );
+            }
+            return;
+        }
         // Single-threshold button: the backend derives its own release side.
         let current =
             pending_simple_threshold(state, device, button).unwrap_or(bar.aggregate_threshold);
@@ -1735,14 +1992,32 @@ fn adjust_sensor_threshold(
     let Some(bar) = pad.buttons.get(button) else {
         return;
     };
-    let (min, max) = (bar.min_raw_threshold, bar.max_raw_threshold);
     let Some(sv) = bar.sensors.get(disp) else {
         return;
     };
     let fw = sv.firmware_index;
     let live = sv.raw_threshold;
     let current = current_sensor_threshold(state, dev, button, fw).unwrap_or(live);
-    let next = (i32::from(current) + delta).clamp(i32::from(min), i32::from(max)) as u16;
+    set_sensor_threshold(state, dev, button, fw, current, i32::from(current) + delta);
+}
+
+/// Queue one sensor's threshold, clamped to the button's editable range;
+/// a no-op when it wouldn't change from `current`.
+fn set_sensor_threshold(
+    state: &mut State,
+    dev: PadDeviceId,
+    button: usize,
+    fw: usize,
+    current: u16,
+    value: i32,
+) {
+    let Some(bar) = pad_by_device(state, dev).and_then(|p| p.buttons.get(button)) else {
+        return;
+    };
+    let next = value.clamp(
+        i32::from(bar.min_raw_threshold),
+        i32::from(bar.max_raw_threshold),
+    ) as u16;
     if next == current {
         return;
     }
@@ -2139,7 +2414,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             // the embedded numbers to the edit constants.
             line(
                 actors,
-                "Up/Down - Threshold +/- 5 (Shift +/- 1)",
+                "Up/Down - Threshold +/- 5 (Shift +/- 1)   Up+Down or 0 - Tare to live reading",
                 bottom - 70.0,
             );
             // Combine the Start action (Advanced, or the press/release lock on
@@ -2179,7 +2454,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         } => {
             line(
                 actors,
-                "Left/Right - Select   Up/Down - Adjust (Shift = fine)",
+                "Left/Right - Select   Up/Down - Adjust (Shift = fine)   Up+Down or 0 - Tare",
                 bottom - 70.0,
             );
             let action_line = match (supports_toggle, save_available) {
@@ -2787,7 +3062,7 @@ mod tests {
             cmds[0],
             PadCommand::Threshold {
                 button: 0,
-                sensor: None,
+                sensor: Some(_),
                 ..
             }
         ));
@@ -2838,21 +3113,26 @@ mod tests {
     #[test]
     fn raise_lower_step_clamp_and_dedup() {
         let mut s = with_pad();
-        // Two raises in one frame collapse to a single queued command (+5 each).
+        // Two raises in one frame collapse to one queued command per sensor
+        // (+5 each), never a pile-up.
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
         let cmds = take_commands(&mut s);
-        assert_eq!(cmds.len(), 1);
-        assert!(matches!(cmds[0], PadCommand::Threshold { value: 40, .. })); // 30 -> 40
+        assert_eq!(cmds.len(), 4);
+        assert!(
+            cmds.iter()
+                .all(|c| matches!(c, PadCommand::Threshold { value: 40, .. })) // 30 -> 40
+        );
         // Lowering past the minimum clamps at min_raw_threshold (5).
         for _ in 0..20 {
             apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
         }
         let cmds = take_commands(&mut s);
-        assert!(matches!(
-            cmds.last().unwrap(),
-            PadCommand::Threshold { value: 5, .. }
-        ));
+        assert_eq!(cmds.len(), 4);
+        assert!(
+            cmds.iter()
+                .all(|c| matches!(c, PadCommand::Threshold { value: 5, .. }))
+        );
     }
 
     #[test]
@@ -2876,13 +3156,14 @@ mod tests {
         );
         assert_eq!(r, EditResult::Handled);
         assert!(take_commands(&mut s).is_empty());
-        // A dedicated menu control from the same gamepad does edit.
+        // A dedicated menu control from the same gamepad does edit (one
+        // command per sensor of the cursor panel).
         apply_edit(
             &mut s,
             &ev_from(VirtualAction::p1_menu_up, InputSource::Gamepad, true),
             false,
         );
-        assert_eq!(take_commands(&mut s).len(), 1);
+        assert_eq!(take_commands(&mut s).len(), 4);
     }
 
     #[test]
@@ -2901,7 +3182,7 @@ mod tests {
     fn p2_actions_also_drive_the_ui() {
         let mut s = with_pad();
         apply_edit(&mut s, &ev(VirtualAction::p2_up), false);
-        assert_eq!(take_commands(&mut s).len(), 1);
+        assert_eq!(take_commands(&mut s).len(), 4);
     }
 
     // ── Back / exit ──
@@ -3138,8 +3419,10 @@ mod tests {
     #[test]
     fn static_footer_numbers_match_edit_constants() {
         assert_eq!(
-            "Up/Down - Threshold +/- 5 (Shift +/- 1)",
-            format!("Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)")
+            "Up/Down - Threshold +/- 5 (Shift +/- 1)   Up+Down or 0 - Tare to live reading",
+            format!(
+                "Up/Down - Threshold +/- {THRESHOLD_STEP} (Shift +/- 1)   Up+Down or 0 - Tare to live reading"
+            )
         );
         assert_eq!(
             "&START; Press/Release lock: ON (keeps them 10 apart)",
@@ -3573,5 +3856,223 @@ mod tests {
             ThemeEffect::None
         ));
         assert!(!take_commands(&mut s).is_empty());
+    }
+
+    // ── Hold-to-repeat + tare ──
+
+    fn ev_release(action: VirtualAction) -> InputEvent {
+        ev_from(action, InputSource::Keyboard, false)
+    }
+
+    /// The pending threshold for the cursor pad's button 0, sensor 0.
+    fn pending_threshold_value(s: &State) -> Option<u16> {
+        current_sensor_threshold(s, s.pads[0].device_id, 0, 0)
+    }
+
+    #[test]
+    fn held_raise_repeats_after_the_initial_delay_until_released() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        assert_eq!(pending_threshold_value(&s), Some(35));
+        // Nothing repeats before the initial delay.
+        update(&mut s, 0.1);
+        assert_eq!(pending_threshold_value(&s), Some(35));
+        // Crossing the delay steps once more (the pending edit carries forward).
+        update(
+            &mut s,
+            HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() - 0.1 + 0.001,
+        );
+        assert_eq!(pending_threshold_value(&s), Some(40));
+        // Then once per interval. A repeat is scheduled with the interval in
+        // force when the previous one fired, and each fire shortens the next.
+        let slack = 0.001;
+        let gap_after_next = s.held.expect("still held").interval;
+        assert!(gap_after_next < HOLD_REPEAT_INTERVAL_START);
+        update(&mut s, HOLD_REPEAT_INTERVAL_START.as_secs_f32() + slack);
+        assert_eq!(pending_threshold_value(&s), Some(45));
+        assert!(s.held.expect("still held").interval < gap_after_next);
+        update(&mut s, gap_after_next.as_secs_f32() + slack);
+        assert_eq!(pending_threshold_value(&s), Some(50));
+        // Release stops it.
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_up), false);
+        update(&mut s, 1.0);
+        assert_eq!(pending_threshold_value(&s), Some(50));
+    }
+
+    #[test]
+    fn hold_repeat_moves_the_cursor_and_pauses_in_modals() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_right), false);
+        assert_eq!(s.selected, 1);
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(s.selected, 2);
+        // Opening the profiles list drops the hold: no cursor drift behind it.
+        set_save_available(&mut s, true);
+        begin_profiles(&mut s);
+        update(&mut s, 1.0);
+        assert_eq!(s.selected, 2);
+        // The name box ignores holds entirely: Down toggles the default once
+        // on the press, and holding it doesn't keep flipping it.
+        begin_save(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert!(s.saving.as_ref().is_some_and(|d| d.set_default));
+        update(&mut s, 1.0);
+        assert!(s.saving.as_ref().is_some_and(|d| d.set_default));
+    }
+
+    #[test]
+    fn profiles_list_hold_repeats_the_cursor() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        set_profiles(
+            &mut s,
+            (0..5)
+                .map(|i| ProfileListEntry {
+                    name: format!("cfg{i}"),
+                    is_default: false,
+                    is_active: false,
+                })
+                .collect(),
+        );
+        begin_profiles(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert_eq!(s.profiles_sel, 1);
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(s.profiles_sel, 2);
+        update(&mut s, HOLD_REPEAT_INTERVAL_START.as_secs_f32());
+        assert_eq!(s.profiles_sel, 3);
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_down), false);
+        update(&mut s, 1.0);
+        assert_eq!(s.profiles_sel, 3);
+    }
+
+    #[test]
+    fn up_plus_down_tares_the_cursor_panel_to_its_reading() {
+        let mut s = with_pad();
+        for (i, sv) in s.pads[0].buttons[0].sensors.iter_mut().enumerate() {
+            sv.raw_value = 100 + i as u16 * 10;
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        let mut got: Vec<(usize, u16)> = take_commands(&mut s)
+            .into_iter()
+            .map(|c| match c {
+                PadCommand::Threshold {
+                    button: 0,
+                    sensor: Some(fw),
+                    value,
+                    ..
+                } => (fw, value),
+                other => panic!("unexpected {other:?}"),
+            })
+            .collect();
+        got.sort_unstable();
+        // Every sensor lands on its own reading, not a shared panel value.
+        assert_eq!(got, vec![(0, 100), (1, 110), (2, 120), (3, 130)]);
+        // The chord is one-shot: neither held key keeps stepping.
+        update(&mut s, 1.0);
+        assert!(take_commands(&mut s).is_empty());
+        // Releasing one key and pressing it again re-chords (still both held).
+        apply_edit(&mut s, &ev_release(VirtualAction::p1_down), false);
+        s.pads[0].buttons[0].sensors[0].raw_value = 90;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert_eq!(
+            current_sensor_threshold(&s, s.pads[0].device_id, 0, 0),
+            Some(90)
+        );
+    }
+
+    #[test]
+    fn simple_step_shifts_each_sensor_separately_and_clamps() {
+        let mut s = with_pad();
+        // Sensors tuned apart in Advanced: 30 / 40 / 50 / 248 (near the 250 cap).
+        let thresholds = [30u16, 40, 50, 248];
+        for (sv, t) in s.pads[0].buttons[0].sensors.iter_mut().zip(thresholds) {
+            sv.raw_threshold = t;
+        }
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let dev = s.pads[0].device_id;
+        let pending = |s: &State| -> Vec<Option<u16>> {
+            (0..4)
+                .map(|fw| current_sensor_threshold(s, dev, 0, fw))
+                .collect()
+        };
+        assert_eq!(pending(&s), vec![Some(35), Some(45), Some(55), Some(250)]);
+        // A held repeat keeps stepping from the pending values, per sensor;
+        // the sensor already at the cap stays there (no new command).
+        update(&mut s, HOLD_REPEAT_INITIAL_DELAY.as_secs_f32() + 0.001);
+        assert_eq!(pending(&s), vec![Some(40), Some(50), Some(60), Some(250)]);
+        assert_eq!(take_commands(&mut s).len(), 4);
+    }
+
+    #[test]
+    fn up_plus_down_in_advanced_tares_the_focused_sensor() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert!(s.advanced.is_some());
+        s.pads[0].buttons[0].sensors[0].raw_value = 77;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(
+            matches!(
+                cmds[..],
+                [PadCommand::Threshold {
+                    button: 0,
+                    sensor: Some(0),
+                    value: 77,
+                    ..
+                }]
+            ),
+            "{cmds:?}"
+        );
+    }
+
+    #[test]
+    fn tare_on_a_load_cell_slot_moves_only_the_focused_threshold() {
+        let mut s = init();
+        set_pads(&mut s, vec![load_cell_pad(0)]);
+        // Landing slot is button 0's release (low) threshold.
+        s.pads[0].buttons[0].aggregate_value = 50;
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        let cmds = take_commands(&mut s);
+        assert!(
+            matches!(
+                cmds[..],
+                [PadCommand::ThresholdPair {
+                    button: 0,
+                    press: 80,
+                    release: 50,
+                    ..
+                }]
+            ),
+            "{cmds:?}"
+        );
+    }
+
+    #[test]
+    fn zero_key_tares_like_the_chord() {
+        let mut s = with_pad();
+        set_fsr_enabled(&mut s, true);
+        s.pads[0].buttons[0].sensors[0].raw_value = 66;
+        let now = Instant::now();
+        let key = |code: KeyCode, repeat: bool| RawKeyboardEvent {
+            code,
+            pressed: true,
+            repeat,
+            timestamp: now,
+            host_nanos: 0,
+        };
+        // OS auto-repeat of a held 0 is ignored; a fresh press tares.
+        assert!(!handle_raw_key_event(&mut s, &key(KeyCode::Digit0, true)));
+        assert!(take_commands(&mut s).is_empty());
+        assert!(handle_raw_key_event(&mut s, &key(KeyCode::Numpad0, false)));
+        assert_eq!(
+            current_sensor_threshold(&s, s.pads[0].device_id, 0, 0),
+            Some(66)
+        );
+        // Other keys pass through.
+        assert!(!handle_raw_key_event(&mut s, &key(KeyCode::Digit1, false)));
     }
 }
