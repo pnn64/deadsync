@@ -1,0 +1,250 @@
+// Frozen from 9541f9eeb (0.5.1148). Source/entry types are shared.
+#![allow(dead_code, clippy::all)]
+use super::{PlaylistEntry, PlaylistSongSource};
+use deadsync_chart::SongData;
+use rustc_hash::{FxBuildHasher, FxHashMap};
+use std::sync::Arc;
+
+#[derive(Clone, Debug, Default)]
+pub struct PlaylistSongLookup {
+    by_path: FxHashMap<String, Arc<SongData>>,
+    by_pack_song: FxHashMap<String, FxHashMap<String, Arc<SongData>>>,
+    by_group: FxHashMap<String, Vec<Arc<SongData>>>,
+}
+
+#[must_use]
+pub fn normalize_song_path(song_path: &str) -> String {
+    normalize_song_path_with(song_path, false)
+}
+
+fn normalize_song_path_ascii_lowercase(song_path: &str) -> String {
+    let mut normalized = String::with_capacity(song_path.trim().len());
+    normalize_song_path_ascii_lowercase_into(song_path, &mut normalized);
+    normalized
+}
+
+fn normalize_song_path_with(song_path: &str, ascii_lowercase: bool) -> String {
+    let song_path = song_path.trim();
+    let mut normalized = String::with_capacity(song_path.len());
+    append_normalized_song_path(song_path, &mut normalized);
+    if ascii_lowercase {
+        normalized.make_ascii_lowercase();
+    }
+    normalized
+}
+
+fn normalize_song_path_ascii_lowercase_into(song_path: &str, normalized: &mut String) {
+    let song_path = song_path.trim();
+    normalized.clear();
+    normalized.reserve(song_path.len());
+    append_normalized_song_path(song_path, normalized);
+    normalized.make_ascii_lowercase();
+}
+
+fn ascii_lowercase_into(value: &str, lowercase: &mut String) {
+    lowercase.clear();
+    lowercase.reserve(value.len());
+    lowercase.push_str(value);
+    lowercase.make_ascii_lowercase();
+}
+
+fn append_normalized_song_path(song_path: &str, normalized: &mut String) {
+    for segment in song_path
+        .split(['/', '\\'])
+        .filter(|segment| !segment.is_empty())
+    {
+        if !normalized.is_empty() {
+            normalized.push('/');
+        }
+        normalized.push_str(segment);
+    }
+}
+
+#[must_use]
+pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)> {
+    let mut parts = song_path
+        .trim()
+        .rsplit(['/', '\\'])
+        .filter(|segment| !segment.is_empty());
+    let song = parts.next()?;
+    let pack = parts.next()?;
+    Some((pack.to_string(), song.to_string()))
+}
+
+#[must_use]
+pub fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
+    let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
+    let pack_dir = song
+        .simfile_path
+        .parent()?
+        .parent()?
+        .file_name()?
+        .to_str()?;
+    Some((pack_dir, song_dir))
+}
+
+pub fn build_playlist_song_lookup(
+    sources: impl IntoIterator<Item = PlaylistSongSource>,
+) -> PlaylistSongLookup {
+    let sources = sources.into_iter();
+    let path_capacity = sources.size_hint().0;
+    let mut lookup = PlaylistSongLookup {
+        by_path: FxHashMap::with_capacity_and_hasher(path_capacity, FxBuildHasher),
+        by_pack_song: FxHashMap::default(),
+        by_group: FxHashMap::default(),
+    };
+
+    for source in sources {
+        if let Some(path) = source.lobby_path.as_deref() {
+            lookup
+                .by_path
+                .entry(normalize_song_path_ascii_lowercase(path))
+                .or_insert_with(|| source.song.clone());
+        }
+
+        let group_key = source
+            .group_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_ascii_lowercase);
+        let (pack_dir_key, song_dir_key) = song_pack_and_dir_name(source.song.as_ref()).map_or(
+            (None, None),
+            |(pack_dir, song_dir)| {
+                (
+                    Some(pack_dir.trim().to_ascii_lowercase()),
+                    Some(song_dir.trim().to_ascii_lowercase()),
+                )
+            },
+        );
+
+        if let Some(song_dir) = song_dir_key {
+            if let Some(group_key) = group_key.as_ref() {
+                lookup
+                    .by_pack_song
+                    .entry(group_key.clone())
+                    .or_default()
+                    .entry(song_dir.clone())
+                    .or_insert_with(|| source.song.clone());
+            }
+            if let Some(pack_dir) = pack_dir_key.as_ref() {
+                lookup
+                    .by_pack_song
+                    .entry(pack_dir.clone())
+                    .or_default()
+                    .entry(song_dir)
+                    .or_insert_with(|| source.song.clone());
+            }
+        }
+
+        if let Some(group_key) = group_key {
+            lookup
+                .by_group
+                .entry(group_key)
+                .or_default()
+                .push(source.song.clone());
+        }
+        if let Some(pack_dir) = pack_dir_key
+            && source
+                .group_name
+                .as_deref()
+                .is_none_or(|group| !group.trim().eq_ignore_ascii_case(pack_dir.as_str()))
+        {
+            lookup
+                .by_group
+                .entry(pack_dir)
+                .or_default()
+                .push(source.song);
+        }
+    }
+
+    lookup
+}
+
+pub fn playlist_entries_from_text(
+    text: &str,
+    fallback_name: &str,
+    lookup: &PlaylistSongLookup,
+) -> Vec<PlaylistEntry> {
+    let mut entries = Vec::new();
+    let mut current_section = None;
+    let mut current_songs = Vec::new();
+    let mut normalized = String::new();
+
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(section_name) = line.strip_prefix("---") {
+            push_playlist_section(
+                &mut entries,
+                current_section.as_deref(),
+                fallback_name,
+                &mut current_songs,
+            );
+            current_section = Some(section_name.trim().to_string());
+            continue;
+        }
+        if let Some(group_name) = line.strip_suffix("/*").map(str::trim)
+            && !group_name.is_empty()
+        {
+            ascii_lowercase_into(group_name, &mut normalized);
+            if let Some(songs) = lookup.by_group.get(normalized.as_str()) {
+                current_songs.extend(songs.iter().cloned());
+            }
+            continue;
+        }
+        if let Some(song) = find_playlist_song(lookup, line, &mut normalized) {
+            current_songs.push(song);
+        }
+    }
+
+    push_playlist_section(
+        &mut entries,
+        current_section.as_deref(),
+        fallback_name,
+        &mut current_songs,
+    );
+    entries
+}
+
+fn find_playlist_song(
+    lookup: &PlaylistSongLookup,
+    line: &str,
+    normalized: &mut String,
+) -> Option<Arc<SongData>> {
+    normalize_song_path_ascii_lowercase_into(line, normalized);
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Some(song) = lookup.by_path.get(normalized.as_str()) {
+        return Some(song.clone());
+    }
+
+    let mut parts = normalized.split('/').filter(|part| !part.is_empty()).rev();
+    let song = parts.next()?;
+    let pack = parts.next()?;
+    lookup.by_pack_song.get(pack)?.get(song).cloned()
+}
+
+fn push_playlist_section(
+    entries: &mut Vec<PlaylistEntry>,
+    section_name: Option<&str>,
+    fallback_name: &str,
+    songs: &mut Vec<Arc<SongData>>,
+) {
+    if songs.is_empty() {
+        return;
+    }
+    let name = section_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback_name)
+        .to_string();
+    entries.push(PlaylistEntry::Header {
+        name,
+        song_count: songs.len(),
+    });
+    entries.extend(songs.drain(..).map(PlaylistEntry::Song));
+}

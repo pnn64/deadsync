@@ -62,7 +62,6 @@ use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{BpmTimeline, beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use deadsync_simfile::playlist::{
-    PlaylistEntry, PlaylistSongLookup, PlaylistSongSource,
     normalize_song_path as normalize_lobby_song_path, song_pack_and_dir_name,
 };
 use deadsync_simfile::song_sort::{
@@ -85,6 +84,11 @@ use std::time::{Duration, Instant};
 
 #[path = "select_music/pack_sync.rs"]
 mod pack_sync;
+#[path = "select_music/playlists.rs"]
+mod playlists;
+use playlists::{PlaylistCacheEntry, build_playlist_library, lobby_song_path};
+#[cfg(test)]
+use playlists::{build_playlist_entries_from_text, build_playlist_song_lookup};
 #[path = "select_music/sync_graph.rs"]
 mod sync_graph;
 use sync_graph::{
@@ -1369,19 +1373,6 @@ struct EditSortCache {
     song: Arc<SongData>,
     chart_type: &'static str,
     indices: Vec<usize>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct PlaylistMenuEntry {
-    id: String,
-    top_label: String,
-    bottom_label: String,
-}
-
-#[derive(Debug)]
-struct PlaylistCacheEntry {
-    menu_entry: PlaylistMenuEntry,
-    entries: Arc<[MusicWheelEntry]>,
 }
 
 #[derive(Debug, Default)]
@@ -3313,109 +3304,6 @@ fn favorite_header_name(entries: &[MusicWheelEntry], index: usize) -> &str {
         Some(MusicWheelEntry::PackHeader { name, .. }) => name,
         Some(MusicWheelEntry::Song(_)) | None => "",
     }
-}
-
-fn playlist_song_sources(
-    grouped_entries: &[MusicWheelEntry],
-    song_scan_roots: &[PathBuf],
-) -> Vec<PlaylistSongSource> {
-    let mut sources = Vec::new();
-    let mut current_group = None;
-
-    for entry in grouped_entries {
-        match entry {
-            MusicWheelEntry::PackHeader { name, pack_key, .. } => {
-                current_group = Some(
-                    pack_key
-                        .as_deref()
-                        .unwrap_or_else(|| name.as_ref())
-                        .to_owned(),
-                );
-            }
-            MusicWheelEntry::Song(song) => sources.push(PlaylistSongSource {
-                group_name: current_group.clone(),
-                song: song.clone(),
-                lobby_path: lobby_song_path(song.as_ref(), song_scan_roots),
-            }),
-        }
-    }
-
-    sources
-}
-
-fn build_playlist_song_lookup(
-    grouped_entries: &[MusicWheelEntry],
-    song_scan_roots: &[PathBuf],
-) -> PlaylistSongLookup {
-    deadsync_simfile::playlist::build_playlist_song_lookup(playlist_song_sources(
-        grouped_entries,
-        song_scan_roots,
-    ))
-}
-
-fn playlist_music_entries(entries: Vec<PlaylistEntry>) -> Vec<MusicWheelEntry> {
-    let mut header_idx = 0usize;
-    entries
-        .into_iter()
-        .map(|entry| match entry {
-            PlaylistEntry::Header { name, song_count } => {
-                let original_index = header_idx;
-                header_idx += 1;
-                MusicWheelEntry::PackHeader {
-                    name: Arc::from(name),
-                    original_index,
-                    banner_path: None,
-                    song_count,
-                    pack_key: None,
-                    parent_series: None,
-                }
-            }
-            PlaylistEntry::Song(song) => MusicWheelEntry::Song(song),
-        })
-        .collect()
-}
-
-fn build_playlist_entries_from_text(
-    text: &str,
-    fallback_name: &str,
-    lookup: &PlaylistSongLookup,
-) -> Vec<MusicWheelEntry> {
-    playlist_music_entries(deadsync_simfile::playlist::playlist_entries_from_text(
-        text,
-        fallback_name,
-        lookup,
-    ))
-}
-
-fn build_playlist_library(
-    grouped_entries: &[MusicWheelEntry],
-    playlist_views: &[SelectMusicPlaylistView],
-    song_scan_roots: &[PathBuf],
-) -> Vec<PlaylistCacheEntry> {
-    let lookup = build_playlist_song_lookup(grouped_entries, song_scan_roots);
-    let mut playlists: Vec<PlaylistCacheEntry> = playlist_views
-        .iter()
-        .map(|playlist| PlaylistCacheEntry {
-            menu_entry: PlaylistMenuEntry {
-                id: playlist.id.clone(),
-                top_label: playlist.owner.as_ref().map_or_else(
-                    || "Machine Playlist".to_string(),
-                    |owner| format!("{owner} Playlist"),
-                ),
-                bottom_label: playlist.name.clone(),
-            },
-            entries: build_playlist_entries_from_text(&playlist.text, &playlist.name, &lookup)
-                .into(),
-        })
-        .collect();
-
-    playlists.sort_by_cached_key(|playlist| {
-        (
-            playlist.menu_entry.top_label.to_ascii_lowercase(),
-            playlist.menu_entry.bottom_label.to_ascii_lowercase(),
-        )
-    });
-    playlists
 }
 
 #[inline(always)]
@@ -7617,11 +7505,6 @@ const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize
 
 fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String)> {
     deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
-}
-
-fn lobby_song_path(song: &SongData, _song_scan_roots: &[PathBuf]) -> Option<String> {
-    let (pack, song) = song_pack_and_dir_name(song)?;
-    Some(format!("{pack}/{song}"))
 }
 
 fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {

@@ -1,5 +1,5 @@
 use deadsync_chart::SongData;
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -98,77 +98,82 @@ pub fn build_playlist_song_lookup(
 ) -> PlaylistSongLookup {
     let sources = sources.into_iter();
     let path_capacity = sources.size_hint().0;
-    let mut lookup = PlaylistSongLookup {
-        by_path: FxHashMap::with_capacity_and_hasher(path_capacity, FxBuildHasher),
-        by_pack_song: FxHashMap::default(),
-        by_group: FxHashMap::default(),
-    };
+    let mut lookup = PlaylistSongLookup::default();
+    let mut group_key = String::new();
+    let mut pack_key = String::new();
+    let mut song_key = String::new();
 
     for source in sources {
         if let Some(path) = source.lobby_path.as_deref() {
+            if lookup.by_path.capacity() == 0 {
+                lookup.by_path.reserve(path_capacity);
+            }
             lookup
                 .by_path
                 .entry(normalize_song_path_ascii_lowercase(path))
                 .or_insert_with(|| source.song.clone());
         }
-
-        let group_key = source
+        let group = source
             .group_name
             .as_deref()
             .map(str::trim)
-            .filter(|name| !name.is_empty())
-            .map(str::to_ascii_lowercase);
-        let (pack_dir_key, song_dir_key) = song_pack_and_dir_name(source.song.as_ref()).map_or(
-            (None, None),
-            |(pack_dir, song_dir)| {
-                (
-                    Some(pack_dir.trim().to_ascii_lowercase()),
-                    Some(song_dir.trim().to_ascii_lowercase()),
-                )
-            },
-        );
-
-        if let Some(song_dir) = song_dir_key {
-            if let Some(group_key) = group_key.as_ref() {
-                lookup
-                    .by_pack_song
-                    .entry(group_key.clone())
-                    .or_default()
-                    .entry(song_dir.clone())
-                    .or_insert_with(|| source.song.clone());
+            .filter(|name| !name.is_empty());
+        if let Some(group) = group {
+            ascii_lowercase_into(group, &mut group_key);
+        }
+        let has_pack = if let Some((pack, song)) = song_pack_and_dir_name(&source.song) {
+            ascii_lowercase_into(pack.trim(), &mut pack_key);
+            ascii_lowercase_into(song.trim(), &mut song_key);
+            true
+        } else {
+            false
+        };
+        if has_pack {
+            if group.is_some() {
+                insert_pack_song(&mut lookup, &group_key, &song_key, &source.song);
             }
-            if let Some(pack_dir) = pack_dir_key.as_ref() {
-                lookup
-                    .by_pack_song
-                    .entry(pack_dir.clone())
-                    .or_default()
-                    .entry(song_dir)
-                    .or_insert_with(|| source.song.clone());
+            // Equal display/folder aliases already inserted the same song.
+            if group.is_none() || group_key != pack_key {
+                insert_pack_song(&mut lookup, &pack_key, &song_key, &source.song);
             }
         }
-
-        if let Some(group_key) = group_key {
-            lookup
-                .by_group
-                .entry(group_key)
-                .or_default()
-                .push(source.song.clone());
+        if group.is_some() {
+            playlist_group_mut(&mut lookup.by_group, &group_key).push(source.song.clone());
         }
-        if let Some(pack_dir) = pack_dir_key
+        if has_pack
             && source
                 .group_name
                 .as_deref()
-                .is_none_or(|group| !group.trim().eq_ignore_ascii_case(pack_dir.as_str()))
+                .is_none_or(|group| !group.trim().eq_ignore_ascii_case(&pack_key))
         {
-            lookup
-                .by_group
-                .entry(pack_dir)
-                .or_default()
-                .push(source.song);
+            playlist_group_mut(&mut lookup.by_group, &pack_key).push(source.song);
         }
     }
-
     lookup
+}
+
+fn playlist_group_mut<'a, T: Default>(
+    groups: &'a mut FxHashMap<String, T>,
+    key: &str,
+) -> &'a mut T {
+    // Borrow existing keys; owning one per source would allocate for every
+    // song in a pack. A second lookup is cheaper than that repeated ownership.
+    if !groups.contains_key(key) {
+        groups.insert(key.to_owned(), T::default());
+    }
+    groups.get_mut(key).expect("playlist group was inserted")
+}
+
+fn insert_pack_song(
+    lookup: &mut PlaylistSongLookup,
+    pack: &str,
+    song_key: &str,
+    song: &Arc<SongData>,
+) {
+    let songs = playlist_group_mut(&mut lookup.by_pack_song, pack);
+    if !songs.contains_key(song_key) {
+        songs.insert(song_key.to_owned(), song.clone());
+    }
 }
 
 pub fn playlist_entries_from_text(
@@ -177,46 +182,69 @@ pub fn playlist_entries_from_text(
     lookup: &PlaylistSongLookup,
 ) -> Vec<PlaylistEntry> {
     let mut entries = Vec::new();
-    let mut current_section = None;
-    let mut current_songs = Vec::new();
-    let mut normalized = String::new();
+    for_each_playlist_section(text, fallback_name, lookup, |name, songs| {
+        let song_count = songs.len();
+        entries.reserve(song_count + 1);
+        entries.push(PlaylistEntry::Header {
+            name: name.to_owned(),
+            song_count,
+        });
+        entries.extend(songs.map(PlaylistEntry::Song));
+    });
+    entries
+}
 
+/// Visit each nonempty resolved section in order. Names borrow the input or
+/// fallback; song handles are transferred in a batch. Dropping the drain releases
+/// any unconsumed handles, and the section buffer is reused for the next section.
+pub fn for_each_playlist_section(
+    text: &str,
+    fallback_name: &str,
+    lookup: &PlaylistSongLookup,
+    mut visit: impl FnMut(&str, std::vec::Drain<'_, Arc<SongData>>),
+) {
+    let mut section_name = None;
+    let mut songs = Vec::new();
+    let mut normalized = String::new();
     for raw_line in text.lines() {
         let line = raw_line.trim();
         if line.is_empty() {
             continue;
         }
-        if let Some(section_name) = line.strip_prefix("---") {
-            push_playlist_section(
-                &mut entries,
-                current_section.as_deref(),
-                fallback_name,
-                &mut current_songs,
-            );
-            current_section = Some(section_name.trim().to_string());
+        if let Some(name) = line.strip_prefix("---") {
+            visit_playlist_section(&mut songs, section_name, fallback_name, &mut visit);
+            section_name = Some(name.trim());
             continue;
         }
-        if let Some(group_name) = line.strip_suffix("/*").map(str::trim)
-            && !group_name.is_empty()
+        if let Some(group) = line.strip_suffix("/*").map(str::trim)
+            && !group.is_empty()
         {
-            ascii_lowercase_into(group_name, &mut normalized);
-            if let Some(songs) = lookup.by_group.get(normalized.as_str()) {
-                current_songs.extend(songs.iter().cloned());
+            ascii_lowercase_into(group, &mut normalized);
+            if let Some(group_songs) = lookup.by_group.get(normalized.as_str()) {
+                songs.extend(group_songs.iter().cloned());
             }
             continue;
         }
         if let Some(song) = find_playlist_song(lookup, line, &mut normalized) {
-            current_songs.push(song);
+            songs.push(song);
         }
     }
+    visit_playlist_section(&mut songs, section_name, fallback_name, &mut visit);
+}
 
-    push_playlist_section(
-        &mut entries,
-        current_section.as_deref(),
-        fallback_name,
-        &mut current_songs,
-    );
-    entries
+fn visit_playlist_section(
+    songs: &mut Vec<Arc<SongData>>,
+    section_name: Option<&str>,
+    fallback_name: &str,
+    visit: &mut impl FnMut(&str, std::vec::Drain<'_, Arc<SongData>>),
+) {
+    if songs.is_empty() {
+        return;
+    }
+    let name = section_name
+        .filter(|name| !name.is_empty())
+        .unwrap_or(fallback_name);
+    visit(name, songs.drain(..));
 }
 
 fn find_playlist_song(
@@ -236,27 +264,6 @@ fn find_playlist_song(
     let song = parts.next()?;
     let pack = parts.next()?;
     lookup.by_pack_song.get(pack)?.get(song).cloned()
-}
-
-fn push_playlist_section(
-    entries: &mut Vec<PlaylistEntry>,
-    section_name: Option<&str>,
-    fallback_name: &str,
-    songs: &mut Vec<Arc<SongData>>,
-) {
-    if songs.is_empty() {
-        return;
-    }
-    let name = section_name
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .unwrap_or(fallback_name)
-        .to_string();
-    entries.push(PlaylistEntry::Header {
-        name,
-        song_count: songs.len(),
-    });
-    entries.extend(songs.drain(..).map(PlaylistEntry::Song));
 }
 
 #[cfg(test)]
