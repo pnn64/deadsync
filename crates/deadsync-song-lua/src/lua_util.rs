@@ -10574,15 +10574,7 @@ fn snapshot_function_action_tables(
 
 fn restore_function_action_tables(snapshots: Vec<FunctionActionTableSnapshot>) -> mlua::Result<()> {
     for snapshot in snapshots {
-        let keys = snapshot
-            .table
-            .clone()
-            .pairs::<Value, Value>()
-            .map(|pair| pair.map(|(key, _)| key))
-            .collect::<mlua::Result<Vec<_>>>()?;
-        for key in keys {
-            snapshot.table.raw_set(key, Value::Nil)?;
-        }
+        snapshot.table.clear()?;
         for (key, value) in snapshot.entries {
             snapshot.table.raw_set(key, value)?;
         }
@@ -11180,17 +11172,7 @@ pub fn actor_pointers_touch_actor(
 }
 
 pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
-    if let Some(color) = method_arg(args, 0).cloned().and_then(read_color_value) {
-        return Some(color);
-    }
-    let r = method_arg(args, 0).cloned().and_then(read_f32)?;
-    let g = method_arg(args, 1).cloned().and_then(read_f32)?;
-    let b = method_arg(args, 2).cloned().and_then(read_f32)?;
-    let a = method_arg(args, 3)
-        .cloned()
-        .and_then(read_f32)
-        .unwrap_or(1.0);
-    Some([r, g, b, a])
+    read_color_values(args.iter().skip(method_arg_offset(args)))
 }
 
 pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -12964,21 +12946,34 @@ where
 
 fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
     let mut states = Vec::new();
-    for index in 0.. {
-        let frame_key = format!("Frame{index:04}");
+    let mut key = [0u8; 16];
+    for index in 0i32.. {
+        let len = write_sprite_frame_key(index, &mut key);
+        let frame_key = std::str::from_utf8(&key[..len]).expect("sprite keys are ASCII");
         let Some(frame) = actor
             .get::<Option<u32>>(frame_key)
             .map_err(|err| err.to_string())?
         else {
             break;
         };
+        key[..5].copy_from_slice(b"Delay");
+        let delay_key = std::str::from_utf8(&key[..len]).expect("sprite keys are ASCII");
         let delay = actor
-            .get::<Option<f32>>(format!("Delay{index:04}"))
+            .get::<Option<f32>>(delay_key)
             .map_err(|err| err.to_string())?
             .unwrap_or(0.1);
         states.push(crate::SongLuaSpriteState { frame, delay });
     }
     Ok(states)
+}
+
+fn write_sprite_frame_key(index: i32, key: &mut [u8; 16]) -> usize {
+    use std::io::Write;
+
+    let mut output = &mut key[..];
+    // Five prefix bytes plus the longest signed i32 fit in sixteen bytes.
+    write!(&mut output, "Frame{index:04}").expect("sprite key buffer fits every i32");
+    16 - output.len()
 }
 
 fn read_actor_multi_vertex_range(
@@ -14283,14 +14278,31 @@ pub fn read_vertex_colors_value(value: Value) -> Option<[[f32; 4]; 4]> {
 }
 
 pub fn read_color_call(args: &MultiValue) -> Option<[f32; 4]> {
-    if let Some(color) = args.front().cloned().and_then(read_color_value) {
-        return Some(color);
+    read_color_values(args.iter())
+}
+
+fn read_color_values<'a>(mut values: impl Iterator<Item = &'a Value>) -> Option<[f32; 4]> {
+    let first = values.next()?;
+    match first {
+        Value::Table(table) => return table_color(table),
+        Value::String(text) => {
+            return Some(parse_color_text(&text.to_str().ok()?).unwrap_or([1.0; 4]));
+        }
+        _ => {}
     }
-    let r = args.front().cloned().and_then(read_f32)?;
-    let g = args.get(1).cloned().and_then(read_f32)?;
-    let b = args.get(2).cloned().and_then(read_f32)?;
-    let a = args.get(3).cloned().and_then(read_f32).unwrap_or(1.0);
+    let r = read_color_component(first)?;
+    let g = read_color_component(values.next()?)?;
+    let b = read_color_component(values.next()?)?;
+    let a = values.next().and_then(read_color_component).unwrap_or(1.0);
     Some([r, g, b, a])
+}
+
+fn read_color_component(value: &Value) -> Option<f32> {
+    match value {
+        Value::Integer(_) | Value::Number(_) => read_f32(value.clone()),
+        Value::String(text) => text.to_str().ok()?.trim().parse::<f32>().ok(),
+        _ => None,
+    }
 }
 
 #[inline(always)]
@@ -14333,3 +14345,15 @@ mod snapshot_transfer_perf;
 #[cfg(test)]
 #[path = "../tests/perf/capture_arrays.rs"]
 mod capture_arrays_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/action_restore.rs"]
+mod action_restore_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/color_reads.rs"]
+mod color_reads_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/sprite_keys.rs"]
+mod sprite_keys_perf;
