@@ -1617,14 +1617,22 @@ pub fn restore_actors_semantic_state(
 
 pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
     let snapshot = lua.create_table()?;
-    for (index, (key, value)) in snapshot_actor_semantic_state(lua, actor)?
-        .into_iter()
-        .enumerate()
-    {
-        let entry = lua.create_table()?;
+    let mut index = 1usize;
+    for pair in actor.pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        let Value::String(key) = key else {
+            continue;
+        };
+        // Validate every string key, including keys excluded from the snapshot.
+        if !is_actor_semantic_state_key(&key.to_str()?) {
+            continue;
+        }
+        let value = clone_lua_value(lua, value)?;
+        let entry = lua.create_table_with_capacity(2, 0)?;
         entry.raw_set(1, key)?;
         entry.raw_set(2, value)?;
-        snapshot.raw_set(index + 1, entry)?;
+        snapshot.raw_set(index, entry)?;
+        index += 1;
     }
     Ok(snapshot)
 }
@@ -2158,30 +2166,23 @@ pub const fn actor_runs_startup_commands(actor: &Table) -> mlua::Result<bool> {
     Ok(true)
 }
 
-fn actor_command_args(actor: &Table, params: Option<Value>) -> MultiValue {
-    let mut args = MultiValue::new();
-    args.push_back(Value::Table(actor.clone()));
-    if let Some(params) = params {
-        args.push_back(params);
-    }
-    args
-}
-
 pub fn call_actor_function(
     lua: &Lua,
     actor: &Table,
     command: &Function,
     params: Option<Value>,
 ) -> mlua::Result<()> {
+    let call = || match params {
+        Some(params) => command.call::<()>((actor, params)),
+        None => command.call::<()>((actor,)),
+    };
     if let Some(script_dir) = actor
         .get::<Option<String>>("__songlua_script_dir")?
         .filter(|dir| !dir.trim().is_empty())
     {
-        return call_with_script_dir(lua, Path::new(&script_dir), || {
-            command.call::<()>(actor_command_args(actor, params))
-        });
+        return call_with_script_dir(lua, Path::new(&script_dir), call);
     }
-    command.call::<()>(actor_command_args(actor, params))
+    call()
 }
 
 fn run_guarded_actor_command(
@@ -2697,7 +2698,7 @@ fn capture_immediate_vec3(
     key: &str,
     value: [f32; 3],
 ) -> mlua::Result<()> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(3, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
     }
@@ -2720,7 +2721,7 @@ fn capture_immediate_vec4(
     key: &str,
     value: [f32; 4],
 ) -> mlua::Result<()> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(4, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
     }
@@ -2743,7 +2744,7 @@ fn capture_immediate_vec5(
     key: &str,
     value: [f32; 5],
 ) -> mlua::Result<()> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(5, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
     }
@@ -2930,7 +2931,7 @@ fn set_actor_capture_state(
 }
 
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(4, 0)?;
     value.raw_set(1, color[0])?;
     value.raw_set(2, color[1])?;
     value.raw_set(3, color[2])?;
@@ -3044,7 +3045,7 @@ pub fn capture_block_set_vec4(
     key: &str,
     value4: [f32; 4],
 ) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(4, 0)?;
     value.raw_set(1, value4[0])?;
     value.raw_set(2, value4[1])?;
     value.raw_set(3, value4[2])?;
@@ -3084,7 +3085,7 @@ pub fn capture_block_set_vec5(
     key: &str,
     value5: [f32; 5],
 ) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(5, 0)?;
     value.raw_set(1, value5[0])?;
     value.raw_set(2, value5[1])?;
     value.raw_set(3, value5[2])?;
@@ -3125,7 +3126,7 @@ pub fn capture_block_set_vec2(
     key: &str,
     value2: [f32; 2],
 ) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(2, 0)?;
     value.raw_set(1, value2[0])?;
     value.raw_set(2, value2[1])?;
     if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec2(value2)) {
@@ -3140,7 +3141,7 @@ pub fn capture_block_set_vec2(
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
     capture_block_set_f32(lua, actor, "x", f32::midpoint(rect[0], rect[2]))?;
     capture_block_set_f32(lua, actor, "y", f32::midpoint(rect[1], rect[3]))?;
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(4, 0)?;
     value.raw_set(1, rect[0])?;
     value.raw_set(2, rect[1])?;
     value.raw_set(3, rect[2])?;
@@ -3160,7 +3161,7 @@ pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> ml
 }
 
 pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(2, 0)?;
     value.raw_set(1, size[0])?;
     value.raw_set(2, size[1])?;
     if !record_overlay_update_capture(lua, actor, "size", SongLuaOverlayUpdateValue::Vec2(size)) {
@@ -3192,7 +3193,7 @@ pub fn capture_block_set_vec3(
     key: &str,
     value3: [f32; 3],
 ) -> mlua::Result<()> {
-    let value = lua.create_table()?;
+    let value = lua.create_table_with_capacity(3, 0)?;
     value.raw_set(1, value3[0])?;
     value.raw_set(2, value3[1])?;
     value.raw_set(3, value3[2])?;
@@ -14126,7 +14127,7 @@ pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
 
 #[inline(always)]
 pub fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(4, 0)?;
     table.raw_set(1, rgba[0])?;
     table.raw_set(2, rgba[1])?;
     table.raw_set(3, rgba[2])?;
@@ -14175,7 +14176,7 @@ pub fn table_vertex_colors(table: &Table) -> Option<[[f32; 4]; 4]> {
 }
 
 pub fn make_vertex_color_table(lua: &Lua, colors: [[f32; 4]; 4]) -> mlua::Result<Table> {
-    let out = lua.create_table()?;
+    let out = lua.create_table_with_capacity(4, 0)?;
     for (index, color) in colors.into_iter().enumerate() {
         out.raw_set(index + 1, make_color_table(lua, color)?)?;
     }
@@ -14320,3 +14321,15 @@ mod child_walk_perf;
 #[cfg(test)]
 #[path = "../tests/perf/tracked_access.rs"]
 mod tracked_access_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/command_transfer.rs"]
+mod command_transfer_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/snapshot_transfer.rs"]
+mod snapshot_transfer_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/capture_arrays.rs"]
+mod capture_arrays_perf;
