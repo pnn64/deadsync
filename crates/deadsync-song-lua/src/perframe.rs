@@ -384,9 +384,13 @@ pub fn player_option_sample(table: &Table) -> Result<SongLuaUpdateModState, Stri
             out.insert(key, value);
         }
     }
-    for key in ["xmod", "cmod", "mmod"] {
+    for (key, state_key) in [
+        ("xmod", "__songlua_speedmod_xmod"),
+        ("cmod", "__songlua_speedmod_cmod"),
+        ("mmod", "__songlua_speedmod_mmod"),
+    ] {
         if let Some(value) = table
-            .get::<Option<f32>>(format!("__songlua_speedmod_{key}"))
+            .get::<Option<f32>>(state_key)
             .map_err(|err| err.to_string())?
         {
             out.insert(key.to_string(), value);
@@ -844,12 +848,38 @@ pub fn push_update_mod_targets(
     speeds: &[SongLuaUpdateModState; LUA_PLAYERS],
     last_windows: &mut BTreeMap<(usize, String), usize>,
 ) {
+    push_update_mod_targets_with_key(
+        out,
+        start,
+        end,
+        from_players,
+        to_players,
+        baseline_players,
+        speeds,
+        last_windows,
+        &mut (0, String::new()),
+    );
+}
+
+fn push_update_mod_targets_with_key(
+    out: &mut Vec<SongLuaEaseWindow>,
+    start: f32,
+    end: f32,
+    from_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    to_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    baseline_players: &[SongLuaUpdateModState; LUA_PLAYERS],
+    speeds: &[SongLuaUpdateModState; LUA_PLAYERS],
+    last_windows: &mut BTreeMap<(usize, String), usize>,
+    lookup_key: &mut (usize, String),
+) {
+    if from_players.iter().all(BTreeMap::is_empty) {
+        return;
+    }
     for player in 0..LUA_PLAYERS {
         for (key, &from) in &from_players[player] {
             let key = key.as_str();
-            let baseline = baseline_players[player].get(key).copied().unwrap_or(0.0);
-            let to = to_players[player].get(key).copied().unwrap_or(baseline);
-            let Some(target) = runtime_player_option_ease_target(key, key) else {
+            // Classify without allocating the name of a coalesced speed target.
+            let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;
             };
             if let Some(speed) = speeds[player].get(key).copied() {
@@ -857,16 +887,26 @@ pub fn push_update_mod_targets(
                     continue;
                 }
                 let value = update_mod_runtime_value(key, from);
-                let key = (player, key.to_string());
-                if let Some(index) = last_windows.get(&key)
-                    && let Some(window) = out.get_mut(*index)
-                    && window.to == value
-                    && window.approach_speed == Some(speed)
-                {
-                    window.limit = end - window.start;
-                    continue;
+                // Reuse this lookup buffer across keys and compiler samples.
+                // Only newly indexed windows need an owned cache key.
+                lookup_key.0 = player;
+                lookup_key.1.clear();
+                lookup_key.1.push_str(key);
+                if let Some(index) = last_windows.get_mut(lookup_key) {
+                    if let Some(window) = out.get_mut(*index)
+                        && window.to == value
+                        && window.approach_speed == Some(speed)
+                    {
+                        window.limit = end - window.start;
+                        continue;
+                    }
+                    *index = out.len();
+                } else {
+                    last_windows.insert(lookup_key.clone(), out.len());
                 }
-                last_windows.insert(key, out.len());
+                if let SongLuaEaseTarget::Mod(name) = &mut target {
+                    *name = key.to_owned();
+                }
                 // Song-level writes are step targets; Current approaches them
                 // at the authored speed. Never tween toward a future write.
                 out.push(SongLuaEaseWindow {
@@ -885,6 +925,11 @@ pub fn push_update_mod_targets(
                     opt2: None,
                 });
                 continue;
+            }
+            let baseline = baseline_players[player].get(key).copied().unwrap_or(0.0);
+            let to = to_players[player].get(key).copied().unwrap_or(baseline);
+            if let SongLuaEaseTarget::Mod(name) = &mut target {
+                *name = key.to_owned();
             }
             push_perframe_player_target(
                 out,
@@ -1424,6 +1469,7 @@ fn capture_update_overlay_samples<Kind>(
     Ok(())
 }
 
+#[cfg_attr(test, derive(Clone))]
 struct SongLuaScheduledOverlaySample {
     overlay_index: usize,
     target: SongLuaOverlayUpdateTarget,
@@ -1558,6 +1604,19 @@ fn sort_overlay_update_samples(samples: &mut Vec<SongLuaOverlayUpdateSample>) {
     });
 }
 
+fn append_ordered_overlay_sample(
+    samples: &mut Vec<SongLuaOverlayUpdateSample>,
+    sample: SongLuaOverlayUpdateSample,
+) {
+    if let Some(last) = samples.last_mut()
+        && (last.beat - sample.beat).abs() <= f32::EPSILON
+    {
+        *last = sample;
+    } else {
+        samples.push(sample);
+    }
+}
+
 fn merge_scheduled_overlay_samples(
     tracks: &mut Vec<SongLuaOverlayUpdateTrack>,
     track_indices: &mut std::collections::HashMap<(usize, SongLuaOverlayUpdateTarget), usize>,
@@ -1596,7 +1655,38 @@ fn merge_scheduled_overlay_samples(
             .unwrap_or_else(|| {
                 overlay_state_update_value(&baseline[sample.overlay_index], sample.target)
             });
-        if sample.end_beat > sample.start_beat + f32::EPSILON {
+        let has_start = sample.end_beat > sample.start_beat + f32::EPSILON;
+        let first_beat = if has_start {
+            sample.start_beat
+        } else {
+            sample.end_beat
+        };
+        let ordered = track
+            .samples
+            .last()
+            .is_none_or(|last| last.beat.total_cmp(&first_beat).is_le());
+        if ordered {
+            // The existing prefix is sorted and compacted. An ordered append
+            // can only merge with its last sample, preserving last-write wins.
+            if has_start {
+                append_ordered_overlay_sample(
+                    &mut track.samples,
+                    SongLuaOverlayUpdateSample {
+                        beat: sample.start_beat,
+                        value: current,
+                    },
+                );
+            }
+            append_ordered_overlay_sample(
+                &mut track.samples,
+                SongLuaOverlayUpdateSample {
+                    beat: sample.end_beat,
+                    value: sample.value,
+                },
+            );
+            continue;
+        }
+        if has_start {
             track.samples.push(SongLuaOverlayUpdateSample {
                 beat: sample.start_beat,
                 value: current,
@@ -1841,6 +1931,7 @@ pub fn compile_update_functions<Kind>(
     let mut eases = Vec::new();
     let mut column_transforms = Vec::new();
     let mut last_mod_windows = BTreeMap::new();
+    let mut last_mod_lookup_key = (0, String::new());
     for index in 0..sample_beats.len() {
         let seg_start = sample_beats[index];
         let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
@@ -1862,7 +1953,7 @@ pub fn compile_update_functions<Kind>(
         );
         let from_mods = &mod_samples[index];
         let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
-        push_update_mod_targets(
+        push_update_mod_targets_with_key(
             &mut eases,
             seg_start,
             seg_end,
@@ -1871,6 +1962,7 @@ pub fn compile_update_functions<Kind>(
             &baseline_mods,
             &mod_speed_samples[index],
             &mut last_mod_windows,
+            &mut last_mod_lookup_key,
         );
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);
@@ -2218,3 +2310,7 @@ mod tests {
         }));
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/update_timeline.rs"]
+mod update_timeline_perf;
