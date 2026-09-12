@@ -5,6 +5,8 @@
 //! predefined entities plus numeric character references. That is sufficient for
 //! `ITGmania`'s output and keeps us from pulling in a heavyweight XML dependency.
 
+use std::borrow::Cow;
+
 /// A parsed XML element node.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct XmlNode {
@@ -88,7 +90,7 @@ struct Parser<'a> {
     i: usize,
 }
 
-impl Parser<'_> {
+impl<'a> Parser<'a> {
     #[inline]
     fn peek(&self) -> Option<u8> {
         self.input.as_bytes().get(self.i).copied()
@@ -190,7 +192,7 @@ impl Parser<'_> {
         }
 
         // Content until matching end tag.
-        let mut text = String::new();
+        let mut text = Cow::Borrowed("");
         loop {
             match self.peek() {
                 None => return Err(XmlError::Unterminated("element")),
@@ -201,7 +203,7 @@ impl Parser<'_> {
                         self.i += "<![CDATA[".len();
                         let start = self.i;
                         if let Some(pos) = self.input[self.i..].find("]]>") {
-                            text.push_str(&self.input[start..start + pos]);
+                            append_text(&mut text, &self.input[start..start + pos]);
                             self.i += pos + 3;
                         } else {
                             return Err(XmlError::Unterminated("CDATA"));
@@ -215,8 +217,13 @@ impl Parser<'_> {
                         } else {
                             return Err(XmlError::Malformed("end tag"));
                         }
-                        trim_string_in_place(&mut text);
-                        node.text = text;
+                        node.text = match text {
+                            Cow::Borrowed(text) => text.trim_end().to_owned(),
+                            Cow::Owned(mut text) => {
+                                trim_string_in_place(&mut text);
+                                text
+                            }
+                        };
                         return Ok(node);
                     } else {
                         let child = self.parse_element()?;
@@ -229,7 +236,21 @@ impl Parser<'_> {
                     self.i += self.input[start..]
                         .find('<')
                         .unwrap_or(self.input.len() - start);
-                    append_decoded_entities(&mut text, &self.input[start..self.i]);
+                    let run = &self.input[start..self.i];
+                    if run.contains('&') {
+                        let mut decoded = match text {
+                            Cow::Borrowed(prefix) => {
+                                let mut joined = String::with_capacity(prefix.len() + run.len());
+                                joined.push_str(prefix);
+                                joined
+                            }
+                            Cow::Owned(text) => text,
+                        };
+                        append_decoded_entities(&mut decoded, run);
+                        text = Cow::Owned(decoded);
+                    } else {
+                        append_text(&mut text, run);
+                    }
                 }
             }
         }
@@ -270,6 +291,25 @@ impl Parser<'_> {
     }
 }
 
+#[inline]
+fn append_text<'a>(text: &mut Cow<'a, str>, run: &'a str) {
+    if text.is_empty() {
+        // Leading indentation cannot survive the final trim. Borrow the first
+        // meaningful run; parent-only whitespace then never needs a buffer.
+        *text = Cow::Borrowed(run.trim_start());
+    } else if !run.is_empty() {
+        match text {
+            Cow::Borrowed(previous) => {
+                let mut joined = String::with_capacity(previous.len() + run.len());
+                joined.push_str(previous);
+                joined.push_str(run);
+                *text = Cow::Owned(joined);
+            }
+            Cow::Owned(text) => text.push_str(run),
+        }
+    }
+}
+
 fn trim_string_in_place(text: &mut String) {
     let trimmed = text.trim();
     let start = trimmed.as_ptr() as usize - text.as_ptr() as usize;
@@ -288,38 +328,69 @@ fn decode_entities(s: &str) -> String {
 }
 
 fn append_decoded_entities(out: &mut String, s: &str) {
-    if !s.contains('&') {
+    let Some(mut amp) = s.find('&') else {
         out.push_str(s);
         return;
-    }
+    };
     out.reserve(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'&'
-            && let Some(semi) = s[i + 1..].find(';')
-        {
-            let entity = &s[i + 1..i + 1 + semi];
-            let decoded = match entity {
-                "amp" => Some('&'),
-                "lt" => Some('<'),
-                "gt" => Some('>'),
-                "quot" => Some('"'),
-                "apos" => Some('\''),
-                _ => decode_numeric_entity(entity),
-            };
-            if let Some(ch) = decoded {
-                out.push(ch);
-                i += semi + 2;
-                continue;
-            }
+    let mut start = 0;
+    let mut semi = 0;
+    loop {
+        if start < amp {
+            out.push_str(&s[start..amp]);
         }
-        // Not an entity we recognize: copy the byte as a char.
-        let ch_len = utf8_char_len(bytes[i]);
-        let end = (i + ch_len).min(s.len());
-        out.push_str(&s[i..end]);
-        i = end;
+        // Recognize the fixed spellings without searching for their delimiter.
+        let (decoded, end) = if let Some((ch, len)) = predefined_entity(&s[amp + 1..]) {
+            (Some(ch), amp + 1 + len)
+        } else {
+            // Unknown references may contain another ampersand before the same
+            // semicolon. Search it only once, even for long malformed runs.
+            if semi <= amp {
+                let Some(offset) = s[amp + 1..].find(';') else {
+                    out.push_str(&s[amp..]);
+                    return;
+                };
+                semi = amp + 1 + offset;
+            }
+            (decode_numeric_entity(&s[amp + 1..semi]), semi + 1)
+        };
+        start = if let Some(ch) = decoded {
+            out.push(ch);
+            end
+        } else {
+            out.push('&');
+            amp + 1
+        };
+        if s.as_bytes().get(start) == Some(&b'&') {
+            amp = start;
+            continue;
+        }
+        let Some(offset) = s[start..].find('&') else {
+            out.push_str(&s[start..]);
+            return;
+        };
+        amp = start + offset;
     }
+}
+
+#[inline]
+fn predefined_entity(s: &str) -> Option<(char, usize)> {
+    match s.as_bytes() {
+        [b'a', b'm', b'p', b';', ..] => Some(('&', 4)),
+        [b'l', b't', b';', ..] => Some(('<', 3)),
+        [b'g', b't', b';', ..] => Some(('>', 3)),
+        [b'q', b'u', b'o', b't', b';', ..] => Some(('"', 5)),
+        [b'a', b'p', b'o', b's', b';', ..] => Some(('\'', 5)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod content_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/xml_content.rs"
+    ));
 }
 
 fn decode_numeric_entity(entity: &str) -> Option<char> {
@@ -330,17 +401,6 @@ fn decode_numeric_entity(entity: &str) -> Option<char> {
         rest.parse::<u32>().ok()?
     };
     char::from_u32(code)
-}
-
-#[inline]
-const fn utf8_char_len(first: u8) -> usize {
-    match first {
-        0x00..=0x7F => 1,
-        0xC0..=0xDF => 2,
-        0xE0..=0xEF => 3,
-        0xF0..=0xF7 => 4,
-        _ => 1,
-    }
 }
 
 #[cfg(test)]

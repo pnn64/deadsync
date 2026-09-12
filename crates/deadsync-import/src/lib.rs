@@ -17,3 +17,8 @@ pub mod xml;
 
 #[cfg(test)]
 mod pipeline_tests;
+
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;

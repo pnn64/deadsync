@@ -453,7 +453,7 @@ pub struct ItgStatsData {
 /// empty result.
 fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
     let content = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
-        String::from_utf8_lossy(&fs::read(&path)?).into_owned()
+        decode_stats_bytes(fs::read(&path)?)
     } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
         read_gz_to_string(&path)?
     } else {
@@ -467,6 +467,21 @@ fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
         current_combo,
         guid,
     })
+}
+
+fn decode_stats_bytes(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(invalid) => String::from_utf8_lossy(invalid.as_bytes()).into_owned(),
+    }
+}
+
+#[cfg(test)]
+mod bytes_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/stats_bytes.rs"
+    ));
 }
 
 /// Extracts `(CurrentCombo, Guid)` from a parsed `Stats.xml` root's
