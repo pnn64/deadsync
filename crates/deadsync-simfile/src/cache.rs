@@ -2411,13 +2411,16 @@ fn path_hash(path: &Path) -> u64 {
 }
 
 fn file_metadata_hash(path: &Path) -> Result<u64, std::io::Error> {
-    let meta = fs::metadata(path)?;
+    Ok(metadata_hash(&fs::metadata(path)?))
+}
+
+fn metadata_hash(meta: &fs::Metadata) -> u64 {
     let modified = meta
         .modified()
         .ok()
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
         .map_or(0, |duration| duration.as_secs());
-    Ok(modified.wrapping_add(meta.len()))
+    modified.wrapping_add(meta.len())
 }
 
 fn get_song_directory_hash(simfile_path: &Path) -> Result<u64, std::io::Error> {
@@ -2438,7 +2441,14 @@ fn get_song_directory_hash(simfile_path: &Path) -> Result<u64, std::io::Error> {
         {
             continue;
         }
-        hash = hash.wrapping_add(file_metadata_hash(&entry.path())?);
+        // Windows enumeration supplies regular-file metadata. Directory lengths
+        // can differ from path metadata, and links must follow their targets;
+        // preserve the original query for both and for unavailable metadata.
+        let entry_hash = match entry.metadata() {
+            Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => metadata_hash(&meta),
+            _ => file_metadata_hash(&entry.path())?,
+        };
+        hash = hash.wrapping_add(entry_hash);
     }
     Ok(hash)
 }
@@ -3423,3 +3433,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/directory_hash.rs"]
+mod directory_hash_perf;

@@ -1,4 +1,5 @@
 use deadsync_chart::SongData;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fs;
@@ -26,8 +27,22 @@ pub fn collapse_song_asset_path(path: &str) -> String {
     collapse_song_asset_path_with(path, false)
 }
 
-fn collapse_song_asset_path_like_itg(path: &str) -> String {
-    collapse_song_asset_path_with(path, true)
+fn collapse_song_asset_path_like_itg(path: &str) -> Cow<'_, str> {
+    // Most asset tags already name a normalized file. Keep their bytes borrowed;
+    // only the compatibility normalizer needs an owned scratch string.
+    let normalized = path.is_empty()
+        || path == "/"
+        || (!path.as_bytes().contains(&b'\\')
+            && path
+                .strip_prefix('/')
+                .unwrap_or(path)
+                .split('/')
+                .all(|part| !part.is_empty() && part != "." && part != ".."));
+    if normalized {
+        Cow::Borrowed(path)
+    } else {
+        Cow::Owned(collapse_song_asset_path_with(path, true))
+    }
 }
 
 fn collapse_song_asset_path_with(path: &str, backslash_separator: bool) -> String {
@@ -98,11 +113,11 @@ pub fn resolve_song_path_like_itg(song_dir: &Path, asset_tag: &str) -> Option<Pa
         return (is_current_dir && song_dir.is_dir()).then(|| song_dir.to_path_buf());
     }
     if collapsed.starts_with('/') {
-        let path = PathBuf::from(&collapsed);
+        let path = PathBuf::from(collapsed.as_ref());
         return path.exists().then_some(path);
     }
 
-    let direct = song_dir.join(&collapsed);
+    let direct = song_dir.join(collapsed.as_ref());
     if direct.exists() {
         return Some(direct);
     }
@@ -151,24 +166,30 @@ pub fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
 pub fn list_song_dir_rel_entries(song_dir: &Path) -> Vec<String> {
     let mut dirs = vec![song_dir.to_path_buf()];
     let mut entries = Vec::new();
-    while let Some(dir) = dirs.pop() {
-        let Ok(read_dir) = fs::read_dir(&dir) else {
+    while let Some(mut path) = dirs.pop() {
+        let Ok(read_dir) = fs::read_dir(&path) else {
             continue;
         };
         for entry in read_dir.flatten() {
-            let path = entry.path();
-            let Ok(rel) = path.strip_prefix(song_dir) else {
-                continue;
+            // Reuse one full-path buffer for siblings. DirEntry already knows
+            // ordinary entry types; symlinks and unavailable types still use
+            // target-following metadata, as the previous Path queries did.
+            path.push(entry.file_name());
+            let file_type = match entry.file_type() {
+                Ok(kind) if !kind.is_symlink() => Some(kind),
+                _ => fs::metadata(&path).ok().map(|meta| meta.file_type()),
             };
-            let rel = rel.to_string_lossy().replace('\\', "/");
-            if path.is_dir() {
-                dirs.push(path);
-                entries.push(rel);
-                continue;
+            if let Some(kind) = file_type {
+                if (kind.is_dir() || kind.is_file())
+                    && let Ok(rel) = path.strip_prefix(song_dir)
+                {
+                    entries.push(rel.to_string_lossy().replace('\\', "/"));
+                    if kind.is_dir() {
+                        dirs.push(path.clone());
+                    }
+                }
             }
-            if path.is_file() {
-                entries.push(rel);
-            }
+            path.pop();
         }
     }
     entries.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
@@ -775,3 +796,7 @@ second.ogv=1
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/asset_discovery.rs"]
+mod asset_discovery_perf;
