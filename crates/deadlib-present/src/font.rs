@@ -575,7 +575,8 @@ fn compute_chain_key(start_name: &'static str, fonts: &FontMap) -> u64 {
 }
 
 pub fn refresh_chain_keys(fonts: &mut FontMap) {
-    let mut names = fonts.keys().copied().collect::<Vec<_>>();
+    let mut names = SmallVec::<[&'static str; 32]>::with_capacity(fonts.len());
+    names.extend(fonts.keys().copied());
     names.sort_unstable();
 
     let mut next_tag = fonts
@@ -596,33 +597,24 @@ pub fn refresh_chain_keys(fonts: &mut FontMap) {
         }
     }
 
-    let chain_keys = names
-        .iter()
-        .map(|name| (*name, compute_chain_key(name, fonts)))
-        .collect::<Vec<_>>();
-    for (name, chain_key) in chain_keys {
+    // Neither computation reads another font's derived caches, so refresh one
+    // font at a time and retain its existing ASCII table allocation.
+    for name in names {
+        let chain_key = compute_chain_key(name, fonts);
+        let ascii_glyphs = compute_ascii_glyphs(name, fonts);
         if let Some(font) = fonts.get_mut(name) {
             font.chain_key = chain_key;
-        }
-    }
-
-    let ascii_tables = names
-        .iter()
-        .map(|name| (*name, compute_ascii_glyphs(name, fonts)))
-        .collect::<Vec<_>>();
-    for (name, ascii_glyphs) in ascii_tables {
-        if let Some(font) = fonts.get_mut(name) {
-            font.ascii_glyphs = ascii_glyphs;
+            *font.ascii_glyphs = ascii_glyphs;
         }
     }
 }
 
-fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> Box<[Option<Glyph>; 128]> {
+fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> [Option<Glyph>; 128] {
     let Some(start_font) = fonts.get(start_name) else {
-        return empty_ascii_glyphs();
+        return std::array::from_fn(|_| None);
     };
     let default_glyph = start_font.default_glyph.clone();
-    Box::new(std::array::from_fn(|code| {
+    std::array::from_fn(|code| {
         let c = code as u8 as char;
         let mut current = Some(start_font);
         while let Some(font) = current {
@@ -632,7 +624,7 @@ fn compute_ascii_glyphs(start_name: &'static str, fonts: &FontMap) -> Box<[Optio
             current = font.fallback_font_name.and_then(|name| fonts.get(name));
         }
         default_glyph.clone()
-    }))
+    })
 }
 
 #[derive(Debug)]

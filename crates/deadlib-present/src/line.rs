@@ -51,9 +51,7 @@ fn line_normal(a: [f32; 2], b: [f32; 2], half: f32) -> [f32; 2] {
 }
 
 #[inline(always)]
-fn line_join(prev: [f32; 2], current: [f32; 2], next: [f32; 2], half: f32) -> [f32; 2] {
-    let prev_normal = line_normal(prev, current, 1.0);
-    let next_normal = line_normal(current, next, 1.0);
+fn line_join(prev_normal: [f32; 2], next_normal: [f32; 2], half: f32) -> [f32; 2] {
     let miter = [
         prev_normal[0] + next_normal[0],
         prev_normal[1] + next_normal[1],
@@ -72,26 +70,7 @@ fn line_join(prev: [f32; 2], current: [f32; 2], next: [f32; 2], half: f32) -> [f
 }
 
 #[inline(always)]
-fn line_offset(points: &[[f32; 2]], window: LineWindow, index: usize, half: f32) -> [f32; 2] {
-    let current = line_window_point(points, window, index);
-    if index == 0 {
-        return line_normal(current, line_window_point(points, window, 1), half);
-    }
-    if index + 1 == window.point_count {
-        return line_normal(line_window_point(points, window, index - 1), current, half);
-    }
-    line_join(
-        line_window_point(points, window, index - 1),
-        current,
-        line_window_point(points, window, index + 1),
-        half,
-    )
-}
-
-#[inline(always)]
-fn write_line_segment(
-    dst: &mut [MeshVertex],
-    written: usize,
+fn line_segment_vertices(
     a: [f32; 2],
     b: [f32; 2],
     a_offset: [f32; 2],
@@ -99,7 +78,7 @@ fn write_line_segment(
     a_outer: [f32; 2],
     b_outer: [f32; 2],
     color: [f32; 4],
-) -> usize {
+) -> [MeshVertex; LINE_SEGMENT_VERTS] {
     let l0 = [a[0] + a_offset[0], a[1] + a_offset[1]];
     let r0 = [a[0] - a_offset[0], a[1] - a_offset[1]];
     let l1 = [b[0] + b_offset[0], b[1] + b_offset[1]];
@@ -110,7 +89,7 @@ fn write_line_segment(
     let or1 = [b[0] - b_outer[0], b[1] - b_outer[1]];
     let edge_color = [color[0], color[1], color[2], 0.0];
 
-    let verts = [
+    [
         MeshVertex { pos: l0, color },
         MeshVertex { pos: r0, color },
         MeshVertex { pos: l1, color },
@@ -148,14 +127,105 @@ fn write_line_segment(
             color: edge_color,
         },
         MeshVertex { pos: r1, color },
-    ];
-    dst[written..written + verts.len()].copy_from_slice(&verts);
-    written + verts.len()
+    ]
 }
 
 #[inline(always)]
 fn line_outer_offset(offset: [f32; 2], scale: f32) -> [f32; 2] {
     [offset[0] * scale, offset[1] * scale]
+}
+
+#[inline(always)]
+fn emit_line_segment(
+    a: [f32; 2],
+    b: [f32; 2],
+    a_offset: [f32; 2],
+    b_offset: [f32; 2],
+    a_outer: [f32; 2],
+    outer_scale: f32,
+    left: f32,
+    color: [f32; 4],
+    emit: &mut impl FnMut([MeshVertex; LINE_SEGMENT_VERTS]),
+) -> [f32; 2] {
+    let b_outer = line_outer_offset(b_offset, outer_scale);
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let degenerate = dx.mul_add(dx, dy * dy) <= LINE_MIN_LEN_SQ;
+    if !degenerate {
+        emit(line_segment_vertices(
+            [a[0] - left, a[1]],
+            [b[0] - left, b[1]],
+            a_offset,
+            b_offset,
+            a_outer,
+            b_outer,
+            color,
+        ));
+    }
+    b_outer
+}
+
+// Carry each segment normal into the next join instead of normalizing it twice.
+// Endpoint offsets keep the original half-width calculation, including signed
+// zero and degenerate/non-finite input behavior.
+#[inline(always)]
+fn for_each_line_segment(
+    points: &[[f32; 2]],
+    window: LineWindow,
+    half: f32,
+    feather: f32,
+    color: [f32; 4],
+    mut emit: impl FnMut([MeshVertex; LINE_SEGMENT_VERTS]),
+) {
+    let inner_half = feather.mul_add(-0.5, half).max(f32::EPSILON);
+    let outer_scale = feather.mul_add(0.5, half) / inner_half;
+    let mut a = line_window_point(points, window, 0);
+    let mut b = line_window_point(points, window, 1);
+    let mut normal = if window.point_count > 2 {
+        line_normal(a, b, 1.0)
+    } else {
+        [0.0, 0.0]
+    };
+    let mut a_offset = line_normal(a, b, inner_half);
+    let mut a_outer = line_outer_offset(a_offset, outer_scale);
+    // Handle the final endpoint outside the loop: interior joins always have
+    // a next point, so no optional point/normal state is needed per segment.
+    for index in 2..window.point_count {
+        let next = line_window_point(points, window, index);
+        let next_normal = line_normal(b, next, 1.0);
+        let b_offset = line_join(normal, next_normal, inner_half);
+        a_outer = emit_line_segment(
+            a,
+            b,
+            a_offset,
+            b_offset,
+            a_outer,
+            outer_scale,
+            window.left,
+            color,
+            &mut emit,
+        );
+        a = b;
+        b = next;
+        normal = next_normal;
+        a_offset = b_offset;
+    }
+    let b_offset = if window.point_count == 2 {
+        a_offset
+    } else {
+        line_normal(a, b, inner_half)
+    };
+    emit_line_segment(
+        a,
+        b,
+        a_offset,
+        b_offset,
+        a_outer,
+        outer_scale,
+        window.left,
+        color,
+        &mut emit,
+    );
 }
 
 #[inline(always)]
@@ -167,31 +237,11 @@ fn fill_line_vertices(
     feather: f32,
     color: [f32; 4],
 ) -> usize {
-    let inner_half = feather.mul_add(-0.5, half).max(f32::EPSILON);
-    let outer_scale = feather.mul_add(0.5, half) / inner_half;
-    let mut written = 0usize;
-    let mut a_offset = line_offset(points, window, 0, inner_half);
-    let mut a_outer = line_outer_offset(a_offset, outer_scale);
-    for index in 0..window.point_count - 1 {
-        let mut a = line_window_point(points, window, index);
-        let mut b = line_window_point(points, window, index + 1);
-        let b_offset = line_offset(points, window, index + 1, inner_half);
-        let b_outer = line_outer_offset(b_offset, outer_scale);
-        let dx = b[0] - a[0];
-        let dy = b[1] - a[1];
-        if dx.mul_add(dx, dy * dy) <= LINE_MIN_LEN_SQ {
-            a_offset = b_offset;
-            a_outer = b_outer;
-            continue;
-        }
-        a[0] -= window.left;
-        b[0] -= window.left;
-        written = write_line_segment(
-            dst, written, a, b, a_offset, b_offset, a_outer, b_outer, color,
-        );
-        a_offset = b_offset;
-        a_outer = b_outer;
-    }
+    let mut written = 0;
+    for_each_line_segment(points, window, half, feather, color, |vertices| {
+        dst[written..written + LINE_SEGMENT_VERTS].copy_from_slice(&vertices);
+        written += LINE_SEGMENT_VERTS;
+    });
     written
 }
 
@@ -307,10 +357,31 @@ pub fn update_line_mesh_reusable(
         .as_mut()
         .and_then(Arc::get_mut)
         .expect("replacement line mesh must be uniquely owned");
-    vertices.resize(max_len, MeshVertex::default());
-    let written = fill_line_vertices(vertices, points, window, half, feather, color);
+    if vertices.len() >= max_len {
+        let written = fill_line_vertices(vertices, points, window, half, feather, color);
+        vertices.truncate(written);
+        if written == 0 {
+            *mesh = None;
+        }
+        return;
+    }
+    vertices.reserve(max_len - vertices.len());
+    let mut written = 0;
+    // Overwrite initialized vertices and append new ones directly. Growing or
+    // mostly-degenerate lines no longer zero-fill vertices only to replace or
+    // discard them immediately afterward.
+    for_each_line_segment(points, window, half, feather, color, |segment| {
+        let end = written + LINE_SEGMENT_VERTS;
+        if end <= vertices.len() {
+            vertices[written..end].copy_from_slice(&segment);
+        } else {
+            vertices.truncate(written);
+            vertices.extend_from_slice(&segment);
+        }
+        written = end;
+    });
     vertices.truncate(written);
-    if written == 0 {
+    if vertices.is_empty() {
         *mesh = None;
     }
 }
