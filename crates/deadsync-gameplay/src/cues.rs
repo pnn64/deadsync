@@ -545,8 +545,33 @@ pub fn build_crossover_cues_from_annotations(
     include_brackets: bool,
     first_visible_time: f32,
 ) -> Vec<ColumnCue> {
-    let arrow_time =
-        |beat: f32| -> f32 { song_time_ns_to_seconds(timing_player.get_time_for_beat_ns(beat)) };
+    if annos.len() < 16 || !timing_player.has_bpm_changes() {
+        return build_crossover_cues_core(
+            annos,
+            |beat| song_time_ns_to_seconds(timing_player.get_time_for_beat_ns(beat)),
+            col_start,
+            duration_ms,
+            quantization,
+            include_brackets,
+            first_visible_time,
+        );
+    }
+    // Initialize only if a cue actually needs timing. Ambiguous BPM boundaries
+    // retain independent queries; the stack-only cursor handles beat rewinds.
+    let mut cache = None;
+    let arrow_time = |beat: f32| -> f32 {
+        let cursor = cache.get_or_insert_with(|| {
+            timing_player
+                .supports_row_time_cache()
+                .then(|| BeatTimeCache::new(timing_player))
+        });
+        let time = if let Some(cursor) = cursor {
+            timing_player.get_time_for_beat_ns_cached(beat, cursor)
+        } else {
+            timing_player.get_time_for_beat_ns(beat)
+        };
+        song_time_ns_to_seconds(time)
+    };
     build_crossover_cues_core(
         annos,
         arrow_time,
@@ -563,7 +588,7 @@ pub fn build_crossover_cues_from_annotations(
 #[allow(clippy::too_many_arguments)]
 fn build_crossover_cues_core(
     annos: &[CrossoverRow],
-    arrow_time: impl Fn(f32) -> f32,
+    arrow_time: impl FnMut(f32) -> f32,
     col_start: usize,
     duration_ms: u16,
     quantization: u8,
@@ -592,7 +617,7 @@ fn build_crossover_cues_core(
 #[allow(clippy::too_many_arguments)]
 fn build_crossover_cues_core_with_capacity(
     annos: &[CrossoverRow],
-    arrow_time: impl Fn(f32) -> f32,
+    mut arrow_time: impl FnMut(f32) -> f32,
     col_start: usize,
     duration_ms: u16,
     quantization: u8,

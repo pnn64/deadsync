@@ -135,13 +135,19 @@ pub fn build_column_cues_for_player(
         return Vec::new();
     }
 
+    let Some(first_eligible) = notes[start..end].iter().position(|note| {
+        note.column >= col_start && note.column < col_end && column_cue_is_mine(note).is_some()
+    }) else {
+        return Vec::new();
+    };
     let mut cues = Vec::with_capacity((end - start).min(COLUMN_CUE_INITIAL_CAPACITY));
     let mut prev_time = 0.0_f32;
-    let mut i = start;
+    let mut i = start + first_eligible;
     while i < end {
         let row = notes[i].row_index;
         let mut row_time = 0.0_f32;
         let mut has_row_time = false;
+        let mut emit = false;
         let mut columns = ColumnCueColumns::default();
         while i < end && notes[i].row_index == row {
             let note = &notes[i];
@@ -152,6 +158,16 @@ pub fn build_column_cues_for_player(
                 if !has_row_time {
                     row_time = song_time_ns_to_seconds(note_time_cache_ns[i]);
                     has_row_time = true;
+                    emit = row_time - prev_time >= COLUMN_CUE_MIN_SECONDS || prev_time == 0.0;
+                    if !emit {
+                        // This row cannot produce a cue. Skip its remaining
+                        // columns without repeating eligibility/mask work.
+                        i += 1;
+                        while i < end && notes[i].row_index == row {
+                            i += 1;
+                        }
+                        break;
+                    }
                 }
                 columns.insert(note.column, is_mine);
             }
@@ -159,7 +175,7 @@ pub fn build_column_cues_for_player(
         }
         if has_row_time {
             let duration = row_time - prev_time;
-            if duration >= COLUMN_CUE_MIN_SECONDS || prev_time == 0.0 {
+            if emit {
                 cues.push(ColumnCue {
                     start_time: prev_time,
                     duration,

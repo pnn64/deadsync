@@ -2,6 +2,10 @@
 mod tests {
     use super::*;
 
+    mod preparation_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/preparation.rs"));
+    }
+
     mod chart_transform_perf {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/chart_transforms.rs"));
     }

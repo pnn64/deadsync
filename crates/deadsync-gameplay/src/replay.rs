@@ -107,6 +107,52 @@ pub fn build_replay_input_edges(
     replay_input
 }
 
+/// Prepare an owned replay without allocating a second edge buffer. Both edge
+/// types have the same size/alignment, so the consuming filter/map can reuse the input
+/// allocation. Equal-time edges retain their original order when sorting.
+#[must_use]
+pub fn build_replay_input_edges_owned(
+    replay_edges: Vec<ReplayInputEdge>,
+    num_players: usize,
+    cols_per_player: usize,
+    num_cols: usize,
+    recorded_beat0_time_ns: SongTimeNs,
+    current_beat0_time_ns: [SongTimeNs; MAX_PLAYERS],
+) -> Vec<RecordedLaneEdge> {
+    let shifts = current_beat0_time_ns.map(|current| {
+        if song_time_ns_invalid(recorded_beat0_time_ns) || song_time_ns_invalid(current) {
+            0
+        } else {
+            current.saturating_sub(recorded_beat0_time_ns)
+        }
+    });
+    let mut previous = None;
+    let mut out_of_order = false;
+    let mut replay_input: Vec<_> = replay_edges
+        .into_iter()
+        .filter_map(|edge| {
+            let lane = edge.lane_index as usize;
+            if lane >= num_cols || song_time_ns_invalid(edge.event_music_time_ns) {
+                return None;
+            }
+            let player = player_index_for_column(num_players, cols_per_player, lane);
+            let time = edge.event_music_time_ns.saturating_add(shifts[player]);
+            out_of_order |= previous.is_some_and(|previous| time < previous);
+            previous = Some(time);
+            Some(RecordedLaneEdge {
+                lane_index: edge.lane_index,
+                pressed: edge.pressed,
+                source: edge.source,
+                event_music_time_ns: time,
+            })
+        })
+        .collect();
+    if out_of_order {
+        replay_input.sort_by_key(|edge| edge.event_music_time_ns);
+    }
+    replay_input
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GameplayReplayInputState {
     input: Vec<RecordedLaneEdge>,

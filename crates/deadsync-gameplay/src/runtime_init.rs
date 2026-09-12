@@ -284,8 +284,8 @@ where
     let replay_beat0_times = std::array::from_fn(|player| {
         timing_players[player.min(MAX_PLAYERS - 1)].get_time_for_beat_ns(0.0)
     });
-    let replay_input = build_replay_input_edges(
-        &replay_edges,
+    let replay_input = build_replay_input_edges_owned(
+        replay_edges,
         num_players,
         cols_per_player,
         num_cols,
