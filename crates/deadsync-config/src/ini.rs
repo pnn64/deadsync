@@ -24,33 +24,7 @@ impl SimpleIni {
     pub fn load_str(&mut self, content: &str) {
         self.sections.clear();
 
-        let mut entries = ini_entries(content).peekable();
-        let mut values = Vec::new();
-        while let Some(entry) = entries.next() {
-            let (name, first) = match entry {
-                IniEntry::Section(name) => (
-                    name,
-                    entries.next_if(|entry| matches!(entry, IniEntry::Property(..))),
-                ),
-                IniEntry::Property(..) => ("", Some(entry)),
-            };
-            while let Some(IniEntry::Property(key, value)) =
-                entries.next_if(|entry| matches!(entry, IniEntry::Property(..)))
-            {
-                values.push((key, value));
-            }
-            // Stage borrowed properties for one section, reserving its final map
-            // once. Reuse this buffer across sections instead of retaining copies.
-            let properties = self.sections.entry(name.to_owned()).or_default();
-            properties.reserve(values.len() + usize::from(first.is_some()));
-            if let Some(IniEntry::Property(key, value)) = first {
-                properties.insert(key.to_owned(), value.to_owned());
-            }
-            for &(key, value) in &values {
-                properties.insert(key.to_owned(), value.to_owned());
-            }
-            values.clear();
-        }
+        load_ini_sections(&mut self.sections, content);
     }
 
     pub fn get(&self, section: &str, key: &str) -> Option<&str> {
@@ -73,6 +47,52 @@ impl SimpleIni {
     #[must_use]
     pub fn into_sections(self) -> IniSections {
         self.sections
+    }
+}
+
+/// INI sections whose names, keys, and values borrow the input text.
+pub type BorrowedIniSections<'a> = FxHashMap<&'a str, FxHashMap<&'a str, &'a str>>;
+
+/// Parse complete INI data while allocating only maps and reusable section storage.
+/// Duplicate sections and keys follow the same rules as `SimpleIni`.
+#[must_use]
+pub fn borrowed_ini_sections(content: &str) -> BorrowedIniSections<'_> {
+    let mut sections = FxHashMap::default();
+    load_ini_sections(&mut sections, content);
+    sections
+}
+
+fn load_ini_sections<'a, K, V>(sections: &mut FxHashMap<K, FxHashMap<K, V>>, content: &'a str)
+where
+    K: From<&'a str> + Eq + std::hash::Hash,
+    V: From<&'a str>,
+{
+    let mut entries = ini_entries(content).peekable();
+    let mut values = Vec::new();
+    while let Some(entry) = entries.next() {
+        let (name, first) = match entry {
+            IniEntry::Section(name) => (
+                name,
+                entries.next_if(|entry| matches!(entry, IniEntry::Property(..))),
+            ),
+            IniEntry::Property(..) => ("", Some(entry)),
+        };
+        while let Some(IniEntry::Property(key, value)) =
+            entries.next_if(|entry| matches!(entry, IniEntry::Property(..)))
+        {
+            values.push((key, value));
+        }
+        // Stage borrowed properties for one section, reserving its final map
+        // once. Reuse this buffer across sections instead of retaining copies.
+        let properties = sections.entry(K::from(name)).or_default();
+        properties.reserve(values.len() + usize::from(first.is_some()));
+        if let Some(IniEntry::Property(key, value)) = first {
+            properties.insert(K::from(key), V::from(value));
+        }
+        for &(key, value) in &values {
+            properties.insert(K::from(key), V::from(value));
+        }
+        values.clear();
     }
 }
 
@@ -116,7 +136,39 @@ pub fn ini_value<'a>(content: &'a str, section: &str, key: &str) -> Option<&'a s
 #[must_use]
 pub fn unescape_ini_value(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
+    let mut remaining = raw;
+    // Copy long unchanged spans in bulk. Small or escape-dense tails use the
+    // scalar decoder to avoid paying for a substring search for every escape.
+    while remaining.len() >= 32 {
+        let Some(slash) = remaining.find('\\') else {
+            out.push_str(remaining);
+            return out;
+        };
+        if slash < 32 {
+            break;
+        }
+        out.push_str(&remaining[..slash]);
+        let escaped = &remaining[slash + 1..];
+        match escaped.as_bytes().first() {
+            Some(b'n') => {
+                out.push('\n');
+                remaining = &escaped[1..];
+            }
+            Some(b't') => {
+                out.push('\t');
+                remaining = &escaped[1..];
+            }
+            Some(b'\\') => {
+                out.push('\\');
+                remaining = &escaped[1..];
+            }
+            _ => {
+                out.push('\\');
+                remaining = escaped;
+            }
+        }
+    }
+    let mut chars = remaining.chars();
     while let Some(c) = chars.next() {
         if c == '\\' {
             match chars.next() {

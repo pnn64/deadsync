@@ -1,10 +1,14 @@
-use deadsync_config::ini::{SimpleIni, ini_value, unescape_ini_value};
+#[cfg(test)]
+use deadsync_config::ini::SimpleIni;
+use deadsync_config::ini::ini_value;
 use deadsync_config::theme::{LanguageFlag, resolve_language_locale};
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub type LanguageMap = FxHashMap<Box<str>, FxHashMap<Box<str>, Arc<str>>>;
+
+mod map;
 
 /// Language resources prepared at the asset boundary for a concrete theme.
 pub struct LanguageBundle {
@@ -28,27 +32,13 @@ fn locale_file_exists(languages_dir: &Path, code: &str) -> bool {
 }
 
 fn load_ini_to_map(path: &Path) -> LanguageMap {
-    let mut ini = SimpleIni::new();
-    if let Err(e) = ini.load(path) {
-        log::warn!("Failed to load language file {}: {e}", path.display());
-        return FxHashMap::default();
-    }
-    let mut sections = LanguageMap::default();
-    for (section, props) in ini.into_sections() {
-        let entries = sections.entry(section.into_boxed_str()).or_default();
-        for (key, value) in props {
-            if value.trim() == "@skip" {
-                continue;
-            }
-            let value = if value.contains('\\') {
-                Arc::from(unescape_ini_value(&value))
-            } else {
-                Arc::from(value)
-            };
-            entries.insert(key.into_boxed_str(), value);
+    match std::fs::read_to_string(path) {
+        Ok(content) => map::parse_language_map(&content),
+        Err(e) => {
+            log::warn!("Failed to load language file {}: {e}", path.display());
+            LanguageMap::default()
         }
     }
-    sections
 }
 
 fn native_name(path: &Path, locale_code: &str) -> String {
