@@ -127,6 +127,49 @@ pub fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
 }
 
 fn fill_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec<u32>) {
+    // For ordinary small chart lists, the existing short sort costs less
+    // than bitmap setup. Larger lists deduplicate common meters before storing.
+    if song.charts.len() <= 16 {
+        fill_small_song_meters_for_sort(song, chart_type, meters);
+        return;
+    }
+    meters.clear();
+    let has_non_edit = song.charts.iter().any(|chart| {
+        chart.has_note_data
+            && chart.chart_type.eq_ignore_ascii_case(chart_type)
+            && !chart.difficulty.eq_ignore_ascii_case("edit")
+    });
+    let mut common = 0u64;
+    for chart in &song.charts {
+        if !chart.has_note_data
+            || !chart.chart_type.eq_ignore_ascii_case(chart_type)
+            || has_non_edit == chart.difficulty.eq_ignore_ascii_case("edit")
+        {
+            continue;
+        }
+        if chart.meter < u64::BITS {
+            common |= 1u64 << chart.meter;
+        } else {
+            if meters.is_empty() {
+                meters.reserve(song.charts.len());
+            }
+            meters.push(chart.meter);
+        }
+    }
+    meters.sort_unstable();
+    meters.dedup();
+    let overflow_len = meters.len();
+    let common_len = common.count_ones() as usize;
+    meters.resize(overflow_len + common_len, 0);
+    meters.copy_within(..overflow_len, common_len);
+    for meter in &mut meters[..common_len] {
+        *meter = common.trailing_zeros();
+        common &= common - 1;
+    }
+}
+
+#[inline]
+fn fill_small_song_meters_for_sort(song: &SongData, chart_type: &str, meters: &mut Vec<u32>) {
     meters.clear();
     let has_non_edit = song.charts.iter().any(|chart| {
         chart.has_note_data
@@ -206,39 +249,14 @@ pub fn genre_grouped_songs(
 }
 
 fn grouped_genre_songs(songs: Vec<Arc<SongData>>) -> Vec<GroupedSongs> {
-    let mut groups = Vec::new();
-    let mut current_group: Option<SongSortGroup> = None;
-    let mut current_songs = Vec::new();
-
-    for song in songs {
-        let matches_current = match current_group.as_ref() {
-            Some(SongSortGroup::Genre(Some(genre))) => {
-                !song.genre.trim().is_empty() && genre == &song.genre
-            }
-            Some(SongSortGroup::Genre(None)) => song.genre.trim().is_empty(),
-            _ => false,
-        };
-        if !matches_current {
-            if let Some(group) = current_group.take() {
-                groups.push(GroupedSongs {
-                    group,
-                    songs: std::mem::take(&mut current_songs),
-                });
-            }
-            current_group = Some(SongSortGroup::Genre(
-                (!song.genre.trim().is_empty()).then(|| song.genre.clone()),
-            ));
-        }
-        current_songs.push(song);
-    }
-
-    if let Some(group) = current_group {
-        groups.push(GroupedSongs {
-            group,
-            songs: current_songs,
-        });
-    }
-    groups
+    grouped_song_runs(
+        songs,
+        |left, right| {
+            left.genre == right.genre
+                || (left.genre.trim().is_empty() && right.genre.trim().is_empty())
+        },
+        |song| SongSortGroup::Genre((!song.genre.trim().is_empty()).then(|| song.genre.clone())),
+    )
 }
 
 #[must_use]
@@ -388,32 +406,42 @@ fn grouped_contiguous_songs(
     songs: Vec<Arc<SongData>>,
     group_for: impl Fn(&SongData) -> SongSortGroup,
 ) -> Vec<GroupedSongs> {
-    let mut groups = Vec::new();
-    let mut current_group = None;
-    let mut current_songs = Vec::new();
+    grouped_song_runs(
+        songs,
+        |left, right| group_for(left) == group_for(right),
+        &group_for,
+    )
+}
 
-    for song in songs {
-        let group = group_for(song.as_ref());
-        if current_group
-            .as_ref()
-            .is_some_and(|current| current != &group)
-        {
-            groups.push(GroupedSongs {
-                group: current_group.take().unwrap(),
-                songs: std::mem::take(&mut current_songs),
-            });
-        }
-        current_group = Some(group);
-        current_songs.push(song);
+fn grouped_song_runs(
+    mut songs: Vec<Arc<SongData>>,
+    same_group: impl Fn(&SongData, &SongData) -> bool,
+    group_for: impl Fn(&SongData) -> SongSortGroup,
+) -> Vec<GroupedSongs> {
+    let group_count = songs
+        .chunk_by(|left, right| same_group(left, right))
+        .count();
+    if group_count == 1 {
+        let group = group_for(&songs[0]);
+        // The whole input is already the only output run. Keep its buffer;
+        // trim spare capacity only if the caller supplied an oversized vector.
+        songs.shrink_to_fit();
+        return vec![GroupedSongs { group, songs }];
     }
-
-    if let Some(group) = current_group {
-        groups.push(GroupedSongs {
-            group,
-            songs: current_songs,
-        });
+    let mut groups = Vec::with_capacity(group_count);
+    let mut songs = songs.into_iter();
+    while let Some(first) = songs.next() {
+        let group = group_for(&first);
+        let rest_count = songs
+            .as_slice()
+            .iter()
+            .take_while(|song| same_group(&first, song))
+            .count();
+        let mut run = Vec::with_capacity(rest_count + 1);
+        run.push(first);
+        run.extend(songs.by_ref().take(rest_count));
+        groups.push(GroupedSongs { group, songs: run });
     }
-
     groups
 }
 
@@ -690,7 +718,16 @@ mod tests {
                 .collect::<Vec<_>>()
         );
     }
+    mod grouping_perf {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/song_grouping.rs"
+        ));
+    }
     mod library_sort_perf {
-        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/library_sort.rs"));
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/perf/library_sort.rs"
+        ));
     }
 }
