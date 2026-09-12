@@ -39,7 +39,7 @@ struct PumpHoldSource {
     column: u8,
 }
 
-fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
+fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<u32> {
     let end = note_range.1.min(notes.len());
     let start = note_range.0.min(end);
     let mut rows = Vec::with_capacity(end - start);
@@ -54,7 +54,8 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
         {
             continue;
         }
-        let row = beat_to_note_row(note.beat).max(0) as usize;
+        // beat_to_note_row returns i32, so every nonnegative row fits u32.
+        let row = beat_to_note_row(note.beat).max(0) as u32;
         match rows.last().copied() {
             Some(last) if row == last => {}
             Some(last) => {
@@ -71,21 +72,25 @@ fn pump_tap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec<usize> {
     rows
 }
 
-fn push_pump_checkpoints(
+#[allow(clippy::too_many_arguments)]
+fn push_pump_checkpoints_cached(
     events: &mut Vec<PumpHoldEvent>,
     notes: &[Note],
-    tap_rows: &[usize],
+    tap_rows: &[u32],
     source: PumpHoldSource,
     timing: &TimingData,
     segments: &TimingSegments,
+    cache_times: bool,
 ) {
     let note = &notes[source.note_index.get()];
     let mut time_cache = BeatTimeCache::new(timing);
-    let cache_times = timing.supports_row_time_cache();
+    let mut tap_cursor = 0;
     for (first_row, last_row, rows_per_tick) in pump_checkpoint_ranges(note, segments) {
         let mut row = first_row;
         while row <= last_row {
             let beat = note_row_to_beat(row as i32);
+            tap_cursor =
+                partition_point_from_hint(tap_rows, tap_cursor, |&tap| (tap as usize) < row);
             events.push(PumpHoldEvent {
                 time_ns: if cache_times {
                     timing.get_time_for_beat_ns_cached(beat, &mut time_cache)
@@ -97,7 +102,9 @@ fn push_pump_checkpoints(
                 player: source.player,
                 column: source.column,
                 kind: PumpHoldEventKind::Checkpoint,
-                has_tap: tap_rows.binary_search(&row).is_ok(),
+                has_tap: tap_rows
+                    .get(tap_cursor)
+                    .is_some_and(|&tap| tap as usize == row),
             });
             row = row.saturating_add(rows_per_tick);
         }
@@ -228,6 +235,8 @@ fn build_pump_hold_events_core(
         let compact_player = u8::try_from(player).expect("gameplay player index must fit u8");
         let note_range = note_ranges[player];
         let tap_rows = pump_tap_rows(notes, note_range);
+        // Timing is immutable during emission; validate its cache once per player.
+        let mut cache_times = None;
         let end = note_range
             .1
             .min(notes.len())
@@ -265,13 +274,15 @@ fn build_pump_hold_events_core(
                 kind: PumpHoldEventKind::Head,
                 has_tap: true,
             });
-            push_pump_checkpoints(
+            push_pump_checkpoints_cached(
                 &mut events,
                 notes,
                 &tap_rows,
                 source,
                 &timing_players[player],
                 &gameplay_charts[player].timing_segments,
+                *cache_times
+                    .get_or_insert_with(|| timing_players[player].supports_row_time_cache()),
             );
             events.push(PumpHoldEvent {
                 time_ns: end_time_ns,

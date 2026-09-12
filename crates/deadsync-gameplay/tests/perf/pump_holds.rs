@@ -1,3 +1,5 @@
+// Keep the 0.5.1136 cached comparison fixed at its original implementation.
+use super::pump_checkpoint_perf::baseline::{pump_tap_rows, push_pump_checkpoints};
 // Reference routines frozen from c4aeed4fe / 0.5.1135. The builder accepts
 // a checkpoint writer to isolate time conversion from buffer reservation.
 use super::*;
