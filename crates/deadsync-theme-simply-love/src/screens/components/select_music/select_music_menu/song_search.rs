@@ -31,6 +31,10 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+mod text;
+pub use text::song_search_query_completed_with;
+use text::{song_search_fit, strip_difficulty_parens};
+
 pub const SONG_SEARCH_MAX_LEN: usize = 80;
 pub const SONG_SEARCH_MAX_RESULTS: usize = 9;
 const CURSOR_BLINK_PERIOD: f32 = 1.0;
@@ -65,18 +69,6 @@ impl SongSearchScope {
         }
     }
 }
-
-/// Difficulty words dropped when they stand alone in parentheses, e.g. `(Easy)`.
-const DIFFICULTY_WORDS: [&str; 8] = [
-    "beginner",
-    "easy",
-    "medium",
-    "hard",
-    "challenge",
-    "edit",
-    "expert",
-    "basic",
-];
 
 /// Zero-width space / BOM, which some packs prepend to `#TITLE`.
 #[inline]
@@ -136,33 +128,6 @@ fn clean_search_title_cow(title: &str) -> Cow<'_, str> {
     } else {
         without_diff
     }
-}
-
-/// Remove `(...)` groups that are exactly a difficulty word.
-fn strip_difficulty_parens(input: &str) -> Cow<'_, str> {
-    if !input.contains('(') {
-        return Cow::Borrowed(input);
-    }
-    let mut out = String::with_capacity(input.len());
-    let mut rest = input;
-    while let Some(open) = rest.find('(') {
-        let Some(close_rel) = rest[open + 1..].find(')') else {
-            break;
-        };
-        let close = open + 1 + close_rel;
-        let inner = rest[open + 1..close].trim();
-        if DIFFICULTY_WORDS
-            .iter()
-            .any(|word| inner.eq_ignore_ascii_case(word))
-        {
-            out.push_str(&rest[..open]);
-        } else {
-            out.push_str(&rest[..=close]);
-        }
-        rest = &rest[close + 1..];
-    }
-    out.push_str(rest);
-    Cow::Owned(out.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
 /// A single ranked result.
@@ -393,69 +358,6 @@ pub fn song_search_completion(open: &SongSearchOpen) -> Option<SongSearchComplet
         typed: open.query.clone(),
         accepted,
     })
-}
-
-/// Rebuild `query` so its free text becomes `label`, keeping the `[###]` filter
-/// tokens verbatim (a BPM token cannot be rebuilt from the parsed tier).
-#[must_use]
-pub fn song_search_query_completed_with(query: &str, label: &str) -> String {
-    let mut out = String::new();
-    let mut chars = query.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch != '[' {
-            continue;
-        }
-        let mut tail = chars.clone();
-        let mut token = String::from('[');
-        let mut has_digit = false;
-        while let Some(&d) = tail.peek() {
-            if !d.is_ascii_digit() {
-                break;
-            }
-            has_digit = true;
-            token.push(d);
-            tail.next();
-        }
-        if has_digit && tail.peek() == Some(&']') {
-            tail.next();
-            token.push(']');
-            out.push_str(&token);
-            out.push(' ');
-            chars = tail;
-        }
-    }
-    out.push_str(label);
-    out.chars().take(SONG_SEARCH_MAX_LEN).collect()
-}
-
-/// Longest prefix of `text` that fits `max_w`, so overlaid ghost actors can be
-/// drawn without `maxwidth` and therefore never scale away from each other.
-fn song_search_fit(asset_manager: &AssetManager, text: &str, max_w: f32, zoom: f32) -> String {
-    let width = |s: &str| -> f32 {
-        let mut out = 0.0_f32;
-        asset_manager.with_fonts(|all_fonts| {
-            asset_manager.with_font("miso", |font| {
-                out = deadlib_present::font::measure_line_width_logical(font, s, all_fonts) as f32
-                    * zoom;
-            });
-        });
-        out
-    };
-    if !width(text).is_finite() || width(text) <= max_w {
-        return text.to_string();
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let (mut lo, mut hi) = (0usize, chars.len());
-    while lo < hi {
-        let mid = (lo + hi).div_ceil(2);
-        let candidate: String = chars[..mid].iter().collect();
-        if width(&candidate) <= max_w {
-            lo = mid;
-        } else {
-            hi = mid - 1;
-        }
-    }
-    chars[..lo].iter().collect()
 }
 
 /// Titles cleaned once from the wheel catalog, so keystrokes only score.
@@ -877,7 +779,8 @@ fn push_song_search_overlay_unreserved(
                 // ghost wider than the box would shrink out from under the
                 // typed text. Trim both to what fits instead.
                 let budget = panel_w - 44.0;
-                let display = song_search_fit(asset_manager, &completion.display, budget, 0.9);
+                let display =
+                    song_search_fit(asset_manager, &completion.display, budget, 0.9).to_owned();
                 let typed: String = completion
                     .typed
                     .chars()
