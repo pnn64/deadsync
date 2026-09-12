@@ -517,6 +517,7 @@ pub fn apply_mines_insert(
     }
 
     let half_beat_rows = (ROWS_PER_BEAT.max(1) / 2) as usize;
+    let mut latest_mines = [None; MAX_COLS];
     for note_index in 0..original_len {
         let Some((column, end_row_index)) = (|| {
             let note = &notes[note_index];
@@ -538,8 +539,9 @@ pub fn apply_mines_insert(
                 range_start,
                 range_end,
             )
-            || track_range_has_any_note(
+            || generated_mine_in_range(
                 &notes[original_len..],
+                &latest_mines,
                 column,
                 range_start,
                 range_end,
@@ -554,7 +556,33 @@ pub fn apply_mines_insert(
         let mine_end = notes[..original_len].partition_point(|note| note.row_index <= mine_row);
         convert_tap_row_to_mines(&mut notes[mine_start..mine_end], mine_row);
         notes.push(mine);
+        if let Some(latest) = latest_mines.get_mut(column) {
+            *latest = Some(latest.map_or(mine_row, |row: usize| row.max(mine_row)));
+        }
     }
+}
+
+fn generated_mine_in_range(
+    generated: &[Note],
+    latest_mines: &[Option<usize>; MAX_COLS],
+    column: usize,
+    start_row: usize,
+    end_row: usize,
+) -> bool {
+    if let Some(&latest) = latest_mines.get(column) {
+        let Some(latest) = latest else {
+            return false;
+        };
+        if latest < start_row {
+            return false;
+        }
+        if latest <= end_row {
+            return true;
+        }
+    }
+    // Hold ends may run backwards, and imported columns may exceed the lane
+    // domain. Only these cases need the original complete collision scan.
+    track_range_has_any_note(generated, column, start_row, end_row)
 }
 
 #[inline(always)]
@@ -802,8 +830,23 @@ fn apply_insert_intelligent_taps_sorted(
     skippy_mode: bool,
 ) {
     debug_assert!(notes_row_sorted(notes));
-    let candidate_count =
-        intelligent_candidate_count(notes, col_offset, cols, window_stride_rows);
+    if window_size_rows <= window_stride_rows
+        && insert_offset_rows < window_size_rows
+        && notes_have_unique_sorted_cells(notes)
+    {
+        apply_insert_intelligent_taps_batched(
+            notes,
+            timing_player,
+            col_offset,
+            cols,
+            window_size_rows,
+            insert_offset_rows,
+            window_stride_rows,
+            skippy_mode,
+        );
+        return;
+    }
+    let candidate_count = intelligent_candidate_count(notes, col_offset, cols, window_stride_rows);
     notes.reserve(candidate_count);
 
     let require_begin = !skippy_mode;
@@ -862,6 +905,88 @@ fn apply_insert_intelligent_taps_sorted(
             row.saturating_add(insert_offset_rows),
             col_offset.saturating_add(track_to_add),
         );
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_insert_intelligent_taps_batched(
+    notes: &mut Vec<Note>,
+    timing_player: &TimingData,
+    col_offset: usize,
+    cols: usize,
+    window_size_rows: usize,
+    insert_offset_rows: usize,
+    window_stride_rows: usize,
+    skippy_mode: bool,
+) {
+    let original_len = notes.len();
+    let mut row_cursor = 0;
+    let mut hold_cursor = 0;
+    let mut latest = [usize::MAX; MAX_COLS];
+    while row_cursor < original_len {
+        let start = row_cursor;
+        let row = notes[start].row_index;
+        row_cursor += 1;
+        while row_cursor < original_len && notes[row_cursor].row_index == row {
+            row_cursor += 1;
+        }
+        let earlier = intelligent_row_summary_slice(&notes[start..row_cursor], col_offset, cols);
+        if earlier.nonempty == 0 || !row.is_multiple_of(window_stride_rows) {
+            continue;
+        }
+        let row_later = row + window_size_rows;
+        let later = intelligent_row_summary(&notes[..original_len], row_later, col_offset, cols);
+        if (!skippy_mode && !earlier.single_endpoint()) || !later.single_endpoint() {
+            continue;
+        }
+        let body_row = row + 1;
+        let body_cells = advance_latest_notes(
+            &notes[..original_len],
+            &mut hold_cursor,
+            body_row,
+            col_offset,
+            cols,
+            &mut latest,
+        );
+        let body_mask = tracks_down_mask(notes, &latest, body_row, cols) & !body_cells;
+        if body_mask != 0
+            || intelligent_range_has_note(
+                &notes[..original_len],
+                body_row,
+                row_later.saturating_sub(1),
+                col_offset,
+                cols,
+            )
+        {
+            continue;
+        }
+        let Some(later_track) = later.first_track() else {
+            continue;
+        };
+        let target = intelligent_add_track(earlier.first_track(), later_track, cols, skippy_mode);
+        let Some(tap) = added_tap_note(
+            timing_player,
+            row + insert_offset_rows,
+            col_offset.saturating_add(target),
+        ) else {
+            continue;
+        };
+        if notes.len() == original_len {
+            notes.reserve(intelligent_candidate_count(
+                &notes[..original_len],
+                col_offset,
+                cols,
+                window_stride_rows,
+            ));
+        }
+        // Nonoverlapping windows put every addition strictly before the next
+        // candidate and inside an empty player-row interval. No live hold
+        // crosses the insertion, so omitting appended taps from the source
+        // cursor cannot change later endpoint, spacing, or hold queries.
+        notes.push(tap);
+    }
+    if notes.len() != original_len {
+        sort_player_notes(notes);
     }
 }
 

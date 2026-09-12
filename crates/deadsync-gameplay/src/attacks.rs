@@ -3166,6 +3166,30 @@ fn apply_chart_attack_window_sorted_with_scratch(
         debug_assert!(chart_attack_notes_sorted(notes));
         return;
     }
+    if mods.insert_mask == 0
+        && mods.remove_mask
+            & (REMOVE_MASK_BIT_NO_JUMPS | REMOVE_MASK_BIT_NO_HANDS | REMOVE_MASK_BIT_NO_QUADS)
+            == 0
+        && mods.holds_mask
+            & (HOLDS_MASK_BIT_PLANTED | HOLDS_MASK_BIT_FLOORED | HOLDS_MASK_BIT_TWISTER)
+            == 0
+    {
+        let start = note_range.start;
+        let end = apply_simple_attack_masks(notes, note_range, mods.remove_mask, mods.holds_mask);
+        apply_attack_turn_mod(
+            &mut notes[start..end],
+            col_offset,
+            cols,
+            mods.turn_option,
+            turn_seed,
+            player,
+        );
+        if mods.turn_option != GameplayTurnOption::None {
+            sort_attack_row_columns(&mut notes[start..end]);
+        }
+        debug_assert!(chart_attack_notes_sorted(notes));
+        return;
+    }
     let insert_at = note_range.start;
     debug_assert!(in_range.is_empty());
     in_range.reserve(note_range.len());
@@ -3213,6 +3237,47 @@ fn apply_chart_attack_window_sorted_with_scratch(
     drop(notes.splice(insert_at..insert_at, in_range.drain(..)));
     debug_assert!(in_range.is_empty());
     debug_assert!(chart_attack_notes_sorted(notes));
+}
+
+// These masks act independently on each note. Compact the attacked interval
+// in place, then shift its untouched tail once, retaining the chart allocation.
+fn apply_simple_attack_masks(
+    notes: &mut Vec<Note>,
+    range: std::ops::Range<usize>,
+    remove_mask: u8,
+    holds_mask: u8,
+) -> usize {
+    let mut write = range.start;
+    for read in range.clone() {
+        let note = &mut notes[read];
+        if (remove_mask & REMOVE_MASK_BIT_LITTLE != 0
+            && beat_to_note_row(note.beat) % ROWS_PER_BEAT != 0)
+            || (remove_mask & REMOVE_MASK_BIT_NO_MINES != 0 && note.note_type == NoteType::Mine)
+            || (remove_mask & REMOVE_MASK_BIT_NO_FAKES != 0
+                && (!note.can_be_judged || note.is_fake))
+            || (remove_mask & REMOVE_MASK_BIT_NO_LIFTS != 0 && note.note_type == NoteType::Lift)
+        {
+            continue;
+        }
+        if holds_mask & HOLDS_MASK_BIT_NO_ROLLS != 0 && note.note_type == NoteType::Roll {
+            note.note_type = NoteType::Hold;
+        }
+        if remove_mask & REMOVE_MASK_BIT_NO_HOLDS != 0 && note.note_type == NoteType::Hold {
+            note.note_type = NoteType::Tap;
+            note.hold = None;
+        }
+        if holds_mask & HOLDS_MASK_BIT_HOLDS_TO_ROLLS != 0 && note.note_type == NoteType::Hold {
+            note.note_type = NoteType::Roll;
+        }
+        if write != read {
+            notes[write] = notes[read].clone();
+        }
+        write += 1;
+    }
+    if write != range.end {
+        drop(notes.drain(write..range.end));
+    }
+    write
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -2,6 +2,10 @@
 mod tests {
     use super::*;
 
+    mod chart_modifier_perf {
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/chart_modifiers.rs"));
+    }
+
     mod tap_insertion_perf {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/perf/tap_insertion.rs"));
     }
