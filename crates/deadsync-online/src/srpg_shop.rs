@@ -138,22 +138,38 @@ pub fn runtime_snapshot_if_changed(last_generation: u64) -> Option<(u64, Arc<Srp
 pub(crate) fn runtime_mark_downloaded(url: &str, destination: &str) {
     let folder = deadsync_config::runtime::get().srpg_shop_folder;
     let mut runtime = RUNTIME.lock().unwrap();
-    let mut snapshot = (*runtime.snapshot).clone();
-    let mut changed = false;
-    for shop in &mut snapshot.shops {
+    if mark_downloaded(&mut runtime.snapshot, url, destination, folder) {
+        RUNTIME_SNAPSHOT_GENERATION.fetch_add(1, Ordering::Release);
+    }
+}
+
+fn mark_downloaded(
+    snapshot: &mut Arc<SrpgShopSnapshot>,
+    url: &str,
+    destination: &str,
+    folder: SrpgShopFolder,
+) -> bool {
+    let changed = snapshot.shops.iter().any(|shop| {
+        download_folder(shop.id, folder) == destination
+            && shop
+                .items
+                .iter()
+                .any(|item| item.download_url.as_deref() == Some(url) && !item.downloaded)
+    });
+    if !changed {
+        return false;
+    }
+    for shop in &mut Arc::make_mut(snapshot).shops {
         if download_folder(shop.id, folder) != destination {
             continue;
         }
         for item in &mut shop.items {
             if item.download_url.as_deref() == Some(url) && !item.downloaded {
                 item.downloaded = true;
-                changed = true;
             }
         }
     }
-    if changed {
-        set_runtime_snapshot(&mut runtime, Arc::new(snapshot));
-    }
+    true
 }
 
 #[must_use]
@@ -441,18 +457,61 @@ fn preserve_snapshot_order(snapshot: &mut SrpgShopSnapshot, previous: &SrpgShopS
         let Some(old_shop) = previous.shops.iter().find(|old| old.id == shop.id) else {
             continue;
         };
-        let mut remaining = std::mem::take(&mut shop.items);
-        let mut ordered = Vec::with_capacity(remaining.len());
-        for old_item in &old_shop.items {
-            if let Some(index) = remaining
-                .iter()
-                .position(|item| item.item_id == old_item.item_id)
-            {
-                ordered.push(remaining.remove(index));
+        restore_item_order(&mut shop.items, &old_shop.items);
+    }
+}
+
+fn restore_item_order(items: &mut [SrpgShopItem], previous: &[SrpgShopItem]) {
+    if items.len() < 2
+        || previous.is_empty()
+        || items
+            .iter()
+            .map(|i| &i.item_id)
+            .eq(previous.iter().map(|i| &i.item_id))
+    {
+        return;
+    }
+    // Each slot carries the next occurrence of its ID and its destination.
+    // Consuming occurrences in input order preserves duplicate-ID behavior.
+    let mut slots = vec![(usize::MAX, usize::MAX); items.len()];
+    {
+        let mut by_id = HashMap::<&str, (usize, usize)>::with_capacity(items.len());
+        for (index, item) in items.iter().enumerate() {
+            match by_id.entry(item.item_id.as_str()) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let tail = &mut entry.get_mut().1;
+                    slots[*tail].0 = index;
+                    *tail = index;
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert((index, index));
+                }
             }
         }
-        ordered.extend(remaining);
-        shop.items = ordered;
+        let mut destination = 0;
+        for old in previous {
+            if let Some((head, _)) = by_id.get_mut(old.item_id.as_str())
+                && *head != usize::MAX
+            {
+                let index = *head;
+                *head = slots[index].0;
+                slots[index].1 = destination;
+                destination += 1;
+            }
+        }
+        for (_, target) in &mut slots {
+            if *target == usize::MAX {
+                *target = destination;
+                destination += 1;
+            }
+        }
+    }
+    for index in 0..items.len() {
+        while slots[index].1 != index {
+            let destination = slots[index].1;
+            items.swap(index, destination);
+            slots.swap(index, destination);
+        }
     }
 }
 
@@ -644,43 +703,79 @@ fn parse_downloads(body: &str) -> Result<Vec<ParsedDownload>, SrpgShopError> {
 }
 
 fn merge_downloads(items: &mut Vec<SrpgShopItem>, downloads: Vec<ParsedDownload>) {
-    for download in downloads {
-        let (difficulty, bpm) = {
-            let mut numbers = download
-                .details
-                .split_whitespace()
-                .filter_map(|part| part.parse::<u32>().ok());
-            (numbers.next(), numbers.next())
-        };
-        let effect = song_stats_text(difficulty, bpm);
-        if let Some(item) = items
-            .iter_mut()
-            .find(|item| item.item_id == download.item_id)
-        {
-            item.owned = true;
-            item.site_downloaded = download.site_downloaded;
-            item.download_url = Some(download.url);
-            item.difficulty = difficulty.or(item.difficulty);
-            item.bpm = bpm.or(item.bpm);
-            item.effect = effect;
-            continue;
+    // Keep small updates free of indexing overhead. Larger batches resolve all
+    // targets before consuming their borrowed IDs, then move the payloads once.
+    if downloads.len() <= 16 || items.len().saturating_add(downloads.len()) <= 32 {
+        for download in downloads {
+            let index = items
+                .iter()
+                .position(|item| item.item_id == download.item_id);
+            apply_download(items, download, index);
         }
-        items.push(SrpgShopItem {
-            item_id: download.item_id,
-            kind: SrpgShopItemKind::Song,
-            name: download.name,
-            description: "Purchased song unlock".to_string(),
-            effect,
-            cost: None,
-            difficulty,
-            bpm,
-            type_id: 1,
-            owned: true,
-            site_downloaded: download.site_downloaded,
-            downloaded: false,
-            download_url: Some(download.url),
-        });
+        return;
     }
+    let mut targets = Vec::with_capacity(downloads.len());
+    let mut next_new = items.len();
+    {
+        let capacity = if items.is_empty() {
+            downloads.len()
+        } else {
+            items.len()
+        };
+        let mut by_id = HashMap::<&str, usize>::with_capacity(capacity);
+        for (index, item) in items.iter().enumerate() {
+            by_id.entry(item.item_id.as_str()).or_insert(index);
+        }
+        for download in &downloads {
+            let target = by_id.entry(download.item_id.as_str()).or_insert_with(|| {
+                let index = next_new;
+                next_new += 1;
+                index
+            });
+            targets.push(*target);
+        }
+    }
+    items.reserve_exact(next_new - items.len());
+    for (download, index) in downloads.into_iter().zip(targets) {
+        let existing = (index < items.len()).then_some(index);
+        apply_download(items, download, existing);
+    }
+}
+
+fn apply_download(items: &mut Vec<SrpgShopItem>, download: ParsedDownload, index: Option<usize>) {
+    let (difficulty, bpm) = {
+        let mut numbers = download
+            .details
+            .split_whitespace()
+            .filter_map(|part| part.parse::<u32>().ok());
+        (numbers.next(), numbers.next())
+    };
+    let effect = song_stats_text(difficulty, bpm);
+    if let Some(index) = index {
+        let item = &mut items[index];
+        item.owned = true;
+        item.site_downloaded = download.site_downloaded;
+        item.download_url = Some(download.url);
+        item.difficulty = difficulty.or(item.difficulty);
+        item.bpm = bpm.or(item.bpm);
+        item.effect = effect;
+        return;
+    }
+    items.push(SrpgShopItem {
+        item_id: download.item_id,
+        kind: SrpgShopItemKind::Song,
+        name: download.name,
+        description: "Purchased song unlock".to_string(),
+        effect,
+        cost: None,
+        difficulty,
+        bpm,
+        type_id: 1,
+        owned: true,
+        site_downloaded: download.site_downloaded,
+        downloaded: false,
+        download_url: Some(download.url),
+    });
 }
 
 fn song_stats_text(difficulty: Option<u32>, bpm: Option<u32>) -> String {
@@ -1364,4 +1459,12 @@ mod tests {
         assert_eq!(result.errors, ["Not enough Gold"]);
         assert!(result.download.is_none());
     }
+}
+
+#[cfg(test)]
+mod preparation_perf {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/srpg_shop.rs"
+    ));
 }
