@@ -111,12 +111,11 @@ pub struct ItgSkinCacheKey {
 /// Process-wide lookup index for caller-owned noteskin runtimes.
 ///
 /// The mutex makes lookup thread-safe, but entries are weak so the index never
-/// extends a runtime beyond its screen/song owner. Player Options populates it
-/// during entry; gameplay populates only its resolved skins before the song.
+/// extends a runtime beyond its owner. The bounded Player Options service
+/// populates it on a worker; gameplay loads its resolved skins before the song.
 /// The touched-key count is bounded by installed skins times encountered play
-/// styles and is cleared at the Player Options exit boundary or after source
-/// changes. A miss loads synchronously and therefore must stay on transition
-/// paths, never a live gameplay frame. There is no eviction or destruction
+/// styles and is cleared after source changes. A miss loads synchronously and
+/// therefore must stay on workers or transition paths, never a live frame. There is no eviction or destruction
 /// work here: the last owning `Arc` drops the runtime in that owner's context.
 /// Existing loader warnings provide miss-failure instrumentation; a hit is one
 /// bounded hash lookup plus `Weak::upgrade`.

@@ -58,6 +58,18 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     }
 }
 
+/// Resolve a native source for a worker without decoding or uploading it.
+pub fn texture_decode_job(key: &str, model: bool) -> TextureDecodeJob {
+    let path = texture_key_source_path(key, key, |path| crate::paths().resolve_asset_path(path));
+    let hints = parse_texture_hints(key);
+    TextureDecodeJob {
+        key: key.to_owned(),
+        path,
+        sampler: texture_key_sampler(&hints, model),
+        hints,
+    }
+}
+
 /// Decode and upload resolved native textures before entering a screen.
 /// Shared source keys are already deduplicated by the caller; resident textures
 /// are reused. The ordinary bounded decode workers stream directly to the GPU.
@@ -76,15 +88,7 @@ pub fn preload_texture_keys(
         {
             continue;
         }
-        let path =
-            texture_key_source_path(&key, &key, |path| crate::paths().resolve_asset_path(path));
-        let hints = parse_texture_hints(&key);
-        jobs.push(TextureDecodeJob {
-            key: key.to_string(),
-            path,
-            sampler: texture_key_sampler(&hints, model),
-            hints,
-        });
+        jobs.push(texture_decode_job(&key, model));
     }
     if !jobs.is_empty() {
         assets.load_textures(backend, jobs)?;
@@ -97,7 +101,6 @@ pub fn initial_texture_jobs(
     dirs: &AssetPaths,
     needs_repeat: fn(&str) -> bool,
 ) -> Vec<TextureDecodeJob> {
-    let packs = crate::noteskin::pack_catalog();
     let textures = texture_assets
         .into_iter()
         .map(|asset| {
@@ -108,19 +111,6 @@ pub fn initial_texture_jobs(
         })
         .chain(noteskin_png_texture_entries(&dirs.noteskin_roots, |path| {
             canonical_texture_key_with_asset_roots(path, &dirs.texture_roots)
-        }))
-        .chain(packs.iter().flat_map(|pack| {
-            pack.manifest
-                .skins
-                .iter()
-                .map(|skin| {
-                    let path = pack.root.join(&skin.preview);
-                    (
-                        canonical_texture_key_with_asset_roots(&path, &dirs.texture_roots),
-                        path,
-                    )
-                })
-                .collect::<Vec<_>>()
         }))
         .chain(INITIAL_GRAPHIC_TEXTURES.iter().flat_map(|spec| {
             discover_graphic_textures_in_roots(
@@ -465,8 +455,8 @@ fn noteskin_png_texture_entries(
     for root in roots {
         let mut dirs = vec![root.clone()];
         while let Some(dir) = dirs.pop() {
-            // Pack atlases are queued separately. Variants and installer staging
-            // stay on disk until Player Options or gameplay transition warmup.
+            // Pack assets and installer staging stay on disk. Player Options
+            // and gameplay load the selected native components on demand.
             if dir.join("pack.json").is_file()
                 || dir
                     .file_name()

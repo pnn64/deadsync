@@ -1270,7 +1270,8 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
         let center = rc.fc.preview_x[player];
         match rc.row.id {
             RowId::NoteSkin => {
-                if let Some(skin) = state.noteskin.cache.get(options.noteskin.as_str()) {
+                request_preview(state, options.noteskin.as_str(), 0);
+                if let Some(skin) = ready_preview(state, options.noteskin.as_str(), 0) {
                     draw_noteskin_preview(actors, rc, skin, center);
                 }
             }
@@ -1279,7 +1280,8 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
                     .receptor_noteskin
                     .as_ref()
                     .unwrap_or(&options.noteskin);
-                if let Some(skin) = state.noteskin.cache.get(name.as_str()) {
+                request_preview(state, name.as_str(), 1);
+                if let Some(skin) = ready_preview(state, name.as_str(), 1) {
                     draw_receptor_preview(actors, rc, skin, center);
                 }
             }
@@ -1314,6 +1316,27 @@ fn draw_noteskin_family_preview(actors: &mut Vec<Actor>, rc: &RowCtx, primary_pl
                         Z_ROW_PREVIEW,
                     );
                 }
+            }
+        }
+        if !state.search.is_open()
+            && state
+                .pane()
+                .row_map
+                .display_order()
+                .get(state.pane().selected_row[player])
+                == Some(&rc.row.id)
+        {
+            let focused = if rc.row.id == RowId::NoteSkin {
+                Some((options.noteskin.as_str(), 0))
+            } else {
+                state
+                    .pack_menu
+                    .preview(player, rc.row.id)
+                    .map(|thumb| (thumb.name.as_ref(), thumb.part))
+            };
+            if let Some((name, part)) = focused {
+                request_preview_priority(state, name, part, NoteskinPreviewPriority::Focused);
+                state.pack_menu.request_neighbors(state, player, rc.row);
             }
         }
         let width = if matches!(rc.row.id, RowId::NoteSkin | RowId::ReceptorSkin) {
@@ -1487,7 +1510,8 @@ pub(super) fn draw_live_preview(
     alpha: f32,
     z: i16,
 ) -> bool {
-    let Some(skin) = state.noteskin.cache.get(name) else {
+    request_preview(state, name, part);
+    let Some(skin) = ready_preview(state, name, part) else {
         return false;
     };
     let first = actors.len();

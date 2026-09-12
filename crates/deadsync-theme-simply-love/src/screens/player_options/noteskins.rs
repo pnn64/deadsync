@@ -1,5 +1,4 @@
 use super::*;
-use deadsync_noteskin::Style;
 use deadsync_profile as profile_data;
 
 pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, bool)> {
@@ -19,8 +18,26 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
             } else {
                 &skin.note_layers
             };
-            for slot in layers.iter().flat_map(|layers| layers.iter()) {
-                add(slot);
+            // Rows show quarter notes; a component icon shows only the left
+            // column. Use the same layer/fallback selection as draw_noteskin_note.
+            let cols = if part == 10 {
+                1
+            } else if matches!(skin.column_xs.len(), 5 | 10) {
+                5
+            } else {
+                4
+            };
+            for col in 0..cols {
+                let index = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
+                let slots = layers
+                    .get(index)
+                    .or_else(|| skin.note_layers.get(index))
+                    .map(AsRef::as_ref)
+                    .or_else(|| skin.notes.get(index).map(std::slice::from_ref))
+                    .unwrap_or_default();
+                for slot in slots {
+                    add(slot);
+                }
             }
         }
         1 => {
@@ -86,20 +103,6 @@ pub(super) fn preview_textures(skin: &Noteskin, part: usize) -> Vec<(Arc<str>, b
     textures
 }
 
-pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
-    let style = Style {
-        num_cols: cols_per_player,
-        num_players: 1,
-    };
-    match noteskin::load_itg_skin_cached(&style, skin) {
-        Ok(skin) => Some(skin),
-        Err(error) => {
-            log::warn!("Cannot load noteskin preview '{skin}': {error}");
-            None
-        }
-    }
-}
-
 pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
@@ -123,100 +126,44 @@ pub(super) fn build_tap_explosion_noteskin_choices(noteskin_names: &[String]) ->
     choices
 }
 
-pub(super) fn build_noteskin_cache(
-    cols_per_player: usize,
-    initial_names: &[String],
-) -> HashMap<String, Arc<Noteskin>> {
-    let mut cache = HashMap::with_capacity(initial_names.len());
-    if initial_names.is_empty() {
-        return cache;
-    }
-    // Parsing stays on bounded workers while the transition owns the load.
-    let workers = std::thread::available_parallelism()
-        .map_or(1, usize::from)
-        .min(8);
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = initial_names
-            .chunks(initial_names.len().div_ceil(workers))
-            .map(|names| {
-                scope.spawn(move || {
-                    names
-                        .iter()
-                        .filter_map(|name| {
-                            load_noteskin_cached(name, cols_per_player)
-                                .map(|skin| (name.clone(), skin))
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
-        for handle in handles {
-            cache.extend(handle.join().expect("noteskin loader worker panicked"));
-        }
-    });
-    cache
-}
-
-pub(super) fn preview_noteskin_names(
-    mut names: Vec<String>,
-    player_options: &[profile_data::PlayerOptionsData],
-) -> Vec<String> {
-    if !names
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case(profile_data::NoteSkin::DEFAULT_NAME))
+pub(super) fn ready_preview<'a>(
+    state: &'a State,
+    name: &str,
+    part: usize,
+) -> Option<&'a Arc<Noteskin>> {
+    if state
+        .noteskin
+        .ready_parts
+        .get(name)
+        .is_some_and(|parts| parts & (1 << part) == 0)
     {
-        names.push(profile_data::NoteSkin::DEFAULT_NAME.to_string());
+        return None;
     }
-    for options in player_options {
-        push_noteskin_name_once(&mut names, &options.noteskin);
-        for skin in [
-            &options.arrow_noteskin,
-            &options.lift_noteskin,
-            &options.hold_active_noteskin,
-            &options.hold_inactive_noteskin,
-            &options.roll_active_noteskin,
-            &options.roll_inactive_noteskin,
-            &options.hold_explosion_noteskin,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            push_noteskin_name_once(&mut names, skin);
-        }
-        if let Some(skin) = options.mine_noteskin.as_ref() {
-            push_noteskin_name_once(&mut names, skin);
-        }
-        if let Some(skin) = options.receptor_noteskin.as_ref() {
-            push_noteskin_name_once(&mut names, skin);
-        }
-        if let Some(skin) = options.tap_explosion_noteskin.as_ref() {
-            push_noteskin_name_once(&mut names, skin);
-        }
-    }
-    names
+    state.noteskin.cache.get(name)
 }
 
-pub(super) fn init_noteskin_state(
-    cols_per_player: usize,
-    noteskin_names: &[String],
-    player_options: &[profile_data::PlayerOptionsData; PLAYER_SLOTS],
-    prewarm_catalog: bool,
-) -> NoteskinState {
-    let cache = if prewarm_catalog {
-        let names = preview_noteskin_names(noteskin_names.to_vec(), player_options);
-        build_noteskin_cache(cols_per_player, &names)
+pub(super) fn request_preview(state: &State, name: &str, part: usize) {
+    request_preview_priority(state, name, part, NoteskinPreviewPriority::Visible);
+}
+
+pub(super) fn request_preview_priority(
+    state: &State,
+    name: &str,
+    part: usize,
+    priority: NoteskinPreviewPriority,
+) {
+    let mut requests = state.noteskin.requests.borrow_mut();
+    if let Some(request) = requests
+        .iter_mut()
+        .find(|request| request.name.as_ref() == name)
+    {
+        request.parts |= 1 << part;
+        request.priority = request.priority.min(priority);
     } else {
-        HashMap::new()
-    };
-    NoteskinState { cache }
-}
-
-pub(super) fn push_noteskin_name_once(names: &mut Vec<String>, skin: &profile_data::NoteSkin) {
-    if skin.is_none_choice() {
-        return;
-    }
-    let skin_name = skin.as_str().to_string();
-    if !names.iter().any(|name| name == &skin_name) {
-        names.push(skin_name);
+        requests.push(NoteskinPreviewRequest {
+            name: Arc::from(name),
+            parts: 1 << part,
+            priority,
+        });
     }
 }

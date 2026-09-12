@@ -182,12 +182,32 @@ impl PackMenu {
         self.parts[player][slot_for_row(row)?].as_ref()
     }
 
-    pub fn preview_choices(&self) -> impl Iterator<Item = (&str, usize)> {
-        self.choices.iter().enumerate().flat_map(|(part, choices)| {
-            choices.iter().flatten().filter_map(move |choice| {
-                (!choice.is_none_choice()).then_some((choice.as_str(), part))
-            })
-        })
+    /// Warm the immediately adjacent choices after all visible previews.
+    pub fn request_neighbors(&self, state: &State, player: usize, row: &Row) {
+        let Some(part) = slot_for_row(row.id).filter(|&part| part != 9) else {
+            return;
+        };
+        let choices = &self.choices[part];
+        if choices.len() < 2 {
+            return;
+        }
+        let current = row.selected_choice_index[player].min(choices.len() - 1);
+        for index in [
+            (current + 1) % choices.len(),
+            (current + choices.len() - 1) % choices.len(),
+        ] {
+            let choice = choices[index]
+                .as_ref()
+                .unwrap_or(&state.player_options[player].noteskin);
+            if !choice.is_none_choice() {
+                request_preview_priority(
+                    state,
+                    choice.as_str(),
+                    part,
+                    NoteskinPreviewPriority::Nearby,
+                );
+            }
+        }
     }
 
     pub fn choice_thumb(

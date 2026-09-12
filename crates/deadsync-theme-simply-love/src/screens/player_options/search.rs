@@ -548,6 +548,14 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
             ([GRAY[0], GRAY[1], GRAY[2]], [GRAY[0], GRAY[1], GRAY[2]])
         };
         if let Some(thumb) = &m.thumb {
+            if focused {
+                request_preview_priority(
+                    state,
+                    &thumb.name,
+                    thumb.part,
+                    NoteskinPreviewPriority::Focused,
+                );
+            }
             super::render::draw_thumb(
                 actors,
                 state,

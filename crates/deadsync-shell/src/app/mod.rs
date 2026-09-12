@@ -11,6 +11,7 @@ mod graphics;
 mod input_routing;
 mod live_case;
 mod lobby_views;
+mod option_previews;
 mod screen_nav;
 mod screenshot;
 mod select_music_views;
@@ -819,31 +820,6 @@ struct PostSelectStageKey {
     video_banners: bool,
 }
 
-fn prewarm_option_previews(
-    state: &mut player_options::State,
-    assets: &mut AssetManager,
-    backend: &mut Option<renderer_backend::Backend>,
-) {
-    let started = Instant::now();
-    let textures = player_options::prewarm_noteskin_previews(state);
-    let runtime_time = started.elapsed();
-    let texture_started = Instant::now();
-    if let Some(backend) = backend
-        && let Err(error) =
-            deadsync_assets::textures::preload_texture_keys(assets, backend, textures)
-    {
-        warn!("Failed to preload Player Options textures: {error}");
-    }
-    let texture_time = texture_started.elapsed();
-    player_options::prepare_presentation(state, assets);
-    info!(
-        "Player Options previews ready in {:.3}s (runtimes {:.3}s, textures {:.3}s)",
-        started.elapsed().as_secs_f64(),
-        runtime_time.as_secs_f64(),
-        texture_time.as_secs_f64(),
-    );
-}
-
 fn sync_gameplay_banners(
     media: &mut DynamicMedia,
     assets: &mut AssetManager,
@@ -1584,6 +1560,7 @@ pub struct App {
         ),
     >,
     asset_manager: AssetManager,
+    option_previews: option_previews::Service,
     dynamic_media: DynamicMedia,
     /// Lazily started after the opt-in feature first receives data. The single
     /// bounded worker decodes off the frame thread and fixed texture keys bound
@@ -4123,6 +4100,15 @@ impl App {
             );
             upload_us = elapsed_us_since(upload_started);
         }
+        if self.state.screens.current_screen == CurrentScreen::PlayerOptions
+            && let Some(state) = self.state.screens.player_options_state.as_mut()
+            && let Some(backend) = self.backend.as_mut()
+        {
+            self.option_previews
+                .update(state, &mut self.asset_manager, backend);
+        } else {
+            self.option_previews.idle();
+        }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
         let uses_gameplay_present = matches!(
@@ -4506,6 +4492,7 @@ impl App {
             smx_scoped_bg_generation: 0,
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
+            option_previews: option_previews::Service::default(),
             dynamic_media: DynamicMedia::new(),
             arrowcloud_result_dialog: None,
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
@@ -8483,7 +8470,7 @@ impl App {
         if target == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
         {
-            prewarm_option_previews(state, &mut self.asset_manager, &mut self.backend);
+            player_options::prepare_presentation(state, &self.asset_manager);
         }
     }
 
@@ -8595,11 +8582,7 @@ impl App {
                             "Failed to load practice payload for '{}': {}",
                             song_arc.title, e
                         );
-                        prewarm_option_previews(
-                            &mut po_state,
-                            &mut self.asset_manager,
-                            &mut self.backend,
-                        );
+                        player_options::prepare_presentation(&mut po_state, &self.asset_manager);
                         self.commit_screen_change(CurrentScreen::PlayerOptions);
                         self.state.screens.player_options_state = Some(po_state);
                         return commands;
@@ -8996,10 +8979,9 @@ impl App {
                                     "Failed to load gameplay payload for '{}': {}",
                                     song_arc.title, e
                                 );
-                                prewarm_option_previews(
+                                player_options::prepare_presentation(
                                     &mut po_state,
-                                    &mut self.asset_manager,
-                                    &mut self.backend,
+                                    &self.asset_manager,
                                 );
                                 self.commit_screen_change(CurrentScreen::PlayerOptions);
                                 self.state.screens.player_options_state = Some(po_state);
@@ -9681,7 +9663,6 @@ impl App {
         }
         if prev == CurrentScreen::PlayerOptions && target != CurrentScreen::PlayerOptions {
             self.state.screens.player_options_state = None;
-            deadsync_assets::noteskin::clear_itg_runtime_caches();
         }
         commands
     }

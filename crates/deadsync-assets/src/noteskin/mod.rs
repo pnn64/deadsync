@@ -29,8 +29,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock};
 
-// Session catalog snapshots, capped at 16 skins / 256 MiB of previews. Startup
-// discovers metadata; a Downloads worker may replace it after loading previews.
+// Session catalog snapshots, capped at 16 installed skins. Startup discovers
+// metadata; a Downloads worker may replace it after validating an installation.
 // RwLock publishes immutable Arc snapshots to menu/load workers. No gameplay
 // scanning or eviction; old metadata is freed when its last menu/load owner drops.
 // Stable lookup takes one read lock and clones one Arc. Refresh logs skin count.
@@ -48,10 +48,11 @@ pub fn pack_catalog() -> Arc<[InstalledPack]> {
     )
 }
 
-/// Reload installed packs and queue their previews from a Downloads worker.
+/// Reload installed pack metadata from a Downloads worker. Player Options loads
+/// native noteskin components on demand; installed atlas pixels stay on disk.
 ///
 /// # Errors
-/// Returns an error if asset paths are unavailable or a preview cannot be decoded.
+/// Returns an error if asset paths are unavailable or the installation is invalid.
 pub fn refresh_packs(installed: &Path) -> Result<(), String> {
     let paths = crate::PATHS
         .get()
@@ -59,28 +60,7 @@ pub fn refresh_packs(installed: &Path) -> Result<(), String> {
     let packs = pack::discover(&paths.noteskin_pack_roots);
     let installed = installed.canonicalize().map_err(|e| e.to_string())?;
     if !packs.iter().any(|pack| pack.root == installed) {
-        return Err("Installed pack could not be activated: check duplicate skin IDs and the 16-skin preview limit".into());
-    }
-    let mut previews = Vec::new();
-    for pack in &packs {
-        for skin in &pack.manifest.skins {
-            let path = pack.root.join(&skin.preview);
-            let mut reader = image::ImageReader::open(&path).map_err(|e| e.to_string())?;
-            let mut limits = image::Limits::default();
-            limits.max_image_width = Some(2048);
-            limits.max_image_height = Some(2048);
-            limits.max_alloc = Some(32 * 1024 * 1024);
-            reader.limits(limits);
-            let image = reader.decode().map_err(|e| e.to_string())?.into_rgba8();
-            previews.push((crate::textures::canonical_texture_key(&path), image));
-        }
-    }
-    for (key, image) in previews {
-        deadlib_assets::register_generated_texture(
-            &key,
-            image,
-            deadlib_render_core::SamplerDesc::default(),
-        );
+        return Err("Installed pack could not be activated: check duplicate skin IDs and the 16-skin catalog limit".into());
     }
     log::info!("Loaded {} installed noteskin packs", packs.len());
     *PACKS

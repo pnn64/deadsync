@@ -12,11 +12,10 @@ pub(super) mod tests {
         RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, append_pending_effects,
         compute_row_window, count_visible_rows, effective_scroll_speed_with_alt,
         handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
-        init_cycle_row_from_binding, init_noteskin_state, init_numeric_row_from_binding,
-        is_row_visible, judgment_tilt_options_visible, multi_select_mask, on_start_press,
-        player_option_column_x, preview_noteskin_names, queue_audio, queue_sfx,
-        repeat_held_arcade_start, row_f_pos_for_index, sync_profile_scroll_speed,
-        sync_speed_mod_type_row, update,
+        init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
+        judgment_tilt_options_visible, multi_select_mask, on_start_press, player_option_column_x,
+        queue_audio, queue_sfx, repeat_held_arcade_start, row_f_pos_for_index,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::SimplyLoveEffect as ThemeEffect;
     use crate::i18n::{LookupKey, lookup_key};
@@ -98,37 +97,84 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn preview_cache_plan_keeps_every_catalog_noteskin() {
-        let names = preview_noteskin_names(
-            vec!["cel".to_owned(), "metal".to_owned()],
-            &[PlayerOptionsData::default(), PlayerOptionsData::default()],
-        );
-
-        assert_eq!(names, ["cel", "metal", "default"]);
+    fn preview_demand_tracks_drawn_parts_and_reuses_shared_names() {
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        let mut requests = Vec::new();
+        super::super::noteskins::request_preview(&state, "cel", 0);
+        super::super::noteskins::request_preview(&state, "cel", 1);
+        super::super::noteskins::request_preview(&state, "metal", 8);
+        super::super::take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].parts, 3);
+        let name = requests[0].name.clone();
+        super::super::noteskins::request_preview(&state, "cel", 10);
+        super::super::take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(requests.len(), 1, "offscreen names leave the demand set");
+        assert_eq!(requests[0].parts, 1 << 10);
+        assert!(Arc::ptr_eq(&name, &requests[0].name));
+        super::super::take_noteskin_preview_requests(&mut state, &mut requests);
+        assert!(requests.is_empty());
     }
 
     #[test]
-    fn preview_cache_plan_keeps_saved_arrow_and_lift_styles() {
-        let options = PlayerOptionsData {
-            noteskin: deadsync_profile::NoteSkin::new("default"),
-            arrow_noteskin: Some(deadsync_profile::NoteSkin::new("cyber")),
-            lift_noteskin: Some(deadsync_profile::NoteSkin::new("cel")),
-            ..Default::default()
+    fn focused_preview_precedes_visible_and_nearby_choices() {
+        use super::super::{
+            NoteskinPreviewPriority as Priority, noteskins, take_noteskin_preview_requests,
         };
-        let names = preview_noteskin_names(vec!["default".into()], &[options]);
-        assert_eq!(names, ["default", "cyber", "cel"]);
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        noteskins::request_preview_priority(&state, "neighbor", 0, Priority::Nearby);
+        noteskins::request_preview(&state, "visible", 0);
+        noteskins::request_preview(&state, "selected", 0);
+        noteskins::request_preview_priority(&state, "selected", 0, Priority::Focused);
+        let mut requests = Vec::new();
+        take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request.name.as_ref())
+                .collect::<Vec<_>>(),
+            ["selected", "visible", "neighbor"]
+        );
+        noteskins::request_preview(&state, "selected", 0);
+        noteskins::request_preview_priority(&state, "neighbor", 0, Priority::Focused);
+        take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(
+            requests[0].name.as_ref(),
+            "neighbor",
+            "navigation changes priority without retaining stale focus"
+        );
+        assert_eq!(requests[1].priority, Priority::Visible);
     }
 
     #[test]
-    fn gameplay_payload_skips_catalog_preview_warmup() {
-        let state = init_noteskin_state(
-            4,
-            &["cel".to_owned(), "metal".to_owned()],
-            &[PlayerOptionsData::default(), PlayerOptionsData::default()],
-            false,
+    fn player_options_entry_does_not_build_catalog_runtimes() {
+        ensure_i18n();
+        let (state, _) = setup_state();
+        assert!(
+            state.noteskin.cache.is_empty(),
+            "runtime loads belong to the visible-preview worker"
         );
+    }
 
-        assert!(state.cache.is_empty());
+    #[test]
+    fn newly_visible_component_waits_for_its_own_native_textures() {
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        let skin = deadsync_assets::noteskin::load_itg_skin_cached(
+            &deadsync_noteskin::Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            "default",
+        )
+        .unwrap();
+        super::super::set_noteskin_preview(&mut state, "default", 1, Some(skin.clone()));
+        assert!(super::super::noteskins::ready_preview(&state, "default", 0).is_some());
+        assert!(super::super::noteskins::ready_preview(&state, "default", 10).is_none());
+        super::super::set_noteskin_preview(&mut state, "default", (1 << 10) | 1, Some(skin));
+        assert!(super::super::noteskins::ready_preview(&state, "default", 10).is_some());
     }
 
     fn test_row(
@@ -1912,16 +1958,28 @@ pub(super) mod tests {
             panic!("component picker is open")
         };
         assert_eq!(open.matches[0].label.as_ref(), "sample metal / red");
+        let mut cold = Vec::new();
+        assert!(!super::super::render::draw_live_preview(
+            &mut cold,
+            &state,
+            "sample-metal?arrows=red",
+            0,
+            [100.0; 2],
+            18.0,
+            1.0,
+            102
+        ));
         assert!(
-            super::get_actors(&state, &asset_manager)
-                .iter()
-                .any(|actor| matches!(
-                    actor,
-                    deadlib_present::actors::Actor::Sprite {
-                        uv_rect: Some(_),
-                        ..
-                    }
-                ))
+            cold.is_empty(),
+            "a cold preview must not show an untransformed atlas arrow"
+        );
+        super::get_actors(&state, &asset_manager);
+        let mut requests = Vec::new();
+        super::super::take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(requests[0].name.as_ref(), "sample-metal?arrows=red");
+        assert_eq!(
+            requests[0].priority,
+            super::super::NoteskinPreviewPriority::Focused
         );
         search_key(
             &mut state,
@@ -1940,6 +1998,15 @@ pub(super) mod tests {
         );
         assert_eq!(state.player_options[P1].noteskin.as_str(), "sample-cel");
         assert_eq!(state.player_options[P2], p2);
+        super::get_actors(&state, &asset_manager);
+        super::super::take_noteskin_preview_requests(&mut state, &mut requests);
+        assert_eq!(requests[0].name.as_ref(), "sample-metal?arrows=red");
+        assert!(
+            requests
+                .iter()
+                .any(|request| request.priority == super::super::NoteskinPreviewPriority::Nearby),
+            "cycling warms adjacent native choices"
+        );
 
         // Changing the main skin leaves explicit component choices fixed.
         choice::apply_pane(&mut state, OptionsPane::Main);
@@ -2067,12 +2134,21 @@ pub(super) mod tests {
                                     assert!(!vertices.is_empty());
                                     assert_eq!(texture.as_ref(), slot.texture_key());
                                 }
-                                Actor::Sprite { source, .. } => {
+                                Actor::Sprite {
+                                    source, rot_z_deg, ..
+                                } => {
                                     assert!(
                                         slot.model.is_none(),
                                         "{name}: {part:?} must keep its mesh"
                                     );
                                     assert_eq!(source.texture_key(), Some(slot.texture_key()));
+                                    let draw =
+                                        slot.model_draw_at(state.preview_time, state.preview_beat);
+                                    assert_eq!(
+                                        *rot_z_deg,
+                                        draw.rot[2] - slot.def.rotation_deg as f32,
+                                        "{name}: preview preserves native column rotation"
+                                    );
                                 }
                                 _ => panic!("unexpected note preview actor"),
                             }
@@ -2245,75 +2321,6 @@ pub(super) mod tests {
             pack_options::sync_player(&mut state, P1);
             state.active = [true, false];
             state.current_pane = OptionsPane::Display;
-            let started = std::time::Instant::now();
-            let textures = super::super::prewarm_noteskin_previews(&mut state);
-            let runtime_time = started.elapsed();
-            eprintln!(
-                "{family}: runtime preload {:.2}s",
-                runtime_time.as_secs_f64()
-            );
-            let texture_count = textures.len();
-            deadsync_assets::textures::preload_texture_keys(
-                &mut assets,
-                &mut backend,
-                textures.clone(),
-            )
-            .unwrap();
-            eprintln!(
-                "{family}: texture preload {:.2}s",
-                (started.elapsed() - runtime_time).as_secs_f64()
-            );
-            assert!(
-                textures
-                    .iter()
-                    .all(|(key, _)| assets.has_uploaded_texture_key(key))
-            );
-            assert!(
-                textures
-                    .iter()
-                    .all(|(key, _)| !assets.has_pending_texture_upload(key))
-            );
-            let choices: Vec<_> = state
-                .pack_menu
-                .preview_choices()
-                .map(|(name, part)| (name.to_string(), part))
-                .collect();
-            assert!(choices.len() > 400, "exercise the whole Workshop catalog");
-            // Every choice must draw on its first frame, including choices outside
-            // the old 40-entry cache and both ends of a long picker list.
-            for (name, part) in choices.iter().rev().chain(&choices) {
-                assert!(
-                    state.noteskin.cache.contains_key(name),
-                    "{name}: runtime missing"
-                );
-                let mut actors = Vec::new();
-                assert!(render::draw_live_preview(
-                    &mut actors,
-                    &state,
-                    name,
-                    *part,
-                    [100.0; 2],
-                    32.0,
-                    1.0,
-                    102
-                ));
-                for actor in actors {
-                    let key = match &actor {
-                        Actor::Sprite { source, .. } => source.texture_key().unwrap(),
-                        Actor::TexturedMesh { texture, .. } => texture,
-                        _ => panic!("unexpected preview actor"),
-                    };
-                    assert!(
-                        assets.has_uploaded_texture_key(key),
-                        "{name}: texture missing on first frame: {key}"
-                    );
-                }
-            }
-            eprintln!(
-                "{family}: {} choices / {texture_count} textures ready in {:.2}s",
-                choices.len(),
-                started.elapsed().as_secs_f64()
-            );
             let mut names: Vec<_> = parts
                 .iter()
                 .map(|&(part, _)| (family.to_string(), part))
@@ -2330,6 +2337,27 @@ pub(super) mod tests {
             ]);
             if family == "metal-workshop" {
                 names.push((format!("{family}?mines=d-a-n-k"), 8));
+            }
+            // Exercise native animation on a small page, as the live service does.
+            // Do not eagerly retain the entire Workshop in this regression test.
+            state.noteskin.cache.clear();
+            for (name, part) in &names {
+                let skin = deadsync_assets::noteskin::load_itg_skin_cached(
+                    &deadsync_noteskin::Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    name,
+                )
+                .unwrap();
+                let textures = super::super::noteskin_preview_textures(&skin, 1 << part);
+                deadsync_assets::textures::preload_texture_keys(
+                    &mut assets,
+                    &mut backend,
+                    textures,
+                )
+                .unwrap();
+                state.noteskin.cache.insert(name.clone(), skin);
             }
             let wanted: Vec<_> = names
                 .iter()
@@ -2434,20 +2462,6 @@ pub(super) mod tests {
                     assert!(animated, "{name} part {part} must advance its animation");
                 }
             }
-            // Re-entry drops screen runtimes and path caches, but reuses the
-            // compiled files and resident native textures, just like the app.
-            state.noteskin.cache.clear();
-            deadsync_assets::noteskin::clear_itg_runtime_caches();
-            let started = std::time::Instant::now();
-            let textures = super::super::prewarm_noteskin_previews(&mut state);
-            assert!(
-                textures
-                    .iter()
-                    .all(|(key, _)| assets.has_uploaded_texture_key(key))
-            );
-            deadsync_assets::textures::preload_texture_keys(&mut assets, &mut backend, textures)
-                .unwrap();
-            eprintln!("{family}: re-entry {:.2}s", started.elapsed().as_secs_f64());
         }
     }
 

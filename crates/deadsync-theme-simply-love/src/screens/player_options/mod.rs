@@ -215,7 +215,7 @@ pub fn init(
     heart_rate_devices: HeartRateDevicesView,
     init_view: PlayerOptionsInitView,
 ) -> State {
-    init_with_noteskin_prewarm(
+    init_state(
         song,
         chart_steps_index,
         preferred_difficulty_index,
@@ -226,7 +226,6 @@ pub fn init(
         smx_gif_catalog,
         heart_rate_devices,
         init_view,
-        true,
     )
 }
 
@@ -243,7 +242,7 @@ pub fn init_for_gameplay(
     heart_rate_devices: HeartRateDevicesView,
     init_view: PlayerOptionsInitView,
 ) -> State {
-    init_with_noteskin_prewarm(
+    init_state(
         song,
         chart_steps_index,
         preferred_difficulty_index,
@@ -254,60 +253,91 @@ pub fn init_for_gameplay(
         smx_gif_catalog,
         heart_rate_devices,
         init_view,
-        false,
     )
 }
 
-/// Loading-boundary work: retain every selectable runtime and return the unique
-/// native textures the shell must upload before showing Player Options.
-pub fn prewarm_noteskin_previews(state: &mut State) -> Vec<(Arc<str>, bool)> {
-    let names = state.panes[OptionsPane::Main.index()]
-        .row_map
-        .get(RowId::NoteSkin)
-        .map(|row| row.choices.iter().map(ToString::to_string).collect())
-        .unwrap_or_default();
-    let mut choices: HashMap<String, u16> = preview_noteskin_names(names, &state.player_options)
-        .into_iter()
-        .map(|name| (name, 0x5ff)) // All preview parts; slot 9 is only a size setting.
-        .collect();
-    for (name, part) in state.pack_menu.preview_choices() {
-        *choices.entry(name.to_string()).or_default() |= 1 << part;
+/// Prepare the focused selection before other visible icons and nearby choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum NoteskinPreviewPriority {
+    Focused,
+    Visible,
+    Nearby,
+}
+
+/// A preview's runtime identity and required component bits.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NoteskinPreviewRequest {
+    pub name: Arc<str>,
+    pub parts: u16,
+    pub priority: NoteskinPreviewPriority,
+}
+
+/// Reuse the shell's scratch buffer for the demand recorded by the last frame.
+pub fn take_noteskin_preview_requests(
+    state: &mut State,
+    requests: &mut Vec<NoteskinPreviewRequest>,
+) -> usize {
+    requests.clear();
+    let drawn = state.noteskin.requests.get_mut();
+    drawn.retain(|request| request.parts != 0);
+    requests.extend(drawn.iter().cloned());
+    requests.sort_by_key(|request| request.priority);
+    for request in drawn {
+        request.parts = 0;
+        request.priority = NoteskinPreviewPriority::Nearby;
     }
-    let missing: Vec<_> = choices
-        .keys()
-        .filter(|name| !state.noteskin.cache.contains_key(*name))
-        .cloned()
-        .collect();
+    state.cols_per_player
+}
+
+/// Publish only runtimes whose currently requested native textures are resident.
+pub fn set_noteskin_preview(
+    state: &mut State,
+    name: &str,
+    parts: u16,
+    skin: Option<Arc<Noteskin>>,
+) {
+    if let Some(skin) = skin {
+        if let Some(ready) = state.noteskin.ready_parts.get_mut(name) {
+            *ready = parts;
+        } else {
+            state.noteskin.ready_parts.insert(name.to_owned(), parts);
+        }
+        if !state.noteskin.cache.contains_key(name) {
+            state.noteskin.cache.insert(name.to_owned(), skin);
+        }
+    } else {
+        state.noteskin.cache.remove(name);
+        state.noteskin.ready_parts.remove(name);
+    }
+}
+
+pub fn retain_noteskin_previews(state: &mut State, requests: &[NoteskinPreviewRequest]) {
+    state
+        .noteskin
+        .ready_parts
+        .retain(|name, _| requests.iter().any(|request| request.name.as_ref() == name));
     state
         .noteskin
         .cache
-        .extend(build_noteskin_cache(state.cols_per_player, &missing));
+        .retain(|name, _| requests.iter().any(|request| request.name.as_ref() == name));
+}
 
-    let mut textures: HashMap<Arc<str>, bool> = HashMap::new();
-    for (name, parts) in choices {
-        let Some(skin) = state.noteskin.cache.get(&name) else {
-            continue;
-        };
-        for part in 0..11 {
-            if parts & (1 << part) == 0 {
-                continue;
-            }
+/// Collect the source textures needed by the requested animated components.
+pub fn noteskin_preview_textures(skin: &Noteskin, parts: u16) -> Vec<(Arc<str>, bool)> {
+    let mut textures = HashMap::<Arc<str>, bool>::new();
+    for part in 0..11 {
+        if parts & (1 << part) != 0 {
             for (key, model) in preview_textures(skin, part) {
                 *textures.entry(key).or_default() |= model;
             }
         }
     }
-    log::info!(
-        "Player Options warmed {} noteskin runtimes / {} native textures",
-        state.noteskin.cache.len(),
-        textures.len()
-    );
     let mut textures: Vec<_> = textures.into_iter().collect();
     textures.sort_unstable_by(|a, b| a.0.cmp(&b.0));
     textures
 }
 
-fn init_with_noteskin_prewarm(
+fn init_state(
     song: Arc<SongData>,
     chart_steps_index: [usize; PLAYER_SLOTS],
     preferred_difficulty_index: [usize; PLAYER_SLOTS],
@@ -318,7 +348,6 @@ fn init_with_noteskin_prewarm(
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
     init_view: PlayerOptionsInitView,
-    prewarm_noteskin_catalog: bool,
 ) -> State {
     let PlayerOptionsInitView {
         policy,
@@ -495,15 +524,7 @@ fn init_with_noteskin_prewarm(
         &mut p2_masks,
     );
 
-    // Only real Player Options entry runs the catalog warmup while the previous
-    // screen shows "Entering Options...". Direct song starts leave this empty;
-    // Gameplay loads and prewarms only the active players' resolved settings.
-    let noteskin = init_noteskin_state(
-        cols_per_player,
-        &noteskin_names,
-        &player_options,
-        prewarm_noteskin_catalog,
-    );
+    let noteskin = NoteskinState::default();
     let main_row_tweens = init_row_tweens(
         &main_row_map,
         [0; PLAYER_SLOTS],

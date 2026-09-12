@@ -7,7 +7,7 @@ use deadsync_noteskin::{
 };
 use std::collections::HashSet;
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{
     LazyLock, Mutex,
@@ -187,10 +187,28 @@ fn install(target: &Path) -> Result<(), UpdaterError> {
     let pack = stage.0.join("pack");
     fs::create_dir(&pack).map_err(io_error)?;
     publish(Phase::Preparing { done: 0, total: 0 });
-    extract(&archive, &pack, || CANCEL.load(Ordering::Acquire))?;
+    let prepare_started = Instant::now();
+    extract_with_progress(&archive, &pack, |done, total| {
+        if last.elapsed() >= Duration::from_millis(100) || done == total {
+            publish(Phase::Preparing {
+                done: done * 500 / total.max(1),
+                total: 1000,
+            });
+            last = Instant::now();
+        }
+        !CANCEL.load(Ordering::Acquire)
+    })?;
+    log::info!(
+        "Workshop extraction completed in {:.3}s",
+        prepare_started.elapsed().as_secs_f64()
+    );
+    let previews_started = Instant::now();
     workshop::compile(&pack, |done, total| {
-        if last.elapsed() >= Duration::from_millis(100) {
-            publish(Phase::Preparing { done, total });
+        if last.elapsed() >= Duration::from_millis(100) || done == total {
+            publish(Phase::Preparing {
+                done: 500 + done * 500 / total.max(1),
+                total: 1000,
+            });
             last = Instant::now();
         }
         !CANCEL.load(Ordering::Acquire)
@@ -201,6 +219,10 @@ fn install(target: &Path) -> Result<(), UpdaterError> {
         }
         e => UpdaterError::Io(e.to_string()),
     })?;
+    log::info!(
+        "Workshop preview compilation completed in {:.3}s",
+        previews_started.elapsed().as_secs_f64()
+    );
     begin_publish()?;
     commit_pack(&pack, &target)?;
     Ok(())
@@ -370,13 +392,22 @@ fn archive_path(name: &str) -> Result<Option<PathBuf>, UpdaterError> {
     }
 }
 
+#[cfg(test)]
 fn extract(
     archive: &Path,
     target: &Path,
     cancelled: impl Fn() -> bool,
 ) -> Result<(), UpdaterError> {
-    let mut zip = zip::ZipArchive::new(File::open(archive).map_err(io_error)?)
-        .map_err(|e| UpdaterError::Io(e.to_string()))?;
+    extract_with_progress(archive, target, |_, _| !cancelled())
+}
+
+fn extract_with_progress(
+    archive: &Path,
+    target: &Path,
+    mut progress: impl FnMut(usize, usize) -> bool,
+) -> Result<(), UpdaterError> {
+    let reader = BufReader::with_capacity(128 * 1024, File::open(archive).map_err(io_error)?);
+    let mut zip = zip::ZipArchive::new(reader).map_err(|e| UpdaterError::Io(e.to_string()))?;
     if zip.len() > MAX_ENTRIES {
         return Err(UpdaterError::Io(
             "workshop archive has too many entries".into(),
@@ -384,8 +415,9 @@ fn extract(
     }
     let mut total = 0_u64;
     let mut names = HashSet::with_capacity(zip.len());
+    let mut directories = HashSet::new();
     for index in 0..zip.len() {
-        if cancelled() {
+        if !progress(index, zip.len()) {
             return Err(UpdaterError::Cancelled);
         }
         let mut entry = zip
@@ -413,18 +445,26 @@ fn extract(
             ));
         }
         let path = target.join(relative);
-        fs::create_dir_all(path.parent().expect("entry is beneath staging root"))
-            .map_err(io_error)?;
-        let mut file = File::options()
+        let parent = path.parent().expect("entry is beneath staging root");
+        if !directories.contains(parent) {
+            fs::create_dir_all(parent).map_err(io_error)?;
+            directories.insert(parent.to_owned());
+        }
+        let file = File::options()
             .write(true)
             .create_new(true)
             .open(path)
             .map_err(io_error)?;
+        let mut file = BufWriter::with_capacity(128 * 1024, file);
         let size = entry.size();
         let copied = io::copy(&mut (&mut entry).take(size + 1), &mut file).map_err(io_error)?;
         if copied != size {
             return Err(UpdaterError::Io("workshop entry size mismatch".into()));
         }
+        file.flush().map_err(io_error)?;
+    }
+    if !progress(zip.len(), zip.len()) {
+        return Err(UpdaterError::Cancelled);
     }
     Ok(())
 }

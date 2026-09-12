@@ -72,7 +72,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.1164"
+version = "0.5.1165"
 
 [[bin]]
 name = "generate_pseudo"
@@ -138,6 +138,14 @@ debug-assertions = false
 lto = true
 debug = false
 panic = "abort"
+
+# Native noteskin sheets are decoded while browsing Player Options. Keep the
+# PNG codec fast in development builds without disabling app debug checks.
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
 
 [profile.local]
 inherits = "release"

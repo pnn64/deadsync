@@ -206,20 +206,14 @@ pub struct PlayerOptionMasks {
 
 /// Screen-lifetime noteskin preview cache owned by the app/game thread.
 ///
-/// This is single-thread-only and is warmed with the ordinary noteskin catalog
-/// before the first Player Options frame, while "Entering Options..." remains
-/// visible. Its capacity is bounded by the catalog plus profile-only fallback
-/// names. Normal option changes only clone cached `Arc`s; no disk access,
-/// parsing, pruning, or eviction occurs on a live screen frame. Entries are
-/// destroyed when the screen state is dropped; the shared loader keeps only
-/// weak references, so it does not extend that lifetime. The underlying loader
-/// reports failed loads through its existing warnings; cache hits need no
-/// per-frame instrumentation because their worst-case work is a bounded hash
-/// lookup. Transition warmup also retains every component choice and uploads all
-/// of its native textures before this screen is presented. There is no on-demand
-/// loading or eviction while browsing; GPU textures live in the session asset store.
+/// Render-ready previews for the visible rows. Rendering records demand without
+/// doing I/O; the shell prepares missing runtimes/textures on a bounded worker
+/// and retains a bounded session cache across screen visits.
+#[derive(Default)]
 pub(super) struct NoteskinState {
     pub(super) cache: HashMap<String, Arc<Noteskin>>,
+    pub(super) ready_parts: HashMap<String, u16>,
+    pub(super) requests: RefCell<Vec<NoteskinPreviewRequest>>,
 }
 
 /// Per-player navigation key hold/repeat timing.
