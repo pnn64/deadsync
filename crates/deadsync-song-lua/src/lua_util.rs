@@ -13324,67 +13324,68 @@ fn actor_multi_vertex_line_strip(
     }
     let mut out = Vec::with_capacity(vertices.len().saturating_sub(1) * 6);
     let half_width = 0.5 * line_width;
-    let mut offsets = Vec::with_capacity(vertices.len());
-    for index in 0..vertices.len() {
-        let offset = if index == 0 {
-            actor_multi_vertex_line_normal(vertices[0], vertices[1], half_width)
-        } else if index + 1 == vertices.len() {
-            actor_multi_vertex_line_normal(vertices[index - 1], vertices[index], half_width)
+    let (mut len, mut normal) = actor_multi_vertex_line_segment(vertices[0], vertices[1]);
+    let mut offset = actor_multi_vertex_line_endpoint(len, normal, half_width);
+    // Only adjacent segment normals and join offsets are needed. Calculate
+    // each segment once and carry the shared endpoint into the next quad.
+    for (index, pair) in vertices.windows(2).enumerate() {
+        let next = vertices
+            .get(index + 2)
+            .map(|&next| actor_multi_vertex_line_segment(pair[1], next));
+        let next_offset = if let Some((_, next_normal)) = next {
+            actor_multi_vertex_line_join_offset(normal, next_normal, half_width)
         } else {
-            actor_multi_vertex_line_join_offset(
-                vertices[index - 1],
-                vertices[index],
-                vertices[index + 1],
-                half_width,
-            )
+            actor_multi_vertex_line_endpoint(len, normal, half_width)
         };
-        offsets.push(offset);
-    }
-    for index in 0..vertices.len().saturating_sub(1) {
-        let a = vertices[index];
-        let b = vertices[index + 1];
-        if actor_multi_vertex_segment_len(a, b) <= f32::EPSILON {
+        let current_offset = offset;
+        let skip_segment = len <= f32::EPSILON;
+        offset = next_offset;
+        if let Some((next_len, next_normal)) = next {
+            len = next_len;
+            normal = next_normal;
+        }
+        // Carry the join forward even when a degenerate segment is skipped.
+        if skip_segment {
             continue;
         }
-        let a0 = actor_multi_vertex_offset_point(a, offsets[index], 1.0);
-        let a1 = actor_multi_vertex_offset_point(a, offsets[index], -1.0);
-        let b0 = actor_multi_vertex_offset_point(b, offsets[index + 1], 1.0);
-        let b1 = actor_multi_vertex_offset_point(b, offsets[index + 1], -1.0);
+        let a0 = actor_multi_vertex_offset_point(pair[0], current_offset, 1.0);
+        let a1 = actor_multi_vertex_offset_point(pair[0], current_offset, -1.0);
+        let b0 = actor_multi_vertex_offset_point(pair[1], next_offset, 1.0);
+        let b1 = actor_multi_vertex_offset_point(pair[1], next_offset, -1.0);
         push_actor_multi_vertex_triangle(&mut out, a0, b0, b1);
         push_actor_multi_vertex_triangle(&mut out, a0, b1, a1);
     }
     out
 }
 
-fn actor_multi_vertex_segment_len(
+fn actor_multi_vertex_line_segment(
     a: SongLuaActorMultiVertexPoint,
     b: SongLuaActorMultiVertexPoint,
-) -> f32 {
-    (b.pos[0] - a.pos[0]).hypot(b.pos[1] - a.pos[1])
-}
-
-fn actor_multi_vertex_line_normal(
-    a: SongLuaActorMultiVertexPoint,
-    b: SongLuaActorMultiVertexPoint,
-    half_width: f32,
-) -> [f32; 2] {
+) -> (f32, [f32; 2]) {
     let dx = b.pos[0] - a.pos[0];
     let dy = b.pos[1] - a.pos[1];
     let len = dx.hypot(dy);
+    let normal = if len <= f32::EPSILON {
+        [0.0, 0.0]
+    } else {
+        [-dy / len, dx / len]
+    };
+    (len, normal)
+}
+
+fn actor_multi_vertex_line_endpoint(len: f32, normal: [f32; 2], half_width: f32) -> [f32; 2] {
     if len <= f32::EPSILON {
-        return [0.0, 0.0];
+        [0.0, 0.0]
+    } else {
+        [normal[0] * half_width, normal[1] * half_width]
     }
-    [-dy / len * half_width, dx / len * half_width]
 }
 
 fn actor_multi_vertex_line_join_offset(
-    prev: SongLuaActorMultiVertexPoint,
-    current: SongLuaActorMultiVertexPoint,
-    next: SongLuaActorMultiVertexPoint,
+    prev_normal: [f32; 2],
+    next_normal: [f32; 2],
     half_width: f32,
 ) -> [f32; 2] {
-    let prev_normal = actor_multi_vertex_line_normal(prev, current, 1.0);
-    let next_normal = actor_multi_vertex_line_normal(current, next, 1.0);
     let miter = [
         prev_normal[0] + next_normal[0],
         prev_normal[1] + next_normal[1],
@@ -14577,3 +14578,7 @@ mod aux_lookup_perf;
 #[cfg(test)]
 #[path = "../tests/perf/actor_restore.rs"]
 mod actor_restore_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/line_segments.rs"]
+mod line_segments_perf;

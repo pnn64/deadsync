@@ -2189,7 +2189,7 @@ struct DeduplicateIndex {
     booleans: u8,
     integers: std::collections::HashSet<i64>,
     numbers: std::collections::HashSet<u64>,
-    integer_numbers: std::collections::HashSet<u64>,
+    integer_numbers: Option<std::collections::HashSet<u64>>,
     strings: std::collections::HashSet<mlua::LuaString>,
     tables: std::collections::HashSet<usize>,
 }
@@ -2210,7 +2210,10 @@ impl DeduplicateIndex {
             booleans: 0,
             integers: std::collections::HashSet::with_capacity(integers),
             numbers: std::collections::HashSet::with_capacity(numbers),
-            integer_numbers: std::collections::HashSet::with_capacity(integers),
+            // Integer-only input needs no rounded projection. If the prefix
+            // already contains floats, reserve it once alongside exact keys.
+            integer_numbers: (numbers != 0)
+                .then(|| std::collections::HashSet::with_capacity(integers)),
             strings: std::collections::HashSet::with_capacity(strings),
             tables: std::collections::HashSet::with_capacity(tables),
         };
@@ -2236,12 +2239,22 @@ impl DeduplicateIndex {
                 if self.numbers.contains(&bits) || !self.integers.insert(*value) {
                     return false;
                 }
-                self.integer_numbers.insert(bits);
+                if let Some(integer_numbers) = &mut self.integer_numbers {
+                    integer_numbers.insert(bits);
+                }
                 true
             }
             Value::Number(value) if !value.is_nan() => {
                 let bits = number_bits(*value);
-                !self.integer_numbers.contains(&bits) && self.numbers.insert(bits)
+                // Include every accepted integer when a float first arrives,
+                // including distinct integers that round to the same float.
+                let integer_numbers = self.integer_numbers.get_or_insert_with(|| {
+                    self.integers
+                        .iter()
+                        .map(|value| number_bits(*value as f64))
+                        .collect()
+                });
+                !integer_numbers.contains(&bits) && self.numbers.insert(bits)
             }
             Value::String(value) if value.to_str().is_ok() => self.strings.insert(value.clone()),
             Value::Table(value) => self.tables.insert(value.to_pointer() as usize),
@@ -2794,9 +2807,7 @@ fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>>
     let Some(function) = table.get::<Option<Function>>(name)? else {
         return Ok(None);
     };
-    let mut args = MultiValue::new();
-    args.push_back(Value::Table(table.clone()));
-    Ok(Some(lua_text_value(function.call::<Value>(args)?)?))
+    Ok(Some(lua_text_value(function.call::<Value>(table)?)?))
 }
 
 fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
@@ -2837,9 +2848,7 @@ fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
 }
 
 fn call_table_function(table: &Table, function: &Function) -> mlua::Result<Value> {
-    let mut args = MultiValue::new();
-    args.push_back(Value::Table(table.clone()));
-    function.call(args)
+    function.call(table)
 }
 
 fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
@@ -3123,3 +3132,11 @@ mod string_transfer_perf;
 #[cfg(test)]
 #[path = "../tests/perf/dedup_storage.rs"]
 mod dedup_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/lazy_numbers.rs"]
+mod lazy_numbers_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/table_calls.rs"]
+mod table_calls_perf;
