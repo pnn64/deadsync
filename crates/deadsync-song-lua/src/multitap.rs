@@ -185,13 +185,28 @@ pub fn push_multitap_explosion_eases(
     let samples = beats.into_iter().map(|beat| {
         let visible = descs
             .iter()
-            .any(|desc| desc.lane == lane && calc_multitap_phase(desc, beat).visible);
+            .any(|desc| desc.lane == lane && multitap_is_visible(desc, beat));
         (
             beat,
             multitap_explosion_state(baseline, context, lane, visible),
         )
     });
     push_overlay_sample_eases_iter(out, overlay_index, baseline, samples);
+}
+
+fn multitap_is_visible(desc: &MultitapDesc, beat: f32) -> bool {
+    if beat > desc.taps[desc.taps.len() - 1] {
+        return false;
+    }
+    if desc.taps[0] - beat < MULTITAP_PREVISIBLE_BEATS {
+        return true;
+    }
+    if beat <= desc.taps[0] {
+        return false;
+    }
+    // Unordered floating-point comparisons can reach the bounce loop even
+    // outside the usual visibility interval. Keep public callers' NaN behavior.
+    calc_multitap_phase(desc, beat).visible
 }
 
 pub fn push_multitap_actor_eases(
@@ -257,35 +272,49 @@ pub fn push_multitap_actor_eases(
     }
     let first_ease = out.len();
     push_overlay_sample_eases(out, frame_index, frame_baseline, &frame_samples);
+    split_multitap_y_eases(out, first_ease, desc.taps[0]);
+    push_overlay_sample_eases(out, arrow_index, arrow_baseline, &arrow_samples);
+    push_overlay_sample_eases(out, deco_index, deco_baseline, &deco_samples);
+    for ((_, baseline), (child_index, samples)) in deco_children.iter().zip(deco_child_samples) {
+        push_overlay_sample_eases(out, child_index, *baseline, &samples);
+    }
+}
+
+fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, first_tap: f32) {
     // Y follows a parabola; squash and the other components are piecewise
     // linear. Split only Y out of each bounce half and keep its exact curve.
-    let mut parabolas = Vec::new();
-    for ease in &mut out[first_ease..] {
-        if ease.limit <= f32::EPSILON || ease.start <= desc.taps[0] {
+    // Visit only the original frame eases, appending Y curves in the same order.
+    let end = out.len();
+    for index in first_ease..end {
+        let ease = &mut out[index];
+        if ease.limit <= f32::EPSILON || ease.start <= first_tap {
             continue;
         }
         let (Some(from), Some(to)) = (ease.from.y, ease.to.y) else {
             continue;
         };
-        let mut y = ease.clone();
-        y.from = SongLuaOverlayStateDelta {
-            y: Some(from),
-            ..Default::default()
+        let y = SongLuaOverlayEase {
+            overlay_index: ease.overlay_index,
+            unit: ease.unit,
+            start: ease.start,
+            limit: ease.limit,
+            span_mode: ease.span_mode,
+            from: SongLuaOverlayStateDelta {
+                y: Some(from),
+                ..Default::default()
+            },
+            to: SongLuaOverlayStateDelta {
+                y: Some(to),
+                ..Default::default()
+            },
+            easing: Some(if to > from { "outQuad" } else { "inQuad" }.into()),
+            sustain: ease.sustain,
+            opt1: ease.opt1,
+            opt2: ease.opt2,
         };
-        y.to = SongLuaOverlayStateDelta {
-            y: Some(to),
-            ..Default::default()
-        };
-        y.easing = Some(if to > from { "outQuad" } else { "inQuad" }.into());
         ease.from.y = None;
         ease.to.y = None;
-        parabolas.push(y);
-    }
-    out.extend(parabolas);
-    push_overlay_sample_eases(out, arrow_index, arrow_baseline, &arrow_samples);
-    push_overlay_sample_eases(out, deco_index, deco_baseline, &deco_samples);
-    for ((_, baseline), (child_index, samples)) in deco_children.iter().zip(deco_child_samples) {
-        push_overlay_sample_eases(out, child_index, *baseline, &samples);
+        out.push(y);
     }
 }
 
@@ -879,14 +908,28 @@ fn multitap_deco_color_pair(
 }
 
 fn multitap_qtzn_color_table(noteskin: &str) -> &'static [MultitapColorPair; 8] {
-    let noteskin = noteskin.to_ascii_lowercase();
-    if noteskin.contains("color") {
+    // Short names avoid a lowercase allocation. For unusually long names,
+    // retain str's substring search instead of rescanning every byte per key.
+    if noteskin.len() > 16 {
+        let lowercase = noteskin.to_ascii_lowercase();
+        return multitap_color_table(|needle| lowercase.contains(needle));
+    }
+    multitap_color_table(|needle| {
+        noteskin
+            .as_bytes()
+            .windows(needle.len())
+            .any(|candidate| candidate.eq_ignore_ascii_case(needle.as_bytes()))
+    })
+}
+
+fn multitap_color_table(contains: impl Fn(&str) -> bool) -> &'static [MultitapColorPair; 8] {
+    if contains("color") {
         return &MULTITAP_QTZN_COLOR;
     }
-    if noteskin.contains("rainbow") || noteskin.contains("solo") {
+    if contains("rainbow") || contains("solo") {
         return &MULTITAP_QTZN_RAINBOW;
     }
-    if noteskin.contains("horse") || noteskin.contains("toonprints") {
+    if contains("horse") || contains("toonprints") {
         return &MULTITAP_QTZN_HORSE;
     }
     for key in [
@@ -903,14 +946,14 @@ fn multitap_qtzn_color_table(noteskin: &str) -> &'static [MultitapColorPair; 8] 
         "vel",
         "vintage",
     ] {
-        if noteskin.contains(key) {
+        if contains(key) {
             return &MULTITAP_QTZN_SHADOW;
         }
     }
     for key in [
         "ascii", "default", "easy", "exact", "lambda", "note", "retro", "trax",
     ] {
-        if noteskin.contains(key) {
+        if contains(key) {
             return &MULTITAP_QTZN_NOTE;
         }
     }
@@ -1073,3 +1116,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/multitap_work.rs"]
 mod multitap_work_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/multitap_compile.rs"]
+mod multitap_compile_perf;
