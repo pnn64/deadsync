@@ -1057,11 +1057,10 @@ pub fn write_pack_ini_if_needed(
     let Some(content) = itl_unlock_pack_ini_content(pack_name) else {
         return Ok(());
     };
-    let pack_ini = destination_pack.join("Pack.ini");
-    if pack_ini.exists() {
+    if has_child_path_ci(destination_pack, "Pack.ini") {
         return Ok(());
     }
-    fs::write(pack_ini, content)
+    fs::write(destination_pack.join("Pack.ini"), content)
 }
 
 pub fn read_unlock_cache_file(path: &Path) -> Result<UnlockCache, ReadUnlockCacheError> {
@@ -1471,6 +1470,38 @@ mod tests {
         assert!(content.contains("DisplayTitle=ITL Online 2026 Unlocks"));
         assert!(content.contains("Series=ITL Online"));
         assert!(content.contains("Year=2026"));
+    }
+
+    #[test]
+    fn write_pack_ini_preserves_existing_filename_case() {
+        let root = temp_root("preserve-pack-ini-case");
+        let pack_name = "ITL Online 2026 Unlocks";
+        for (index, name) in ["Pack.ini", "pack.ini", "PACK.INI", "pAcK.InI"]
+            .iter()
+            .enumerate()
+        {
+            let pack = root.join(index.to_string());
+            fs::create_dir_all(&pack).expect("create pack directory");
+            let metadata = b"[Group]\nVersion=1\nDisplayTitle=Custom\nSyncOffset=NULL\n";
+            fs::write(pack.join(name), metadata).expect("write original metadata");
+
+            write_pack_ini_if_needed(&pack, pack_name).expect("preserve pack metadata");
+
+            assert_eq!(fs::read(pack.join(name)).unwrap(), metadata);
+            let files = fs::read_dir(&pack)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name())
+                .collect::<Vec<_>>();
+            assert_eq!(files, [std::ffi::OsString::from(name)], "{name}");
+        }
+        let empty = root.join("empty");
+        fs::create_dir(&empty).expect("create empty pack");
+        write_pack_ini_if_needed(&empty, pack_name).expect("create missing metadata");
+        assert_eq!(
+            fs::read_to_string(empty.join("Pack.ini")).unwrap(),
+            itl_unlock_pack_ini_content(pack_name).unwrap()
+        );
+        fs::remove_dir_all(root).expect("remove test root");
     }
 
     #[test]

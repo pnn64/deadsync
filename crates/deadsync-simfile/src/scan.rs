@@ -2162,6 +2162,48 @@ mod tests {
     }
 
     #[test]
+    fn scan_song_roots_loads_pack_ini_case_insensitively() {
+        let root = test_dir("pack-ini-case");
+        for (parent, prefix) in [(&root, "Flat"), (&root.join("Folder Series"), "Nested")] {
+            for (index, name) in ["Pack.ini", "pack.ini", "PACK.INI", "pAcK.InI"]
+                .iter()
+                .enumerate()
+            {
+                let pack = parent.join(format!("{prefix} Pack {index}"));
+                let song = pack.join("Song");
+                fs::create_dir_all(&song).unwrap();
+                fs::write(song.join("song.sm"), b"#TITLE:Song;").unwrap();
+                fs::write(
+                    pack.join(name),
+                    b"[Group]\nVersion=1\nDisplayTitle=Display\nSortTitle=Sort\nTranslitTitle=Translit\nSeries=Series\nYear=2026\nSyncOffset=ITG\n",
+                )
+                .unwrap();
+            }
+        }
+        let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
+        assert!(failures.is_empty(), "{failures:?}");
+        assert_eq!(packs.len(), 8);
+        for pack in packs {
+            assert!(pack.has_pack_ini, "{}", pack.dir.display());
+            assert_eq!(pack.display_title, "Display");
+            assert_eq!(pack.sort_title, "Sort");
+            assert_eq!(pack.translit_title, "Translit");
+            assert_eq!(pack.series, "Series");
+            assert_eq!(pack.year, 2026);
+            assert_eq!(pack.sync_pref, SyncPref::Itg);
+            assert_eq!(
+                pack.folder_series,
+                if pack.group_name.starts_with("Nested") {
+                    "Folder Series"
+                } else {
+                    ""
+                }
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn collect_reload_pack_dirs_preserves_series_relative_path() {
         let root = test_dir("reload-nested-pack-dirs");
         let base = root.join("base");
