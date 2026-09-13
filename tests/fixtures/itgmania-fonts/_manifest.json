@@ -4,7 +4,7 @@
   "harness_version": "0.1.0",
   "corpus": "all-complete-bmp-plus-default-and-missing",
   "itgmania": {
-    "git_revision": "49fddb40adbdb43e9c03e6856b6c2afeeccf451a",
+    "git_revision": "54e62e5ffedf406a1713ec55a1da3dcecf50817c",
     "git_dirty": "false"
   },
   "fonts": [
@@ -26,7 +26,7 @@
     {
       "font": "Mega/_mega font.ini",
       "fixture": "Mega/_mega font.json",
-      "glyphs": 99
+      "glyphs": 100
     },
     {
       "font": "Mega/_mega monospace numbers.ini",

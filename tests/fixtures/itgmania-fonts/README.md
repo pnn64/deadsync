@@ -22,6 +22,10 @@ cargo test --test font_itgmania_parity
 fixture changes rather than updating expected output automatically in the
 DeadSync test.
 
+The Mega alphanumeric fixture includes zmod's name-entry page: accept uses
+the checkmark and delete uses the cross, overriding the generic back button.
+Restoring that page adds the previously missing accept glyph to the corpus.
+
 The current batch reports one native diagnostic: probing `Common default.ini`
 as a top-level font reaches ITGmania's normal `Common default` fallback and its
 recursion guard. ITGmania still returns the font's geometry, which is included.

@@ -13,7 +13,7 @@
     0.0,
     0.0
   ],
-  "line_width": 2851,
+  "line_width": 2872,
   "line_height": 40,
   "pages": [
     {
@@ -55,6 +55,27 @@
       "height": 36,
       "line_spacing": 72,
       "vertical_shift": -54.0,
+      "draw_extra_pixels_left": 0,
+      "draw_extra_pixels_right": 0
+    },
+    {
+      "texture": "Mega/_mega font [nameentry] 2x1 (res 80x80).png",
+      "texture_hints": "",
+      "source_size": {
+        "width": 80,
+        "height": 80
+      },
+      "image_size": {
+        "width": 280,
+        "height": 280
+      },
+      "frames": {
+        "width": 2,
+        "height": 1
+      },
+      "height": 40,
+      "line_spacing": 80,
+      "vertical_shift": -60.0,
       "draw_extra_pixels_left": 0,
       "draw_extra_pixels_right": 0
     },
@@ -1758,19 +1779,37 @@
     {
       "codepoint": 57360,
       "uses_default_glyph": false,
-      "texture": "Mega/_game chars 36px 4x1 (doubleres).png",
-      "frame": 2,
+      "texture": "Mega/_mega font [nameentry] 2x1 (res 80x80).png",
+      "frame": 1,
       "pen_x": 2617,
-      "advance": 61,
-      "width": 63.0,
-      "height": 72.0,
-      "horizontal_shift": -2.0,
-      "vertical_shift": -54.0,
+      "advance": 41,
+      "width": 40.0,
+      "height": 80.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -60.0,
       "sample_rect": {
-        "left": 296.0,
+        "left": 140.0,
         "top": 0.0,
-        "right": 422.0,
-        "bottom": 144.0
+        "right": 280.0,
+        "bottom": 280.0
+      }
+    },
+    {
+      "codepoint": 57361,
+      "uses_default_glyph": false,
+      "texture": "Mega/_mega font [nameentry] 2x1 (res 80x80).png",
+      "frame": 0,
+      "pen_x": 2658,
+      "advance": 41,
+      "width": 40.0,
+      "height": 80.0,
+      "horizontal_shift": 0.0,
+      "vertical_shift": -60.0,
+      "sample_rect": {
+        "left": 0.0,
+        "top": 0.0,
+        "right": 140.0,
+        "bottom": 280.0
       }
     },
     {
@@ -1778,7 +1817,7 @@
       "uses_default_glyph": false,
       "texture": "Mega/_game chars 36px 4x1 (doubleres).png",
       "frame": 1,
-      "pen_x": 2678,
+      "pen_x": 2699,
       "advance": 61,
       "width": 63.0,
       "height": 72.0,
@@ -1796,7 +1835,7 @@
       "uses_default_glyph": false,
       "texture": "Mega/_game chars 36px 4x1 (doubleres).png",
       "frame": 3,
-      "pen_x": 2739,
+      "pen_x": 2760,
       "advance": 61,
       "width": 63.0,
       "height": 72.0,
@@ -1814,7 +1853,7 @@
       "uses_default_glyph": false,
       "texture": "Common default 2x1.png",
       "frame": 1,
-      "pen_x": 2800,
+      "pen_x": 2821,
       "advance": 17,
       "width": 19.0,
       "height": 34.0,
@@ -1832,7 +1871,7 @@
       "uses_default_glyph": true,
       "texture": "Common default 2x1.png",
       "frame": 0,
-      "pen_x": 2817,
+      "pen_x": 2838,
       "advance": 17,
       "width": 19.0,
       "height": 34.0,
@@ -1850,7 +1889,7 @@
       "uses_default_glyph": true,
       "texture": "Common default 2x1.png",
       "frame": 0,
-      "pen_x": 2834,
+      "pen_x": 2855,
       "advance": 17,
       "width": 19.0,
       "height": 34.0,

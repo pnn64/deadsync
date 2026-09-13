@@ -994,6 +994,38 @@ mod tests {
     }
 
     #[test]
+    fn mega_initials_use_nameentry_glyphs() {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_roots = [project_root.join("assets")];
+        let spec = *FONT_ASSETS
+            .iter()
+            .find(|spec| spec.name == "mega_alpha")
+            .expect("Mega font spec");
+        let mut parsed = deadlib_assets::parse_font_asset_specs([spec], &asset_roots, |path| {
+            project_root.join(path)
+        })
+        .expect("parse bundled Mega font");
+        let parsed = parsed.pop().expect("parsed Mega font");
+        let page = "fonts/Mega/_mega font [nameentry] 2x1 (res 80x80).png";
+
+        // Both actions must override the imported button/default glyphs. The
+        // authored page has accept on the left and delete on the right.
+        for (marker, frame) in [("&OK;", 0), ("&BACK;", 1)] {
+            let text = deadlib_present::font::replace_markers(marker);
+            let ch = text.chars().next().expect("action marker glyph");
+            let glyph = parsed.font.glyph_map.get(&ch).expect("local action glyph");
+            assert_eq!(glyph.texture_key.as_ref(), page);
+            assert_eq!((glyph.uv_offset[0] * 2.0).round() as u32, frame);
+        }
+        assert!(
+            parsed
+                .required_textures
+                .iter()
+                .any(|path| path.ends_with(page))
+        );
+    }
+
+    #[test]
     fn nested_combo_fonts_inherit_common_default_glyph() {
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_roots = [project_root.join("assets")];

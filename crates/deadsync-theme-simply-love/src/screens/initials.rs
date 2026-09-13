@@ -9,6 +9,7 @@ use crate::views::{PostSelectStageView, PostSongPlayerView, PostSongRuntimeView}
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
+use deadsync_config::theme::MachineFont;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
@@ -45,15 +46,14 @@ const WHEEL_Y_IN_FRAME: f32 = 58.0;
 const PLAYERNAME_X: f32 = -80.0;
 const CURSOR_Y_IN_FRAME: f32 = 58.0;
 const HIGHSCORE_LIST_ZOOM: f32 = 0.95; // SL: HighScoreList.lua list:zoom(0.95)
-const HIGHSCORE_Y_GLOBAL: f32 = 68.0;
+const HIGHSCORE_Y_GLOBAL: f32 = 60.0;
 const HIGHSCORE_ROW_HEIGHT: f32 = 22.0 * HIGHSCORE_LIST_ZOOM;
 const HIGHSCORE_ROW_COUNT: usize = 5;
 const HIGHSCORE_TEXT_ZOOM: f32 = HIGHSCORE_LIST_ZOOM;
 const HIGHSCORE_HIGHLIGHT_PERIOD: f32 = 4.0 / 3.0;
 
-// Cursor.png (Simply Love): 496x92, zoom(0.5)
+// zmod displays the cursor at 248x46 logical units, independent of image resolution.
 const NAME_ENTRY_CURSOR_TEX: &str = "name_entry_cursor.png";
-const NAME_ENTRY_CURSOR_ZOOM: f32 = 0.5;
 
 // NameEntry wheel masking (Simply Love: 3 MaskSource quads leave two “windows”).
 const MASK_OUTER_X: f32 = 272.0;
@@ -525,7 +525,7 @@ fn build_stage_highscores(
         };
 
         rows.push(HighScoreRow {
-            rank: Arc::from(format!("{rank}.")),
+            rank: Arc::from(format!("{rank}. ")),
             name,
             score,
             date,
@@ -992,13 +992,18 @@ fn build_banner_and_title(state: &State) -> Vec<Actor> {
 }
 
 fn build_wheel(
-    _side: profile_data::PlayerSide,
     player_frame_x: f32,
     p: &PlayerEntry,
     alpha: f32,
-    headline_font: &'static str,
+    machine_font: MachineFont,
 ) -> Actor {
     let mut children = Vec::with_capacity(WHEEL_NUM_ITEMS);
+    let headline_font = machine_font_key(machine_font, FontRole::Headline);
+    // zmod's AlphabetCharacterMT.lua compensates for Mega's smaller authored glyphs.
+    let zoom = match machine_font {
+        MachineFont::Wendy => 0.5,
+        MachineFont::Mega => 0.812,
+    };
 
     // Approximate SL's 3-mask "window" by centering a single clip rect on the cursor.
     // This keeps the clip symmetric relative to Cursor.png's arrows on both sides.
@@ -1031,7 +1036,7 @@ fn build_wheel(
             settext(content):
             align(0.5, 0.5):
             xy(x, 0.0):
-            zoom(0.5):
+            zoom(zoom):
             z(12):
             diffuse(r, g, b, a):
             horizalign(center)
@@ -1098,14 +1103,17 @@ fn build_highscore_list(
 
     let hl = highlight_row_color(side, state.active_color_index, state.elapsed);
     let mut children = Vec::with_capacity(HIGHSCORE_ROW_COUNT * 4);
-    let rank_x = -120.0 * HIGHSCORE_LIST_ZOOM;
-    let name_x = -110.0 * HIGHSCORE_LIST_ZOOM;
-    let score_x = -24.0 * HIGHSCORE_LIST_ZOOM;
-    let date_x = 50.0 * HIGHSCORE_LIST_ZOOM;
-    let date_maxw = 165.0 * HIGHSCORE_LIST_ZOOM;
+    let rank_x = -130.0 * HIGHSCORE_LIST_ZOOM;
+    let name_x = -120.0 * HIGHSCORE_LIST_ZOOM;
+    let score_x = 16.0 * HIGHSCORE_LIST_ZOOM;
+    let date_x = 72.0 * HIGHSCORE_LIST_ZOOM;
+    let rank_maxw = 55.0 * HIGHSCORE_LIST_ZOOM;
+    let name_maxw = 130.0 * HIGHSCORE_LIST_ZOOM;
 
     for (i, row) in list.rows.iter().enumerate() {
-        let y = i as f32 * HIGHSCORE_ROW_HEIGHT;
+        // HighScoreList.lua increments the captured row_index before InitCommand
+        // runs, so zmod positions its first row at row_height, not zero.
+        let y = (i + 1) as f32 * HIGHSCORE_ROW_HEIGHT;
         let col = if row.is_highlight {
             hl
         } else {
@@ -1115,9 +1123,10 @@ fn build_highscore_list(
         children.push(act!(text:
             font("miso"):
             settext(Arc::clone(&row.rank)):
-            align(1.0, 0.0):
+            align(1.0, 0.5):
             xy(rank_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
+            maxwidth(rank_maxw):
             z(11):
             diffuse(col[0], col[1], col[2], col[3]):
             horizalign(right)
@@ -1125,9 +1134,10 @@ fn build_highscore_list(
         children.push(act!(text:
             font("miso"):
             settext(Arc::clone(&row.name)):
-            align(0.0, 0.0):
+            align(0.0, 0.5):
             xy(name_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
+            maxwidth(name_maxw):
             z(11):
             diffuse(col[0], col[1], col[2], col[3]):
             horizalign(left)
@@ -1135,7 +1145,7 @@ fn build_highscore_list(
         children.push(act!(text:
             font("miso"):
             settext(Arc::clone(&row.score)):
-            align(0.0, 0.0):
+            align(0.0, 0.5):
             xy(score_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
             z(11):
@@ -1145,10 +1155,9 @@ fn build_highscore_list(
         children.push(act!(text:
             font("miso"):
             settext(Arc::clone(&row.date)):
-            align(0.0, 0.0):
+            align(0.0, 0.5):
             xy(date_x, y):
             zoom(HIGHSCORE_TEXT_ZOOM):
-            maxwidth(date_maxw):
             z(11):
             diffuse(col[0], col[1], col[2], col[3]):
             horizalign(left)
@@ -1171,6 +1180,11 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     let px = player_frame_x(side);
     let cy = screen_center_y();
     let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
+    // zmod's PlayerNameAndDecorations.lua uses a separate zoom for the entered name.
+    let name_zoom = match state.runtime.machine_font {
+        MachineFont::Wendy => 0.75,
+        MachineFont::Mega => 1.22,
+    };
 
     let mut children: Vec<Actor> = Vec::with_capacity(32);
 
@@ -1206,7 +1220,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
             settext(name):
             align(0.0, 0.5):
             xy(PLAYERNAME_X, 0.0):
-            zoom(0.75):
+            zoom(name_zoom):
             z(12):
             diffuse(1.0, 1.0, 1.0, 1.0):
             horizalign(left)
@@ -1221,16 +1235,16 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
         if alpha > 0.0 {
             let pc = player_color_rgba(side, state.active_color_index);
 
-            // Simply Love: PlayerNameAndDecorations.lua loads Cursor.png (tinted to PlayerColor).
+            // zmod: PlayerNameAndDecorations.lua tints the cursor to PlayerColor.
             children.push(act!(sprite(NAME_ENTRY_CURSOR_TEX):
                 align(0.5, 0.5):
                 xy(0.0, CURSOR_Y_IN_FRAME):
-                zoom(NAME_ENTRY_CURSOR_ZOOM):
+                setsize(248.0, 46.0):
                 z(13):
                 diffuse(pc[0], pc[1], pc[2], alpha)
             ));
 
-            children.push(build_wheel(side, px, p, alpha, headline_font));
+            children.push(build_wheel(px, p, alpha, state.runtime.machine_font));
         }
     } else if p.joined {
         let pc = player_color_rgba(side, state.active_color_index);
@@ -1355,6 +1369,47 @@ mod tests {
     }
 
     #[test]
+    fn initials_cursor_size_survives_asset_resolution_changes() {
+        use deadlib_present::{
+            compose::build_screen_with_texture_context, font::FontMap, space::Metrics,
+        };
+        use deadlib_render_core::DrawOp;
+
+        let mut runtime = PostSongRuntimeView::default();
+        runtime.players[0].joined = true;
+        let state = init(runtime);
+        let metrics = Metrics::centered(854.0, 480.0);
+
+        for (width, height) in [(496, 92), (992, 184)] {
+            let mut textures = deadlib_assets::TextureStore::new();
+            textures.insert_texture(NAME_ENTRY_CURSOR_TEX.to_owned(), (), width, height);
+            let handle = textures.texture_handle(NAME_ENTRY_CURSOR_TEX);
+            let frame = build_screen_with_texture_context(
+                &[build_player_frame(profile_data::PlayerSide::P1, &state)],
+                [0.0; 4],
+                &metrics,
+                &FontMap::default(),
+                0.0,
+                &textures,
+            );
+            let cursor = frame
+                .ops
+                .iter()
+                .find_map(|op| match op {
+                    DrawOp::Sprite(run) if run.texture_handle == handle => {
+                        Some(&frame.sprite_instances[run.instance_start as usize])
+                    }
+                    _ => None,
+                })
+                .expect("cursor must reach the renderer");
+
+            // zmod's doubled-resolution cursor at zoom 0.5. The arrows and
+            // selection box must not shrink when the native image size changes.
+            assert_eq!(cursor.size, [248.0, 46.0]);
+        }
+    }
+
+    #[test]
     fn stage_texts_rebuild_only_when_dirty_or_policy_changes() {
         let stages: [stage_stats::StageSummary; 0] = [];
         let indices: [usize; 0] = [];
@@ -1390,7 +1445,7 @@ mod tests {
         assert_eq!(rows.rows.len(), HIGHSCORE_ROW_COUNT);
 
         let first = &rows.rows[0];
-        assert_eq!(first.rank.as_ref(), "1.");
+        assert_eq!(first.rank.as_ref(), "1. ");
         assert_eq!(first.name.as_ref(), "AAA");
         assert_eq!(first.score.as_ref(), "99.87%");
         assert!(first.is_highlight);
