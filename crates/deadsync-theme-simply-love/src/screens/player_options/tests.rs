@@ -5911,4 +5911,87 @@ pub(super) mod tests {
             panic!("search should still be open after Tab");
         }
     }
+
+    #[test]
+    fn retained_search_text_tracks_typing_backspace_focus_and_reopening() {
+        fn check_focused_text(state: &super::State) {
+            let super::search::SettingSearchState::Open(open) = &state.search else {
+                panic!("search should be open");
+            };
+            let expected = super::search::focused_match(open).and_then(|m| {
+                if open.query.is_empty() {
+                    return None;
+                }
+                let consumed = crate::screens::components::shared::fuzzy::folded_prefix_len(
+                    &open.query,
+                    &m.label,
+                )?;
+                (m.label.chars().count() > consumed).then(|| {
+                    (
+                        m.label.to_string(),
+                        m.label.chars().take(consumed).collect::<String>(),
+                    )
+                })
+            });
+            for _ in 0..2 {
+                let actual = super::search::completion(open);
+                assert_eq!(
+                    actual
+                        .as_ref()
+                        .map(|(full, prefix)| (full.as_ref(), prefix.as_ref())),
+                    expected
+                        .as_ref()
+                        .map(|(full, prefix)| (full.as_str(), prefix.as_str())),
+                    "query {:?}, focus {}",
+                    open.query,
+                    open.selected_index
+                );
+            }
+            if let Some(m) = super::search::focused_match(open) {
+                let row = state.panes[m.pane.index()].row_map.row(m.row_id);
+                let joined = row
+                    .help
+                    .iter()
+                    .map(|line| line.text.trim())
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let expected = (!joined.is_empty()).then_some(joined.as_str());
+                for _ in 0..2 {
+                    assert_eq!(super::search::help_text(state, m).as_deref(), expected);
+                }
+            }
+        }
+
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        for _ in 0..2 {
+            open_search(&mut state);
+            check_focused_text(&state);
+            for text in ["s", "pe", "e", "d"] {
+                super::search::add_text(&mut state, text);
+                check_focused_text(&state);
+                for _ in 0..10 {
+                    super::search::move_selection(&mut state, 1);
+                    check_focused_text(&state);
+                }
+                super::search::move_selection(&mut state, -1);
+                check_focused_text(&state);
+            }
+            super::search::accept_ghost(&mut state);
+            check_focused_text(&state);
+            while let super::search::SettingSearchState::Open(open) = &state.search {
+                if open.query.is_empty() {
+                    break;
+                }
+                super::search::backspace(&mut state);
+                check_focused_text(&state);
+            }
+            super::search::add_text(&mut state, "arrows");
+            check_focused_text(&state);
+            super::search::add_text(&mut state, "zzzzzzzz");
+            check_focused_text(&state);
+            super::search::close(&mut state);
+        }
+    }
 }

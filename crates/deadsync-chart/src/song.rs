@@ -444,7 +444,26 @@ impl SongData {
         if edit_index == 0 {
             return self.first_edit_chart(chart_type);
         }
-        self.edit_charts_sorted(chart_type).get(edit_index).copied()
+        if edit_index >= self.charts.len() {
+            return None;
+        }
+        // Navigation needs one chart, not a fully sorted list. Keep ordinary
+        // edit sets on the stack; unusually large sets may spill to the heap.
+        let mut edits: smallvec::SmallVec<[usize; 16]> = self
+            .charts
+            .iter()
+            .enumerate()
+            .filter_map(|(index, chart)| is_edit_chart(chart, chart_type).then_some(index))
+            .collect();
+        if edit_index >= edits.len() {
+            return None;
+        }
+        // The original stable sort kept source order for equal keys. Include
+        // that order explicitly so unstable selection chooses the same chart.
+        let (_, selected, _) = edits.select_nth_unstable_by(edit_index, |left, right| {
+            self.edit_chart_index_cmp(*left, *right)
+        });
+        Some(&self.charts[*selected])
     }
 
     #[inline]

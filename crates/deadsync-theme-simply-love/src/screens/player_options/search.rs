@@ -31,6 +31,7 @@ pub(super) struct SettingMatch {
     /// the ordinary row and index one is the focused row.
     row_text: [Arc<str>; 2],
     pane_text: Arc<str>,
+    retained_text: super::search_text::SearchResultText,
 }
 
 impl SettingMatch {
@@ -47,6 +48,7 @@ impl SettingMatch {
                 Arc::from(format!("▸ {label}")),
             ],
             pane_text: pane_label(pane),
+            retained_text: super::search_text::SearchResultText::default(),
             label,
         }
     }
@@ -337,16 +339,12 @@ pub(super) fn visible_range(open: &SettingSearchOpen) -> std::ops::Range<usize> 
 /// Single source of truth shared by the renderer and `accept_ghost`, so Tab can
 /// only complete to something visibly offered. Prefix extensions only — alias
 /// matches (e.g. "arrows" focusing "`NoteSkin`") deliberately offer none.
-pub(super) fn completion(open: &SettingSearchOpen) -> Option<(String, String)> {
+pub(super) fn completion(open: &SettingSearchOpen) -> Option<(Arc<str>, Arc<str>)> {
     if open.query.is_empty() {
         return None;
     }
     let m = focused_match(open)?;
-    let consumed = fuzzy::folded_prefix_len(&open.query, &m.label)?;
-    (m.label.chars().count() > consumed).then(|| {
-        let prefix: String = m.label.chars().take(consumed).collect();
-        (m.label.to_string(), prefix)
-    })
+    m.retained_text.completion(&open.query, &m.label)
 }
 
 /// Accept the ghost completion (Tab / →). No-op when none is offered.
@@ -359,7 +357,8 @@ pub(super) fn accept_ghost(state: &mut State) {
         return;
     };
     if let SettingSearchState::Open(open) = &mut state.search {
-        open.query = label;
+        open.query.clear();
+        open.query.push_str(&label);
         open.selected_index = 0;
     }
     refresh(state);
@@ -378,16 +377,9 @@ fn current_value(state: &State, m: &SettingMatch, player_idx: usize) -> Option<S
 }
 
 /// Row help text joined to one line; `None` when the row has none.
-pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<String> {
+pub(super) fn help_text(state: &State, m: &SettingMatch) -> Option<Arc<str>> {
     let row = state.panes[m.pane.index()].row_map.get(m.row_id)?;
-    let text = row
-        .help
-        .iter()
-        .map(|line| line.text.trim())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if text.is_empty() { None } else { Some(text) }
+    m.retained_text.help(row.help.iter().map(|line| &line.text))
 }
 
 fn pane_label(pane: OptionsPane) -> Arc<str> {
