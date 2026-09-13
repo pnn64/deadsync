@@ -6525,26 +6525,29 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let layer = base_z.saturating_add(mesh.z);
     let base_order = *order_counter;
     *order_counter = base_order.saturating_add(1);
-    out.push_textured_mesh(
-        texture_handle,
-        base_order,
-        layer,
-        actor_blend,
-        camera,
-        TexturedMeshPayload {
-            instance: renderer::TexturedMeshInstanceRaw::new(
-                transform,
-                mul_rgba(mesh.tint, style.tint),
-                mesh.uv_scale,
-                mesh.uv_offset,
-                mesh.uv_tex_shift,
-                false,
-            ),
-            vertices: mesh.vertices.clone_for_render(),
-            geom_cache_key: mesh.geom_cache_key,
-            depth_test: mesh.depth_test,
-        },
-    );
+    // A glow-only mesh has no diffuse pass, just like a glow-only Sprite.
+    if mesh.tint[3] > 0.0 {
+        out.push_textured_mesh(
+            texture_handle,
+            base_order,
+            layer,
+            actor_blend,
+            camera,
+            TexturedMeshPayload {
+                instance: renderer::TexturedMeshInstanceRaw::new(
+                    transform,
+                    mul_rgba(mesh.tint, style.tint),
+                    mesh.uv_scale,
+                    mesh.uv_offset,
+                    mesh.uv_tex_shift,
+                    false,
+                ),
+                vertices: mesh.vertices.clone_for_render(),
+                geom_cache_key: mesh.geom_cache_key,
+                depth_test: mesh.depth_test,
+            },
+        );
+    }
     if mesh.glow[3] > 0.0001 {
         let glow_order = *order_counter;
         *order_counter = glow_order.saturating_add(1);

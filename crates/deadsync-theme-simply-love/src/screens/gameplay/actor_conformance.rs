@@ -227,6 +227,7 @@ pub fn compose_overlay_states(
 /// composition consumes metadata and handles, not sampled pixels.
 pub struct WholeSongComposer {
     assets: AssetManager,
+    mesh_scratch: Vec<SongLuaProjectedMeshScratch>,
 }
 
 impl WholeSongComposer {
@@ -242,6 +243,11 @@ impl WholeSongComposer {
                     texture_key: Some(texture_key),
                     ..
                 } => queue_texture(&mut assets, texture_key),
+                SongLuaOverlayKind::NoteskinActor { slots } => {
+                    for slot in slots.iter() {
+                        queue_texture(&mut assets, slot.texture_key());
+                    }
+                }
                 SongLuaOverlayKind::Model { layers } => {
                     for layer in layers.iter() {
                         queue_texture(&mut assets, &layer.texture_key);
@@ -250,7 +256,63 @@ impl WholeSongComposer {
                 _ => {}
             }
         }
-        Self { assets }
+        Self {
+            assets,
+            mesh_scratch: song_lua_projected_mesh_scratch_for(overlays),
+        }
+    }
+
+    /// Exercise the warmed gameplay builder and final draw-pass composition,
+    /// including the inherited camera and noteskin model textures.
+    #[must_use]
+    pub fn render_overlay(
+        &mut self,
+        overlays: &[SongLuaOverlayActor],
+        states: &[SongLuaOverlayState],
+        index: usize,
+        screen: [f32; 2],
+        seconds: f32,
+        beat: f32,
+    ) -> deadlib_render_core::RenderFrame {
+        let mut actors = Vec::new();
+        if append_song_lua_multi_actor_overlay(
+            &mut actors,
+            &overlays[index],
+            states[index],
+            &self.assets,
+            0,
+            screen[0],
+            screen[1],
+            seconds,
+            beat,
+            seconds,
+            self.mesh_scratch.get_mut(index),
+        )
+        .is_none()
+            && let Some(built) = build_song_lua_overlay_actor_with_scratch(
+                &overlays[index],
+                states[index],
+                song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index),
+                &self.assets,
+                0,
+                screen[0],
+                screen[1],
+                seconds,
+                beat,
+                seconds,
+                self.mesh_scratch.get_mut(index),
+            )
+        {
+            actors.extend(built);
+        }
+        deadlib_present::compose::build_screen_with_texture_context(
+            &actors,
+            [0.0; 4],
+            &deadlib_present::space::Metrics::centered(screen[0], screen[1]),
+            &font::FontMap::default(),
+            seconds,
+            self.assets.texture_context(),
+        )
     }
 
     #[must_use]

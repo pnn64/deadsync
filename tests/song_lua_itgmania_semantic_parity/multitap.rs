@@ -13,6 +13,8 @@ fn edgar_countdown_onsets_and_hit_commands() {
     );
     let (layers, primary, context) = compile_trace_song(&trace);
     let compiled = &layers[primary];
+    check_edgar_model_squash(compiled, &context);
+    check_edgar_tap_draws(compiled, &context);
     let named = |name: &str| {
         compiled
             .overlays
@@ -135,6 +137,169 @@ fn edgar_countdown_onsets_and_hit_commands() {
             "numbers do not spin like flip69's decoration"
         );
         assert_eq!(states[count].z, 10.0);
+    }
+}
+
+// Compare final model matrices, rather than just the Lua zoom/rotation writes.
+fn check_edgar_model_squash(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
+    use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+        WholeSongComposer, compose_overlay_states,
+    };
+    let screen = [context.screen_width, context.screen_height];
+    let mut composer = WholeSongComposer::new(&compiled.overlays);
+    for (tap, first) in [(1, 112.0), (2, 114.0), (3, 116.0), (4, 118.0)] {
+        let frame = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(&format!("MultitapP1_{tap}")))
+            .expect("multitap frame");
+        let arrow = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(&format!("MultitapArrowP1_{tap}")))
+            .expect("multitap arrow");
+        for beat in [first + 0.01, first + 0.39, first + 0.7] {
+            let seconds = song_elapsed_seconds_at(beat, context);
+            let mut local = compiled_local_states_at(compiled, context, beat, seconds);
+            // The real script has a tiny nonzero rotationx from its legacy
+            // radians/degrees workaround. An exact-zero synthetic actor missed this bug.
+            assert!(local[arrow].rot_x_deg.abs() > f32::EPSILON);
+            let squash = local[frame].zoom_y;
+            assert!((squash - 1.0).abs() > 0.001);
+            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let actual =
+                composer.render_overlay(&compiled.overlays, &states, arrow, screen, seconds, beat);
+            local[frame].zoom_y = 1.0;
+            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let baseline =
+                composer.render_overlay(&compiled.overlays, &states, arrow, screen, seconds, beat);
+            assert!(
+                !actual.tmesh_instances.is_empty(),
+                "compiled Cyber model must draw"
+            );
+            assert_eq!(actual.tmesh_instances.len(), baseline.tmesh_instances.len());
+            for (actual, baseline) in actual.tmesh_instances.iter().zip(&baseline.tmesh_instances) {
+                for (actual, baseline) in [
+                    (actual.model_col0, baseline.model_col0),
+                    (actual.model_col1, baseline.model_col1),
+                ] {
+                    assert!(
+                        (actual[0] - baseline[0]).abs() < 0.0001,
+                        "tap {tap} beat {beat}: parent zoomy must preserve horizontal extent"
+                    );
+                    assert!(
+                        (actual[1] - baseline[1] * squash).abs() < 0.0001,
+                        "tap {tap} beat {beat}: parent zoomy must scale the rotated model vertically"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
+    use deadlib_present::render::{BlendMode, DrawOp};
+    use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+        WholeSongComposer, compose_overlay_states,
+    };
+    let screen = [context.screen_width, context.screen_height];
+    let mut composer = WholeSongComposer::new(&compiled.overlays);
+    let oracle: Value = serde_json::from_slice(
+        &std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/itgmania-actors/cyber-tap-repeat.json"),
+        )
+        .expect("native Cyber fixture"),
+    )
+    .expect("native Cyber JSON");
+    // Before and inside the first multitap, exercise the real compiled W1
+    // callback tree, including its inherited perspective camera.
+    for (beat, lane) in [
+        (110.0, 1),
+        (112.01, 1),
+        (114.01, 3),
+        (116.01, 2),
+        (118.01, 4),
+    ] {
+        let message = format!("__songlua_tap_1_{lane}_W1");
+        for sample in oracle["samples"].as_array().expect("native samples") {
+            let time = sample["time"].as_f64().expect("native time") as f32;
+            let age = if time >= 0.237 { time - 0.237 } else { time };
+            let native = sample["actors"]
+                .as_array()
+                .expect("native actors")
+                .iter()
+                .find(|actor| actor["name"] == "tap")
+                .expect("native tap");
+            let expected = native["draws"].as_array().expect("native passes");
+            let mut local = compiled_local_states_at(
+                compiled,
+                context,
+                beat,
+                song_elapsed_seconds_at(beat, context),
+            );
+            let mut leaves = Vec::new();
+            for (index, overlay) in compiled.overlays.iter().enumerate() {
+                if let Some(command) = overlay
+                    .message_commands
+                    .iter()
+                    .find(|command| command.message == message)
+                {
+                    local[index] = overlay_state_after_blocks(local[index], &command.blocks, age);
+                    if matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. }) {
+                        leaves.push(index);
+                    }
+                }
+            }
+            let states = compose_overlay_states(&compiled.overlays, &local, screen);
+            let mut passes = Vec::new();
+            for index in leaves {
+                let frame =
+                    composer.render_overlay(&compiled.overlays, &states, index, screen, time, beat);
+                for op in &frame.ops {
+                    match op {
+                        DrawOp::Sprite(run) => {
+                            for instance in &frame.sprite_instances[run.instance_start as usize..]
+                                [..run.instance_count as usize]
+                            {
+                                passes.push((run.blend, instance.texture_mask, instance.tint));
+                            }
+                        }
+                        DrawOp::TexturedMesh(run) => {
+                            for instance in &frame.tmesh_instances[run.instance_start as usize..]
+                                [..run.instance_count as usize]
+                            {
+                                passes.push((run.blend, instance.texture_mask, instance.tint));
+                            }
+                        }
+                        other => panic!("unexpected explosion draw: {other:?}"),
+                    }
+                }
+            }
+            assert_eq!(
+                passes.len(),
+                expected.len(),
+                "W1 beat {beat}, fade/effect time {time}: duplicate explosion pass"
+            );
+            for ((blend, mask, tint), expected) in passes.into_iter().zip(expected) {
+                assert_eq!(
+                    blend,
+                    BlendMode::Alpha,
+                    "native Sprite glow retains normal blending"
+                );
+                assert_eq!(mask > 0.0, expected["texture_mode"] == "glow");
+                let color = expected["vertices"][0]["color"]
+                    .as_array()
+                    .expect("native vertex color");
+                for (actual, expected) in tint.into_iter().zip(color) {
+                    let expected = expected.as_f64().expect("color byte") as f32 / 255.0;
+                    assert!(
+                        (actual.clamp(0.0, 1.0) - expected).abs() <= 1.0 / 255.0,
+                        "W1 at {time}: draw color {actual} != native {expected}"
+                    );
+                }
+            }
+        }
     }
 }
 

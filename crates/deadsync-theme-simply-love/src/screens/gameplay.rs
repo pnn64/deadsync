@@ -7215,10 +7215,13 @@ fn song_lua_overlay_compose_state(
     };
     let local_x = raw_local_x * parent_scale_x;
     let local_y = raw_local_y * parent_scale_y;
-    let affine_2d = parent.rot_x_deg.abs() <= f32::EPSILON
-        && parent.rot_y_deg.abs() <= f32::EPSILON
-        && child.rot_x_deg.abs() <= f32::EPSILON
-        && child.rot_y_deg.abs() <= f32::EPSILON
+    // Compare radians, the unit used by rotation-matrix coefficients. Legacy
+    // Lua degree/radian cancellation can leave a few millionths of a degree;
+    // that roundoff must not change parent-scale/child-rotation composition.
+    let affine_2d = parent.rot_x_deg.to_radians().abs() <= f32::EPSILON
+        && parent.rot_y_deg.to_radians().abs() <= f32::EPSILON
+        && child.rot_x_deg.to_radians().abs() <= f32::EPSILON
+        && child.rot_y_deg.to_radians().abs() <= f32::EPSILON
         && (parent.skew_x.abs() > f32::EPSILON
             || parent.skew_y.abs() > f32::EPSILON
             || child.skew_x.abs() > f32::EPSILON
@@ -14950,6 +14953,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_tex_shift,
             depth_test,
             visible,
+            blend,
             z,
             ..
         } => {
@@ -14976,7 +14980,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
                     visible: *visible,
-                    blend: BlendMode::Add,
+                    blend: *blend,
                     z: *z,
                 }
             } else if let Some(vertices) = glow_vertices {
@@ -14996,7 +15000,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
                     visible: *visible,
-                    blend: BlendMode::Add,
+                    blend: *blend,
                     z: *z,
                 }
             } else {
@@ -15020,7 +15024,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
                     visible: *visible,
-                    blend: BlendMode::Add,
+                    blend: *blend,
                     z: *z,
                 }
             };
@@ -15039,6 +15043,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_tex_shift,
             depth_test,
             visible,
+            blend,
             z,
             ..
         } => {
@@ -15072,7 +15077,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 uv_tex_shift: *uv_tex_shift,
                 depth_test: *depth_test,
                 visible: *visible,
-                blend: BlendMode::Add,
+                blend: *blend,
                 z: *z,
             })
         }
@@ -15082,13 +15087,23 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
 
 fn song_lua_finalize_overlay_actor(
     state: SongLuaOverlayState,
-    actor: Actor,
+    mut actor: Actor,
     glow: [f32; 4],
     x_scale: f32,
     y_scale: f32,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> SongLuaActorList {
-    let glow_actor = song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode, scratch);
+    let glow_actor = if let Actor::Sprite {
+        glow: actor_glow, ..
+    } = &mut actor
+    {
+        // Sprite composition already emits TextureMode_Glow after diffuse.
+        // A separate glow actor would draw that pass a second time.
+        *actor_glow = glow;
+        None
+    } else {
+        song_lua_overlay_glow_actor(&actor, glow, state.text_glow_mode, scratch)
+    };
     let actor = song_lua_wrap_overlay_shadow(state, actor, x_scale, y_scale);
     let mut out = SmallVec::new();
     out.push(actor);
@@ -25219,7 +25234,7 @@ mod tests {
         else {
             panic!("expected reusable base and glow meshes, got {glowing:?}");
         };
-        assert_eq!(*glow_blend, BlendMode::Add);
+        assert_eq!(*glow_blend, BlendMode::Alpha);
         assert_ne!(Arc::as_ptr(base_vertices), Arc::as_ptr(glow_vertices));
         for (source, glow_vertex) in vertices.iter().zip(glow_vertices.iter()) {
             assert_eq!(glow_vertex.pos, source.pos);
@@ -25454,7 +25469,7 @@ mod tests {
             assert_ne!(*base_key, INVALID_TMESH_CACHE_KEY);
             assert_ne!(*glow_key, INVALID_TMESH_CACHE_KEY);
             assert_ne!(base_key, glow_key);
-            assert_eq!(*blend, BlendMode::Add);
+            assert_eq!(*blend, BlendMode::Alpha);
             assert!(Arc::ptr_eq(vertices, prewarmed_vertices));
         }
         append_warmed(&mut warmed);
@@ -25487,6 +25502,7 @@ mod tests {
                         ..Default::default()
                     },
                     SongLuaOverlayState {
+                        rot_x_deg: -3.8146973e-6,
                         rot_z_deg: rotation,
                         ..Default::default()
                     },
@@ -25706,7 +25722,7 @@ mod tests {
             assert_ne!(*base_key, INVALID_TMESH_CACHE_KEY);
             assert_ne!(*glow_key, INVALID_TMESH_CACHE_KEY);
             assert_ne!(base_key, glow_key);
-            assert_eq!(*blend, BlendMode::Add);
+            assert_eq!(*blend, BlendMode::Alpha);
             let expected = prewarmed_glow[slot_index]
                 .as_ref()
                 .expect("rendered model slot should have prewarmed glow geometry");
@@ -27906,6 +27922,85 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_sprite_glow_draws_once_with_native_blend() {
+        use deadlib_render_core::DrawOp;
+        let key = "song-lua-cyber-glow.png";
+        let mut assets = AssetManager::new();
+        assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(64, 64));
+        let overlay = SongLuaOverlayActor {
+            kind: test_sprite_kind(key),
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+        for camera in [
+            None,
+            Some(SongLuaOverlayState {
+                fov: Some(45.0),
+                vanishpoint: Some([320.0, 240.0]),
+                ..Default::default()
+            }),
+        ] {
+            for cached in [false, true] {
+                for blend in [SongLuaOverlayBlendMode::Alpha, SongLuaOverlayBlendMode::Add] {
+                    let mut scratch = SongLuaProjectedMeshScratch::default();
+                    let actors = build_song_lua_overlay_actor_with_scratch(
+                        &overlay,
+                        SongLuaOverlayState {
+                            x: 320.0,
+                            y: 240.0,
+                            diffuse: [1.0, 1.0, 1.0, 0.8],
+                            glow: [1.0, 1.0, 1.0, 0.4],
+                            blend,
+                            ..Default::default()
+                        },
+                        camera,
+                        &assets,
+                        0,
+                        640.0,
+                        480.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        cached.then_some(&mut scratch),
+                    )
+                    .expect("visible glowing Sprite");
+                    let frame = deadlib_present::compose::build_screen_with_texture_context(
+                        &actors,
+                        [0.0; 4],
+                        &metrics,
+                        &font::FontMap::default(),
+                        0.0,
+                        assets.texture_context(),
+                    );
+                    assert_eq!(
+                        frame.sprite_instances.len() + frame.tmesh_instances.len(),
+                        2,
+                        "Sprite::DrawTexture emits one diffuse and one glow: camera={camera:?}, cached={cached}"
+                    );
+                    for op in &frame.ops {
+                        let actual = match op {
+                            DrawOp::Sprite(run) => run.blend,
+                            DrawOp::TexturedMesh(run) => run.blend,
+                            other => panic!("unexpected Sprite draw: {other:?}"),
+                        };
+                        assert_eq!(actual, song_lua_overlay_blend(blend));
+                    }
+                    let masks = frame
+                        .sprite_instances
+                        .iter()
+                        .map(|i| i.texture_mask)
+                        .chain(frame.tmesh_instances.iter().map(|i| i.texture_mask))
+                        .collect::<Vec<_>>();
+                    assert_eq!(masks, [0.0, 1.0]);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_overlay_wraps_runtime_actors_with_glow() {
         let sprite_key = "song-lua-glow.png".to_string();
         let mut asset_manager = AssetManager::new();
@@ -27939,23 +28034,20 @@ mod tests {
 
         match sprite_actors.as_slice() {
             [
-                Actor::Sprite { blend, z, .. },
                 Actor::Sprite {
                     tint,
                     glow,
-                    blend: glow_blend,
-                    z: glow_z,
+                    blend,
+                    z,
                     ..
                 },
             ] => {
                 assert_eq!(blend, &BlendMode::Alpha);
                 assert_eq!(z, &790);
-                assert_eq!(tint, &[0.0; 4]);
+                assert_eq!(tint, &[1.0; 4]);
                 assert_eq!(glow, &[0.1, 0.2, 0.3, 0.4]);
-                assert_eq!(glow_blend, &BlendMode::Alpha);
-                assert_eq!(glow_z, &790);
             }
-            other => panic!("expected base sprite plus glow sprite actors, got {other:?}"),
+            other => panic!("expected one sprite with its native glow pass, got {other:?}"),
         }
 
         let quad = SongLuaOverlayActor {
