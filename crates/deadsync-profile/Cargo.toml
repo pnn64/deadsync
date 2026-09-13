@@ -7,11 +7,11 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-smx = { path = "../deadsync-smx" }
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
-bitflags = "2.13.1"
+bitflags = "2.13.2"
 chrono = "0.4.45"
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.34"
-uuid = { version = "1.26.0", features = ["v4", "v5"] }
+uuid = { version = "1.26.1", features = ["v4", "v5"] }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-chart = { path = "../deadsync-chart" }

@@ -9,7 +9,7 @@ arrayvec = "0.7.8"
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.34"
 rustc-hash = "2.1.3"
-smallvec = "1.16.0"
+smallvec = "1.16.1"
 winit = "0.30.13"
 
 [target.'cfg(unix)'.dependencies]
