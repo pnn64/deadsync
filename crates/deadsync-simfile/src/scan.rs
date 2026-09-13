@@ -1301,7 +1301,7 @@ pub fn scan_and_load_songs_runtime<Progress, Worker, InitWorker, Process, NeverC
 }
 
 pub fn reload_song_dirs_runtime<Progress, Worker, InitWorker, Process, NeverCache>(
-    input: RuntimeSongScanInput,
+    mut input: RuntimeSongScanInput,
     pack_dirs: &[PathBuf],
     progress: Option<&mut Progress>,
     init_worker: InitWorker,
@@ -1327,6 +1327,10 @@ pub fn reload_song_dirs_runtime<Progress, Worker, InitWorker, Process, NeverCach
         event(RuntimeSongScanEvent::NoReloadPackDirs);
         return;
     }
+
+    // These packs have been updated since the library scan. Verify freshness
+    // even with FastLoad enabled, so changed simfiles are parsed and recached.
+    input.load_options.fastload = false;
 
     event(RuntimeSongScanEvent::StartReload {
         packs: pack_keys.len(),
