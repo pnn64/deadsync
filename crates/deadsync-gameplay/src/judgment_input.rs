@@ -63,6 +63,7 @@ pub struct ActiveTapExplosion {
     pub elapsed: f32,
     pub duration: f32,
     pub start_beat: f32,
+    pub effect_started_at_screen_s: f32,
 }
 
 #[derive(Copy, Clone, Debug)]

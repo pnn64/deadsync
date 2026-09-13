@@ -167,12 +167,14 @@ impl ExplosionAnimation {
 
     #[must_use]
     pub fn state_at(&self, time: f32) -> ExplosionVisualState {
-        self.state_at_impl(time, true)
+        self.state_at_clocks(time, time)
     }
 
-    fn state_at_impl(&self, time: f32, optimized: bool) -> ExplosionVisualState {
-        if optimized
-            && time.is_finite()
+    /// Tween age restarts on a hit; Actor::ResetEffectTimeIfDifferent preserves
+    /// the glow clock when the same effect is commanded again.
+    #[must_use]
+    pub fn state_at_clocks(&self, time: f32, effect_time: f32) -> ExplosionVisualState {
+        if time.is_finite()
             && let Some(state) = self.canonical_fade_state_at(time)
         {
             return state;
@@ -240,9 +242,9 @@ impl ExplosionAnimation {
             }
 
             let diffuse = color;
-            let glow = self
-                .glow
-                .map_or([0.0, 0.0, 0.0, 0.0], |g| g.color_at(time, diffuse[3]));
+            let glow = self.glow.map_or([0.0, 0.0, 0.0, 0.0], |g| {
+                g.color_at(effect_time, diffuse[3])
+            });
             let visible = if progress >= 1.0 {
                 segment.end_visible.unwrap_or(current.visible)
             } else {
@@ -259,9 +261,9 @@ impl ExplosionAnimation {
         }
 
         let diffuse = current.color;
-        let glow = self
-            .glow
-            .map_or([0.0, 0.0, 0.0, 0.0], |g| g.color_at(time, diffuse[3]));
+        let glow = self.glow.map_or([0.0, 0.0, 0.0, 0.0], |g| {
+            g.color_at(effect_time, diffuse[3])
+        });
 
         ExplosionVisualState {
             zoom: current.zoom,

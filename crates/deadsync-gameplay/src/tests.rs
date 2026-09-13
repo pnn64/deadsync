@@ -3849,6 +3849,19 @@ mod tests {
     }
 
     #[test]
+    fn feedback_tap_effect_clock_survives_fade_and_other_judgments() {
+        let mut feedback = GameplayVisualFeedbackState::default();
+        assert_eq!(feedback.tap_effect_start(2, "W1", false, 10.037), 10.037);
+        feedback.tick(0.3, 10.337);
+        assert_eq!(feedback.tap_effect_start(2, "W2", false, 10.34), 10.34);
+        assert_eq!(feedback.tap_effect_start(2, "W1", false, 10.416), 10.037);
+        assert_eq!(feedback.tap_effect_start(3, "W1", false, 10.42), 10.42);
+        assert_eq!(feedback.tap_effect_start(2, "W1", true, 10.43), 10.43);
+        feedback.clear();
+        assert_eq!(feedback.tap_effect_start(2, "W1", false, 1.0), 1.0);
+    }
+
+    #[test]
     fn feedback_explosion_slots_tick_elapsed_and_expire() {
         let mut tap = Some(ActiveTapExplosion {
             window: "W1",
@@ -3856,6 +3869,7 @@ mod tests {
             elapsed: 0.2,
             duration: 0.5,
             start_beat: 8.0,
+            effect_started_at_screen_s: 0.0,
         });
         tick_tap_explosion_slot(&mut tap, 0.2);
         assert_near(tap.expect("tap explosion should remain").elapsed, 0.4);
@@ -3868,6 +3882,7 @@ mod tests {
             elapsed: 0.0,
             duration: 0.0,
             start_beat: 0.0,
+            effect_started_at_screen_s: 0.0,
         });
         tick_tap_explosion_slot(&mut instant_tap, 0.0);
         assert!(instant_tap.is_none());
@@ -14676,6 +14691,7 @@ mod tests {
                 elapsed: 0.1,
                 duration: 0.5,
                 start_beat: 4.0,
+                effect_started_at_screen_s: 0.0,
             }),
         );
         state.set_column_flash(
@@ -14723,6 +14739,7 @@ mod tests {
                 elapsed: 0.0,
                 duration: 0.25,
                 start_beat: 2.0,
+                effect_started_at_screen_s: 0.0,
             }),
         );
         assert_eq!(

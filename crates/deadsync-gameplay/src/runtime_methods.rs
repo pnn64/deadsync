@@ -1218,6 +1218,12 @@ where
             .noteskin_effects
             .tap_explosion_duration(player, local_col, window_key, bright);
         if let Some(duration) = spawn_duration {
+            let effect_started_at_screen_s = self.display.visual_feedback.tap_effect_start(
+                column,
+                window_key,
+                bright,
+                self.boundary.total_elapsed_in_screen,
+            );
             self.display.visual_feedback.set_tap_explosion(
                 column,
                 Some(ActiveTapExplosion {
@@ -1226,6 +1232,7 @@ where
                     elapsed: 0.0,
                     duration,
                     start_beat: self.clock.song_position.current_beat,
+                    effect_started_at_screen_s,
                 }),
             );
         }

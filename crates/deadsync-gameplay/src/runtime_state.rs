@@ -733,6 +733,9 @@ impl GameplayHoldFeedbackState {
 #[derive(Clone, Debug, Default)]
 pub struct GameplayVisualFeedbackState {
     tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    // Fixed song-lifetime effect epochs, one per compiled lane/window/mode.
+    // Fading a flash out does not stop its underlying noteskin effect clock.
+    tap_effect_starts: [[[Option<f32>; 2]; TAP_EXPLOSION_WINDOW_COUNT]; MAX_COLS],
     column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
     pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
     mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
@@ -742,6 +745,16 @@ pub struct GameplayVisualFeedbackState {
 }
 
 impl GameplayVisualFeedbackState {
+    fn tap_effect_start(&mut self, col: usize, window: &str, bright: bool, now: f32) -> f32 {
+        let Some(window) = tap_explosion_window_index(window) else {
+            return now;
+        };
+        let Some(lane) = self.tap_effect_starts.get_mut(col) else {
+            return now;
+        };
+        *lane[window][usize::from(bright)].get_or_insert(now)
+    }
+
     #[inline(always)]
     #[must_use]
     pub fn tap_explosions(
@@ -867,6 +880,8 @@ impl GameplayVisualFeedbackState {
     #[inline(always)]
     pub fn clear(&mut self) {
         self.tap_explosions.fill(None);
+        self.tap_effect_starts
+            .fill([[None; 2]; TAP_EXPLOSION_WINDOW_COUNT]);
         self.column_flashes.fill(None);
         self.mine_explosions.fill(None);
         self.tap_mask = 0;

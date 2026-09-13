@@ -16,6 +16,7 @@ pub(crate) enum ExplosionRotation {
 pub(crate) struct ExplosionComposeRequest<'a, S> {
     pub layers: &'a [TapExplosionLayer<S>],
     pub elapsed_s: f32,
+    pub effect_elapsed_s: f32,
     pub current_frame_beat: f32,
     pub relative_frame_beat: Option<f32>,
     pub uv_elapsed_s: f32,
@@ -38,7 +39,9 @@ pub(crate) fn compose_explosion_layers<S, F>(
     F: Fn(&S) -> SpriteSource,
 {
     for layer in request.layers {
-        let visual = layer.animation.state_at(request.elapsed_s);
+        let visual = layer
+            .animation
+            .state_at_clocks(request.elapsed_s, request.effect_elapsed_s);
         if !visual.visible {
             continue;
         }
@@ -75,24 +78,13 @@ pub(crate) fn compose_explosion_layers<S, F>(
             zoom: visual.zoom * request.effect_zoom.signum(),
             uv,
             tint: visual.diffuse,
+            glow: visual.glow,
             rotation_y_deg,
             rotation_z_deg,
             blend,
             z: request.z,
         };
         append_explosion_draw(draws, slot, sprite_source, draw);
-
-        if visual.glow.iter().map(|channel| channel.abs()).sum::<f32>() > f32::EPSILON {
-            append_explosion_draw(
-                draws,
-                slot,
-                sprite_source,
-                ExplosionDraw {
-                    tint: visual.glow,
-                    ..draw
-                },
-            );
-        }
     }
 }
 
@@ -103,6 +95,7 @@ struct ExplosionDraw {
     zoom: f32,
     uv: [f32; 4],
     tint: [f32; 4],
+    glow: [f32; 4],
     rotation_y_deg: f32,
     rotation_z_deg: f32,
     blend: BlendMode,
@@ -128,7 +121,7 @@ fn append_explosion_draw<S, F>(
         ],
         source: sprite_source(slot),
         tint: draw.tint,
-        glow: [1.0, 1.0, 1.0, 0.0],
+        glow: draw.glow,
         uv_rect: draw.uv,
         flip_x: flip,
         flip_y: flip,
@@ -248,6 +241,7 @@ mod tests {
             ExplosionComposeRequest {
                 layers: &layers,
                 elapsed_s: 0.0,
+                effect_elapsed_s: 0.0,
                 current_frame_beat: 9.0,
                 relative_frame_beat: Some(2.0),
                 uv_elapsed_s: 3.0,
@@ -263,7 +257,7 @@ mod tests {
             &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
         );
 
-        assert_eq!(actors.len(), 2);
+        assert_eq!(actors.len(), 1);
         let FlatDraw::Sprite(FlatSprite {
             size,
             uv_rect,
@@ -290,24 +284,12 @@ mod tests {
         );
         assert_eq!(*uv_rect, [0.2, 0.0, 1.0, 1.0]);
         assert_eq!(*tint, [0.2, 0.3, 0.4, 0.5]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(*glow, [0.1, 0.2, 0.3, 0.2]);
         assert_eq!(*world_z, 0.0);
         assert_eq!(*rot_y_deg, 7.0);
         assert_eq!(*rot_z_deg, 18.0);
         assert_eq!(*blend, BlendMode::Add);
         assert_eq!(*z, 145);
-        let FlatDraw::Sprite(FlatSprite {
-            tint,
-            glow,
-            world_z,
-            ..
-        }) = &actors[1]
-        else {
-            unreachable!();
-        };
-        assert_eq!(*tint, [0.1, 0.2, 0.3, 0.2]);
-        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.0]);
-        assert_eq!(*world_z, 0.0);
     }
 
     #[test]
@@ -319,6 +301,7 @@ mod tests {
             ExplosionComposeRequest {
                 layers: &layers,
                 elapsed_s: 0.0,
+                effect_elapsed_s: 0.0,
                 current_frame_beat: 0.0,
                 relative_frame_beat: None,
                 uv_elapsed_s: 0.0,
@@ -331,7 +314,7 @@ mod tests {
             &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
         );
 
-        assert_eq!(actors.len(), 2);
+        assert_eq!(actors.len(), 1);
         let FlatDraw::Sprite(FlatSprite {
             rot_y_deg,
             rot_z_deg,
@@ -359,6 +342,7 @@ mod tests {
             ExplosionComposeRequest {
                 layers: &layers,
                 elapsed_s: 0.0,
+                effect_elapsed_s: 0.0,
                 current_frame_beat: 7.0,
                 relative_frame_beat: Some(2.0),
                 uv_elapsed_s: 0.0,

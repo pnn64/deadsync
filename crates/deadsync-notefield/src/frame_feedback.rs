@@ -317,6 +317,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 ExplosionComposeRequest {
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
+                    effect_elapsed_s: (elapsed_screen - active.effect_started_at_screen_s).max(0.0),
                     current_frame_beat: request.visual.current_display_beat,
                     relative_frame_beat: Some(
                         (request.visual.current_display_beat - active.start_beat).max(0.0),
@@ -355,6 +356,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 ExplosionComposeRequest {
                     layers: explosion.layers.as_ref(),
                     elapsed_s: active.elapsed,
+                    effect_elapsed_s: active.elapsed,
                     current_frame_beat: current_beat,
                     relative_frame_beat: None,
                     uv_elapsed_s: elapsed_screen,
@@ -973,6 +975,7 @@ mod tests {
             elapsed: 0.1,
             duration: 1.0,
             start_beat: 0.0,
+            effect_started_at_screen_s: 0.0,
         })
     }
 

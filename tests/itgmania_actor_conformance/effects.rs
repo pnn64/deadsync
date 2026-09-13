@@ -178,6 +178,43 @@ fn glow_ramp_timing_and_colors_match_itgmania() {
 }
 
 #[test]
+fn cyber_repeated_tap_fade_and_glow_match_native() {
+    let animation = deadsync_noteskin::parse_explosion_animation(
+        "diffusealpha,1.2;zoom,1.1;accelerate,0.15;zoom,1;diffusealpha,0;\
+         glowshift;effectperiod,0.05;effectcolor1,1,1,1,0;effectcolor2,1,1,1,0.5",
+    );
+    let oracle = fixture("cyber-tap-repeat");
+    for sample in samples(&oracle) {
+        let time = f32_at(sample, "time");
+        let age = if time >= 0.237 { time - 0.237 } else { time };
+        let visual = animation.state_at_clocks(age, time);
+        let native = actor(sample, "tap");
+        let diffuse: [f32; 4] = f32_array(&native["current"]["diffuse"][0]);
+        let zoom: [f32; 3] = f32_array(&native["current"]["zoom"]);
+        assert!((visual.diffuse[3] - diffuse[3].clamp(0.0, 1.0)).abs() < 0.00002);
+        assert!((visual.zoom - zoom[0]).abs() < 0.00002);
+        if native["drawn"] == false {
+            assert_eq!(visual.glow[3], 0.0);
+            continue;
+        }
+        let glow: [f32; 4] = f32_array(&native["effected"]["glow"]);
+        for (actual, expected) in visual.glow.into_iter().zip(glow) {
+            assert!(
+                (actual - expected).abs() < 0.00002,
+                "glow at {time}: {actual} != {expected}"
+            );
+        }
+        let draws = native["draws"].as_array().expect("native sprite passes");
+        assert_eq!(draws[0]["texture_mode"], "modulate");
+        if visual.glow[3] > 0.0001 {
+            assert_eq!(draws.len(), 2);
+            assert_eq!(draws[1]["texture_mode"], "glow");
+            assert_eq!(draws[1]["blend_mode"], draws[0]["blend_mode"]);
+        }
+    }
+}
+
+#[test]
 fn glow_shift_fades_with_native_actor_alpha() {
     let oracle = fixture("glow-alpha");
     let mut checked = 0;

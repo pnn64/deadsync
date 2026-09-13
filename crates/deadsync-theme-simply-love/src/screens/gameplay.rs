@@ -661,7 +661,7 @@ struct SongLuaOverlayOrderCache {
     child_lists: Vec<Vec<usize>>,
     dynamic_draw_order: Vec<bool>,
     // Built once at song load; at most one entry per captured grade command.
-    // The frame loop only reads this bounded plan and existing judgment slots.
+    // The frame loop updates only effect epochs and reads judgment slots.
     tap_commands: Vec<SongLuaTapCommand>,
     // Song-lifetime execution plan: only these actors can change local state,
     // and only these composed states depend on changing local/ancestor state.
@@ -691,6 +691,7 @@ struct SongLuaTapCommand {
     player: usize,
     column: usize,
     grade: JudgeGrade,
+    glow_started_at: Option<f32>,
 }
 
 // Built once per song or visual layer so frame rendering does not repeatedly
@@ -1567,6 +1568,7 @@ fn song_lua_overlay_order_cache_from(
                     player,
                     column,
                     grade,
+                    glow_started_at: None,
                 });
             }
         }
@@ -3411,8 +3413,14 @@ fn gameplay_song_lua_data(
     );
     let (display_width, display_height) = display_size;
     context.player_timing = std::array::from_fn(|player| {
-        let source = if session.p2_runtime_player() { 1 } else { player };
-        context.players[player].enabled.then(|| timing[source].clone())
+        let source = if session.p2_runtime_player() {
+            1
+        } else {
+            player
+        };
+        context.players[player]
+            .enabled
+            .then(|| timing[source].clone())
     });
     context.display_width = display_width.max(1) as f32;
     context.display_height = display_height.max(1) as f32;
@@ -7546,14 +7554,15 @@ fn apply_song_lua_taps(
     feedback: &deadsync_gameplay::GameplayVisualFeedbackState,
     cols_per_player: usize,
     now: f32,
+    effect_time: f32,
     overlays: &[SongLuaOverlayActor],
-    order: &SongLuaOverlayOrderCache,
+    order: &mut SongLuaOverlayOrderCache,
     local: &mut [SongLuaOverlayState],
     composed: &mut Vec<SongLuaOverlayState>,
     screen: [f32; 2],
 ) {
     let mut changed = false;
-    for tap in &order.tap_commands {
+    for tap in &mut order.tap_commands {
         if tap.player >= MAX_PLAYERS || tap.column >= cols_per_player {
             continue;
         }
@@ -7569,11 +7578,19 @@ fn apply_song_lua_taps(
             continue;
         }
         let current = local[tap.overlay];
-        let next = deadsync_song_lua::overlay_state_after_blocks(
+        let mut next = deadsync_song_lua::overlay_state_after_blocks(
             current,
             &overlays[tap.overlay].message_commands[tap.command].blocks,
             elapsed,
         );
+        if next.effect_mode == deadlib_present::anim::EffectMode::GlowShift
+            && next.effect_clock == deadlib_present::anim::EffectClock::Time
+        {
+            // Actor::ResetEffectTimeIfDifferent leaves repeated glowshift
+            // commands running, including while the explosion is invisible.
+            let start = tap.glow_started_at.get_or_insert(judgment.at_screen_s);
+            next.effect_offset += now - *start - effect_time;
+        }
         changed |= next != current;
         local[tap.overlay] = next;
     }
@@ -12245,7 +12262,7 @@ fn append_song_lua_noteskin_actors(
         );
         draw.pos[0] *= x_scale * actor_scale[0] * effect_scale[0];
         draw.pos[1] *= y_scale * actor_scale[1] * effect_scale[1];
-        draw.pos[2] *= actor_scale[1].abs() * effect_scale[2];
+        draw.pos[2] *= song_lua_overlay_z_scale(state) * effect_scale[2];
         draw.rot[0] += effect_rot[0];
         draw.rot[1] += effect_rot[1];
         let frame = slot.frame_index(total_elapsed, effect_beat);
@@ -12261,6 +12278,13 @@ fn append_song_lua_noteskin_actors(
         let layer_z = song_lua_add_z(z, idx.min(i16::MAX as usize) as i16)
             .min(SONG_LUA_FOREGROUND_DEPTH.ceiling);
         let actor = if slot.model.is_some() {
+            // Actor::BeginDraw scales each model axis independently. The
+            // noteskin renderer fits models uniformly from size[1], so pass
+            // native dimensions and put the composed Lua scale in the draw.
+            draw.zoom[0] *= x_scale * actor_scale[0] * effect_scale[0];
+            draw.zoom[1] *= y_scale * actor_scale[1] * effect_scale[1];
+            draw.zoom[2] *= song_lua_overlay_z_scale(state) * effect_scale[2];
+            let size = base_size;
             if let Some(cache) = model_cache.as_deref_mut() {
                 noteskin_model_actor_from_draw_cached(
                     slot,
@@ -14770,6 +14794,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             state_delay,
             scale,
             effect,
+            blend,
             ..
         } => {
             if glow[3] <= f32::EPSILON {
@@ -14784,8 +14809,11 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 world_z: *world_z,
                 size: *size,
                 source: source.clone(),
-                tint: glow,
-                glow: [0.0, 0.0, 0.0, 0.0],
+                // Sprite::DrawTexture uses TextureMode_Glow with the actor's
+                // blend mode: whiten through texture alpha, without adding a
+                // second texture-modulated diffuse pass.
+                tint: [0.0; 4],
+                glow,
                 z: *z,
                 cell: *cell,
                 grid: *grid,
@@ -14801,7 +14829,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 faderight: *faderight,
                 fadetop: *fadetop,
                 fadebottom: *fadebottom,
-                blend: BlendMode::Add,
+                blend: *blend,
                 mask_source: false,
                 mask_dest: *mask_dest,
                 rot_x_deg: *rot_x_deg,
@@ -16471,6 +16499,7 @@ pub fn push_actors(
         &state.gameplay.display.visual_feedback,
         state.cols_per_player(),
         state.total_elapsed_in_screen(),
+        song_lua_now,
         &song_lua_visuals.overlays,
         song_lua_overlay_order,
         song_lua_local_state_scratch,
@@ -16512,8 +16541,9 @@ pub fn push_actors(
             &state.gameplay.display.visual_feedback,
             state.cols_per_player(),
             state.total_elapsed_in_screen(),
+            song_lua_now,
             &layer.overlays,
-            &song_lua_background_visual_layer_orders[layer_idx],
+            &mut song_lua_background_visual_layer_orders[layer_idx],
             local_states,
             layer_states,
             [layer.screen_width, layer.screen_height],
@@ -16541,8 +16571,9 @@ pub fn push_actors(
             &state.gameplay.display.visual_feedback,
             state.cols_per_player(),
             state.total_elapsed_in_screen(),
+            song_lua_now,
             &layer.overlays,
-            &song_lua_foreground_visual_layer_orders[layer_idx],
+            &mut song_lua_foreground_visual_layer_orders[layer_idx],
             local_states,
             layer_states,
             [layer.screen_width, layer.screen_height],
@@ -19138,6 +19169,63 @@ mod tests {
     use deadsync_song_lua::SongLuaOverlayStateDelta;
 
     #[test]
+    fn song_lua_tap_glow_clock_survives_repeated_hits_and_music_rate() {
+        let initial = SongLuaOverlayState::default();
+        let overlays = vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Quad,
+            name: None,
+            parent_index: None,
+            initial_state: initial,
+            message_commands: vec![SongLuaOverlayMessageCommand {
+                message: "__songlua_tap_1_3_W1".into(),
+                aux: None,
+                blocks: vec![SongLuaOverlayCommandBlock {
+                    start: 0.0,
+                    duration: 0.0,
+                    easing: None,
+                    opt1: None,
+                    opt2: None,
+                    delta: SongLuaOverlayStateDelta {
+                        effect_mode: Some(deadlib_present::anim::EffectMode::GlowShift),
+                        effect_period: Some(0.05),
+                        effect_color1: Some([1.0, 1.0, 1.0, 0.0]),
+                        effect_color2: Some([1.0, 1.0, 1.0, 0.5]),
+                        ..Default::default()
+                    },
+                }],
+            }],
+        }];
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut feedback = deadsync_gameplay::GameplayVisualFeedbackState::default();
+        for (at, now, music) in [(10.037, 10.0495, 8.0), (10.416, 10.4495, 8.6)] {
+            feedback.last_tap_judgments[2] = Some(deadsync_gameplay::ColumnTapJudgment {
+                grade: JudgeGrade::Fantastic,
+                blue_fantastic: false,
+                at_screen_s: at,
+            });
+            let mut local = vec![initial];
+            let mut composed = vec![initial];
+            apply_song_lua_taps(
+                &feedback,
+                4,
+                now,
+                music,
+                &overlays,
+                &mut order,
+                &mut local,
+                &mut composed,
+                [854.0, 480.0],
+            );
+            let effect = song_lua_proxy_effect(composed[0], music, 0.0, 0);
+            assert!(
+                (effect.glow[3] - 0.25).abs() < 0.00005,
+                "same timer phase across hits and playback rates: {:?}",
+                effect.glow
+            );
+        }
+    }
+
+    #[test]
     fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
         let initial = SongLuaOverlayState {
             diffuse: [1.0, 1.0, 1.0, 0.0],
@@ -19167,7 +19255,7 @@ mod tests {
                     .collect(),
             }],
         }];
-        let order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
         let mut feedback = deadsync_gameplay::GameplayVisualFeedbackState::default();
         for (column, grade, at, now, alpha) in [
             (0, JudgeGrade::Fantastic, 1.0, 1.0, 0.0),
@@ -19190,8 +19278,9 @@ mod tests {
                 &feedback,
                 4,
                 now,
+                now,
                 &overlays,
-                &order,
+                &mut order,
                 &mut local,
                 &mut composed,
                 [854.0, 480.0],
@@ -25378,6 +25467,71 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_multitap_model_preserves_vertical_squash_in_all_lanes() {
+        crate::tests::init_paths();
+        let slots = deadsync_assets::noteskin::load_itg_model_slots_from_path(
+            &workspace_root().join("assets/noteskins/dance/cyber/_down tap note model.txt"),
+        )
+        .expect("cyber tap model should load");
+        let mut assets = AssetManager::new();
+        for slot in slots.iter() {
+            assets
+                .queue_texture_upload(slot.texture_key().to_owned(), image::RgbaImage::new(16, 16));
+        }
+        for rotation in [90.0_f32, 0.0, 180.0, 270.0] {
+            for squash in [0.9, 1.0, 1.1] {
+                let state = song_lua_overlay_compose_state(
+                    &SongLuaOverlayKind::ActorFrame,
+                    SongLuaOverlayState {
+                        zoom_y: squash,
+                        ..Default::default()
+                    },
+                    SongLuaOverlayState {
+                        rot_z_deg: rotation,
+                        ..Default::default()
+                    },
+                    854.0,
+                    480.0,
+                );
+                let actors = song_lua_noteskin_actor(
+                    &slots,
+                    state,
+                    &assets,
+                    323,
+                    1.0,
+                    1.0,
+                    song_lua_overlay_axis_scale(state),
+                    [1.0; 3],
+                    [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+                    [0.0; 3],
+                    [1.0; 4],
+                    [0.0; 4],
+                    BlendMode::Alpha,
+                    0.0,
+                    0.0,
+                )
+                .expect("squashed multitap model should render");
+                let actual = first_textured_mesh_transform(&actors);
+                // Native ActorFrame scale * child base rotation * Model's Y flip.
+                let expected = Matrix4::from_scale(Vector3::new(1.0, squash, 1.0))
+                    * Matrix4::from_rotation_z(rotation.to_radians())
+                    * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+                for point in [
+                    Vector4::new(20.0, 0.0, 0.0, 1.0),
+                    Vector4::new(0.0, 20.0, 0.0, 1.0),
+                ] {
+                    let actual = actual * point;
+                    let expected = expected * point;
+                    assert!(
+                        (actual - expected).abs().max_element() < 0.0001,
+                        "rotation={rotation}, squash={squash}: {actual:?} != {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
         crate::tests::init_paths();
         let model_path =
@@ -27788,6 +27942,7 @@ mod tests {
                 Actor::Sprite { blend, z, .. },
                 Actor::Sprite {
                     tint,
+                    glow,
                     blend: glow_blend,
                     z: glow_z,
                     ..
@@ -27795,8 +27950,9 @@ mod tests {
             ] => {
                 assert_eq!(blend, &BlendMode::Alpha);
                 assert_eq!(z, &790);
-                assert_eq!(tint, &[0.1, 0.2, 0.3, 0.4]);
-                assert_eq!(glow_blend, &BlendMode::Add);
+                assert_eq!(tint, &[0.0; 4]);
+                assert_eq!(glow, &[0.1, 0.2, 0.3, 0.4]);
+                assert_eq!(glow_blend, &BlendMode::Alpha);
                 assert_eq!(glow_z, &790);
             }
             other => panic!("expected base sprite plus glow sprite actors, got {other:?}"),
