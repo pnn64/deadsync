@@ -55,6 +55,13 @@ fn snapshot(owner: &Table) -> String {
         if let Some(table) = owner.raw_get::<Option<Table>>(field).unwrap() {
             for pair in table.pairs::<String, Value>() {
                 let (key, value) = pair.unwrap();
+                // Speed approaches were missing from the frozen parser; the
+                // native speed-option regression covers their corrected values.
+                if field == "__songlua_player_option_speeds"
+                    && matches!(key.as_str(), "xmod" | "cmod" | "mmod")
+                {
+                    continue;
+                }
                 let value = match value {
                     Value::Number(n) => format!("number:{:x}", n.to_bits()),
                     value => format!("{value:?}"),

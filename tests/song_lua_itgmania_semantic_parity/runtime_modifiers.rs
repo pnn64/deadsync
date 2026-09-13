@@ -142,6 +142,11 @@ fn runtime_mod_value(
         "tilt" => runtime.perspective[player].tilt.unwrap_or(0.0),
         "skew" => runtime.perspective[player].skew.unwrap_or(0.0),
         "mini" => runtime.mini_percent[player].unwrap_or(0.0) / 100.0,
+        "xmod" => match runtime.scroll_speed[player] {
+            Some(deadsync_rules::scroll::ScrollSpeedSetting::XMod(value)) => value,
+            None => 1.0,
+            _ => return None,
+        },
         _ => return None,
     })
 }
@@ -154,12 +159,10 @@ struct ModStats {
     worst: (f32, f32, f32),
 }
 
-#[test]
-#[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
-fn native_modifier_values_match_deadsync() {
-    crate::paths::init();
-    let trace = read_trace();
-    let (compiled, _, context) = compile_trace_song(&trace);
+fn modifier_runtime(
+    compiled: &[CompiledSongLua],
+    context: &SongLuaCompileContext,
+) -> GameplayAttackRuntimeState {
     let timing = deadsync_rules::timing::TimingData::from_segments(
         0.0,
         0.0,
@@ -196,7 +199,136 @@ fn native_modifier_values_match_deadsync() {
             })
             .collect()
     });
-    let mut runtime = GameplayAttackRuntimeState::new(constants, eases);
+    GameplayAttackRuntimeState::new(constants, eases)
+}
+
+#[test]
+fn sampled_mini_and_xmod_pulse_preserves_note_spacing() {
+    crate::paths::init();
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song_lua");
+    let mut context = SongLuaCompileContext::new(&directory, "Mini and XMod pulse");
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    context.music_length_seconds = 3.0;
+    let compiled = compile_song_lua_layers(
+        &[directory.join("mini-speed-pulse.lua").as_path()],
+        0,
+        &context,
+    )
+    .unwrap();
+    let mut runtime = modifier_runtime(&compiled, &context);
+    let mut transform = SongLuaPlayerTransform::default();
+    // Probe between the compiler's 60 Hz samples as well as on their edges.
+    // ITGmania Player::Update uses zoom = 1 - Mini / 2; ArrowEffects::GetYOffset
+    // multiplies travel by XMod. These paired writes must cancel at every frame.
+    for frame in 0..540 {
+        let second = frame as f32 / 180.0;
+        if let Some(next) = runtime.refresh_player(
+            0,
+            second,
+            1.0 / 180.0,
+            AttackBaseEffects::default(),
+            transform,
+        ) {
+            transform = next;
+        }
+        let mini = runtime_mod_value(&runtime, 0, "mini").unwrap();
+        let speed = runtime_mod_value(&runtime, 0, "xmod").unwrap();
+        let expected_mini = match frame {
+            135 | 315 => Some(-0.4), // inside each method/string-authored pulse
+            45 | 225 | 405 => Some(0.0),
+            _ => None,
+        };
+        if let Some(expected) = expected_mini {
+            assert!(
+                (mini - expected).abs() < 0.00001,
+                "pulse missing at {second}s"
+            );
+        }
+        let spacing = (1.0 - mini * 0.5) * speed;
+        assert!(
+            (spacing - 1.0).abs() < 0.00001,
+            "note spacing jumped at {second}s: Mini={mini}, XMod={speed}, spacing={spacing}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires the 7th Gear song files; set ITGMANIA_SONG_LUA_SIMFILE"]
+fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
+    crate::paths::init();
+    let mut trace = read_trace_file(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/itgmania-song-lua/7th Gear/7th Gear.ssc.semantic.json"),
+    );
+    // The native trace records the same outQuad factor for Mini and XMod.
+    // Check that relationship first, then probe DeadSync between its samples.
+    let writes = option_writes(&trace);
+    let mut native_samples = 0;
+    for mini in writes.iter().filter(|write| {
+        write.player == 0 && write.key == "mini" && (16.0..20.0).contains(&write.beat)
+    }) {
+        if writes.iter().any(|later| {
+            later.player == mini.player
+                && later.key == mini.key
+                && later.second == mini.second
+                && later.sequence > mini.sequence
+        }) {
+            continue;
+        }
+        let speed = writes
+            .iter()
+            .rev()
+            .find(|write| write.player == 0 && write.key == "xmod" && write.second == mini.second)
+            .unwrap();
+        assert!((speed.value - (1.0 + mini.value * (5.0 / 12.0))).abs() < 0.00001);
+        native_samples += 1;
+    }
+    assert!(native_samples >= 16);
+    let first_pulse = writes.iter().find(|write| write.beat == 16.0).unwrap();
+    let seconds_per_beat = first_pulse.second / first_pulse.beat;
+    trace.end_position.seconds = 21.0 * seconds_per_beat;
+    let (compiled, _, context) = compile_trace_song(&trace);
+    let mut runtime = modifier_runtime(&compiled, &context);
+    let mut transform = SongLuaPlayerTransform::default();
+    let mut pulsed = [false; 4];
+    for frame in 0..(trace.end_position.seconds * 180.0) as usize {
+        let second = frame as f32 / 180.0;
+        if let Some(next) = runtime.refresh_player(
+            0,
+            second,
+            1.0 / 180.0,
+            AttackBaseEffects::default(),
+            transform,
+        ) {
+            transform = next;
+        }
+        let beat = second / seconds_per_beat;
+        if !(15.0..20.0).contains(&beat) {
+            continue;
+        }
+        let mini = runtime_mod_value(&runtime, 0, "mini").unwrap();
+        let speed = runtime_mod_value(&runtime, 0, "xmod").unwrap();
+        if beat >= 16.0 && mini < -0.3 {
+            pulsed[beat as usize - 16] = true;
+        }
+        assert!(
+            (speed - (1.0 + mini * (5.0 / 12.0))).abs() < 0.00001,
+            "pulse out of sync at beat {beat}: Mini={mini}, XMod={speed}"
+        );
+    }
+    assert!(
+        pulsed.into_iter().all(|seen| seen),
+        "opening pulses missing"
+    );
+}
+
+#[test]
+#[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
+fn native_modifier_values_match_deadsync() {
+    crate::paths::init();
+    let trace = read_trace();
+    let (compiled, _, context) = compile_trace_song(&trace);
+    let mut runtime = modifier_runtime(&compiled, &context);
     let mut transforms = [SongLuaPlayerTransform::default(); 2];
     let writes = option_writes(&trace);
     assert!(!writes.is_empty(), "fixture contains no modifier writes");

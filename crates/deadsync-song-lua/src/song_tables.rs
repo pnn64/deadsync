@@ -433,6 +433,21 @@ fn player_option_speeds(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     Ok(speeds)
 }
 
+fn set_player_speed_approaches(lua: &Lua, owner: &Table, speed: Option<f32>) -> mlua::Result<()> {
+    let speeds = player_option_speeds(lua, owner)?;
+    let speed = speed
+        .or(speeds.raw_get::<Option<f32>>("xmod")?)
+        .unwrap_or(1.0)
+        .max(0.0);
+    // PlayerOptions::SetSpeedModApproaches updates all speed modes together.
+    // Record these writes like Mini/Flip so sampled XMod targets do not
+    // interpolate ahead of the matching size/position changes.
+    for key in ["xmod", "cmod", "mmod"] {
+        speeds.raw_set(key, speed)?;
+    }
+    Ok(())
+}
+
 fn apply_player_options_string(lua: &Lua, owner: &Table, text: &str) -> mlua::Result<()> {
     for option in text.split(',') {
         apply_player_option_token(lua, owner, option)?;
@@ -448,7 +463,11 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
         .and_then(|prefix| split_first_word(prefix).0.parse::<f32>().ok())
         .unwrap_or(1.0)
         .max(0.0);
-    if text.is_empty() || apply_player_speed_option(owner, text)? {
+    if text.is_empty() {
+        return Ok(());
+    }
+    if apply_player_speed_option(owner, text)? {
+        set_player_speed_approaches(lua, owner, Some(speed))?;
         return Ok(());
     }
 
@@ -507,12 +526,16 @@ fn install_speedmod_state_method(
     let value_key = format!("__songlua_speedmod_{key}");
     table.set(
         name,
-        lua.create_function(move |_, args: MultiValue| {
+        lua.create_function(move |lua, args: MultiValue| {
             if let Some(value) = method_arg(&args, 0).cloned() {
                 if matches!(value, Value::Nil) {
                     set_player_speedmod_with_key(&owner, &key, &value_key, None)?;
                 } else if let Some(value) = read_f32(value) {
                     set_player_speedmod_with_key(&owner, &key, &value_key, Some(value))?;
+                    if matches!(key.as_str(), "xmod" | "cmod" | "mmod") {
+                        let speed = method_arg(&args, 1).cloned().and_then(read_f32);
+                        set_player_speed_approaches(lua, &owner, speed)?;
+                    }
                 }
                 return Ok(Value::Table(owner.clone()));
             }
@@ -1274,6 +1297,32 @@ fn create_steps_by_steps_type_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn speed_option_writes_preserve_shared_approach_speed() {
+        let lua = Lua::new();
+        let options = create_player_options_table(&lua, SongLuaPlayerContext::default()).unwrap();
+        lua.globals().set("options", options.clone()).unwrap();
+        for (script, expected) in [
+            ("options:XMod(2.5)", 1.0),
+            ("options:XMod(2.5, 10000)", 10000.0),
+            ("options:CMod(300)", 10000.0),
+            ("options:MMod(400, 0)", 0.0),
+            ("options:XMod(1.5)", 0.0),
+            ("options:FromString('*7 2x')", 7.0),
+            ("options:FromString('C500')", 1.0),
+        ] {
+            lua.load(script).exec().unwrap();
+            let speeds = player_option_speeds(&lua, &options).unwrap();
+            for key in ["xmod", "cmod", "mmod"] {
+                assert_eq!(
+                    speeds.raw_get::<f32>(key).unwrap(),
+                    expected,
+                    "{script}: {key}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn dynamic_player_option_methods_are_cached_after_first_lookup() {

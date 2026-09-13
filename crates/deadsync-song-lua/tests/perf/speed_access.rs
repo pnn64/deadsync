@@ -23,7 +23,9 @@ fn snapshot(owner: &Table) -> Vec<(String, String)> {
             };
             (key, text)
         })
-        .filter(|(key, _)| key.starts_with("__songlua_"))
+        // The frozen implementation omitted speed approaches. Their corrected
+        // behavior is covered by speed_option_writes_preserve_shared_approach_speed.
+        .filter(|(key, _)| key.starts_with("__songlua_") && key != "__songlua_player_option_speeds")
         .collect();
     values.sort();
     values
