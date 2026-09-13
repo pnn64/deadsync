@@ -405,6 +405,17 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
     for entry in selected_archives(&index) {
         let archive = extract_archive(entry);
         validate_archive(entry, &archive);
+        if entry.source_simfile.contains("Who the Hell Is Edgar") {
+            for font in [
+                "song/multitap/_komika axis 42px.ini",
+                "song/multitap/_komika axis 42px [numbers] 4x4 (doubleres).png",
+            ] {
+                assert!(
+                    archive.manifest.files.iter().any(|file| file.path == font),
+                    "the isolated countdown needs {font}"
+                );
+            }
+        }
     }
 }
 

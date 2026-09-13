@@ -1863,6 +1863,8 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
         font_name: &'static str,
         font_path: PathBuf,
         text: Arc<str>,
+        // Sorted beat/string pairs baked at load; never grown during playback.
+        text_changes: Arc<[(f32, Arc<str>)]>,
         stroke_color: Option<[f32; 4]>,
         attributes: Arc<[TextAttribute]>,
     },
@@ -1895,6 +1897,17 @@ pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
 pub struct SongLuaSpriteState {
     pub frame: u32,
     pub delay: f32,
+}
+
+/// Select precompiled text without formatting or allocating on a song frame.
+pub fn overlay_text_at<'a>(
+    initial: &'a Arc<str>,
+    changes: &'a [(f32, Arc<str>)],
+    beat: f32,
+) -> &'a Arc<str> {
+    let end = changes.partition_point(|(start, _)| *start <= beat);
+    end.checked_sub(1)
+        .map_or(initial, |index| &changes[index].1)
 }
 
 #[must_use]

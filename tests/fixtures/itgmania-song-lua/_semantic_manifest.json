@@ -251,7 +251,13 @@
       "fixture": "[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.semantic.json",
       "title": "[3752] [09] Who the Hell Is Edgar?",
       "lua_entries": 1,
-      "status": "ok"
+      "status": "ok",
+      "itgmania": {
+        "git_revision": "5148388e6061a5bf2e6b9aa7d41039d7672e9980",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      }
     },
     {
       "simfile": "[10] Riddle (DX) [Brother Mojo remixes A. Astral]/Riddle.ssc",

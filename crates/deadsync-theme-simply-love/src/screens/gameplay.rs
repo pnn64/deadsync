@@ -908,6 +908,9 @@ const SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS: usize = 64;
 /// for glow/stroke extraction. Gameplay frames only refill or clone these
 /// prewarmed buffers. The fallback conversion also supports test-only builders
 /// that do not provide screen scratch.
+/// Authored text changes reserve their largest string length and one uppercase
+/// string per change at entry. They never grow or evict during playback and
+/// are released with this song; selection costs at most two binary searches per draw.
 #[derive(Default)]
 struct SongLuaProjectedMeshScratch {
     sprite_key: Option<Arc<str>>,
@@ -928,6 +931,7 @@ struct SongLuaProjectedMeshScratch {
     text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
     text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
     uppercase_text: Option<Arc<str>>,
+    uppercase_changes: Vec<Arc<str>>,
     rainbow_text_attributes: Option<[Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()]>,
     capacity: usize,
     text_attribute_capacity: usize,
@@ -979,6 +983,7 @@ impl SongLuaProjectedMeshScratch {
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
+            uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
             capacity,
             text_attribute_capacity: 0,
@@ -1006,6 +1011,7 @@ impl SongLuaProjectedMeshScratch {
             text_diffuse_attributes: None,
             text_glow_attributes: None,
             uppercase_text: None,
+            uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
             capacity,
             text_attribute_capacity: 0,
@@ -1286,17 +1292,31 @@ fn song_lua_projected_mesh_scratch_for(
                 _ => SongLuaProjectedMeshScratch::default(),
             };
             if let SongLuaOverlayKind::BitmapText {
-                text, attributes, ..
+                text,
+                text_changes,
+                attributes,
+                ..
             } = &overlay.kind
             {
                 let uppercase_text = Arc::<str>::from(text.to_uppercase());
-                let char_count = text.chars().count();
+                let char_count = text_changes
+                    .iter()
+                    .map(|(_, text)| text.chars().count())
+                    .chain(std::iter::once(text.chars().count()))
+                    .max()
+                    .unwrap_or(0);
                 scratch.prewarm_text_attributes(
                     attributes.len(),
                     char_count.max(uppercase_text.chars().count()),
                 );
                 scratch.uppercase_text = Some(uppercase_text);
-                if (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count) {
+                scratch.uppercase_changes = text_changes
+                    .iter()
+                    .map(|(_, text)| Arc::from(text.to_uppercase()))
+                    .collect();
+                if text_changes.is_empty()
+                    && (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count)
+                {
                     scratch.rainbow_text_attributes =
                         Some(song_lua_rainbow_scroll_phases(text.as_ref()));
                 }
@@ -6131,6 +6151,25 @@ pub fn prewarm_text_layout(
     }
     prewarm_life_text_slots(cache, scratch, fonts, state.num_players());
     prewarm_bpm_text_slot(cache, scratch, fonts);
+    let visuals = state.gameplay.song_lua_visuals();
+    for overlay in visuals.overlays.iter().chain(
+        visuals
+            .background_visual_layers
+            .iter()
+            .chain(&visuals.foreground_visual_layers)
+            .flat_map(|layer| &layer.overlays),
+    ) {
+        if let SongLuaOverlayKind::BitmapText {
+            font_name,
+            text_changes,
+            ..
+        } = &overlay.kind
+        {
+            for (_, text) in text_changes.iter() {
+                cache.prewarm_text(fonts, font_name, text, None);
+            }
+        }
+    }
     for player in 0..state.num_players() {
         let chart = &state.charts()[player];
         let meter_text = cached_meter_text(chart.meter);
@@ -13957,14 +13996,24 @@ fn build_song_lua_overlay_actor_with_scratch(
         SongLuaOverlayKind::BitmapText {
             font_name,
             text,
+            text_changes,
             stroke_color,
             attributes,
             ..
         } => {
+            let text = deadsync_song_lua::overlay_text_at(text, text_changes, effect_beat);
+            let text_index = text_changes
+                .partition_point(|(beat, _)| *beat <= effect_beat)
+                .checked_sub(1);
             let content = if state.uppercase {
                 projected_mesh_scratch
                     .as_deref()
-                    .and_then(|scratch| scratch.uppercase_text.as_ref())
+                    .and_then(|scratch| {
+                        text_index.map_or_else(
+                            || scratch.uppercase_text.as_ref(),
+                            |index| scratch.uppercase_changes.get(index),
+                        )
+                    })
                     .map_or_else(
                         || TextContent::from(text.to_uppercase()),
                         |uppercase| TextContent::from(Arc::clone(uppercase)),
@@ -25321,6 +25370,7 @@ mod tests {
 
     #[test]
     fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
+        crate::tests::init_paths();
         let model_path =
             workspace_root().join("assets/noteskins/dance/ddr-note/_down tap note model.txt");
         let slots = deadsync_assets::noteskin::load_itg_model_slots_from_path(&model_path)
@@ -26101,6 +26151,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ABC"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -26144,6 +26195,54 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_countdown_renders_precompiled_text() {
+        let overlay = SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::BitmapText {
+                font_name: "miso",
+                font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+                text: Arc::from(""),
+                text_changes: Arc::from([
+                    (104.0, Arc::from("3")),
+                    (112.0_f32.next_up(), Arc::from("2")),
+                ]),
+                stroke_color: None,
+                attributes: empty_text_attributes(),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        };
+        let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+        assert!(scratch[0].text_attribute_capacity >= 1);
+        for uppercase in [false, true] {
+            for (beat, expected) in [(111.0, "3"), (112.0, "3"), (112.01, "2"), (111.0, "3")] {
+                let actor = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        uppercase,
+                        ..Default::default()
+                    },
+                    None,
+                    &AssetManager::new(),
+                    780,
+                    640.0,
+                    480.0,
+                    0.0,
+                    beat,
+                    0.0,
+                    scratch.first_mut(),
+                )
+                .expect_actor("countdown should render");
+                let Actor::Text { content, .. } = actor else {
+                    panic!("countdown must be text");
+                };
+                assert_eq!(content.as_str(), expected);
+            }
+        }
+    }
+
+    #[test]
     fn long_song_lua_rainbow_text_uses_prewarmed_current_phase_buffer() {
         let text = "R".repeat(SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS + 17);
         let overlay = SongLuaOverlayActor {
@@ -26151,6 +26250,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::from(text.as_str()),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -26208,6 +26308,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ATTR"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: Arc::clone(&compiled),
             },
@@ -26249,6 +26350,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("GLOW"),
+                text_changes: Arc::from([]),
                 stroke_color: Some([0.0, 0.0, 0.0, 0.5]),
                 attributes: empty_text_attributes(),
             },
@@ -26342,6 +26444,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("GLOW"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: Arc::from([TextAttribute {
                     start: 1,
@@ -27393,6 +27496,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("MASK"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -27472,6 +27576,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ALIGN"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -27830,6 +27935,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("WRAP"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -27895,6 +28001,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("USEZOOM"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -27944,6 +28051,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ATTR"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: Arc::from([TextAttribute {
                     start: 1,
@@ -27995,6 +28103,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("ATTR"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: Arc::from([TextAttribute {
                     start: 1,
@@ -28090,6 +28199,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("Mixed Straße"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -28166,6 +28276,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("SKEW"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },
@@ -28220,6 +28331,7 @@ mod tests {
                 font_name: "miso",
                 font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
                 text: Arc::<str>::from("FIT"),
+                text_changes: Arc::from([]),
                 stroke_color: None,
                 attributes: empty_text_attributes(),
             },

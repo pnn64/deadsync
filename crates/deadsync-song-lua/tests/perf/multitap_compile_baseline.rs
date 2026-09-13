@@ -48,6 +48,8 @@ pub fn push_multitap_actor_eases(
     noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     desc: &MultitapDesc,
+    // Signature adapter; the frozen baseline only measures rotating decorations.
+    _numbered: bool,
 ) {
     // Preserve strict visibility/tap boundaries and the derivative change at
     // each bounce apex. The smallest representable following beat keeps the

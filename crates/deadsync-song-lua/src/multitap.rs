@@ -1,9 +1,10 @@
 use deadlib_present::anim::{EffectClock, EffectMode};
 use mlua::{Lua, Table, Value};
+use std::sync::Arc;
 
 use crate::{
     LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_NOTE_COLUMNS, SongLuaCompileContext,
-    SongLuaNoteskinResolver, SongLuaOverlayCompileActor, SongLuaOverlayEase,
+    SongLuaNoteskinResolver, SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayKind,
     SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
     SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
     named_overlay_indices_by_name, overlay_delta_intersection, overlay_descendants_by_parent,
@@ -223,6 +224,7 @@ pub fn push_multitap_actor_eases(
     noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     desc: &MultitapDesc,
+    numbered: bool,
 ) {
     // Preserve strict visibility/tap boundaries and the derivative change at
     // each bounce apex. The smallest representable following beat keeps the
@@ -259,9 +261,22 @@ pub fn push_multitap_actor_eases(
             desc.lane,
             phase,
         );
+        if numbered && phase.visible {
+            // The numbered script brightens the arrow after each tap. Keep
+            // strict `beat > tap` edges, just like its Lua countdown.
+            let hit = desc.taps.partition_point(|tap| *tap < beat);
+            let diffuse = 0.4 + 0.6 * hit as f32 / (desc.taps.len() - 1).max(1) as f32;
+            if let Some((_, arrow)) = arrow_samples.last_mut() {
+                arrow.diffuse = [diffuse, diffuse, diffuse, 1.0];
+            }
+        }
         deco_samples.push((
             beat,
-            multitap_deco_state(deco_baseline, noteskin_resolver, noteskin, phase),
+            if numbered {
+                multitap_count_state(deco_baseline, noteskin_resolver, noteskin, desc, beat)
+            } else {
+                multitap_deco_state(deco_baseline, noteskin_resolver, noteskin, phase)
+            },
         ));
         for ((_, baseline), (_, samples)) in deco_children.iter().zip(&mut deco_child_samples) {
             samples.push((
@@ -318,16 +333,19 @@ fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, 
     }
 }
 
-pub fn compile_multitap_update_overlays_for_actors<Kind, EnsureArrowVisual>(
+pub fn compile_multitap_update_overlays_for_actors<Slot, Vertex, Attribute, EnsureArrowVisual>(
     lua: &Lua,
     context: &SongLuaCompileContext,
-    overlays: &mut Vec<SongLuaOverlayCompileActor<Kind>>,
+    overlays: &mut Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<Slot, Vertex, Attribute>>>,
     noteskin_resolver: SongLuaNoteskinResolver,
     mut ensure_arrow_visual: EnsureArrowVisual,
 ) -> Result<Option<Vec<SongLuaOverlayEase>>, String>
 where
-    EnsureArrowVisual:
-        FnMut(&mut Vec<SongLuaOverlayCompileActor<Kind>>, usize, &str) -> Result<(), String>,
+    EnsureArrowVisual: FnMut(
+        &mut Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<Slot, Vertex, Attribute>>>,
+        usize,
+        &str,
+    ) -> Result<(), String>,
 {
     let Some(multitaps) = read_multitap_descs(lua, context)? else {
         return Ok(None);
@@ -366,11 +384,42 @@ where
             else {
                 return Ok(None);
             };
-            let Some(&deco_index) =
-                overlay_indices.get(format!("MultitapDeco{pn}_{index}").as_str())
-            else {
+            let numbered =
+                overlay_indices.contains_key(format!("MultitapTextP{pn}_{index}").as_str());
+            let Some(&deco_index) = overlay_indices.get(
+                if numbered {
+                    format!("MultitapTextP{pn}_{index}")
+                } else {
+                    format!("MultitapDeco{pn}_{index}")
+                }
+                .as_str(),
+            ) else {
                 return Ok(None);
             };
+            if numbered {
+                let SongLuaOverlayKind::BitmapText { text_changes, .. } =
+                    &mut overlays[deco_index].actor.kind
+                else {
+                    return Ok(None);
+                };
+                *text_changes = std::iter::once((
+                    multitap_visible_start(desc.taps[0]),
+                    Arc::from(desc.taps.len().to_string()),
+                ))
+                .chain(
+                    desc.taps
+                        .iter()
+                        .take(desc.taps.len().saturating_sub(2))
+                        .enumerate()
+                        .map(|(tap, beat)| {
+                            (
+                                beat.next_up(),
+                                Arc::from((desc.taps.len() - tap - 1).to_string()),
+                            )
+                        }),
+                )
+                .collect();
+            }
             overlays[arrow_index]
                 .actor
                 .initial_state
@@ -402,6 +451,7 @@ where
                 noteskin_resolver,
                 &noteskin,
                 desc,
+                numbered,
             );
         }
         for lane in 1..=SONG_LUA_NOTE_COLUMNS {
@@ -749,6 +799,31 @@ pub fn multitap_deco_state(
     state.effect_color1 = effect_color1;
     state.effect_color2 = effect_color2;
     state.effect_period = 1.0;
+    state
+}
+
+fn multitap_count_state(
+    baseline: SongLuaOverlayState,
+    resolver: SongLuaNoteskinResolver,
+    noteskin: &str,
+    desc: &MultitapDesc,
+    beat: f32,
+) -> SongLuaOverlayState {
+    if !multitap_is_visible(desc, beat) {
+        return baseline;
+    }
+    let hit = desc.taps.partition_point(|tap| *tap < beat);
+    let mut state = baseline;
+    state.visible = desc.taps.len().saturating_sub(hit) > 1;
+    if state.visible {
+        let qtzn = calc_multitap_qtzn(desc.taps.get(hit + 1).copied());
+        (state.effect_color1, state.effect_color2) =
+            multitap_deco_color_pair(resolver, noteskin, qtzn);
+        state.zoom = 1.0;
+        state.effect_mode = EffectMode::DiffuseRamp;
+        state.effect_clock = EffectClock::Beat;
+        state.effect_period = 1.0;
+    }
     state
 }
 

@@ -377,6 +377,7 @@ fn multitap_compile_actor_matches_parent_with_live_resolvers_and_child_baselines
                         resolver,
                         skin,
                         &desc,
+                        false,
                     );
                     let calls = METRIC_CALLS.get();
                     METRIC_CALLS.set((0, 0));
@@ -394,6 +395,7 @@ fn multitap_compile_actor_matches_parent_with_live_resolvers_and_child_baselines
                         resolver,
                         skin,
                         &desc,
+                        false,
                     );
                     assert_eq!(METRIC_CALLS.get(), calls);
                     assert_eq!(
@@ -600,6 +602,7 @@ fn multitap_compile_bench() {
                             Default::default(),
                             black_box("default"),
                             black_box(&desc),
+                            false,
                         );
                         black_box(out);
                     },

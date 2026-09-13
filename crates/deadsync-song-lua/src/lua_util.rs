@@ -13044,6 +13044,7 @@ where
             stroke_color: read_actor_color_field(actor, "__songlua_stroke_color")?
                 .or_else(|| read_actor_color_field(actor, "StrokeColor").ok().flatten()),
             attributes: read_bitmap_text_attributes(actor)?,
+            text_changes: Arc::from([]),
         }
     } else if actor_type.eq_ignore_ascii_case("DeviceList")
         || actor_type.eq_ignore_ascii_case("InputList")
@@ -13055,6 +13056,7 @@ where
             font_name,
             font_path,
             text: Arc::<str>::from(input_status_actor_text(&actor_type).unwrap_or_default()),
+            text_changes: Arc::from([]),
             stroke_color: None,
             attributes: Arc::<[TextAttribute]>::from([]),
         }

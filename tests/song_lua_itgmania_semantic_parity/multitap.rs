@@ -1,6 +1,120 @@
 use super::*;
 use std::collections::BTreeMap;
 
+const EDGAR_TRACE: &str = "tests/fixtures/itgmania-song-lua/[09] Who the Hell Is Edgar (SX) [Telperion]/Who the Hell Is Edgar.ssc.semantic.json";
+
+#[test]
+fn edgar_countdown_onsets_and_hit_commands() {
+    crate::paths::init();
+    let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
+    let (layers, primary, context) = compile_trace_song(&trace);
+    let compiled = &layers[primary];
+    let named = |name: &str| {
+        compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some(name))
+            .expect(name)
+    };
+    assert!(
+        compiled.overlay_updates.is_empty(),
+        "multitaps must use authored boundaries"
+    );
+    for player in 1..=2 {
+        for (index, lane, first, rotation) in [
+            (1, 1, 112.0, 90.0),
+            (2, 3, 114.0, 180.0),
+            (3, 2, 116.0, 0.0),
+            (4, 4, 118.0, 270.0),
+        ] {
+            let frame = named(&format!("MultitapP{player}_{index}"));
+            let arrow = named(&format!("MultitapArrowP{player}_{index}"));
+            let onset = compiled
+                .overlay_eases
+                .iter()
+                .filter(|ease| ease.overlay_index == frame && ease.to.visible == Some(true))
+                .map(|ease| ease.start)
+                .min_by(f32::total_cmp)
+                .expect("visible onset");
+            assert!(onset > first - 8.0, "the authored onset is strict");
+            // Adjacent f32 beats can map to the same f32 second. Sample on
+            // either side at distinct times, and check the exact beat above.
+            for beat in [first - 8.01, first - 7.999, first] {
+                let states = compiled_local_states_at(
+                    compiled,
+                    &context,
+                    beat,
+                    song_elapsed_seconds_at(beat, &context),
+                );
+                assert_eq!(
+                    states[frame].visible,
+                    beat > first - 8.0,
+                    "P{player} tap {index} at {beat}"
+                );
+                if states[frame].visible {
+                    assert_eq!(states[arrow].rot_z_deg, rotation);
+                    assert!(states[arrow].rot_x_deg.abs() < 0.001);
+                    assert!((states[frame].x - (lane as f32 * 64.0 - 160.0)).abs() < 0.001);
+                    assert!((states[frame].y - (-135.0 + (first - beat) * 64.0)).abs() < 0.003);
+                }
+            }
+            let prefix = format!("__songlua_tap_{player}_{lane}_");
+            for grade in ["W1", "W2", "W3", "W4", "W5"] {
+                assert!(
+                    compiled
+                        .overlays
+                        .iter()
+                        .any(
+                            |actor| actor.message_commands.iter().any(|command| command.message
+                                == format!("{prefix}{grade}")
+                                && overlay_state_after_blocks(
+                                    actor.initial_state,
+                                    &command.blocks,
+                                    0.0
+                                )
+                                .diffuse[3]
+                                    > 0.99)
+                        ),
+                    "P{player} lane {lane} {grade} must light a noteskin explosion"
+                );
+            }
+        }
+    }
+    let count = named("MultitapTextP1_2");
+    let arrow = named("MultitapArrowP1_2");
+    let SongLuaOverlayKind::BitmapText {
+        text, text_changes, ..
+    } = &compiled.overlays[count].kind
+    else {
+        panic!("Edgar uses numbered text");
+    };
+    for (beat, expected, visible, brightness) in [
+        (113.9, "3", true, 0.4),
+        (114.0, "3", true, 0.4),
+        (114.01, "2", true, 0.7),
+        (114.75, "2", true, 0.7),
+        (114.76, "2", false, 1.0),
+    ] {
+        let states = compiled_local_states_at(
+            compiled,
+            &context,
+            beat,
+            song_elapsed_seconds_at(beat, &context),
+        );
+        assert_eq!(
+            deadsync_song_lua::overlay_text_at(text, text_changes, beat).as_ref(),
+            expected
+        );
+        assert_eq!(states[count].visible, visible, "count visibility at {beat}");
+        assert!((states[arrow].diffuse[0] - brightness).abs() < 0.001);
+        assert_eq!(
+            states[count].rot_z_deg, 0.0,
+            "numbers do not spin like flip69's decoration"
+        );
+        assert_eq!(states[count].z, 10.0);
+    }
+}
+
 // Multitap uses SetUpdateFunction, whose writes are in operation_tracks, not
 // the UpdateCommand tween tracks handled by the general comparator.
 pub(super) fn compare_multitap(
@@ -71,6 +185,22 @@ pub(super) fn compare_multitap(
         let mut checked = 0usize;
         let mut failures = BTreeMap::<(String, String), (usize, String)>::new();
         for (index, name, track, (seq, beat, seconds, args)) in writes {
+            if track.operation.ends_with(".settext") {
+                let SongLuaOverlayKind::BitmapText {
+                    text, text_changes, ..
+                } = &compiled.overlays[index].kind
+                else {
+                    panic!("{name} must be text");
+                };
+                let expected = args[0]
+                    .as_str()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| args[0].to_string());
+                let actual = deadsync_song_lua::overlay_text_at(text, text_changes, *beat);
+                assert_eq!(actual.as_ref(), expected, "{name} text at beat {beat}");
+                checked += 1;
+                continue;
+            }
             if last_seconds != Some(*seconds) {
                 states = compiled_local_states_at(compiled, context, *beat, *seconds);
                 last_seconds = Some(*seconds);
