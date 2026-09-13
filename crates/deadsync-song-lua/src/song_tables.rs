@@ -524,6 +524,26 @@ fn install_speedmod_state_method(
     let owner = table.clone();
     let key = name.to_ascii_lowercase();
     let value_key = format!("__songlua_speedmod_{key}");
+    // Retain the small set of values written by speedmod setters. Comparing Lua
+    // handles avoids both owned text and BorrowedStr's shared-reference allocation.
+    let active_keys = [
+        key.as_str(),
+        "xmod",
+        "cmod",
+        "mmod",
+        "amod",
+        "camod",
+        "none",
+        "",
+    ]
+    .into_iter()
+    .map(|key| {
+        let key = lua.create_string(key)?;
+        let identity = key.to_pointer() as usize;
+        Ok((key, identity))
+    })
+    .collect::<mlua::Result<Vec<_>>>()?
+    .into_boxed_slice();
     table.set(
         name,
         lua.create_function(move |lua, args: MultiValue| {
@@ -540,14 +560,11 @@ fn install_speedmod_state_method(
                 return Ok(Value::Table(owner.clone()));
             }
 
-            let active = owner.raw_get::<Option<String>>("__songlua_speedmod_active")?;
-            if active
-                .as_deref()
-                .is_some_and(|active| active != key.as_str())
-            {
+            let active = player_speedmod_is_active(&owner, &key, &active_keys)?;
+            if active == Some(false) {
                 return Ok(Value::Nil);
             }
-            if active.as_deref() == Some(key.as_str()) {
+            if active == Some(true) {
                 return Ok(owner
                     .raw_get::<Option<f32>>(value_key.as_str())?
                     .map_or(Value::Nil, |value| Value::Number(f64::from(value))));
@@ -555,6 +572,31 @@ fn install_speedmod_state_method(
             Ok(initial.clone())
         })?,
     )
+}
+
+// Unknown/coercible values still use FromLua<String>, preserving numeric
+// conversion and exact errors, including invalid UTF-8. No state is cached:
+// every call observes the owner's current raw field.
+fn player_speedmod_is_active(
+    owner: &Table,
+    key: &str,
+    active_keys: &[(mlua::LuaString, usize)],
+) -> mlua::Result<Option<bool>> {
+    match owner.raw_get::<Value>("__songlua_speedmod_active")? {
+        Value::Nil => return Ok(None),
+        Value::String(active) => {
+            // Retained handles keep these immutable strings alive. A matching
+            // identity proves equality; a miss still takes the text fallback.
+            let identity = active.to_pointer() as usize;
+            if let Some(index) = active_keys.iter().position(|(_, key)| *key == identity) {
+                return Ok(Some(index == 0));
+            }
+        }
+        _ => {}
+    }
+    Ok(owner
+        .raw_get::<Option<String>>("__songlua_speedmod_active")?
+        .map(|active| active == key))
 }
 
 fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Result<()> {
@@ -1351,3 +1393,7 @@ mod mod_tokens_perf;
 #[cfg(test)]
 #[path = "../tests/perf/speed_access.rs"]
 mod speed_access_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/speed_read.rs"]
+mod speed_read_perf;
