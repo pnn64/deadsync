@@ -8,11 +8,11 @@ use crate::theme::{
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
     MachineBarColor, MachineEvaluationStyle, MachineFlowOptions, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
-    SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicSort, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder,
-    SrpgVariant, SyncGraphMode, ThemeFlag, ThemePresentationOptions, TournamentModeOptions,
-    VersionOverlaySide, VisualStyle,
+    SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicPatternInfoMode,
+    SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicSort,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelScoreMode, SelectMusicWheelScoreType,
+    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
+    ThemePresentationOptions, TournamentModeOptions, VersionOverlaySide, VisualStyle,
 };
 use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio_core::AudioOutputMode;
@@ -168,7 +168,10 @@ pub struct Config {
     /// Hide inactive parent-series folders while browsing an open section.
     pub hide_inactive_series: bool,
     pub select_music_itl_rank_mode: SelectMusicItlRankMode,
-    pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
+    pub select_music_wheel_score_mode: SelectMusicWheelScoreMode,
+    pub select_music_wheel_score_type: SelectMusicWheelScoreType,
+    pub select_music_wheel_show_fails: bool,
+    pub select_music_wheel_itl_points: bool,
     /// Simply Love `MusicWheelStyle` parity: IIDX only shows the active pack when expanded.
     pub select_music_wheel_style: SelectMusicWheelStyle,
     /// zmod difficulty colors: theme-relative Simply Love, fixed ITG, or fixed DDR.
@@ -459,7 +462,10 @@ impl Default for Config {
             select_music_series_source: select_music.series_source,
             hide_inactive_series: select_music.hide_inactive_series,
             select_music_itl_rank_mode: select_music.itl_rank_mode,
-            select_music_itl_wheel_mode: select_music.itl_wheel_mode,
+            select_music_wheel_score_mode: select_music.wheel_score_mode,
+            select_music_wheel_score_type: select_music.wheel_score_type,
+            select_music_wheel_show_fails: select_music.wheel_show_fails,
+            select_music_wheel_itl_points: select_music.wheel_itl_points,
             select_music_wheel_style: select_music.wheel_style,
             difficulty_color_scheme: select_music.difficulty_color_scheme,
             select_music_song_select_bg_mode: select_music.song_select_bg_mode,

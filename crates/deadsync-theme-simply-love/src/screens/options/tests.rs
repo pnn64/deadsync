@@ -526,6 +526,102 @@ fn machine_noteskin_choice_emits_shell_profile_request() {
 }
 
 #[test]
+fn wheel_options_preserve_preferences_and_follow_score_scope() {
+    use config::theme::{SelectMusicWheelScoreMode as Mode, SelectMusicWheelScoreType as Metric};
+    let mut state = init_with_config(config::app_config::Config {
+        select_music_wheel_score_mode: Mode::None,
+        select_music_wheel_score_type: Metric::HardEx,
+        select_music_wheel_show_fails: true,
+        select_music_wheel_itl_points: true,
+        ..Default::default()
+    });
+    let rows = SELECT_MUSIC_OPTIONS_ROWS;
+    let kind = SubmenuKind::SelectMusic;
+    for row in [
+        SubRowId::WheelScoreType,
+        SubRowId::WheelShowFails,
+        SubRowId::WheelItlPoints,
+    ] {
+        assert!(is_submenu_row_disabled(&state, kind, row));
+    }
+    assert_eq!(
+        get_choice_by_id(
+            &state.sub[kind].choice_indices,
+            rows,
+            SubRowId::WheelScoreType
+        ),
+        Some(2)
+    );
+    set_choice_by_id(
+        &mut state.sub[kind].choice_indices,
+        rows,
+        SubRowId::WheelScores,
+        1,
+    );
+    assert!(is_submenu_row_disabled(
+        &state,
+        kind,
+        SubRowId::WheelScoreType
+    ));
+    assert!(!is_submenu_row_disabled(
+        &state,
+        kind,
+        SubRowId::WheelShowFails
+    ));
+    assert!(!is_submenu_row_disabled(
+        &state,
+        kind,
+        SubRowId::WheelItlPoints
+    ));
+    set_choice_by_id(
+        &mut state.sub[kind].choice_indices,
+        rows,
+        SubRowId::WheelScores,
+        2,
+    );
+    assert!(!is_submenu_row_disabled(
+        &state,
+        kind,
+        SubRowId::WheelScoreType
+    ));
+    assert_eq!(
+        get_choice_by_id(
+            &state.sub[kind].choice_indices,
+            rows,
+            SubRowId::WheelScoreType
+        ),
+        Some(2)
+    );
+}
+
+#[test]
+fn wheel_options_emit_all_four_config_requests() {
+    use crate::SimplyLoveSelectMusicConfigRequest as Request;
+    use config::theme::{SelectMusicWheelScoreMode as Mode, SelectMusicWheelScoreType as Metric};
+    let assets = AssetManager::new();
+    for (row, expected) in [
+        (SubRowId::WheelScores, Request::WheelScoreMode(Mode::None)),
+        (
+            SubRowId::WheelScoreType,
+            Request::WheelScoreType(Metric::Ex),
+        ),
+        (SubRowId::WheelShowFails, Request::WheelShowFails(true)),
+        (SubRowId::WheelItlPoints, Request::WheelItlPoints(true)),
+    ] {
+        let mut state = init_with_config(config::app_config::Config {
+            select_music_wheel_score_mode: Mode::All,
+            ..Default::default()
+        });
+        state.view = OptionsView::Submenu(SubmenuKind::SelectMusic);
+        select_visible_row(&mut state, SubmenuKind::SelectMusic, row);
+        let effect = apply_submenu_choice_delta(&mut state, &assets, 1, NavWrap::Wrap).unwrap();
+        assert!(
+            matches!(effect, ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(crate::SimplyLoveConfigRequest::SelectMusic(request))) if request == expected)
+        );
+    }
+}
+
+#[test]
 fn select_music_choice_emits_shell_config_request() {
     let asset_manager = AssetManager::new();
     let mut state = init();

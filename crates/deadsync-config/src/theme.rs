@@ -452,22 +452,12 @@ impl FromStr for SelectMusicItlRankMode {
     }
 }
 
+/// Legacy setting, retained only for loading existing configurations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectMusicItlWheelMode {
+pub(crate) enum SelectMusicItlWheelMode {
     Off,
     Score,
     PointsAndScore,
-}
-
-impl SelectMusicItlWheelMode {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "Off",
-            Self::Score => "Score",
-            Self::PointsAndScore => "PointsAndScore",
-        }
-    }
 }
 
 impl FromStr for SelectMusicItlWheelMode {
@@ -481,6 +471,72 @@ impl FromStr for SelectMusicItlWheelMode {
             "off" | "disable" | "disabled" => Ok(Self::Off),
             "score" | "scores" => Ok(Self::Score),
             "pointsandscore" | "pointsscore" | "points" => Ok(Self::PointsAndScore),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicWheelScoreMode {
+    None,
+    #[default]
+    Events,
+    All,
+}
+
+impl SelectMusicWheelScoreMode {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Events => "Events",
+            Self::All => "All",
+        }
+    }
+}
+
+impl FromStr for SelectMusicWheelScoreMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let key = NormalizedAsciiKey::parse(s).ok_or(())?;
+        match key.as_str() {
+            "none" | "off" => Ok(Self::None),
+            "events" | "eventsonly" => Ok(Self::Events),
+            "all" | "allsongs" => Ok(Self::All),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SelectMusicWheelScoreType {
+    #[default]
+    Itg,
+    Ex,
+    HardEx,
+}
+
+impl SelectMusicWheelScoreType {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Itg => "ITG",
+            Self::Ex => "EX",
+            Self::HardEx => "HEX",
+        }
+    }
+}
+
+impl FromStr for SelectMusicWheelScoreType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let key = NormalizedAsciiKey::parse(s).ok_or(())?;
+        match key.as_str() {
+            "itg" | "normal" => Ok(Self::Itg),
+            "ex" => Ok(Self::Ex),
+            "hex" | "hardex" => Ok(Self::HardEx),
             _ => Err(()),
         }
     }

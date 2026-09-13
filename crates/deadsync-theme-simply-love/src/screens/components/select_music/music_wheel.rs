@@ -17,11 +17,12 @@ use deadsync_chart::{
 };
 use deadsync_config::theme::MachineFont;
 use deadsync_config::theme::{
-    DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
+    DefaultSyncOffset, SelectMusicItlRankMode, SelectMusicSongSelectBgMode,
+    SelectMusicWheelScoreMode, SelectMusicWheelScoreType,
 };
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
-use deadsync_simfile::event_intro::is_srpg_event_song;
+use deadsync_simfile::event_intro::{is_itl_event_song, is_srpg_event_song};
 use deadsync_theme::FontRole;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
@@ -85,7 +86,7 @@ const LOCK_ZOOM_SINGLE: f32 = 0.039; // 512 * 0.039 ≈ 20px
 const LOCK_ZOOM_DUAL: f32 = 0.029; // 512 * 0.029 ≈ 15px
 const WHEEL_BADGE_ZOOM: f32 = 0.1875;
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
-const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
+const WHEEL_SCORE_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
 const SRPG_RATE_TEXT_CACHE_LIMIT: usize = 512;
 const PACK_COUNT_TEXT_CACHE_LIMIT: usize = 1024;
@@ -93,7 +94,9 @@ const STR_REF_CACHE_LIMIT: usize = 4096;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
 // Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
 // keep both lines within that same visual footprint.
-const ITL_SCORE_ZOOM: f32 = 0.2;
+const WHEEL_SCORE_ZOOM: f32 = 0.2;
+const WHEEL_SCORE_MAX_WIDTH: f32 = 72.0;
+const WHEEL_SCORE_TITLE_GAP: f32 = 8.0;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
 
@@ -319,7 +322,7 @@ fn song_select_bg_sprite(
 thread_local! {
     static ITL_RANK_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(text_cache_with_capacity(256));
-    static ITL_EX_TEXT_CACHE: RefCell<TextCache<u32>> =
+    static WHEEL_SCORE_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(text_cache_with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<TextCache<u32>> =
         RefCell::new(text_cache_with_capacity(256));
@@ -364,12 +367,12 @@ const fn digit_text(digit: u8) -> &'static str {
 }
 
 #[inline(always)]
-fn cached_itl_ex_text(ex_hundredths: u32) -> Arc<str> {
+fn cached_wheel_score_text(hundredths: u32) -> Arc<str> {
     cached_text(
-        &ITL_EX_TEXT_CACHE,
-        ex_hundredths,
-        ITL_EX_TEXT_CACHE_LIMIT,
-        || format!("{}.{:02}", ex_hundredths / 100, ex_hundredths % 100),
+        &WHEEL_SCORE_TEXT_CACHE,
+        hundredths,
+        WHEEL_SCORE_TEXT_CACHE_LIMIT,
+        || format!("{}.{:02}", hundredths / 100, hundredths % 100),
     )
 }
 
@@ -423,7 +426,7 @@ const fn song_pack_sync_style(pref: SyncPref, default: DefaultSyncOffset) -> Def
 }
 
 #[inline(always)]
-fn itl_score_line_y(side: profile_data::PlayerSide, joined_sides: usize) -> (f32, f32) {
+fn wheel_points_score_line_y(side: profile_data::PlayerSide, joined_sides: usize) -> (f32, f32) {
     if joined_sides >= 2 {
         return if side == profile_data::PlayerSide::P1 {
             (-15.0, -6.0)
@@ -435,7 +438,7 @@ fn itl_score_line_y(side: profile_data::PlayerSide, joined_sides: usize) -> (f32
 }
 
 #[inline(always)]
-fn itl_score_y(side: profile_data::PlayerSide, joined_sides: usize) -> f32 {
+fn wheel_score_y(side: profile_data::PlayerSide, joined_sides: usize) -> f32 {
     if joined_sides >= 2 {
         if side == profile_data::PlayerSide::P1 {
             -11.0
@@ -448,47 +451,34 @@ fn itl_score_y(side: profile_data::PlayerSide, joined_sides: usize) -> f32 {
 }
 
 #[inline(always)]
-fn choose_itl_wheel_score(
-    local_itl: Option<score_data::CachedItlScore>,
-    online_ex_hundredths: Option<u32>,
-    online_points: Option<u32>,
-) -> Option<(u32, Option<u32>)> {
-    let ex_hundredths =
-        online_ex_hundredths.or_else(|| local_itl.as_ref().map(|score| score.ex_hundredths))?;
-    let points = if online_ex_hundredths.is_some() {
-        online_points
-    } else {
-        local_itl.map(|score| score.points)
-    };
-    Some((ex_hundredths, points))
-}
-
-#[inline(always)]
-const fn itl_wheel_mode_for_sides(
-    mode: SelectMusicItlWheelMode,
-    joined_sides: usize,
-) -> SelectMusicItlWheelMode {
-    match (mode, joined_sides >= 2) {
-        (SelectMusicItlWheelMode::PointsAndScore, true) => SelectMusicItlWheelMode::Score,
-        _ => mode,
-    }
-}
-
-#[inline(always)]
 pub(crate) const fn itl_fetch_flags(
     allow_online_fetch: bool,
     rank_mode: SelectMusicItlRankMode,
-    wheel_mode: SelectMusicItlWheelMode,
+    wheel_mode: SelectMusicWheelScoreMode,
     is_srpg_event: bool,
+    is_itl_event: bool,
 ) -> (bool, bool, bool) {
     if !allow_online_fetch {
         return (false, false, false);
     }
-    let fetch_rank = matches!(rank_mode, SelectMusicItlRankMode::Chart);
-    let fetch_score = matches!(rank_mode, SelectMusicItlRankMode::Overall)
-        || (!matches!(wheel_mode, SelectMusicItlWheelMode::Off) && !is_srpg_event);
-    let fetch_srpg = !matches!(wheel_mode, SelectMusicItlWheelMode::Off) && is_srpg_event;
-    (fetch_rank, fetch_score, fetch_srpg)
+    let show_scores = !matches!(wheel_mode, SelectMusicWheelScoreMode::None);
+    let fetch_rank = is_itl_event && matches!(rank_mode, SelectMusicItlRankMode::Chart);
+    let fetch_score = is_itl_event
+        && !is_srpg_event
+        && (matches!(rank_mode, SelectMusicItlRankMode::Overall) || show_scores);
+    (fetch_rank, fetch_score, show_scores && is_srpg_event)
+}
+
+const fn wheel_score_color(score_type: SelectMusicWheelScoreType, failed: bool) -> [f32; 4] {
+    if failed {
+        color::JUDGMENT_RGBA[5]
+    } else {
+        match score_type {
+            SelectMusicWheelScoreType::Itg => [1.0; 4],
+            SelectMusicWheelScoreType::Ex => color::JUDGMENT_RGBA[0],
+            SelectMusicWheelScoreType::HardEx => color::HARD_EX_SCORE_RGBA,
+        }
+    }
 }
 
 #[inline(always)]
@@ -581,6 +571,7 @@ pub(crate) struct WheelSongMeta {
     meter_indices: WheelMeterIndices,
     pub has_edit: bool,
     pub is_srpg_event: bool,
+    pub is_itl_event: bool,
     pub is_itl_unlock_pack: bool,
     pub sync_pref: SyncPref,
 }
@@ -598,6 +589,7 @@ pub(crate) fn wheel_song_meta(
         chart_indices,
         has_edit,
         is_srpg_event: is_srpg_event_song(song),
+        is_itl_event: is_itl_event_song(song),
         is_itl_unlock_pack,
         sync_pref,
     }
@@ -771,6 +763,8 @@ pub(crate) fn runtime_slot_requests<'a>(
                     ),
                     is_srpg_event: song_meta
                         .map_or_else(|| is_srpg_event_song(song), |meta| meta.is_srpg_event),
+                    is_itl_event: song_meta
+                        .map_or_else(|| is_itl_event_song(song), |meta| meta.is_itl_event),
                     unlock_song_dir: song_meta
                         .map_or_else(
                             || {
@@ -807,7 +801,7 @@ pub struct MusicWheelParams<'a> {
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
-    pub itl_wheel_mode: SelectMusicItlWheelMode,
+    pub show_itl_points: bool,
     pub song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub song_select_bg_paths: &'a [PathBuf],
     pub song_select_bg_texture_keys: &'a [Arc<str>],
@@ -900,12 +894,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let grade_x_p2 = widescale(26.0, 47.0);
     let itl_rank_zoom = widescale(0.2, 0.3);
     let srpg_rate_zoom = widescale(0.15, 0.2);
-    let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
-    let itl_ex_color = color::JUDGMENT_RGBA[0];
-    let srpg_score_color = [1.0, 1.0, 1.0, 1.0];
-    let itl_points_color = [1.0, 1.0, 1.0, 1.0];
+    let wheel_score_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let joined_sides = usize::from(p1_joined) + usize::from(p2_joined);
-    let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
+
     let is_double_style = play_style.is_double();
 
     let header_font = machine_font_key(p.machine_font, FontRole::Header);
@@ -1141,6 +1132,22 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     let title = info.display_title(translated_titles);
                     let subtitle = info.display_subtitle(translated_titles);
                     let has_subtitle = !subtitle.trim().is_empty();
+                    let has_percentage =
+                        [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2]
+                            .into_iter()
+                            .any(|side| {
+                                side_joined(side) && runtime_for_side(side).percentage.is_some()
+                            });
+                    let title_max_w_local = if has_percentage {
+                        title_max_w_local.min(
+                            wheel_score_x
+                                - title_x_local
+                                - WHEEL_SCORE_MAX_WIDTH
+                                - WHEEL_SCORE_TITLE_GAP,
+                        )
+                    } else {
+                        title_max_w_local
+                    };
                     let has_edit = runtime_slot.has_edit;
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = lua_badge_submit_allowed(
@@ -1397,91 +1404,44 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     }
 
                     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                        if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                        if !side_joined(side) {
                             continue;
                         }
-                        if is_srpg_event {
-                            let Some(score_hundredths) =
-                                runtime_for_side(side).srpg_itl_ex_hundredths
-                            else {
-                                continue;
-                            };
-                            actors.push(act!(text:
-                                font(numbers_font):
-                                settext(cached_itl_ex_text(score_hundredths)):
-                                align(1.0, 0.5):
-                                horizalign(right):
-                                xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
-                                zoom(ITL_SCORE_ZOOM):
-                                diffuse(srpg_score_color[0], srpg_score_color[1], srpg_score_color[2], srpg_score_color[3]):
-                                z(53)
-                            ));
-                            continue;
-                        }
-                        let runtime = runtime_for_side(side);
-                        let Some((ex_hundredths, points)) = choose_itl_wheel_score(
-                            runtime.local_itl,
-                            runtime.online_itl_ex_hundredths,
-                            runtime.online_itl_points,
-                        ) else {
+                        let Some(score) = runtime_for_side(side).percentage else {
                             continue;
                         };
-                        match itl_wheel_mode {
-                            SelectMusicItlWheelMode::Off => {}
-                            SelectMusicItlWheelMode::Score => {
-                                actors.push(act!(text:
-                                    font(numbers_font):
-                                    settext(cached_itl_ex_text(ex_hundredths)):
-                                    align(1.0, 0.5):
-                                    horizalign(right):
-                                    xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
-                                    zoom(ITL_SCORE_ZOOM):
-                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                    z(53)
-                                ));
-                            }
-                            SelectMusicItlWheelMode::PointsAndScore => {
-                                let Some(points) = points else {
-                                    actors.push(act!(text:
-                                        font(numbers_font):
-                                        settext(cached_itl_ex_text(ex_hundredths)):
-                                        align(1.0, 0.5):
-                                        horizalign(right):
-                                        xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
-                                        zoom(ITL_SCORE_ZOOM):
-                                        diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                        z(53)
-                                    ));
-                                    continue;
-                                };
-                                let (points_y, ex_y) = itl_score_line_y(side, joined_sides);
-                                actors.push(act!(text:
-                                    font(numbers_font):
-                                    settext(cached_itl_points_text(points)):
-                                    align(1.0, 0.5):
-                                    horizalign(right):
-                                    xy(highlight_left_world + itl_ex_x, y_center_item + points_y):
-                                    zoom(ITL_POINTS_SCORE_ZOOM):
-                                    diffuse(
-                                        itl_points_color[0],
-                                        itl_points_color[1],
-                                        itl_points_color[2],
-                                        itl_points_color[3]
-                                    ):
-                                    z(53)
-                                ));
-                                actors.push(act!(text:
-                                    font(numbers_font):
-                                    settext(cached_itl_ex_text(ex_hundredths)):
-                                    align(1.0, 0.5):
-                                    horizalign(right):
-                                    xy(highlight_left_world + itl_ex_x, y_center_item + ex_y):
-                                    zoom(ITL_POINTS_SCORE_ZOOM):
-                                    diffuse(itl_ex_color[0], itl_ex_color[1], itl_ex_color[2], itl_ex_color[3]):
-                                    z(53)
-                                ));
-                            }
-                        }
+                        let score_color = wheel_score_color(score.score_type, score.failed);
+                        let points = (p.show_itl_points && joined_sides == 1 && !score.failed)
+                            .then_some(score.itl_points)
+                            .flatten();
+                        let (score_y, score_zoom) = if let Some(points) = points {
+                            let (points_y, score_y) = wheel_points_score_line_y(side, joined_sides);
+                            actors.push(act!(text:
+                                font(numbers_font):
+                                settext(cached_itl_points_text(points)):
+                                align(1.0, 0.5):
+                                horizalign(right):
+                                xy(highlight_left_world + wheel_score_x, y_center_item + points_y):
+                                zoom(ITL_POINTS_SCORE_ZOOM):
+                                maxwidth(WHEEL_SCORE_MAX_WIDTH):
+                                diffuse(1.0, 1.0, 1.0, 1.0):
+                                z(53)
+                            ));
+                            (score_y, ITL_POINTS_SCORE_ZOOM)
+                        } else {
+                            (wheel_score_y(side, joined_sides), WHEEL_SCORE_ZOOM)
+                        };
+                        actors.push(act!(text:
+                            font(numbers_font):
+                            settext(cached_wheel_score_text(score.hundredths)):
+                            align(1.0, 0.5):
+                            horizalign(right):
+                            xy(highlight_left_world + wheel_score_x, y_center_item + score_y):
+                            zoom(score_zoom):
+                            maxwidth(WHEEL_SCORE_MAX_WIDTH):
+                            diffuse(score_color[0], score_color[1], score_color[2], score_color[3]):
+                            z(53)
+                        ));
                     }
 
                     // Favorite heart icon
@@ -1662,10 +1622,10 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        chart_for_difficulty, choose_itl_wheel_score, itl_fetch_flags, itl_rank_color,
-        itl_wheel_mode_for_sides, lua_badge_submit_allowed, pack_header_color, pack_header_text_x,
-        runtime_slot_requests, song_select_bg_path, srpg_rate_color, visible_song_select_bg_paths,
-        visible_song_select_bg_paths_match, wheel_bg_layout, wheel_song_meta,
+        chart_for_difficulty, itl_fetch_flags, itl_rank_color, lua_badge_submit_allowed,
+        pack_header_color, pack_header_text_x, runtime_slot_requests, song_select_bg_path,
+        srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
+        wheel_bg_layout, wheel_score_color, wheel_song_meta,
     };
     use crate::color;
     use crate::screens::select_music::MusicWheelEntry;
@@ -1673,10 +1633,10 @@ mod tests {
     use deadlib_present::space::{Metrics, set_current_metrics};
     use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref};
     use deadsync_config::theme::{
-        SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
+        SelectMusicItlRankMode, SelectMusicSongSelectBgMode, SelectMusicWheelScoreMode,
+        SelectMusicWheelScoreType,
     };
     use deadsync_profile as profile_data;
-    use deadsync_score::CachedItlScore;
     use deadsync_simfile::event_intro::is_srpg_event_song;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -1794,61 +1754,148 @@ mod tests {
     }
 
     #[test]
-    fn choose_itl_wheel_score_prefers_online_tournament_score() {
-        let local = Some(CachedItlScore {
-            ex_hundredths: 9732,
-            clear_type: 4,
-            points: 12_345,
-        });
-
-        assert_eq!(
-            choose_itl_wheel_score(local, Some(9912), Some(19_912)),
-            Some((9912, Some(19_912)))
-        );
+    fn wheel_renders_only_joined_players_percentages_and_pass_points() {
+        use super::{MusicWheelParams, push};
+        use crate::views::{MusicWheelRuntimeView, MusicWheelScoreView};
+        use deadlib_present::actors::Actor;
+        let entries = [MusicWheelEntry::Song(song_with_art(None, None))];
+        for width in [640.0, 854.0] {
+            set_current_metrics(Metrics::centered(width, 480.0));
+            for joined in [[true, false], [false, true], [true, true]] {
+                let mut runtime = MusicWheelRuntimeView {
+                    joined,
+                    ..Default::default()
+                };
+                let center = &mut runtime.slots[MUSIC_WHEEL_SLOT_COUNT / 2];
+                center.sides[0].percentage = Some(MusicWheelScoreView {
+                    hundredths: 9200,
+                    score_type: SelectMusicWheelScoreType::Itg,
+                    failed: true,
+                    itl_points: None,
+                });
+                center.sides[1].percentage = Some(MusicWheelScoreView {
+                    hundredths: 8800,
+                    score_type: SelectMusicWheelScoreType::Ex,
+                    failed: false,
+                    itl_points: Some(12345),
+                });
+                let mut actors = Vec::new();
+                push(
+                    &mut actors,
+                    MusicWheelParams {
+                        machine_font: Default::default(),
+                        entries: &entries,
+                        selected_index: 0,
+                        position_offset_from_selection: 0.0,
+                        selection_animation_timer: 0.0,
+                        selection_animation_beat: 0.0,
+                        color_pack_headers: false,
+                        pack_color_indices: None,
+                        song_box_color: None,
+                        song_text_color: None,
+                        song_text_color_overrides: None,
+                        show_pack_sync: false,
+                        show_music_wheel_grades: false,
+                        show_music_wheel_lamps: false,
+                        itl_rank_mode: SelectMusicItlRankMode::None,
+                        show_itl_points: true,
+                        song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
+                        song_select_bg_paths: &[],
+                        song_select_bg_texture_keys: &[],
+                        expanded_series_name: None,
+                        expanded_pack_name: None,
+                        new_pack_names: None,
+                        default_sync_offset: Default::default(),
+                        runtime: &runtime,
+                    },
+                );
+                let text = |expected: &str| {
+                    actors
+                        .iter()
+                        .filter_map(|actor| match actor {
+                            Actor::Text {
+                                content,
+                                color,
+                                offset,
+                                scale,
+                                max_width,
+                                max_w_pre_zoom,
+                                ..
+                            } if content.as_str() == expected => {
+                                let zoom = if joined == [false, true] {
+                                    super::ITL_POINTS_SCORE_ZOOM
+                                } else {
+                                    super::WHEEL_SCORE_ZOOM
+                                };
+                                assert_eq!(*scale, [zoom, zoom]);
+                                assert_eq!(*max_width, Some(super::WHEEL_SCORE_MAX_WIDTH));
+                                assert!(
+                                    !max_w_pre_zoom,
+                                    "wheel values must limit width after zoom to avoid squeezing digits"
+                                );
+                                Some((*color, *offset))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let title_right = actors
+                    .iter()
+                    .find_map(|actor| match actor {
+                        Actor::Text {
+                            content,
+                            offset,
+                            max_width: Some(max_width),
+                            ..
+                        } if content.as_str() == "Song" && offset[1] == 240.0 => {
+                            Some(offset[0] + max_width)
+                        }
+                        _ => None,
+                    })
+                    .expect("center row title");
+                let fails = text("92.00");
+                let passes = text("88.00");
+                assert_eq!(fails.len(), usize::from(joined[0]));
+                assert_eq!(passes.len(), usize::from(joined[1]));
+                assert_eq!(text("12345").len(), usize::from(joined == [false, true]));
+                if let Some((color, offset)) = fails.first() {
+                    assert_eq!(*color, deadlib_present::color::rgba_hex("#FF3030"));
+                    assert!(offset[0] > width / 2.0 && offset[0] < width);
+                }
+                if let Some((color, _)) = passes.first() {
+                    assert_eq!(*color, color::JUDGMENT_RGBA[0]);
+                }
+                let score_right = fails.first().or_else(|| passes.first()).unwrap().1[0];
+                assert!(
+                    title_right
+                        <= score_right
+                            - super::WHEEL_SCORE_MAX_WIDTH
+                            - super::WHEEL_SCORE_TITLE_GAP
+                            + 0.001
+                );
+                if joined == [true, true] {
+                    assert!(fails[0].1[1] < passes[0].1[1]);
+                }
+            }
+        }
     }
 
     #[test]
-    fn choose_itl_wheel_score_falls_back_to_local_when_no_online_score() {
-        let local = Some(CachedItlScore {
-            ex_hundredths: 9732,
-            clear_type: 4,
-            points: 12_345,
-        });
-
-        assert_eq!(
-            choose_itl_wheel_score(local, None, None),
-            Some((9732, Some(12_345)))
-        );
-    }
-
-    #[test]
-    fn choose_itl_wheel_score_keeps_online_score_without_points() {
-        let local = Some(CachedItlScore {
-            ex_hundredths: 9732,
-            clear_type: 4,
-            points: 12_345,
-        });
-
-        assert_eq!(
-            choose_itl_wheel_score(local, Some(9912), None),
-            Some((9912, None))
-        );
-    }
-
-    #[test]
-    fn points_score_wheel_falls_back_to_score_for_versus() {
-        assert_eq!(
-            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 2),
-            SelectMusicItlWheelMode::Score
-        );
-        assert_eq!(
-            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::PointsAndScore, 1),
-            SelectMusicItlWheelMode::PointsAndScore
-        );
-        assert_eq!(
-            itl_wheel_mode_for_sides(SelectMusicItlWheelMode::Off, 2),
-            SelectMusicItlWheelMode::Off
-        );
+    fn failed_wheel_percentages_use_standard_red_for_every_metric() {
+        for metric in [
+            SelectMusicWheelScoreType::Itg,
+            SelectMusicWheelScoreType::Ex,
+            SelectMusicWheelScoreType::HardEx,
+        ] {
+            assert_eq!(
+                wheel_score_color(metric, true),
+                deadlib_present::color::rgba_hex("#FF3030")
+            );
+            assert_ne!(
+                wheel_score_color(metric, false),
+                wheel_score_color(metric, true)
+            );
+        }
     }
 
     #[test]
@@ -2185,42 +2232,36 @@ mod tests {
     }
 
     #[test]
-    fn online_itl_fetch_flags_follow_mode_and_settle_state() {
+    fn wheel_fetches_only_requested_event_data() {
+        use SelectMusicItlRankMode as Rank;
+        use SelectMusicWheelScoreMode as Mode;
         assert_eq!(
-            itl_fetch_flags(
-                false,
-                SelectMusicItlRankMode::Chart,
-                SelectMusicItlWheelMode::Score,
-                false,
-            ),
-            (false, false, false)
-        );
-        assert_eq!(
-            itl_fetch_flags(
-                true,
-                SelectMusicItlRankMode::Chart,
-                SelectMusicItlWheelMode::Off,
-                false,
-            ),
-            (true, false, false)
-        );
-        assert_eq!(
-            itl_fetch_flags(
-                true,
-                SelectMusicItlRankMode::Overall,
-                SelectMusicItlWheelMode::Score,
-                false,
-            ),
+            itl_fetch_flags(true, Rank::None, Mode::Events, false, true),
             (false, true, false)
         );
         assert_eq!(
-            itl_fetch_flags(
-                true,
-                SelectMusicItlRankMode::None,
-                SelectMusicItlWheelMode::Score,
-                true,
-            ),
+            itl_fetch_flags(true, Rank::None, Mode::Events, true, false),
             (false, false, true)
+        );
+        assert_eq!(
+            itl_fetch_flags(true, Rank::None, Mode::None, true, false),
+            (false, false, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(true, Rank::Overall, Mode::None, false, true),
+            (false, true, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(true, Rank::Chart, Mode::None, false, true),
+            (true, false, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(true, Rank::None, Mode::All, false, false),
+            (false, false, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(false, Rank::Chart, Mode::All, false, true),
+            (false, false, false)
         );
     }
 

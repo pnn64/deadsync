@@ -12,6 +12,75 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+pub(crate) struct WheelScoreInput {
+    pub mode: config::theme::SelectMusicWheelScoreMode,
+    pub score_type: config::theme::SelectMusicWheelScoreType,
+    pub show_fails: bool,
+    pub is_srpg: bool,
+    pub is_itl: bool,
+    pub personal: deadsync_score::CachedWheelScores,
+    pub online_event_score: Option<u32>,
+    pub online_itl_points: Option<u32>,
+    pub local_itl: Option<deadsync_score::CachedItlScore>,
+}
+
+/// Keep official event records authoritative, then fall back to personal records.
+/// Personal caches already prefer passes and exclude every online failed score.
+pub(crate) fn resolve_wheel_score(
+    input: WheelScoreInput,
+) -> Option<deadsync_theme_simply_love::views::MusicWheelScoreView> {
+    use config::theme::{SelectMusicWheelScoreMode as Mode, SelectMusicWheelScoreType as Metric};
+    use deadsync_theme_simply_love::views::MusicWheelScoreView;
+    if input.mode == Mode::None || (input.mode == Mode::Events && !input.is_srpg && !input.is_itl) {
+        return None;
+    }
+    let score_type = if input.is_srpg {
+        Metric::Itg
+    } else if input.is_itl {
+        Metric::Ex
+    } else {
+        input.score_type
+    };
+    let event_score = if input.is_srpg {
+        input.online_event_score.map(|score| (score, None))
+    } else if input.is_itl {
+        input
+            .online_event_score
+            .map(|score| (score, input.online_itl_points))
+            .or_else(|| {
+                input
+                    .local_itl
+                    .filter(|score| score.clear_type > 0)
+                    .map(|score| (score.ex_hundredths, Some(score.points)))
+            })
+    } else {
+        None
+    };
+    if let Some((hundredths, itl_points)) = event_score {
+        return Some(MusicWheelScoreView {
+            hundredths: hundredths.min(10000),
+            score_type,
+            failed: false,
+            itl_points,
+        });
+    }
+    let personal = match score_type {
+        Metric::Itg => input.personal.itg,
+        Metric::Ex => input.personal.ex,
+        Metric::HardEx => input.personal.hard_ex,
+    }?;
+    if personal.is_fail && !input.show_fails {
+        return None;
+    }
+    Some(MusicWheelScoreView {
+        hundredths: (personal.percent.clamp(0.0, 100.0) * 100.0).round() as u32,
+        score_type,
+        failed: personal.is_fail,
+        // A personal fallback must not award event points.
+        itl_points: None,
+    })
+}
+
 #[inline(always)]
 fn path_key(path: &Path) -> String {
     let mut key = path.to_string_lossy().into_owned();
@@ -236,7 +305,10 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
             show_grades: config.show_music_wheel_grades,
             show_lamps: config.show_music_wheel_lamps,
             itl_rank_mode: config.select_music_itl_rank_mode,
-            itl_score_mode: config.select_music_itl_wheel_mode,
+            score_mode: config.select_music_wheel_score_mode,
+            score_type: config.select_music_wheel_score_type,
+            show_failed_scores: config.select_music_wheel_show_fails,
+            show_itl_points: config.select_music_wheel_itl_points,
         },
         interaction: SelectMusicInteractionPolicyView {
             wheel_switch_speed: config.music_wheel_switch_speed,
@@ -333,6 +405,153 @@ pub(crate) fn prepared_init_view(dirs: &deadsync_config::dirs::AppDirs) -> Selec
 mod tests {
     use super::*;
 
+    fn wheel_score_input() -> WheelScoreInput {
+        use config::theme::{
+            SelectMusicWheelScoreMode as Mode, SelectMusicWheelScoreType as Metric,
+        };
+        let score = |percent, is_fail| Some(deadsync_score::LocalScalarScore { percent, is_fail });
+        WheelScoreInput {
+            mode: Mode::All,
+            score_type: Metric::Itg,
+            show_fails: true,
+            is_srpg: false,
+            is_itl: false,
+            personal: deadsync_score::CachedWheelScores {
+                itg: score(92.0, true),
+                ex: score(83.45, true),
+                hard_ex: score(76.54, false),
+                ..Default::default()
+            },
+            online_event_score: None,
+            online_itl_points: None,
+            local_itl: None,
+        }
+    }
+
+    #[test]
+    fn wheel_score_scope_and_event_metric_overrides() {
+        use config::theme::{
+            SelectMusicWheelScoreMode as Mode, SelectMusicWheelScoreType as Metric,
+        };
+        assert!(
+            resolve_wheel_score(WheelScoreInput {
+                mode: Mode::None,
+                is_srpg: true,
+                ..wheel_score_input()
+            })
+            .is_none()
+        );
+        assert!(
+            resolve_wheel_score(WheelScoreInput {
+                mode: Mode::Events,
+                ..wheel_score_input()
+            })
+            .is_none()
+        );
+        for (is_srpg, is_itl, preferred, expected_metric, expected_score) in [
+            (true, false, Metric::Ex, Metric::Itg, 9200),
+            (false, true, Metric::Itg, Metric::Ex, 8345),
+            (false, false, Metric::HardEx, Metric::HardEx, 7654),
+            (true, true, Metric::HardEx, Metric::Itg, 9200),
+        ] {
+            let score = resolve_wheel_score(WheelScoreInput {
+                is_srpg,
+                is_itl,
+                score_type: preferred,
+                ..wheel_score_input()
+            })
+            .unwrap();
+            assert_eq!(score.score_type, expected_metric);
+            assert_eq!(score.hundredths, expected_score);
+        }
+        assert!(
+            resolve_wheel_score(WheelScoreInput {
+                personal: Default::default(),
+                ..wheel_score_input()
+            })
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn wheel_failed_percentages_are_opt_in_without_event_points() {
+        assert!(
+            resolve_wheel_score(WheelScoreInput {
+                show_fails: false,
+                ..wheel_score_input()
+            })
+            .is_none()
+        );
+        let failed = resolve_wheel_score(WheelScoreInput {
+            is_itl: true,
+            online_itl_points: Some(1234),
+            ..wheel_score_input()
+        })
+        .unwrap();
+        assert!(failed.failed);
+        assert_eq!(failed.hundredths, 8345);
+        assert_eq!(failed.itl_points, None);
+        let passed = resolve_wheel_score(WheelScoreInput {
+            score_type: config::theme::SelectMusicWheelScoreType::HardEx,
+            show_fails: false,
+            ..wheel_score_input()
+        })
+        .unwrap();
+        assert!(!passed.failed);
+    }
+
+    #[test]
+    fn wheel_event_passes_beat_higher_local_fails_and_preserve_event_sources() {
+        let local_itl = Some(deadsync_score::CachedItlScore {
+            ex_hundredths: 8000,
+            clear_type: 1,
+            points: 1200,
+        });
+        for is_srpg in [false, true] {
+            let result = resolve_wheel_score(WheelScoreInput {
+                is_srpg,
+                is_itl: !is_srpg,
+                online_event_score: Some(7800),
+                online_itl_points: Some(1100),
+                local_itl,
+                ..wheel_score_input()
+            })
+            .unwrap();
+            assert_eq!(result.hundredths, 7800);
+            assert!(!result.failed);
+            assert_eq!(result.itl_points, if is_srpg { None } else { Some(1100) });
+        }
+        let local_event = resolve_wheel_score(WheelScoreInput {
+            is_itl: true,
+            local_itl,
+            ..wheel_score_input()
+        })
+        .unwrap();
+        assert_eq!(local_event.hundredths, 8000);
+        assert_eq!(local_event.itl_points, Some(1200));
+        assert!(!local_event.failed);
+        let online_without_points = resolve_wheel_score(WheelScoreInput {
+            is_itl: true,
+            local_itl,
+            online_event_score: Some(7900),
+            ..wheel_score_input()
+        })
+        .unwrap();
+        assert_eq!(online_without_points.itl_points, None);
+        let uncleared_event = resolve_wheel_score(WheelScoreInput {
+            is_itl: true,
+            local_itl: Some(deadsync_score::CachedItlScore {
+                clear_type: 0,
+                ..local_itl.unwrap()
+            }),
+            ..wheel_score_input()
+        })
+        .unwrap();
+        assert!(uncleared_event.failed);
+        assert_eq!(uncleared_event.hundredths, 8345);
+        assert_eq!(uncleared_event.itl_points, None);
+    }
+
     #[test]
     fn policy_view_maps_media_and_wheel_runtime_flags() {
         let config = config::app_config::Config {
@@ -343,7 +562,10 @@ mod tests {
             show_music_wheel_grades: true,
             show_music_wheel_lamps: false,
             select_music_itl_rank_mode: config::theme::SelectMusicItlRankMode::Overall,
-            select_music_itl_wheel_mode: config::theme::SelectMusicItlWheelMode::PointsAndScore,
+            select_music_wheel_score_mode: config::theme::SelectMusicWheelScoreMode::All,
+            select_music_wheel_score_type: config::theme::SelectMusicWheelScoreType::HardEx,
+            select_music_wheel_show_fails: true,
+            select_music_wheel_itl_points: true,
             music_wheel_switch_speed: 22,
             select_music_wheel_style: config::theme::SelectMusicWheelStyle::Iidx,
             difficulty_color_scheme: deadsync_theme::color::DifficultyColorScheme::Ddr,
@@ -396,8 +618,8 @@ mod tests {
             config::theme::SelectMusicItlRankMode::Overall
         );
         assert_eq!(
-            view.wheel.itl_score_mode,
-            config::theme::SelectMusicItlWheelMode::PointsAndScore
+            view.wheel.score_mode,
+            config::theme::SelectMusicWheelScoreMode::All
         );
         assert_eq!(view.interaction.wheel_switch_speed, 22);
         assert_eq!(

@@ -26,6 +26,19 @@ pub fn is_srpg_event_song(song: &SongData) -> bool {
     song_pack_group(song).is_some_and(is_srpg_event_group)
 }
 
+pub fn is_itl_event_group(pack_group: &str) -> bool {
+    let bytes = pack_group.trim().as_bytes();
+    ascii_case_insensitive_find(bytes, b"itl online ").is_some()
+        || (bytes
+            .get(..b"itl ".len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"itl "))
+            && bytes.iter().any(u8::is_ascii_digit))
+}
+
+pub fn is_itl_event_song(song: &SongData) -> bool {
+    song_pack_group(song).is_some_and(is_itl_event_group)
+}
+
 #[inline]
 fn ascii_case_insensitive_find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
@@ -36,12 +49,7 @@ fn ascii_case_insensitive_find(haystack: &[u8], needle: &[u8]) -> Option<usize> 
 fn itl_event_intro_name(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
     let bytes = name.as_bytes();
-    let itl_pack = ascii_case_insensitive_find(bytes, b"itl online ").is_some()
-        || (bytes
-            .get(..b"itl ".len())
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"itl "))
-            && bytes.iter().any(u8::is_ascii_digit));
-    if !itl_pack {
+    if !is_itl_event_group(name) {
         return None;
     }
 

@@ -2768,6 +2768,31 @@ impl App {
         profiles: &profile_data::ScoreboxRuntimeView,
         display: MusicWheelDisplayPolicy,
     ) -> MusicWheelRuntimeView {
+        let has_srpg = request.slots.iter().any(|slot| {
+            matches!(
+                slot,
+                MusicWheelSlotRuntimeRequest::Song {
+                    is_srpg_event: true,
+                    ..
+                }
+            )
+        });
+        let has_event = has_srpg
+            || request.slots.iter().any(|slot| {
+                matches!(
+                    slot,
+                    MusicWheelSlotRuntimeRequest::Song {
+                        is_itl_event: true,
+                        ..
+                    }
+                )
+            });
+        let read_percentages = match request.score_mode {
+            config::theme::SelectMusicWheelScoreMode::None => false,
+            config::theme::SelectMusicWheelScoreMode::Events => has_event,
+            config::theme::SelectMusicWheelScoreMode::All => true,
+        };
+        let read_event_scores = read_percentages && has_event;
         let joined = [profiles.sides[0].joined, profiles.sides[1].joined];
         let profile_ids: [Option<&str>; 2] = std::array::from_fn(|side_idx| {
             joined[side_idx]
@@ -2778,10 +2803,10 @@ impl App {
             let Some(profile_id) = profile_ids[side_idx] else {
                 continue;
             };
-            if request.read_scores {
+            if request.read_scores || read_percentages || has_srpg {
                 scores::ensure_score_caches_loaded(profile_id);
             }
-            if request.rank_source != MusicWheelRankSource::None || request.read_itl_scores {
+            if request.rank_source != MusicWheelRankSource::None || read_event_scores {
                 scores::ensure_itl_wheel_caches_loaded(profile_id);
             }
         }
@@ -2790,7 +2815,7 @@ impl App {
                 let fetch = request.sides[side_idx];
                 (joined[side_idx]
                     && (request.rank_source != MusicWheelRankSource::None
-                        || request.read_itl_scores
+                        || read_event_scores
                         || fetch.fetch_itl_rank
                         || fetch.fetch_itl_score
                         || fetch.fetch_srpg_score))
@@ -2866,6 +2891,8 @@ impl App {
         let cached_scores = request
             .read_scores
             .then(|| scores::cached_best_itg_scores(&score_queries));
+        let percentages = (read_percentages || has_srpg)
+            .then(|| deadsync_score::runtime_cached_wheel_scores(&score_queries));
         let slots = std::array::from_fn(|slot_idx| {
             let mut view = MusicWheelSlotRuntimeView::default();
             match request.slots[slot_idx] {
@@ -2883,6 +2910,7 @@ impl App {
                     lua_submit_allowed,
                     has_edit,
                     is_srpg_event,
+                    is_itl_event,
                     unlock_song_dir,
                     sync_pref,
                 } => {
@@ -2914,32 +2942,56 @@ impl App {
                                     .and_then(|ranks| ranks.get(chart_hash))
                                     .copied(),
                             };
+                            let personal = percentages
+                                .as_ref()
+                                .map(|scores| scores[slot_idx * 2 + side_idx])
+                                .unwrap_or_default();
                             if is_srpg_event {
-                                side_view.srpg_pass_rate_hundredths = profile_id.and_then(|id| {
-                                    scores::get_cached_local_pass_rate_with_profile(chart_hash, id)
+                                side_view.srpg_pass_rate_hundredths = personal.pass_rate_hundredths;
+                            }
+                            if read_percentages {
+                                let online_event_score = context.and_then(|context| {
+                                    if is_srpg_event {
+                                        context.cached_srpg_self_score(chart_hash)
+                                    } else if is_itl_event {
+                                        context.cached_self_ex_score(chart_hash)
+                                    } else {
+                                        None
+                                    }
                                 });
-                                side_view.srpg_itl_ex_hundredths = request
-                                    .read_itl_scores
+                                // Use this player's exact chart, not the song's ITL path-map entry.
+                                let local_itl = (is_itl_event && !is_srpg_event)
                                     .then(|| {
-                                        context.and_then(|context| {
-                                            context.cached_srpg_self_score(chart_hash)
+                                        profile_id.and_then(|id| {
+                                            deadsync_score::cached_itl_chart_score(id, chart_hash)
                                         })
                                     })
                                     .flatten();
-                            } else if request.read_itl_scores {
-                                side_view.local_itl = context
-                                    .and_then(|context| context.cached_local_itl_score(song));
-                                side_view.online_itl_ex_hundredths = context
-                                    .and_then(|context| context.cached_self_ex_score(chart_hash));
-                                side_view.online_itl_points =
-                                    side_view.online_itl_ex_hundredths.and_then(|online_ex| {
-                                        song.charts
-                                            .iter()
-                                            .find(|chart| chart.short_hash == chart_hash)
-                                            .and_then(|chart| {
-                                                scores::itl_points_for_chart(chart, online_ex)
-                                            })
-                                    });
+                                let online_itl_points = (is_itl_event && !is_srpg_event)
+                                    .then(|| {
+                                        online_event_score.and_then(|ex| {
+                                            song.charts
+                                                .iter()
+                                                .find(|chart| chart.short_hash == chart_hash)
+                                                .and_then(|chart| {
+                                                    scores::itl_points_for_chart(chart, ex)
+                                                })
+                                        })
+                                    })
+                                    .flatten();
+                                side_view.percentage = crate::select_music::resolve_wheel_score(
+                                    crate::select_music::WheelScoreInput {
+                                        mode: request.score_mode,
+                                        score_type: request.score_type,
+                                        show_fails: request.show_failed_scores,
+                                        is_srpg: is_srpg_event,
+                                        is_itl: is_itl_event,
+                                        personal,
+                                        online_event_score,
+                                        online_itl_points,
+                                        local_itl,
+                                    },
+                                );
                             }
                         }
                     }

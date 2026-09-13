@@ -476,8 +476,17 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::ItlRankMode(mode) => {
             config::runtime_update::update_select_music_itl_rank_mode(mode)
         }
-        Request::ItlWheelMode(mode) => {
-            config::runtime_update::update_select_music_itl_wheel_mode(mode)
+        Request::WheelScoreMode(value) => {
+            config::runtime_update::update_select_music_wheel_score_mode(value)
+        }
+        Request::WheelScoreType(value) => {
+            config::runtime_update::update_select_music_wheel_score_type(value)
+        }
+        Request::WheelShowFails(value) => {
+            config::runtime_update::update_select_music_wheel_show_fails(value)
+        }
+        Request::WheelItlPoints(value) => {
+            config::runtime_update::update_select_music_wheel_itl_points(value)
         }
         Request::NewPackMode(mode) => {
             config::runtime_update::update_select_music_new_pack_mode(mode)

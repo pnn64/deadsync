@@ -646,6 +646,7 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
         lua_submit_allowed: [bool; 2],
         has_edit: bool,
         is_srpg_event: bool,
+        is_itl_event: bool,
         unlock_song_dir: Option<&'a str>,
         sync_pref: deadsync_chart::SyncPref,
     },
@@ -665,9 +666,20 @@ pub struct MusicWheelSideRuntimeRequest<'a> {
 pub struct MusicWheelRuntimeRequest<'a> {
     pub read_scores: bool,
     pub rank_source: MusicWheelRankSource,
-    pub read_itl_scores: bool,
+    pub score_mode: deadsync_config::theme::SelectMusicWheelScoreMode,
+    pub score_type: deadsync_config::theme::SelectMusicWheelScoreType,
+    pub show_failed_scores: bool,
     pub sides: [MusicWheelSideRuntimeRequest<'a>; 2],
     pub slots: [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT],
+}
+
+/// Resolved wheel percentage; fail status belongs to this exact score/metric.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MusicWheelScoreView {
+    pub hundredths: u32,
+    pub score_type: deadsync_config::theme::SelectMusicWheelScoreType,
+    pub failed: bool,
+    pub itl_points: Option<u32>,
 }
 
 /// Shell-prepared runtime presentation data for one player side in one slot.
@@ -676,10 +688,7 @@ pub struct MusicWheelSideRuntimeView {
     pub score: Option<deadsync_score::CachedScore>,
     pub itl_rank: Option<u32>,
     pub srpg_pass_rate_hundredths: Option<u32>,
-    pub local_itl: Option<deadsync_score::CachedItlScore>,
-    pub online_itl_ex_hundredths: Option<u32>,
-    pub online_itl_points: Option<u32>,
-    pub srpg_itl_ex_hundredths: Option<u32>,
+    pub percentage: Option<MusicWheelScoreView>,
     pub favorite: bool,
     pub locked: bool,
 }
@@ -1286,7 +1295,10 @@ pub struct SelectMusicWheelPolicyView {
     pub show_grades: bool,
     pub show_lamps: bool,
     pub itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode,
-    pub itl_score_mode: deadsync_config::theme::SelectMusicItlWheelMode,
+    pub score_mode: deadsync_config::theme::SelectMusicWheelScoreMode,
+    pub score_type: deadsync_config::theme::SelectMusicWheelScoreType,
+    pub show_failed_scores: bool,
+    pub show_itl_points: bool,
 }
 
 impl Default for SelectMusicWheelPolicyView {
@@ -1295,7 +1307,10 @@ impl Default for SelectMusicWheelPolicyView {
             show_grades: false,
             show_lamps: false,
             itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,
-            itl_score_mode: deadsync_config::theme::SelectMusicItlWheelMode::Score,
+            score_mode: deadsync_config::theme::SelectMusicWheelScoreMode::Events,
+            score_type: deadsync_config::theme::SelectMusicWheelScoreType::Itg,
+            show_failed_scores: false,
+            show_itl_points: false,
         }
     }
 }

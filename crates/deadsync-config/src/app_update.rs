@@ -15,11 +15,11 @@ use crate::theme::{
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
     MachineBarColor, MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicDefaultSort,
-    SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
-    SelectMusicScoreboxPlacement, SelectMusicSeriesSource, SelectMusicSongSelectBgMode,
-    SelectMusicSort, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder,
-    SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide,
-    VisualStyle,
+    SelectMusicItlRankMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
+    SelectMusicSeriesSource, SelectMusicSongSelectBgMode, SelectMusicSort,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelScoreMode, SelectMusicWheelScoreType,
+    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
+    TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
 use crate::update::{
     set_f32_if_changed, set_f64_if_changed, set_if_changed, set_pair_if_changed,
@@ -263,8 +263,26 @@ pub fn set_select_music_itl_rank_mode(cfg: &mut Config, mode: SelectMusicItlRank
     set_if_changed(&mut cfg.select_music_itl_rank_mode, mode)
 }
 
-pub fn set_select_music_itl_wheel_mode(cfg: &mut Config, mode: SelectMusicItlWheelMode) -> bool {
-    set_if_changed(&mut cfg.select_music_itl_wheel_mode, mode)
+pub fn set_select_music_wheel_score_mode(
+    cfg: &mut Config,
+    value: SelectMusicWheelScoreMode,
+) -> bool {
+    set_if_changed(&mut cfg.select_music_wheel_score_mode, value)
+}
+
+pub fn set_select_music_wheel_score_type(
+    cfg: &mut Config,
+    value: SelectMusicWheelScoreType,
+) -> bool {
+    set_if_changed(&mut cfg.select_music_wheel_score_type, value)
+}
+
+pub fn set_select_music_wheel_show_fails(cfg: &mut Config, value: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_wheel_show_fails, value)
+}
+
+pub fn set_select_music_wheel_itl_points(cfg: &mut Config, value: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_wheel_itl_points, value)
 }
 
 pub fn set_select_music_wheel_style(cfg: &mut Config, style: SelectMusicWheelStyle) -> bool {

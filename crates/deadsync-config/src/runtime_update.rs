@@ -9,10 +9,11 @@ use crate::theme::{
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, MachineBarColor,
     MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
     NewPackMode, RandomBackgroundMode, SelectMusicDefaultSort, SelectMusicItlRankMode,
-    SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSeriesSource, SelectMusicSongSelectBgMode, SelectMusicSort,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
-    SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
+    SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
+    SelectMusicSongSelectBgMode, SelectMusicSort, SelectMusicStepArtistBoxMode,
+    SelectMusicWheelScoreMode, SelectMusicWheelScoreType, SelectMusicWheelStyle, SrpgShopFolder,
+    SrpgVariant, SyncGraphMode, ThemeFlag, TournamentScoringSystem, VersionOverlaySide,
+    VisualStyle,
 };
 #[cfg(target_os = "linux")]
 use deadlib_audio::LinuxAudioBackend;
@@ -191,7 +192,10 @@ update_config_fn!(pub fn update_select_music_last_sort(sort: SelectMusicSort) =>
 update_config_fn!(pub fn update_select_music_series_source(source: SelectMusicSeriesSource) => set_select_music_series_source);
 update_config_fn!(pub fn update_hide_inactive_series(enabled: bool) => set_hide_inactive_series);
 update_config_fn!(pub fn update_select_music_itl_rank_mode(mode: SelectMusicItlRankMode) => set_select_music_itl_rank_mode);
-update_config_fn!(pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) => set_select_music_itl_wheel_mode);
+update_config_fn!(pub fn update_select_music_wheel_score_mode(value: SelectMusicWheelScoreMode) => set_select_music_wheel_score_mode);
+update_config_fn!(pub fn update_select_music_wheel_score_type(value: SelectMusicWheelScoreType) => set_select_music_wheel_score_type);
+update_config_fn!(pub fn update_select_music_wheel_show_fails(value: bool) => set_select_music_wheel_show_fails);
+update_config_fn!(pub fn update_select_music_wheel_itl_points(value: bool) => set_select_music_wheel_itl_points);
 update_config_fn!(pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) => set_select_music_wheel_style);
 update_config_fn!(pub fn update_difficulty_color_scheme(scheme: DifficultyColorScheme) => set_difficulty_color_scheme);
 update_config_fn!(pub fn update_select_music_song_select_bg_mode(mode: SelectMusicSongSelectBgMode) => set_select_music_song_select_bg_mode);

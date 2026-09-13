@@ -171,12 +171,40 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::ItlWheelData,
-        label: lookup_key("OptionsSelectMusic", "ITLWheelData"),
+        id: SubRowId::WheelScores,
+        label: lookup_key("OptionsSelectMusic", "WheelScores"),
         choices: &[
-            localized_choice("Common", "Off"),
-            localized_choice("OptionsSelectMusic", "ItlWheelScore"),
-            localized_choice("OptionsSelectMusic", "ItlWheelPointsScore"),
+            localized_choice("OptionsSelectMusic", "ItlRankNone"),
+            localized_choice("OptionsSelectMusic", "WheelScoresEvents"),
+            localized_choice("OptionsSelectMusic", "WheelScoresAll"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::WheelScoreType,
+        label: lookup_key("OptionsSelectMusic", "WheelScoreType"),
+        choices: &[
+            localized_choice("OptionsSelectMusic", "WheelScoreNormal"),
+            literal_choice("EX"),
+            literal_choice("HEX"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::WheelShowFails,
+        label: lookup_key("OptionsSelectMusic", "WheelShowFails"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::WheelItlPoints,
+        label: lookup_key("OptionsSelectMusic", "WheelItlPoints"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
         ],
         inline: true,
     },
@@ -452,11 +480,35 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::SmWheelItl,
-        name: lookup_key("OptionsSelectMusic", "ITLWheelData"),
+        id: ItemId::SmWheelScores,
+        name: lookup_key("OptionsSelectMusic", "WheelScores"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
-            "ItlWheelDataHelp",
+            "WheelScoresHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmWheelScoreType,
+        name: lookup_key("OptionsSelectMusic", "WheelScoreType"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "WheelScoreTypeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmWheelShowFails,
+        name: lookup_key("OptionsSelectMusic", "WheelShowFails"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "WheelShowFailsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmWheelItlPoints,
+        name: lookup_key("OptionsSelectMusic", "WheelItlPoints"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "WheelItlPointsHelp",
         ))],
     },
     Item {

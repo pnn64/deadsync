@@ -2206,7 +2206,9 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
     MusicWheelRuntimeRequest {
         read_scores: true,
         rank_source: MusicWheelRankSource::None,
-        read_itl_scores: false,
+        score_mode: deadsync_config::theme::SelectMusicWheelScoreMode::None,
+        score_type: deadsync_config::theme::SelectMusicWheelScoreType::Itg,
+        show_failed_scores: false,
         sides: Default::default(),
         slots: music_wheel::runtime_slot_requests(
             &state.entries,
@@ -2698,7 +2700,7 @@ pub fn push_actors(
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,
-            itl_wheel_mode: deadsync_config::theme::SelectMusicItlWheelMode::Off,
+            show_itl_points: false,
             song_select_bg_mode: deadsync_config::theme::SelectMusicSongSelectBgMode::Off,
             song_select_bg_paths: &[],
             song_select_bg_texture_keys: &[],

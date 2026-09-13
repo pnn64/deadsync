@@ -46,9 +46,9 @@ use crate::theme::{
     RandomBackgroundMode, SelectMusicDefaultSort, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSeriesSource,
     SelectMusicSongSelectBgMode, SelectMusicSort, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    SelectMusicWheelScoreMode, SelectMusicWheelScoreType, SelectMusicWheelStyle, SrpgShopFolder,
+    SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
@@ -1106,7 +1106,10 @@ pub struct SelectMusicOptions {
     pub series_source: SelectMusicSeriesSource,
     pub hide_inactive_series: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
-    pub itl_wheel_mode: SelectMusicItlWheelMode,
+    pub wheel_score_mode: SelectMusicWheelScoreMode,
+    pub wheel_score_type: SelectMusicWheelScoreType,
+    pub wheel_show_fails: bool,
+    pub wheel_itl_points: bool,
     pub wheel_style: SelectMusicWheelStyle,
     pub difficulty_color_scheme: DifficultyColorScheme,
     pub song_select_bg_mode: SelectMusicSongSelectBgMode,
@@ -1148,7 +1151,10 @@ impl Default for SelectMusicOptions {
             series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: DEFAULT_HIDE_INACTIVE_SERIES,
             itl_rank_mode: SelectMusicItlRankMode::None,
-            itl_wheel_mode: SelectMusicItlWheelMode::Score,
+            wheel_score_mode: SelectMusicWheelScoreMode::Events,
+            wheel_score_type: SelectMusicWheelScoreType::Itg,
+            wheel_show_fails: false,
+            wheel_itl_points: false,
             wheel_style: SelectMusicWheelStyle::Itg,
             difficulty_color_scheme: DifficultyColorScheme::SimplyLove,
             song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
@@ -1183,6 +1189,9 @@ pub fn load_select_music_options(
     let song_select_bg = conf.get("Options", "SongSelectBG");
     let legacy_song_select_bg = conf.get("Options", "SelectMusicSongSelectBG");
 
+    let legacy_wheel_mode = conf
+        .get("Options", "SelectMusicWheelITL")
+        .and_then(|value| SelectMusicItlWheelMode::from_str(value).ok());
     SelectMusicOptions {
         breakdown_style: conf
             .get("Options", "SelectMusicBreakdown")
@@ -1246,10 +1255,30 @@ pub fn load_select_music_options(
             legacy_itl_chart_rank,
             default.itl_rank_mode,
         ),
-        itl_wheel_mode: conf
-            .get("Options", "SelectMusicWheelITL")
-            .and_then(|value| SelectMusicItlWheelMode::from_str(value).ok())
-            .unwrap_or(default.itl_wheel_mode),
+        wheel_score_mode: conf
+            .get("Options", "SelectMusicWheelScores")
+            .and_then(|value| SelectMusicWheelScoreMode::from_str(value).ok())
+            .or_else(|| {
+                legacy_wheel_mode.map(|mode| match mode {
+                    SelectMusicItlWheelMode::Off => SelectMusicWheelScoreMode::None,
+                    _ => SelectMusicWheelScoreMode::Events,
+                })
+            })
+            .unwrap_or(default.wheel_score_mode),
+        wheel_score_type: conf
+            .get("Options", "SelectMusicWheelScoreType")
+            .and_then(|value| SelectMusicWheelScoreType::from_str(value).ok())
+            .unwrap_or(default.wheel_score_type),
+        wheel_show_fails: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicWheelShowFails"),
+            default.wheel_show_fails,
+        ),
+        wheel_itl_points: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicWheelITLPoints"),
+            legacy_wheel_mode.map_or(default.wheel_itl_points, |mode| {
+                mode == SelectMusicItlWheelMode::PointsAndScore
+            }),
+        ),
         wheel_style: conf
             .get("Options", "SelectMusicWheelStyle")
             .and_then(|value| SelectMusicWheelStyle::from_str(value).ok())
@@ -1395,8 +1424,23 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
     );
     push_line(
         content,
-        "SelectMusicWheelITL",
-        select.itl_wheel_mode.as_str(),
+        "SelectMusicWheelScores",
+        select.wheel_score_mode.as_str(),
+    );
+    push_line(
+        content,
+        "SelectMusicWheelScoreType",
+        select.wheel_score_type.as_str(),
+    );
+    push_bool(
+        content,
+        "SelectMusicWheelShowFails",
+        select.wheel_show_fails,
+    );
+    push_bool(
+        content,
+        "SelectMusicWheelITLPoints",
+        select.wheel_itl_points,
     );
     push_line(
         content,
@@ -1994,20 +2038,38 @@ pub const fn select_music_step_artist_box_mode_from_choice(
 }
 
 #[must_use]
-pub const fn select_music_itl_wheel_mode_choice_index(mode: SelectMusicItlWheelMode) -> usize {
-    match mode {
-        SelectMusicItlWheelMode::Off => 0,
-        SelectMusicItlWheelMode::Score => 1,
-        SelectMusicItlWheelMode::PointsAndScore => 2,
+pub const fn select_music_wheel_score_mode_choice_index(value: SelectMusicWheelScoreMode) -> usize {
+    match value {
+        SelectMusicWheelScoreMode::None => 0,
+        SelectMusicWheelScoreMode::Events => 1,
+        SelectMusicWheelScoreMode::All => 2,
     }
 }
 
 #[must_use]
-pub const fn select_music_itl_wheel_mode_from_choice(idx: usize) -> SelectMusicItlWheelMode {
+pub const fn select_music_wheel_score_mode_from_choice(idx: usize) -> SelectMusicWheelScoreMode {
     match idx {
-        1 => SelectMusicItlWheelMode::Score,
-        2 => SelectMusicItlWheelMode::PointsAndScore,
-        _ => SelectMusicItlWheelMode::Off,
+        1 => SelectMusicWheelScoreMode::Events,
+        2 => SelectMusicWheelScoreMode::All,
+        _ => SelectMusicWheelScoreMode::None,
+    }
+}
+
+#[must_use]
+pub const fn select_music_wheel_score_type_choice_index(value: SelectMusicWheelScoreType) -> usize {
+    match value {
+        SelectMusicWheelScoreType::Itg => 0,
+        SelectMusicWheelScoreType::Ex => 1,
+        SelectMusicWheelScoreType::HardEx => 2,
+    }
+}
+
+#[must_use]
+pub const fn select_music_wheel_score_type_from_choice(idx: usize) -> SelectMusicWheelScoreType {
+    match idx {
+        1 => SelectMusicWheelScoreType::Ex,
+        2 => SelectMusicWheelScoreType::HardEx,
+        _ => SelectMusicWheelScoreType::Itg,
     }
 }
 
@@ -2502,6 +2564,43 @@ mod tests {
         conf
     }
 
+    #[test]
+    fn wheel_score_settings_migrate_and_round_trip() {
+        let default = SelectMusicOptions::default();
+        assert_eq!(default.wheel_score_mode, SelectMusicWheelScoreMode::Events);
+        assert_eq!(default.wheel_score_type, SelectMusicWheelScoreType::Itg);
+        assert!(!default.wheel_show_fails && !default.wheel_itl_points);
+        for (legacy, mode, points) in [
+            ("Off", SelectMusicWheelScoreMode::None, false),
+            ("Score", SelectMusicWheelScoreMode::Events, false),
+            ("PointsAndScore", SelectMusicWheelScoreMode::Events, true),
+        ] {
+            let conf = ini(&format!("[Options]\nSelectMusicWheelITL={legacy}\n"));
+            let loaded = load_select_music_options(&conf, default);
+            assert_eq!(loaded.wheel_score_mode, mode);
+            assert_eq!(loaded.wheel_itl_points, points);
+            assert!(!loaded.wheel_show_fails);
+        }
+        let conf = ini(
+            "[Options]\nSelectMusicWheelITL=PointsAndScore\nSelectMusicWheelScores=All\nSelectMusicWheelScoreType=HEX\nSelectMusicWheelShowFails=1\nSelectMusicWheelITLPoints=0\n",
+        );
+        let loaded = load_select_music_options(&conf, default);
+        assert_eq!(loaded.wheel_score_mode, SelectMusicWheelScoreMode::All);
+        assert_eq!(loaded.wheel_score_type, SelectMusicWheelScoreType::HardEx);
+        assert!(loaded.wheel_show_fails);
+        assert!(!loaded.wheel_itl_points);
+        let mut text = String::from("[Options]\n");
+        push_select_music_option_lines(
+            &mut text,
+            SelectMusicSaveOptions {
+                select_music: loaded,
+                separate_unlocks_by_player: false,
+            },
+        );
+        assert!(!text.contains("SelectMusicWheelITL="));
+        assert_eq!(load_select_music_options(&ini(&text), default), loaded);
+    }
+
     fn default_select_music_options() -> SelectMusicOptions {
         SelectMusicOptions {
             breakdown_style: BreakdownStyle::Sl,
@@ -2519,7 +2618,10 @@ mod tests {
             series_source: SelectMusicSeriesSource::PackIni,
             hide_inactive_series: false,
             itl_rank_mode: SelectMusicItlRankMode::None,
-            itl_wheel_mode: SelectMusicItlWheelMode::Off,
+            wheel_score_mode: SelectMusicWheelScoreMode::None,
+            wheel_score_type: SelectMusicWheelScoreType::Itg,
+            wheel_show_fails: false,
+            wheel_itl_points: false,
             wheel_style: SelectMusicWheelStyle::Itg,
             difficulty_color_scheme: DifficultyColorScheme::SimplyLove,
             song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
@@ -3469,10 +3571,8 @@ mod tests {
         assert_eq!(loaded.series_source, SelectMusicSeriesSource::Folder);
         assert!(loaded.hide_inactive_series);
         assert_eq!(loaded.itl_rank_mode, SelectMusicItlRankMode::Overall);
-        assert_eq!(
-            loaded.itl_wheel_mode,
-            SelectMusicItlWheelMode::PointsAndScore
-        );
+        assert_eq!(loaded.wheel_score_mode, SelectMusicWheelScoreMode::Events);
+        assert!(loaded.wheel_itl_points);
         assert_eq!(loaded.wheel_style, SelectMusicWheelStyle::Iidx);
         assert_eq!(loaded.difficulty_color_scheme, DifficultyColorScheme::Ddr);
         assert_eq!(loaded.song_select_bg_mode, SelectMusicSongSelectBgMode::Bg);
@@ -3536,7 +3636,10 @@ mod tests {
                 "SelectMusicSeriesSource=PackIni\n",
                 "SelectMusicHideInactiveSeries=0\n",
                 "SelectMusicWheelITLRank=None\n",
-                "SelectMusicWheelITL=Off\n",
+                "SelectMusicWheelScores=None\n",
+                "SelectMusicWheelScoreType=ITG\n",
+                "SelectMusicWheelShowFails=0\n",
+                "SelectMusicWheelITLPoints=0\n",
                 "SelectMusicWheelStyle=ITG\n",
                 "ITGDiffColors=Simply Love\n",
                 "SongSelectBG=Off\n",
@@ -3836,16 +3939,16 @@ mod tests {
         );
 
         assert_eq!(
-            select_music_itl_wheel_mode_choice_index(SelectMusicItlWheelMode::Off),
+            select_music_wheel_score_mode_choice_index(SelectMusicWheelScoreMode::None),
             0
         );
         assert_eq!(
-            select_music_itl_wheel_mode_from_choice(2),
-            SelectMusicItlWheelMode::PointsAndScore
+            select_music_wheel_score_mode_from_choice(2),
+            SelectMusicWheelScoreMode::All
         );
         assert_eq!(
-            select_music_itl_wheel_mode_from_choice(99),
-            SelectMusicItlWheelMode::Off
+            select_music_wheel_score_mode_from_choice(99),
+            SelectMusicWheelScoreMode::None
         );
 
         assert_eq!(

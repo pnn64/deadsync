@@ -362,7 +362,10 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_series_source = loaded.series_source;
     cfg.hide_inactive_series = loaded.hide_inactive_series;
     cfg.select_music_itl_rank_mode = loaded.itl_rank_mode;
-    cfg.select_music_itl_wheel_mode = loaded.itl_wheel_mode;
+    cfg.select_music_wheel_score_mode = loaded.wheel_score_mode;
+    cfg.select_music_wheel_score_type = loaded.wheel_score_type;
+    cfg.select_music_wheel_show_fails = loaded.wheel_show_fails;
+    cfg.select_music_wheel_itl_points = loaded.wheel_itl_points;
     cfg.select_music_wheel_style = loaded.wheel_style;
     cfg.difficulty_color_scheme = loaded.difficulty_color_scheme;
     cfg.select_music_song_select_bg_mode = loaded.song_select_bg_mode;

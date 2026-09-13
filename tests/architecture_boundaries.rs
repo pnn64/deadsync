@@ -3602,7 +3602,10 @@ fn select_music_feature_policy_is_shell_prepared() {
         "cfg.show_music_wheel_grades",
         "cfg.show_music_wheel_lamps",
         "cfg.select_music_itl_rank_mode",
-        "cfg.select_music_itl_wheel_mode",
+        "cfg.select_music_wheel_score_mode",
+        "cfg.select_music_wheel_score_type",
+        "cfg.select_music_wheel_show_fails",
+        "cfg.select_music_wheel_itl_points",
         "config::runtime::get().music_wheel_switch_speed",
         "config::runtime::get().select_music_wheel_style",
         "config::runtime::get().show_srpg_shop",
@@ -3671,7 +3674,10 @@ fn select_music_feature_policy_is_shell_prepared() {
         "pub show_grades: bool",
         "pub show_lamps: bool",
         "pub itl_rank_mode:",
-        "pub itl_score_mode:",
+        "pub score_mode:",
+        "pub score_type:",
+        "pub show_failed_scores:",
+        "pub show_itl_points:",
         "pub wheel_switch_speed: u8",
         "pub wheel_style:",
         "pub initial_sort:",
@@ -3718,7 +3724,10 @@ fn select_music_feature_policy_is_shell_prepared() {
         "config.show_music_wheel_grades",
         "config.show_music_wheel_lamps",
         "config.select_music_itl_rank_mode",
-        "config.select_music_itl_wheel_mode",
+        "config.select_music_wheel_score_mode",
+        "config.select_music_wheel_score_type",
+        "config.select_music_wheel_show_fails",
+        "config.select_music_wheel_itl_points",
         "config.music_wheel_switch_speed",
         "config.select_music_wheel_style",
         "config.select_music_default_sort",
@@ -3753,7 +3762,7 @@ fn select_music_feature_policy_is_shell_prepared() {
             && screen.contains("state.policy.media.show_previews")
             && screen.contains("state.policy.media.song_select_bg_mode")
             && screen.contains("state.policy.wheel.show_grades")
-            && screen.contains("state.policy.wheel.itl_score_mode")
+            && screen.contains("state.policy.wheel.show_itl_points")
             && screen.contains("state.policy.interaction.wheel_switch_speed")
             && screen.contains("state.policy.interaction.wheel_style")
             && screen.contains("state.policy.interaction.new_pack_mode")
@@ -4059,8 +4068,8 @@ fn music_wheel_runtime_data_is_shell_prepared() {
         "scores::ensure_score_caches_loaded",
         "scores::ensure_itl_wheel_caches_loaded",
         "scores::cached_best_itg_scores",
-        "scores::get_cached_local_pass_rate_with_profile",
-        "context.cached_local_itl_score(song)",
+        "deadsync_score::runtime_cached_wheel_scores",
+        "deadsync_score::cached_itl_chart_score(id, chart_hash)",
         "context.cached_self_ex_score(chart_hash)",
         "scores::itl_song_folders_unlocked_with_profiles",
         "profile_data::runtime_favorite_membership",

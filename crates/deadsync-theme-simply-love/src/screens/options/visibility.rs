@@ -6,7 +6,23 @@ use super::*;
 pub(super) fn is_submenu_row_disabled(state: &State, kind: SubmenuKind, id: SubRowId) -> bool {
     match (kind, id) {
         (SubmenuKind::Bookkeeping, _) => true,
-        (SubmenuKind::Downloads, SubRowId::CheckForUpdates) => !state.updater_capabilities.app_update,
+        (SubmenuKind::SelectMusic, SubRowId::WheelScoreType) => {
+            get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::WheelScores,
+            ) != Some(2)
+        }
+        (SubmenuKind::SelectMusic, SubRowId::WheelShowFails | SubRowId::WheelItlPoints) => {
+            get_choice_by_id(
+                &state.sub[SubmenuKind::SelectMusic].choice_indices,
+                SELECT_MUSIC_OPTIONS_ROWS,
+                SubRowId::WheelScores,
+            ) == Some(0)
+        }
+        (SubmenuKind::Downloads, SubRowId::CheckForUpdates) => {
+            !state.updater_capabilities.app_update
+        }
         (SubmenuKind::Downloads, SubRowId::DownloadVideoSupport) => {
             !state.updater_capabilities.ffmpeg_install
         }

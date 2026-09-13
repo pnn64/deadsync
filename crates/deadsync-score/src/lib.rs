@@ -185,6 +185,15 @@ pub struct LocalScalarScore {
     pub is_fail: bool,
 }
 
+/// Personal wheel percentages (0..=100). Only local records may supply fails.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct CachedWheelScores {
+    pub itg: Option<LocalScalarScore>,
+    pub ex: Option<LocalScalarScore>,
+    pub hard_ex: Option<LocalScalarScore>,
+    pub pass_rate_hundredths: Option<u32>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Encode, Decode)]
 pub struct LocalScoreBestScalar {
     pub grade: Grade,
@@ -1972,6 +1981,54 @@ pub fn runtime_cached_best_itg_scores<const N: usize>(
     })
 }
 
+/// Read all wheel metrics under one cache transaction, without I/O or allocation.
+/// Callers must load the profile caches before entering this transaction.
+pub fn runtime_cached_wheel_scores<const N: usize>(
+    queries: &[Option<(&str, &str)>; N],
+) -> [CachedWheelScores; N] {
+    if queries.iter().all(Option::is_none) {
+        return [CachedWheelScores::default(); N];
+    }
+    let caches = runtime_lock_score_caches();
+    let mut profiles = [None; 2];
+    std::array::from_fn(|index| {
+        queries[index]
+            .and_then(|(profile_id, chart_hash)| {
+                caches
+                    .batch_profile(&mut profiles, profile_id)
+                    .map(|profile| profile.wheel_scores(chart_hash))
+            })
+            .unwrap_or_default()
+    })
+}
+
+fn wheel_scalar_score(
+    local: Option<LocalScalarScore>,
+    online_passes: impl IntoIterator<Item = Option<f64>>,
+) -> Option<LocalScalarScore> {
+    let local = local.filter(|score| score.percent.is_finite());
+    let passed = online_passes
+        .into_iter()
+        .flatten()
+        .chain(
+            local
+                .filter(|score| !score.is_fail)
+                .map(|score| score.percent),
+        )
+        .filter(|percent| percent.is_finite())
+        .reduce(f64::max);
+    passed
+        .map(|percent| LocalScalarScore {
+            percent,
+            is_fail: false,
+        })
+        .or(local)
+        .map(|score| LocalScalarScore {
+            percent: score.percent.clamp(0.0, 100.0),
+            ..score
+        })
+}
+
 pub fn best_cached_itg_score(
     scores: impl IntoIterator<Item = Option<CachedScore>>,
 ) -> Option<CachedScore> {
@@ -1995,6 +2052,54 @@ struct HeldProfileScores<'a> {
 }
 
 impl HeldProfileScores<'_> {
+    fn wheel_scores(&self, chart_hash: &str) -> CachedWheelScores {
+        let local_itg = self.local.and_then(|index| index.best_itg.get(chart_hash));
+        let local_scalar = |hard_ex| {
+            self.local.and_then(|index| {
+                let scores = if hard_ex {
+                    &index.best_hard_ex
+                } else {
+                    &index.best_ex
+                };
+                scores.get(chart_hash).map(|score| LocalScalarScore {
+                    percent: score.percent,
+                    is_fail: score.grade == Grade::Failed,
+                })
+            })
+        };
+        let gs_pass = self
+            .gs
+            .and_then(|scores| scores.get(chart_hash))
+            .filter(|score| score.grade != Grade::Failed)
+            .map(|score| score.score_percent * 100.0);
+        let ac = self.ac.and_then(|scores| scores.get(chart_hash));
+        let ac_pass = |score: Option<ArrowCloudScore>| {
+            score
+                .filter(|score| !score.is_fail)
+                .map(|score| score.score_percent * 100.0)
+        };
+        CachedWheelScores {
+            itg: wheel_scalar_score(
+                local_itg.map(|score| LocalScalarScore {
+                    percent: score.score_percent * 100.0,
+                    is_fail: score.grade == Grade::Failed,
+                }),
+                [gs_pass, ac_pass(ac.and_then(|score| score.itg))],
+            ),
+            ex: wheel_scalar_score(
+                local_scalar(false),
+                [ac_pass(ac.and_then(|score| score.ex))],
+            ),
+            hard_ex: wheel_scalar_score(
+                local_scalar(true),
+                [ac_pass(ac.and_then(|score| score.hard_ex))],
+            ),
+            pass_rate_hundredths: self
+                .local
+                .and_then(|index| index.best_pass_rate.get(chart_hash).copied()),
+        }
+    }
+
     fn merged(&self, chart_hash: &str) -> Option<CachedScore> {
         let local = self
             .local
@@ -6935,6 +7040,157 @@ pub fn arrowcloud_submit_ui_status(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wheel_scores_prefer_passes_and_never_use_online_fails() {
+        let cached = |percent, failed| CachedScore {
+            score_percent: percent,
+            grade: if failed { Grade::Failed } else { Grade::Tier01 },
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        let remote = |percent, is_fail| ArrowCloudScore {
+            score_percent: percent,
+            is_fail,
+            server_grade: None,
+            played_at: None,
+            play_id: None,
+        };
+        for (local_failed, gs_failed, ac_failed, expected, failed) in [
+            (false, true, true, 88.0, false),
+            (true, false, true, 88.0, false),
+            (true, true, false, 88.0, false),
+            (true, true, true, 92.0, true),
+        ] {
+            let mut local = LocalScoreIndex::default();
+            local.best_itg.insert(
+                "chart".into(),
+                cached(if local_failed { 0.92 } else { 0.88 }, local_failed),
+            );
+            let gs = HashMap::from([(
+                "chart".into(),
+                cached(if gs_failed { 0.99 } else { 0.88 }, gs_failed),
+            )]);
+            let ac = HashMap::from([(
+                "chart".into(),
+                ArrowCloudScores {
+                    itg: Some(remote(if ac_failed { 0.99 } else { 0.88 }, ac_failed)),
+                    ..Default::default()
+                },
+            )]);
+            let profile = HeldProfileScores {
+                profile_id: "player",
+                local: Some(&local),
+                gs: Some(&gs),
+                ac: Some(&ac),
+            };
+            assert_eq!(
+                profile.wheel_scores("chart").itg,
+                Some(LocalScalarScore {
+                    percent: expected,
+                    is_fail: failed
+                })
+            );
+            assert_eq!(
+                profile.wheel_scores("missing"),
+                CachedWheelScores::default()
+            );
+            let online_only = HeldProfileScores {
+                local: None,
+                ..profile
+            };
+            if gs_failed && ac_failed {
+                assert_eq!(online_only.wheel_scores("chart").itg, None);
+            }
+        }
+    }
+
+    #[test]
+    fn wheel_scores_keep_each_metrics_best_result_and_local_fail_status() {
+        let mut local = LocalScoreIndex::default();
+        local.best_ex.insert(
+            "chart".into(),
+            LocalScoreBestScalar {
+                grade: Grade::Failed,
+                percent: 92.0,
+            },
+        );
+        local.best_hard_ex.insert(
+            "chart".into(),
+            LocalScoreBestScalar {
+                grade: Grade::Failed,
+                percent: 73.0,
+            },
+        );
+        local.best_pass_rate.insert("chart".into(), 120);
+        let ac = HashMap::from([(
+            "chart".into(),
+            ArrowCloudScores {
+                ex: Some(ArrowCloudScore {
+                    score_percent: 0.88,
+                    is_fail: false,
+                    server_grade: None,
+                    played_at: None,
+                    play_id: None,
+                }),
+                hard_ex: Some(ArrowCloudScore {
+                    score_percent: 0.99,
+                    is_fail: true,
+                    server_grade: None,
+                    played_at: None,
+                    play_id: None,
+                }),
+                ..Default::default()
+            },
+        )]);
+        let profile = HeldProfileScores {
+            profile_id: "player",
+            local: Some(&local),
+            gs: None,
+            ac: Some(&ac),
+        };
+        let scores = profile.wheel_scores("chart");
+        assert_eq!(scores.itg, None);
+        assert_eq!(
+            scores.ex,
+            Some(LocalScalarScore {
+                percent: 88.0,
+                is_fail: false
+            })
+        );
+        assert_eq!(
+            scores.hard_ex,
+            Some(LocalScalarScore {
+                percent: 73.0,
+                is_fail: true
+            })
+        );
+        assert_eq!(scores.pass_rate_hundredths, Some(120));
+        assert_eq!(
+            HeldProfileScores {
+                local: None,
+                ..profile
+            }
+            .wheel_scores("chart")
+            .hard_ex,
+            None
+        );
+        assert_eq!(
+            wheel_scalar_score(
+                Some(LocalScalarScore {
+                    percent: 0.0,
+                    is_fail: true
+                }),
+                []
+            ),
+            Some(LocalScalarScore {
+                percent: 0.0,
+                is_fail: true
+            })
+        );
+        assert_eq!(wheel_scalar_score(None, [Some(f64::NAN)]), None);
+    }
+
     use std::cell::Cell;
     use std::collections::HashSet;
     use std::fs;

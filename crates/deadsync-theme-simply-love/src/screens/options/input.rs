@@ -1046,8 +1046,17 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::ItlRank => crate::SimplyLoveSelectMusicConfigRequest::ItlRankMode(
                 select_music_itl_rank_mode_from_choice(new_index),
             ),
-            SubRowId::ItlWheelData => crate::SimplyLoveSelectMusicConfigRequest::ItlWheelMode(
-                select_music_itl_wheel_mode_from_choice(new_index),
+            SubRowId::WheelScores => crate::SimplyLoveSelectMusicConfigRequest::WheelScoreMode(
+                select_music_wheel_score_mode_from_choice(new_index),
+            ),
+            SubRowId::WheelScoreType => crate::SimplyLoveSelectMusicConfigRequest::WheelScoreType(
+                select_music_wheel_score_type_from_choice(new_index),
+            ),
+            SubRowId::WheelShowFails => crate::SimplyLoveSelectMusicConfigRequest::WheelShowFails(
+                yes_no_from_choice(new_index),
+            ),
+            SubRowId::WheelItlPoints => crate::SimplyLoveSelectMusicConfigRequest::WheelItlPoints(
+                yes_no_from_choice(new_index),
             ),
             SubRowId::NewPackBadge => crate::SimplyLoveSelectMusicConfigRequest::NewPackMode(
                 select_music_new_pack_mode_from_choice(new_index),

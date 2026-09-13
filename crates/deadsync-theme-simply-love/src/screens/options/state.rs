@@ -1442,8 +1442,26 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SubRowId::ItlWheelData,
-        select_music_itl_wheel_mode_choice_index(cfg.select_music_itl_wheel_mode),
+        SubRowId::WheelScores,
+        select_music_wheel_score_mode_choice_index(cfg.select_music_wheel_score_mode),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::WheelScoreType,
+        select_music_wheel_score_type_choice_index(cfg.select_music_wheel_score_type),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::WheelShowFails,
+        yes_no_choice_index(cfg.select_music_wheel_show_fails),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::WheelItlPoints,
+        yes_no_choice_index(cfg.select_music_wheel_itl_points),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,

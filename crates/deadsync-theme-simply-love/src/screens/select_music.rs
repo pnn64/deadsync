@@ -12704,19 +12704,22 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
         Some(&state.wheel_song_meta),
         meter_sort_section_meter(state.sort_mode, state.expanded_pack_name.as_deref()),
     );
-    let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
-        MusicWheelSlotRuntimeRequest::Song {
-            chart_hashes,
-            is_srpg_event,
-            ..
-        } => (chart_hashes, is_srpg_event),
-        _ => ([None, None], false),
-    };
+    let (selected_chart_hashes, selected_is_srpg, selected_is_itl) =
+        match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
+            MusicWheelSlotRuntimeRequest::Song {
+                chart_hashes,
+                is_srpg_event,
+                is_itl_event,
+                ..
+            } => (chart_hashes, is_srpg_event, is_itl_event),
+            _ => ([None, None], false, false),
+        };
     let (fetch_itl_rank, fetch_itl_score, fetch_srpg_score) = music_wheel::itl_fetch_flags(
         allow_gs_fetch_for_selection(state),
         policy.itl_rank_mode,
-        policy.itl_score_mode,
+        policy.score_mode,
         selected_is_srpg,
+        selected_is_itl,
     );
     let sides = std::array::from_fn(|side_idx| MusicWheelSideRuntimeRequest {
         chart_hash: selected_chart_hashes[side_idx],
@@ -12732,10 +12735,9 @@ pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_
     MusicWheelRuntimeRequest {
         read_scores: policy.show_grades || policy.show_lamps,
         rank_source,
-        read_itl_scores: !matches!(
-            policy.itl_score_mode,
-            deadsync_config::theme::SelectMusicItlWheelMode::Off
-        ),
+        score_mode: policy.score_mode,
+        score_type: policy.score_type,
+        show_failed_scores: policy.show_failed_scores,
         sides,
         slots,
     }
@@ -14027,7 +14029,7 @@ pub fn push_actors(
             show_music_wheel_grades: state.policy.wheel.show_grades,
             show_music_wheel_lamps: state.policy.wheel.show_lamps,
             itl_rank_mode: state.policy.wheel.itl_rank_mode,
-            itl_wheel_mode: state.policy.wheel.itl_score_mode,
+            show_itl_points: state.policy.wheel.show_itl_points,
             song_select_bg_mode: state.policy.media.song_select_bg_mode,
             song_select_bg_paths: &state.last_requested_wheel_item_bg_paths,
             song_select_bg_texture_keys: &state.wheel_item_bg_texture_keys,
