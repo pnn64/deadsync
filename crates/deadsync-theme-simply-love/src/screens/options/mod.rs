@@ -114,6 +114,7 @@ use update::*;
 mod input;
 use input::*;
 mod render;
+mod text_wrap;
 use render::*;
 
 // Public API re-exports

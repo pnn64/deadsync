@@ -4,6 +4,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, sc
 use deadsync_online::lobbies;
 use deadsync_profile::PlayerSide;
 use std::cmp::Ordering;
+use std::fmt::{self, Write as _};
 use std::sync::Arc;
 
 const PANEL_WIDTH: f32 = 200.0;
@@ -84,6 +85,40 @@ impl LobbyHudSnapshot {
             && self.z == params.z
     }
 
+    fn update(&mut self, params: &CachedRenderParams<'_>) {
+        replace_text(&mut self.screen_name, params.screen_name);
+        replace_text(&mut self.code, &params.joined.code);
+        if self.players.len() == params.joined.players.len() {
+            for (cached, player) in self.players.iter_mut().zip(&params.joined.players) {
+                replace_text(&mut cached.label, &player.label);
+                replace_text(&mut cached.screen_name, &player.screen_name);
+                cached.ready = player.ready;
+                cached.score = player.score;
+                cached.ex_score = player.ex_score;
+            }
+        } else {
+            self.players = params
+                .joined
+                .players
+                .iter()
+                .map(LobbyPlayerSnapshot::from_player)
+                .collect();
+        }
+        replace_optional_text(
+            &mut self.song_path,
+            params
+                .show_song_info
+                .then_some(params.joined.song_info.as_ref())
+                .flatten()
+                .map(|song| song.song_path.as_str()),
+        );
+        replace_optional_text(&mut self.status_text, params.status_text);
+        self.show_song_info = params.show_song_info;
+        self.joined_sides = params.joined_sides;
+        self.player_side = params.player_side;
+        self.z = params.z;
+    }
+
     fn from_params(params: &CachedRenderParams<'_>) -> Self {
         Self {
             screen_name: params.screen_name.into(),
@@ -128,6 +163,20 @@ impl LobbyPlayerSnapshot {
     }
 }
 
+// Leave unchanged names untouched during frequent score/ready updates.
+fn replace_text(target: &mut Box<str>, source: &str) {
+    if target.as_ref() != source {
+        *target = source.into();
+    }
+}
+
+fn replace_optional_text(target: &mut Option<Box<str>>, source: Option<&str>) {
+    match (target.as_mut(), source) {
+        (Some(target), Some(source)) => replace_text(target, source),
+        (_, source) => *target = source.map(Into::into),
+    }
+}
+
 fn percent_value_matches(left: Option<f32>, right: Option<f32>) -> bool {
     match (left, right) {
         (Some(left), Some(right)) if !left.is_finite() && !right.is_finite() => true,
@@ -145,8 +194,9 @@ fn percent_value_matches(left: Option<f32>, right: Option<f32>) -> bool {
 /// change. A hit performs bounded player comparisons and shares one immutable
 /// two-actor slice without cloning the wide actor values. There is no eviction,
 /// synchronization, or live-frame pruning.
-/// Replaced strings are freed on an external lobby-state change, and the final
-/// snapshot is freed with the screen. Hit and miss counters provide runtime
+/// Unchanged snapshot strings and equal-length player lists are reused across
+/// lobby updates. Changed text remains exactly sized; the snapshot is freed
+/// with the screen. Hit and miss counters provide runtime
 /// instrumentation. Worst-case boundary work sorts and formats the current
 /// lobby's finite player list once.
 #[derive(Default)]
@@ -210,7 +260,11 @@ impl LobbyHudCache {
                 horizalign(center)
             ),
         ]);
-        self.snapshot = Some(LobbyHudSnapshot::from_params(params));
+        if let Some(snapshot) = &mut self.snapshot {
+            snapshot.update(params);
+        } else {
+            self.snapshot = Some(LobbyHudSnapshot::from_params(params));
+        }
         Arc::clone(&self.panel)
     }
 }
@@ -274,81 +328,74 @@ fn build_body_text(
     show_song_info: bool,
     status_text: Option<&str>,
 ) -> String {
-    build_body_lines(joined, current_screen_name, show_song_info, status_text).join("\n")
-}
-
-fn build_body_lines(
-    joined: &lobbies::JoinedLobby,
-    current_screen_name: &str,
-    show_song_info: bool,
-    status_text: Option<&str>,
-) -> Vec<String> {
-    let mut lines = Vec::new();
-
-    lines.push(format!("Lobby Code: {}", joined.code));
-    lines.push(String::new());
-
+    // Reserve typical player/status lines; longer screen names can still grow.
+    let mut out = String::with_capacity(
+        joined.code.len()
+            + 32
+            + joined.players.len() * 96
+            + status_text.map_or(0, |text| text.len().min(256)),
+    );
+    write!(out, "Lobby Code: {}\n\n", joined.code).expect("writing to a String cannot fail");
     if let Some(status_text) = status_text {
         for line in status_text.lines() {
-            lines.push(truncate_text(line, 44));
+            writeln!(out, "{}", Truncated(line, 44)).expect("writing to a String cannot fail");
         }
-        lines.push(String::new());
+        out.push('\n');
     }
-
     let ordered_players = ordered_players(joined);
     if ordered_players.is_empty() {
-        lines.push("Waiting for players...".to_string());
-        return lines;
+        out.push_str("Waiting for players...");
+        return out;
     }
-
     let show_ready_icons = current_screen_name.eq_ignore_ascii_case("ScreenGameplay")
         && !joined.players.is_empty()
         && !joined.players.iter().all(gameplay_player_ready);
-
     for (display_index, (_, player)) in ordered_players.into_iter().enumerate() {
         if display_index > 0 {
-            lines.push(String::new());
+            out.push_str("\n\n");
         }
-        let mut player_line = format!(
+        write!(
+            out,
             "{}. {}",
             display_index + 1,
-            truncate_text(player.label.as_str(), 22)
-        );
+            Truncated(&player.label, 22)
+        )
+        .expect("writing to a String cannot fail");
         if show_ready_icons {
-            player_line.push_str(if gameplay_player_ready(player) {
-                " [✔]"
+            out.push_str(if gameplay_player_ready(player) {
+                " [\u{2714}]"
             } else {
-                " [❌]"
+                " [\u{274c}]"
             });
         }
         if !player.screen_name.eq_ignore_ascii_case(current_screen_name) {
-            player_line.push_str(" - in ");
-            player_line.push_str(display_screen_name(player.screen_name.as_str()).as_str());
+            out.push_str(" - in ");
+            out.push_str(display_screen_name(&player.screen_name));
         }
-        lines.push(player_line);
-
-        if is_score_screen(player.screen_name.as_str()) {
-            lines.push(format!(
-                "    {} - {} EX",
-                format_percent(player.score),
-                format_percent(player.ex_score),
-            ));
+        if is_score_screen(&player.screen_name) {
+            write!(
+                out,
+                "\n    {:.2}% - {:.2}% EX",
+                percent_value(player.score),
+                percent_value(player.ex_score)
+            )
+            .expect("writing to a String cannot fail");
         }
     }
-
     if show_song_info && let Some(song_info) = joined.song_info.as_ref() {
-        let (mut pack, mut song) = match song_info.song_path.split_once('/') {
-            Some((pack, song)) => (pack.to_string(), song.to_string()),
-            None => ("Unknown".to_string(), song_info.song_path.clone()),
-        };
-        pack = truncate_text(pack.as_str(), 30);
-        song = truncate_text(song.as_str(), 30);
-        lines.push(String::new());
-        lines.push(format!("Pack: {pack}"));
-        lines.push(format!("Song: {song}"));
+        let (pack, song) = song_info
+            .song_path
+            .split_once('/')
+            .unwrap_or(("Unknown", &song_info.song_path));
+        write!(
+            out,
+            "\n\nPack: {}\nSong: {}",
+            Truncated(pack, 30),
+            Truncated(song, 30)
+        )
+        .expect("writing to a String cannot fail");
     }
-
-    lines
+    out
 }
 
 fn ordered_players(joined: &lobbies::JoinedLobby) -> Vec<(usize, &lobbies::LobbyPlayer)> {
@@ -394,24 +441,20 @@ fn gameplay_player_ready(player: &lobbies::LobbyPlayer) -> bool {
     player.screen_name.eq_ignore_ascii_case("ScreenGameplay") && player.ready
 }
 
-fn display_screen_name(screen_name: &str) -> String {
+fn display_screen_name(screen_name: &str) -> &str {
     let screen_name = screen_name.trim();
     if screen_name.is_empty() || screen_name.eq_ignore_ascii_case("NoScreen") {
-        return "Transitioning".to_string();
+        return "Transitioning";
     }
-    screen_name
-        .strip_prefix("Screen")
-        .unwrap_or(screen_name)
-        .to_string()
+    screen_name.strip_prefix("Screen").unwrap_or(screen_name)
 }
 
 #[inline(always)]
-fn format_percent(value: Option<f32>) -> String {
-    let value = value
+fn percent_value(value: Option<f32>) -> f32 {
+    value
         .filter(|value| value.is_finite())
         .unwrap_or(0.0)
-        .max(0.0);
-    format!("{value:.2}%")
+        .max(0.0)
 }
 
 #[inline(always)]
@@ -468,16 +511,23 @@ fn display_x(placement: PanelPlacement, width: f32) -> f32 {
     }
 }
 
-fn truncate_text(text: &str, max_chars: usize) -> String {
-    let count = text.chars().count();
-    if count <= max_chars {
-        return text.to_string();
+// Formatting borrows the displayed UTF-8 prefix; no truncated String is built.
+struct Truncated<'a>(&'a str, usize);
+
+impl fmt::Display for Truncated<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.char_indices().nth(self.1).is_none() {
+            return f.write_str(self.0);
+        }
+        let keep = self.1.saturating_sub(3);
+        let end = self
+            .0
+            .char_indices()
+            .nth(keep)
+            .map_or(self.0.len(), |(index, _)| index);
+        f.write_str(&self.0[..end])?;
+        f.write_str("...")
     }
-    let keep = max_chars.saturating_sub(3);
-    let mut out = String::with_capacity(max_chars);
-    out.extend(text.chars().take(keep));
-    out.push_str("...");
-    out
 }
 
 #[cfg(test)]
@@ -544,7 +594,8 @@ mod tests {
             test_player("Remote", "ScreenSelectMusic", true),
         ]);
 
-        let lines = build_body_lines(&joined, "ScreenGameplay", false, None);
+        let text = build_body_text(&joined, "ScreenGameplay", false, None);
+        let lines: Vec<_> = text.lines().collect();
 
         assert!(lines.iter().any(|line| line.contains("1. Local [✔]")));
         assert!(
@@ -617,7 +668,8 @@ mod tests {
             test_player("Remote", "ScreenGameplay", false),
         ]);
 
-        let lines = build_body_lines(&joined, "ScreenGameplay", false, None);
+        let text = build_body_text(&joined, "ScreenGameplay", false, None);
+        let lines: Vec<_> = text.lines().collect();
 
         assert!(lines.iter().any(|line| line.contains("2. Remote [❌]")));
     }
