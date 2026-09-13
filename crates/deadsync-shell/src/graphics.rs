@@ -211,6 +211,7 @@ pub const fn renderer_startup_config(
             high_dpi: settings.high_dpi,
             width: shell.display_width,
             height: shell.display_height,
+            refresh_rate_millihertz: shell.refresh_rate_millihertz,
             monitor: shell.display_monitor,
             display_mode: shell.display_mode,
             fallback_fullscreen_type: settings.fallback_fullscreen_type,
@@ -237,7 +238,8 @@ pub fn start_renderer_runtime(
     dynamic_media: &mut DynamicMedia,
     now: Instant,
 ) -> Result<RendererStartupResult, Box<dyn Error>> {
-    let setup = crate::window::create_app_window(event_loop, config.window)?;
+    let setup =
+        crate::window::create_app_window(event_loop, config.window, &mut shell.fullscreen_state)?;
     apply_app_window_setup_state(shell, &setup);
     let monitor_count = setup.monitor_count;
     let fullscreen_type = setup.fullscreen_type;
@@ -330,6 +332,9 @@ pub fn begin_renderer_switch(
     now: Instant,
 ) {
     let window_state = prepare_renderer_switch_window(window, config);
+    if let Err(error) = shell.fullscreen_state.restore() {
+        log::warn!("Failed to restore desktop before renderer switch: {error}");
+    }
     dispose_renderer(backend, assets, dynamic_media);
     apply_renderer_switch_window_state(shell, window_state);
     reset_renderer_switch_clock(shell, now);
@@ -658,6 +663,7 @@ pub const fn runtime_display_mode_change(
         high_dpi,
         width: shell.display_width,
         height: shell.display_height,
+        refresh_rate_millihertz: shell.refresh_rate_millihertz,
         monitor: shell.display_monitor,
         monitor_override,
         previous_mode: shell.display_mode,
@@ -679,6 +685,7 @@ pub const fn runtime_resolution_change(
         high_dpi,
         width,
         height,
+        refresh_rate_millihertz: shell.refresh_rate_millihertz,
         monitor: shell.display_monitor,
         display_mode: shell.display_mode,
     }
@@ -695,7 +702,7 @@ pub fn apply_runtime_display_mode(
     mode: DisplayMode,
     monitor_override: Option<usize>,
     fallback_fullscreen_type: FullscreenType,
-) -> crate::window::DisplayModeResult {
+) -> Result<crate::window::DisplayModeResult, display::DisplayError> {
     let result = crate::window::apply_window_display_mode(
         window,
         event_loop,
@@ -707,12 +714,13 @@ pub fn apply_runtime_display_mode(
             monitor_override,
             fallback_fullscreen_type,
         ),
-    );
+        &mut shell.fullscreen_state,
+    )?;
     if let Some(size) = result.immediate_size {
         sync_renderer_window_size(shell, window, backend, backend_type, high_dpi, size);
     }
     apply_display_mode_result(shell, mode, &result);
-    result
+    Ok(result)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -725,17 +733,18 @@ pub fn apply_runtime_resolution(
     high_dpi: bool,
     width: u32,
     height: u32,
-) -> crate::window::ResolutionResult {
+) -> Result<crate::window::ResolutionResult, display::DisplayError> {
     let result = crate::window::apply_window_resolution(
         window,
         event_loop,
         runtime_resolution_change(shell, backend_type, high_dpi, width, height),
-    );
+        &mut shell.fullscreen_state,
+    )?;
     if let Some(size) = result.immediate_size {
         sync_renderer_window_size(shell, window, backend, backend_type, high_dpi, size);
     }
     apply_resolution_result(shell, width, height, &result);
-    result
+    Ok(result)
 }
 
 const fn software_thread_count(configured: u8) -> Option<usize> {
@@ -760,6 +769,7 @@ pub struct GraphicsRuntimeSettings {
     pub renderer: Option<BackendType>,
     pub display_mode: Option<DisplayMode>,
     pub resolution: Option<(u32, u32)>,
+    pub refresh_rate_millihertz: Option<u32>,
     pub monitor_requested: bool,
     pub vsync: Option<bool>,
     pub present_mode_policy: Option<PresentModePolicy>,
@@ -776,11 +786,13 @@ pub struct GraphicsRuntimeSettingsResult {
     pub max_fps: Option<u16>,
     pub high_dpi: Option<bool>,
     pub resolution: Option<(u32, u32)>,
+    pub refresh_rate_millihertz: Option<u32>,
     pub aspect_ratio: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GraphicsRuntimeUpdate {
+    RefreshRate(u32),
     Vsync(bool),
     MaxFps(u16),
     PresentModePolicy(PresentModePolicy),
@@ -792,7 +804,10 @@ pub enum GraphicsRuntimeUpdate {
 pub fn graphics_runtime_updates(
     result: &GraphicsRuntimeSettingsResult,
 ) -> Vec<GraphicsRuntimeUpdate> {
-    let mut updates = Vec::with_capacity(5);
+    let mut updates = Vec::with_capacity(7);
+    if let Some(rate) = result.refresh_rate_millihertz {
+        updates.push(GraphicsRuntimeUpdate::RefreshRate(rate));
+    }
     if let Some(vsync) = result.vsync {
         updates.push(GraphicsRuntimeUpdate::Vsync(vsync));
     }
@@ -878,6 +893,16 @@ pub fn apply_graphics_runtime_settings(
     shell: &mut ShellState,
     settings: GraphicsRuntimeSettings,
 ) -> GraphicsRuntimeSettingsResult {
+    let mut resolution = settings.resolution;
+    if let Some(rate) = settings.refresh_rate_millihertz {
+        shell.refresh_rate_millihertz = rate;
+        if matches!(
+            settings.display_mode.unwrap_or(shell.display_mode),
+            DisplayMode::Fullscreen(FullscreenType::Exclusive)
+        ) {
+            resolution.get_or_insert((shell.display_width, shell.display_height));
+        }
+    }
     let mut present_config_changed = false;
     if let Some(vsync) = settings.vsync {
         shell.vsync_enabled = vsync;
@@ -905,7 +930,7 @@ pub fn apply_graphics_runtime_settings(
         request: GraphicsChangeRequest {
             renderer: settings.renderer,
             display_mode: settings.display_mode,
-            resolution: settings.resolution,
+            resolution,
             monitor_requested: settings.monitor_requested,
             high_dpi_changed: settings.high_dpi.is_some(),
             present_config_changed,
@@ -915,6 +940,7 @@ pub fn apply_graphics_runtime_settings(
         max_fps: settings.max_fps,
         high_dpi: settings.high_dpi,
         resolution: settings.resolution,
+        refresh_rate_millihertz: settings.refresh_rate_millihertz,
         aspect_ratio: settings.aspect_ratio,
     }
 }
@@ -1016,6 +1042,7 @@ mod tests {
 
     fn runtime_settings() -> GraphicsRuntimeSettings {
         GraphicsRuntimeSettings {
+            refresh_rate_millihertz: None,
             renderer: None,
             display_mode: None,
             resolution: None,
@@ -1029,11 +1056,44 @@ mod tests {
     }
 
     #[test]
+    fn refresh_only_change_reapplies_exclusive_mode() {
+        let mut shell = ShellState::new(&Config::default(), 0);
+        for mode in [
+            DisplayMode::Windowed,
+            DisplayMode::Fullscreen(FullscreenType::Borderless),
+            DisplayMode::Fullscreen(FullscreenType::Exclusive),
+        ] {
+            shell.display_mode = mode;
+            for rate in [30_000, 0] {
+                let result = apply_graphics_runtime_settings(
+                    &mut shell,
+                    GraphicsRuntimeSettings {
+                        refresh_rate_millihertz: Some(rate),
+                        ..runtime_settings()
+                    },
+                );
+                assert_eq!(shell.refresh_rate_millihertz, rate);
+                assert_eq!(
+                    result.request.resolution,
+                    (mode == DisplayMode::Fullscreen(FullscreenType::Exclusive))
+                        .then_some((shell.display_width, shell.display_height))
+                );
+                assert_eq!(
+                    graphics_runtime_updates(&result),
+                    vec![GraphicsRuntimeUpdate::RefreshRate(rate)]
+                );
+                assert!(!result.request.present_config_changed);
+            }
+        }
+    }
+
+    #[test]
     fn runtime_settings_update_shell_and_request_window_plan_inputs() {
         let mut shell = ShellState::new(&Config::default(), 0);
         let result = apply_graphics_runtime_settings(
             &mut shell,
             GraphicsRuntimeSettings {
+                refresh_rate_millihertz: None,
                 renderer: Some(BackendType::OpenGL),
                 display_mode: Some(DisplayMode::Windowed),
                 resolution: Some((1024, 768)),

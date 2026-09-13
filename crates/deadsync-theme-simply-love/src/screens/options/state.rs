@@ -273,6 +273,7 @@ pub struct State {
     pub(super) display_monitor_at_load: usize,
     pub(super) display_width_at_load: u32,
     pub(super) display_height_at_load: u32,
+    pub(super) refresh_rate_at_load: u32,
     pub(super) display_aspect_ratio_at_load: f32,
     pub(super) max_fps_at_load: u16,
     pub(super) vsync_at_load: bool,
@@ -284,7 +285,7 @@ pub struct State {
     pub(super) software_thread_labels: Vec<String>,
     pub(super) max_fps_choices: Vec<u16>,
     pub(super) resolution_choices: Vec<(u32, u32)>,
-    pub(super) refresh_rate_choices: Vec<u32>, // New: stored in millihertz
+    pub(super) refresh_rate_choices: Vec<u32>, // Stored in millihertz.
     // Hardware info
     pub monitor_specs: Vec<GraphicsMonitorView>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
@@ -537,6 +538,7 @@ pub fn init(view: OptionsInitView) -> State {
         display_monitor_at_load: graphics_options.monitor,
         display_width_at_load: graphics_options.width,
         display_height_at_load: graphics_options.height,
+        refresh_rate_at_load: graphics_options.refresh_rate_millihertz,
         display_aspect_ratio_at_load: display_aspect_ratio,
         max_fps_at_load: graphics_options.max_fps,
         vsync_at_load: graphics_options.vsync,

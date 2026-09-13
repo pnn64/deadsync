@@ -129,6 +129,7 @@ pub(super) fn options_graphics_view() -> GraphicsOptionsView {
         monitor: cfg.display_monitor,
         width: cfg.display_width,
         height: cfg.display_height,
+        refresh_rate_millihertz: cfg.refresh_rate_millihertz,
         aspect_ratio: cfg.display_aspect_ratio,
         max_fps: cfg.max_fps,
         vsync: cfg.vsync,
@@ -167,6 +168,7 @@ impl App {
             renderer,
             display_mode,
             resolution,
+            refresh_rate_millihertz,
             aspect_ratio,
             monitor,
             vsync,
@@ -192,6 +194,7 @@ impl App {
                 renderer,
                 display_mode,
                 resolution,
+                refresh_rate_millihertz,
                 aspect_ratio,
                 monitor_requested: monitor.is_some(),
                 vsync,
@@ -235,6 +238,7 @@ impl App {
             }
         }
 
+        self.sync_fullscreen_mode();
         refresh_present_config(
             &mut self.backend,
             &self.state.shell,
@@ -275,6 +279,7 @@ impl App {
             startup.fullscreen_type,
             startup.monitor_count,
         ));
+        self.sync_fullscreen_mode();
         let window = startup.window;
         let backend = startup.backend;
         // Renderer reinit reloads font geometry and replaces the texture registry,
@@ -400,6 +405,39 @@ impl App {
         }
     }
 
+    fn sync_fullscreen_mode(&mut self) {
+        let Some(mode) = self.state.shell.fullscreen_state.current_mode() else {
+            return;
+        };
+        if (mode.width, mode.height)
+            != (
+                self.state.shell.display_width,
+                self.state.shell.display_height,
+            )
+        {
+            self.state.shell.display_width = mode.width;
+            self.state.shell.display_height = mode.height;
+            config::runtime_update::update_display_resolution(mode.width, mode.height);
+            options::sync_display_resolution(
+                &mut self.state.screens.options_state,
+                mode.width,
+                mode.height,
+            );
+        }
+        // Keep Default as a preference. An explicit request that fell back should
+        // record the rate Windows actually accepted, as ITGmania does.
+        if self.state.shell.refresh_rate_millihertz != 0
+            && self.state.shell.refresh_rate_millihertz != mode.refresh_rate_millihertz
+        {
+            self.state.shell.refresh_rate_millihertz = mode.refresh_rate_millihertz;
+            config::runtime_update::update_refresh_rate(mode.refresh_rate_millihertz);
+            options::sync_refresh_rate(
+                &mut self.state.screens.options_state,
+                mode.refresh_rate_millihertz,
+            );
+        }
+    }
+
     pub(super) fn sync_window_size(&mut self, size: PhysicalSize<u32>) {
         sync_renderer_window_size(
             &mut self.state.shell,
@@ -428,7 +466,7 @@ impl App {
             mode,
             monitor_override,
             runtime_config.fullscreen_type,
-        );
+        )?;
         self.apply_graphics_display_sync(runtime_display_mode_sync(
             mode,
             self.state.shell.display_monitor,
@@ -452,7 +490,7 @@ impl App {
             config::runtime::get().high_dpi,
             width,
             height,
-        );
+        )?;
         Ok(())
     }
 
@@ -493,6 +531,10 @@ impl App {
     fn apply_graphics_runtime_updates(&mut self, updates: Vec<RuntimeUpdate>) {
         for update in updates {
             match update {
+                RuntimeUpdate::RefreshRate(rate) => {
+                    config::runtime_update::update_refresh_rate(rate);
+                    options::sync_refresh_rate(&mut self.state.screens.options_state, rate);
+                }
                 RuntimeUpdate::Vsync(vsync) => {
                     debug!("Graphics setting changed: vsync={vsync}");
                     config::runtime_update::update_vsync(vsync);

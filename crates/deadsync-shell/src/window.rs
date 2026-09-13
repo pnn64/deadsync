@@ -23,6 +23,7 @@ pub struct AppWindowConfig {
     pub high_dpi: bool,
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub monitor: usize,
     pub display_mode: DisplayMode,
     pub fallback_fullscreen_type: FullscreenType,
@@ -43,6 +44,7 @@ pub struct DisplayModeChange {
     pub high_dpi: bool,
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub monitor: usize,
     pub monitor_override: Option<usize>,
     pub previous_mode: DisplayMode,
@@ -67,6 +69,7 @@ pub struct ResolutionChange {
     pub high_dpi: bool,
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub monitor: usize,
     pub display_mode: DisplayMode,
 }
@@ -79,7 +82,8 @@ pub struct ResolutionResult {
 pub fn create_app_window(
     event_loop: &ActiveEventLoop,
     config: AppWindowConfig,
-) -> Result<AppWindowSetup, winit::error::OsError> {
+    fullscreen_state: &mut display::FullscreenState,
+) -> Result<AppWindowSetup, Box<dyn std::error::Error>> {
     let mut attributes = Window::default_attributes()
         .with_title("DeadSync")
         .with_resizable(true)
@@ -108,28 +112,40 @@ pub fn create_app_window(
         config.height,
     );
 
-    match config.display_mode {
-        DisplayMode::Fullscreen(fullscreen_type) => {
-            attributes = attributes.with_fullscreen(display::fullscreen_mode(
-                fullscreen_type,
-                config.width,
-                config.height,
-                monitor_handle,
-                event_loop,
-            ));
-        }
-        DisplayMode::Windowed => {
-            if let Some(position) = config.pending_position {
-                attributes = attributes.with_position(position);
-            } else if let Some(position) =
-                display::default_window_position(config.width, config.height, monitor_handle)
-            {
-                attributes = attributes.with_position(position);
-            }
+    if matches!(config.display_mode, DisplayMode::Windowed) {
+        if let Some(position) = config.pending_position.or_else(|| {
+            display::default_window_position(config.width, config.height, monitor_handle.clone())
+        }) {
+            attributes = attributes.with_position(position);
         }
     }
-
+    #[cfg(not(target_os = "windows"))]
+    if let DisplayMode::Fullscreen(fullscreen_type) = config.display_mode {
+        attributes = attributes.with_fullscreen(fullscreen_state.mode(
+            fullscreen_type,
+            config.width,
+            config.height,
+            config.refresh_rate_millihertz,
+            monitor_handle.clone(),
+            event_loop,
+        )?);
+    }
+    // Windows needs our window to exist before changing the display mode.
     let window = Arc::new(event_loop.create_window(attributes)?);
+    #[cfg(target_os = "windows")]
+    if let DisplayMode::Fullscreen(fullscreen_type) = config.display_mode {
+        let fullscreen = fullscreen_state.mode(
+            fullscreen_type,
+            config.width,
+            config.height,
+            config.refresh_rate_millihertz,
+            monitor_handle,
+            event_loop,
+        )?;
+        window.set_fullscreen(fullscreen);
+    } else {
+        fullscreen_state.restore()?;
+    }
     // Re-assert the opaque hint so compositors do not apply alpha-based blending.
     window.set_transparent(false);
     window.set_cursor_visible(!config.hide_cursor);
@@ -146,7 +162,8 @@ pub fn apply_window_display_mode(
     window: Option<&Window>,
     event_loop: &ActiveEventLoop,
     change: DisplayModeChange,
-) -> DisplayModeResult {
+    fullscreen_state: &mut display::FullscreenState,
+) -> Result<DisplayModeResult, display::DisplayError> {
     let (monitor_handle, monitor_count, monitor) = display::resolve_monitor(
         event_loop,
         change.monitor_override.unwrap_or(change.monitor),
@@ -166,36 +183,50 @@ pub fn apply_window_display_mode(
         }
     }
 
-    let immediate_size = window.and_then(|window| match change.mode {
-        DisplayMode::Windowed => {
-            window.set_fullscreen(None);
-            let immediate_size =
-                request_window_size(window, change.backend_type, change.high_dpi, width, height);
-            if let Some(position) = pending_position.take() {
-                window.set_outer_position(position);
-            } else if let Some(position) =
-                display::default_window_position(width, height, monitor_handle)
-            {
-                window.set_outer_position(position);
+    let immediate_size = if let Some(window) = window {
+        match change.mode {
+            DisplayMode::Windowed => {
+                window.set_fullscreen(None);
+                fullscreen_state.restore()?;
+                let immediate_size = request_window_size(
+                    window,
+                    change.backend_type,
+                    change.high_dpi,
+                    width,
+                    height,
+                );
+                if let Some(position) = pending_position.take() {
+                    window.set_outer_position(position);
+                } else if let Some(position) =
+                    display::default_window_position(width, height, monitor_handle)
+                {
+                    window.set_outer_position(position);
+                }
+                immediate_size
             }
-            immediate_size
+            DisplayMode::Fullscreen(_) => {
+                apply_window_resolution(
+                    Some(window),
+                    event_loop,
+                    ResolutionChange {
+                        backend_type: change.backend_type,
+                        high_dpi: change.high_dpi,
+                        width,
+                        height,
+                        refresh_rate_millihertz: change.refresh_rate_millihertz,
+                        monitor,
+                        display_mode: change.mode,
+                    },
+                    fullscreen_state,
+                )?
+                .immediate_size
+            }
         }
-        DisplayMode::Fullscreen(fullscreen_type) => {
-            let fullscreen = display::fullscreen_mode(
-                fullscreen_type,
-                width,
-                height,
-                monitor_handle,
-                event_loop,
-            );
-            let immediate_size =
-                request_window_size(window, change.backend_type, change.high_dpi, width, height);
-            window.set_fullscreen(fullscreen);
-            immediate_size
-        }
-    });
+    } else {
+        None
+    };
 
-    DisplayModeResult {
+    Ok(DisplayModeResult {
         width,
         height,
         monitor,
@@ -207,7 +238,7 @@ pub fn apply_window_display_mode(
             change.fallback_fullscreen_type,
         ),
         immediate_size,
-    }
+    })
 }
 
 /// Apply a runtime resolution change to the current window and monitor.
@@ -215,39 +246,50 @@ pub fn apply_window_resolution(
     window: Option<&Window>,
     event_loop: &ActiveEventLoop,
     change: ResolutionChange,
-) -> ResolutionResult {
+    fullscreen_state: &mut display::FullscreenState,
+) -> Result<ResolutionResult, display::DisplayError> {
     let (monitor_handle, _, monitor) = display::resolve_monitor(event_loop, change.monitor);
-    let immediate_size = window.and_then(|window| match change.display_mode {
-        DisplayMode::Windowed => request_window_size(
-            window,
-            change.backend_type,
-            change.high_dpi,
-            change.width,
-            change.height,
-        ),
-        DisplayMode::Fullscreen(fullscreen_type) => {
-            let fullscreen = display::fullscreen_mode(
-                fullscreen_type,
-                change.width,
-                change.height,
-                monitor_handle,
-                event_loop,
-            );
-            let immediate_size = request_window_size(
+    let immediate_size = if let Some(window) = window {
+        match change.display_mode {
+            DisplayMode::Windowed => request_window_size(
                 window,
                 change.backend_type,
                 change.high_dpi,
                 change.width,
                 change.height,
-            );
-            window.set_fullscreen(fullscreen);
-            immediate_size
+            ),
+            DisplayMode::Fullscreen(fullscreen_type) => {
+                #[cfg(target_os = "windows")]
+                window.set_fullscreen(None);
+                let fullscreen = fullscreen_state.mode(
+                    fullscreen_type,
+                    change.width,
+                    change.height,
+                    change.refresh_rate_millihertz,
+                    monitor_handle,
+                    event_loop,
+                )?;
+                let immediate_size = request_window_size(
+                    window,
+                    change.backend_type,
+                    change.high_dpi,
+                    change.width,
+                    change.height,
+                );
+                window.set_fullscreen(fullscreen);
+                fullscreen_state
+                    .current_mode()
+                    .map(|mode| PhysicalSize::new(mode.width, mode.height))
+                    .or(immediate_size)
+            }
         }
-    });
-    ResolutionResult {
+    } else {
+        None
+    };
+    Ok(ResolutionResult {
         monitor,
         immediate_size,
-    }
+    })
 }
 
 pub const fn effective_fullscreen_type(

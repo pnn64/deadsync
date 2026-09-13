@@ -304,6 +304,7 @@ pub struct GraphicsRequest {
     pub display_mode: Option<DisplayModeChoice>,
     pub monitor: Option<usize>,
     pub resolution: Option<(u32, u32)>,
+    pub refresh_rate_millihertz: Option<u32>,
     pub aspect_ratio: Option<f32>,
     pub vsync: Option<bool>,
     pub present_mode_policy: Option<PresentPolicyChoice>,

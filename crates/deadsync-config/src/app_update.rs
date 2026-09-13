@@ -486,6 +486,10 @@ pub fn set_separate_unlocks_by_player(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.separate_unlocks_by_player, enabled)
 }
 
+pub fn set_refresh_rate(cfg: &mut Config, millihertz: u32) -> bool {
+    set_if_changed(&mut cfg.refresh_rate_millihertz, millihertz)
+}
+
 pub fn set_display_monitor(cfg: &mut Config, monitor: usize) -> bool {
     set_if_changed(&mut cfg.display_monitor, monitor)
 }

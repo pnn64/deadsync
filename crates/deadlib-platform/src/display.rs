@@ -1,4 +1,6 @@
-use log::{info, warn};
+#[cfg(not(target_os = "windows"))]
+use log::info;
+use log::warn;
 use std::collections::HashMap;
 use std::str::FromStr;
 use winit::{
@@ -403,16 +405,119 @@ pub fn default_window_position(
     Some(PhysicalPosition::new(x, y))
 }
 
-/// Pick a fullscreen mode (exclusive if available) for the given monitor and resolution.
-pub fn fullscreen_mode(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayError {
+    MonitorQuery,
+    ModeQuery,
+    ModeChange(i32),
+}
+
+impl std::fmt::Display for DisplayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MonitorQuery => f.write_str("could not query the selected monitor"),
+            Self::ModeQuery => f.write_str("could not query the current display mode"),
+            Self::ModeChange(code) => write!(f, "Windows rejected the display mode (code {code})"),
+        }
+    }
+}
+
+impl std::error::Error for DisplayError {}
+
+/// Window-thread ownership of a temporary Windows display mode. Restores the
+/// captured desktop timing on exit; no registry settings are changed.
+#[derive(Default)]
+pub struct FullscreenState {
+    #[cfg(target_os = "windows")]
+    mode: Option<platform::ScreenMode>,
+}
+
+impl FullscreenState {
+    pub fn current_mode(&self) -> Option<VideoModeSpec> {
+        #[cfg(target_os = "windows")]
+        return self.mode.as_ref().map(platform::ScreenMode::spec);
+        #[cfg(not(target_os = "windows"))]
+        None
+    }
+
+    pub fn restore(&mut self) -> Result<(), DisplayError> {
+        #[cfg(target_os = "windows")]
+        if let Some(mode) = &mut self.mode {
+            mode.set_active(false)?;
+            self.mode = None;
+        }
+        Ok(())
+    }
+
+    pub fn set_focused(&mut self, focused: bool) -> Result<(), DisplayError> {
+        #[cfg(target_os = "windows")]
+        if let Some(mode) = &mut self.mode {
+            mode.set_active(focused)?;
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = focused;
+        Ok(())
+    }
+
+    pub fn mode(
+        &mut self,
+        fullscreen_type: FullscreenType,
+        width: u32,
+        height: u32,
+        refresh_rate_millihertz: u32,
+        monitor: Option<MonitorHandle>,
+        event_loop: &ActiveEventLoop,
+    ) -> Result<Option<Fullscreen>, DisplayError> {
+        self.restore()?;
+        let monitor = monitor.or_else(|| event_loop.primary_monitor());
+        #[cfg(target_os = "windows")]
+        {
+            if fullscreen_type == FullscreenType::Exclusive {
+                let monitor = monitor.as_ref().ok_or(DisplayError::MonitorQuery)?;
+                self.mode = Some(platform::ScreenMode::capture(monitor)?);
+                if let Err(error) = self.mode.as_mut().expect("mode was captured").apply(
+                    width,
+                    height,
+                    refresh_rate_millihertz,
+                ) {
+                    self.restore()?;
+                    return Err(error);
+                }
+            }
+            // Windows mode switching is owned above. Winit only manages the
+            // fullscreen window, so it cannot replace an interlaced mode with
+            // a deduplicated VideoModeHandle or assert on a rejected request.
+            Ok(Some(Fullscreen::Borderless(monitor)))
+        }
+        #[cfg(not(target_os = "windows"))]
+        Ok(fullscreen_mode(
+            fullscreen_type,
+            width,
+            height,
+            refresh_rate_millihertz,
+            monitor,
+        ))
+    }
+}
+
+impl Drop for FullscreenState {
+    fn drop(&mut self) {
+        if let Err(error) = self.restore() {
+            warn!("Failed to restore desktop display mode: {error}");
+        }
+    }
+}
+
+/// X11's default policy follows ITGmania: highest rate, or nearest explicit rate.
+#[cfg(not(target_os = "windows"))]
+fn fullscreen_mode(
     fullscreen_type: FullscreenType,
     width: u32,
     height: u32,
+    refresh_rate_millihertz: u32,
     monitor: Option<MonitorHandle>,
-    event_loop: &ActiveEventLoop,
 ) -> Option<Fullscreen> {
-    let primary = event_loop.primary_monitor();
-    let mon = monitor.or(primary);
+    let mon = monitor;
     match fullscreen_type {
         FullscreenType::Exclusive => {
             if let Some(mon) = mon {
@@ -422,7 +527,14 @@ pub fn fullscreen_mode(
                         let sz = m.size();
                         sz.width == width && sz.height == height
                     })
-                    .max_by_key(winit::monitor::VideoModeHandle::refresh_rate_millihertz);
+                    .min_by_key(|mode| {
+                        let rate = mode.refresh_rate_millihertz();
+                        if refresh_rate_millihertz == 0 {
+                            u32::MAX - rate
+                        } else {
+                            rate.abs_diff(refresh_rate_millihertz)
+                        }
+                    });
                 if let Some(mode) = best_mode {
                     info!(
                         "Fullscreen: using EXCLUSIVE {}x{} @ {} mHz",
@@ -446,7 +558,7 @@ pub fn fullscreen_mode(
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::DisplaySnapshot;
+    use super::{DisplayError, DisplaySnapshot};
     use std::mem;
     use windows::Win32::Devices::Display::{
         DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME, DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME,
@@ -457,10 +569,264 @@ mod platform {
     };
     use windows::Win32::Foundation::{LPARAM, RECT};
     use windows::Win32::Graphics::Gdi::{
+        CDS_FULLSCREEN, ChangeDisplaySettingsExW, DEVMODEW, DISP_CHANGE, DISP_CHANGE_SUCCESSFUL,
+        DM_BITSPERPEL, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT, DM_PELSWIDTH, ENUM_CURRENT_SETTINGS,
         EnumDisplayDevicesW, EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, HDC,
         HMONITOR, MONITORINFO, MONITORINFOEXW,
     };
     use windows::core::{BOOL, PCWSTR};
+
+    pub(super) struct ScreenMode {
+        device: [u16; 32],
+        desktop: DEVMODEW,
+        fullscreen: DEVMODEW,
+        active: bool,
+    }
+
+    impl ScreenMode {
+        pub(super) fn spec(&self) -> super::VideoModeSpec {
+            super::VideoModeSpec {
+                width: self.fullscreen.dmPelsWidth,
+                height: self.fullscreen.dmPelsHeight,
+                refresh_rate_millihertz: self.fullscreen.dmDisplayFrequency.saturating_mul(1000),
+            }
+        }
+
+        pub(super) fn capture(
+            monitor: &winit::monitor::MonitorHandle,
+        ) -> Result<Self, DisplayError> {
+            use winit::platform::windows::MonitorHandleExtWindows;
+            let mut info = MONITORINFOEXW::default();
+            info.monitorInfo.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+            // SAFETY: The monitor handle comes from winit; info is a properly
+            // sized MONITORINFOEXW and remains writable throughout the call.
+            if !unsafe {
+                GetMonitorInfoW(
+                    HMONITOR(monitor.hmonitor() as *mut _),
+                    &mut info.monitorInfo,
+                )
+            }
+            .as_bool()
+            {
+                return Err(DisplayError::MonitorQuery);
+            }
+            let desktop = current_mode(&info.szDevice)?;
+            Ok(Self {
+                device: info.szDevice,
+                desktop,
+                fullscreen: desktop,
+                active: false,
+            })
+        }
+
+        pub(super) fn apply(
+            &mut self,
+            width: u32,
+            height: u32,
+            rate: u32,
+        ) -> Result<(), DisplayError> {
+            let request = mode_request(width, height, rate);
+            let selected = try_modes(request, self.desktop, |mode| {
+                change_mode(&self.device, mode)
+            })?;
+            self.fullscreen = selected;
+            self.active = true;
+            // Capture the resolved native mode, including scan flags, for focus
+            // restoration. Do not reconstruct it from winit's reduced mode list.
+            self.fullscreen = current_mode(&self.device)?;
+            let mode = &self.fullscreen;
+            // SAFETY: For a display DEVMODEW the second union contains dmDisplayFlags.
+            let flags = unsafe { mode.Anonymous2.dmDisplayFlags };
+            log::info!(
+                "Fullscreen: using EXCLUSIVE {}x{} @ {} Hz, display_flags=0x{:x} (requested {}x{} @ {} mHz)",
+                mode.dmPelsWidth,
+                mode.dmPelsHeight,
+                mode.dmDisplayFrequency,
+                flags,
+                width,
+                height,
+                rate
+            );
+            Ok(())
+        }
+
+        pub(super) fn set_active(&mut self, active: bool) -> Result<(), DisplayError> {
+            if self.active != active {
+                let mode = if active {
+                    &self.fullscreen
+                } else {
+                    &self.desktop
+                };
+                let result = change_mode(&self.device, mode);
+                if result != DISP_CHANGE_SUCCESSFUL {
+                    return Err(DisplayError::ModeChange(result.0));
+                }
+                self.active = active;
+            }
+            Ok(())
+        }
+    }
+
+    fn current_mode(device: &[u16; 32]) -> Result<DEVMODEW, DisplayError> {
+        let mut mode = DEVMODEW {
+            dmSize: mem::size_of::<DEVMODEW>() as u16,
+            ..Default::default()
+        };
+        // SAFETY: device is the terminated name returned by GetMonitorInfoW;
+        // mode is correctly sized writable storage, with no driver-extra bytes.
+        if unsafe {
+            EnumDisplaySettingsW(PCWSTR(device.as_ptr()), ENUM_CURRENT_SETTINGS, &mut mode)
+        }
+        .as_bool()
+        {
+            Ok(mode)
+        } else {
+            Err(DisplayError::ModeQuery)
+        }
+    }
+
+    fn change_mode(device: &[u16; 32], mode: &DEVMODEW) -> DISP_CHANGE {
+        // SAFETY: device is terminated; mode is initialized and has the correct
+        // size. The API only borrows both and does not update registry settings.
+        unsafe {
+            ChangeDisplaySettingsExW(
+                PCWSTR(device.as_ptr()),
+                Some(mode),
+                None,
+                CDS_FULLSCREEN,
+                None,
+            )
+        }
+    }
+
+    fn mode_request(width: u32, height: u32, rate: u32) -> DEVMODEW {
+        let mut mode = DEVMODEW {
+            dmSize: mem::size_of::<DEVMODEW>() as u16,
+            dmPelsWidth: width,
+            dmPelsHeight: height,
+            dmBitsPerPel: 32,
+            dmFields: DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL,
+            ..Default::default()
+        };
+        if rate != 0 {
+            mode.dmDisplayFrequency = ((u64::from(rate) + 500) / 1000) as u32;
+            mode.dmFields |= DM_DISPLAYFREQUENCY;
+        }
+        mode
+    }
+
+    /// Match ITGmania's Windows request/retry order, then recover the exact
+    /// captured desktop timing if the requested resolution is rejected too.
+    fn try_modes(
+        mut request: DEVMODEW,
+        desktop: DEVMODEW,
+        mut apply: impl FnMut(&DEVMODEW) -> DISP_CHANGE,
+    ) -> Result<DEVMODEW, DisplayError> {
+        let mut result = apply(&request);
+        if result != DISP_CHANGE_SUCCESSFUL && request.dmFields.contains(DM_DISPLAYFREQUENCY) {
+            log::warn!(
+                "Fullscreen refresh {} Hz rejected ({}); retrying driver default",
+                request.dmDisplayFrequency,
+                result.0
+            );
+            request.dmFields &= !DM_DISPLAYFREQUENCY;
+            request.dmDisplayFrequency = 0;
+            result = apply(&request);
+        }
+        if result == DISP_CHANGE_SUCCESSFUL {
+            return Ok(request);
+        }
+        log::warn!(
+            "Fullscreen {}x{} rejected ({}); restoring current desktop mode",
+            request.dmPelsWidth,
+            request.dmPelsHeight,
+            result.0
+        );
+        result = apply(&desktop);
+        if result == DISP_CHANGE_SUCCESSFUL {
+            Ok(desktop)
+        } else {
+            Err(DisplayError::ModeChange(result.0))
+        }
+    }
+
+    #[cfg(test)]
+    mod mode_tests {
+        use super::*;
+        use windows::Win32::Graphics::Gdi::{DISP_CHANGE_BADMODE, DM_DISPLAYFLAGS, DM_INTERLACED};
+
+        #[test]
+        fn default_leaves_refresh_and_scan_choice_to_driver() {
+            let request = mode_request(640, 480, 0);
+            let mut calls = 0;
+            let result = try_modes(request, DEVMODEW::default(), |mode| {
+                calls += 1;
+                assert_eq!((mode.dmPelsWidth, mode.dmPelsHeight), (640, 480));
+                assert!(!mode.dmFields.contains(DM_DISPLAYFREQUENCY));
+                assert!(!mode.dmFields.contains(DM_DISPLAYFLAGS));
+                DISP_CHANGE_SUCCESSFUL
+            });
+            assert!(result.is_ok());
+            assert_eq!(calls, 1);
+        }
+
+        #[test]
+        fn rejected_explicit_rate_retries_default() {
+            let mut calls = 0;
+            let result = try_modes(
+                mode_request(640, 480, 30_000),
+                DEVMODEW::default(),
+                |mode| {
+                    calls += 1;
+                    assert_eq!((mode.dmPelsWidth, mode.dmPelsHeight), (640, 480));
+                    if calls == 1 {
+                        assert!(mode.dmFields.contains(DM_DISPLAYFREQUENCY));
+                        assert_eq!(mode.dmDisplayFrequency, 30);
+                        DISP_CHANGE_BADMODE
+                    } else {
+                        assert!(!mode.dmFields.contains(DM_DISPLAYFREQUENCY));
+                        DISP_CHANGE_SUCCESSFUL
+                    }
+                },
+            );
+            assert!(result.is_ok());
+            assert_eq!(calls, 2);
+        }
+
+        #[test]
+        fn rejected_resolution_recovers_exact_interlaced_desktop() {
+            let mut desktop = mode_request(640, 480, 30_000);
+            desktop.dmFields |= DM_DISPLAYFLAGS;
+            desktop.Anonymous2.dmDisplayFlags = DM_INTERLACED.0;
+            let mut calls = 0;
+            let result = try_modes(mode_request(1920, 1080, 60_000), desktop, |mode| {
+                calls += 1;
+                if calls < 3 {
+                    DISP_CHANGE_BADMODE
+                } else {
+                    assert_eq!((mode.dmPelsWidth, mode.dmPelsHeight), (640, 480));
+                    assert_eq!(mode.dmDisplayFrequency, 30);
+                    assert!(mode.dmFields.contains(DM_DISPLAYFLAGS));
+                    // SAFETY: This test initialized the display-flags union member above.
+                    assert_eq!(unsafe { mode.Anonymous2.dmDisplayFlags }, DM_INTERLACED.0);
+                    DISP_CHANGE_SUCCESSFUL
+                }
+            });
+            assert!(result.is_ok());
+            assert_eq!(calls, 3);
+        }
+
+        #[test]
+        fn failed_default_and_desktop_return_error() {
+            let mut calls = 0;
+            let result = try_modes(mode_request(640, 480, 0), DEVMODEW::default(), |_| {
+                calls += 1;
+                DISP_CHANGE_BADMODE
+            });
+            assert!(matches!(result, Err(DisplayError::ModeChange(-2))));
+            assert_eq!(calls, 2);
+        }
+    }
 
     // SAFETY: Windows calls this callback synchronously during `EnumDisplayMonitors`; `state` is
     // the exact `Vec<HMONITOR>` pointer passed from `displays()` and remains valid for that call.

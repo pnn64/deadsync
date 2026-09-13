@@ -90,14 +90,21 @@ pub fn sync_display_mode(
     ) {
         *slot = target_type.choice_index();
     }
-    sync_submenu_cursor_indices(state);
-    clear_render_cache(state);
+    sync_refresh_rate(state, state.refresh_rate_at_load);
 }
 
 pub fn sync_display_resolution(state: &mut State, width: u32, height: u32) {
     rebuild_resolution_choices(state, width, height);
     state.display_width_at_load = width;
     state.display_height_at_load = height;
+    sync_submenu_cursor_indices(state);
+    clear_render_cache(state);
+}
+
+pub fn sync_refresh_rate(state: &mut State, millihertz: u32) {
+    state.refresh_rate_at_load = millihertz;
+    state.refresh_rate_choices.clear();
+    rebuild_refresh_rate_choices(state);
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
 }
@@ -412,6 +419,9 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
             } else {
                 (None, None, None, None, None, None, None, None, None, None)
             };
+            let refresh_rate_change = leaving_graphics
+                .then(|| selected_refresh_rate_millihertz(state))
+                .filter(|rate| *rate != state.refresh_rate_at_load);
             let step = if SUBMENU_FADE_DURATION > 0.0 {
                 dt / SUBMENU_FADE_DURATION
             } else {
@@ -502,7 +512,8 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                     state.software_threads_at_load = software_threads;
                 }
 
-                if renderer_change.is_some()
+                if refresh_rate_change.is_some()
+                    || renderer_change.is_some()
                     || display_mode_change.is_some()
                     || monitor_change.is_some()
                     || resolution_change.is_some()
@@ -519,6 +530,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                             display_mode: display_mode_change,
                             monitor: monitor_change,
                             resolution: resolution_change,
+                            refresh_rate_millihertz: refresh_rate_change,
                             aspect_ratio: aspect_ratio_change,
                             vsync: vsync_change,
                             present_mode_policy: present_mode_policy_change,

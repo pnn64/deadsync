@@ -2422,6 +2422,11 @@ impl App {
         now: Instant,
         window: Option<&Arc<Window>>,
     ) {
+        if window.is_some() {
+            if let Err(error) = self.state.shell.fullscreen_state.set_focused(focused) {
+                warn!("Failed to change fullscreen focus: {error}");
+            }
+        }
         deadlib_input_native::set_raw_keyboard_window_focused(focused);
         let plan = apply_shell_window_focus(&mut self.state.shell, focused, now);
         if !plan.changed {
@@ -9949,6 +9954,9 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Err(error) = self.state.shell.fullscreen_state.restore() {
+            warn!("Failed to restore desktop on exit: {error}");
+        }
         config::runtime::flush_pending_saves();
         if let Some(backend) = &mut self.backend {
             self.dynamic_media

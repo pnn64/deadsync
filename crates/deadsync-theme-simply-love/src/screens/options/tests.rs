@@ -3601,3 +3601,89 @@ fn workshop_modal_blocks_navigation_and_exposes_cancel_retry_dismiss() {
     sync_updater_panels(&mut state, &view, false, false, true);
     assert!(state.workshop_panel.is_none());
 }
+
+#[test]
+fn graphics_refresh_survives_monitor_discovery() {
+    let mut state = init();
+    sync_display_mode(
+        &mut state,
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive),
+        FullscreenChoice::Exclusive,
+        0,
+        1,
+    );
+    sync_display_aspect_ratio(&mut state, 4.0 / 3.0);
+    sync_display_resolution(&mut state, 640, 480);
+    sync_refresh_rate(&mut state, 30_000);
+    update_monitor_specs(
+        &mut state,
+        vec![GraphicsMonitorView {
+            name: "CRT".to_owned(),
+            modes: [30_000, 60_000]
+                .map(|rate| deadsync_theme::views::GraphicsVideoModeView {
+                    width: 640,
+                    height: 480,
+                    refresh_rate_millihertz: rate,
+                })
+                .to_vec(),
+        }],
+    );
+    assert_eq!(selected_refresh_rate_millihertz(&state), 30_000);
+    assert_eq!(state.refresh_rate_choices, vec![0, 30_000, 60_000]);
+    // A windowed -> exclusive transition must reselect the persisted rate after
+    // the windowed menu temporarily offered only Default.
+    sync_display_mode(
+        &mut state,
+        DisplayModeChoice::Windowed,
+        FullscreenChoice::Exclusive,
+        0,
+        1,
+    );
+    assert_eq!(selected_refresh_rate_millihertz(&state), 0);
+    sync_display_mode(
+        &mut state,
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive),
+        FullscreenChoice::Exclusive,
+        0,
+        1,
+    );
+    assert_eq!(selected_refresh_rate_millihertz(&state), 30_000);
+    sync_refresh_rate(&mut state, 0);
+    assert_eq!(selected_refresh_rate_millihertz(&state), 0);
+    sync_refresh_rate(&mut state, 59_940);
+    assert_eq!(selected_refresh_rate_millihertz(&state), 60_000);
+    sync_refresh_rate(&mut state, 120_000);
+    assert_eq!(selected_refresh_rate_millihertz(&state), 0);
+}
+
+#[test]
+fn graphics_refresh_change_emits_request_on_exit() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+    state.refresh_rate_choices = vec![0, 30_000, 60_000];
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Graphics].choice_indices,
+        GRAPHICS_OPTIONS_ROWS,
+        SubRowId::RefreshRate,
+        1,
+    );
+    state.submenu_transition = SubmenuTransition::FadeOutToMain;
+    let mut effects = Vec::new();
+    update(
+        &mut state,
+        SUBMENU_FADE_DURATION + 0.001,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+        &mut effects,
+    );
+    assert!(matches!(
+        effects.as_slice(),
+        [ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Graphics(deadsync_theme::GraphicsRequest {
+                refresh_rate_millihertz: Some(30_000),
+                ..
+            })
+        )]
+    ));
+}

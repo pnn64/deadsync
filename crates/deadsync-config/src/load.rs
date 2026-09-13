@@ -156,6 +156,7 @@ pub fn load_app_config(conf: &SimpleIni, default: Config) -> Config {
                 monitor: default.display_monitor,
                 width: default.display_width,
                 height: default.display_height,
+                refresh_rate_millihertz: default.refresh_rate_millihertz,
                 aspect_ratio: default.display_aspect_ratio,
                 video_renderer: default.video_renderer,
             },
@@ -236,6 +237,7 @@ const fn apply_display_opts(
     cfg.display_monitor = display.monitor;
     cfg.display_width = display.width;
     cfg.display_height = display.height;
+    cfg.refresh_rate_millihertz = display.refresh_rate_millihertz;
     cfg.display_aspect_ratio = display.aspect_ratio;
     cfg.video_renderer = display.video_renderer;
 }

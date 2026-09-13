@@ -800,6 +800,11 @@ pub(in crate::screens::options) fn ensure_display_mode_choices(state: &mut State
 }
 
 pub fn update_monitor_specs(state: &mut State, specs: Vec<GraphicsMonitorView>) {
+    if state.monitor_specs.is_empty() {
+        // The initial menu has no hardware modes yet; seed from the saved rate
+        // when monitor discovery completes.
+        state.refresh_rate_choices.clear();
+    }
     state.monitor_specs = specs;
     ensure_display_mode_choices(state);
     // Keep the Display Mode row aligned with the actual current mode after monitors refresh.
@@ -809,6 +814,8 @@ pub fn update_monitor_specs(state: &mut State, specs: Vec<GraphicsMonitorView>) 
         state.display_mode_at_load,
         state.display_monitor_at_load,
     );
+    let (width, height) = selected_resolution(state);
+    rebuild_resolution_choices(state, width, height);
     if state.max_fps_at_load == 0 && !max_fps_enabled(state) {
         seed_max_fps_value_choice(state, 0);
     }
@@ -936,20 +943,19 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
     let supported_rates = supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
     rates.extend(supported_rates);
 
-    // Add common fallback rates if list is empty (besides Default)
-    if rates.len() == 1 {
-        rates.extend_from_slice(&[60000, 75000, 120_000, 144_000, 165_000, 240_000]);
-    }
-
-    // Preserve current selection if possible, else default to "Default".
+    // ITGmania keeps the nearest advertised rate within 10 Hz, otherwise Default.
     let current_rate = if let Some(idx) = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::RefreshRate,
     ) {
-        state.refresh_rate_choices.get(idx).copied().unwrap_or(0)
+        state
+            .refresh_rate_choices
+            .get(idx)
+            .copied()
+            .unwrap_or(state.refresh_rate_at_load)
     } else {
-        0
+        state.refresh_rate_at_load
     };
 
     state.refresh_rate_choices = rates;
@@ -957,8 +963,10 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
     let next_idx = state
         .refresh_rate_choices
         .iter()
-        .position(|&r| r == current_rate)
-        .unwrap_or(0);
+        .enumerate()
+        .min_by_key(|(_, rate)| rate.abs_diff(current_rate))
+        .filter(|(_, rate)| rate.abs_diff(current_rate) < 10_000)
+        .map_or(0, |(idx, _)| idx);
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,

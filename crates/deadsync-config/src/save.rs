@@ -416,6 +416,7 @@ const fn display_options<'a>(
     DisplayOptions {
         width: cfg.display_width,
         height: cfg.display_height,
+        refresh_rate_millihertz: cfg.refresh_rate_millihertz,
         aspect_ratio: cfg.display_aspect_ratio,
         monitor: cfg.display_monitor,
         fullscreen_type: cfg.fullscreen_type.as_str(),
@@ -676,6 +677,35 @@ mod tests {
     use super::*;
     use crate::ini::SimpleIni;
     use deadlib_render_core::BackendType;
+
+    #[test]
+    fn fullscreen_refresh_round_trips() {
+        for rate in [0, 30_000, 59_940, 60_000, 144_000] {
+            let cfg = Config {
+                refresh_rate_millihertz: rate,
+                ..Config::default()
+            };
+            let content =
+                build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+            let mut ini = SimpleIni::new();
+            ini.load_str(&content);
+            let loaded = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(loaded.refresh_rate_millihertz, rate);
+        }
+        for text in [
+            "",
+            "RefreshRate=-1",
+            "RefreshRate=NaN",
+            "RefreshRate=inf",
+            "RefreshRate=1e30",
+            "RefreshRate=invalid",
+        ] {
+            let mut ini = SimpleIni::new();
+            ini.load_str(&format!("[Options]\n{text}\n"));
+            let loaded = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(loaded.refresh_rate_millihertz, 0, "{text}");
+        }
+    }
 
     #[test]
     fn max_fps_off_round_trips() {

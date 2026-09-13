@@ -374,6 +374,7 @@ pub struct SystemInputHardwareOptions<'a> {
 pub struct DisplayOptions<'a> {
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub aspect_ratio: f32,
     pub monitor: usize,
     pub fullscreen_type: &'a str,
@@ -403,6 +404,7 @@ pub struct DisplayLoadOptions<F, P, V> {
     pub monitor: usize,
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub aspect_ratio: f32,
     pub video_renderer: V,
 }
@@ -468,6 +470,12 @@ where
             .get("Options", "DisplayHeight")
             .and_then(|value| value.parse::<u32>().ok())
             .unwrap_or(default.height),
+        refresh_rate_millihertz: conf
+            .get("Options", "RefreshRate")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|hz| hz.is_finite() && *hz >= 0.0 && *hz <= f64::from(u32::MAX) / 1000.0)
+            .map(|hz| (hz * 1000.0).round() as u32)
+            .unwrap_or(default.refresh_rate_millihertz),
         aspect_ratio: conf
             .get("Options", "DisplayAspectRatio")
             .and_then(|value| value.parse::<f32>().ok())
@@ -957,6 +965,11 @@ pub fn push_display_monitor_option_lines(content: &mut String, options: DisplayO
 
 pub fn push_display_fullscreen_option_lines(content: &mut String, options: DisplayOptions<'_>) {
     push_line(content, "FullscreenType", options.fullscreen_type);
+    push_line(
+        content,
+        "RefreshRate",
+        f64::from(options.refresh_rate_millihertz) / 1000.0,
+    );
 }
 
 pub fn push_display_frame_timing_option_lines(content: &mut String, options: DisplayOptions<'_>) {
@@ -2630,6 +2643,7 @@ mod tests {
                 DisplayMonitor=2
                 DisplayWidth=1920
                 DisplayHeight=1080
+                RefreshRate=59.94
                 DisplayAspectRatio=1.3333334
                 VideoRenderer=a
                 "#),
@@ -2642,6 +2656,7 @@ mod tests {
                 monitor: 0,
                 width: 1600,
                 height: 900,
+                refresh_rate_millihertz: 0,
                 aspect_ratio: 16.0 / 9.0,
                 video_renderer: 'b',
             },
@@ -2663,6 +2678,7 @@ mod tests {
                 monitor: 2,
                 width: 1920,
                 height: 1080,
+                refresh_rate_millihertz: 59_940,
                 aspect_ratio: 4.0 / 3.0,
                 video_renderer: 'a',
             },
@@ -2682,6 +2698,7 @@ mod tests {
                 monitor: 0,
                 width: 1600,
                 height: 900,
+                refresh_rate_millihertz: 0,
                 aspect_ratio: 16.0 / 9.0,
                 video_renderer: 'b',
             },
@@ -3115,6 +3132,7 @@ mod tests {
         let options = DisplayOptions {
             width: 1600,
             height: 900,
+            refresh_rate_millihertz: 59_940,
             aspect_ratio: 4.0 / 3.0,
             monitor: 2,
             fullscreen_type: "Borderless",
@@ -3139,6 +3157,7 @@ mod tests {
                 "DisplayWidth=1600\n",
                 "DisplayMonitor=2\n",
                 "FullscreenType=Borderless\n",
+                "RefreshRate=59.94\n",
                 "MaxFps=144\n",
                 "PresentModePolicy=immediate\n",
                 "VideoRenderer=OpenGL\n",

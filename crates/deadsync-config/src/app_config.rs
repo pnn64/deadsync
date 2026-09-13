@@ -85,6 +85,8 @@ pub struct Config {
     pub cdtitle_cache: bool,
     pub display_width: u32,
     pub display_height: u32,
+    /// Requested fullscreen refresh; zero delegates to the platform default.
+    pub refresh_rate_millihertz: u32,
     /// Physical display aspect ratio, independent of the framebuffer resolution.
     /// This supports non-square-pixel displays such as arcade CRTs.
     pub display_aspect_ratio: f32,
@@ -418,6 +420,7 @@ impl Default for Config {
             cdtitle_cache: system.cdtitle_cache,
             display_width: DEFAULT_DISPLAY_WIDTH,
             display_height: DEFAULT_DISPLAY_HEIGHT,
+            refresh_rate_millihertz: 0,
             display_aspect_ratio: DEFAULT_DISPLAY_ASPECT_RATIO,
             center_image_translate_x: system.center_image_translate_x,
             center_image_translate_y: system.center_image_translate_y,

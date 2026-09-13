@@ -119,6 +119,7 @@ pub struct GraphicsOptionsView {
     pub monitor: usize,
     pub width: u32,
     pub height: u32,
+    pub refresh_rate_millihertz: u32,
     pub aspect_ratio: f32,
     pub max_fps: u16,
     pub vsync: bool,
