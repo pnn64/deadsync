@@ -1824,7 +1824,26 @@ where
             &mut roll_cols,
         );
         for col in roll_cols.into_iter().take(roll_count) {
-            self.refresh_roll_life_on_step(col, self.clock.song_position.current_music_time_ns);
+            let Some(active) = self.hold_runtime.active_holds[col].as_mut() else {
+                continue;
+            };
+            // Player::Update taps autoplay rolls only below half life, before
+            // UpdateHoldNotes drains this frame. Keep last_update_time_ns so
+            // the refill does not skip that drain or shift the next pulse.
+            if active.life >= 0.5
+                || now_music_time_ns < active.start_time_ns
+                || now_music_time_ns > active.end_time_ns
+            {
+                continue;
+            }
+            let Some(hold) = self.chart_runtime.notes[active.note_index].hold.as_mut() else {
+                continue;
+            };
+            active.life = MAX_HOLD_LIFE;
+            hold.life = MAX_HOLD_LIFE;
+            // Native Step also presses the receptor; it does not rescore the
+            // hidden roll head or flash another tap judgment.
+            self.trigger_receptor_score_pulse(col, "W1");
         }
     }
 

@@ -1031,7 +1031,8 @@ mod runtime_regression_tests {
         song.charts[0].holds_total = 1;
         song.charts[0].possible_grade_points = 10;
         let chart = Arc::new(song.charts[0].clone());
-        let mut gameplay_chart = regression_payload_with_segments(timing_segments, 96);
+        let mut gameplay_chart =
+            regression_payload_with_segments(timing_segments, tail_row.max(96));
         gameplay_chart.parsed_notes = vec![ParsedNote {
             row_index: 48,
             column: 0,
@@ -2076,6 +2077,126 @@ mod runtime_regression_tests {
                 .map(|active| active.note_index),
             Some(1)
         );
+    }
+
+    #[test]
+    fn autoplay_roll_life_matches_native_frame_order() {
+        // Player::Update: test the previous frame's life (< 0.5), Step to
+        // refill, then UpdateHoldNotes subtracts this frame's real delta.
+        // Uneven frames exercise the crossing frame and two refill cycles.
+        let samples = [
+            (35_150_000, 0.90, false),
+            (87_875_000, 0.75, false),
+            (140_600_000, 0.60, false),
+            (193_325_000, 0.45, false),
+            (210_900_000, 0.95, true),
+            (281_200_000, 0.75, false),
+            (351_500_000, 0.55, false),
+            (404_225_000, 0.40, false),
+            (439_375_000, 0.90, true),
+        ];
+        for play_style in [
+            GameplayInputPlayStyle::Single,
+            GameplayInputPlayStyle::PumpSingle,
+        ] {
+            for rate in [0.5, 1.0, 1.5, 2.0] {
+                let mut state = hold_regression_state_with_timing_and_tail(
+                    play_style,
+                    TimingSegments {
+                        bpms: vec![(0.0, 120.0)],
+                        ..TimingSegments::default()
+                    },
+                    240,
+                );
+                state.chart_runtime.notes[0].note_type = NoteType::Roll;
+                state.progress.stage.autoplay_enabled = true;
+                state.set_music_rate(rate);
+                state.display.noteskin_effects.set_receptor_step_behavior(
+                    0,
+                    0,
+                    Some("W1"),
+                    GameplayReceptorStepBehavior::default(),
+                );
+                let start = state.chart_runtime.note_time_cache_ns[0];
+                state.set_song_position_for_test(1.0, start, 0.0, rate);
+                state.run_autoplay_or_replay_frame(start);
+                let head_result = state.chart_runtime.notes[0]
+                    .result
+                    .expect("autoplay must hit the actual roll head");
+                for (real_ns, life, pulse) in samples {
+                    let time = start + (real_ns as f64 * f64::from(rate)) as i64;
+                    state
+                        .display
+                        .receptor_feedback
+                        .set_bop_timer_for_test(0, 0.0);
+                    state.set_song_position_for_test(1.0, time, 0.0, rate);
+                    state.run_autoplay_or_replay_frame(time);
+                    assert_eq!(state.display.receptor_feedback.bop_zoom(0) < 1.0, pulse);
+                    state.update_active_holds(&[false; MAX_COLS], time);
+                    let active = state.hold_runtime.active_holds[0]
+                        .as_ref()
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{play_style:?}, rate {rate}, real ns {real_ns}: roll ended early"
+                            )
+                        });
+                    assert!(
+                        (active.life - life).abs() < 0.00001,
+                        "{play_style:?}, rate {rate}, real ns {real_ns}: {} != {life}",
+                        active.life,
+                    );
+                    assert_eq!(active.last_update_time_ns, time);
+                    let note = &state.chart_runtime.notes[0];
+                    assert_eq!(note.hold.as_ref().expect("roll data").life, active.life);
+                    let result = note.result.expect("head remains judged");
+                    assert_eq!(result.grade, head_result.grade);
+                    assert_eq!(result.time_error_music_ns, head_result.time_error_music_ns);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn autoplay_roll_threshold_is_strict_and_manual_taps_are_unthrottled() {
+        for (autoplay, life, refilled) in [
+            (true, 0.5, false),
+            (true, f32::from_bits(0.5f32.to_bits() - 1), true),
+            (false, 0.4, false),
+            (false, 0.8, false),
+        ] {
+            let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+            state.chart_runtime.notes[0].note_type = NoteType::Roll;
+            let start = state.chart_runtime.note_time_cache_ns[0];
+            let end = state.chart_runtime.hold_end_time_cache_ns[0];
+            state.start_active_hold(0, 0, start, end, start);
+            state.hold_runtime.active_holds[0]
+                .as_mut()
+                .expect("live roll")
+                .life = life;
+            state.chart_runtime.notes[0]
+                .hold
+                .as_mut()
+                .expect("roll data")
+                .life = life;
+            state.progress.stage.autoplay_enabled = autoplay;
+            for player in 0..state.setup.num_players {
+                state.set_autoplay_cursor(player, state.note_range_for_player(player).1);
+            }
+            state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+            state.run_autoplay_or_replay_frame(start);
+            let active = state.hold_runtime.active_holds[0]
+                .as_ref()
+                .expect("live roll");
+            assert_eq!(active.life, if refilled { 1.0 } else { life });
+            if !autoplay {
+                state.refresh_roll_life_on_step(0, start + 1_000_000);
+                let active = state.hold_runtime.active_holds[0]
+                    .as_ref()
+                    .expect("live roll");
+                assert_eq!(active.life, 1.0, "manual taps refill at any positive life");
+                assert_eq!(active.last_update_time_ns, start + 1_000_000);
+            }
+        }
     }
 
     #[test]
