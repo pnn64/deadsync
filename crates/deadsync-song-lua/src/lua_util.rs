@@ -7009,8 +7009,8 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "settextf",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, args: MultiValue| {
-                actor.set("Text", lua_format_text(lua, &args)?)?;
+            move |lua, mut args: MultiValue| {
+                actor.set("Text", lua_format_text_in_place(lua, &mut args)?)?;
                 Ok(actor.clone())
             }
         })?,
@@ -13841,6 +13841,28 @@ pub fn song_lua_screen_center(lua: &Lua) -> mlua::Result<(f32, f32)> {
     Ok((center_x, center_y))
 }
 
+// Reuse the callback's buffer, then restore it so all arguments stay alive
+// through the caller's Text setter, including on the formatter's error path.
+fn lua_format_text_in_place(lua: &Lua, args: &mut MultiValue) -> mlua::Result<String> {
+    let receiver = if method_arg_offset(args) == 1 {
+        args.pop_front()
+    } else {
+        None
+    };
+    let result = (|| {
+        if args.is_empty() {
+            return Ok(String::new());
+        }
+        let string_table = lua.globals().get::<Table>("string")?;
+        let format = string_table.get::<Function>("format")?;
+        lua_text_value(format.call::<Value>(&*args)?)
+    })();
+    if let Some(receiver) = receiver {
+        args.push_front(receiver);
+    }
+    result
+}
+
 pub fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
     let offset = method_arg_offset(args);
     if args.get(offset).is_none() {
@@ -13858,7 +13880,7 @@ pub fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
 }
 
 pub fn create_string_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(values.len(), 0)?;
     for (index, value) in values.iter().enumerate() {
         table.raw_set(index + 1, *value)?;
     }
@@ -13866,7 +13888,7 @@ pub fn create_string_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
 }
 
 pub fn create_owned_string_array(lua: &Lua, values: &[String]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
+    let table = lua.create_table_with_capacity(values.len(), 0)?;
     for (index, value) in values.iter().enumerate() {
         table.raw_set(index + 1, value.as_str())?;
     }
@@ -13908,34 +13930,59 @@ pub fn nested_function_named_upvalue_tables(
     seen_tables: &mut HashSet<usize>,
     seen_functions: &mut HashSet<usize>,
 ) -> Result<Vec<Table>, String> {
-    if !seen_functions.insert(function.to_pointer() as usize) {
-        return Ok(Vec::new());
-    }
     let mut out = Vec::new();
+    collect_nested_function_named_upvalue_tables(
+        getupvalue,
+        function,
+        names,
+        seen_tables,
+        seen_functions,
+        &mut out,
+    )?;
+    Ok(out)
+}
+
+// Append in depth-first discovery order without allocating and copying a
+// separate result vector at every recursive level.
+fn collect_nested_function_named_upvalue_tables(
+    getupvalue: &Function,
+    function: &Function,
+    names: &[&str],
+    seen_tables: &mut HashSet<usize>,
+    seen_functions: &mut HashSet<usize>,
+    out: &mut Vec<Table>,
+) -> Result<(), String> {
+    if !seen_functions.insert(function.to_pointer() as usize) {
+        return Ok(());
+    }
     for index in 1..=function.info().num_upvalues {
         let (name, value): (Value, Value) = getupvalue
-            .call((function.clone(), i64::from(index)))
+            .call((function, i64::from(index)))
             .map_err(|err| err.to_string())?;
-        if let Value::String(name) = &name {
+        let matches_name = if let Value::String(name) = &name {
             let name = name.to_str().map_err(|err| err.to_string())?;
-            if names.iter().any(|candidate| name.as_ref() == *candidate)
-                && let Value::Table(table) = &value
-                && seen_tables.insert(table.to_pointer() as usize)
+            names.iter().any(|candidate| name.as_ref() == *candidate)
+        } else {
+            false
+        };
+        match value {
+            Value::Table(table)
+                if matches_name && seen_tables.insert(table.to_pointer() as usize) =>
             {
-                out.push(table.clone());
+                out.push(table);
             }
-        }
-        if let Value::Function(child) = value {
-            out.extend(nested_function_named_upvalue_tables(
+            Value::Function(child) => collect_nested_function_named_upvalue_tables(
                 getupvalue,
                 &child,
                 names,
                 seen_tables,
                 seen_functions,
-            )?);
+                out,
+            )?,
+            _ => {}
         }
     }
-    Ok(out)
+    Ok(())
 }
 
 pub fn read_update_function_tables(
@@ -14582,3 +14629,15 @@ mod actor_restore_perf;
 #[cfg(test)]
 #[path = "../tests/perf/line_segments.rs"]
 mod line_segments_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/string_arrays.rs"]
+mod string_arrays_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/text_arguments.rs"]
+mod text_arguments_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/upvalue_output.rs"]
+mod upvalue_output_perf;
