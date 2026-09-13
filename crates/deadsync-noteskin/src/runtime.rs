@@ -1606,12 +1606,12 @@ pub fn itg_first_actor_sprite_slot<T>(
         return load_texture(path);
     }
 
-    let decl = compiled_actors.decl_for_path(&data.search_dirs, path)?;
+    let decl = compiled_actors.decl_for_path_ref(&data.search_dirs, path)?;
     let default_anim_is_beat = itg::animation_is_beat_based(data);
-    for sprite in decl.sprites {
+    for sprite in &decl.sprites {
         let slot = itg_load_sprite_decl_slot(
             data,
-            &sprite,
+            sprite,
             None,
             default_anim_is_beat,
             &mut load_texture,
@@ -1700,12 +1700,12 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
         return Vec::new();
     }
 
-    let request = compiled.load_request(button, element);
+    let request = compiled.load_request_ref(button, element);
     if request.blank {
         visiting.remove(&visit_key);
         return Vec::new();
     }
-    let path = data.resolve_path(&request.load_button, &request.load_element);
+    let path = data.resolve_path(request.load_button, request.load_element);
     let Some(path) = path else {
         visiting.remove(&visit_key);
         return Vec::new();
@@ -1720,7 +1720,7 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
         visiting,
         None,
     );
-    apply_loader_command(&mut out, request.init_command.as_deref());
+    apply_loader_command(&mut out, request.init_command);
 
     visiting.remove(&visit_key);
     out
@@ -2241,16 +2241,21 @@ fn itg_runtime_columns_selected<T: Clone>(
                 {
                     return None;
                 }
-                let request = compiled.load_request(button, element);
+                let request = compiled.load_request_ref(button, element);
                 itg_first_resolved_slot_or_fallback(
                     resolve_sprites(button, element),
                     request.blank,
-                    || resolve_direct_slot(&request.load_button, &request.load_element),
+                    || resolve_direct_slot(request.load_button, request.load_element),
                 )
             };
             let hold_parts = itg_hold_visual_parts(
                 ItgHoldKind::Hold,
-                |element| load.preview || compiled.load_request(button, element).maps_head_to_tap(),
+                |element| {
+                    load.preview
+                        || compiled
+                            .load_request_ref(button, element)
+                            .maps_head_to_tap()
+                },
                 &mut resolve_head_slots,
                 &mut resolve_single_slot,
             );
@@ -2258,7 +2263,12 @@ fn itg_runtime_columns_selected<T: Clone>(
 
             let roll_parts = itg_hold_visual_parts(
                 ItgHoldKind::Roll,
-                |element| load.preview || compiled.load_request(button, element).maps_head_to_tap(),
+                |element| {
+                    load.preview
+                        || compiled
+                            .load_request_ref(button, element)
+                            .maps_head_to_tap()
+                },
                 &mut resolve_head_slots,
                 &mut resolve_single_slot,
             );
@@ -2337,11 +2347,11 @@ pub fn itg_tap_explosions_by_col_compiled<T: Clone>(
         out.push(itg_tap_explosion_map_from_resolved_layers(
             &column_explosion_sprites,
             |base_element| {
-                let base_request = compiled.load_request(button, base_element);
+                let base_request = compiled.load_request_ref(button, base_element);
                 itg_direct_tap_explosion_resolved_layers(
                     base_element,
                     base_request.blank,
-                    |element| compiled.load_request(button, element).blank,
+                    |element| compiled.load_request_ref(button, element).blank,
                     |element| resolve_sprites(button, element),
                 )
             },
@@ -2454,7 +2464,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
             Vec::new()
         };
     if !load.preview || load.has(SkinPart::HoldExplosions) {
-        let hold_explosion_request = compiled.load_request(base_button, "Hold Explosion");
+        let hold_explosion_request = compiled.load_request_ref(base_button, "Hold Explosion");
         let hold_explosion_blank = hold_explosion_request.blank;
         let hold_explosion_sprites = resolve_sprites(base_button, "Hold Explosion");
         hold.explosion = resolve_hold_explosion(
@@ -2469,7 +2479,9 @@ fn itg_noteskin_runtime_selected<T: Clone>(
             None,
         );
         if !load.preview {
-            let roll_explosion_blank = compiled.load_request(base_button, "Roll Explosion").blank;
+            let roll_explosion_blank = compiled
+                .load_request_ref(base_button, "Roll Explosion")
+                .blank;
             let roll_explosion_sprites = resolve_sprites(base_button, "Roll Explosion");
             let roll_explosion = resolve_hold_explosion(
                 &explosion_sprites,
@@ -2508,7 +2520,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
                         } else {
                             resolve_sprites(button, "Explosion")
                         };
-                        let request = compiled.load_request(button, request_element);
+                        let request = compiled.load_request_ref(button, request_element);
                         let source_sprites = if request.blank {
                             Vec::new()
                         } else {

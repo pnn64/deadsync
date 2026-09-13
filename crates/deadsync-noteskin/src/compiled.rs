@@ -67,6 +67,18 @@ pub struct ItgLoadRequest {
     pub init_command: Option<String>,
 }
 
+/// Read-only loader result borrowing either its entry or the fallback arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItgLoadRequestRef<'a> {
+    pub blank: bool,
+    pub load_button: &'a str,
+    pub load_element: &'a str,
+    pub rotation_x: Option<i32>,
+    pub rotation_y: Option<i32>,
+    pub rotation_z: Option<i32>,
+    pub init_command: Option<&'a str>,
+}
+
 impl CompiledLoader {
     #[must_use]
     pub fn find(&self, button: &str, element: &str) -> Option<&CompiledLoaderEntry> {
@@ -80,22 +92,31 @@ impl CompiledLoader {
 
     #[must_use]
     pub fn load_request(&self, button: &str, element: &str) -> ItgLoadRequest {
+        self.load_request_ref(button, element).into_owned()
+    }
+
+    #[must_use]
+    pub fn load_request_ref<'a>(
+        &'a self,
+        button: &'a str,
+        element: &'a str,
+    ) -> ItgLoadRequestRef<'a> {
         if let Some(entry) = self.find(button, element) {
-            return ItgLoadRequest {
+            return ItgLoadRequestRef {
                 blank: entry.blank,
-                load_button: entry.load_button.clone(),
-                load_element: entry.load_element.clone(),
+                load_button: &entry.load_button,
+                load_element: &entry.load_element,
                 rotation_x: entry.rotation_x,
                 rotation_y: entry.rotation_y,
                 rotation_z: entry.rotation_z,
-                init_command: entry.init_command.clone(),
+                init_command: entry.init_command.as_deref(),
             };
         }
         warn!("compiled noteskin loader is missing '{button} {element}'");
-        ItgLoadRequest {
+        ItgLoadRequestRef {
             blank: false,
-            load_button: button.to_string(),
-            load_element: element.to_string(),
+            load_button: button,
+            load_element: element,
             rotation_x: None,
             rotation_y: None,
             rotation_z: None,
@@ -128,6 +149,26 @@ impl ItgLoadRequest {
     }
 }
 
+impl ItgLoadRequestRef<'_> {
+    #[must_use]
+    pub fn maps_head_to_tap(&self) -> bool {
+        !self.blank && self.load_element.eq_ignore_ascii_case("Tap Note")
+    }
+
+    #[must_use]
+    pub fn into_owned(self) -> ItgLoadRequest {
+        ItgLoadRequest {
+            blank: self.blank,
+            load_button: self.load_button.to_owned(),
+            load_element: self.load_element.to_owned(),
+            rotation_x: self.rotation_x,
+            rotation_y: self.rotation_y,
+            rotation_z: self.rotation_z,
+            init_command: self.init_command.map(str::to_owned),
+        }
+    }
+}
+
 impl CompiledActors {
     #[must_use]
     pub fn find(&self, key: &str) -> Option<&CompiledActorFile> {
@@ -142,8 +183,18 @@ impl CompiledActors {
         search_dirs: &[PathBuf],
         path: &Path,
     ) -> Option<noteskin_actor::ItgLuaActorDecl> {
+        self.decl_for_path_ref(search_dirs, path).cloned()
+    }
+
+    /// Borrow compiled metadata when a reader does not consume the actor graph.
+    #[must_use]
+    pub fn decl_for_path_ref(
+        &self,
+        search_dirs: &[PathBuf],
+        path: &Path,
+    ) -> Option<&noteskin_actor::ItgLuaActorDecl> {
         let key = actor_manifest_key(search_dirs, path)?;
-        self.find(&key).cloned().map(|file| file.decl)
+        self.find(&key).map(|file| &file.decl)
     }
 }
 

@@ -841,31 +841,38 @@ impl SongLuaNoteHideWindows {
         if size == 2 {
             points[0][1] = points[1][0] - points[0][0];
         } else if size > 2 {
-            let mut diagonal = vec![4.0_f32; size];
-            let mut slopes = vec![0.0; size];
-            diagonal[0] = 2.0;
-            diagonal[size - 1] = 2.0;
-            slopes[0] = 3.0 * (points[1][0] - points[0][0]);
+            // Until the final coefficient pass, the b/c output slots are
+            // scratch for the slope and diagonal. Preserve the floating-point
+            // calculations without allocating two extra size-element arrays.
+            points[0][2] = 2.0;
+            points[0][1] = 3.0 * (points[1][0] - points[0][0]);
             for i in 1..size - 1 {
-                slopes[i] = 3.0 * (points[i + 1][0] - points[i - 1][0]);
+                let slope = 3.0 * (points[i + 1][0] - points[i - 1][0]);
+                let multiple = 1.0 / points[i - 1][2];
+                points[i][2] = 4.0 - multiple;
+                points[i][1] = slope - points[i - 1][1] * multiple;
             }
-            slopes[size - 1] = 3.0 * (points[size - 1][0] - points[size - 2][0]);
-            for i in 1..size {
-                let multiple = 1.0 / diagonal[i - 1];
-                diagonal[i] -= multiple;
-                slopes[i] -= slopes[i - 1] * multiple;
-            }
-            for i in (1..size).rev() {
-                slopes[i - 1] -= slopes[i] * (1.0 / diagonal[i]);
-            }
-            for (slope, diagonal) in slopes.iter_mut().zip(diagonal) {
-                *slope /= diagonal;
-            }
-            for i in 0..size - 1 {
-                let diff = points[i + 1][0] - points[i][0];
-                points[i][1] = slopes[i];
-                points[i][2] = 3.0 * diff - 2.0 * slopes[i] - slopes[i + 1];
-                points[i][3] = -2.0 * diff + slopes[i] + slopes[i + 1];
+            let multiple = 1.0 / points[size - 2][2];
+            let mut next_diagonal = 2.0 - multiple;
+            let mut next_slope =
+                3.0 * (points[size - 1][0] - points[size - 2][0]) - points[size - 2][1] * multiple;
+            let mut next_b = next_slope / next_diagonal;
+            let mut next_a = points[size - 1][0];
+            // The terminal segment has no cubic in the original representation.
+            // Its zero-initialized slots can stay untouched. Solve backwards and
+            // finish each preceding segment once its neighbor's slope is known.
+            for point in points[..size - 1].iter_mut().rev() {
+                let slope = point[1] - next_slope * (1.0 / next_diagonal);
+                let diagonal = point[2];
+                let b = slope / diagonal;
+                let diff = next_a - point[0];
+                point[1] = b;
+                point[2] = 3.0 * diff - 2.0 * b - next_b;
+                point[3] = -2.0 * diff + b + next_b;
+                next_slope = slope;
+                next_diagonal = diagonal;
+                next_b = b;
+                next_a = point[0];
             }
         }
         self.zoom_splines[column] = SongLuaZoomSpline {

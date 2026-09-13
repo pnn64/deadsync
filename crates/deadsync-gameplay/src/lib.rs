@@ -162,3 +162,7 @@ include!("runtime_regression_tests.rs");
 #[allow(dead_code)]
 #[path = "../../../tests/support/perf.rs"]
 mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/spline_preparation.rs"]
+mod load_preparation_perf;
