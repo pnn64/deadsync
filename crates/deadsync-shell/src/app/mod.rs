@@ -2135,6 +2135,7 @@ impl App {
         let charts = plan.charts;
         let gameplay_session = gameplay_session();
         let viewport = gameplay_viewport(self.state.shell.metrics);
+        let display_size = space::current_window_px();
         let gameplay_config = gameplay_config_from_config(&cfg);
         let music_rate = options.music_rate;
         let video_renderer = cfg.video_renderer;
@@ -2159,6 +2160,7 @@ impl App {
                         &scroll_speeds,
                         music_rate,
                         viewport,
+                        display_size,
                         &gameplay_session,
                         &gameplay_config,
                         video_renderer,

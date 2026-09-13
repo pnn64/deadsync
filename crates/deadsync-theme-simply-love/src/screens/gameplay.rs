@@ -3351,6 +3351,7 @@ fn gameplay_song_lua_data(
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     viewport: GameplayViewport,
+    display_size: (u32, u32),
     session: &GameplaySession,
     config: &GameplayConfig,
     video_renderer: BackendType,
@@ -3387,7 +3388,7 @@ fn gameplay_song_lua_data(
         session,
         config.center_1player_notefield,
     );
-    let (display_width, display_height) = current_window_px();
+    let (display_width, display_height) = display_size;
     context.display_width = display_width.max(1) as f32;
     context.display_height = display_height.max(1) as f32;
     // `VideoRenderers` is a legacy capability preference used by mod charts to
@@ -3409,6 +3410,8 @@ fn gameplay_song_lua_data(
 }
 
 #[must_use]
+/// `display_size` is the physical surface size captured on the render thread.
+/// Preload workers must not read thread-local presentation dimensions.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -3416,6 +3419,7 @@ pub fn prepare_song_lua(
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     viewport: GameplayViewport,
+    display_size: (u32, u32),
     session: &GameplaySession,
     config: &GameplayConfig,
     video_renderer: BackendType,
@@ -3427,6 +3431,7 @@ pub fn prepare_song_lua(
         scroll_speed,
         music_rate,
         viewport,
+        display_size,
         session,
         config,
         video_renderer,
@@ -4155,6 +4160,7 @@ pub fn init(
                 &scroll_speed,
                 music_rate,
                 viewport,
+                current_window_px(),
                 &session,
                 &config,
                 video_renderer,
@@ -23498,6 +23504,167 @@ mod tests {
         assert_eq!(song_lua_aft_capture_capacity(&overlays, &topology, 0), 5);
         assert!(banks.iter().all(|bank| bank.capacity() >= 5));
         assert!(banks.iter().all(|bank| bank.stats().growths == 0));
+    }
+
+    fn compile_display_size_fixture(display_size: (u32, u32)) -> CompiledSongLua {
+        crate::tests::init_paths();
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/song_lua/display-size.ssc");
+        let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
+        let chart = Arc::new(song.charts[0].clone());
+        std::thread::spawn(move || {
+            assert_eq!(current_window_px(), (0, 0));
+            let prepared = prepare_song_lua(
+                &song,
+                &[chart.clone(), chart],
+                &std::array::from_fn(|_| profile_data::Profile::default()),
+                &[ScrollSpeedSetting::XMod(1.0); MAX_PLAYERS],
+                1.0,
+                GameplayViewport::design(),
+                display_size,
+                &GameplaySession::default(),
+                &GameplayConfig::default(),
+                BackendType::VulkanWgpu,
+            );
+            prepared.0.primary.unwrap().compiled
+        })
+        .join()
+        .unwrap()
+    }
+
+    #[test]
+    fn song_lua_preload_preserves_display_size_on_worker() {
+        for display_size in [(640, 480), (1600, 900), (3840, 1080)] {
+            let compiled = compile_display_size_fixture(display_size);
+            assert_eq!(
+                [compiled.screen_width, compiled.screen_height],
+                [854.0, 480.0]
+            );
+            let captures: Vec<_> = compiled
+                .overlays
+                .iter()
+                .filter(|actor| matches!(actor.kind, SongLuaOverlayKind::ActorFrameTexture { .. }))
+                .collect();
+            assert_eq!(captures.len(), 3);
+            for capture in captures {
+                assert_eq!(
+                    capture.initial_state.size,
+                    Some([display_size.0 as f32, display_size.1 as f32])
+                );
+            }
+            let output = compiled
+                .overlays
+                .iter()
+                .find(|actor| actor.name.as_deref() == Some("Output"))
+                .unwrap();
+            assert_eq!(output.initial_state.zoom_x, 854.0 / display_size.0 as f32);
+            assert_eq!(output.initial_state.zoom_y, 480.0 / display_size.1 as f32);
+        }
+    }
+
+    #[cfg(all(
+        target_os = "windows",
+        not(target_pointer_width = "32"),
+        not(target_vendor = "win7")
+    ))]
+    #[test]
+    #[ignore = "requires a Vulkan device and a window system"]
+    fn song_lua_preloaded_aft_chain_preserves_pixels() {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let overlays = compile_display_size_fixture((1600, 900)).overlays;
+        let metrics = deadlib_present::space::Metrics::centered(854.0, 480.0);
+        deadlib_present::space::set_current_metrics(metrics);
+        deadlib_present::space::set_current_window_px(1600, 900);
+        let local: Vec<_> = overlays.iter().map(|a| a.initial_state).collect();
+        let mut states = Vec::new();
+        song_lua_overlay_states_from_local_all_into(&overlays, &local, 854.0, 480.0, &mut states);
+        let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+        let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+        let mut captures = SongLuaAftCaptureScratch::new(&overlays, &topology);
+        let mut projected = song_lua_projected_mesh_scratch_for(&overlays);
+        let mut actors = Vec::new();
+        let mut targets = Vec::new();
+        push_song_lua_layer_actors(
+            &mut actors,
+            &mut targets,
+            &overlays,
+            &mut order,
+            &topology,
+            &local,
+            &states,
+            SongLuaOverlayState::default(),
+            &SongLuaScreenProxySources::default(),
+            None,
+            None,
+            &AssetManager::new(),
+            854.0,
+            480.0,
+            0.0,
+            0.0,
+            0.0,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut captures,
+            &mut projected,
+            SONG_LUA_FOREGROUND_DEPTH,
+        );
+        let frame = deadlib_present::compose::build_passes(
+            std::iter::once(ActorSegment::new(&actors)),
+            &targets,
+            [0.2, 0.2, 0.2, 1.0],
+            &metrics,
+            &deadlib_present::font::FontMap::default(),
+            0.0,
+            &mut deadlib_present::compose::TextLayoutCache::default(),
+            &mut deadlib_present::compose::ComposeScratch::default(),
+            &CaptureTextureContext,
+            None,
+        );
+        assert_eq!(frame.render_targets.len(), 3);
+        for target in &frame.render_targets {
+            assert_eq!((target.width, target.height), (1600, 900));
+            assert!(!target.ops.is_empty());
+        }
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        #[allow(deprecated)]
+        let window = Arc::new(
+            event_loop
+                .create_window(
+                    winit::window::Window::default_attributes()
+                        .with_visible(false)
+                        .with_inner_size(winit::dpi::PhysicalSize::new(854, 480)),
+                )
+                .unwrap(),
+        );
+        let mut backend = deadlib_render::create_backend(
+            BackendType::VulkanWgpu,
+            window,
+            metrics.projection(),
+            false,
+            deadlib_render_core::PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .unwrap();
+        let mut textures = deadlib_render::TextureHandleMap::default();
+        textures.insert(
+            1,
+            backend
+                .create_texture(
+                    &deadlib_assets::white_texture_image().image,
+                    Default::default(),
+                )
+                .unwrap(),
+        );
+        backend.request_screenshot();
+        backend.draw(&frame, &textures, false).unwrap();
+        let image = backend.capture_frame().unwrap();
+        assert_eq!(image.get_pixel(200, 240).0, [255, 0, 0, 255]);
+        assert_eq!(image.get_pixel(650, 240).0, [0, 255, 0, 255]);
     }
 
     #[test]

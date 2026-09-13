@@ -394,6 +394,9 @@ fn compile_trace_song_at(
     context.screen_height = trace.display.logical_height;
     context.display_width = trace.display.width;
     context.display_height = trace.display.height;
+    // Match gameplay's AFT capability advertisement so renderer-gated charts
+    // exercise their texture effects during semantic comparisons as well.
+    context.video_renderers = "opengl,software".to_string();
     let player_x = [
         ((0.85 / 3.0) * context.screen_width).floor(),
         ((2.15 / 3.0) * context.screen_width).floor(),
