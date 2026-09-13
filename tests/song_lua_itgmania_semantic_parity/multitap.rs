@@ -15,6 +15,7 @@ fn edgar_countdown_onsets_and_hit_commands() {
     let compiled = &layers[primary];
     check_edgar_model_squash(compiled, &context);
     check_edgar_tap_draws(compiled, &context);
+    check_edgar_texture_phase(compiled, &context);
     let named = |name: &str| {
         compiled
             .overlays
@@ -296,6 +297,85 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
                     assert!(
                         (actual.clamp(0.0, 1.0) - expected).abs() <= 1.0 / 255.0,
                         "W1 at {time}: draw color {actual} != native {expected}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
+    use deadsync_theme_simply_love::screens::gameplay::{
+        actor_conformance::WholeSongComposer, foreground_elapsed,
+    };
+    let screen = [context.screen_width, context.screen_height];
+    let mut composer = WholeSongComposer::new(&compiled.overlays);
+    let arrow = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("MultitapArrowP1_3"))
+        .expect("Edgar down multitap");
+    let count = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("MultitapTextP1_3"))
+        .expect("Edgar countdown");
+    let beat = 116.7;
+    let local = compiled_local_states_at(
+        compiled,
+        context,
+        beat,
+        song_elapsed_seconds_at(beat, context),
+    );
+    assert!(
+        !local[count].visible,
+        "exercise the last, unnumbered multitap phase"
+    );
+    let states = compose_overlay_states(&compiled.overlays, &local, screen);
+    let SongLuaOverlayKind::NoteskinActor { slots } = &compiled.overlays[arrow].kind else {
+        panic!("compiled multitap must retain its actual noteskin model");
+    };
+    let baseline = composer.render_overlay(&compiled.overlays, &states, arrow, screen, 0.0, beat);
+    assert_eq!(baseline.tmesh_instances.len(), slots.len());
+    assert!(slots.iter().any(|slot| slot.uv_velocity == [0.0, -1.0]));
+    let fixture: Value = serde_json::from_slice(
+        &fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/itgmania-actors/cyber-multitap-texture.json"),
+        )
+        .expect("native animated texture fixture"),
+    )
+    .expect("texture JSON");
+    for case in fixture["cases"].as_array().expect("native texture cases") {
+        let start = case["start_second"].as_f64().expect("start") as f32;
+        let rate = case["music_rate"].as_f64().expect("rate") as f32;
+        for sample in case["samples"].as_array().expect("native texture samples") {
+            let music = sample["music_second"].as_f64().expect("music time") as f32;
+            let elapsed = foreground_elapsed(music, start, rate);
+            let actual =
+                composer.render_overlay(&compiled.overlays, &states, arrow, screen, elapsed, beat);
+            assert_eq!(actual.tmesh_instances.len(), slots.len());
+            for ((actual, base), slot) in actual
+                .tmesh_instances
+                .iter()
+                .zip(&baseline.tmesh_instances)
+                .zip(slots.iter())
+            {
+                for axis in 0..2 {
+                    let expected = if slot.uv_velocity[axis] == 0.0 {
+                        0.0
+                    } else {
+                        sample["translation"][axis]
+                            .as_f64()
+                            .expect("native texture translation") as f32
+                    };
+                    let delta = actual.uv_tex_shift[axis] - base.uv_tex_shift[axis] - expected;
+                    // Repeat-wrapped UVs at 0 and 1 are equivalent. Native
+                    // AnimatedTexture accumulates float deltas at 120 Hz.
+                    let error = (delta + 0.5).rem_euclid(1.0) - 0.5;
+                    assert!(
+                        error.abs() < 0.0002,
+                        "rate {rate}, start {start}, music {music}: texture axis {axis} differs by {error}"
                     );
                 }
             }

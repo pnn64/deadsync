@@ -2246,6 +2246,9 @@ pub struct State {
     next_song_lua_sound_event_ix: usize,
     active_song_lua_video_paths: Vec<PathBuf>,
     static_song_lua_video_path_count: usize,
+    // Authored primary foreground start in the gameplay music clock, resolved
+    // once at screen entry. Actor animation must exclude the screen lead-in.
+    foreground_start_second: f32,
     foreground_media_initialized: bool,
     next_foreground_change_ix: usize,
     current_foreground_path: Option<PathBuf>,
@@ -2495,6 +2498,11 @@ impl State {
         let song_layer2_events = build_song_layer2_events(&gameplay);
         let next_song_layer2_event_ix = song_layer2_events
             .partition_point(|event| event.start_second <= gameplay.current_music_time_display());
+        let foreground_start_second = song
+            .foreground_lua_changes
+            .iter()
+            .find(|change| change.start_beat <= 0.0 && change.path.is_file())
+            .map_or(0.0, |change| gameplay.music_time_for_beat(change.start_beat));
         let song_lua_visuals = gameplay.song_lua_visuals();
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &song_lua_visuals.overlays,
@@ -2849,6 +2857,7 @@ impl State {
             next_song_lua_sound_event_ix: 0,
             active_song_lua_video_paths,
             static_song_lua_video_path_count,
+            foreground_start_second,
             foreground_media_initialized: false,
             next_foreground_change_ix: 0,
             current_foreground_path: None,
@@ -16157,6 +16166,14 @@ fn prepare_active_song_lua_layer(
     depth.shifted(song_foreground_state.z)
 }
 
+/// Foreground::Update advances actors from the FGCHANGE's start, undoing
+/// music rate with ITGmania's default RateModsAffectFGChanges=false. Hidden
+/// children continue animating; the gameplay-screen lead-in is not actor age.
+#[must_use]
+pub fn foreground_elapsed(music_second: f32, start_second: f32, music_rate: f32) -> f32 {
+    (music_second - start_second).max(0.0) / music_rate
+}
+
 fn push_song_lua_layer_actors(
     out: &mut Vec<Actor>,
     targets: &mut Vec<deadlib_present::actors::RenderTarget>,
@@ -18523,7 +18540,11 @@ pub fn push_actors(
             song_lua_space_height,
             state.current_music_time_display(),
             state.current_beat(),
-            state.total_elapsed_in_screen(),
+            foreground_elapsed(
+                song_lua_now,
+                state.foreground_start_second,
+                state.music_rate(),
+            ),
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -18583,7 +18604,7 @@ pub fn push_actors(
             layer.screen_height.max(1.0),
             song_lua_now,
             state.current_beat(),
-            state.total_elapsed_in_screen(),
+            foreground_elapsed(song_lua_now, layer.start_second, state.music_rate()),
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,

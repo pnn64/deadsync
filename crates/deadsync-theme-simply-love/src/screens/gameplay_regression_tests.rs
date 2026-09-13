@@ -2964,6 +2964,130 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn song_lua_texture_clock_excludes_screen_lead_in() {
+        let text = generated_pipeline_song_lua_simfile()
+            .replace("#OFFSET:0.000;", "#OFFSET:-2.103;")
+            .replace(
+                "StretchNoLoop====;",
+                "StretchNoLoop====,6.500=late/default.lua=1.000=0=0=0=StretchNoLoop====;",
+            );
+        let simfile = write_fixture("f0-foreground-clock", &text);
+        let folder = simfile.parent().expect("fixture folder");
+        for name in ["lua", "late"] {
+            let folder = folder.join(name);
+            fs::create_dir_all(&folder).expect("foreground folder");
+            fs::write(
+                folder.join("default.lua"),
+                r#"
+    return Def.ActorFrame {
+    OnCommand=function(self) self:sleep(1000) end,
+    NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", "cyber")..{
+        Name="ClockArrow",
+        InitCommand=function(self) self:xy(320,240) end,
+    },
+    }
+    "#,
+            )
+            .expect("foreground model fixture");
+        }
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                space::set_current_window_px(1280, 720);
+                let profiles = [
+                    profile_data::Profile::default(),
+                    profile_data::Profile::default(),
+                ];
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(1280.0, 720.0),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                let mut assets = fixture_assets();
+                let visuals = state.gameplay.song_lua_visuals();
+                for overlay in visuals.overlays.iter().chain(
+                    visuals
+                        .foreground_visual_layers
+                        .iter()
+                        .flat_map(|layer| &layer.overlays),
+                ) {
+                    match &overlay.kind {
+                        deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                            for slot in slots.iter() {
+                                assets.queue_texture_upload(
+                                    slot.texture_key().to_owned(),
+                                    image::RgbaImage::new(16, 16),
+                                );
+                            }
+                        }
+                        deadsync_assets::song_lua::SongLuaOverlayKind::Model { layers } => {
+                            for layer in layers.iter() {
+                                assets.queue_texture_upload(
+                                    layer.texture_key.to_string(),
+                                    image::RgbaImage::new(16, 16),
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                // The fixture uses GameplayConfig's global offset as well
+                // as the simfile offset, just as foreground activation does.
+                let primary_start = state.music_time_for_beat(0.0);
+                let late_start = state.music_time_for_beat(6.5);
+                for music in [primary_start + 0.5, late_start + 0.25] {
+                    set_fixture_time(&mut state, music);
+                    let mut phases = Vec::new();
+                    for screen_age in [10.0, 10.371] {
+                        state.boundary.total_elapsed_in_screen = screen_age;
+                        let mut actors = Vec::new();
+                        screen_gameplay::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride::default(),
+                            123.0,
+                            crate::views::SimplyLoveVisualPolicyView::default(),
+                        );
+                        let actual = actors
+                            .iter()
+                            .filter_map(|actor| match actor {
+                                Actor::TexturedMesh {
+                                    texture,
+                                    uv_tex_shift,
+                                    ..
+                                } if texture.contains("cyber") => Some(uv_tex_shift[1].rem_euclid(1.0)),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>();
+                        assert!(!actual.is_empty(), "foreground models must actually render");
+                        assert!(
+                            actual.iter().any(|phase| (*phase - 0.5).abs() < 0.00001),
+                            "primary foreground must animate from beat zero: {actual:?}"
+                        );
+                        if music > late_start {
+                            assert!(
+                                actual.iter().any(|phase| (*phase - 0.75).abs() < 0.00001),
+                                "later foreground must use its own start: {actual:?}"
+                            );
+                        }
+                        phases.push(actual);
+                    }
+                    assert_eq!(
+                        phases[0], phases[1],
+                        "screen lead-in must not shift foreground texture animation"
+                    );
+                }
+            },
+        );
+    }
+
+    #[test]
     fn top_screen_text_stays_outside_song_lua_aft_captures() {
         let simfile = write_pipeline_song_lua_fixture();
         with_session(

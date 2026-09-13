@@ -1,0 +1,299 @@
+{
+  "animated_texture": "../deadsync/assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
+  "cases": [
+    {
+      "music_rate": 0.75,
+      "samples": [
+        {
+          "animation_second": 0.0,
+          "music_second": 1.6030000448226929,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.0,
+          "music_second": 2.1029999256134033,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.25,
+          "music_second": 2.2904999256134033,
+          "texture_second": 0.25000008940696716,
+          "translation": [
+            0.0,
+            -0.25000008940696716
+          ]
+        },
+        {
+          "animation_second": 0.75,
+          "music_second": 2.6654999256134033,
+          "texture_second": 0.7499996423721313,
+          "translation": [
+            0.0,
+            -0.7499996423721313
+          ]
+        },
+        {
+          "animation_second": 1.25,
+          "music_second": 3.0404999256134033,
+          "texture_second": 0.2499994933605194,
+          "translation": [
+            0.0,
+            -0.2499994933605194
+          ]
+        },
+        {
+          "animation_second": 61.753421783447266,
+          "music_second": 48.418067932128906,
+          "texture_second": 0.753385066986084,
+          "translation": [
+            0.0,
+            -0.753385066986084
+          ]
+        },
+        {
+          "animation_second": 63.94520568847656,
+          "music_second": 50.06190490722656,
+          "texture_second": 0.945167601108551,
+          "translation": [
+            0.0,
+            -0.945167601108551
+          ]
+        },
+        {
+          "animation_second": 166.9589080810547,
+          "music_second": 127.32218170166016,
+          "texture_second": 0.958808660507202,
+          "translation": [
+            0.0,
+            -0.958808660507202
+          ]
+        }
+      ],
+      "start_second": 2.103
+    },
+    {
+      "music_rate": 1.0,
+      "samples": [
+        {
+          "animation_second": 0.0,
+          "music_second": 1.6030000448226929,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.0,
+          "music_second": 2.1029999256134033,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.25,
+          "music_second": 2.3529999256134033,
+          "texture_second": 0.25000008940696716,
+          "translation": [
+            0.0,
+            -0.25000008940696716
+          ]
+        },
+        {
+          "animation_second": 0.75,
+          "music_second": 2.8529999256134033,
+          "texture_second": 0.7499996423721313,
+          "translation": [
+            0.0,
+            -0.7499996423721313
+          ]
+        },
+        {
+          "animation_second": 1.25,
+          "music_second": 3.3529999256134033,
+          "texture_second": 0.2499994933605194,
+          "translation": [
+            0.0,
+            -0.2499994933605194
+          ]
+        },
+        {
+          "animation_second": 46.315067291259766,
+          "music_second": 48.418067932128906,
+          "texture_second": 0.31503990292549133,
+          "translation": [
+            0.0,
+            -0.31503990292549133
+          ]
+        },
+        {
+          "animation_second": 47.95890426635742,
+          "music_second": 50.06190490722656,
+          "texture_second": 0.9588757753372192,
+          "translation": [
+            0.0,
+            -0.9588757753372192
+          ]
+        },
+        {
+          "animation_second": 125.21918487548828,
+          "music_second": 127.32218170166016,
+          "texture_second": 0.21911051869392395,
+          "translation": [
+            0.0,
+            -0.21911051869392395
+          ]
+        }
+      ],
+      "start_second": 2.103
+    },
+    {
+      "music_rate": 1.5,
+      "samples": [
+        {
+          "animation_second": 0.0,
+          "music_second": 1.6030000448226929,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.0,
+          "music_second": 2.1029999256134033,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.25,
+          "music_second": 2.4779999256134033,
+          "texture_second": 0.25000008940696716,
+          "translation": [
+            0.0,
+            -0.25000008940696716
+          ]
+        },
+        {
+          "animation_second": 0.75,
+          "music_second": 3.2279999256134033,
+          "texture_second": 0.7499996423721313,
+          "translation": [
+            0.0,
+            -0.7499996423721313
+          ]
+        },
+        {
+          "animation_second": 1.25,
+          "music_second": 3.9779999256134033,
+          "texture_second": 0.2499994933605194,
+          "translation": [
+            0.0,
+            -0.2499994933605194
+          ]
+        },
+        {
+          "animation_second": 30.876710891723633,
+          "music_second": 48.418067932128906,
+          "texture_second": 0.8766925334930419,
+          "translation": [
+            0.0,
+            -0.8766925334930419
+          ]
+        },
+        {
+          "animation_second": 31.97260284423828,
+          "music_second": 50.06190490722656,
+          "texture_second": 0.972583830356598,
+          "translation": [
+            0.0,
+            -0.972583830356598
+          ]
+        },
+        {
+          "animation_second": 83.47945404052734,
+          "music_second": 127.32218170166016,
+          "texture_second": 0.47940453886985773,
+          "translation": [
+            0.0,
+            -0.47940453886985773
+          ]
+        }
+      ],
+      "start_second": 2.103
+    },
+    {
+      "music_rate": 1.0,
+      "samples": [
+        {
+          "animation_second": 0.0,
+          "music_second": 5.0,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.0,
+          "music_second": 5.353000164031982,
+          "texture_second": 0.0,
+          "translation": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "animation_second": 0.25,
+          "music_second": 5.603000164031982,
+          "texture_second": 0.25000008940696716,
+          "translation": [
+            0.0,
+            -0.25000008940696716
+          ]
+        },
+        {
+          "animation_second": 1.25,
+          "music_second": 6.603000164031982,
+          "texture_second": 0.2499994933605194,
+          "translation": [
+            0.0,
+            -0.2499994933605194
+          ]
+        },
+        {
+          "animation_second": 43.0,
+          "music_second": 48.35300064086914,
+          "texture_second": 0.9999743700027466,
+          "translation": [
+            0.0,
+            -0.9999743700027466
+          ]
+        }
+      ],
+      "start_second": 5.353
+    }
+  ],
+  "fixture": "cyber-multitap-texture",
+  "oracle": "itgmania_native_animated_texture",
+  "provenance": {
+    "execution": "embedded_native_sources",
+    "git_dirty": "false",
+    "git_revision": "6170835abf29f09b7f5507fdc129d646127cde16",
+    "source_root": "C:\\GitHub\\rework\\itgmania-harness-rs\\../itgmania"
+  },
+  "schema_version": 1
+}
