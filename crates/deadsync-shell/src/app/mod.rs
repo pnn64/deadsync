@@ -2156,6 +2156,7 @@ impl App {
                     let song_lua = gameplay::prepare_song_lua(
                         song.as_ref(),
                         &charts,
+                        std::array::from_fn(|player| &gameplay_song[player].timing),
                         &player_profiles,
                         &scroll_speeds,
                         music_rate,

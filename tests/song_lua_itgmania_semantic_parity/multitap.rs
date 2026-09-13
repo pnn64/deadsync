@@ -7,6 +7,10 @@ const EDGAR_TRACE: &str = "tests/fixtures/itgmania-song-lua/[09] Who the Hell Is
 fn edgar_countdown_onsets_and_hit_commands() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
+    assert_eq!(
+        trace.arrow_timing, "native",
+        "fixture must exercise chart timing"
+    );
     let (layers, primary, context) = compile_trace_song(&trace);
     let compiled = &layers[primary];
     let named = |name: &str| {
@@ -55,7 +59,9 @@ fn edgar_countdown_onsets_and_hit_commands() {
                     assert_eq!(states[arrow].rot_z_deg, rotation);
                     assert!(states[arrow].rot_x_deg.abs() < 0.001);
                     assert!((states[frame].x - (lane as f32 * 64.0 - 160.0)).abs() < 0.001);
-                    assert!((states[frame].y - (-135.0 + (first - beat) * 64.0)).abs() < 0.003);
+                    let travel = (112.0 - beat).max(0.0) * 0.7 + (first - beat.max(112.0)) * 0.35;
+                    let speed = 0.3 + 0.7 * ((beat - 96.0) / 16.0).clamp(0.0, 1.0);
+                    assert!((states[frame].y - (-135.0 + travel * speed * 64.0)).abs() < 0.015);
                 }
             }
             let prefix = format!("__songlua_tap_{player}_{lane}_");
@@ -79,6 +85,23 @@ fn edgar_countdown_onsets_and_hit_commands() {
                 );
             }
         }
+    }
+    // Independently calculated positions: the approach crosses a SCROLLS
+    // boundary during a SPEEDS ramp; the first bounce peaks at 0.39375 beats
+    // after the script's 1.05 elasticity increase.
+    let frame = named("MultitapP1_1");
+    for (beat, distance) in [(108.0, 147.84), (110.0, 81.76), (112.5, 8.82)] {
+        let states = compiled_local_states_at(
+            compiled,
+            &context,
+            beat,
+            song_elapsed_seconds_at(beat, &context),
+        );
+        assert!(
+            (states[frame].y + 135.0 - distance).abs() < 0.015,
+            "beat {beat}: expected {distance}px above the receptor offset, got {}",
+            states[frame].y + 135.0
+        );
     }
     let count = named("MultitapTextP1_2");
     let arrow = named("MultitapArrowP1_2");

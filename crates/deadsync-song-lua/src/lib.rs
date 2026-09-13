@@ -1292,6 +1292,8 @@ pub struct SongLuaCompileContext {
     pub main_title: String,
     pub song_display_bpms: [f32; 2],
     pub song_timing_bpms: Vec<(f32, f32)>,
+    /// Selected chart timing, shared with gameplay; populated before Lua compilation.
+    pub player_timing: [Option<deadsync_rules::timing::TimingData>; LUA_PLAYERS],
     pub song_music_rate: f32,
     pub music_length_seconds: f32,
     pub style_name: String,
@@ -1316,6 +1318,7 @@ impl SongLuaCompileContext {
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
             song_timing_bpms: Vec::new(),
+            player_timing: std::array::from_fn(|_| None),
             song_music_rate: 1.0,
             music_length_seconds: 0.0,
             style_name: "single".to_string(),

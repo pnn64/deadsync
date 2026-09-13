@@ -89,7 +89,7 @@ use deadsync_profile_gameplay::{
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::TimingSegments;
+use deadsync_rules::timing::{TimingData, TimingSegments};
 use deadsync_score as score_data;
 use deadsync_song_lua::{apply_overlay_delta, overlay_state_lerp};
 use deadsync_theme::FontRole;
@@ -3367,6 +3367,7 @@ fn compile_song_lua_without_primary(
 fn gameplay_song_lua_data(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&TimingData; MAX_PLAYERS],
     player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
@@ -3409,6 +3410,10 @@ fn gameplay_song_lua_data(
         config.center_1player_notefield,
     );
     let (display_width, display_height) = display_size;
+    context.player_timing = std::array::from_fn(|player| {
+        let source = if session.p2_runtime_player() { 1 } else { player };
+        context.players[player].enabled.then(|| timing[source].clone())
+    });
     context.display_width = display_width.max(1) as f32;
     context.display_height = display_height.max(1) as f32;
     // `VideoRenderers` is a legacy capability preference used by mod charts to
@@ -3435,6 +3440,7 @@ fn gameplay_song_lua_data(
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&TimingData; MAX_PLAYERS],
     player_profiles: &[profile_data::Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
@@ -3447,6 +3453,7 @@ pub fn prepare_song_lua(
     PreparedGameplaySongLua(gameplay_song_lua_data(
         song,
         charts,
+        timing,
         player_profiles,
         scroll_speed,
         music_rate,
@@ -4176,6 +4183,7 @@ pub fn init(
             gameplay_song_lua_data(
                 &song,
                 &charts,
+                std::array::from_fn(|player| &gameplay_charts[player].timing),
                 &player_profiles,
                 &scroll_speed,
                 music_rate,
@@ -23566,6 +23574,7 @@ mod tests {
             let prepared = prepare_song_lua(
                 &song,
                 &[chart.clone(), chart],
+                [&TimingData::default(); MAX_PLAYERS],
                 &std::array::from_fn(|_| profile_data::Profile::default()),
                 &[ScrollSpeedSetting::XMod(1.0); MAX_PLAYERS],
                 1.0,

@@ -45,6 +45,14 @@ mod multitap;
 
 #[derive(Deserialize)]
 struct NativeTrace {
+    #[serde(default)]
+    arrow_timing: String,
+    #[serde(default)]
+    difficulty: String,
+    #[serde(default)]
+    steps_type: String,
+    #[serde(default)]
+    description: String,
     oracle: String,
     title: String,
     style: String,
@@ -384,6 +392,28 @@ fn compile_trace_song_at(
         song.title.clone(),
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
+    if trace.arrow_timing == "native" {
+        let chart_index = song.charts.iter().position(|chart| {
+            chart.chart_type == trace.steps_type
+                && chart.description == trace.description
+                && chart.difficulty.eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+        })
+            .expect("reference chart timing");
+        let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
+            &song,
+            &[chart_index],
+            &deadsync_simfile::cache::GameplayChartLoadOptions {
+                cache_dir: Path::new("."),
+                parse_options: &ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+                allow_cache_read: false,
+                allow_cache_write: false,
+                verify_cache_freshness: true,
+                global_offset_seconds: 0.0,
+            },
+            |_| 0.0,
+        ).expect("load reference chart timing");
+        context.player_timing = std::array::from_fn(|_| Some(payload.charts[0].timing.clone()));
+    }
     let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
     if !timing_bpms.is_empty() {
         context.song_timing_bpms = timing_bpms;

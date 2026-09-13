@@ -879,19 +879,45 @@ fn arrow_effects_reverse_percent(args: &MultiValue) -> mlua::Result<f32> {
 
 pub fn create_arrow_effects_table(
     lua: &Lua,
+    context: &SongLuaCompileContext,
     current_style_name: fn(&Lua) -> String,
 ) -> mlua::Result<Table> {
     let table = lua.create_table()?;
+    let timing = context.player_timing.clone();
+    let rate = crate::song_music_rate(context);
     table.set(
         "GetYOffset",
-        lua.create_function(|_, args: MultiValue| {
+        lua.create_function(move |lua, args: MultiValue| {
             let speed = arrow_effects_speed_multiplier(&args)?;
-            Ok(args
-                .get(2)
-                .cloned()
-                .and_then(read_f32)
-                .map(|beat| 64.0 * beat * speed)
-                .unwrap_or(0.0_f32))
+            let note = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0);
+            if timing.iter().all(Option::is_none) {
+                return Ok(64.0 * note * speed);
+            }
+            let player = if let Some(Value::Table(state)) = args.front() {
+                let method = state.get::<Function>("GetPlayerNumber")?;
+                player_index_from_value(&method.call::<Value>(state.clone())?).unwrap_or(0)
+            } else {
+                0
+            };
+            let Some(timing) = timing.get(player).and_then(Option::as_ref) else {
+                return Ok(64.0 * note * speed);
+            };
+            let (beat, _) = crate::compile_song_runtime_values(lua)?;
+            let seconds = timing.get_time_for_beat_exact(beat);
+            if let Some(options) = arrow_effects_player_options(&args)? {
+                if let Some(cmod) = arrow_effects_speedmod_value(&options, "CMod")? {
+                    return Ok((timing.get_time_for_beat(note) - seconds) * cmod / 60.0 / rate * 64.0);
+                }
+                let speed = if arrow_effects_speedmod_value(&options, "XMod")?.is_some() {
+                    speed
+                } else {
+                    speed / rate
+                };
+                return Ok((timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
+                    * timing.get_speed_multiplier(beat, seconds) * 64.0 * speed);
+            }
+            Ok((timing.get_displayed_beat(note) - timing.get_displayed_beat(beat))
+                * timing.get_speed_multiplier(beat, seconds) * 64.0)
         })?,
     )?;
     table.set(
@@ -1090,7 +1116,7 @@ pub fn install_core_globals(
     install_screen_utility_globals(lua)?;
     globals.set(
         "ArrowEffects",
-        create_arrow_effects_table(lua, current_style_name)?,
+        create_arrow_effects_table(lua, context, current_style_name)?,
     )?;
     install_screen_string_globals(lua)?;
     install_game_state_globals(lua, context)

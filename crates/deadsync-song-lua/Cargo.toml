@@ -7,6 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
+deadsync-rules = { path = "../deadsync-rules" }
 chrono = "0.4.45"
 image = "0.25.10"
 log = "0.4.34"

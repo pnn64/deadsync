@@ -246,11 +246,11 @@ pub fn push_multitap_actor_eases(
         .iter()
         .map(|(index, _)| (*index, Vec::new()))
         .collect::<Vec<_>>();
-    for beat in beats {
+    for &beat in &beats {
         let phase = calc_multitap_phase(desc, beat);
         frame_samples.push((
             beat,
-            multitap_frame_state(frame_baseline, context, player, desc.lane, phase),
+            multitap_frame_state(frame_baseline, context, player, desc.lane, beat, phase),
         ));
         push_multitap_arrow_sample(
             &mut arrow_samples,
@@ -285,14 +285,73 @@ pub fn push_multitap_actor_eases(
             ));
         }
     }
+    if context.player_timing[player].is_some() {
+        // Only motion needs extra samples. Keep noteskin/color resolution at
+        // the authored boundaries, and bake the timing curve before gameplay.
+        let boundaries = beats.clone();
+        for pair in boundaries.windows(2) {
+            sample_multitap_y(&mut beats, context, player, desc, pair[0], pair[1], 0);
+        }
+        beats.sort_by(f32::total_cmp);
+        beats.dedup();
+        frame_samples = beats
+            .into_iter()
+            .map(|beat| {
+                (
+                    beat,
+                    multitap_frame_state(
+                        frame_baseline,
+                        context,
+                        player,
+                        desc.lane,
+                        beat,
+                        calc_multitap_phase(desc, beat),
+                    ),
+                )
+            })
+            .collect();
+    }
     let first_ease = out.len();
     push_overlay_sample_eases(out, frame_index, frame_baseline, &frame_samples);
-    split_multitap_y_eases(out, first_ease, desc.taps[0]);
+    if context.player_timing[player].is_none() {
+        split_multitap_y_eases(out, first_ease, desc.taps[0]);
+    }
     push_overlay_sample_eases(out, arrow_index, arrow_baseline, &arrow_samples);
     push_overlay_sample_eases(out, deco_index, deco_baseline, &deco_samples);
     for ((_, baseline), (child_index, samples)) in deco_children.iter().zip(deco_child_samples) {
         push_overlay_sample_eases(out, child_index, *baseline, &samples);
     }
+}
+
+fn sample_multitap_y(
+    beats: &mut Vec<f32>,
+    context: &SongLuaCompileContext,
+    player: usize,
+    desc: &MultitapDesc,
+    start: f32,
+    end: f32,
+    depth: u8,
+) {
+    let mid = start.midpoint(end);
+    if depth == 16 || end - start <= 1.0 / 1024.0 || mid <= start || mid >= end {
+        return;
+    }
+    let y = |beat| multitap_y_offset(context, player, beat, calc_multitap_phase(desc, beat).pos);
+    let from = y(start);
+    let to = y(end);
+    // Probe quarters too: a speed ramp multiplied by a bounce can be cubic,
+    // and a midpoint alone can miss curvature or a scroll boundary.
+    let tolerance = 0.005 * song_lua_speedmod_multiplier(context, player).max(1.0);
+    let linear = end - start <= 0.125
+        && [0.25, 0.5, 0.75]
+            .into_iter()
+            .all(|t| (y(start + (end - start) * t) - (from + (to - from) * t)).abs() <= tolerance);
+    if linear {
+        return;
+    }
+    beats.push(mid);
+    sample_multitap_y(beats, context, player, desc, start, mid, depth + 1);
+    sample_multitap_y(beats, context, player, desc, mid, end, depth + 1);
 }
 
 fn split_multitap_y_eases(out: &mut Vec<SongLuaOverlayEase>, first_ease: usize, first_tap: f32) {
@@ -709,6 +768,7 @@ pub fn multitap_frame_state(
     context: &SongLuaCompileContext,
     player: usize,
     lane: usize,
+    beat: f32,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
@@ -718,7 +778,7 @@ pub fn multitap_frame_state(
     state.visible = true;
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
     state.y = (THEME_RECEPTOR_Y_STD - THEME_RECEPTOR_Y_REV) * 0.5
-        + multitap_y_offset(context, player, phase.pos);
+        + multitap_y_offset(context, player, beat, phase.pos);
     state.z = 0.0;
     state.zoom_x = 1.0;
     state.zoom_y = 1.0 + phase.squish;
@@ -727,7 +787,26 @@ pub fn multitap_frame_state(
     state
 }
 
-fn multitap_y_offset(context: &SongLuaCompileContext, player: usize, pos_beats: f32) -> f32 {
+fn multitap_y_offset(
+    context: &SongLuaCompileContext,
+    player: usize,
+    beat: f32,
+    pos_beats: f32,
+) -> f32 {
+    if let Some(timing) = &context.player_timing[player] {
+        let seconds = timing.get_time_for_beat_exact(beat);
+        if let SongLuaSpeedMod::C(value) = context.players[player].speedmod {
+            return (timing.get_time_for_beat(beat + pos_beats) - timing.get_time_for_beat(beat))
+                * value
+                / 60.0
+                / crate::song_music_rate(context)
+                * 64.0;
+        }
+        return (timing.get_displayed_beat(beat + pos_beats) - timing.get_displayed_beat(beat))
+            * timing.get_speed_multiplier(beat, seconds)
+            * 64.0
+            * song_lua_speedmod_multiplier(context, player);
+    }
     pos_beats * 64.0 * song_lua_speedmod_multiplier(context, player)
 }
 
@@ -1154,6 +1233,99 @@ pub fn overlay_delta_pair_from_states(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn multitap_travel_obeys_chart_timing_and_speedmod() {
+        use deadsync_rules::timing::{
+            ScrollSegment, SpeedSegment, SpeedUnit, TimingData, TimingSegments,
+        };
+        let mut context = SongLuaCompileContext::new(".", "Multitap timing");
+        context.player_timing[0] = Some(TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0), (8.0, 240.0)],
+                scrolls: vec![
+                    ScrollSegment {
+                        beat: 0.0,
+                        ratio: 0.5,
+                    },
+                    ScrollSegment {
+                        beat: 8.0,
+                        ratio: 0.25,
+                    },
+                ],
+                speeds: vec![
+                    SpeedSegment {
+                        beat: 0.0,
+                        ratio: 0.5,
+                        delay: 0.0,
+                        unit: SpeedUnit::Beats,
+                    },
+                    SpeedSegment {
+                        beat: 4.0,
+                        ratio: 1.0,
+                        delay: 4.0,
+                        unit: SpeedUnit::Beats,
+                    },
+                ],
+                ..Default::default()
+            },
+            &[],
+        ));
+        context.players[0].display_bpms = [120.0, 240.0];
+        for (speed, rate, expected) in [
+            (SongLuaSpeedMod::X(1.0), 1.0, 72.0),
+            (SongLuaSpeedMod::X(2.0), 1.5, 144.0),
+            (SongLuaSpeedMod::M(480.0), 2.0, 72.0),
+            (SongLuaSpeedMod::C(120.0), 1.0, 192.0),
+            (SongLuaSpeedMod::C(120.0), 2.0, 96.0),
+        ] {
+            context.players[0].speedmod = speed;
+            context.song_music_rate = rate;
+            assert!((multitap_y_offset(&context, 0, 6.0, 4.0) - expected).abs() < 0.001);
+            let lua = Lua::new();
+            let globals = lua.globals();
+            globals
+                .set(
+                    crate::SONG_LUA_RUNTIME_KEY,
+                    crate::create_song_runtime_table(&lua, &context).unwrap(),
+                )
+                .unwrap();
+            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0).unwrap();
+            globals
+                .set(
+                    "ArrowEffects",
+                    crate::host::create_arrow_effects_table(&lua, &context, |_| "single".into())
+                        .unwrap(),
+                )
+                .unwrap();
+            let (method, value) = match speed {
+                SongLuaSpeedMod::X(value) => ("XMod", value),
+                SongLuaSpeedMod::M(value) => ("MMod", value),
+                SongLuaSpeedMod::C(value) => ("CMod", value),
+                _ => unreachable!(),
+            };
+            globals.set("speed_method", method).unwrap();
+            globals.set("speed_value", value).unwrap();
+            let actual: f32 = lua
+                .load(
+                    r#"
+                local options = {__songlua_reference_bpm=240}
+                options[speed_method] = function() return speed_value end
+                local ps = {GetPlayerNumber=function() return "PlayerNumber_P1" end,
+                    GetPlayerOptions=function() return options end}
+                return ArrowEffects.GetYOffset(ps, 1, 10) - ArrowEffects.GetYOffset(ps, 1, 6)
+            "#,
+                )
+                .eval()
+                .unwrap();
+            assert!(
+                (actual - expected).abs() < 0.001,
+                "Lua ArrowEffects {speed:?}"
+            );
+        }
+    }
 
     #[test]
     fn explosion_eases_ignore_other_lanes_and_merge_overlapping_visibility() {

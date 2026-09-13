@@ -253,7 +253,7 @@
       "lua_entries": 1,
       "status": "ok",
       "itgmania": {
-        "git_revision": "5148388e6061a5bf2e6b9aa7d41039d7672e9980",
+        "git_revision": "6170835abf29f09b7f5507fdc129d646127cde16",
         "git_dirty": "false",
         "execution": "embedded_bundled_lua",
         "launches_executable": false
