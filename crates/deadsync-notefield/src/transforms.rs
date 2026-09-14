@@ -84,8 +84,8 @@ pub(crate) struct NoteAppearanceCache {
     random_vanish: f32,
     combined_fade_low_y: f32,
     combined_fade_high_y: f32,
-    combined_fade_low_alpha: f32,
-    combined_fade_high_alpha: f32,
+    fade_low_alpha: f32,
+    fade_high_alpha: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -106,6 +106,8 @@ enum AppearancePath {
     HiddenStealthBlinkOnly,
     SuddenStealthBlinkOnly,
     HiddenSuddenStealthBlinkOnly,
+    HiddenOnlyUnbounded,
+    SuddenOnlyUnbounded,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -1130,8 +1132,8 @@ pub(crate) fn note_appearance_cache(
             random_vanish: 0.0,
             combined_fade_low_y: 0.0,
             combined_fade_high_y: 0.0,
-            combined_fade_low_alpha: 1.0,
-            combined_fade_high_alpha: 1.0,
+            fade_low_alpha: 1.0,
+            fade_high_alpha: 1.0,
         };
     }
     let zoom = mini.mul_add(-0.5, 1.0).abs().max(0.01);
@@ -1165,16 +1167,6 @@ pub(crate) fn note_appearance_cache(
     let stealth_active = params.stealth > f32::EPSILON;
     let blink_active = params.blink > f32::EPSILON;
     let random_vanish_active = params.random_vanish > f32::EPSILON;
-    let mut combined_fade_low_adjust = 0.0;
-    combined_fade_low_adjust = params.hidden.mul_add(-1.0, combined_fade_low_adjust);
-    combined_fade_low_adjust = params.sudden.mul_add(0.0, combined_fade_low_adjust);
-    combined_fade_low_adjust -= params.stealth;
-    combined_fade_low_adjust += blink_adjust;
-    let mut combined_fade_high_adjust = 0.0;
-    combined_fade_high_adjust = params.hidden.mul_add(0.0, combined_fade_high_adjust);
-    combined_fade_high_adjust = params.sudden.mul_add(-1.0, combined_fade_high_adjust);
-    combined_fade_high_adjust -= params.stealth;
-    combined_fade_high_adjust += blink_adjust;
     let path = match (
         hidden_active,
         sudden_active,
@@ -1182,8 +1174,20 @@ pub(crate) fn note_appearance_cache(
         blink_active,
         random_vanish_active,
     ) {
-        (true, false, false, false, false) => AppearancePath::HiddenOnly,
-        (false, true, false, false, false) => AppearancePath::SuddenOnly,
+        (true, false, false, false, false) => {
+            if hidden_bounds_finite && hidden_denom.abs() >= 1e-6 {
+                AppearancePath::HiddenOnly
+            } else {
+                AppearancePath::HiddenOnlyUnbounded
+            }
+        }
+        (false, true, false, false, false) => {
+            if sudden_bounds_finite && sudden_denom.abs() >= 1e-6 {
+                AppearancePath::SuddenOnly
+            } else {
+                AppearancePath::SuddenOnlyUnbounded
+            }
+        }
         (false, false, true, false, false) => AppearancePath::StealthOnly,
         (false, false, false, true, false) => AppearancePath::BlinkOnly,
         (true, true, false, false, false)
@@ -1231,6 +1235,34 @@ pub(crate) fn note_appearance_cache(
         }
         _ => AppearancePath::General,
     };
+    // Reuse the endpoint slots for single fades as well as combined fades.
+    // Inactive modifiers must stay excluded from single-effect arithmetic.
+    let (fade_low_alpha, fade_high_alpha) = match path {
+        AppearancePath::HiddenOnly | AppearancePath::HiddenOnlyUnbounded => (
+            (1.0 + params.hidden.mul_add(-1.0, 0.0)).clamp(0.0, 1.0),
+            (1.0 + params.hidden.mul_add(0.0, 0.0)).clamp(0.0, 1.0),
+        ),
+        AppearancePath::SuddenOnly | AppearancePath::SuddenOnlyUnbounded => (
+            (1.0 + params.sudden.mul_add(0.0, 0.0)).clamp(0.0, 1.0),
+            (1.0 + params.sudden.mul_add(-1.0, 0.0)).clamp(0.0, 1.0),
+        ),
+        _ => {
+            let mut combined_fade_low_adjust = 0.0;
+            combined_fade_low_adjust = params.hidden.mul_add(-1.0, combined_fade_low_adjust);
+            combined_fade_low_adjust = params.sudden.mul_add(0.0, combined_fade_low_adjust);
+            combined_fade_low_adjust -= params.stealth;
+            combined_fade_low_adjust += blink_adjust;
+            let mut combined_fade_high_adjust = 0.0;
+            combined_fade_high_adjust = params.hidden.mul_add(0.0, combined_fade_high_adjust);
+            combined_fade_high_adjust = params.sudden.mul_add(-1.0, combined_fade_high_adjust);
+            combined_fade_high_adjust -= params.stealth;
+            combined_fade_high_adjust += blink_adjust;
+            (
+                (1.0 + combined_fade_low_adjust).clamp(0.0, 1.0),
+                (1.0 + combined_fade_high_adjust).clamp(0.0, 1.0),
+            )
+        }
+    };
     NoteAppearanceCache {
         identity: false,
         path,
@@ -1256,8 +1288,8 @@ pub(crate) fn note_appearance_cache(
         random_vanish: params.random_vanish,
         combined_fade_low_y: hidden_end.min(sudden_end),
         combined_fade_high_y: hidden_start.max(sudden_start),
-        combined_fade_low_alpha: (1.0 + combined_fade_low_adjust).clamp(0.0, 1.0),
-        combined_fade_high_alpha: (1.0 + combined_fade_high_adjust).clamp(0.0, 1.0),
+        fade_low_alpha,
+        fade_high_alpha,
     }
 }
 
@@ -1329,11 +1361,33 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
     }
     match cache.path {
         AppearancePath::HiddenOnly => {
-            let scaled = hidden_fade_scaled_bounded(y, cache);
+            if y <= cache.hidden_end {
+                return cache.fade_low_alpha;
+            }
+            if y >= cache.hidden_start {
+                return cache.fade_high_alpha;
+            }
+            let scaled = ((y - cache.hidden_start) / cache.hidden_denom).mul_add(-1.0, 0.0);
             let visible_adjust = cache.hidden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
         }
         AppearancePath::SuddenOnly => {
+            if y <= cache.sudden_end {
+                return cache.fade_low_alpha;
+            }
+            if y >= cache.sudden_start {
+                return cache.fade_high_alpha;
+            }
+            let scaled = ((y - cache.sudden_start) / cache.sudden_denom).mul_add(1.0, -1.0);
+            let visible_adjust = cache.sudden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::HiddenOnlyUnbounded => {
+            let scaled = hidden_fade_scaled_bounded(y, cache);
+            let visible_adjust = cache.hidden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
+            return (1.0 + visible_adjust).clamp(0.0, 1.0);
+        }
+        AppearancePath::SuddenOnlyUnbounded => {
             let scaled = sudden_fade_scaled_bounded(y, cache);
             let visible_adjust = cache.sudden.mul_add(scaled.clamp(-1.0, 0.0), 0.0);
             return (1.0 + visible_adjust).clamp(0.0, 1.0);
@@ -1350,10 +1404,10 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         }
         AppearancePath::HiddenSuddenOnly => {
             if y <= cache.combined_fade_low_y {
-                return cache.combined_fade_low_alpha;
+                return cache.fade_low_alpha;
             }
             if y >= cache.combined_fade_high_y {
-                return cache.combined_fade_high_alpha;
+                return cache.fade_high_alpha;
             }
             let mut visible_adjust = 0.0;
             let hidden_scaled = hidden_fade_scaled_bounded(y, cache);
@@ -1392,10 +1446,10 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         }
         AppearancePath::HiddenSuddenStealthOnly => {
             if y <= cache.combined_fade_low_y {
-                return cache.combined_fade_low_alpha;
+                return cache.fade_low_alpha;
             }
             if y >= cache.combined_fade_high_y {
-                return cache.combined_fade_high_alpha;
+                return cache.fade_high_alpha;
             }
             let mut visible_adjust = 0.0;
             let hidden_scaled = hidden_fade_scaled_bounded(y, cache);
@@ -1429,10 +1483,10 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         }
         AppearancePath::HiddenSuddenBlinkOnly => {
             if y <= cache.combined_fade_low_y {
-                return cache.combined_fade_low_alpha;
+                return cache.fade_low_alpha;
             }
             if y >= cache.combined_fade_high_y {
-                return cache.combined_fade_high_alpha;
+                return cache.fade_high_alpha;
             }
             let mut visible_adjust = 0.0;
             let hidden_scaled = hidden_fade_scaled_bounded(y, cache);
@@ -1468,10 +1522,10 @@ pub(crate) fn appearance_note_alpha_cached(y: f32, cache: &NoteAppearanceCache) 
         }
         AppearancePath::HiddenSuddenStealthBlinkOnly => {
             if y <= cache.combined_fade_low_y {
-                return cache.combined_fade_low_alpha;
+                return cache.fade_low_alpha;
             }
             if y >= cache.combined_fade_high_y {
-                return cache.combined_fade_high_alpha;
+                return cache.fade_high_alpha;
             }
             let mut visible_adjust = 0.0;
             let hidden_scaled = hidden_fade_scaled_finite(y, cache);

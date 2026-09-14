@@ -2952,6 +2952,19 @@ pub fn find_glyph<'a>(start_font: &'a Font, c: char, all_fonts: &'a FontMap) -> 
 #[inline(always)]
 #[must_use]
 pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) -> i32 {
+    if text.is_empty() {
+        return 0;
+    }
+    if text.is_ascii() {
+        return text
+            .bytes()
+            .map(|code| {
+                font.ascii_glyphs[code as usize]
+                    .as_ref()
+                    .map_or(0, |glyph| glyph.advance_i32)
+            })
+            .sum();
+    }
     text.chars()
         .map(|c| find_glyph(font, c, all_fonts).map_or(0, |glyph| glyph.advance_i32))
         .sum()
