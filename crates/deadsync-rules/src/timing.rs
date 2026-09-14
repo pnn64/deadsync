@@ -1666,15 +1666,18 @@ where
 {
     let mut idx: usize = 0;
     while idx < notes.len() {
-        let row_start = idx;
         let row_index = notes[idx].row_index;
+        let mut chosen = judgeable_result(&notes[idx]);
+        idx += 1;
+        // Select the result while finding the row end, without rescanning it.
         while idx < notes.len() && notes[idx].row_index == row_index {
+            if let Some(candidate) = judgeable_result(&notes[idx]) {
+                judgment::select_row_final_judgment(&mut chosen, candidate);
+            }
             idx += 1;
         }
 
-        if let Some(j) = judgment::aggregate_row_final_judgment(
-            notes[row_start..idx].iter().filter_map(judgeable_result),
-        ) {
+        if let Some(j) = chosen {
             f(j);
         }
     }
@@ -1978,10 +1981,6 @@ pub fn visit_scatter_points(
 
     while row_start < notes.len() {
         let row = notes[row_start].row_index;
-        let mut row_end = row_start + 1;
-        while row_end < notes.len() && notes[row_end].row_index == row {
-            row_end += 1;
-        }
         let parity_foot = if let Some(rows) = foot_by_row {
             while foot_row_idx < rows.len() && rows[foot_row_idx].0 < row {
                 foot_row_idx += 1;
@@ -1997,8 +1996,12 @@ pub fn visit_scatter_points(
         let mut row_judgment = None;
         let mut representative_ix: Option<usize> = None;
         let mut direction_code = 0u8;
-        for (offset, n) in notes[row_start..row_end].iter().enumerate() {
-            let i = row_start + offset;
+        let mut row_end = row_start;
+        // Collect the row's display fields during the boundary scan.
+        while row_end < notes.len() && notes[row_end].row_index == row {
+            let i = row_end;
+            let n = &notes[i];
+            row_end += 1;
             if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
                 continue;
             }
@@ -3495,3 +3498,7 @@ mod construction_perf;
 #[cfg(test)]
 #[path = "../tests/perf/histogram_storage.rs"]
 mod histogram_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/row_traversal.rs"]
+mod row_traversal_perf;

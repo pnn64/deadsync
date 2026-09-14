@@ -1,4 +1,4 @@
-﻿#[inline(always)]
+#[inline(always)]
 #[must_use]
 pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
     is_failing || life <= 0.0
@@ -121,9 +121,7 @@ pub fn course_life_carry(state: CourseLifeState) -> CourseLifeState {
 #[inline(always)]
 const fn battery_lives_lost(event: CourseLifeEvent) -> u32 {
     match event {
-        CourseLifeEvent::Tap(
-            JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great,
-        )
+        CourseLifeEvent::Tap(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
         | CourseLifeEvent::CheckpointHit
         | CourseLifeEvent::CheckpointMiss
         | CourseLifeEvent::HoldHeld => 0,
@@ -150,22 +148,14 @@ const fn survival_seconds_change(event: CourseLifeEvent) -> f32 {
     }
 }
 
-fn record_player_life_change(
-    player: &mut PlayerRuntime,
-    current_music_time: f32,
-    old_life: f32,
-) {
+fn record_player_life_change(player: &mut PlayerRuntime, current_music_time: f32, old_life: f32) {
     if (player.life - old_life).abs() <= 0.000_001_f32 {
         return;
     }
-    deadsync_rules::life::record_life_history(
+    deadsync_rules::life::record_life_change(
         &mut player.life_history,
         current_music_time,
         old_life,
-    );
-    deadsync_rules::life::record_life_history(
-        &mut player.life_history,
-        current_music_time,
         player.life,
     );
 }
@@ -184,8 +174,7 @@ pub fn update_course_life_time(
     current_music_time: f32,
     delta_time: f32,
 ) {
-    let CourseLifeState::Survival { remaining_seconds } = &mut player.course_life
-    else {
+    let CourseLifeState::Survival { remaining_seconds } = &mut player.course_life else {
         return;
     };
     if player.is_failing {
@@ -212,11 +201,8 @@ pub fn apply_course_life_event(
     }
 
     if let Some(submit_life) = player.course_submit_life.as_mut() {
-        let _ = deadsync_rules::life::apply_life_delta(
-            submit_life,
-            current_music_time,
-            normal_delta,
-        );
+        let _ =
+            deadsync_rules::life::apply_life_delta(submit_life, current_music_time, normal_delta);
     }
     if player.is_failing {
         return;
@@ -305,10 +291,10 @@ pub fn individual_song_outcome(
                 && life.fail_time.is_none()
                 && life.life > 0.0
         });
-    let (life, is_failing, fail_time) = post_fail_life.map_or(
-        (player.life, player.is_failing, player.fail_time),
-        |life| (life.life, life.is_failing, life.fail_time),
-    );
+    let (life, is_failing, fail_time) = post_fail_life
+        .map_or((player.life, player.is_failing, player.fail_time), |life| {
+            (life.life, life.is_failing, life.fail_time)
+        });
     IndividualSongOutcome {
         song_completed_naturally,
         is_failing,
@@ -350,14 +336,10 @@ pub fn apply_gameplay_life_delta(
 
     let result = deadsync_rules::life::apply_life_delta(meter, current_music_time, delta);
     if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
-        deadsync_rules::life::record_life_history(
+        deadsync_rules::life::record_life_change(
             life_history,
             current_music_time,
             result.old_life,
-        );
-        deadsync_rules::life::record_life_history(
-            life_history,
-            current_music_time,
             result.new_life,
         );
     }

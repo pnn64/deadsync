@@ -82,15 +82,13 @@ pub fn record_life_history(history: &mut Vec<(f32, f32)>, t: f32, life: f32) {
     };
 
     if t > last_t {
-        history.push((t, life));
-        if history.len() >= 3 {
-            let len = history.len();
-            let a = history[len - 3].1;
-            let b = history[len - 2].1;
-            let c = history[len - 1].1;
-            if a == b && b == c {
-                history.remove(len - 2);
-            }
+        let len = history.len();
+        if last_life == life && len >= 2 && history[len - 2].1 == last_life {
+            // Extend the plateau before pushing: its interior endpoint would
+            // immediately be removed, and a full buffer could grow needlessly.
+            history[len - 1] = (t, life);
+        } else {
+            history.push((t, life));
         }
         return;
     }
@@ -107,6 +105,54 @@ pub fn record_life_history(history: &mut Vec<(f32, f32)>, t: f32, life: f32) {
         } else {
             history[last_ix].0 = shifted_t;
             history.push((t, life));
+        }
+    }
+}
+
+/// Records the before/after samples of one life change, with the same plateau
+/// and timestamp behavior as calling [`record_life_history`] for each value.
+#[inline(always)]
+pub fn record_life_change(history: &mut Vec<(f32, f32)>, t: f32, before: f32, after: f32) {
+    let Some(&(last_t, last_life)) = history.last() else {
+        record_life_history(history, t, before);
+        record_life_history(history, t, after);
+        return;
+    };
+    if !(t.is_finite() && t > last_t) {
+        record_life_history(history, t, before);
+        record_life_history(history, t, after);
+        return;
+    }
+    let before = before.clamp(0.0, 1.0);
+    let after = after.clamp(0.0, 1.0);
+    if before == after {
+        record_life_history(history, t, before);
+        return;
+    }
+
+    // Locate the before sample without temporarily appending it at t. The
+    // second record would move it to shifted_t or merge it with its predecessor.
+    let len = history.len();
+    let before_ix = if before == last_life && len >= 2 && history[len - 2].1 == last_life {
+        len - 1
+    } else {
+        len
+    };
+    let shifted_t = t - LIFE_HISTORY_SAME_TIME_SHIFT;
+    let merge_previous = (history[before_ix - 1].0 - shifted_t).abs() <= 0.000_001;
+    if merge_previous {
+        history[before_ix - 1] = (shifted_t, before);
+        if before_ix == len {
+            history.push((t, after));
+        } else {
+            history[before_ix] = (t, after);
+        }
+    } else {
+        if before_ix == len {
+            history.extend_from_slice(&[(shifted_t, before), (t, after)]);
+        } else {
+            history[before_ix] = (shifted_t, before);
+            history.push((t, after));
         }
     }
 }
