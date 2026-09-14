@@ -127,10 +127,14 @@ fn format_leaderboard_date_with_empty(date: &str, empty_text: &str) -> String {
         return trimmed.to_string();
     };
 
-    format!(
-        "{} {}, {}",
-        LEADERBOARD_MONTH_ABBR[month_idx], day_num, year
-    )
+    use std::fmt::Write;
+    // Month, spaces/comma, year and at most ten decimal day digits. The
+    // input digit count also bounds the output when it has a leading zero/+.
+    let mut out = String::with_capacity(6 + year.len() + day.len().min(10));
+    out.push_str(LEADERBOARD_MONTH_ABBR[month_idx]);
+    write!(out, " {day_num}, ").expect("write leaderboard date to String");
+    out.push_str(year);
+    out
 }
 
 #[must_use]
@@ -220,13 +224,31 @@ fn fill_prioritized_entries<'a>(
     let phase_start = selected.len();
     let phase_capacity = max_rows - phase_start;
     for entry in entries {
-        if !include(entry) || selected_contains(selected.as_slice(), entry) {
+        if !include(entry) {
             continue;
         }
         let key = leaderboard_neighbor_key(entry, self_rank);
+        // Once full, equal/later candidates cannot enter this stable prefix.
+        // Reject them before duplicate-name scans and the insertion search.
+        if selected.len() == max_rows
+            && key >= leaderboard_neighbor_key(selected.last().expect("full phase"), self_rank)
+        {
+            continue;
+        }
+        if selected_contains(selected.as_slice(), entry) {
+            continue;
+        }
         let phase_entries = &selected[phase_start..];
-        let insert_offset = phase_entries
-            .partition_point(|chosen| leaderboard_neighbor_key(chosen, self_rank) <= key);
+        let insert_offset = if phase_entries
+            .first()
+            .is_some_and(|chosen| key < leaderboard_neighbor_key(chosen, self_rank))
+        {
+            // Descending ranks/distances prepend without a binary search.
+            0
+        } else {
+            phase_entries
+                .partition_point(|chosen| leaderboard_neighbor_key(chosen, self_rank) <= key)
+        };
         if phase_entries.len() < phase_capacity {
             selected.insert(phase_start + insert_offset, entry);
         } else if insert_offset < phase_capacity {
@@ -248,6 +270,16 @@ fn prioritized_leaderboard_entry_refs_with_neighbors(
         return entries.iter().collect();
     }
 
+    select_leaderboard_entry_refs(entries, max_rows, nearest_self)
+}
+
+// Keep the selection workspace out of the common already-short-list return.
+#[inline(never)]
+fn select_leaderboard_entry_refs(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+    nearest_self: bool,
+) -> PrioritizedLeaderboardEntryRefs<'_> {
     let mut top = None;
     let mut best_self = None;
     let mut next_self = None;

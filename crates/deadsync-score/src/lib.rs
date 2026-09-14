@@ -5950,14 +5950,27 @@ pub fn collect_chart_hashes_per_pack_for_import(
     pack_groups_filter: &[String],
     existing_scores: &HashSet<String>,
 ) -> Vec<(String, Vec<String>)> {
-    let filter_set: HashSet<String> = pack_groups_filter
+    let mut nonempty_filters = pack_groups_filter
         .iter()
-        .map(|v| v.trim().to_ascii_lowercase())
-        .filter(|v| !v.is_empty())
-        .collect();
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty());
+    // Importing one selected pack needs neither a hash table nor owned names.
+    let single_filter = nonempty_filters
+        .next()
+        .filter(|_| nonempty_filters.next().is_none());
+    let filter_set: HashSet<String> = if single_filter.is_some() {
+        HashSet::new()
+    } else {
+        pack_groups_filter
+            .iter()
+            .map(|v| v.trim().to_ascii_lowercase())
+            .filter(|v| !v.is_empty())
+            .collect()
+    };
 
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
+    let mut name_scratch = String::with_capacity(if filter_set.is_empty() { 0 } else { 64 });
     for pack in song_packs {
         let group_name = pack.group_name.trim();
         let display_name = if pack.name.trim().is_empty() {
@@ -5965,11 +5978,28 @@ pub fn collect_chart_hashes_per_pack_for_import(
         } else {
             pack.name.trim()
         };
-        if !filter_set.is_empty() {
-            let group_lc = group_name.to_ascii_lowercase();
-            let display_lc = display_name.to_ascii_lowercase();
-            if !filter_set.contains(&group_lc) && !filter_set.contains(&display_lc) {
+        if let Some(filter) = single_filter {
+            if !group_name.eq_ignore_ascii_case(filter)
+                && !display_name.eq_ignore_ascii_case(filter)
+            {
                 continue;
+            }
+        } else if !filter_set.is_empty() {
+            // Reuse one lowercase buffer across the whole library, and avoid
+            // normalizing the display alias when the group already matches.
+            name_scratch.clear();
+            name_scratch.push_str(group_name);
+            name_scratch.make_ascii_lowercase();
+            if !filter_set.contains(&name_scratch) {
+                if display_name == group_name {
+                    continue;
+                }
+                name_scratch.clear();
+                name_scratch.push_str(display_name);
+                name_scratch.make_ascii_lowercase();
+                if !filter_set.contains(&name_scratch) {
+                    continue;
+                }
             }
         }
 
