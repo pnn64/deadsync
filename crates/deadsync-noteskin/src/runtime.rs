@@ -1,10 +1,10 @@
 use crate::explosion::{
-    ItgTapExplosionMode, ItgTapExplosionSource, itg_direct_tap_explosion_layers,
-    itg_has_hit_mine_command, itg_has_tap_explosion_command, itg_hit_mine_command_with_init,
-    itg_hit_mine_explosion_slot, itg_hold_explosion_slot, itg_is_hit_mine_explosion_element,
-    itg_mine_explosion_command_refs, itg_partition_tap_explosion_sources, itg_tap_explosion_key,
-    parse_explosion_animation, parse_explosion_animation_with_init,
-    parse_itg_tap_explosion_animation,
+    ItgTapExplosionMode, ItgTapExplosionSource, ItgTapExplosionSourceRef,
+    itg_direct_tap_explosion_layers, itg_has_hit_mine_command, itg_has_tap_explosion_command,
+    itg_hit_mine_command_with_init, itg_hit_mine_explosion_slot, itg_hold_explosion_slot,
+    itg_is_hit_mine_explosion_element, itg_mine_explosion_command_refs,
+    itg_partition_tap_explosion_sources, itg_tap_explosion_key, parse_explosion_animation,
+    parse_explosion_animation_with_init, parse_itg_tap_explosion_animation_commands,
 };
 use crate::script::{itg_active_model_commands, model_draw_program};
 use crate::{
@@ -529,24 +529,27 @@ pub fn itg_hold_head_layers<T: Clone>(layers: Vec<T>) -> (Option<T>, Option<Arc<
 
 pub fn itg_hold_visuals_from_parts<T: Clone>(parts: HoldVisualParts<T>) -> HoldVisuals<T> {
     let head_active_layers = if parts.head_active.is_some() {
-        parts.head_active_layers.clone()
+        parts.head_active_layers
     } else {
         parts
             .head_active_layers
-            .clone()
             .or_else(|| parts.head_inactive_layers.clone())
     };
     HoldVisuals {
-        head_inactive: parts.head_inactive.clone(),
-        head_active: parts.head_active.or(parts.head_inactive),
+        head_active: parts.head_active.or_else(|| parts.head_inactive.clone()),
+        head_inactive: parts.head_inactive,
         head_inactive_layers: parts.head_inactive_layers,
         head_active_layers,
-        body_inactive: parts.body_inactive.clone(),
-        body_active: parts.body_active.or(parts.body_inactive),
-        topcap_inactive: parts.topcap_inactive.clone(),
-        topcap_active: parts.topcap_active.or(parts.topcap_inactive),
-        bottomcap_inactive: parts.bottomcap_inactive.clone(),
-        bottomcap_active: parts.bottomcap_active.or(parts.bottomcap_inactive),
+        body_active: parts.body_active.or_else(|| parts.body_inactive.clone()),
+        body_inactive: parts.body_inactive,
+        topcap_active: parts
+            .topcap_active
+            .or_else(|| parts.topcap_inactive.clone()),
+        topcap_inactive: parts.topcap_inactive,
+        bottomcap_active: parts
+            .bottomcap_active
+            .or_else(|| parts.bottomcap_inactive.clone()),
+        bottomcap_inactive: parts.bottomcap_inactive,
         explosion: None,
     }
 }
@@ -557,64 +560,54 @@ pub fn itg_roll_visuals_from_parts<T: Clone>(
 ) -> HoldVisuals<T> {
     let head_inactive_has_slot = parts.head_inactive.is_some();
     let head_active_has_slot = parts.head_active.is_some();
-    let head_inactive_layers = if head_inactive_has_slot {
-        parts.head_inactive_layers.clone()
-    } else {
-        parts
-            .head_inactive_layers
-            .clone()
-            .or_else(|| hold.head_inactive_layers.clone())
-    };
     let head_active_layers = if head_active_has_slot {
-        parts.head_active_layers.clone()
+        parts.head_active_layers
     } else if head_inactive_has_slot {
         parts.head_inactive_layers.clone()
     } else {
         parts
             .head_active_layers
-            .clone()
             .or_else(|| parts.head_inactive_layers.clone())
             .or_else(|| hold.head_active_layers.clone())
             .or_else(|| hold.head_inactive_layers.clone())
     };
+    let head_inactive_layers = if head_inactive_has_slot {
+        parts.head_inactive_layers
+    } else {
+        parts
+            .head_inactive_layers
+            .or_else(|| hold.head_inactive_layers.clone())
+    };
     HoldVisuals {
-        head_inactive: parts
-            .head_inactive
-            .clone()
-            .or_else(|| hold.head_inactive.clone()),
         head_active: parts
             .head_active
-            .or(parts.head_inactive)
+            .or_else(|| parts.head_inactive.clone())
             .or_else(|| hold.head_active.clone())
             .or_else(|| hold.head_inactive.clone()),
+        head_inactive: parts.head_inactive.or_else(|| hold.head_inactive.clone()),
         head_inactive_layers,
         head_active_layers,
-        body_inactive: parts
-            .body_inactive
-            .clone()
-            .or_else(|| hold.body_inactive.clone()),
         body_active: parts
             .body_active
-            .or(parts.body_inactive)
+            .or_else(|| parts.body_inactive.clone())
             .or_else(|| hold.body_active.clone())
             .or_else(|| hold.body_inactive.clone()),
-        topcap_inactive: parts
-            .topcap_inactive
-            .clone()
-            .or_else(|| hold.topcap_inactive.clone()),
+        body_inactive: parts.body_inactive.or_else(|| hold.body_inactive.clone()),
         topcap_active: parts
             .topcap_active
-            .or(parts.topcap_inactive)
+            .or_else(|| parts.topcap_inactive.clone())
             .or_else(|| hold.topcap_active.clone())
             .or_else(|| hold.topcap_inactive.clone()),
-        bottomcap_inactive: parts
-            .bottomcap_inactive
-            .clone()
-            .or_else(|| hold.bottomcap_inactive.clone()),
+        topcap_inactive: parts
+            .topcap_inactive
+            .or_else(|| hold.topcap_inactive.clone()),
         bottomcap_active: parts
             .bottomcap_active
-            .or(parts.bottomcap_inactive)
+            .or_else(|| parts.bottomcap_inactive.clone())
             .or_else(|| hold.bottomcap_active.clone())
+            .or_else(|| hold.bottomcap_inactive.clone()),
+        bottomcap_inactive: parts
+            .bottomcap_inactive
             .or_else(|| hold.bottomcap_inactive.clone()),
         explosion: None,
     }
@@ -836,40 +829,72 @@ pub fn itg_tap_explosion_map_from_sources<T: Clone>(
     itg_tap_explosion_map_from_partitioned_sources(dim_sprites, bright_sprites, metric_command)
 }
 
+fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
+    dim_sprites: Vec<ItgTapExplosionSource<T>>,
+    bright_sprites: Vec<ItgTapExplosionSource<T>>,
+    metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> TapExplosionMap<T> {
+    itg_tap_explosion_map_from_source_refs(&dim_sprites, &bright_sprites, metric_command)
+}
+
+// Both public owned sources and construction-time borrowed sources use one
+// selection algorithm, without copying either representation into another Vec.
+trait TapSource<T> {
+    fn view(&self) -> ItgTapExplosionSourceRef<'_, T>;
+}
+
+impl<T> TapSource<T> for ItgTapExplosionSource<T> {
+    fn view(&self) -> ItgTapExplosionSourceRef<'_, T> {
+        self.as_ref()
+    }
+}
+
+impl<T> TapSource<T> for ItgTapExplosionSourceRef<'_, T> {
+    fn view(&self) -> ItgTapExplosionSourceRef<'_, T> {
+        ItgTapExplosionSourceRef {
+            element: self.element,
+            payload: self.payload,
+            commands: self.commands,
+            mode: self.mode,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
-struct ItgTapExplosionMatch<'a, T> {
-    source: &'a ItgTapExplosionSource<T>,
+struct ItgTapExplosionMatch<'a, S> {
+    source: &'a S,
     direct_command: Option<&'a str>,
 }
 
 #[inline]
-fn itg_tap_explosion_source_match<'a, T>(
-    source: &'a ItgTapExplosionSource<T>,
+fn itg_tap_explosion_source_match<'a, T: 'a, S: TapSource<T>>(
+    source: &'a S,
     window: &str,
     command_key: &str,
-) -> Option<ItgTapExplosionMatch<'a, T>> {
-    let direct_command = source.commands.get(command_key).map(String::as_str);
-    (direct_command.is_some() || source.matches_window(window) || source.is_generic_tap_explosion())
+) -> Option<ItgTapExplosionMatch<'a, S>> {
+    let view = source.view();
+    let direct_command = view.commands.get(command_key).map(String::as_str);
+    (direct_command.is_some() || view.matches_window(window) || view.is_generic_tap_explosion())
         .then_some(ItgTapExplosionMatch {
             source,
             direct_command,
         })
 }
 
-fn itg_tap_explosion_matches<'a, T>(
-    sources: &'a [ItgTapExplosionSource<T>],
+fn itg_tap_explosion_matches<'a, T: 'a, S: TapSource<T>>(
+    sources: &'a [S],
     window: &str,
     command_key: &str,
-) -> SmallVec<[ItgTapExplosionMatch<'a, T>; 4]> {
+) -> SmallVec<[ItgTapExplosionMatch<'a, S>; 4]> {
     sources
         .iter()
         .filter_map(|source| itg_tap_explosion_source_match(source, window, command_key))
         .collect()
 }
 
-fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
-    dim_sprites: Vec<ItgTapExplosionSource<T>>,
-    bright_sprites: Vec<ItgTapExplosionSource<T>>,
+fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
+    dim_sprites: &[S],
+    bright_sprites: &[S],
     mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
     if dim_sprites.is_empty() && bright_sprites.is_empty() {
@@ -902,12 +927,13 @@ fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
             let fallback_matches = itg_tap_explosion_matches(fallback_sprites, window, key);
 
             let mut layers = SmallVec::new();
-            let mut add_source = |matched: &ItgTapExplosionMatch<'_, T>| {
+            let mut add_source = |matched: &ItgTapExplosionMatch<'_, S>| {
+                let source = matched.source.view();
                 let fallback;
                 let command = if let Some(command) = matched.direct_command {
                     command
                 } else {
-                    let Some(command) = metric_command(matched.source.mode, metric_key) else {
+                    let Some(command) = metric_command(source.mode, metric_key) else {
                         return;
                     };
                     fallback = command;
@@ -917,8 +943,12 @@ fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
                     return;
                 }
                 layers.push(TapExplosionLayer {
-                    slot: matched.source.payload.clone(),
-                    animation: parse_itg_tap_explosion_animation(matched.source, mode, command),
+                    slot: source.payload.clone(),
+                    animation: parse_itg_tap_explosion_animation_commands(
+                        source.commands,
+                        mode,
+                        command,
+                    ),
                 });
             };
 
@@ -930,7 +960,7 @@ fn itg_tap_explosion_map_from_partitioned_sources<T: Clone>(
                 if let Some(source) = preferred.first().or_else(|| fallback_sprites.first()) {
                     add_source(&ItgTapExplosionMatch {
                         source,
-                        direct_command: source.commands.get(key).map(String::as_str),
+                        direct_command: source.view().commands.get(key).map(String::as_str),
                     });
                 }
             } else {
@@ -1013,25 +1043,40 @@ pub fn itg_tap_explosion_map_from_resolved_layers<T: Clone>(
     mut direct_layers: impl FnMut(&str) -> Vec<ItgResolvedSprite<T>>,
     metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
 ) -> TapExplosionMap<T> {
-    itg_tap_explosion_map_from_layers(
-        explosion_layers,
-        |sprite| itg_has_tap_explosion_command(&sprite.commands),
-        |mode| {
-            let base_element = match mode {
-                ItgTapExplosionMode::Dim => "Tap Explosion Dim",
-                ItgTapExplosionMode::Bright => "Tap Explosion Bright",
-            };
-            direct_layers(base_element)
-        },
-        |sprite| {
-            ItgTapExplosionSource::new(
-                sprite.element.clone(),
-                sprite.slot.clone(),
-                sprite.commands.clone(),
-            )
-        },
-        metric_command,
-    )
+    let direct_dim;
+    let direct_bright;
+    let mut dim = SmallVec::<[_; 4]>::new();
+    let mut bright = SmallVec::<[_; 4]>::new();
+    fn add<'a, T>(
+        sprite: &'a ItgResolvedSprite<T>,
+        dim: &mut SmallVec<[ItgTapExplosionSourceRef<'a, T>; 4]>,
+        bright: &mut SmallVec<[ItgTapExplosionSourceRef<'a, T>; 4]>,
+    ) {
+        let source = ItgTapExplosionSourceRef::new(&sprite.element, &sprite.slot, &sprite.commands);
+        match source.mode {
+            ItgTapExplosionMode::Dim => dim.push(source),
+            ItgTapExplosionMode::Bright => bright.push(source),
+        }
+    }
+    // Keep direct fallback storage alive until its borrowed sources are consumed.
+    // Resolve both modes in the original order, only when no actor has a tap command.
+    if explosion_layers
+        .iter()
+        .any(|sprite| itg_has_tap_explosion_command(&sprite.commands))
+    {
+        for sprite in explosion_layers {
+            if itg_has_tap_explosion_command(&sprite.commands) {
+                add(sprite, &mut dim, &mut bright);
+            }
+        }
+    } else {
+        direct_dim = direct_layers("Tap Explosion Dim");
+        direct_bright = direct_layers("Tap Explosion Bright");
+        for sprite in direct_dim.iter().chain(&direct_bright) {
+            add(sprite, &mut dim, &mut bright);
+        }
+    }
+    itg_tap_explosion_map_from_source_refs(&dim, &bright, metric_command)
 }
 
 pub fn itg_direct_tap_explosion_resolved_layers<T>(
@@ -2339,13 +2384,15 @@ pub fn itg_tap_explosions_by_col_compiled<T: Clone>(
     let mut out = Vec::with_capacity(style.num_cols);
     for col in 0..style.num_cols {
         let button = itg::button_for_col(style.num_cols, col);
+        let resolved;
         let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
-            down_explosion_sprites.to_vec()
+            down_explosion_sprites
         } else {
-            resolve_sprites(button, "Explosion")
+            resolved = resolve_sprites(button, "Explosion");
+            &resolved
         };
         out.push(itg_tap_explosion_map_from_resolved_layers(
-            &column_explosion_sprites,
+            column_explosion_sprites,
             |base_element| {
                 let base_request = compiled.load_request_ref(button, base_element);
                 itg_direct_tap_explosion_resolved_layers(
@@ -2515,10 +2562,12 @@ fn itg_noteskin_runtime_selected<T: Clone>(
                      element_hint: &str,
                      request_element: &str,
                      fallback: Option<&T>| {
+                        let resolved;
                         let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
-                            explosion_sprites.clone()
+                            explosion_sprites.as_slice()
                         } else {
-                            resolve_sprites(button, "Explosion")
+                            resolved = resolve_sprites(button, "Explosion");
+                            &resolved
                         };
                         let request = compiled.load_request_ref(button, request_element);
                         let source_sprites = if request.blank {
@@ -2527,7 +2576,7 @@ fn itg_noteskin_runtime_selected<T: Clone>(
                             resolve_sprites(button, request_element)
                         };
                         resolve_hold_explosion(
-                            &column_explosion_sprites,
+                            column_explosion_sprites,
                             &source_sprites,
                             button,
                             active_key,
@@ -5779,3 +5828,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/tap_layers.rs"]
 mod preparation_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/visual_assembly.rs"]
+mod visual_assembly_perf;

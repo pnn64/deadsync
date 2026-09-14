@@ -717,7 +717,48 @@ pub struct ItgTapExplosionSource<T> {
     pub mode: ItgTapExplosionMode,
 }
 
+// Construction only borrows metadata; final animation layers own their slots.
+pub(crate) struct ItgTapExplosionSourceRef<'a, T> {
+    pub element: &'a str,
+    pub payload: &'a T,
+    pub commands: &'a HashMap<String, String>,
+    pub mode: ItgTapExplosionMode,
+}
+
+impl<'a, T> ItgTapExplosionSourceRef<'a, T> {
+    pub fn new(element: &'a str, payload: &'a T, commands: &'a HashMap<String, String>) -> Self {
+        let mode = itg_tap_explosion_mode(element)
+            .or_else(|| itg_tap_explosion_mode_from_commands(commands))
+            .unwrap_or(ItgTapExplosionMode::Dim);
+        Self {
+            element,
+            payload,
+            commands,
+            mode,
+        }
+    }
+
+    pub fn matches_window(&self, window: &str) -> bool {
+        itg_tap_explosion_element_window(self.element)
+            .is_some_and(|value| value.eq_ignore_ascii_case(window))
+    }
+
+    pub fn is_generic_tap_explosion(&self) -> bool {
+        let element = self.element.trim();
+        element.eq_ignore_ascii_case("tap explosion dim")
+            || element.eq_ignore_ascii_case("tap explosion bright")
+    }
+}
+
 impl<T> ItgTapExplosionSource<T> {
+    pub(crate) fn as_ref(&self) -> ItgTapExplosionSourceRef<'_, T> {
+        ItgTapExplosionSourceRef {
+            element: &self.element,
+            payload: &self.payload,
+            commands: &self.commands,
+            mode: self.mode,
+        }
+    }
     pub fn new(element: String, payload: T, commands: HashMap<String, String>) -> Self {
         let mode = itg_tap_explosion_mode(&element)
             .or_else(|| itg_tap_explosion_mode_from_commands(&commands))
@@ -731,8 +772,7 @@ impl<T> ItgTapExplosionSource<T> {
     }
 
     pub fn matches_window(&self, window: &str) -> bool {
-        itg_tap_explosion_element_window(&self.element)
-            .is_some_and(|value| value.eq_ignore_ascii_case(window))
+        self.as_ref().matches_window(window)
     }
 
     pub fn applies_to_window(&self, window: &str, command_key: &str) -> bool {
@@ -742,9 +782,7 @@ impl<T> ItgTapExplosionSource<T> {
     }
 
     pub fn is_generic_tap_explosion(&self) -> bool {
-        let element = self.element.trim();
-        element.eq_ignore_ascii_case("tap explosion dim")
-            || element.eq_ignore_ascii_case("tap explosion bright")
+        self.as_ref().is_generic_tap_explosion()
     }
 }
 
@@ -822,17 +860,26 @@ pub fn itg_partition_tap_explosion_sources<T>(
     (dim, bright)
 }
 
+#[cfg(test)]
 pub(crate) fn parse_itg_tap_explosion_animation<T>(
     source: &ItgTapExplosionSource<T>,
+    mode: ItgTapExplosionMode,
+    command: &str,
+) -> ExplosionAnimation {
+    parse_itg_tap_explosion_animation_commands(&source.commands, mode, command)
+}
+
+pub(crate) fn parse_itg_tap_explosion_animation_commands(
+    commands: &HashMap<String, String>,
     mode: ItgTapExplosionMode,
     command: &str,
 ) -> ExplosionAnimation {
     let mut sequence = [""; 4];
     let mut len = 0;
     for command in [
-        source.commands.get("initcommand"),
-        source.commands.get("judgmentcommand"),
-        source.commands.get(mode.command_key()),
+        commands.get("initcommand"),
+        commands.get("judgmentcommand"),
+        commands.get(mode.command_key()),
     ]
     .into_iter()
     .flatten()
