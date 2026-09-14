@@ -347,17 +347,21 @@ fn discover_graphic_textures_in_roots(
             continue;
         };
         for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            let file_name = entry.file_name();
+            let Some(file_name) = file_name.to_str() else {
                 continue;
             };
             if require_multiframe_hint && !texture_filename_has_multiframe_hint(file_name) {
                 continue;
             }
             if !require_multiframe_hint && !is_png_file(file_name) {
+                continue;
+            }
+            let is_file = match entry.file_type() {
+                Ok(kind) if !kind.is_symlink() => kind.is_file(),
+                _ => entry.path().is_file(),
+            };
+            if !is_file {
                 continue;
             }
             let key = format!("{folder}/{file_name}");
@@ -371,7 +375,7 @@ fn discover_graphic_textures_in_roots(
             discovered.push(DiscoveredTexture {
                 key,
                 label,
-                source_path: absolute_or_self(&path),
+                source_path: absolute_or_self(&entry.path()),
             });
         }
     }
@@ -468,17 +472,22 @@ fn noteskin_png_texture_entries(
                 continue;
             };
             for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    dirs.push(path);
+                let is_dir = match entry.file_type() {
+                    Ok(kind) if !kind.is_symlink() => kind.is_dir(),
+                    _ => entry.path().is_dir(),
+                };
+                if is_dir {
+                    dirs.push(entry.path());
                     continue;
                 }
-                if !path
+                let name = entry.file_name();
+                if !Path::new(&name)
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
                 {
                     continue;
                 }
+                let path = entry.path();
                 let key = canonical_key(&path);
                 if key.starts_with("noteskins/") && seen_keys.insert(key.clone()) {
                     list.push((key, path));
@@ -488,6 +497,10 @@ fn noteskin_png_texture_entries(
     }
     list
 }
+
+#[cfg(test)]
+#[path = "../tests/asset_discovery/textures.rs"]
+mod asset_discovery;
 
 pub fn resolve_texture_choice_key<'a>(
     requested: Option<&str>,

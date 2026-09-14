@@ -92,20 +92,31 @@ fn is_skipped_stem(path: &Path) -> bool {
         .is_some_and(|stem| stem.starts_with('_'))
 }
 
-#[inline(always)]
-fn is_eligible_ogg(path: &Path) -> bool {
-    path.is_file() && is_ogg(path) && !is_skipped_stem(path)
-}
-
 fn list_ogg_files(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut out: Vec<PathBuf> = std::fs::read_dir(dir)?
         .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| is_eligible_ogg(path))
+        .filter_map(|entry| {
+            let name = entry.file_name();
+            let name = Path::new(&name);
+            if !is_ogg(name) || is_skipped_stem(name) {
+                return None;
+            }
+            // Follow links just as Path::is_file does; ordinary entries already
+            // carry their type from directory enumeration.
+            let is_file = match entry.file_type() {
+                Ok(kind) if !kind.is_symlink() => kind.is_file(),
+                _ => entry.path().is_file(),
+            };
+            is_file.then(|| entry.path())
+        })
         .collect();
     out.sort();
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "../tests/asset_discovery/audio.rs"]
+mod asset_discovery;
 
 fn cached_ogg_listing_shared(dir: &Path) -> SharedOggListing {
     {

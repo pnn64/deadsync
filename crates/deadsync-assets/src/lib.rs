@@ -9,6 +9,15 @@ pub mod screenshot;
 pub mod song_lua;
 pub mod textures;
 
+#[cfg(test)]
+#[allow(dead_code)]
+#[path = "../../../tests/support/perf.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../tests/asset_discovery/support.rs"]
+mod asset_discovery_support;
+
 use deadlib_assets::{
     open_image_fallback, register_generated_texture, register_texture_dims, sprite_sheet_dims,
     texture_dims, texture_source_frame_dims_from_real,
