@@ -1,13 +1,14 @@
+// Frozen from 74650590a (0.5.1207), without the test module.
 //! Domain-agnostic fuzzy matcher: callers pass a label plus any synonym
 //! aliases, so this is shared by the setting search and the song search.
 //!
 //! Subsequence scoring (fzf-style) first; an edit-distance fallback via
-//! bounded dynamic programming runs only when that finds nothing, so typos like `prespective`
+//! `strsim` runs only when that finds nothing, so typos like `prespective`
 //! still resolve without costing anything on normal queries.
 //!
 //! Everything is sized for a catalog-per-keystroke budget: the query is folded
-//! once, subsequence scoring allocates nothing, and the fallback stays inline
-//! for ordinary interactive queries and skips words that cannot improve its score.
+//! once, scoring allocates nothing, and the fallback skips candidates whose
+//! length already puts them out of range.
 //!
 //! Scores are an ordering within a single query, not a stable scale.
 
@@ -194,12 +195,7 @@ pub fn best_match_score(query: &Query, label: &str, aliases: &[&str]) -> Option<
 #[inline]
 fn subsequence_score_prepared(query: &Query, candidate: &str) -> Option<i32> {
     if query.ascii && candidate.is_ascii() {
-        // Dispatch here so short labels do not pay for an extra scorer call.
-        if candidate.len() <= 32 {
-            subsequence_score_ascii_scalar(&query.chars, candidate.as_bytes())
-        } else {
-            subsequence_score_ascii(&query.chars, candidate.as_bytes())
-        }
+        subsequence_score_ascii(&query.chars, candidate.as_bytes())
     } else {
         subsequence_score(&query.chars, candidate)
     }
@@ -210,81 +206,6 @@ fn subsequence_score_prepared(query: &Query, candidate: &str) -> Option<i32> {
 /// preserves the generic scorer's ordering without UTF-8 decoding or Unicode
 /// classification in the inner loop.
 fn subsequence_score_ascii(query: &[char], candidate: &[u8]) -> Option<i32> {
-    if query.is_empty() {
-        return Some(0);
-    }
-
-    // Prefix matches need only contiguous and boundary bonuses. Keep their
-    // common loop separate from the position tracking needed for gaps.
-    let mut score = PREFIX_BONUS;
-    let mut matched = 0;
-    let mut previous = b' ';
-    for (&ch, &wanted) in candidate.iter().zip(query) {
-        if char::from(ch.to_ascii_lowercase()) != wanted {
-            break;
-        }
-        if matched != 0 {
-            score += CONTIGUOUS_BONUS;
-        }
-        if !previous.is_ascii_alphanumeric()
-            || (previous.is_ascii_lowercase() && ch.is_ascii_uppercase())
-        {
-            score += BOUNDARY_BONUS;
-        }
-        previous = ch;
-        matched += 1;
-    }
-    if matched == query.len() {
-        return Some(score - (candidate.len() as i32) / 8);
-    }
-    subsequence_score_ascii_tail(query, candidate, matched, score)
-}
-
-fn subsequence_score_ascii_tail(
-    query: &[char],
-    candidate: &[u8],
-    matched: usize,
-    prefix_score: i32,
-) -> Option<i32> {
-    let mut score = if matched == 0 { 0 } else { prefix_score };
-    let mut next = matched;
-    for (index, &wanted) in query.iter().enumerate().skip(matched) {
-        // The prepared-query ASCII guard makes this narrowing exact.
-        let lower = wanted as u8;
-        let pos = if candidate.get(next)?.to_ascii_lowercase() == lower {
-            next
-        } else {
-            let rest = &candidate[next + 1..];
-            let offset = if rest.len() < 32 {
-                rest.iter()
-                    .position(|ch| ch.to_ascii_lowercase() == lower)?
-            } else {
-                memchr::memchr2(lower, lower.to_ascii_uppercase(), rest)?
-            };
-            next + 1 + offset
-        };
-        if index == 0 {
-            // A failed prefix cannot start at zero. Its offset still affects
-            // the score even when byte search skips the preceding text.
-            score -= pos as i32;
-        } else if pos == next {
-            score += CONTIGUOUS_BONUS;
-        } else {
-            score -= ((pos - next) as i32).min(GAP_PENALTY_MAX);
-        }
-        let ch = candidate[pos];
-        if pos == 0
-            || !candidate[pos - 1].is_ascii_alphanumeric()
-            || (candidate[pos - 1].is_ascii_lowercase() && ch.is_ascii_uppercase())
-        {
-            score += BOUNDARY_BONUS;
-        }
-        next = pos + 1;
-    }
-    Some(score - (candidate.len() as i32) / 8)
-}
-
-fn subsequence_score_ascii_scalar(query: &[char], candidate: &[u8]) -> Option<i32> {
     if query.is_empty() {
         return Some(0);
     }
@@ -356,11 +277,9 @@ pub fn subsequence_score(query: &[char], candidate: &str) -> Option<i32> {
     let mut prev_char: Option<char> = None;
     let mut cand_len = 0usize;
 
-    let mut chars = candidate.chars();
-    while let Some(ch) = chars.next() {
-        let pos = cand_len;
-        cand_len += 1;
-        if fold(ch) == query[qi] {
+    for (pos, ch) in candidate.chars().enumerate() {
+        cand_len = pos + 1;
+        if qi < query.len() && fold(ch) == query[qi] {
             if first_match.is_none() {
                 first_match = Some(pos);
             }
@@ -380,13 +299,6 @@ pub fn subsequence_score(query: &[char], candidate: &str) -> Option<i32> {
             }
             prev_match = Some(pos);
             qi += 1;
-            if qi == query.len() {
-                // Only the total scalar count affects the unmatched suffix.
-                // Chars::count counts UTF-8 boundaries without decoding each
-                // remaining scalar through the scoring loop.
-                cand_len += chars.count();
-                break;
-            }
         }
         prev_char = Some(ch);
     }
@@ -465,15 +377,12 @@ fn typo_score_parts(query: &[char], query_ascii: bool, candidate: &str) -> Optio
         .split_whitespace()
         .filter(|word| word.len() != candidate.len());
     for word in std::iter::once(candidate).chain(words) {
-        // Equal or worse distances cannot change the score. Once a close word
-        // exists, spend only the edit budget required to improve it.
-        let limit = best_distance.map_or(threshold, |best| best - 1);
         let distance = if query_ascii && word.is_ascii() {
             let bytes = word.as_bytes();
-            if bytes.len().abs_diff(qlen) > limit {
+            if bytes.len().abs_diff(qlen) > threshold {
                 continue;
             }
-            bounded_levenshtein_by(qlen, bytes.len(), limit, |qi, wi| {
+            bounded_levenshtein_by(qlen, bytes.len(), threshold, |qi, wi| {
                 query[qi] == char::from(bytes[wi].to_ascii_lowercase())
             })
         } else {
@@ -484,23 +393,20 @@ fn typo_score_parts(query: &[char], query_ascii: bool, candidate: &str) -> Optio
             // Case folding keeps one scalar per input here. Count before
             // materializing: long unrelated Unicode titles should never spill
             // the inline buffer just to fail the length guard.
-            if word.chars().count().abs_diff(qlen) > limit {
+            if word.chars().count().abs_diff(qlen) > threshold {
                 continue;
             }
             let word_folded: SmallVec<[char; EDIT_DISTANCE_STACK_CAPACITY]> =
                 word.chars().map(fold).collect();
-            bounded_levenshtein_by(qlen, word_folded.len(), limit, |qi, wi| {
+            bounded_levenshtein_by(qlen, word_folded.len(), threshold, |qi, wi| {
                 query[qi] == word_folded[wi]
             })
         };
         let Some(distance) = distance else {
             continue;
         };
-        best_distance = Some(distance);
-        // This fallback is called only after the whole-label subsequence
-        // failed. An exact word would have been a subsequence too, so one edit
-        // is already the best possible fallback result.
-        if distance <= 1 {
+        best_distance = Some(best_distance.map_or(distance, |b| b.min(distance)));
+        if best_distance == Some(0) {
             break;
         }
     }
@@ -584,192 +490,4 @@ fn bounded_levenshtein_by(
     }
 
     (row[b_len] <= limit).then_some(row[b_len])
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const SPEED_ALIASES: &[&str] = &["speed", "cmod", "mmod", "xmod"];
-    const NOTESKIN_ALIASES: &[&str] = &["arrows", "skin", "notes"];
-
-    #[test]
-    fn bounded_distance_matches_full_distance_at_every_short_word_threshold() {
-        let mut words = vec![String::new()];
-        for len in 1..=5 {
-            for bits in 0..1usize << len {
-                words.push(
-                    (0..len)
-                        .map(|i| if bits & (1 << i) == 0 { 'a' } else { 'b' })
-                        .collect(),
-                );
-            }
-        }
-        for a in &words {
-            for b in &words {
-                let distance = strsim::levenshtein(a, b);
-                for limit in 0..=6 {
-                    assert_eq!(
-                        bounded_levenshtein_by(a.len(), b.len(), limit, |i, j| {
-                            a.as_bytes()[i] == b.as_bytes()[j]
-                        }),
-                        (distance <= limit).then_some(distance),
-                        "{a:?} / {b:?}, limit {limit}",
-                    );
-                }
-            }
-        }
-    }
-
-    fn score(query: &str, label: &str) -> Option<i32> {
-        subsequence_score(&query_chars(query), label)
-    }
-
-    #[test]
-    fn folds_non_ascii_case_for_localized_labels() {
-        // Only matches with full Unicode folding; to_ascii_lowercase is a no-op here.
-        assert!(score("скор", "Скорость").is_some());
-        assert!(score("ταχ", "Ταχύτητα").is_some());
-    }
-
-    #[test]
-    fn fold_diacritics_reduces_latin_accents_only() {
-        assert_eq!(fold_diacritics("Déjà Vu"), "Deja Vu");
-        assert_eq!(fold_diacritics("Señorita"), "Senorita");
-        assert_eq!(fold_diacritics("Über Ålesund"), "Uber Alesund");
-        // NFC and NFD converge, so the two spellings search alike.
-        assert_eq!(fold_diacritics("caf\u{e9}"), "cafe");
-        assert_eq!(fold_diacritics("cafe\u{301}"), "cafe");
-        // Case survives: subsequence_score reads it for word-boundary bonuses.
-        assert_eq!(fold_diacritics("ÉCLAT"), "ECLAT");
-        // All-ASCII borrows rather than allocating.
-        assert!(matches!(fold_diacritics("Speed Mod"), Cow::Borrowed(_)));
-    }
-
-    #[test]
-    fn fold_diacritics_leaves_non_latin_scripts_alone() {
-        // Hangul syllables decompose into jamo; taking a base would shred them.
-        assert_eq!(fold_diacritics("한국어"), "한국어");
-        // Dakuten changes the sound rather than decorating a Latin letter, in
-        // both precomposed and decomposed spellings.
-        assert_eq!(fold_diacritics("ガガ"), "ガガ");
-        assert_eq!(fold_diacritics("\u{30ab}\u{3099}"), "\u{30ab}\u{3099}");
-        assert_eq!(fold_diacritics("Скорость"), "Скорость");
-        assert_eq!(fold_diacritics("Ταχύτητα"), "Ταχύτητα");
-    }
-
-    #[test]
-    fn folded_prefix_len_counts_original_chars_across_folding() {
-        // The count splits the *original* candidate, so a precomposed accent is
-        // one char and a decomposed one is two.
-        assert_eq!(folded_prefix_len("deja", "D\u{e9}j\u{e0} Vu"), Some(4));
-        assert_eq!(folded_prefix_len("deja", "De\u{301}ja\u{300} Vu"), Some(6));
-        assert_eq!(folded_prefix_len("déjà", "Deja Vu"), Some(4));
-    }
-
-    #[test]
-    fn folded_prefix_len_handles_non_ascii_and_counts_chars() {
-        assert_eq!(folded_prefix_len("spe", "Speed Mod"), Some(3));
-        assert_eq!(folded_prefix_len("скор", "Скорость"), Some(4));
-        assert_eq!(folded_prefix_len("Speed Mod", "Speed Mod"), Some(9));
-        assert_eq!(folded_prefix_len("Speed Mod Extra", "Speed Mod"), None);
-        assert_eq!(folded_prefix_len("xyz", "Speed Mod"), None);
-        assert_eq!(folded_prefix_len("", "Speed Mod"), Some(0));
-    }
-
-    #[test]
-    fn typo_threshold_uses_char_counts_not_bytes() {
-        // "Скор" is 4 chars but 8 bytes; a byte guard would skip the comparison.
-        let q = prepare_query("скол");
-        assert!(best_match_score(&q, "Скор", &[]).is_some());
-    }
-
-    #[test]
-    fn empty_query_matches_everything() {
-        assert_eq!(score("", "Speed Mod"), Some(0));
-    }
-
-    #[test]
-    fn subsequence_matches_non_contiguous() {
-        assert!(score("spdm", "Speed Mod").is_some());
-        assert!(score("errbar", "Error Bar").is_some());
-        assert!(score("bfly", "Butterfly").is_some());
-    }
-
-    #[test]
-    fn non_subsequence_returns_none() {
-        assert!(score("zzz", "Speed Mod").is_none());
-    }
-
-    #[test]
-    fn prefix_and_contiguous_outrank_scattered() {
-        let prefix = score("speed", "Speed Mod").unwrap();
-        let scattered = score("sd", "Speed Mod").unwrap();
-        assert!(
-            prefix > scattered,
-            "prefix {prefix} vs scattered {scattered}"
-        );
-    }
-
-    #[test]
-    fn better_label_ranks_higher_across_candidates() {
-        let q = prepare_query("speed");
-        let direct = best_match_score(&q, "Speed Mod", SPEED_ALIASES).unwrap();
-        let unrelated = best_match_score(&q, "Perspective", &[]);
-        assert!(unrelated.is_none() || direct > unrelated.unwrap());
-    }
-
-    #[test]
-    fn alias_matches_when_label_differs() {
-        let q = prepare_query("arrows");
-        assert!(subsequence_score(q.chars(), "NoteSkin").is_none());
-        assert!(best_match_score(&q, "NoteSkin", NOTESKIN_ALIASES).is_some());
-    }
-
-    #[test]
-    fn typo_tolerance_resolves_misspellings() {
-        let q = prepare_query("prespective");
-        assert!(subsequence_score(q.chars(), "Perspective").is_none());
-        assert!(best_match_score(&q, "Perspective", &[]).is_some());
-
-        // Transposition in a song-style title.
-        let q = prepare_query("atcion");
-        assert!(subsequence_score(q.chars(), "Action").is_none());
-        assert!(best_match_score(&q, "Action", &[]).is_some());
-    }
-
-    #[test]
-    fn typo_tolerance_rejects_unrelated() {
-        let q = prepare_query("xylophone");
-        assert!(best_match_score(&q, "Speed Mod", SPEED_ALIASES).is_none());
-        assert!(best_match_score(&q, "Butterfly", &[]).is_none());
-    }
-
-    #[test]
-    fn ascii_fast_path_matches_unicode_scorer() {
-        const QUERIES: [&str; 8] = ["", "song", "csr", "ab", "ABC", "spdm", "zzz", "123"];
-        const LABELS: [&str; 10] = [
-            "",
-            "Catalog Song 0042 Remix 11",
-            "CamelCaseRun",
-            "a---b trailing suffix",
-            "ABC",
-            "Speed Mod",
-            "under_score_123",
-            "no match",
-            "song with a deliberately long suffix",
-            "123 Start",
-        ];
-
-        for query in QUERIES {
-            let prepared = prepare_query(query);
-            for label in LABELS {
-                assert_eq!(
-                    subsequence_score_prepared(&prepared, label),
-                    subsequence_score(prepared.chars(), label),
-                    "query={query:?}, label={label:?}",
-                );
-            }
-        }
-    }
 }
