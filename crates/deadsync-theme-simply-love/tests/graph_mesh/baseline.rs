@@ -1,3 +1,4 @@
+//! Frozen evaluation graph builders from 30bbc73c204ebe2d433323430651436931394b36 (0.5.1212).
 use crate::color;
 use deadlib_render_core::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterFoot, ScatterPoint};
@@ -23,7 +24,6 @@ pub enum ScatterPlotScale {
 }
 
 const HIST_BIN_MS: f32 = 1.0;
-const SCATTER_EXACT_CAPACITY_MIN_POINTS: usize = 4096;
 
 #[inline(always)]
 fn hard_ex_display_window_ms(worst_window_ms: f32) -> f32 {
@@ -195,26 +195,24 @@ fn hist_bin_abs_ms(bin: i32) -> f32 {
 fn push_quad(out: &mut Vec<MeshVertex>, x: f32, y: f32, w: f32, h: f32, color: [f32; 4]) {
     let x1 = x + w;
     let y1 = y + h;
-    out.extend_from_slice(&[
-        MeshVertex { pos: [x, y], color },
-        MeshVertex {
-            pos: [x1, y],
-            color,
-        },
-        MeshVertex {
-            pos: [x1, y1],
-            color,
-        },
-        MeshVertex { pos: [x, y], color },
-        MeshVertex {
-            pos: [x1, y1],
-            color,
-        },
-        MeshVertex {
-            pos: [x, y1],
-            color,
-        },
-    ]);
+    out.push(MeshVertex { pos: [x, y], color });
+    out.push(MeshVertex {
+        pos: [x1, y],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x1, y1],
+        color,
+    });
+    out.push(MeshVertex { pos: [x, y], color });
+    out.push(MeshVertex {
+        pos: [x1, y1],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [x, y1],
+        color,
+    });
 }
 
 #[must_use]
@@ -261,15 +259,15 @@ pub fn build_scatter_background_mesh_with_palette(
 
     // (outer_ms, color) ordered innermost to outermost. The inner edge of
     // each band is the outer edge of the previous band (0 for the first).
-    let bands: &[(f32, [f32; 4])] = match scale {
-        ScatterPlotScale::Itg => &[
+    let bands: Vec<(f32, [f32; 4])> = match scale {
+        ScatterPlotScale::Itg => vec![
             (timing_windows_ms[0], palette.color(Role::FantasticBlue)),
             (timing_windows_ms[1], palette.color(Role::Excellent)),
             (timing_windows_ms[2], palette.color(Role::Great)),
             (timing_windows_ms[3], palette.color(Role::Decent)),
             (timing_windows_ms[4], palette.color(Role::WayOff)),
         ],
-        ScatterPlotScale::Ex => &[
+        ScatterPlotScale::Ex => vec![
             (w0, palette.color(Role::FantasticBlue)),
             (timing_windows_ms[0], palette.color(Role::FantasticWhite)),
             (timing_windows_ms[1], palette.color(Role::Excellent)),
@@ -277,7 +275,7 @@ pub fn build_scatter_background_mesh_with_palette(
             (timing_windows_ms[3], palette.color(Role::Decent)),
             (timing_windows_ms[4], palette.color(Role::WayOff)),
         ],
-        ScatterPlotScale::HardEx => &[
+        ScatterPlotScale::HardEx => vec![
             (w010, color::HARD_EX_SCORE_RGBA),
             (w0, palette.color(Role::FantasticBlue)),
             (timing_windows_ms[0], palette.color(Role::FantasticWhite)),
@@ -297,7 +295,7 @@ pub fn build_scatter_background_mesh_with_palette(
     let mut out: Vec<MeshVertex> = Vec::with_capacity(bands.len() * 12);
     let half = h * 0.5;
     let mut inner_ms: f32 = 0.0;
-    for &(outer_ms, c) in bands {
+    for &(outer_ms, c) in &bands {
         let outer = outer_ms.min(worst);
         if outer <= inner_ms {
             continue;
@@ -376,27 +374,7 @@ pub fn build_scatter_mesh_with_palette(
     const POINT_H: f32 = 1.5;
     const MISS_W: f32 = 1.0;
 
-    // Discard a rejected prefix before allocating. NaN offsets remain visible,
-    // matching the drawing pass; an entirely rejected plot needs no storage.
-    let Some(first_visible) = scatter
-        .iter()
-        .position(|sp| !sp.offset_ms.is_some_and(|off| off.abs() > worst))
-    else {
-        return Vec::new();
-    };
-    let scatter = &scatter[first_visible..];
-    // Count long plots exactly to avoid reserving a full chart for a narrow
-    // display window. Small plots avoid a second scan and retain a bounded
-    // upper estimate of less than 4,096 points (576 KiB of vertices).
-    let visible_count = if scatter.len() < SCATTER_EXACT_CAPACITY_MIN_POINTS {
-        scatter.len()
-    } else {
-        scatter
-            .iter()
-            .filter(|sp| !sp.offset_ms.is_some_and(|off| off.abs() > worst))
-            .count()
-    };
-    let mut out: Vec<MeshVertex> = Vec::with_capacity(visible_count.saturating_mul(6));
+    let mut out: Vec<MeshVertex> = Vec::with_capacity(scatter.len().saturating_mul(6));
 
     for sp in scatter {
         if let Some(off_ms) = sp.offset_ms
@@ -478,32 +456,30 @@ fn push_hist_segment(
     bottom_y: f32,
     color: [f32; 4],
 ) {
-    out.extend_from_slice(&[
-        MeshVertex {
-            pos: [ax, bottom_y],
-            color,
-        },
-        MeshVertex {
-            pos: [ax, atop],
-            color,
-        },
-        MeshVertex {
-            pos: [bx, bottom_y],
-            color,
-        },
-        MeshVertex {
-            pos: [ax, atop],
-            color,
-        },
-        MeshVertex {
-            pos: [bx, btop],
-            color,
-        },
-        MeshVertex {
-            pos: [bx, bottom_y],
-            color,
-        },
-    ]);
+    out.push(MeshVertex {
+        pos: [ax, bottom_y],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, atop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, atop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, btop],
+        color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color,
+    });
 }
 
 #[must_use]
@@ -609,202 +585,4 @@ pub fn build_offset_histogram_mesh_with_palette(
     }
 
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn scatter_point(offset_ms: f32) -> ScatterPoint {
-        ScatterPoint {
-            time_sec: 1.0,
-            offset_ms: Some(offset_ms),
-            direction_code: 1,
-            miss_because_held: false,
-            row_index: 0,
-            quantization_idx: 0,
-            parity_foot: ScatterFoot::Unknown,
-        }
-    }
-
-    fn miss_point() -> ScatterPoint {
-        ScatterPoint {
-            offset_ms: None,
-            ..scatter_point(0.0)
-        }
-    }
-
-    #[test]
-    fn judgment_scatter_hits_use_full_alpha() {
-        let verts = build_scatter_mesh(
-            &[scatter_point(120.0)],
-            0.0,
-            2.0,
-            None,
-            false,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Itg,
-        );
-
-        assert_eq!(verts.len(), 6);
-        assert!(verts.iter().all(|v| v.color
-            == [
-                color::JUDGMENT_RGBA[3][0],
-                color::JUDGMENT_RGBA[3][1],
-                color::JUDGMENT_RGBA[3][2],
-                1.0,
-            ]));
-    }
-
-    #[test]
-    fn judgment_scatter_uses_the_selected_custom_palette() {
-        let custom = crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE.with_color(
-            Role::Decent,
-            deadlib_present::color::Color::rgb(0.1, 0.2, 0.3).to_rgba(),
-            crate::color::JUDGMENT_PRESET.dim_peaks,
-        );
-        let verts = build_scatter_mesh_with_palette(
-            &[scatter_point(120.0)],
-            0.0,
-            2.0,
-            None,
-            false,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Itg,
-            custom,
-        );
-
-        assert_eq!(verts.len(), 6);
-        assert!(
-            verts
-                .iter()
-                .all(|vertex| vertex.color == [0.1, 0.2, 0.3, 1.0])
-        );
-    }
-
-    #[test]
-    fn arrow_scatter_hits_keep_reference_alpha() {
-        let verts = build_scatter_mesh(
-            &[scatter_point(10.0)],
-            0.0,
-            2.0,
-            None,
-            false,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Arrow,
-        );
-
-        assert_eq!(verts.len(), 6);
-        assert!(verts.iter().all(|v| v.color == [1.0, 0.0, 0.0, 0.666]));
-    }
-
-    #[test]
-    fn arrow_scatter_doubles_fifth_column_uses_p2_color() {
-        let mut point = scatter_point(10.0);
-        point.direction_code = 5;
-        let verts = build_scatter_mesh(
-            &[point],
-            0.0,
-            2.0,
-            None,
-            false,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Arrow,
-        );
-
-        assert_eq!(verts.len(), 6);
-        let purple = deadlib_present::color::rgba_hex("#B54DFF");
-        assert!(
-            verts
-                .iter()
-                .all(|v| v.color == [purple[0], purple[1], purple[2], 0.666])
-        );
-    }
-
-    #[test]
-    fn quant_scatter_uses_simply_love_palette() {
-        assert_eq!(color_for_quant(0), [232.0 / 255.0, 0.0, 0.0, 1.0]);
-        assert_eq!(color_for_quant(6), [1.0, 205.0 / 255.0, 224.0 / 255.0, 1.0]);
-        assert_eq!(color_for_quant(7), color_for_quant(8));
-        assert_eq!(color_for_quant(u8::MAX), [0.0, 0.0, 0.0, 1.0]);
-    }
-
-    #[test]
-    fn foot_scatter_colors_real_parity() {
-        assert_eq!(color_for_foot(ScatterFoot::Left), [1.0, 0.0, 0.0, 1.0]);
-        assert_eq!(color_for_foot(ScatterFoot::Right), [0.0, 0.0, 1.0, 1.0]);
-        assert_eq!(color_for_foot(ScatterFoot::Both), [0.0, 0.0, 0.0, 1.0]);
-        assert_eq!(color_for_foot(ScatterFoot::Unknown), [0.0, 0.0, 0.0, 1.0]);
-    }
-
-    #[test]
-    fn post_fail_scatter_uses_reference_hit_and_miss_alpha() {
-        let hit = build_scatter_mesh(
-            &[scatter_point(10.0)],
-            0.0,
-            2.0,
-            Some(0.5),
-            true,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Itg,
-        );
-        let miss = build_scatter_mesh(
-            &[miss_point()],
-            0.0,
-            2.0,
-            Some(0.5),
-            true,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Arrow,
-        );
-
-        assert!(hit.iter().all(|v| v.color[3] == 0.333));
-        assert!(miss.iter().all(|v| v.color[3] == 0.08));
-    }
-
-    #[test]
-    fn post_fail_scatter_dim_can_be_disabled() {
-        let verts = build_scatter_mesh(
-            &[miss_point()],
-            0.0,
-            2.0,
-            Some(0.5),
-            false,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Arrow,
-        );
-
-        assert!(verts.iter().all(|v| v.color[3] == 0.3));
-    }
-
-    #[test]
-    fn scatter_point_at_fail_time_is_not_dimmed() {
-        let verts = build_scatter_mesh(
-            &[scatter_point(0.0)],
-            0.0,
-            2.0,
-            Some(1.0),
-            true,
-            100.0,
-            50.0,
-            180.0,
-            ScatterPlotScale::Itg,
-        );
-
-        assert!(verts.iter().all(|v| v.color[3] == 1.0));
-    }
 }
