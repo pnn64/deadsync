@@ -2067,9 +2067,9 @@ struct HistScan {
 }
 
 #[derive(Clone, Debug, Default)]
-struct HistCounts {
+struct HistCounts<'a> {
     bins: Vec<(i32, u32)>,
-    dense: Vec<u32>,
+    dense: Cow<'a, [u32]>,
     min_bin: i32,
     max_count: u32,
 }
@@ -2128,7 +2128,7 @@ fn scan_hist_bins(notes: &[Note], fast_counts: &mut [u32; FAST_HIST_BINS]) -> Hi
     scan
 }
 
-fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
+fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts<'static> {
     if seen_bins.is_empty() {
         return HistCounts::default();
     }
@@ -2140,9 +2140,9 @@ fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
     let mut counts = HistCounts {
         bins: Vec::with_capacity(seen_bins.len().min(span as usize)),
         dense: if span <= MAX_DENSE_HIST_SPAN {
-            vec![0; span as usize]
+            Cow::Owned(vec![0; span as usize])
         } else {
-            Vec::new()
+            Cow::Borrowed(&[])
         },
         min_bin,
         max_count: 0,
@@ -2152,7 +2152,7 @@ fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
     let mut run_count = 0u32;
     for bin in seen_bins {
         if !counts.dense.is_empty() {
-            counts.dense[(bin - min_bin) as usize] += 1;
+            counts.dense.to_mut()[(bin - min_bin) as usize] += 1;
         }
         if bin == prev {
             run_count += 1;
@@ -2169,7 +2169,11 @@ fn pack_hist_counts(mut seen_bins: Vec<i32>) -> HistCounts {
     counts
 }
 
-fn pack_dense_hist_counts(dense: Vec<u32>, min_bin: i32, bin_capacity: usize) -> HistCounts {
+fn pack_dense_hist_counts(
+    dense: Cow<'_, [u32]>,
+    min_bin: i32,
+    bin_capacity: usize,
+) -> HistCounts<'_> {
     let mut bins = Vec::with_capacity(bin_capacity.min(dense.len()));
     let mut max_count = 0;
     for (offset, &count) in dense.iter().enumerate() {
@@ -2187,18 +2191,24 @@ fn pack_dense_hist_counts(dense: Vec<u32>, min_bin: i32, bin_capacity: usize) ->
     }
 }
 
-fn count_hist_bins(
+fn count_hist_bins<'a>(
     notes: &[Note],
     scan: HistScan,
-    fast_counts: &[u32; FAST_HIST_BINS],
-) -> HistCounts {
+    fast_counts: &'a [u32; FAST_HIST_BINS],
+) -> HistCounts<'a> {
     if scan.count == 0 {
         return HistCounts::default();
     }
     if scan.all_fast {
         let start = (scan.min_bin - FAST_HIST_MIN_BIN) as usize;
         let end = (scan.max_bin - FAST_HIST_MIN_BIN) as usize + 1;
-        return pack_dense_hist_counts(fast_counts[start..end].to_vec(), scan.min_bin, scan.count);
+        // The caller keeps its counting array alive through smoothing. Borrow
+        // those counts instead of allocating and copying an identical table.
+        return pack_dense_hist_counts(
+            Cow::Borrowed(&fast_counts[start..end]),
+            scan.min_bin,
+            scan.count,
+        );
     }
     let span = i64::from(scan.max_bin) - i64::from(scan.min_bin) + 1;
     if span > i64::from(MAX_DENSE_HIST_SPAN) {
@@ -2218,64 +2228,12 @@ fn count_hist_bins(
             dense[(i64::from(bin) - i64::from(scan.min_bin)) as usize] += 1;
         }
     });
-    pack_dense_hist_counts(dense, scan.min_bin, scan.count)
+    pack_dense_hist_counts(Cow::Owned(dense), scan.min_bin, scan.count)
 }
 
-fn merge_hist_counts<'a, I>(histograms: I) -> Option<HistCounts>
-where
-    I: Clone + Iterator<Item = &'a HistogramMs>,
-{
-    let bin_capacity = histograms.clone().map(|hist| hist.bins.len()).sum();
-    if bin_capacity == 0 {
-        return None;
-    }
-    let min_bin = histograms
-        .clone()
-        .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
-        .min()
-        .unwrap_or(0);
-    let max_bin = histograms
-        .clone()
-        .flat_map(|hist| hist.bins.iter().map(|&(bin, _)| bin))
-        .max()
-        .unwrap_or(min_bin);
-    let span = i64::from(max_bin) - i64::from(min_bin) + 1;
-    if span <= i64::from(MAX_DENSE_HIST_SPAN) {
-        let mut dense = vec![0u32; span as usize];
-        for histogram in histograms {
-            for &(bin, count) in &histogram.bins {
-                dense[(i64::from(bin) - i64::from(min_bin)) as usize] += count;
-            }
-        }
-        return Some(pack_dense_hist_counts(dense, min_bin, bin_capacity));
-    }
-
-    let mut pairs = Vec::with_capacity(bin_capacity);
-    for histogram in histograms {
-        pairs.extend_from_slice(&histogram.bins);
-    }
-    pairs.sort_unstable_by_key(|&(bin, _)| bin);
-    let mut bins: Vec<(i32, u32)> = Vec::with_capacity(bin_capacity);
-    for (bin, count) in pairs {
-        if let Some((last_bin, last_count)) = bins.last_mut()
-            && *last_bin == bin
-        {
-            *last_count += count;
-        } else {
-            bins.push((bin, count));
-        }
-    }
-    let max_count = bins.iter().map(|&(_, count)| count).max().unwrap_or(0);
-    Some(HistCounts {
-        bins,
-        dense: Vec::new(),
-        min_bin,
-        max_count,
-    })
-}
-
+#[cfg(test)]
 #[inline(always)]
-fn hist_count_at(counts: &HistCounts, bin: i32) -> u32 {
+fn hist_count_at(counts: &HistCounts<'_>, bin: i32) -> u32 {
     if !counts.dense.is_empty() {
         let idx = bin - counts.min_bin;
         if idx >= 0 && (idx as usize) < counts.dense.len() {
@@ -2290,7 +2248,45 @@ fn hist_count_at(counts: &HistCounts, bin: i32) -> u32 {
         .map_or(0, |idx| counts.bins[idx].1)
 }
 
-fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f32)> {
+fn smooth_hist_counts(counts: &HistCounts<'_>, worst_window_bin: i32) -> Vec<(i32, f32)> {
+    // Select a lookup once, outside the smoothing loop. Resolve Cow once too,
+    // so dense samples retain direct slice access without ownership branches.
+    let dense = counts.dense.as_ref();
+    if !dense.is_empty() {
+        return smooth_hist_samples(worst_window_bin, |bin| {
+            let index = bin - counts.min_bin;
+            if index >= 0 && (index as usize) < dense.len() {
+                dense[index as usize]
+            } else {
+                0
+            }
+        });
+    }
+    // Clamped sample positions never decrease. Skip an out-of-window prefix
+    // once, then visit each sparse bin at most once.
+    let mut next = if worst_window_bin < 0 {
+        0
+    } else {
+        counts
+            .bins
+            .partition_point(|&(bin, _)| bin < -worst_window_bin)
+    };
+    smooth_hist_samples(worst_window_bin, |bin| {
+        while next < counts.bins.len() && counts.bins[next].0 < bin {
+            next += 1;
+        }
+        if next < counts.bins.len() && counts.bins[next].0 == bin {
+            counts.bins[next].1
+        } else {
+            0
+        }
+    })
+}
+
+fn smooth_hist_samples(
+    worst_window_bin: i32,
+    mut count_at: impl FnMut(i32) -> u32,
+) -> Vec<(i32, f32)> {
     let mut smoothed = Vec::with_capacity((worst_window_bin * 2 + 1).max(1) as usize);
     if worst_window_bin < 0 {
         return smoothed;
@@ -2298,7 +2294,7 @@ fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f
     let mut samples: [f32; 7] = std::array::from_fn(|index| {
         let sample =
             (-worst_window_bin + (index as i32 - 3)).clamp(-worst_window_bin, worst_window_bin);
-        hist_count_at(counts, sample) as f32
+        count_at(sample) as f32
     });
     for bin in -worst_window_bin..=worst_window_bin {
         let mut y = 0.0_f32;
@@ -2311,7 +2307,7 @@ fn smooth_hist_counts(counts: &HistCounts, worst_window_bin: i32) -> Vec<(i32, f
             // and edge clamping, but look up and convert only the entering bin.
             samples.rotate_left(1);
             let sample = (bin + 4).clamp(-worst_window_bin, worst_window_bin);
-            samples[6] = hist_count_at(counts, sample) as f32;
+            samples[6] = count_at(sample) as f32;
         }
     }
     smoothed
@@ -2345,16 +2341,72 @@ pub fn merge_histograms_ms_iter<'a, I>(histograms: I) -> HistogramMs
 where
     I: Clone + Iterator<Item = &'a HistogramMs>,
 {
-    let Some(counts) = merge_hist_counts(histograms.clone()) else {
-        return HistogramMs::default();
-    };
-
+    // Find the bounds and output capacity in one pass. Histogram inputs may
+    // contain unordered bins, so inspect every bin rather than only endpoints.
+    let mut bin_capacity = 0usize;
+    let mut min_bin = i32::MAX;
+    let mut max_bin = i32::MIN;
     let mut worst_observed_ms = 0.0_f32;
     let mut worst_window_ms = 0.0_f32;
-    for hist in histograms {
-        worst_observed_ms = worst_observed_ms.max(hist.worst_observed_ms);
-        worst_window_ms = worst_window_ms.max(hist.worst_window_ms);
+    for histogram in histograms.clone() {
+        worst_observed_ms = worst_observed_ms.max(histogram.worst_observed_ms);
+        worst_window_ms = worst_window_ms.max(histogram.worst_window_ms);
+        bin_capacity += histogram.bins.len();
+        for &(bin, _) in &histogram.bins {
+            min_bin = min_bin.min(bin);
+            max_bin = max_bin.max(bin);
+        }
     }
+    if bin_capacity == 0 {
+        return HistogramMs::default();
+    }
+    let span = i64::from(max_bin) - i64::from(min_bin) + 1;
+    // Allocate stack scratch only once nonempty input is known. It remains
+    // alive until smoothing finishes, so dense counts can borrow it safely.
+    let mut scratch = [0u32; FAST_HIST_BINS];
+    let counts = if span <= i64::from(MAX_DENSE_HIST_SPAN) {
+        let mut owned = Vec::new();
+        let dense = if span as usize <= scratch.len() {
+            &mut scratch[..span as usize]
+        } else {
+            owned = vec![0u32; span as usize];
+            &mut owned[..]
+        };
+        for histogram in histograms {
+            for &(bin, count) in &histogram.bins {
+                dense[(i64::from(bin) - i64::from(min_bin)) as usize] += count;
+            }
+        }
+        let dense = if span as usize <= scratch.len() {
+            Cow::Borrowed(&scratch[..span as usize])
+        } else {
+            Cow::Owned(owned)
+        };
+        pack_dense_hist_counts(dense, min_bin, bin_capacity)
+    } else {
+        let mut bins = Vec::with_capacity(bin_capacity);
+        for histogram in histograms {
+            bins.extend_from_slice(&histogram.bins);
+        }
+        bins.sort_unstable_by_key(|&(bin, _)| bin);
+        // Coalesce in the sorted allocation; a second equally sized vector adds
+        // no useful storage and would copy every retained pair again.
+        bins.dedup_by(|current, previous| {
+            if current.0 == previous.0 {
+                previous.1 += current.1;
+                true
+            } else {
+                false
+            }
+        });
+        let max_count = bins.iter().map(|&(_, count)| count).max().unwrap_or(0);
+        HistCounts {
+            bins,
+            dense: Cow::Borrowed(&[]),
+            min_bin,
+            max_count,
+        }
+    };
 
     let worst_window_ms = worst_window_ms
         .max(worst_observed_ms)
@@ -3439,3 +3491,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/timing_construction.rs"]
 mod construction_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/histogram_storage.rs"]
+mod histogram_storage_perf;

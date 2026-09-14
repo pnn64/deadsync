@@ -14,7 +14,7 @@ fn smoothing_allocates_only_its_output() {
     }
 }
 
-fn counts_fixture(radius: i32, dense: bool) -> HistCounts {
+fn counts_fixture(radius: i32, dense: bool) -> HistCounts<'static> {
     let mut counts = HistCounts {
         min_bin: -radius,
         ..HistCounts::default()
@@ -26,7 +26,7 @@ fn counts_fixture(radius: i32, dense: bool) -> HistCounts {
             0
         };
         if dense {
-            counts.dense.push(count);
+            counts.dense.to_mut().push(count);
         }
         if count != 0 {
             counts.bins.push((bin, count));
