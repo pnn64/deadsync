@@ -53,9 +53,9 @@ pub fn dynamic_image_cache_path_for(
     Some((dir.join(format!("{stem}.rgba")), path_hex))
 }
 
-fn source_newer_than_cache(src: &Path, cache: &Path) -> bool {
+fn source_newer_than_cache(src: &Path, cache: &fs::Metadata) -> bool {
     let src_m = fs::metadata(src).ok().and_then(|m| m.modified().ok());
-    let cache_m = fs::metadata(cache).ok().and_then(|m| m.modified().ok());
+    let cache_m = cache.modified().ok();
     match (src_m, cache_m) {
         (Some(src_m), Some(cache_m)) => src_m > cache_m,
         (Some(_), None) => true,
@@ -79,8 +79,15 @@ fn ensure_cache_parent(cache_path: &Path) -> bool {
 fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
     let mut file = fs::File::open(cache_path).ok()?;
     let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    let (width, height, payload_len) = read_raw_banner_header(&mut file, file_len)?;
+    let mut payload = vec![0_u8; payload_len];
+    file.read_exact(&mut payload).ok()?;
+    RgbaImage::from_raw(width, height, payload)
+}
+
+fn read_raw_banner_header(reader: &mut impl Read, file_len: usize) -> Option<(u32, u32, usize)> {
     let mut header = [0_u8; BANNER_CACHE_HEADER_SIZE];
-    file.read_exact(&mut header).ok()?;
+    reader.read_exact(&mut header).ok()?;
     if header[..8] != BANNER_CACHE_MAGIC {
         return None;
     }
@@ -92,9 +99,36 @@ fn load_raw_cached_banner_image(cache_path: &Path) -> Option<RgbaImage> {
         return None;
     }
 
-    let mut payload = vec![0_u8; payload_len];
-    file.read_exact(&mut payload).ok()?;
-    RgbaImage::from_raw(width, height, payload)
+    // Match ImageBuffer's channel-first layout check, including empty images
+    // with extreme widths on 32-bit targets.
+    4usize
+        .checked_mul(width as usize)?
+        .checked_mul(height as usize)?;
+    Some((width, height, payload_len))
+}
+
+fn validate_raw_cached_banner(cache_path: &Path) -> Option<()> {
+    let mut file = fs::File::open(cache_path).ok()?;
+    let file_len = usize::try_from(file.metadata().ok()?.len()).ok()?;
+    validate_raw_banner(&mut file, file_len)
+}
+
+fn validate_raw_banner(reader: &mut impl Read, file_len: usize) -> Option<()> {
+    let (_, _, payload_len) = read_raw_banner_header(reader, file_len)?;
+    // Prewarming only needs to verify the cache. Read every payload byte so
+    // truncation and I/O errors still trigger rebuilding, without owning pixels.
+    let mut remaining = payload_len;
+    if remaining == 0 {
+        return Some(());
+    }
+    // Larger chunks amortize file reads without an image-sized heap allocation.
+    let mut buffer = [0_u8; 64 * 1024];
+    while remaining != 0 {
+        let count = remaining.min(buffer.len());
+        reader.read_exact(&mut buffer[..count]).ok()?;
+        remaining -= count;
+    }
+    Some(())
 }
 
 pub fn save_raw_cached_banner_image(cache_path: &Path, rgba: &RgbaImage) -> bool {
@@ -145,9 +179,18 @@ fn write_raw_cached_banner(mut writer: impl Write, rgba: &RgbaImage) -> std::io:
 }
 
 fn load_cached_banner_image(cache_path: &Path, source_path: &Path) -> Option<RgbaImage> {
-    if cache_path.is_file() && !source_newer_than_cache(source_path, cache_path) {
-        if let Some(rgba) = load_raw_cached_banner_image(cache_path) {
-            return Some(rgba);
+    with_cached_banner(cache_path, source_path, load_raw_cached_banner_image)
+}
+
+fn with_cached_banner<T>(
+    cache_path: &Path,
+    source_path: &Path,
+    read: impl FnOnce(&Path) -> Option<T>,
+) -> Option<T> {
+    let metadata = fs::metadata(cache_path).ok()?;
+    if metadata.is_file() && !source_newer_than_cache(source_path, &metadata) {
+        if let Some(value) = read(cache_path) {
+            return Some(value);
         }
         let _ = fs::remove_file(cache_path);
         debug!(
@@ -166,23 +209,31 @@ fn prune_stale_banner_cache_variants(cache_path: &Path, path_hex: &str) {
         return;
     };
 
-    let prefix = format!("{path_hex}-");
     let Ok(entries) = fs::read_dir(parent) else {
         return;
     };
 
     for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
             continue;
         };
-        if name == current_name || !name.starts_with(&prefix) {
+        if name == current_name
+            || !name
+                .strip_prefix(path_hex)
+                .is_some_and(|suffix| suffix.starts_with('-'))
+        {
             continue;
         }
         if !(name.ends_with(".rgba") || name.ends_with(".png")) {
+            continue;
+        }
+        let path = entry.path();
+        let is_file = match entry.file_type() {
+            Ok(kind) if !kind.is_symlink() => kind.is_file(),
+            _ => path.is_file(),
+        };
+        if !is_file {
             continue;
         }
         if let Err(e) = fs::remove_file(&path) {
@@ -270,13 +321,17 @@ fn ensure_cached_dynamic_image_at(
     cache_path: &Path,
     path_hex: &str,
 ) -> image::ImageResult<bool> {
-    if load_cached_banner_image(cache_path, path).is_some() {
+    if with_cached_banner(cache_path, path, validate_raw_cached_banner).is_some() {
         return Ok(false);
     }
     let rgba = build_cached_banner_rgba(path, opts)?;
     save_cached_banner_image(cache_path, path_hex, &rgba);
     Ok(true)
 }
+
+#[cfg(test)]
+#[path = "../tests/banner_cache/mod.rs"]
+mod banner_cache;
 
 fn build_cached_banner_rgba(
     path: &Path,
