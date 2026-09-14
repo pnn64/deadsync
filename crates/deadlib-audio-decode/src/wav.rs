@@ -313,12 +313,8 @@ fn decode_packet_into(
         return Err("WAV packet ended mid-sample");
     }
     let samples = bytes.len() / encoding.sample_bytes();
-    if matches!(encoding, Encoding::Float32 | Encoding::Float64) {
-        resize_output(out, samples);
-    } else {
-        out.clear();
-        out.reserve(samples);
-    }
+    out.clear();
+    out.reserve(samples);
     match encoding {
         Encoding::Pcm8 => out.extend(bytes.iter().map(|sample| (i16::from(*sample) - 128) << 8)),
         Encoding::Pcm16 => out.extend(
@@ -336,16 +332,20 @@ fn decode_packet_into(
                 .iter()
                 .map(|sample| (i32::from_le_bytes(*sample) >> 16) as i16),
         ),
-        Encoding::Float32 => {
-            for (output, sample) in out.iter_mut().zip(bytes.as_chunks::<4>().0) {
-                *output = float_to_i16(f64::from(f32::from_le_bytes(*sample)));
-            }
-        }
-        Encoding::Float64 => {
-            for (output, sample) in out.iter_mut().zip(bytes.as_chunks::<8>().0) {
-                *output = float_to_i16(f64::from_le_bytes(*sample));
-            }
-        }
+        Encoding::Float32 => out.extend(
+            bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|sample| float_to_i16(f64::from(f32::from_le_bytes(*sample)))),
+        ),
+        Encoding::Float64 => out.extend(
+            bytes
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|sample| float_to_i16(f64::from_le_bytes(*sample))),
+        ),
     }
     Ok(())
 }
@@ -366,16 +366,9 @@ fn float_to_i16(value: f64) -> i16 {
     if !value.is_finite() {
         return 0;
     }
-    (value * 32767.0).round().clamp(-32768.0, 32767.0) as i16
-}
-
-#[inline(always)]
-fn resize_output(out: &mut Vec<i16>, samples: usize) {
-    if out.len() < samples {
-        out.resize(samples, 0);
-    } else {
-        out.truncate(samples);
-    }
+    // The cast saturates overflow after scaling, including finite input whose
+    // product overflows to infinity. Nonfinite source samples stay silent.
+    (value * 32767.0).round() as i16
 }
 
 fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {
@@ -473,3 +466,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/packet_work/mod.rs"]
+mod packet_work;

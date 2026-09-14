@@ -1,3 +1,4 @@
+// Frozen from 0.5.1218 (c5fb50443).
 use rubato::{SincInterpolationParameters, SincInterpolationType, WindowFunction};
 
 pub const OUT_FRAMES_PER_CALL: usize = 256;
@@ -181,11 +182,6 @@ pub fn write_resampler_output(
     let produced_frames = produced_frames
         .min(out[0].len())
         .min(out.iter().map(Vec::len).min().unwrap_or(0));
-    if out_ch == 1 {
-        // Mono uses the first channel; the shortest input still limits output.
-        write_mono_output(&out[0][..produced_frames], out_tmp);
-        return produced_frames;
-    }
     let produced_samples = produced_frames.saturating_mul(out_ch);
     resize_output(out_tmp, produced_samples);
     for frame in 0..produced_frames {
@@ -196,14 +192,6 @@ pub fn write_resampler_output(
         }
     }
     produced_frames
-}
-
-// Keep the vector append loop separate from the existing stereo conversion
-// loops so its buffer-growth machinery does not enlarge their function body.
-#[inline(never)]
-fn write_mono_output(input: &[f32], output: &mut Vec<i16>) {
-    output.clear();
-    output.extend(input.iter().copied().map(sample_to_i16));
 }
 
 #[inline]
@@ -341,13 +329,8 @@ pub fn apply_fade_envelope(
     if start_volume > 0.9999 && end_volume > 0.9999 {
         return;
     }
-    if start_volume == 0.0 && end_volume == 0.0 {
-        // Preserve any trailing samples that do not form a complete frame.
-        samples[..frames * channels].fill(0);
-        return;
-    }
     let frames_f = frames as f32;
-    for (frame, samples) in samples.chunks_exact_mut(channels).enumerate() {
+    for frame in 0..frames {
         let t = frame as f32 / frames_f;
         let volume = (end_volume - start_volume)
             .mul_add(t, start_volume)
@@ -355,9 +338,10 @@ pub fn apply_fade_envelope(
         if (volume - 1.0).abs() < 0.0001 {
             continue;
         }
-        for sample in samples {
-            let scaled = f32::from(*sample) * volume;
-            *sample = scaled.round() as i16;
+        for channel in 0..channels {
+            let index = frame * channels + channel;
+            let scaled = f32::from(samples[index]) * volume;
+            samples[index] = scaled.round().clamp(-32768.0, 32767.0) as i16;
         }
     }
 }
@@ -397,158 +381,4 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 fn sample_to_i16(sample: f32) -> i16 {
     // Rust float-to-integer casts already saturate and map NaN to zero.
     (sample * 32767.0).round() as i16
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        PlanarAccum, append_channel_mapped_i16, apply_fade_envelope, drop_front_samples,
-        take_cleared_i16, volume_for_frame, write_channel_mapped_i16, write_resampler_output,
-    };
-
-    #[test]
-    fn planar_accum_keeps_channel_order() {
-        let mut planar = PlanarAccum::new(2, 4);
-
-        planar.push_i16_interleaved(&[32767, -32768, 0, 16384], 2);
-
-        assert_eq!(planar.available_frames(), 2);
-        assert!((planar.channels[0][0] - 32767.0 / 32768.0).abs() < 1e-6);
-        assert_eq!(planar.channels[0][1], 0.0);
-        assert_eq!(planar.channels[1][0], -1.0);
-        assert_eq!(planar.channels[1][1], 0.5);
-    }
-
-    #[test]
-    fn planar_accum_compacts_consumed_frames() {
-        let mut planar = PlanarAccum::new(1, 4);
-        planar.push_i16_interleaved(&[1; 5000], 1);
-
-        planar.consume_frames(3000);
-
-        assert_eq!(planar.start_frame, 0);
-        assert_eq!(planar.available_frames(), 2000);
-        assert_eq!(planar.channels[0].len(), 2000);
-    }
-
-    #[test]
-    fn resampler_output_duplicates_mono_to_stereo() {
-        let mut out_tmp = Vec::new();
-
-        let frames = write_resampler_output(&[vec![0.0, 0.5]], 2, 2, &mut out_tmp);
-
-        assert_eq!(frames, 2);
-        assert_eq!(out_tmp, [0, 0, 16384, 16384]);
-    }
-
-    #[test]
-    fn resampler_output_wraps_source_channels() {
-        let mut out_tmp = Vec::new();
-
-        let frames = write_resampler_output(&[vec![0.0, 1.0], vec![-1.0, 0.5]], 2, 4, &mut out_tmp);
-
-        assert_eq!(frames, 2);
-        assert_eq!(out_tmp, [0, -32767, 0, -32767, 32767, 16384, 32767, 16384]);
-    }
-
-    #[test]
-    fn resampler_sample_cast_handles_non_finite_values() {
-        assert_eq!(super::sample_to_i16(f32::NEG_INFINITY), i16::MIN);
-        assert_eq!(super::sample_to_i16(f32::INFINITY), i16::MAX);
-        assert_eq!(super::sample_to_i16(f32::NAN), 0);
-    }
-
-    #[test]
-    fn channel_map_duplicates_mono_to_stereo() {
-        let mut out_tmp = Vec::new();
-
-        let frames = write_channel_mapped_i16(&[1, 2, 3], 1, 2, &mut out_tmp);
-
-        assert_eq!(frames, 3);
-        assert_eq!(out_tmp, [1, 1, 2, 2, 3, 3]);
-    }
-
-    #[test]
-    fn channel_map_wraps_input_channels() {
-        let mut out_tmp = Vec::new();
-
-        let frames = write_channel_mapped_i16(&[1, 2, 3, 4], 2, 4, &mut out_tmp);
-
-        assert_eq!(frames, 2);
-        assert_eq!(out_tmp, [1, 2, 1, 2, 3, 4, 3, 4]);
-    }
-
-    #[test]
-    fn appended_channel_map_matches_packet_then_copy() {
-        for (in_ch, out_ch) in [(1usize, 2usize), (2, 2), (2, 4), (3, 2), (6, 2), (2, 1)] {
-            let input = (0..257 * in_ch + in_ch - 1)
-                .map(|index| index.wrapping_mul(25_173) as i16)
-                .collect::<Vec<_>>();
-            let mut packet = Vec::new();
-            let frames = write_channel_mapped_i16(&input, in_ch, out_ch, &mut packet);
-            let mut expected = vec![91, -73, 45];
-            expected.extend_from_slice(&packet);
-            let mut actual = vec![91, -73, 45];
-
-            let actual_frames = append_channel_mapped_i16(&input, in_ch, out_ch, &mut actual);
-
-            assert_eq!(actual_frames, frames, "{in_ch} -> {out_ch}");
-            assert_eq!(actual, expected, "{in_ch} -> {out_ch}");
-        }
-    }
-
-    #[test]
-    fn drop_front_samples_trims_in_place() {
-        let mut samples = vec![1, 2, 3, 4, 5];
-
-        drop_front_samples(&mut samples, 2);
-
-        assert_eq!(samples, [3, 4, 5]);
-    }
-
-    #[test]
-    fn drop_front_samples_handles_boundaries() {
-        let original = (0..64).collect::<Vec<i16>>();
-        for drop_samples in [0, 1, 17, 63, 64] {
-            let expected = original[drop_samples..].to_vec();
-            let mut actual = original.clone();
-
-            drop_front_samples(&mut actual, drop_samples);
-
-            assert_eq!(actual, expected);
-        }
-    }
-
-    #[test]
-    fn seek_scratch_take_preserves_allocation_and_clears_samples() {
-        let mut slot = Some(vec![7i16; 4_096]);
-        let ptr = slot.as_ref().unwrap().as_ptr();
-        let capacity = slot.as_ref().unwrap().capacity();
-
-        let scratch = take_cleared_i16(&mut slot);
-
-        assert!(slot.is_none());
-        assert!(scratch.is_empty());
-        assert_eq!(scratch.capacity(), capacity);
-        assert_eq!(scratch.as_ptr(), ptr);
-    }
-
-    #[test]
-    fn fade_out_longer_than_clip_starts_near_silent() {
-        let clip_frames = 48i64;
-        let fade_frames = 72_000i64;
-        let start_volume = volume_for_frame(0, clip_frames - fade_frames, clip_frames);
-
-        assert!((start_volume - (clip_frames as f32 / fade_frames as f32)).abs() < 0.00001);
-    }
-
-    #[test]
-    fn fade_envelope_does_not_compress_long_fade_to_short_clip() {
-        let mut samples = [30_000i16; 48];
-
-        apply_fade_envelope(&mut samples, 1, 0, (-71_952, 48));
-
-        assert!(samples[0].abs() <= 25);
-        assert_eq!(samples[47], 0);
-    }
 }
