@@ -84,7 +84,7 @@ use crate::session_results::{
 };
 use crate::stutter_diag::{
     STUTTER_DIAG_FRAME_CAPACITY, STUTTER_DIAG_WINDOW_NS, StutterDiagDumpContext,
-    stutter_diag_dump_lines,
+    for_each_stutter_diag_line,
 };
 use crate::transition_effects::{
     PlayerOptionsTransition, TransitionEffectContext, transition_effect_plan,
@@ -7512,7 +7512,7 @@ impl App {
                 &mut display_events,
             );
         }
-        for line in stutter_diag_dump_lines(
+        for_each_stutter_diag_line(
             StutterDiagDumpContext {
                 now_host_nanos,
                 total_elapsed,
@@ -7524,9 +7524,8 @@ impl App {
             &frames,
             &display_events,
             &audio_events,
-        ) {
-            trace!("{line}");
-        }
+            |line| trace!("{line}"),
+        );
     }
 
     fn trace_stutter_diag_dump_if_needed(

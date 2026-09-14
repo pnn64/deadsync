@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use deadlib_audio_core::StutterDiagAudioEvent;
 use deadlib_render_core::{ClockDomainTrace, DrawStats, PresentModeTrace};
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, seconds_to_us_u32};
@@ -52,6 +54,7 @@ pub struct StutterDiagDumpContext {
     pub display_triggered: bool,
 }
 
+#[cfg(test)]
 pub fn stutter_diag_dump_lines(
     context: StutterDiagDumpContext,
     frames: &[StutterDiagFrameSample],
@@ -64,7 +67,23 @@ pub fn stutter_diag_dump_lines(
             .saturating_add(display_events.len())
             .saturating_add(audio_events.len()),
     );
-    lines.push(format!(
+    for_each_stutter_diag_line(context, frames, display_events, audio_events, |line| {
+        lines.push(line.to_owned());
+    });
+    lines
+}
+
+/// Format and consume each diagnostic line using one reusable buffer.
+pub fn for_each_stutter_diag_line(
+    context: StutterDiagDumpContext,
+    frames: &[StutterDiagFrameSample],
+    display_events: &[DisplayClockDiagEvent],
+    audio_events: &[StutterDiagAudioEvent],
+    mut emit: impl FnMut(&str),
+) {
+    let mut line = String::with_capacity(if frames.is_empty() { 256 } else { 768 });
+    let _ = write!(
+        line,
         "Stutter recorder dump t={:.3}s screen={:?} reason=[stutter:{} audio:{} display:{}] window_ms={:.1} frames={} audio_events={} display_events={}",
         context.total_elapsed,
         context.screen,
@@ -75,7 +94,9 @@ pub fn stutter_diag_dump_lines(
         frames.len(),
         audio_events.len(),
         display_events.len(),
-    ));
+    );
+    emit(&line);
+    line.clear();
     for sample in frames {
         let age_ms = context.now_host_nanos.saturating_sub(sample.host_nanos) as f64 / 1_000_000.0;
         let multiple = if sample.expected_us > 0 {
@@ -83,7 +104,8 @@ pub fn stutter_diag_dump_lines(
         } else {
             0.0
         };
-        lines.push(format!(
+        let _ = write!(
+            line,
             "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} maintenance:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
             age_ms,
             sample.screen,
@@ -116,12 +138,15 @@ pub fn stutter_diag_dump_lines(
             u8::from(sample.applied_back_pressure),
             u8::from(sample.queue_idle_waited),
             u8::from(sample.suboptimal),
-        ));
+        );
+        emit(&line);
+        line.clear();
     }
     for event in display_events {
         let age_ms =
             context.now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
-        lines.push(format!(
+        let _ = write!(
+            line,
             "Stutter recorder display age_ms={:.3} kind={} target_ms={:.3} prev_ms={:.3} curr_ms={:.3} err_ms={:+.3} step_ms={:+.3} limit_ms={:.3}",
             age_ms,
             event.kind,
@@ -131,12 +156,15 @@ pub fn stutter_diag_dump_lines(
             f64::from(event.error_seconds) * 1000.0,
             f64::from(event.step_seconds) * 1000.0,
             f64::from(event.limit_seconds) * 1000.0,
-        ));
+        );
+        emit(&line);
+        line.clear();
     }
     for event in audio_events {
         let age_ms =
             context.now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
-        lines.push(format!(
+        let _ = write!(
+            line,
             "Stutter recorder audio age_ms={:.3} kind={} value_ms={:.3} rate={} buf={} pad={} q={} period_ms={:.3} out_ms={:.3} qual={}",
             age_ms,
             event.kind,
@@ -148,9 +176,10 @@ pub fn stutter_diag_dump_lines(
             event.device_period_ns as f64 / 1_000_000.0,
             event.estimated_output_delay_ns as f64 / 1_000_000.0,
             event.timing_quality,
-        ));
+        );
+        emit(&line);
+        line.clear();
     }
-    lines
 }
 
 impl StutterDiagFrameSample {

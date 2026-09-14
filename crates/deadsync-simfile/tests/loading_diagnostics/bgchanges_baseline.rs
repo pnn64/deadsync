@@ -1,3 +1,4 @@
+// Frozen from 0.5.1214 (012adc4ce) for behavior and performance comparisons.
 use smallvec::SmallVec;
 use std::borrow::Cow;
 
@@ -105,54 +106,11 @@ fn bgchange_field_range(changes: &str, start: usize, end: usize) -> Cow<'_, str>
 }
 
 fn match_bgchange_entry_end(changes: &str, start: usize, entries: &[String]) -> Option<usize> {
-    if entries.is_empty() {
-        return None;
-    }
-    let input = &changes.as_bytes()[start..];
-    // Probe a bounded prefix once per filename field, not once per directory
-    // entry. Newline-heavy legacy tags keep their original matching loop.
-    let probe_len = input.len().min(64);
-    if input[..probe_len].contains(&b'\n') {
-        return match_bgchange_entries_with_newlines(changes, start, entries);
-    }
-    entries.iter().find_map(|entry| {
-        let expected = entry.as_bytes();
-        let prefix = input.get(..expected.len())?;
-        // Most directory entries differ immediately. Reject them before the
-        // longer slice comparison; the probe ruled out leading LF/CRLF.
-        if let (Some(actual), Some(expected)) = (input.first(), expected.first())
-            && !actual.eq_ignore_ascii_case(expected)
-        {
-            return None;
-        }
-        if (expected.len() <= probe_len || !prefix[probe_len..].contains(&b'\n'))
-            && !matches!(
-                input.get(expected.len()..),
-                Some([b'\n', ..] | [b'\r', b'\n', ..])
-            )
-        {
-            return (matches!(input.get(expected.len()), None | Some(b'=') | Some(b','))
-                && prefix.eq_ignore_ascii_case(expected))
-            .then_some(start + expected.len());
-        }
-        match_bgchange_entry_end_one(changes, start, entry)
-    })
-}
-
-// Keep the legacy scan in its own loop so the ordinary-name fast path does not
-// increase its register pressure or prevent inlining the per-entry matcher.
-#[inline(never)]
-fn match_bgchange_entries_with_newlines(
-    changes: &str,
-    start: usize,
-    entries: &[String],
-) -> Option<usize> {
     entries
         .iter()
         .find_map(|entry| match_bgchange_entry_end_one(changes, start, entry))
 }
 
-#[inline(always)]
 fn match_bgchange_entry_end_one(changes: &str, start: usize, entry: &str) -> Option<usize> {
     let input = changes.as_bytes();
     let mut input_index = start;
@@ -276,112 +234,4 @@ fn parse_bgchange_int(field: Option<&str>) -> i32 {
     field
         .map(|field| field.trim().parse::<i32>().unwrap_or(0))
         .unwrap_or(0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_plain_bgchange_sets() {
-        let sets = split_bgchange_sets_like_itg("0=movie.mp4=1,8=other.mp4=2", &[]);
-        assert_eq!(
-            sets,
-            vec![
-                vec!["0".to_string(), "movie.mp4".to_string(), "1".to_string()],
-                vec!["8".to_string(), "other.mp4".to_string(), "2".to_string()],
-            ]
-        );
-    }
-
-    #[test]
-    fn preserves_entry_names_with_delimiters() {
-        let entries = vec!["movie,part.mp4".to_string(), "layer=alt.png".to_string()];
-        let sets = split_bgchange_sets_like_itg(
-            "0=movie,part.mp4=1=0=0=0=0=layer=alt.png=CrossFade",
-            &entries,
-        );
-        assert_eq!(
-            sets,
-            vec![vec![
-                "0".to_string(),
-                "movie,part.mp4".to_string(),
-                "1".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "0".to_string(),
-                "layer=alt.png".to_string(),
-                "CrossFade".to_string(),
-            ]]
-        );
-    }
-
-    #[test]
-    fn strips_line_breaks_before_splitting() {
-        let sets = split_bgchange_sets_like_itg("0=\nmovie.mp4=1", &[]);
-        assert_eq!(
-            sets,
-            vec![vec![
-                "0".to_string(),
-                "movie.mp4".to_string(),
-                "1".to_string()
-            ]]
-        );
-    }
-
-    #[test]
-    fn parses_bgchange_rate_defaults_and_invalid_values() {
-        assert_eq!(parse_bgchange_rate(None), 1.0);
-        assert_eq!(parse_bgchange_rate(Some(" 1.5 ")), 1.5);
-        assert_eq!(parse_bgchange_rate(Some("bad")), 0.0);
-    }
-
-    #[test]
-    fn parses_transition_from_explicit_or_crossfade_flag() {
-        assert_eq!(
-            parse_bgchange_transition(Some("0"), Some(" FadeRight ")),
-            "FadeRight"
-        );
-        assert_eq!(parse_bgchange_transition(Some("1"), Some("")), "CrossFade");
-        assert_eq!(parse_bgchange_transition(Some("0"), None), "");
-    }
-
-    #[test]
-    fn parses_effect_from_explicit_or_legacy_flags() {
-        assert_eq!(
-            parse_bgchange_effect(Some("0"), Some("1"), Some(" SongBgWithMovieViz ")),
-            "SongBgWithMovieViz"
-        );
-        assert_eq!(
-            parse_bgchange_effect(Some("0"), Some("0"), None),
-            "StretchNoLoop"
-        );
-        assert_eq!(
-            parse_bgchange_effect(Some("1"), None, None),
-            "StretchRewind"
-        );
-        assert_eq!(parse_bgchange_effect(Some("0"), None, None), "");
-    }
-
-    #[test]
-    fn parses_bgchange_colors() {
-        assert_eq!(
-            parse_bgchange_color("#ff8000"),
-            Some([1.0, 128.0 / 255.0, 0.0, 1.0])
-        );
-        assert_eq!(
-            parse_bgchange_color("0.5^0.25^1^0.75"),
-            Some([0.5, 0.25, 1.0, 0.75])
-        );
-        assert_eq!(parse_bgchange_color("1,0,0"), Some([1.0, 0.0, 0.0, 1.0]));
-        assert_eq!(parse_bgchange_color("bad"), None);
-    }
-
-    #[test]
-    fn rejects_non_media_bgchange_fields() {
-        assert!(bgchange_field_rejects_non_media("Theme/default.xml"));
-        assert!(bgchange_field_rejects_non_media("config.INI"));
-        assert!(!bgchange_field_rejects_non_media("movie.mp4"));
-    }
 }

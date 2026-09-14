@@ -14,7 +14,7 @@ const DEBUG_OVERLAY_Z: i16 = 32020;
 
 thread_local! {
     static STATS_TEXT_CACHE: RefCell<TextCache<(u32, u32, u8)>> = RefCell::new(text_cache_with_capacity(256));
-    static TIMING_TEXT_CACHE: RefCell<TextCache<TimingTextKey>> = RefCell::new(text_cache_with_capacity(256));
+    static TIMING_TEXT_CACHE: RefCell<TimingTextCache> = RefCell::new(TimingTextCache::new());
     static STUTTER_TIME_CACHE: RefCell<TextCache<u32>> = RefCell::new(text_cache_with_capacity(1024));
     static STUTTER_LINE_CACHE: RefCell<TextCache<(u32, u32, u32)>> = RefCell::new(text_cache_with_capacity(2048));
 }
@@ -78,6 +78,59 @@ struct TimingTextKey {
     calibration_error_ns: u64,
     host_mapped: bool,
     audio: Option<AudioTimingTextKey>,
+}
+
+struct TimingTextCache {
+    entries: TextCache<TimingTextKey>,
+    scratch: String,
+    last: Option<(TimingTextKey, Arc<str>)>,
+}
+
+impl TimingTextCache {
+    fn new() -> Self {
+        Self {
+            entries: text_cache_with_capacity(256),
+            scratch: String::with_capacity(384),
+            last: None,
+        }
+    }
+
+    #[inline(always)]
+    fn get(&mut self, timing: TimingHealth) -> Arc<str> {
+        let key = timing_text_key(timing);
+        // IDs normally advance each frame; reject them before comparing the
+        // larger audio key and its backend/clock strings.
+        if let Some((last_key, text)) = &self.last
+            && last_key.submitted_present_id == key.submitted_present_id
+            && last_key.completed_present_id == key.completed_present_id
+            && *last_key == key
+        {
+            return Arc::clone(text);
+        }
+        if let Some(text) = self.entries.get(&key) {
+            return Arc::clone(text);
+        }
+        self.format(timing, key)
+    }
+
+    // Keep formatting and key/Arc replacement out of the small cache-hit path.
+    #[inline(never)]
+    fn format(&mut self, timing: TimingHealth, key: TimingTextKey) -> Arc<str> {
+        self.scratch.clear();
+        write_timing_text(&mut self.scratch, timing);
+        if let Some((last_key, text)) = &mut self.last
+            && text.as_ref() == self.scratch
+        {
+            *last_key = key;
+            return Arc::clone(text);
+        }
+        let text = Arc::<str>::from(self.scratch.as_str());
+        if self.entries.len() < TEXT_CACHE_LIMIT {
+            self.entries.insert(key, Arc::clone(&text));
+        }
+        self.last = Some((key, Arc::clone(&text)));
+        text
+    }
 }
 
 #[inline(always)]
@@ -169,8 +222,7 @@ impl fmt::Display for Milliseconds {
     }
 }
 
-fn timing_text(timing: TimingHealth) -> String {
-    let mut text = String::with_capacity(if timing.audio.is_some() { 288 } else { 160 });
+fn write_timing_text(text: &mut String, timing: TimingHealth) {
     let _ = write!(
         text,
         "Disp err {:+.2}ms catch:{}\nPresent int {}\nMode {} {}->{} map:{}\nQueue {} iw:{} bp:{} qi:{} sub:{}\nIDs {}/{} cal {}",
@@ -211,21 +263,16 @@ fn timing_text(timing: TimingHealth) -> String {
             Milliseconds(audio.stream_latency_ns),
         );
     }
-    text
 }
 
 /// Thread-lifetime, bounded telemetry text interning. Exact source bits form
 /// the key, so cache hits preserve formatting byte-for-byte. The cache never
 /// evicts, stops admitting entries at `TEXT_CACHE_LIMIT`, and drops with the
-/// presentation thread; stable telemetry frames only clone an `Arc` handle.
+/// presentation thread. Formatting reuses scratch storage, and the last result
+/// stays reusable after saturation. Consecutive identical text shares its Arc.
 #[inline(always)]
 fn retained_timing_text(timing: TimingHealth) -> Arc<str> {
-    cached_text(
-        &TIMING_TEXT_CACHE,
-        timing_text_key(timing),
-        TEXT_CACHE_LIMIT,
-        || timing_text(timing),
-    )
+    TIMING_TEXT_CACHE.with(|cache| cache.borrow_mut().get(timing))
 }
 
 /// Stats overlay: base FPS block plus optional timing-health block, top-right, miso, white.
