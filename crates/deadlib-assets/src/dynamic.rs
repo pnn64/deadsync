@@ -341,8 +341,12 @@ fn build_cached_banner_rgba(
         return video::load_poster(path)
             .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
     }
-    Ok(open_image_fallback_quiet(path)?.to_rgba8())
+    Ok(open_image_fallback_quiet(path)?.into_rgba8())
 }
+
+#[cfg(test)]
+#[path = "../tests/image_loading/mod.rs"]
+mod image_loading;
 
 pub enum DynamicImagePrewarmOutcome {
     Built { path: PathBuf, millis: f64 },

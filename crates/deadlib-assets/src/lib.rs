@@ -479,21 +479,29 @@ fn open_image_fallback_mode(
     path: &Path,
     warn_mismatch: bool,
 ) -> image::ImageResult<image::DynamicImage> {
-    let hint = ImageFormat::from_path(path).ok();
-    if let Some(fmt) = hint {
-        let mut reader = ImageReader::open(path).map_err(image::ImageError::IoError)?;
-        reader.set_format(fmt);
-        if let Ok(img) = reader.decode() {
-            return Ok(img);
-        }
+    use std::io::{BufReader, Seek};
+
+    let Some(hint) = ImageFormat::from_path(path).ok() else {
+        return ImageReader::open(path)
+            .map_err(image::ImageError::IoError)?
+            .with_guessed_format()?
+            .decode();
+    };
+    let file = std::fs::File::open(path).map_err(image::ImageError::IoError)?;
+    let mut input = BufReader::new(file);
+    if let Ok(img) = ImageReader::with_format(&mut input, hint).decode() {
+        return Ok(img);
+    }
+    // Keep the file and read buffer for the format-guessing retry. If this
+    // input cannot seek, retain the original reopen-and-retry behavior.
+    if input.rewind().is_err() {
+        input = BufReader::new(std::fs::File::open(path).map_err(image::ImageError::IoError)?);
     }
 
-    let guessed = ImageReader::open(path)
-        .map_err(image::ImageError::IoError)?
-        .with_guessed_format()?;
+    let guessed = ImageReader::with_format(input, hint).with_guessed_format()?;
     let guessed_fmt = guessed.format();
-    if let (Some(hint_fmt), Some(real_fmt)) = (hint, guessed_fmt)
-        && hint_fmt != real_fmt
+    if let Some(real_fmt) = guessed_fmt
+        && hint != real_fmt
         && warn_mismatch
     {
         warn!(

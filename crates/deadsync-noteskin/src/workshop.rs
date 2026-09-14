@@ -322,7 +322,7 @@ fn thumbnail(path: &Path) -> Result<RgbaImage, Error> {
     limits.max_image_height = Some(8192);
     limits.max_alloc = Some(256 * 1024 * 1024);
     reader.limits(limits);
-    let mut image = reader
+    let image = reader
         .decode()
         .map_err(|e| Error::Invalid(e.to_string()))?
         .into_rgba8();
@@ -355,13 +355,24 @@ fn thumbnail(path: &Path) -> Result<RgbaImage, Error> {
             if cols == 0 || rows == 0 || cols > image.width() || rows > image.height() {
                 return Err(Error::Invalid(format!("invalid sprite sheet: {name}")));
             }
-            image = imageops::crop_imm(&image, 0, 0, image.width() / cols, image.height() / rows)
-                .to_image();
-            break;
+            return Ok(thumbnail_frame(
+                &image,
+                image.width() / cols,
+                image.height() / rows,
+            ));
         }
     }
     Ok(imageops::thumbnail(&image, CELL - 4, CELL - 4))
 }
+
+fn thumbnail_frame(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
+    let frame = imageops::crop_imm(image, 0, 0, width, height);
+    imageops::thumbnail(&*frame, CELL - 4, CELL - 4)
+}
+
+#[cfg(test)]
+#[path = "../tests/thumbnail_loading/mod.rs"]
+mod thumbnail_loading;
 
 #[cfg(test)]
 mod tests {
