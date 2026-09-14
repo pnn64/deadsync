@@ -426,8 +426,7 @@ fn build_select_music_scorebox_view(
     let Some(data) = snapshot.data.as_ref() else {
         return view;
     };
-    let filtered_panes =
-        score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
+    let filtered_panes = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     let Some(pane) =
         score_data::preferred_primary_scorebox_pane(filtered_panes.as_slice(), show_ex)
     else {
@@ -636,7 +635,7 @@ fn gameplay_panes_from_snapshot(
         return Vec::new();
     }
 
-    let filtered = score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
+    let filtered = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     if filtered.is_empty() {
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
@@ -674,7 +673,7 @@ fn select_music_panes_from_snapshot(
         return Vec::new();
     }
 
-    let filtered = score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
+    let filtered = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     if filtered.is_empty() {
         return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
     }

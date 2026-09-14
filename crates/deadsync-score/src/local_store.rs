@@ -311,25 +311,32 @@ pub fn load_local_score_cache_from_paths(paths: &ScoreProfilePaths) -> LocalScor
     }
 }
 
-fn count_score_bins_in_dir(dir: &Path) -> u32 {
+// Local stores accept files at the root and exactly one directory level below.
+// A regular file needs only its name; full paths are needed for directories
+// and for following symlinks with the same semantics as Path::is_file/is_dir.
+fn visit_local_score_files(dir: &Path, descend: bool, visitor: &mut impl FnMut(&std::ffi::OsStr)) {
     let Ok(read_dir) = fs::read_dir(dir) else {
-        return 0;
+        return;
     };
-
-    let mut total: u32 = 0;
     for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
+        let Ok(kind) = entry.file_type() else {
             continue;
-        }
-        if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
-        {
-            total = total.saturating_add(1);
+        };
+        if kind.is_file() {
+            visitor(&entry.file_name());
+        } else if kind.is_dir() {
+            if descend {
+                visit_local_score_files(&entry.path(), false, visitor);
+            }
+        } else if kind.is_symlink() {
+            let path = entry.path();
+            if path.is_file() {
+                visitor(&entry.file_name());
+            } else if descend && path.is_dir() {
+                visit_local_score_files(&path, false, visitor);
+            }
         }
     }
-    total
 }
 
 #[must_use]
@@ -337,17 +344,15 @@ pub fn total_local_score_bins_in_root(root: &Path) -> u32 {
     if !root.is_dir() {
         return 0;
     }
-
-    let mut total = count_score_bins_in_dir(root);
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return total;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            total = total.saturating_add(count_score_bins_in_dir(&path));
+    let mut total = 0u32;
+    visit_local_score_files(root, true, &mut |name| {
+        if Path::new(name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("bin"))
+        {
+            total = total.saturating_add(1);
         }
-    }
+    });
     total
 }
 
@@ -408,74 +413,26 @@ fn note_history(history_by_chart: &mut FxMap<String, ChartPlayHistory>, name: &s
     }
 }
 
-fn collect_recent_plays_in_dir<S: BuildHasher>(
-    dir: &Path,
-    latest_by_chart: &mut HashMap<String, i64, S>,
-) {
-    let Ok(read_dir) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        let Some((chart_hash, played_at_ms)) = parse_score_file_name(name) else {
-            continue;
-        };
-        note_recent(latest_by_chart, chart_hash, played_at_ms);
-    }
-}
-
 pub fn collect_recent_local_plays_in_root<S: BuildHasher>(
     root: &Path,
     latest_by_chart: &mut HashMap<String, i64, S>,
 ) {
-    collect_recent_plays_in_dir(root, latest_by_chart);
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_recent_plays_in_dir(&path, latest_by_chart);
+    visit_local_score_files(root, true, &mut |name| {
+        if let Some((hash, time)) = name.to_str().and_then(parse_score_file_name) {
+            note_recent(latest_by_chart, hash, time);
         }
-    }
-}
-
-fn collect_history_in_dir(dir: &Path, history_by_chart: &mut FxMap<String, ChartPlayHistory>) {
-    let Ok(read_dir) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        note_history(history_by_chart, name);
-    }
+    });
 }
 
 fn collect_local_history_in_root(
     root: &Path,
     history_by_chart: &mut FxMap<String, ChartPlayHistory>,
 ) {
-    collect_history_in_dir(root, history_by_chart);
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_history_in_dir(&path, history_by_chart);
+    visit_local_score_files(root, true, &mut |name| {
+        if let Some(name) = name.to_str() {
+            note_history(history_by_chart, name);
         }
-    }
+    });
 }
 
 fn rank_recent<S: BuildHasher>(latest_by_chart: HashMap<String, i64, S>) -> Vec<String> {
@@ -549,42 +506,15 @@ pub fn recent_played_chart_hashes_in_profiles_root(profiles_root: &Path) -> Vec<
     rank_recent(latest_by_chart)
 }
 
-fn collect_play_counts_in_dir<S: BuildHasher>(
-    dir: &Path,
-    counts_by_chart: &mut HashMap<String, u32, S>,
-) {
-    let Ok(read_dir) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        let Some((chart_hash, _played_at_ms)) = parse_score_file_name(name) else {
-            continue;
-        };
-        note_count(counts_by_chart, chart_hash);
-    }
-}
-
 pub fn collect_local_play_counts_in_root<S: BuildHasher>(
     root: &Path,
     counts_by_chart: &mut HashMap<String, u32, S>,
 ) {
-    collect_play_counts_in_dir(root, counts_by_chart);
-    let Ok(read_dir) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in read_dir.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_play_counts_in_dir(&path, counts_by_chart);
+    visit_local_score_files(root, true, &mut |name| {
+        if let Some((hash, _)) = name.to_str().and_then(parse_score_file_name) {
+            note_count(counts_by_chart, hash);
         }
-    }
+    });
 }
 
 #[must_use]

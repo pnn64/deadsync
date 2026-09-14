@@ -672,6 +672,28 @@ pub fn select_music_scorebox_filtered_panes(
     out
 }
 
+/// Borrow filtered panes without heap storage for the usual small scorebox.
+/// Larger pane lists reserve once instead of repeatedly growing after spilling.
+#[inline]
+#[must_use]
+pub fn select_music_scorebox_pane_refs(
+    panes: &[LeaderboardPane],
+    filter: SelectMusicScoreboxFilter,
+) -> SmallVec<[&LeaderboardPane; 8]> {
+    if panes.len() > 8 {
+        // Keep Vec's simple push loop for unusually large lists, then transfer
+        // its existing heap allocation without copying or growing it.
+        return SmallVec::from_vec(select_music_scorebox_filtered_panes(panes, filter));
+    }
+    let mut out = SmallVec::new();
+    for pane in panes {
+        if select_music_scorebox_filter_allows_kind(scorebox_pane_kind(pane), filter) {
+            out.push(pane);
+        }
+    }
+    out
+}
+
 #[inline(always)]
 #[must_use]
 pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
@@ -750,23 +772,20 @@ pub fn preferred_primary_scorebox_pane<'a>(
     } else {
         ScoreboxPaneKind::Gs
     };
-    panes
-        .iter()
-        .copied()
-        .find(|pane| scorebox_pane_kind(pane) == want)
-        .or_else(|| {
-            panes
-                .iter()
-                .copied()
-                .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Gs)
-        })
-        .or_else(|| {
-            panes
-                .iter()
-                .copied()
-                .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Ex)
-        })
-        .or_else(|| panes.first().copied())
+    let mut first_gs = None;
+    let mut first_ex = None;
+    for &pane in panes {
+        let kind = scorebox_pane_kind(pane);
+        if kind == want {
+            return Some(pane);
+        }
+        match kind {
+            ScoreboxPaneKind::Gs if first_gs.is_none() => first_gs = Some(pane),
+            ScoreboxPaneKind::Ex if first_ex.is_none() => first_ex = Some(pane),
+            _ => {}
+        }
+    }
+    first_gs.or(first_ex).or_else(|| panes.first().copied())
 }
 
 #[must_use]
