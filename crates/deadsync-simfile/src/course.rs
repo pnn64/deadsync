@@ -1219,32 +1219,29 @@ pub fn resolve_song_dir(
         let Ok(entries) = fs::read_dir(songs_root) else {
             continue;
         };
-        let group_dirs = entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.is_dir())
-            .map(|path| {
-                let is_pack = is_pack_dir(&path);
-                (path, is_pack)
-            })
-            .collect::<Vec<_>>();
-        for (group_dir, is_pack) in &group_dirs {
-            if !is_pack {
+        // Direct packs win over packs inside series folders. Search each
+        // direct pack immediately and retain only series paths for pass two.
+        let mut series_dirs = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !course_entry_is_dir(&entry, &path) {
                 continue;
             }
-            if let Some(found) = is_dir_ci(group_dir, song) {
-                return Some(found);
+            if is_pack_dir(&path) {
+                if let Some(found) = is_dir_ci(&path, song) {
+                    return Some(found);
+                }
+            } else {
+                series_dirs.push(path);
             }
         }
-        for (series_dir, is_pack) in group_dirs {
-            if is_pack {
-                continue;
-            }
+        for series_dir in series_dirs {
             let Ok(pack_dirs) = fs::read_dir(series_dir) else {
                 continue;
             };
-            for pack_dir in pack_dirs.flatten().map(|entry| entry.path()) {
-                if pack_dir.is_dir()
+            for entry in pack_dirs.flatten() {
+                let pack_dir = entry.path();
+                if course_entry_is_dir(&entry, &pack_dir)
                     && let Some(found) = is_dir_ci(&pack_dir, song)
                 {
                     return Some(found);
@@ -1304,6 +1301,15 @@ fn is_pack_dir(path: &Path) -> bool {
         .is_some()
 }
 
+// Directory enumeration already supplies ordinary entry types. Follow links
+// and preserve the metadata-error behavior of Path::is_dir when necessary.
+fn course_entry_is_dir(entry: &fs::DirEntry, path: &Path) -> bool {
+    match entry.file_type() {
+        Ok(kind) if !kind.is_symlink() => kind.is_dir(),
+        _ => path.is_dir(),
+    }
+}
+
 fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -1313,7 +1319,7 @@ fn collect_course_paths(root: &Path) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
+            if course_entry_is_dir(&entry, &path) {
                 stack.push(path);
                 continue;
             }
@@ -1334,24 +1340,25 @@ fn is_dir_ci(dir: &Path, name: &str) -> Option<PathBuf> {
     if want.is_empty() {
         return None;
     }
-    let want_ci = want.to_ascii_lowercase();
     let Ok(entries) = fs::read_dir(dir) else {
         return None;
     };
     let mut ci_match = None;
     for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
         let got = entry.file_name();
         let got = got.to_string_lossy();
-        if got == want {
+        let exact = got == want;
+        if !exact && (ci_match.is_some() || !got.eq_ignore_ascii_case(want)) {
+            continue;
+        }
+        let path = entry.path();
+        if !course_entry_is_dir(&entry, &path) {
+            continue;
+        }
+        if exact {
             return Some(path);
         }
-        if ci_match.is_none() && got.to_ascii_lowercase() == want_ci {
-            ci_match = Some(path);
-        }
+        ci_match = Some(path);
     }
     ci_match
 }
@@ -2187,3 +2194,11 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/course_selection.rs"]
 mod selection_perf;
+
+#[cfg(test)]
+mod course_filesystem {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/course_filesystem/mod.rs"
+    ));
+}
