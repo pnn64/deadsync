@@ -4834,9 +4834,11 @@ impl App {
                         let cfg = config::runtime::get();
                         (
                             crate::qr_login::should_auto_show_groovestats(
+                                cfg.enable_groovestats,
                                 cfg.groovestats_qr_login_when,
                             ),
                             crate::qr_login::should_auto_show_arrowcloud(
+                                cfg.enable_arrowcloud,
                                 cfg.arrowcloud_qr_login_when,
                             ),
                         )

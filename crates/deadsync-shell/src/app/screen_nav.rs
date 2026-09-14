@@ -96,7 +96,10 @@ impl App {
             .as_ref()
             .map(|target| (target.id.clone(), target.display_name.clone()));
         let show_arrowcloud_next = target.is_none()
-            && crate::qr_login::should_auto_show_arrowcloud(config.arrowcloud_qr_login_when);
+            && crate::qr_login::should_auto_show_arrowcloud(
+                config.enable_arrowcloud,
+                config.arrowcloud_qr_login_when,
+            );
         let request = crate::qr_login::request(SimplyLoveQrLoginService::GrooveStats, target);
         screens::groovestats_login::on_enter(
             state,

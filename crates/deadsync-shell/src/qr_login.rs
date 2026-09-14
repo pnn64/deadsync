@@ -307,24 +307,26 @@ pub(crate) fn request(
     SimplyLoveQrLoginRequest { service, slots }
 }
 
-pub(crate) fn should_auto_show_arrowcloud(when: ArrowCloudQrLoginWhen) -> bool {
-    match when {
-        ArrowCloudQrLoginWhen::Always => true,
-        ArrowCloudQrLoginWhen::Sometimes => {
-            session_has_missing_key(SimplyLoveQrLoginService::ArrowCloud)
+pub(crate) fn should_auto_show_arrowcloud(enabled: bool, when: ArrowCloudQrLoginWhen) -> bool {
+    enabled
+        && match when {
+            ArrowCloudQrLoginWhen::Always => true,
+            ArrowCloudQrLoginWhen::Sometimes => {
+                session_has_missing_key(SimplyLoveQrLoginService::ArrowCloud)
+            }
+            ArrowCloudQrLoginWhen::Disabled => false,
         }
-        ArrowCloudQrLoginWhen::Disabled => false,
-    }
 }
 
-pub(crate) fn should_auto_show_groovestats(when: GrooveStatsQrLoginWhen) -> bool {
-    match when {
-        GrooveStatsQrLoginWhen::Always => true,
-        GrooveStatsQrLoginWhen::Sometimes => {
-            session_has_missing_key(SimplyLoveQrLoginService::GrooveStats)
+pub(crate) fn should_auto_show_groovestats(enabled: bool, when: GrooveStatsQrLoginWhen) -> bool {
+    enabled
+        && match when {
+            GrooveStatsQrLoginWhen::Always => true,
+            GrooveStatsQrLoginWhen::Sometimes => {
+                session_has_missing_key(SimplyLoveQrLoginService::GrooveStats)
+            }
+            GrooveStatsQrLoginWhen::Disabled => false,
         }
-        GrooveStatsQrLoginWhen::Disabled => false,
-    }
 }
 
 fn session_has_missing_key(service: SimplyLoveQrLoginService) -> bool {
@@ -415,6 +417,44 @@ const fn side_bit(side: PlayerSide) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_login_requires_enabled_service() {
+        for when in [
+            ArrowCloudQrLoginWhen::Always,
+            ArrowCloudQrLoginWhen::Sometimes,
+            ArrowCloudQrLoginWhen::Disabled,
+        ] {
+            assert!(!should_auto_show_arrowcloud(false, when));
+        }
+        for when in [
+            GrooveStatsQrLoginWhen::Always,
+            GrooveStatsQrLoginWhen::Sometimes,
+            GrooveStatsQrLoginWhen::Disabled,
+        ] {
+            assert!(!should_auto_show_groovestats(false, when));
+        }
+        for (arrowcloud, groovestats) in
+            [(true, false), (false, true), (true, true), (false, false)]
+        {
+            assert_eq!(
+                should_auto_show_arrowcloud(arrowcloud, ArrowCloudQrLoginWhen::Always),
+                arrowcloud
+            );
+            assert_eq!(
+                should_auto_show_groovestats(groovestats, GrooveStatsQrLoginWhen::Always),
+                groovestats
+            );
+        }
+        assert!(!should_auto_show_arrowcloud(
+            true,
+            ArrowCloudQrLoginWhen::Disabled
+        ));
+        assert!(!should_auto_show_groovestats(
+            true,
+            GrooveStatsQrLoginWhen::Disabled
+        ));
+    }
 
     #[test]
     fn profile_request_prepares_one_ready_slot() {
