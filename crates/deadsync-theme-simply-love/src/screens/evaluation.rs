@@ -1,3 +1,12 @@
+mod graph_build;
+#[cfg(test)]
+use graph_build::life_record_lerp_at;
+use graph_build::{
+    GRAPH_LIFE_SAMPLE_COUNT, LifeRecordSampler, build_course_density_graph_mesh,
+    course_graph_raw_seconds, course_graph_stage_seconds, graph_display_life_layout,
+    graph_display_life_points, valid_music_rate,
+};
+
 use crate::act;
 use crate::color;
 use crate::screens::Screen;
@@ -148,7 +157,6 @@ const SRPG10_EVAL_FAILED_SECONDS: f32 = 3.0;
 const SRPG10_EVAL_PASSED_SECONDS: f32 = 1.0;
 const SRPG10_EVAL_Z: i16 = 1250;
 const SRPG10_EVAL_ZOOM: f32 = 480.0 / 1080.0;
-const GRAPH_LIFE_SAMPLE_COUNT: usize = 100;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
@@ -841,39 +849,6 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 }
 
 #[inline(always)]
-const fn course_graph_stage_seconds(stage: &CourseGraphStage) -> f32 {
-    if stage.song_last_second.is_finite() {
-        stage.song_last_second.max(0.0)
-    } else {
-        0.0
-    }
-}
-
-fn course_graph_raw_seconds(stages: &[CourseGraphStage]) -> f32 {
-    stages.iter().map(course_graph_stage_seconds).sum()
-}
-
-fn course_graph_peak_nps(stages: &[CourseGraphStage]) -> f64 {
-    stages.iter().fold(0.0, |peak, stage| {
-        let stage_peak = stage.chart.max_nps;
-        if stage_peak.is_finite() {
-            peak.max(stage_peak)
-        } else {
-            peak
-        }
-    })
-}
-
-#[inline(always)]
-fn valid_music_rate(music_rate: f32) -> f32 {
-    if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
 fn eval_graph_x(time: f32, first: f32, last: f32, graph_width: f32) -> f32 {
     let duration = (last - first).max(0.001);
     ((time - first) / duration).clamp(0.0, 1.0) * graph_width.max(0.0)
@@ -899,59 +874,6 @@ fn course_graph_stage_spans(stages: &[CourseGraphStage], graph_width: f32) -> Ve
         x += w;
     }
     spans
-}
-
-fn build_course_density_graph_mesh(
-    stages: &[CourseGraphStage],
-    graph_width: f32,
-    graph_height: f32,
-    music_rate: f32,
-) -> Option<Arc<[MeshVertex]>> {
-    let total = course_graph_raw_seconds(stages);
-    let width = graph_width.max(0.0);
-    let height = graph_height.max(0.0);
-    if total <= 0.0 || width <= 0.0 || height <= 0.0 {
-        return None;
-    }
-
-    let rate = valid_music_rate(music_rate);
-    // Simply Love measures both values in rate-adjusted seconds.  Keeping
-    // both divisions here makes the cancellation explicit and prevents the
-    // numerator-only rate scaling that previously shortened the course graph.
-    let display_total = total / rate;
-    let peak_nps = course_graph_peak_nps(stages);
-    let mut x = 0.0_f32;
-    let mut out = Vec::new();
-    for stage in stages {
-        let stage_seconds = course_graph_stage_seconds(stage);
-        let stage_width = (stage_seconds / rate) / display_total * width;
-        if stage_width <= 0.0 {
-            continue;
-        }
-
-        let first = stage.chart.first_second;
-        let last = stage_seconds.max(first + 0.001);
-        let mut verts = crate::screens::components::shared::density::build_density_histogram_mesh(
-            &stage.chart.measure_nps_vec,
-            peak_nps,
-            &stage.chart.measure_seconds_vec,
-            first,
-            last,
-            stage_width,
-            height,
-            0.0,
-            stage_width,
-            Some(0.5),
-            0.65,
-        );
-        for v in &mut verts {
-            v.pos[0] += x;
-        }
-        out.extend(verts);
-        x += stage_width;
-    }
-
-    (!out.is_empty()).then(|| Arc::from(out.into_boxed_slice()))
 }
 
 fn build_eval_density_graph_mesh(
@@ -4992,93 +4914,6 @@ fn build_fail_label_text(label: Arc<str>, x: f32, y: f32) -> Actor {
     )
 }
 
-#[inline(always)]
-fn life_record_lerp_at(life_history: &[(f32, f32)], record_start: f32, sample_time: f32) -> f32 {
-    let Some(&(_, start_life)) = life_history.first() else {
-        return 0.0;
-    };
-    let start_life = start_life.clamp(0.0, 1.0);
-    if sample_time <= record_start {
-        return start_life;
-    }
-
-    // Match ITGmania's PlayerStageStats::GetLifeRecordLerpAt() upper_bound behavior:
-    // discard pre-chart records, choose the first key > sample_time, then lerp
-    // from the previous sample (or the chart-start life anchor).
-    let records = &life_history[life_history.partition_point(|&(t, _)| t < record_start)..];
-    let later_ix = records.partition_point(|&(t, _)| t <= sample_time);
-    let (earlier_t, earlier_life) = if later_ix == 0 {
-        (record_start, start_life)
-    } else {
-        records[later_ix - 1]
-    };
-    let Some(&(later_t, later_life)) = records.get(later_ix) else {
-        return earlier_life.clamp(0.0, 1.0);
-    };
-    let dt = later_t - earlier_t;
-    if dt.abs() <= f32::EPSILON {
-        return earlier_life.clamp(0.0, 1.0);
-    }
-
-    let alpha = ((sample_time - earlier_t) / dt).clamp(0.0, 1.0);
-    (later_life - earlier_life)
-        .mul_add(alpha, earlier_life)
-        .clamp(0.0, 1.0)
-}
-
-fn graph_display_life_points(
-    life_history: &[(f32, f32)],
-    record_start: f32,
-    graph_first: f32,
-    graph_last: f32,
-    graph_width: f32,
-    graph_height: f32,
-) -> Option<[[f32; 2]; GRAPH_LIFE_SAMPLE_COUNT]> {
-    if life_history.is_empty() || graph_height <= 0.0 {
-        return None;
-    }
-
-    let (graph_last, line_left, sample_x_step) =
-        graph_display_life_layout(record_start, graph_first, graph_last, graph_width)?;
-    let record_duration = graph_last - record_start;
-    let sample_time_step = record_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
-
-    let mut points = [[0.0_f32; 2]; GRAPH_LIFE_SAMPLE_COUNT];
-    for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
-        // GraphDisplay samples life with a denominator of 100 but lays those
-        // samples across its width with a denominator of 99.
-        let sample_time = (i as f32).mul_add(sample_time_step, record_start);
-        let life = life_record_lerp_at(life_history, record_start, sample_time);
-        points[i] = [
-            (i as f32).mul_add(sample_x_step, line_left),
-            (1.0 - life).mul_add(graph_height, 1.0),
-        ];
-    }
-    Some(points)
-}
-
-fn graph_display_life_layout(
-    record_start: f32,
-    graph_first: f32,
-    graph_last: f32,
-    graph_width: f32,
-) -> Option<(f32, f32, f32)> {
-    if !record_start.is_finite()
-        || !graph_first.is_finite()
-        || !graph_last.is_finite()
-        || graph_width <= 0.0
-    {
-        return None;
-    }
-    let graph_last = graph_last.max(graph_first + 0.001);
-    if graph_last <= record_start {
-        return None;
-    }
-    let line_left = ((record_start - graph_first) / (graph_last - graph_first)) * graph_width;
-    let sample_x_step = (graph_width - line_left) / (GRAPH_LIFE_SAMPLE_COUNT - 1) as f32;
-    Some((graph_last, line_left, sample_x_step))
-}
-
 fn eval_life_record_start(si: &ScoreInfo) -> f32 {
     if si.is_course_summary() {
         0.0
@@ -5129,9 +4964,10 @@ fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32
     let mut min_life = 1.0_f32;
     let mut min_ix = 0usize;
     let sample_step = sample_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
+    let record = LifeRecordSampler::new(&si.life_history, record_start);
     for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
         let t = (i as f32).mul_add(sample_step, record_start);
-        let life = life_record_lerp_at(&si.life_history, record_start, t);
+        let life = record.sample(t);
         if life < min_life {
             min_life = life;
             min_ix = i;

@@ -1,4 +1,5 @@
-//! Simply Love measure-density histograms and reusable mesh updates.
+// Frozen density module from 8037d3c007f466c0160fc6c12ac81a79599bf900 (0.5.1211).
+// Simply Love measure-density histograms and reusable mesh updates.
 
 use deadlib_present::color::{desaturate_rgb, lerp, lerp_color};
 use deadlib_render_core::MeshVertex;
@@ -71,47 +72,17 @@ fn build_hist_cols(
     desaturation: Option<f32>,
     alpha: f32,
 ) -> (Vec<HistCol>, [f32; 4]) {
-    let mut cols = Vec::new();
-    let bottom_color = build_hist_cols_into(
-        &mut cols,
-        measure_nps,
-        peak_nps,
-        measure_seconds,
-        first_second,
-        last_second,
-        width,
-        height,
-        desaturation,
-        alpha,
-    );
-    (cols, bottom_color)
-}
-
-#[inline]
-fn build_hist_cols_into(
-    cols: &mut Vec<HistCol>,
-    measure_nps: &[f64],
-    peak_nps: f64,
-    measure_seconds: &[f32],
-    first_second: f32,
-    last_second: f32,
-    width: f32,
-    height: f32,
-    desaturation: Option<f32>,
-    alpha: f32,
-) -> [f32; 4] {
-    cols.clear();
     let (blue, purple) = sl_hist_colors(desaturation, alpha);
     let denom_t = last_second - first_second;
     if width <= 0.0 || height <= 0.0 || !denom_t.is_finite() || denom_t <= 0.0 {
-        return blue;
+        return (Vec::new(), blue);
     }
     let peak = (peak_nps as f32).max(0.000_001);
     if measure_nps.len() <= 1 || !peak.is_finite() {
-        return blue;
+        return (Vec::new(), blue);
     }
 
-    cols.reserve_exact(measure_nps.len().saturating_add(1));
+    let mut cols: Vec<HistCol> = Vec::with_capacity(measure_nps.len().saturating_add(1));
     let mut first_step_has_occurred = false;
     // The first sampled column must have positive density, so a NaN key
     // cannot hit before a height has been computed.
@@ -168,83 +139,7 @@ fn build_hist_cols_into(
         });
     }
 
-    blue
-}
-
-/// Caller-owned column storage for assembling several histograms into one mesh.
-///
-/// Each append replaces the columns while retaining capacity for the largest
-/// source seen. Course graph construction owns this scratch locally and drops
-/// it when the combined mesh is complete; no chart data or cache is shared.
-#[derive(Debug, Default)]
-pub struct DensityHistScratch {
-    cols: Vec<HistCol>,
-}
-
-impl DensityHistScratch {
-    /// Append a full histogram translated by `x`, preserving existing vertices.
-    /// Invalid or empty histograms append nothing. Both column and destination
-    /// buffers reuse capacity; growing either buffer may allocate.
-    pub fn append_mesh(
-        &mut self,
-        out: &mut Vec<MeshVertex>,
-        measure_nps: &[f64],
-        peak_nps: f64,
-        measure_seconds: &[f32],
-        first_second: f32,
-        last_second: f32,
-        scaled_width: f32,
-        height: f32,
-        x: f32,
-        desaturation: Option<f32>,
-        alpha: f32,
-    ) {
-        let scaled_width = scaled_width.max(0.0);
-        let height = height.max(0.0);
-        if measure_nps.len() <= 1 || scaled_width <= 0.0 || height <= 0.0 {
-            self.cols.clear();
-            return;
-        }
-        let bottom_color = build_hist_cols_into(
-            &mut self.cols,
-            measure_nps,
-            peak_nps,
-            measure_seconds,
-            first_second,
-            last_second,
-            scaled_width,
-            height,
-            desaturation,
-            alpha,
-        );
-        if self.cols.len() < 2 {
-            return;
-        }
-        let view = HistView {
-            cols: &self.cols,
-            bottom_color,
-            height,
-            scaled_width,
-        };
-        let Some(window) = view.visible_window(0.0, scaled_width) else {
-            return;
-        };
-        out.reserve((window.point_count - 1) * 6);
-        let mut prev = None;
-        view.visit_window_points(window, |point| {
-            if let Some(last) = prev {
-                let mut segment =
-                    hist_segment_vertices(last, point, window.left, height, bottom_color);
-                // Keep the original subtraction followed by translation, and
-                // apply it before writing directly to the destination buffer.
-                for vertex in &mut segment {
-                    vertex.pos[0] += x;
-                }
-                out.extend_from_slice(&segment);
-            }
-            prev = Some(point);
-        });
-    }
+    (cols, blue)
 }
 
 #[must_use]
@@ -645,128 +540,4 @@ pub fn build_density_histogram_mesh(
         scaled_width,
     }
     .mesh(offset, visible_width)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sample_cache() -> DensityHistCache {
-        build_density_histogram_cache(
-            &[0.0, 0.0, 2.0, 5.0, 3.0, 4.0, 1.0],
-            5.0,
-            &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            0.0,
-            6.0,
-            240.0,
-            64.0,
-            None,
-            1.0,
-        )
-        .expect("sample cache")
-    }
-
-    fn assert_mesh_matches(actual: &[MeshVertex], expected: &[MeshVertex]) {
-        assert_eq!(actual.len(), expected.len());
-        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
-            assert_eq!(actual.pos, expected.pos, "pos mismatch at {index}");
-            assert_eq!(actual.color, expected.color, "color mismatch at {index}");
-        }
-    }
-
-    #[test]
-    fn update_density_hist_mesh_reuses_existing_buffer_when_vertex_count_matches() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
-        let expected = cache.mesh(48.0, 120.0);
-        let first_ptr = mesh.as_ref().expect("mesh").as_ptr();
-        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
-        let second_ptr = mesh.as_ref().expect("mesh").as_ptr();
-
-        assert_eq!(first_ptr, second_ptr);
-        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
-    }
-
-    #[test]
-    fn update_density_hist_mesh_clears_mesh_without_cache() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 0.0, 120.0);
-        assert!(mesh.is_some());
-
-        update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
-        assert!(mesh.is_none());
-    }
-
-    #[test]
-    fn reusable_density_hist_mesh_matches_shared_mesh_and_reuses_changed_lengths() {
-        let cache = sample_cache();
-        let mut shared = None;
-        let mut reusable = None;
-
-        update_density_hist_mesh(&mut shared, Some(&cache), 0.0, 240.0);
-        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 0.0, 240.0);
-        assert_mesh_matches(
-            reusable.as_deref().expect("reusable mesh"),
-            shared.as_deref().expect("shared mesh"),
-        );
-        let first_ptr = reusable.as_ref().expect("reusable mesh").as_ptr();
-        let first_len = reusable.as_ref().expect("reusable mesh").len();
-
-        update_density_hist_mesh(&mut shared, Some(&cache), 48.0, 120.0);
-        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 48.0, 120.0);
-        assert_mesh_matches(
-            reusable.as_deref().expect("reusable mesh"),
-            shared.as_deref().expect("shared mesh"),
-        );
-
-        assert_ne!(reusable.as_ref().expect("reusable mesh").len(), first_len);
-        assert_eq!(
-            reusable.as_ref().expect("reusable mesh").as_ptr(),
-            first_ptr
-        );
-    }
-
-    #[test]
-    fn reusable_density_hist_mesh_preserves_a_shared_previous_frame() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 0.0, 240.0);
-        let previous = Arc::clone(mesh.as_ref().expect("reusable mesh"));
-        let previous_vertices = previous.to_vec();
-
-        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 48.0, 120.0);
-
-        assert_mesh_matches(previous.as_slice(), &previous_vertices);
-        assert!(!Arc::ptr_eq(
-            &previous,
-            mesh.as_ref().expect("replacement mesh")
-        ));
-    }
-
-    #[test]
-    fn build_density_histogram_mesh_preserves_subpixel_bursts() {
-        let mesh = build_density_histogram_mesh(
-            &[1.0, 10.0, 1.0],
-            10.0,
-            &[0.0, 0.25, 0.5],
-            0.0,
-            1.0,
-            1.0,
-            10.0,
-            0.0,
-            1.0,
-            None,
-            1.0,
-        );
-
-        assert_eq!(mesh.len(), 18);
-        assert!(mesh.iter().any(|v| v.pos == [0.25, 0.0]));
-    }
 }
