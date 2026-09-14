@@ -1804,6 +1804,62 @@ fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
 }
 
 #[test]
+fn sound_output_mode_restores_exclusive_selection() {
+    let state = init_with_audio(AudioOptionsView {
+        available_backend_names: vec!["Auto".to_owned(), "ALSA".to_owned()],
+        output_mode: AudioOutputModeChoice::Exclusive,
+        selected_backend_name: "ALSA".to_owned(),
+        ..AudioOptionsView::default()
+    });
+    let row = sound_row_index(SubRowId::AudioOutputMode).expect("audio output mode row");
+    let expected = if cfg!(target_os = "windows") { 2 } else { 1 };
+    assert_eq!(state.sub[SubmenuKind::Sound].choice_indices[row], expected);
+    assert_eq!(state.sub[SubmenuKind::Sound].cursor_indices[row], expected);
+    assert!(expected < SOUND_OPTIONS_ROWS[row].choices.len());
+    assert_eq!(
+        state.audio_options.output_mode,
+        AudioOutputModeChoice::Exclusive
+    );
+    #[cfg(target_os = "linux")]
+    {
+        let toggle = sound_row_index(SubRowId::AlsaExclusive).expect("ALSA exclusive toggle");
+        assert_eq!(state.sub[SubmenuKind::Sound].choice_indices[toggle], 1);
+        assert!(sound_show_alsa_exclusive(&state));
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn sound_output_mode_selects_exclusive_on_windows() {
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_audio(AudioOptionsView {
+        output_mode: AudioOutputModeChoice::Shared,
+        ..AudioOptionsView::default()
+    });
+    state.view = OptionsView::Submenu(SubmenuKind::Sound);
+    select_visible_row(&mut state, SubmenuKind::Sound, SubRowId::AudioOutputMode);
+
+    for (delta, mode, index) in [
+        (1, AudioOutputModeChoice::Exclusive, 2),
+        (-1, AudioOutputModeChoice::Shared, 1),
+        (-1, AudioOutputModeChoice::Auto, 0),
+    ] {
+        let effects = apply_choice_effects(&mut state, &asset_manager, delta, NavWrap::Clamp);
+        assert_eq!(state.audio_options.output_mode, mode);
+        let row = sound_row_index(SubRowId::AudioOutputMode).expect("audio output mode row");
+        assert_eq!(state.sub[SubmenuKind::Sound].choice_indices[row], index);
+        assert_eq!(effects.len(), 2);
+        assert!(is_change_value_sfx(&effects[0]));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetOutputMode(selected)
+            )) if *selected == mode
+        ));
+    }
+}
+
+#[test]
 fn sound_device_change_emits_output_and_invalid_rate_requests() {
     let asset_manager = AssetManager::new();
     let mut state = init_with_audio(AudioOptionsView {

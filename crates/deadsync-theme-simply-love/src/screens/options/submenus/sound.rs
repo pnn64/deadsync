@@ -13,6 +13,8 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsSound", "OutputModeAuto"),
             localized_choice("OptionsSound", "OutputModeShared"),
+            #[cfg(target_os = "windows")]
+            localized_choice("OptionsSound", "OutputModeExclusive"),
         ],
         inline: false,
     },
@@ -118,7 +120,11 @@ pub(in crate::screens::options) const SOUND_OPTIONS_ITEMS: &[Item] = &[
         name: lookup_key("OptionsSound", "AudioOutputMode"),
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSoundHelp",
-            "AudioOutputModeHelp",
+            if cfg!(target_os = "windows") {
+                "AudioOutputModeWindowsHelp"
+            } else {
+                "AudioOutputModeHelp"
+            },
         ))],
     },
     #[cfg(target_os = "linux")]

@@ -1304,7 +1304,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_sound_choice_index(
         &mut state,
         SubRowId::AudioOutputMode,
-        output_mode.choice_index(),
+        if cfg!(target_os = "windows") {
+            output_mode.choice_index()
+        } else {
+            // ALSA exposes exclusivity through its separate toggle.
+            output_mode.with_exclusive(false).choice_index()
+        },
     );
     #[cfg(target_os = "linux")]
     let linux_backend_idx =

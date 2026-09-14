@@ -71,21 +71,24 @@ pub enum AudioOutputModeChoice {
 }
 
 impl AudioOutputModeChoice {
-    /// Collapse exclusive output into the shared base choice so a concrete
-    /// theme can present exclusivity as a separate capability-dependent row.
     #[inline(always)]
     #[must_use]
     pub const fn choice_index(self) -> usize {
         match self {
             Self::Auto => 0,
-            Self::Shared | Self::Exclusive => 1,
+            Self::Shared => 1,
+            Self::Exclusive => 2,
         }
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn from_choice(index: usize) -> Self {
-        if index == 1 { Self::Shared } else { Self::Auto }
+        match index {
+            1 => Self::Shared,
+            2 => Self::Exclusive,
+            _ => Self::Auto,
+        }
     }
 
     #[inline(always)]
@@ -363,10 +366,20 @@ mod tests {
     }
 
     #[test]
-    fn output_mode_choice_keeps_alsa_exclusive_separate() {
+    fn output_mode_choices_preserve_exclusive() {
         assert_eq!(AudioOutputModeChoice::Auto.choice_index(), 0);
         assert_eq!(AudioOutputModeChoice::Shared.choice_index(), 1);
-        assert_eq!(AudioOutputModeChoice::Exclusive.choice_index(), 1);
+        assert_eq!(AudioOutputModeChoice::Exclusive.choice_index(), 2);
+        for mode in [
+            AudioOutputModeChoice::Auto,
+            AudioOutputModeChoice::Shared,
+            AudioOutputModeChoice::Exclusive,
+        ] {
+            assert_eq!(
+                AudioOutputModeChoice::from_choice(mode.choice_index()),
+                mode
+            );
+        }
         assert_eq!(
             AudioOutputModeChoice::from_choice(1).with_exclusive(true),
             AudioOutputModeChoice::Exclusive
