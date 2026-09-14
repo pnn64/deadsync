@@ -29,7 +29,10 @@ mod tests {
         compose::{self, TextureContext, TextureMeta},
         space,
     };
-    use deadlib_render_core::{DrawOp, DrawStorageStats, frame_compare::compare_render_frames};
+    use deadlib_render_core::{
+        DrawOp, DrawStorageStats,
+        frame_compare::{compare_render_frames, compare_render_frames_semantic},
+    };
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -3061,7 +3064,9 @@ return Def.ActorFrame{
                                     texture,
                                     uv_tex_shift,
                                     ..
-                                } if texture.contains("cyber") => Some(uv_tex_shift[1].rem_euclid(1.0)),
+                                } if texture.contains("cyber") => {
+                                    Some(uv_tex_shift[1].rem_euclid(1.0))
+                                }
                                 _ => None,
                             })
                             .collect::<Vec<_>>();
@@ -4191,6 +4196,86 @@ return Def.ActorFrame{
         assert_ne!(compare_render_frames(&practice_base, &practice), Ok(()));
         assert_ne!(compare_render_frames(&versus, &autoplay), Ok(()));
         assert_ne!(compare_render_frames(&versus, &practice), Ok(()));
+    }
+
+    #[test]
+    fn practice_editor_ignores_player_scroll_mods() {
+        let simfile = write_fixture("practice-scroll-mods", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                space::set_overscan(0, 0, 0, 0);
+                let assets = fixture_assets();
+                let mut actors = Vec::new();
+                let mut text_cache = compose::TextLayoutCache::default();
+                let mut scratch = compose::ComposeScratch::default();
+                let mut normal_frames = None;
+                for scroll in [
+                    profile_data::ScrollOption::Normal,
+                    profile_data::ScrollOption::Reverse,
+                    profile_data::ScrollOption::Split,
+                    profile_data::ScrollOption::Alternate,
+                    profile_data::ScrollOption::Cross,
+                    profile_data::ScrollOption::Centered,
+                    profile_data::ScrollOption::Reverse.union(profile_data::ScrollOption::Split),
+                ] {
+                    let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                    profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
+                    profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
+                    profiles[0].scroll_option = scroll;
+                    let gameplay = build_test_state(
+                        &simfile,
+                        GameplayViewport::new(1280.0, 720.0),
+                        GameplaySession::default(),
+                        profiles,
+                    );
+                    let mut practice = crate::screens::practice::init(
+                        gameplay,
+                        crate::views::PracticeRuntimeView::default(),
+                    );
+                    set_fixture_time(&mut practice.gameplay, 2.5);
+                    let editor = compose_practice_fixture_frame(
+                        &mut practice,
+                        &assets,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        &mut scratch,
+                    );
+                    assert_eq!(practice.gameplay.profiles()[0].scroll_option, scroll);
+                    // Playback uses the unmodified gameplay view and must still
+                    // honor the profile after the editor has drawn its field.
+                    let gameplay = compose_fixture_frame(
+                        &mut practice.gameplay,
+                        &assets,
+                        &metrics,
+                        &mut actors,
+                        &mut text_cache,
+                        &mut scratch,
+                    );
+                    if let Some((normal_editor, normal_gameplay)) = &normal_frames {
+                        assert_eq!(
+                            compare_render_frames_semantic(normal_editor, &editor),
+                            Ok(()),
+                            "{scroll}"
+                        );
+                        assert_ne!(
+                            compare_render_frames_semantic(normal_gameplay, &gameplay),
+                            Ok(()),
+                            "{scroll}"
+                        );
+                    } else {
+                        normal_frames = Some((editor, gameplay));
+                    }
+                }
+            },
+        );
     }
 
     fn generated_runtime_mod_lua() -> &'static str {

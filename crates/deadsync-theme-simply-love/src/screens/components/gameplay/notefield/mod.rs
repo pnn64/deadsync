@@ -675,7 +675,9 @@ pub(crate) fn compose_frame(
     } else {
         base_accel
     };
-    let scroll = if apply_attacks {
+    let scroll = if let Some(scroll) = view.scroll {
+        scroll
+    } else if apply_attacks {
         effective_scroll_effects_for_player(state, player_idx)
     } else {
         base_scroll
@@ -740,7 +742,7 @@ pub(crate) fn compose_frame(
         if local_col >= state.cols_per_player() || col >= state.num_cols() {
             1.0
         } else {
-            if apply_attacks {
+            if apply_attacks && view.scroll.is_none() {
                 state.notefield_column_scroll_dir(col)
             } else {
                 scroll.reverse_scale_for_column(local_col, state.cols_per_player())
@@ -797,7 +799,7 @@ pub(crate) fn compose_frame(
             draw_distance_before_targets: draw_distance_before,
             draw_distance_after_targets: draw_distance_after,
             column_dirs,
-            reverse_scroll: if apply_attacks {
+            reverse_scroll: if apply_attacks && view.scroll.is_none() {
                 state.notefield_reverse_scroll(player_idx)
             } else {
                 scroll.reverse_percent_for_column(0, state.cols_per_player()) > 0.5

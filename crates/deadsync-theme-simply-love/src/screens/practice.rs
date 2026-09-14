@@ -19,8 +19,8 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, handle_core_input,
-    scroll_effects_from_flags, spacing_multiplier_for_percent, update_core,
+    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, ScrollEffects,
+    handle_core_input, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
@@ -1136,6 +1136,8 @@ fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverr
     gameplay_screen::NotefieldViewOverride {
         field_zoom: Some(practice_edit_field_zoom()),
         scroll_speed: Some(practice_edit_scroll_speed(state)),
+        // ITG ScreenEdit uses separate editor options, never the player's scroll mods.
+        scroll: Some(ScrollEffects::default()),
         force_center_1player: true,
         receptor_y: Some(practice_edit_cursor_y()),
         edit_beat_bars: true,
@@ -1824,25 +1826,16 @@ fn change_music_rate_by_hold_dir(state: &mut State, dir: MusicRateHoldDir) -> bo
 fn move_cursor_by_hold_dir(state: &mut State, dir: CursorHoldDir) {
     let snap = SNAP_BEATS[state.snap_index];
     match dir {
-        CursorHoldDir::Up => move_cursor_from_button(state, -snap),
-        CursorHoldDir::Down => move_cursor_from_button(state, snap),
+        CursorHoldDir::Up => move_cursor(state, -snap),
+        CursorHoldDir::Down => move_cursor(state, snap),
     }
 }
 
 fn move_cursor_by_page_dir(state: &mut State, dir: PageHoldDir) {
     match dir {
-        PageHoldDir::Up => move_cursor_from_button(state, -BEATS_PER_MEASURE),
-        PageHoldDir::Down => move_cursor_from_button(state, BEATS_PER_MEASURE),
+        PageHoldDir::Up => move_cursor(state, -BEATS_PER_MEASURE),
+        PageHoldDir::Down => move_cursor(state, BEATS_PER_MEASURE),
     }
-}
-
-fn move_cursor_from_button(state: &mut State, delta_beats: f32) {
-    let delta = if edit_reverse_scroll(state) {
-        -delta_beats
-    } else {
-        delta_beats
-    };
-    move_cursor(state, delta);
 }
 
 fn move_cursor(state: &mut State, delta_beats: f32) {
@@ -2161,13 +2154,6 @@ fn selection_range(state: &State) -> Option<(f32, f32)> {
     Some((a.min(b), a.max(b)))
 }
 
-fn edit_reverse_scroll(state: &State) -> bool {
-    state.gameplay.profiles().first().is_some_and(|p| {
-        p.scroll_option
-            .contains(profile_data::ScrollOption::Reverse)
-    })
-}
-
 fn max_play_beat(state: &State) -> f32 {
     let note_beat = state
         .gameplay
@@ -2428,28 +2414,6 @@ fn fmt_itg_float(value: f32) -> String {
 }
 
 fn marker_y_for_beat(state: &State, player_idx: usize, offset_y: f32, beat: f32) -> f32 {
-    let profile = &state.gameplay.profiles()[player_idx];
-    let scroll = scroll_effects_from_flags(
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Reverse),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Split),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Alternate),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Cross),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Centered),
-    );
-    let dir = scroll
-        .reverse_scale_for_column(0, state.gameplay.cols_per_player())
-        .signum();
-    let dir = if dir.abs() <= f32::EPSILON { 1.0 } else { dir };
     let receptor_y = practice_edit_cursor_y() + offset_y;
     let field_zoom = practice_edit_field_zoom();
     let scroll_speed = practice_edit_scroll_speed(state);
@@ -2462,7 +2426,7 @@ fn marker_y_for_beat(state: &State, player_idx: usize, offset_y: f32, beat: f32)
         state.gameplay.scroll_reference_bpm(),
         state.gameplay.music_rate(),
     );
-    receptor_y + dir * travel
+    receptor_y + travel
 }
 
 fn practice_edit_beat_travel(

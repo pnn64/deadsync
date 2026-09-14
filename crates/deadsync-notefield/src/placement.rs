@@ -1,4 +1,5 @@
 use deadsync_core::input::MAX_COLS;
+use deadsync_gameplay::ScrollEffects;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_theme::NotefieldStyle;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
@@ -113,6 +114,7 @@ pub struct FieldLayout {
 pub struct ViewOverride {
     pub field_zoom: Option<f32>,
     pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub scroll: Option<ScrollEffects>,
     pub force_center_1player: bool,
     pub center_receptors_y: bool,
     pub receptor_y: Option<f32>,
