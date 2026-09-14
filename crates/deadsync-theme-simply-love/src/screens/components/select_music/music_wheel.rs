@@ -95,7 +95,8 @@ const STR_REF_CACHE_LIMIT: usize = 4096;
 // Our stacked Points+Score mode is deadsync-only, so it needs a smaller zoom to
 // keep both lines within that same visual footprint.
 const WHEEL_SCORE_ZOOM: f32 = 0.2;
-const WHEEL_SCORE_MAX_WIDTH: f32 = 72.0;
+// Fits 100.00 at the normal score zoom in both numbers fonts.
+const WHEEL_SCORE_MAX_WIDTH: f32 = 56.0;
 const WHEEL_SCORE_TITLE_GAP: f32 = 8.0;
 const ITL_POINTS_SCORE_ZOOM: f32 = 0.13;
 const SONG_NULL_SYNC_RIGHT_EDGE: [f32; 4] = [80.0 / 255.0, 20.0 / 255.0, 27.0 / 255.0, 1.0];
@@ -1138,16 +1139,18 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             .any(|side| {
                                 side_joined(side) && runtime_for_side(side).percentage.is_some()
                             });
-                    let title_max_w_local = if has_percentage {
-                        title_max_w_local.min(
-                            wheel_score_x
-                                - title_x_local
-                                - WHEEL_SCORE_MAX_WIDTH
-                                - WHEEL_SCORE_TITLE_GAP,
-                        )
+                    // Compare rendered widths so zoom does not shrink the available
+                    // space a second time. Keep the existing limits on unscored rows.
+                    let score_title_max_w = if has_percentage {
+                        wheel_score_x
+                            - title_x_local
+                            - WHEEL_SCORE_MAX_WIDTH
+                            - WHEEL_SCORE_TITLE_GAP
                     } else {
-                        title_max_w_local
+                        f32::INFINITY
                     };
+                    let title_max_w = (title_max_w_local * 0.85).min(score_title_max_w);
+                    let subtitle_max_w = (title_max_w_local * 0.7).min(score_title_max_w);
                     let has_edit = runtime_slot.has_edit;
                     let has_lua = info.has_lua;
                     let lua_submit_allowed = lua_badge_submit_allowed(
@@ -1206,8 +1209,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         settext(cached_str_ref(title)):
                         align(0.0, 0.5):
                         xy(highlight_left_world + title_x_local, y_center_item + subtitle_y_offset):
-                        maxwidth(title_max_w_local):
                         zoom(0.85):
+                        maxwidth(title_max_w):
                         diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                         z(53)
                     ));
@@ -1217,8 +1220,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             settext(cached_str_ref(subtitle)):
                             align(0.0, 0.5):
                             xy(highlight_left_world + title_x_local, y_center_item + line_gap_units):
-                            maxwidth(title_max_w_local):
                             zoom(0.7):
+                            maxwidth(subtitle_max_w):
                             diffuse(txt_col[0], txt_col[1], txt_col[2], txt_col[3]):
                             z(53)
                         ));
@@ -1846,8 +1849,13 @@ mod tests {
                             content,
                             offset,
                             max_width: Some(max_width),
+                            max_w_pre_zoom,
                             ..
                         } if content.as_str() == "Song" && offset[1] == 240.0 => {
+                            assert!(
+                                !max_w_pre_zoom,
+                                "titles must use the available width after zoom"
+                            );
                             Some(offset[0] + max_width)
                         }
                         _ => None,
@@ -1866,13 +1874,9 @@ mod tests {
                     assert_eq!(*color, color::JUDGMENT_RGBA[0]);
                 }
                 let score_right = fails.first().or_else(|| passes.first()).unwrap().1[0];
-                assert!(
-                    title_right
-                        <= score_right
-                            - super::WHEEL_SCORE_MAX_WIDTH
-                            - super::WHEEL_SCORE_TITLE_GAP
-                            + 0.001
-                );
+                let available_title_right =
+                    score_right - super::WHEEL_SCORE_MAX_WIDTH - super::WHEEL_SCORE_TITLE_GAP;
+                assert!((title_right - available_title_right).abs() < 0.001);
                 if joined == [true, true] {
                     assert!(fails[0].1[1] < passes[0].1[1]);
                 }
