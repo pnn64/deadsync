@@ -1,3 +1,4 @@
+// Frozen from 0.5.1215 (a907beb1d).
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
@@ -194,14 +195,6 @@ fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
         }
         return;
     }
-    if gain == 0.0 {
-        // A zero product needs no normalization or fused multiply-add. Still
-        // add its sign to preserve signed-zero output and NaN propagation.
-        for (dst, &src) in dst.iter_mut().zip(src) {
-            *dst += f32::from(src) * gain;
-        }
-        return;
-    }
     for (dst, &src) in dst.iter_mut().zip(src) {
         *dst = i16_to_f32(src).mul_add(gain, *dst);
     }
@@ -259,97 +252,6 @@ pub fn i16_to_f32(sample: i16) -> f32 {
     f32::from(sample) / (f32::from(i16::MAX) + 1.0)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{
-        MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, ScheduledOnset, f32_to_i16, i16_to_f32,
-        scheduled_onset_decision,
-    };
-
-    #[test]
-    fn scheduled_onset_immediate_when_target_zero() {
-        assert_eq!(
-            scheduled_onset_decision(0, 10_000, 2, 1_024),
-            ScheduledOnset::StartAt(0)
-        );
-    }
-
-    #[test]
-    fn scheduled_onset_starts_at_offset_within_buffer() {
-        assert_eq!(
-            scheduled_onset_decision(10_100, 10_000, 2, 1_024),
-            ScheduledOnset::StartAt(200)
-        );
-    }
-
-    #[test]
-    fn scheduled_onset_pending_when_beyond_buffer() {
-        assert_eq!(
-            scheduled_onset_decision(10_600, 10_000, 2, 1_024),
-            ScheduledOnset::Pending
-        );
-    }
-
-    #[test]
-    fn scheduled_onset_drops_when_implausibly_far_ahead() {
-        assert_eq!(
-            scheduled_onset_decision(MAX_SCHEDULE_AHEAD_FRAMES + 10_001, 10_000, 2, 1_024),
-            ScheduledOnset::Drop
-        );
-    }
-
-    #[test]
-    fn scheduled_onset_fires_when_target_already_passed() {
-        assert_eq!(
-            scheduled_onset_decision(9_000, 10_000, 2, 1_024),
-            ScheduledOnset::StartAt(0)
-        );
-    }
-
-    #[test]
-    fn f32_to_i16_clamps_full_scale() {
-        assert_eq!(f32_to_i16(2.0), i16::MAX);
-        assert_eq!(f32_to_i16(1.0), i16::MAX);
-        assert_eq!(f32_to_i16(-1.0), i16::MIN);
-        assert_eq!(f32_to_i16(-2.0), i16::MIN);
-        assert_eq!(f32_to_i16(f32::INFINITY), i16::MAX);
-        assert_eq!(f32_to_i16(f32::NEG_INFINITY), i16::MIN);
-        assert_eq!(f32_to_i16(f32::NAN), 0);
-    }
-
-    #[test]
-    fn f32_to_i16_maps_midpoint_samples() {
-        assert_eq!(f32_to_i16(0.0), 0);
-        assert_eq!(f32_to_i16(0.5), 16_384);
-        assert_eq!(f32_to_i16(-0.5), -16_384);
-    }
-
-    #[test]
-    fn i16_to_f32_maps_full_range() {
-        assert_eq!(i16_to_f32(i16::MIN), -1.0);
-        assert_eq!(i16_to_f32(0), 0.0);
-        assert!((i16_to_f32(i16::MAX) - 0.999_969_5).abs() <= f32::EPSILON);
-    }
-
-    #[test]
-    fn mix_controls_keep_bus_policy_outside_the_mixer() {
-        let controls = MixControls::new();
-        let bus = MixBus::new(3);
-        controls.set_stream_gain(0.75);
-        controls.set_bus_gain(bus, 0.25);
-        assert_eq!(controls.stream_gain(), 0.75);
-        assert_eq!(controls.bus_gain(bus), 0.25);
-    }
-
-    #[test]
-    fn stopping_one_bus_only_invalidates_that_bus() {
-        let controls = MixControls::new();
-        let first = MixBus::new(1);
-        let second = MixBus::new(2);
-        let first_generation = controls.bus_generation(first);
-        let second_generation = controls.bus_generation(second);
-        controls.stop_bus(first);
-        assert!(!controls.is_current(first, first_generation));
-        assert!(controls.is_current(second, second_generation));
-    }
+pub(super) fn samples(src: &[i16], dst: &mut [f32], gain: f32) {
+    mix_sfx_samples(src, dst, gain);
 }
