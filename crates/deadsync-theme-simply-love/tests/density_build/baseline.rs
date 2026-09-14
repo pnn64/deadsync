@@ -1,4 +1,5 @@
-//! Simply Love measure-density histograms and reusable mesh updates.
+// Frozen production density module from 7619f9cb22f619cc4dc7598b5a3bd06bce9ff665 (0.5.1210).
+// Simply Love measure-density histograms and reusable mesh updates.
 
 use deadlib_present::color::{desaturate_rgb, lerp, lerp_color};
 use deadlib_render_core::MeshVertex;
@@ -49,17 +50,6 @@ pub struct DensityHistCache {
     scaled_width: f32,
 }
 
-// Mesh construction only reads columns. One-shot callers can borrow their
-// temporary columns; long-lived caches keep their shared ownership unchanged.
-#[derive(Clone, Copy)]
-struct HistView<'a> {
-    cols: &'a [HistCol],
-    bottom_color: [f32; 4],
-    height: f32,
-    scaled_width: f32,
-}
-
-#[inline]
 fn build_hist_cols(
     measure_nps: &[f64],
     peak_nps: f64,
@@ -83,10 +73,6 @@ fn build_hist_cols(
 
     let mut cols: Vec<HistCol> = Vec::with_capacity(measure_nps.len().saturating_add(1));
     let mut first_step_has_occurred = false;
-    // The first sampled column must have positive density, so a NaN key
-    // cannot hit before a height has been computed.
-    let mut previous_nps_bits = f32::NAN.to_bits();
-    let mut previous_bar_h = f32::NAN;
 
     for (i, &nps_f64) in measure_nps.iter().enumerate() {
         let nps = nps_f64 as f32;
@@ -101,14 +87,11 @@ fn build_hist_cols(
             continue;
         };
         let x = ((t - first_second) / denom_t) * width;
-        // Repeated density values share their rounded height. Compare bits so
-        // signed zero and nonfinite input keep the same arithmetic inputs.
-        if previous_nps_bits != nps.to_bits() {
-            previous_bar_h = ((nps / peak) * height).round();
-            previous_nps_bits = nps.to_bits();
-        }
-        let bar_h = previous_bar_h;
+        let bar_h = ((nps / peak) * height).round();
         let top_y = height - bar_h;
+        let frac = (bar_h / height).abs();
+        let top_color = lerp_color(frac, blue, purple);
+
         if cols.len() >= 2 {
             let a = cols[cols.len() - 1];
             let b = cols[cols.len() - 2];
@@ -119,10 +102,6 @@ fn build_hist_cols(
             }
         }
 
-        // A collapsed plateau keeps the preceding column's color. Compute a
-        // new color only for columns that will actually be stored.
-        let frac = (bar_h / height).abs();
-        let top_color = lerp_color(frac, blue, purple);
         cols.push(HistCol {
             x,
             top_y,
@@ -153,9 +132,6 @@ pub fn build_density_histogram_cache(
     desaturation: Option<f32>,
     alpha: f32,
 ) -> Option<DensityHistCache> {
-    if measure_nps.len() <= 1 {
-        return None;
-    }
     let scaled_width = scaled_width.max(0.0);
     let height = height.max(0.0);
     if scaled_width <= 0.0 || height <= 0.0 {
@@ -203,21 +179,50 @@ fn push_hist_segment(
     bottom_y: f32,
     bottom_color: [f32; 4],
 ) {
-    out.extend_from_slice(&hist_segment_vertices(a, b, left, bottom_y, bottom_color));
+    let ax = a.x - left;
+    let bx = b.x - left;
+
+    out.push(MeshVertex {
+        pos: [ax, bottom_y],
+        color: bottom_color,
+    });
+    out.push(MeshVertex {
+        pos: [ax, a.top_y],
+        color: a.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color: bottom_color,
+    });
+
+    out.push(MeshVertex {
+        pos: [ax, a.top_y],
+        color: a.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, b.top_y],
+        color: b.top_color,
+    });
+    out.push(MeshVertex {
+        pos: [bx, bottom_y],
+        color: bottom_color,
+    });
 }
 
 #[inline(always)]
-fn hist_segment_vertices(
+fn write_hist_segment(
+    dst: &mut [MeshVertex],
+    written: usize,
     a: HistCol,
     b: HistCol,
     left: f32,
     bottom_y: f32,
     bottom_color: [f32; 4],
-) -> [MeshVertex; 6] {
+) -> usize {
     let ax = a.x - left;
     let bx = b.x - left;
 
-    [
+    let verts = [
         MeshVertex {
             pos: [ax, bottom_y],
             color: bottom_color,
@@ -242,41 +247,12 @@ fn hist_segment_vertices(
             pos: [bx, bottom_y],
             color: bottom_color,
         },
-    ]
-}
-
-#[inline(always)]
-fn write_hist_segment(
-    dst: &mut [MeshVertex],
-    written: usize,
-    a: HistCol,
-    b: HistCol,
-    left: f32,
-    bottom_y: f32,
-    bottom_color: [f32; 4],
-) -> usize {
-    let verts = hist_segment_vertices(a, b, left, bottom_y, bottom_color);
+    ];
     dst[written..written + verts.len()].copy_from_slice(&verts);
     written + verts.len()
 }
 
 impl DensityHistCache {
-    fn view(&self) -> HistView<'_> {
-        HistView {
-            cols: &self.cols,
-            bottom_color: self.bottom_color,
-            height: self.height,
-            scaled_width: self.scaled_width,
-        }
-    }
-
-    #[must_use]
-    pub fn mesh(&self, offset: f32, visible_width: f32) -> Vec<MeshVertex> {
-        self.view().mesh(offset, visible_width)
-    }
-}
-
-impl HistView<'_> {
     fn visible_window(&self, offset: f32, visible_width: f32) -> Option<HistWindow> {
         let visible_width = visible_width.max(0.0);
         if visible_width <= 0.0 || self.scaled_width <= 0.0 || self.height <= 0.0 {
@@ -412,7 +388,6 @@ pub fn update_density_hist_mesh(
         *mesh = None;
         return;
     };
-    let cache = cache.view();
     let Some(window) = cache.visible_window(offset, visible_width) else {
         *mesh = None;
         return;
@@ -446,7 +421,6 @@ pub fn update_density_hist_mesh_reusable(
         *mesh = None;
         return;
     };
-    let cache = cache.view();
     let Some(window) = cache.visible_window(offset, visible_width) else {
         *mesh = None;
         return;
@@ -462,32 +436,8 @@ pub fn update_density_hist_mesh_reusable(
 
     let vertices = Arc::get_mut(mesh.as_mut().expect("mesh initialized above"))
         .expect("mesh has no other owners");
-    if vertices.len() >= len {
-        let written = cache.fill_mesh_vertices(vertices, window);
-        vertices.truncate(written);
-        debug_assert_eq!(written, len);
-        return;
-    }
-    vertices.clear();
-    vertices.reserve(len);
-    let mut prev = None;
-    let mut written = 0;
-    // Rebuild growing meshes in the retained allocation without zero-filling
-    // vertices that would immediately be overwritten.
-    cache.visit_window_points(window, |point| {
-        if let Some(last) = prev {
-            push_hist_segment(
-                vertices,
-                last,
-                point,
-                window.left,
-                cache.height,
-                cache.bottom_color,
-            );
-            written += 6;
-        }
-        prev = Some(point);
-    });
+    vertices.resize(len, MeshVertex::default());
+    let written = cache.fill_mesh_vertices(vertices, window);
     debug_assert_eq!(written, len);
 }
 
@@ -505,9 +455,6 @@ pub fn build_density_histogram_mesh(
     desaturation: Option<f32>,
     alpha: f32,
 ) -> Vec<MeshVertex> {
-    if measure_nps.len() <= 1 {
-        return Vec::new();
-    }
     let scaled_width = scaled_width.max(0.0);
     let height = height.max(0.0);
     let visible_width = visible_width.max(0.0);
@@ -515,7 +462,7 @@ pub fn build_density_histogram_mesh(
         return Vec::new();
     }
 
-    let (cols, bottom_color) = build_hist_cols(
+    let Some(cache) = build_density_histogram_cache(
         measure_nps,
         peak_nps,
         measure_seconds,
@@ -525,142 +472,8 @@ pub fn build_density_histogram_mesh(
         height,
         desaturation,
         alpha,
-    );
-    if cols.len() < 2 {
+    ) else {
         return Vec::new();
-    }
-    // Release capacity discarded by plateau compression before allocating the
-    // mesh, while avoiding the cache's additional Arc allocation and copy.
-    let cols = cols.into_boxed_slice();
-    HistView {
-        cols: &cols,
-        bottom_color,
-        height,
-        scaled_width,
-    }
-    .mesh(offset, visible_width)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sample_cache() -> DensityHistCache {
-        build_density_histogram_cache(
-            &[0.0, 0.0, 2.0, 5.0, 3.0, 4.0, 1.0],
-            5.0,
-            &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
-            0.0,
-            6.0,
-            240.0,
-            64.0,
-            None,
-            1.0,
-        )
-        .expect("sample cache")
-    }
-
-    fn assert_mesh_matches(actual: &[MeshVertex], expected: &[MeshVertex]) {
-        assert_eq!(actual.len(), expected.len());
-        for (index, (actual, expected)) in actual.iter().zip(expected.iter()).enumerate() {
-            assert_eq!(actual.pos, expected.pos, "pos mismatch at {index}");
-            assert_eq!(actual.color, expected.color, "color mismatch at {index}");
-        }
-    }
-
-    #[test]
-    fn update_density_hist_mesh_reuses_existing_buffer_when_vertex_count_matches() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
-        let expected = cache.mesh(48.0, 120.0);
-        let first_ptr = mesh.as_ref().expect("mesh").as_ptr();
-        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 48.0, 120.0);
-        let second_ptr = mesh.as_ref().expect("mesh").as_ptr();
-
-        assert_eq!(first_ptr, second_ptr);
-        assert_mesh_matches(mesh.as_ref().expect("mesh"), &expected);
-    }
-
-    #[test]
-    fn update_density_hist_mesh_clears_mesh_without_cache() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh(&mut mesh, Some(&cache), 0.0, 120.0);
-        assert!(mesh.is_some());
-
-        update_density_hist_mesh(&mut mesh, None, 0.0, 120.0);
-        assert!(mesh.is_none());
-    }
-
-    #[test]
-    fn reusable_density_hist_mesh_matches_shared_mesh_and_reuses_changed_lengths() {
-        let cache = sample_cache();
-        let mut shared = None;
-        let mut reusable = None;
-
-        update_density_hist_mesh(&mut shared, Some(&cache), 0.0, 240.0);
-        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 0.0, 240.0);
-        assert_mesh_matches(
-            reusable.as_deref().expect("reusable mesh"),
-            shared.as_deref().expect("shared mesh"),
-        );
-        let first_ptr = reusable.as_ref().expect("reusable mesh").as_ptr();
-        let first_len = reusable.as_ref().expect("reusable mesh").len();
-
-        update_density_hist_mesh(&mut shared, Some(&cache), 48.0, 120.0);
-        update_density_hist_mesh_reusable(&mut reusable, Some(&cache), 48.0, 120.0);
-        assert_mesh_matches(
-            reusable.as_deref().expect("reusable mesh"),
-            shared.as_deref().expect("shared mesh"),
-        );
-
-        assert_ne!(reusable.as_ref().expect("reusable mesh").len(), first_len);
-        assert_eq!(
-            reusable.as_ref().expect("reusable mesh").as_ptr(),
-            first_ptr
-        );
-    }
-
-    #[test]
-    fn reusable_density_hist_mesh_preserves_a_shared_previous_frame() {
-        let cache = sample_cache();
-        let mut mesh = None;
-
-        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 0.0, 240.0);
-        let previous = Arc::clone(mesh.as_ref().expect("reusable mesh"));
-        let previous_vertices = previous.to_vec();
-
-        update_density_hist_mesh_reusable(&mut mesh, Some(&cache), 48.0, 120.0);
-
-        assert_mesh_matches(previous.as_slice(), &previous_vertices);
-        assert!(!Arc::ptr_eq(
-            &previous,
-            mesh.as_ref().expect("replacement mesh")
-        ));
-    }
-
-    #[test]
-    fn build_density_histogram_mesh_preserves_subpixel_bursts() {
-        let mesh = build_density_histogram_mesh(
-            &[1.0, 10.0, 1.0],
-            10.0,
-            &[0.0, 0.25, 0.5],
-            0.0,
-            1.0,
-            1.0,
-            10.0,
-            0.0,
-            1.0,
-            None,
-            1.0,
-        );
-
-        assert_eq!(mesh.len(), 18);
-        assert!(mesh.iter().any(|v| v.pos == [0.25, 0.0]));
-    }
+    };
+    cache.mesh(offset, visible_width)
 }

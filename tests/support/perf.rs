@@ -121,6 +121,28 @@ pub fn assert_churn_budget(max_allocations: usize, max_bytes: usize, work: impl 
     );
 }
 
+/// Compare complete owning operations, including destruction of their results.
+/// Shrinking reallocations are allowed when they do not exceed the baseline.
+pub fn assert_reduced_churn(old: impl FnOnce(), new: impl FnOnce()) {
+    fn count(work: impl FnOnce()) -> Churn {
+        let tracking = Tracking::start();
+        work();
+        let counts = COUNTS.get().expect("tracking is active");
+        drop(tracking);
+        counts
+    }
+    let old = count(old);
+    let new = count(new);
+    assert!(
+        new.allocs < old.allocs
+            && new.frees < old.frees
+            && new.reallocs <= old.reallocs
+            && new.allocated_bytes < old.allocated_bytes
+            && new.freed_bytes < old.freed_bytes,
+        "expected less allocation churn: old {old:?}, new {new:?}"
+    );
+}
+
 pub fn measure<T>(name: &str, units: usize, mut work: impl FnMut() -> T) {
     const ITERATIONS: usize = 512;
     for _ in 0..64 {
