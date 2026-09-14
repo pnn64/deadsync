@@ -562,6 +562,7 @@ pub const SFX_PATHS: &[&str] = &[
     "assets/sounds/harder.ogg",
     "assets/sounds/next_row.ogg",
     "assets/sounds/prev_row.ogg",
+    "assets/sounds/prompt.ogg",
     "assets/sounds/screen_edit_marker.ogg",
     "assets/sounds/screen_edit_snap.ogg",
     "assets/sounds/screenshot.ogg",

@@ -2659,7 +2659,7 @@ mod tests {
             enable_arrowcloud: false,
             enable_boogiestats: false,
             submit_arrowcloud_fails: false,
-            show_arrowcloud_result_dialogs: false,
+            show_arrowcloud_result_dialogs: true,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: false,
@@ -3074,7 +3074,7 @@ mod tests {
 
     #[test]
     fn load_system_options_uses_legacy_keys_and_defaults() {
-        let default = default_system_options();
+        let default = SystemOptions::default();
         let mut conf = SimpleIni::new();
         conf.load_str(
             r#"
@@ -3104,6 +3104,10 @@ mod tests {
         assert_eq!(loaded.log_level, default.log_level);
         assert_eq!(loaded.log_to_file, default.log_to_file);
         assert_eq!(loaded.show_console, default.show_console);
+        assert!(loaded.show_arrowcloud_result_dialogs);
+
+        conf.load_str("[Options]\nShowArrowCloudResultDialogs=0\n");
+        assert!(!load_system_options(&conf, default).show_arrowcloud_result_dialogs);
     }
 
     #[test]

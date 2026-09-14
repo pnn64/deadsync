@@ -176,8 +176,9 @@ const SUBMIT_FOOTER_SPRITE_FPS: f32 = 30.0;
 const SUBMIT_FOOTER_TEXT_ZOOM: f32 = 0.8;
 const SUBMIT_FOOTER_SPRITE_PX: f32 = 16.2;
 const RESULT_DIALOG_OVERLAY_Z: i16 = 1400;
-const RESULT_DIALOG_SCREEN_MARGIN: f32 = 32.0;
-const RESULT_DIALOG_PANEL_GAP: f32 = 24.0;
+// ArrowCloud theme-20260901.2: fit within 360x440, then apply its manual scale.
+const RESULT_DIALOG_SIDE_OFFSET: f32 = 200.0;
+const RESULT_IMAGE_MANUAL_SCALE: f32 = 0.7;
 // Semantic tints for submit footer status icons. Indexes into
 // `color::JUDGMENT_RGBA` so the icons share the gameplay judgment palette.
 const SUBMIT_FOOTER_TINT_OK: [f32; 4] = color::JUDGMENT_RGBA[2]; // Great (green)
@@ -1159,15 +1160,33 @@ mod tests {
 
         assert!(!super::show_pending_result_dialogs(&mut state));
         assert!(!state.result_dialog_visible);
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::None
+        ));
         super::dismiss_event_overlay(&mut state);
         assert!(state.result_dialog_visible);
         assert!(!state.event_overlay_visible);
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx("assets/sounds/prompt.ogg")
+            ))
+        ));
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::None
+        ));
 
         state.event_overlay_pending = true;
         super::dismiss_result_dialogs(&mut state);
         assert!(!state.result_dialog_visible);
         assert!(state.event_overlay_visible);
         assert!(state.result_dialogs[0].is_none());
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::None
+        ));
     }
 
     #[test]
@@ -1177,12 +1196,22 @@ mod tests {
             vec![Arc::<str>::from("first"), Arc::<str>::from("second")].into_boxed_slice(),
         );
         assert!(super::show_pending_result_dialogs(&mut state));
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx("assets/sounds/prompt.ogg")
+            ))
+        ));
 
         assert!(matches!(
             super::handle_input(&mut state, &press(VirtualAction::p1_right)),
             crate::SimplyLoveEffect::None
         ));
         assert_eq!(state.result_dialogs[0].as_ref().unwrap().page, 1);
+        assert!(matches!(
+            super::update(&mut state, 0.0),
+            super::ThemeEffect::None
+        ));
 
         assert!(matches!(
             super::handle_input(&mut state, &press(VirtualAction::p1_start)),
@@ -2539,6 +2568,7 @@ struct ResultDialog {
     page: usize,
     page_text: Arc<str>,
     shown: bool,
+    sfx_played: bool,
 }
 
 impl ResultDialog {
@@ -2552,6 +2582,7 @@ impl ResultDialog {
             page: 0,
             page_text,
             shown: false,
+            sfx_played: false,
         })
     }
 
@@ -3832,6 +3863,17 @@ fn show_pending_result_dialogs(state: &mut State) -> bool {
     found
 }
 
+fn sync_result_dialog_sfx(state: &mut State) -> ThemeEffect {
+    let mut effect = ThemeEffect::None;
+    for dialog in state.result_dialogs.iter_mut().flatten() {
+        if dialog.shown && !dialog.sfx_played {
+            dialog.sfx_played = true;
+            effect = ThemeEffect::sequence(effect, crate::effects::sfx("assets/sounds/prompt.ogg"));
+        }
+    }
+    effect
+}
+
 fn dismiss_event_overlay(state: &mut State) {
     state.event_overlay_visible = false;
     let _ = show_pending_result_dialogs(state);
@@ -4267,6 +4309,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     sync_submit_text(state);
     effect = ThemeEffect::sequence(effect, sync_submit_record_sfx(state));
     effect = ThemeEffect::sequence(effect, sync_nice_sfx(state));
+    effect = ThemeEffect::sequence(effect, sync_result_dialog_sfx(state));
     let play_style = state.context.play_style;
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
@@ -4699,18 +4742,11 @@ fn push_result_dialog_overlay(actors: &mut Vec<Actor>, state: &State) {
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
         setsize(screen_width(), screen_height()):
-        diffuse(0.0, 0.0, 0.0, 0.88): z(RESULT_DIALOG_OVERLAY_Z)
+        diffuse(0.0, 0.0, 0.0, 0.75): z(RESULT_DIALOG_OVERLAY_Z)
     ));
 
-    let total_width = screen_width() - RESULT_DIALOG_SCREEN_MARGIN * 2.0;
-    let panel_width = if panel_count == 1 {
-        total_width
-    } else {
-        (total_width - RESULT_DIALOG_PANEL_GAP) * 0.5
-    };
-    let max_image_width = panel_width - 24.0;
-    let max_image_height = screen_height() - 96.0;
-    let title = tr("OptionsGrooveStats", "ArrowCloudResultDialogs");
+    let max_image_width = (screen_width() - 40.0).min(360.0);
+    let max_image_height = (screen_height() - 40.0).min(440.0);
     let mut ordinal = 0_usize;
     for dialog in state
         .result_dialogs
@@ -4729,46 +4765,62 @@ fn push_result_dialog_overlay(actors: &mut Vec<Actor>, state: &State) {
         }
         let scale = (max_image_width / meta.w as f32)
             .min(max_image_height / meta.h as f32)
-            .min(1.0);
+            .min(1.0)
+            * RESULT_IMAGE_MANUAL_SCALE;
         let image_width = meta.w as f32 * scale;
         let image_height = meta.h as f32 * scale;
         let center_x = if panel_count == 1 {
             screen_center_x()
         } else {
-            RESULT_DIALOG_SCREEN_MARGIN
-                + panel_width * 0.5
-                + ordinal as f32 * (panel_width + RESULT_DIALOG_PANEL_GAP)
+            screen_center_x() + (ordinal as f32 * 2.0 - 1.0) * RESULT_DIALOG_SIDE_OFFSET
         };
-        let center_y = screen_center_y() - 8.0;
+        let center_y = screen_center_y();
         actors.push(act!(quad:
             align(0.5, 0.5): xy(center_x, center_y):
-            setsize(image_width + 8.0, image_height + 8.0):
-            diffuse(1.0, 1.0, 1.0, 1.0): z(RESULT_DIALOG_OVERLAY_Z + 1)
+            setsize(image_width, image_height):
+            diffuse(0.0, 0.0, 0.0, 0.9): z(RESULT_DIALOG_OVERLAY_Z + 1)
         ));
         actors.push(act!(sprite(Arc::clone(texture_key)):
             align(0.5, 0.5): xy(center_x, center_y): zoom(scale):
             z(RESULT_DIALOG_OVERLAY_Z + 2)
         ));
-        actors.push(act!(text:
-            font("miso"): settext(Arc::clone(&title)):
-            align(0.5, 0.5): xy(center_x, 18.0): zoom(0.8):
-            z(RESULT_DIALOG_OVERLAY_Z + 3)
-        ));
+        // Keep the two-pixel border inside the image bounds, as in layoutBoxToImage.
+        for (x, y, w, h) in [
+            (0.0, 1.0 - image_height * 0.5, image_width, 2.0),
+            (0.0, image_height * 0.5 - 1.0, image_width, 2.0),
+            (
+                1.0 - image_width * 0.5,
+                0.0,
+                2.0,
+                (image_height - 4.0).max(0.0),
+            ),
+            (
+                image_width * 0.5 - 1.0,
+                0.0,
+                2.0,
+                (image_height - 4.0).max(0.0),
+            ),
+        ] {
+            actors.push(act!(quad:
+                align(0.5, 0.5): xy(center_x + x, center_y + y): setsize(w, h):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(RESULT_DIALOG_OVERLAY_Z + 3)
+            ));
+        }
         if dialog.texture_keys.len() > 1 {
-            let page_y = screen_height() - 20.0;
+            let page_y = center_y + image_height * 0.5 + 16.0;
             actors.push(act!(text:
                 font("miso"): settext(Arc::clone(&dialog.page_text)):
-                align(0.5, 0.5): xy(center_x, page_y): zoom(0.72):
+                align(0.5, 0.5): xy(center_x, page_y): zoom(0.6):
                 z(RESULT_DIALOG_OVERLAY_Z + 3)
             ));
             actors.push(act!(text:
-                font("miso"): settext("<"):
-                align(0.5, 0.5): xy(center_x - 48.0, page_y): zoom(0.8):
+                font("miso"): settext("&MENULEFT;"):
+                align(0.5, 0.5): xy(center_x - image_width * 0.5 - 22.0, center_y): zoom(0.8):
                 z(RESULT_DIALOG_OVERLAY_Z + 3)
             ));
             actors.push(act!(text:
-                font("miso"): settext(">"):
-                align(0.5, 0.5): xy(center_x + 48.0, page_y): zoom(0.8):
+                font("miso"): settext("&MENURiGHT;"):
+                align(0.5, 0.5): xy(center_x + image_width * 0.5 + 22.0, center_y): zoom(0.8):
                 z(RESULT_DIALOG_OVERLAY_Z + 3)
             ));
         }
