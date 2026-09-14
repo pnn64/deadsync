@@ -71,6 +71,15 @@ pub(super) fn row_choices(
     rows: &[SubRow],
     row_idx: usize,
 ) -> Vec<Cow<'static, str>> {
+    collect_row_choices(state, kind, rows, row_idx)
+}
+
+fn collect_row_choices<T: ChoiceText>(
+    state: &State,
+    kind: SubmenuKind,
+    rows: &[SubRow],
+    row_idx: usize,
+) -> Vec<T> {
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Gameplay)
         && row.id == SubRowId::DefaultJudgmentPalette
@@ -79,7 +88,7 @@ pub(super) fn row_choices(
             .judgment_palettes
             .palettes
             .iter()
-            .map(|entry| Cow::Owned(entry.name.clone()))
+            .map(|entry| T::borrowed(entry.name.as_str()))
             .collect();
     }
     if let Some(row) = rows.get(row_idx)
@@ -91,7 +100,7 @@ pub(super) fn row_choices(
                     .system_scroll_speed_values
                     .iter()
                     .map(ToString::to_string)
-                    .map(Cow::Owned)
+                    .map(T::owned)
                     .collect();
             }
             SubRowId::DefaultScrollDirection => {
@@ -99,7 +108,7 @@ pub(super) fn row_choices(
                     .system_scroll_direction_values
                     .iter()
                     .map(ToString::to_string)
-                    .map(Cow::Owned)
+                    .map(T::owned)
                     .collect();
             }
             SubRowId::DefaultBackgroundFilter => {
@@ -107,16 +116,11 @@ pub(super) fn row_choices(
                     .system_background_filter_values
                     .iter()
                     .map(|value| format!("{}%", value.percent()))
-                    .map(Cow::Owned)
+                    .map(T::owned)
                     .collect();
             }
             SubRowId::DefaultNoteSkin => {
-                return state
-                    .system_noteskin_choices
-                    .iter()
-                    .cloned()
-                    .map(Cow::Owned)
-                    .collect();
+                return string_choice_texts(&state.system_noteskin_choices);
             }
             _ => {}
         }
@@ -125,15 +129,25 @@ pub(super) fn row_choices(
         && matches!(kind, SubmenuKind::SmxConfig)
     {
         if row.id == SubRowId::SmxBgPack {
-            let default_label = tr("Common", "Default").to_string();
-            let mut choices = vec![Cow::Owned(default_label)];
-            choices.extend(state.smx_bg_pack_choices.iter().cloned().map(Cow::Owned));
+            let default_label = T::shared(tr("Common", "Default"));
+            let mut choices = vec![default_label];
+            choices.extend(
+                state
+                    .smx_bg_pack_choices
+                    .iter()
+                    .map(|text| T::borrowed(text.as_str())),
+            );
             return choices;
         }
         if row.id == SubRowId::SmxJudgePack {
-            let default_label = tr("Common", "Default").to_string();
-            let mut choices = vec![Cow::Owned(default_label)];
-            choices.extend(state.smx_judge_pack_choices.iter().cloned().map(Cow::Owned));
+            let default_label = T::shared(tr("Common", "Default"));
+            let mut choices = vec![default_label];
+            choices.extend(
+                state
+                    .smx_judge_pack_choices
+                    .iter()
+                    .map(|text| T::borrowed(text.as_str())),
+            );
             return choices;
         }
     }
@@ -141,29 +155,19 @@ pub(super) fn row_choices(
         && matches!(kind, SubmenuKind::Graphics)
     {
         if row.id == SubRowId::SoftwareRendererThreads {
-            return state
-                .software_thread_labels
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return string_choice_texts(&state.software_thread_labels);
         }
         if row.id == SubRowId::MaxFpsValue {
-            return vec![Cow::Owned(selected_max_fps_label(state))];
+            return vec![T::owned(selected_max_fps_label(state))];
         }
         if row.id == SubRowId::DisplayMode {
-            return state
-                .display_mode_choices
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return string_choice_texts(&state.display_mode_choices);
         }
         if row.id == SubRowId::DisplayResolution {
             return state
                 .resolution_choices
                 .iter()
-                .map(|&(w, h)| Cow::Owned(format!("{w}x{h}")))
+                .map(|&(w, h)| T::owned(format!("{w}x{h}")))
                 .collect();
         }
         if row.id == SubRowId::RefreshRate {
@@ -172,14 +176,14 @@ pub(super) fn row_choices(
                 .iter()
                 .map(|&mhz| {
                     if mhz == 0 {
-                        Cow::Owned(tr("Common", "Default").to_string())
+                        T::shared(tr("Common", "Default"))
                     } else {
                         // Format nicely: 60000 -> "60 Hz", 59940 -> "59.94 Hz"
                         let hz = mhz as f32 / 1000.0;
                         if (hz.fract()).abs() < 0.01 {
-                            Cow::Owned(format!("{hz:.0}Hz"))
+                            T::owned(format!("{hz:.0}Hz"))
                         } else {
-                            Cow::Owned(format!("{hz:.2}Hz"))
+                            T::owned(format!("{hz:.2}Hz"))
                         }
                     }
                 })
@@ -190,23 +194,13 @@ pub(super) fn row_choices(
         && matches!(kind, SubmenuKind::Advanced)
         && row.id == SubRowId::SongParsingThreads
     {
-        return state
-            .software_thread_labels
-            .iter()
-            .cloned()
-            .map(Cow::Owned)
-            .collect();
+        return string_choice_texts(&state.software_thread_labels);
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::NullOrDieOptions)
         && row.id == SubRowId::PackSyncThreads
     {
-        return state
-            .software_thread_labels
-            .iter()
-            .cloned()
-            .map(Cow::Owned)
-            .collect();
+        return string_choice_texts(&state.software_thread_labels);
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Sound)
@@ -215,53 +209,38 @@ pub(super) fn row_choices(
             return state
                 .sound_device_options
                 .iter()
-                .map(|opt| Cow::Owned(opt.label.clone()))
+                .map(|opt| T::borrowed(opt.label.as_str()))
                 .collect();
         }
         if row.id == SubRowId::AudioSampleRate {
             return sound_sample_rate_choices(state)
                 .into_iter()
                 .map(|rate| match rate {
-                    None => Cow::Owned(tr("Common", "Auto").to_string()),
-                    Some(hz) => Cow::Owned(format!("{hz} Hz")),
+                    None => T::shared(tr("Common", "Auto")),
+                    Some(hz) => T::owned(format!("{hz} Hz")),
                 })
                 .collect();
         }
         #[cfg(target_os = "linux")]
         if row.id == SubRowId::LinuxAudioBackend {
-            return state
-                .linux_backend_choices
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return string_choice_texts(&state.linux_backend_choices);
         }
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::ScoreImport)
     {
         if row.id == SubRowId::ScoreImportProfile {
-            return state
-                .score_import_profile_choices
-                .iter()
-                .cloned()
-                .map(Cow::Owned)
-                .collect();
+            return string_choice_texts(&state.score_import_profile_choices);
         }
         if row.id == SubRowId::ScoreImportPack {
-            return vec![Cow::Owned(score_import_pack_summary(state))];
+            return vec![T::owned(score_import_pack_summary(state))];
         }
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::SyncPacks)
         && row.id == SubRowId::SyncPackPack
     {
-        return state
-            .sync_pack_choices
-            .iter()
-            .cloned()
-            .map(Cow::Owned)
-            .collect();
+        return string_choice_texts(&state.sync_pack_choices);
     }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Bookkeeping)
@@ -273,15 +252,10 @@ pub(super) fn row_choices(
             SubRowId::StagesPlayed => state.bookkeeping.stages_played,
             _ => 0,
         };
-        return vec![Cow::Owned(value.to_string())];
+        return vec![T::owned(value.to_string())];
     }
     rows.get(row_idx)
-        .map(|row| {
-            row.choices
-                .iter()
-                .map(|c| Cow::Owned(c.get().to_string()))
-                .collect()
-        })
+        .map(|row| choice_texts(row.choices))
         .unwrap_or_default()
 }
 
@@ -290,8 +264,8 @@ pub(super) fn submenu_display_choice_texts(
     kind: SubmenuKind,
     rows: &[SubRow],
     row_idx: usize,
-) -> Vec<Cow<'static, str>> {
-    let mut choice_texts = row_choices(state, kind, rows, row_idx);
+) -> Vec<Arc<str>> {
+    let mut choice_texts = collect_row_choices::<Arc<str>>(state, kind, rows, row_idx);
     let Some(row) = rows.get(row_idx) else {
         return choice_texts;
     };
@@ -299,29 +273,29 @@ pub(super) fn submenu_display_choice_texts(
         return choice_texts;
     }
     if row.id == SubRowId::GlobalOffset {
-        choice_texts[0] = Cow::Owned(format_ms(state.global_offset_ms));
+        choice_texts[0] = Arc::from(format_ms(state.global_offset_ms));
     } else if row.id == SubRowId::MasterVolume {
-        choice_texts[0] = Cow::Owned(format_percent(state.master_volume_pct));
+        choice_texts[0] = Arc::from(format_percent(state.master_volume_pct));
     } else if row.id == SubRowId::SfxVolume {
-        choice_texts[0] = Cow::Owned(format_percent(state.sfx_volume_pct));
+        choice_texts[0] = Arc::from(format_percent(state.sfx_volume_pct));
     } else if row.id == SubRowId::AssistTickVolume {
-        choice_texts[0] = Cow::Owned(format_percent(state.assist_tick_volume_pct));
+        choice_texts[0] = Arc::from(format_percent(state.assist_tick_volume_pct));
     } else if row.id == SubRowId::MusicVolume {
-        choice_texts[0] = Cow::Owned(format_percent(state.music_volume_pct));
+        choice_texts[0] = Arc::from(format_percent(state.music_volume_pct));
     } else if row.id == SubRowId::SmxDefaultLightBrightness {
-        choice_texts[0] = Cow::Owned(format_percent(state.smx_default_light_brightness_pct));
+        choice_texts[0] = Arc::from(format_percent(state.smx_default_light_brightness_pct));
     } else if row.id == SubRowId::VisualDelay {
-        choice_texts[0] = Cow::Owned(format_ms(state.visual_delay_ms));
+        choice_texts[0] = Arc::from(format_ms(state.visual_delay_ms));
     } else if row.id == SubRowId::Debounce {
-        choice_texts[0] = Cow::Owned(format_ms(state.input_debounce_ms));
+        choice_texts[0] = Arc::from(format_ms(state.input_debounce_ms));
     } else if row.id == SubRowId::Fingerprint {
-        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_fingerprint_tenths));
+        choice_texts[0] = Arc::from(format_tenths_ms(state.null_or_die_fingerprint_tenths));
     } else if row.id == SubRowId::Window {
-        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_window_tenths));
+        choice_texts[0] = Arc::from(format_tenths_ms(state.null_or_die_window_tenths));
     } else if row.id == SubRowId::Step {
-        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_step_tenths));
+        choice_texts[0] = Arc::from(format_tenths_ms(state.null_or_die_step_tenths));
     } else if row.id == SubRowId::MagicOffset {
-        choice_texts[0] = Cow::Owned(format_tenths_ms(state.null_or_die_magic_offset_tenths));
+        choice_texts[0] = Arc::from(format_tenths_ms(state.null_or_die_magic_offset_tenths));
     }
     choice_texts
 }
@@ -352,11 +326,8 @@ pub(super) fn build_submenu_row_layout(
     } else {
         INLINE_SPACING
     };
-    let texts: Vec<Arc<str>> = choice_texts
-        .iter()
-        .map(|text| Arc::<str>::from(text.as_ref()))
-        .collect();
-    let mut widths: Vec<f32> = Vec::with_capacity(choice_texts.len());
+    let texts = choice_texts;
+    let mut widths: Vec<f32> = Vec::with_capacity(texts.len());
     let mut text_h = 16.0_f32;
     if is_color_choice {
         let [width, height] = selected_visual_assets(state).select_color_size;
@@ -1011,3 +982,7 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         dt,
     );
 }
+
+#[cfg(test)]
+#[path = "../../../tests/option_frame/baseline_layout.rs"]
+pub(super) mod label_baseline;

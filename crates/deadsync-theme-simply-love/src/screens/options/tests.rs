@@ -812,7 +812,7 @@ fn bookkeeping_rows_show_shell_counters_and_are_read_only() {
         .expect("bookkeeping must contain the stages-played row");
 
     assert_eq!(
-        row_choices(&state, SubmenuKind::Bookkeeping, BOOKKEEPING_ROWS, row)[0],
+        row_choices(&state, SubmenuKind::Bookkeeping, BOOKKEEPING_ROWS, row)[0].as_ref(),
         "17"
     );
     assert!(is_submenu_row_disabled(
@@ -3782,4 +3782,61 @@ fn graphics_refresh_change_emits_request_on_exit() {
             })
         )]
     ));
+}
+
+#[test]
+fn shared_option_labels_preserve_all_submenu_values_and_layout_geometry() {
+    fn compare(state: &State, assets: &AssetManager) {
+        for kind in SubmenuKind::ALL {
+            let rows = submenu_rows(kind);
+            // Include out-of-range lookups as well as every real row.
+            for index in 0..=rows.len() {
+                let old = layout::label_baseline::row_choices(state, kind, rows, index);
+                let new = row_choices(state, kind, rows, index);
+                assert_eq!(
+                    new.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                    old.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                    "{kind:?}/{index}"
+                );
+                let old =
+                    layout::label_baseline::submenu_display_choice_texts(state, kind, rows, index);
+                let new = submenu_display_choice_texts(state, kind, rows, index);
+                assert_eq!(
+                    new.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                    old.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                    "display {kind:?}/{index}"
+                );
+                let old =
+                    layout::label_baseline::build_submenu_row_layout(state, assets, kind, index);
+                let new = build_submenu_row_layout(state, assets, kind, index);
+                // Debug includes text, widths, positions, centers and all sizing/inline flags.
+                assert_eq!(
+                    format!("{new:?}"),
+                    format!("{old:?}"),
+                    "layout {kind:?}/{index}"
+                );
+            }
+        }
+    }
+    let mut state = init();
+    let assets = AssetManager::new();
+    compare(&state, &assets);
+    state.system_noteskin_choices = vec![
+        "".into(),
+        "\u{65e5}\u{672c}\u{8a9e}".into(),
+        "Skin".repeat(100),
+    ];
+    state.software_thread_labels = vec!["Auto".into(), "128".into()];
+    state.display_mode_choices = vec!["Windowed".into(), "Full screen".into()];
+    state.resolution_choices = vec![(1, 1), (1920, 1080), (7680, 4320)];
+    state.smx_bg_pack_choices = vec!["Custom".into(), "".into()];
+    state.smx_judge_pack_choices = vec!["Judgments".into()];
+    state.score_import_profile_choices = vec!["Player 1".into(), "Player 2".into()];
+    state.sync_pack_choices = vec!["Pack A".into(), "Pack B".into()];
+    state.bookkeeping.stages_played = 123456;
+    compare(&state, &assets);
+    state.system_noteskin_choices.clear();
+    state.smx_bg_pack_choices.clear();
+    state.sync_pack_choices.clear();
+    compare(&state, &assets);
 }

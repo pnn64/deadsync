@@ -53,6 +53,8 @@ impl SettingMatch {
 pub(super) struct SettingSearchOpen {
     pub component: Option<RowId>,
     pub query: String,
+    query_text: super::search_frame::SearchQueryText,
+    current_text: super::search_frame::SearchCurrentText,
     pub matches: Vec<SettingMatch>,
     pub selected_index: usize,
     pub blink_t: f32,
@@ -169,6 +171,8 @@ pub(super) fn open(state: &mut State, opener_player: usize) {
     state.search = SettingSearchState::Open(SettingSearchOpen {
         component: None,
         query: String::new(),
+        query_text: Default::default(),
+        current_text: Default::default(),
         matches,
         selected_index: 0,
         blink_t: 0.0,
@@ -185,6 +189,8 @@ pub(super) fn open_component(state: &mut State, player: usize, row: RowId) {
     state.search = SettingSearchState::Open(SettingSearchOpen {
         component: Some(row),
         query: String::new(),
+        query_text: Default::default(),
+        current_text: Default::default(),
         matches,
         selected_index,
         blink_t: 0.0,
@@ -248,6 +254,7 @@ fn refresh(state: &mut State) {
         None => rebuild_matches(state, &query),
     };
     if let SettingSearchState::Open(open) = &mut state.search {
+        open.query_text.invalidate();
         open.matches = matches;
         open.selected_index = open
             .selected_index
@@ -350,10 +357,14 @@ pub(super) fn focused_match(open: &SettingSearchOpen) -> Option<&SettingMatch> {
 }
 
 /// The row's currently selected choice, for the detail line.
-fn current_value(state: &State, m: &SettingMatch, player_idx: usize) -> Option<String> {
+fn current_value<'a>(
+    state: &'a State,
+    m: &SettingMatch,
+    player_idx: usize,
+) -> Option<&'a deadlib_present::actors::TextContent> {
     let row = state.panes[m.pane.index()].row_map.get(m.row_id)?;
     let idx = row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1));
-    row.choices.get(idx).map(std::string::ToString::to_string)
+    row.choices.get(idx)
 }
 
 /// Row help text joined to one line; `None` when the row has none.
@@ -467,9 +478,8 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
                 ));
             }
             None => {
-                let caret = if caret_on { "▮" } else { "" };
                 actors.push(act!(text:
-                    font("miso"): settext(format!("{}{caret}", open.query)):
+                    font("miso"): settext(open.query_text.get(&open.query, caret_on)):
                     align(0.0, 0.5): xy(text_x, query_y): zoom(0.9):
                     maxwidth(panel_w - 40.0):
                     diffuse(theme[0], theme[1], theme[2], 1.0): z(Z_TEXT): horizalign(left)
@@ -566,11 +576,9 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
     if let Some(m) = focused_match(open) {
         let value_y = panel_h.mul_add(0.5, cy) - 74.0;
         if let Some(value) = current_value(state, m, open.opener_player) {
-            let current = tr_fmt(
-                "PlayerOptions",
-                "SettingSearchCurrent",
-                &[("value", &value)],
-            );
+            let current = open
+                .current_text
+                .get(value, &tr("PlayerOptions", "SettingSearchCurrent"));
             actors.push(act!(text:
                 font("miso"): settext(current):
                 align(0.0, 0.5): xy(list_x, value_y): zoom(0.75):
@@ -605,3 +613,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
         diffuse(GRAY[0], GRAY[1], GRAY[2], 1.0): z(Z_TEXT): horizalign(center)
     ));
 }
+
+#[cfg(test)]
+#[path = "../../../tests/option_frame/baseline_search.rs"]
+pub(super) mod frame_baseline;

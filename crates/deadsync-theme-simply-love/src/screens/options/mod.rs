@@ -82,6 +82,8 @@ mod constants;
 use constants::*;
 mod format;
 use format::*;
+mod choice_text;
+use choice_text::*;
 mod row;
 use row::*;
 mod item;

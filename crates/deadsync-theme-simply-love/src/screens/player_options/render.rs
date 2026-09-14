@@ -218,7 +218,7 @@ pub fn push_actors(
     // Only shown when keyboard features are enabled (the search is keyboard-only)
     // and hidden while the search overlay itself is open (it has its own footer).
     if state.policy.keyboard_features && !state.search.is_open() {
-        let search_hint = tr("PlayerOptions", "SettingSearchHint").to_string();
+        let search_hint = tr("PlayerOptions", "SettingSearchHint");
         actors.push(act!(text:
             font("miso"): settext(search_hint):
             align(1.0, 0.5): xy(deadlib_present::space::screen_width() - 10.0, 16.0):

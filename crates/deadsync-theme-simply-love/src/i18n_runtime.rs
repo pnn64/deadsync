@@ -133,7 +133,7 @@ pub fn tr_fmt_into(out: &mut String, section: &str, key: &str, args: &[(&str, &s
     append_translation_template(out, template.as_ref(), args);
 }
 
-fn format_translation_template(template: &str, args: &[(&str, &str)]) -> Arc<str> {
+pub(crate) fn format_translation_template(template: &str, args: &[(&str, &str)]) -> Arc<str> {
     // This covers normal UI translations while keeping enough stack space for
     // multi-line status text without increasing persistent actor size.
     const INLINE_BYTES: usize = 256;

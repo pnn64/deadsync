@@ -6051,4 +6051,90 @@ pub(super) mod tests {
             super::search::close(&mut state);
         }
     }
+
+    #[test]
+    fn cached_search_frame_matches_parent_during_edits_and_live_choice_changes() {
+        use super::search::{self, SettingSearchState};
+        use deadlib_present::actors::Actor;
+        fn normalized(mut actors: Vec<Actor>) -> String {
+            fn normalize(actor: &mut Actor) {
+                match actor {
+                    Actor::Text { content, .. } => {
+                        *content = TextContent::from(content.to_string())
+                    }
+                    Actor::Frame { children, .. } => children.iter_mut().for_each(normalize),
+                    _ => {}
+                }
+            }
+            actors.iter_mut().for_each(normalize);
+            format!("{actors:?}")
+        }
+        fn compare(state: &mut super::State) {
+            for blink_t in [0.0, 0.49, 0.5, 0.99, 0.0] {
+                if let SettingSearchState::Open(open) = &mut state.search {
+                    open.blink_t = blink_t;
+                }
+                let mut old = Vec::new();
+                search::frame_baseline::push_overlay(&mut old, state);
+                for _ in 0..2 {
+                    let mut new = Vec::new();
+                    search::push_overlay(&mut new, state);
+                    assert_eq!(normalized(new), normalized(old.clone()));
+                }
+            }
+        }
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        for query in [
+            "",
+            "spe",
+            "arrows",
+            "Background Filter",
+            "no matches \u{65e5}\u{672c}\u{8a9e}",
+            &"q".repeat(512),
+        ] {
+            search::close(&mut state);
+            open_search(&mut state);
+            search::add_text(&mut state, query);
+            compare(&mut state);
+            for direction in [1, 1, -1] {
+                search::move_selection(&mut state, direction);
+                compare(&mut state);
+            }
+            search::accept_ghost(&mut state);
+            compare(&mut state);
+            search::backspace(&mut state);
+            compare(&mut state);
+        }
+        search::close(&mut state);
+        open_search(&mut state);
+        search::add_text(&mut state, "arrows");
+        let (pane, id) = match &state.search {
+            SettingSearchState::Open(open) => {
+                let m = search::focused_match(open).expect("arrows must match NoteSkin");
+                (m.pane, m.row_id)
+            }
+            _ => panic!("search should be open"),
+        };
+        for choices in [
+            vec!["One".into(), "Two".into()],
+            vec!["Replacement".into()],
+            vec![],
+        ] {
+            let row = state.panes[pane.index()]
+                .row_map
+                .get_mut(id)
+                .expect("matched row exists");
+            row.replace_choices(choices);
+            row.selected_choice_index = [0, usize::MAX];
+            for player in [P1, P2, P1] {
+                if let SettingSearchState::Open(open) = &mut state.search {
+                    open.opener_player = player;
+                }
+                compare(&mut state);
+            }
+        }
+        search::close(&mut state);
+        compare(&mut state);
+    }
 }

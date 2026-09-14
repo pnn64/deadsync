@@ -43,6 +43,7 @@ mod profile;
 mod render;
 mod row;
 mod search;
+mod search_frame;
 mod search_ranking;
 mod search_text;
 mod state;

@@ -257,24 +257,6 @@ pub struct SubRow {
     pub inline: bool, // whether to lay out choices inline (vs single centered value)
 }
 
-/// Choice values — some are localizable, some are format-specific literals.
-#[derive(Clone, Copy)]
-pub enum Choice {
-    /// Translatable text (e.g., "Windowed", "On", "Off").
-    Localized(LookupKey),
-    /// Format-specific literal that should never be translated (e.g., "16:9", "1920x1080").
-    Literal(&'static str),
-}
-
-impl Choice {
-    pub fn get(&self) -> Arc<str> {
-        match self {
-            Self::Localized(lkey) => lkey.get(),
-            Self::Literal(s) => Arc::from(*s),
-        }
-    }
-}
-
 /// Shorthand for `Choice::Localized(lookup_key(section, key))` in const arrays.
 #[allow(non_snake_case)]
 pub(super) const fn localized_choice(section: &'static str, key: &'static str) -> Choice {
