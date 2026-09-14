@@ -1759,6 +1759,16 @@ pub fn update_remaining_targets(
     }
 }
 
+// Only retained identities need normalization. Keep the existing allocation.
+fn take_trimmed_user_id(user_id: &mut String) -> String {
+    user_id.truncate(user_id.trim_end().len());
+    let leading = user_id.len() - user_id.trim_start().len();
+    if leading != 0 {
+        user_id.drain(..leading);
+    }
+    std::mem::take(user_id)
+}
+
 pub fn hard_ex_pane_from_pages(
     first_page: ArrowCloudLeaderboardPane,
     extra_pages: Vec<ArrowCloudLeaderboardPane>,
@@ -1767,30 +1777,29 @@ pub fn hard_ex_pane_from_pages(
     let mut entries = Vec::with_capacity(first_page.scores.len());
     let mut appended_user_ids = HashSet::new();
 
-    for entry in first_page.scores {
-        let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+    for mut entry in first_page.scores {
+        let user_id = arrowcloud_user_id(entry.user_id.as_str());
         let (is_self, is_rival) =
-            arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
-        if (is_self || is_rival)
-            && let Some(user_id) = user_id
-        {
-            appended_user_ids.insert(user_id);
+            arrowcloud_entry_flags(user_id, entry.is_self, entry.is_rival, context);
+        if (is_self || is_rival) && user_id.is_some() {
+            appended_user_ids.insert(take_trimmed_user_id(&mut entry.user_id));
         }
         entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
     }
 
     for page in extra_pages {
-        for entry in page.scores {
-            let user_id = arrowcloud_user_id(entry.user_id.as_str()).map(str::to_owned);
+        for mut entry in page.scores {
+            let user_id = arrowcloud_user_id(entry.user_id.as_str());
             let (is_self, is_rival) =
-                arrowcloud_entry_flags(user_id.as_deref(), entry.is_self, entry.is_rival, context);
+                arrowcloud_entry_flags(user_id, entry.is_self, entry.is_rival, context);
             if !(is_self || is_rival) {
                 continue;
             }
-            if let Some(user_id) = user_id
-                && !appended_user_ids.insert(user_id)
-            {
-                continue;
+            if let Some(user_id) = user_id {
+                if appended_user_ids.contains(user_id) {
+                    continue;
+                }
+                appended_user_ids.insert(take_trimmed_user_id(&mut entry.user_id));
             }
             entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
         }

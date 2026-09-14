@@ -91,3 +91,7 @@ mod tests {
 #[allow(dead_code)]
 #[path = "../../../tests/support/perf.rs"]
 mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/online_results/mod.rs"]
+mod online_results;

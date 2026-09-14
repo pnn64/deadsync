@@ -29,7 +29,7 @@ use deadsync_score::{
     PlayerScoreImportResult, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint,
     SubmitAchievement, SubmitAchievementReward, SubmitEventProgressData, SubmitEventProgressInput,
     SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
-    cached_score_from_imported_player_score, event_name_or_unknown, event_progress_from_submit,
+    cached_score_from_imported_player_score, event_name_or_unknown,
     groovestats_autosubmit_player_decision, groovestats_autosubmit_session_decision,
     groovestats_eval_state_from_gameplay_parts, groovestats_submit_record_banner,
     groovestats_submit_ui_status, leaderboard_nonzero_rank, leaderboard_pane,
@@ -2991,6 +2991,10 @@ pub fn event_progress_from_submit_response(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Vec<ItlEventProgress> {
+    if response.srpg.is_none() && (response.itl.is_none() || player.itl_score_hundredths.is_none())
+    {
+        return Vec::new();
+    }
     let input = SubmitEventProgressInput {
         result: response.result.clone(),
         score_10000: player.score_10000,
@@ -2999,13 +3003,14 @@ pub fn event_progress_from_submit_response(
         itl: response
             .itl
             .as_ref()
-            .map(|event| submit_event_progress_from_api(event, event.itl_leaderboard.clone())),
+            .filter(|_| player.itl_score_hundredths.is_some())
+            .map(|event| submit_event_progress_from_borrowed_api(event, &event.itl_leaderboard)),
         srpg: response
             .srpg
             .as_ref()
-            .map(|event| submit_event_progress_from_api(event, event.srpg_leaderboard.clone())),
+            .map(|event| submit_event_progress_from_borrowed_api(event, &event.srpg_leaderboard)),
     };
-    event_progress_from_submit(&input)
+    deadsync_score::event_progress_from_submit_owned(input)
 }
 
 #[must_use]
@@ -3501,6 +3506,33 @@ pub fn submit_event_progress_from_api(
     event: &GrooveStatsSubmitApiEvent,
     leaderboard: Vec<LeaderboardApiEntry>,
 ) -> SubmitEventProgressData {
+    submit_event_progress_with_leaderboard(event, leaderboard_entries_from_api(leaderboard))
+}
+
+fn submit_event_progress_from_borrowed_api(
+    event: &GrooveStatsSubmitApiEvent,
+    leaderboard: &[LeaderboardApiEntry],
+) -> SubmitEventProgressData {
+    let leaderboard = leaderboard
+        .iter()
+        .map(|entry| LeaderboardEntry {
+            rank: entry.rank,
+            name: entry.name.clone(),
+            machine_tag: entry.machine_tag.clone(),
+            score: entry.score,
+            date: entry.date.clone(),
+            is_rival: entry.is_rival,
+            is_self: entry.is_self,
+            is_fail: entry.is_fail,
+        })
+        .collect();
+    submit_event_progress_with_leaderboard(event, leaderboard)
+}
+
+fn submit_event_progress_with_leaderboard(
+    event: &GrooveStatsSubmitApiEvent,
+    leaderboard: Vec<LeaderboardEntry>,
+) -> SubmitEventProgressData {
     SubmitEventProgressData {
         name: event.name.clone(),
         is_doubles: event.is_doubles,
@@ -3517,7 +3549,7 @@ pub fn submit_event_progress_from_api(
         previous_ex_point_total: event.previous_ex_point_total,
         current_point_total: event.current_point_total,
         previous_point_total: event.previous_point_total,
-        leaderboard: leaderboard_entries_from_api(leaderboard),
+        leaderboard,
         progress: event.progress.as_ref().map(submit_progress_from_api),
     }
 }

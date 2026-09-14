@@ -401,12 +401,26 @@ pub fn event_progress_overlay_pages(
     submit_progress: Option<&SubmitProgress>,
     leaderboard: &[LeaderboardEntry],
 ) -> Vec<ItlOverlayPage> {
-    let mut pages = vec![ItlOverlayPage::Text(summary_page_text(
+    event_progress_overlay_pages_owned(progress, submit_progress, leaderboard.to_vec())
+}
+
+/// Build overlay pages while retaining the caller's owned leaderboard buffer.
+#[must_use]
+pub fn event_progress_overlay_pages_owned(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&SubmitProgress>,
+    leaderboard: Vec<LeaderboardEntry>,
+) -> Vec<ItlOverlayPage> {
+    let count = submit_progress.map_or(2, |p| {
+        2 + p.quests_completed.len() + p.achievements_completed.len()
+    });
+    let mut pages = Vec::with_capacity(count);
+    pages.push(ItlOverlayPage::Text(summary_page_text(
         progress,
         submit_progress,
-    ))];
+    )));
     let Some(submit_progress) = submit_progress else {
-        pages.push(ItlOverlayPage::Leaderboard(leaderboard.to_vec()));
+        pages.push(ItlOverlayPage::Leaderboard(leaderboard));
         return pages;
     };
     for quest in &submit_progress.quests_completed {
@@ -415,7 +429,7 @@ pub fn event_progress_overlay_pages(
     for achievement in &submit_progress.achievements_completed {
         pages.push(ItlOverlayPage::Text(achievement_page_text(achievement)));
     }
-    pages.push(ItlOverlayPage::Leaderboard(leaderboard.to_vec()));
+    pages.push(ItlOverlayPage::Leaderboard(leaderboard));
     pages
 }
 
@@ -452,7 +466,10 @@ pub fn event_stat_improvements(progress: Option<&SubmitProgress>) -> Vec<EventSt
         .collect()
 }
 
-fn itl_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEventProgress> {
+fn itl_progress_from_submit(
+    input: &SubmitEventProgressInput,
+    leaderboard: Vec<LeaderboardEntry>,
+) -> Option<ItlEventProgress> {
     let itl = input.itl.as_ref()?;
     let score_hundredths = input.itl_score_hundredths?;
     let (clear_type_before, clear_type_after) = event_clear_type_change(itl.progress.as_ref());
@@ -485,11 +502,14 @@ fn itl_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEvent
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages =
-        event_progress_overlay_pages(&progress, itl.progress.as_ref(), itl.leaderboard.as_slice());
+        event_progress_overlay_pages_owned(&progress, itl.progress.as_ref(), leaderboard);
     Some(progress)
 }
 
-fn srpg_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEventProgress> {
+fn srpg_progress_from_submit(
+    input: &SubmitEventProgressInput,
+    leaderboard: Vec<LeaderboardEntry>,
+) -> Option<ItlEventProgress> {
     let srpg = input.srpg.as_ref()?;
     let score_delta = if input.result.eq_ignore_ascii_case("score-added") {
         input.score_10000 as i32
@@ -536,21 +556,57 @@ fn srpg_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEven
             .unwrap_or_default(),
         overlay_pages: Vec::new(),
     };
-    progress.overlay_pages = event_progress_overlay_pages(
-        &progress,
-        srpg.progress.as_ref(),
-        srpg.leaderboard.as_slice(),
-    );
+    progress.overlay_pages =
+        event_progress_overlay_pages_owned(&progress, srpg.progress.as_ref(), leaderboard);
     Some(progress)
 }
 
 #[must_use]
 pub fn event_progress_from_submit(input: &SubmitEventProgressInput) -> Vec<ItlEventProgress> {
-    let mut progress = Vec::with_capacity(2);
-    if let Some(srpg) = srpg_progress_from_submit(input) {
+    let srpg = input
+        .srpg
+        .as_ref()
+        .map(|event| event.leaderboard.clone())
+        .unwrap_or_default();
+    let itl = input
+        .itl
+        .as_ref()
+        .filter(|_| input.itl_score_hundredths.is_some())
+        .map(|event| event.leaderboard.clone())
+        .unwrap_or_default();
+    event_progress_with_leaderboards(input, srpg, itl)
+}
+
+/// Consume prepared event data without copying its leaderboard rows again.
+#[must_use]
+pub fn event_progress_from_submit_owned(
+    mut input: SubmitEventProgressInput,
+) -> Vec<ItlEventProgress> {
+    let srpg = input
+        .srpg
+        .as_mut()
+        .map(|event| std::mem::take(&mut event.leaderboard))
+        .unwrap_or_default();
+    let itl = input
+        .itl
+        .as_mut()
+        .map(|event| std::mem::take(&mut event.leaderboard))
+        .unwrap_or_default();
+    event_progress_with_leaderboards(&input, srpg, itl)
+}
+
+fn event_progress_with_leaderboards(
+    input: &SubmitEventProgressInput,
+    srpg: Vec<LeaderboardEntry>,
+    itl: Vec<LeaderboardEntry>,
+) -> Vec<ItlEventProgress> {
+    let count = usize::from(input.srpg.is_some())
+        + usize::from(input.itl.is_some() && input.itl_score_hundredths.is_some());
+    let mut progress = Vec::with_capacity(count);
+    if let Some(srpg) = srpg_progress_from_submit(input, srpg) {
         progress.push(srpg);
     }
-    if let Some(itl) = itl_progress_from_submit(input) {
+    if let Some(itl) = itl_progress_from_submit(input, itl) {
         progress.push(itl);
     }
     progress

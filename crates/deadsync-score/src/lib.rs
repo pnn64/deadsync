@@ -2973,6 +2973,53 @@ pub struct ArrowCloudScores {
     pub hard_ex: Option<ArrowCloudScore>,
 }
 
+#[inline]
+fn arrowcloud_canonical_utc(date: &str) -> Option<DateTime<Utc>> {
+    let bytes = date.as_bytes();
+    if (bytes.len() == 20 || bytes.len() == 24)
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes[10] == b'T'
+        && bytes[13] == b':'
+        && bytes[16] == b':'
+        && bytes[bytes.len() - 1] == b'Z'
+        && (bytes.len() == 20 || bytes[19] == b'.')
+        && bytes[5] <= b'1'
+        && bytes[17] < b'6'
+    {
+        let digits = |part: &[u8]| {
+            part.iter().try_fold(0u32, |value, &byte| {
+                byte.is_ascii_digit()
+                    .then(|| value * 10 + u32::from(byte - b'0'))
+            })
+        };
+        let canonical = || {
+            let year = digits(&bytes[..4])?;
+            let month = digits(&bytes[5..7])?;
+            let day = digits(&bytes[8..10])?;
+            let hour = digits(&bytes[11..13])?;
+            let minute = digits(&bytes[14..16])?;
+            let second = digits(&bytes[17..19])?;
+            let millis = if bytes.len() == 24 {
+                digits(&bytes[20..23])?
+            } else {
+                0
+            };
+            // Chrono's general parser retains its leap-second representation.
+            if second >= 60 {
+                return None;
+            }
+            chrono::NaiveDate::from_ymd_opt(year as i32, month, day)?
+                .and_hms_milli_opt(hour, minute, second, millis)
+                .map(|time| time.and_utc())
+        };
+        if let Some(parsed) = canonical() {
+            return Some(parsed);
+        }
+    }
+    None
+}
+
 pub fn arrowcloud_score_from_retrieve_fields(
     score: Option<f64>,
     grade: Option<&str>,
@@ -2982,9 +3029,13 @@ pub fn arrowcloud_score_from_retrieve_fields(
 ) -> Option<ArrowCloudScore> {
     let percent_0_100 = score?.clamp(0.0, 100.0);
     let server_grade = grade.and_then(ArrowCloudServerGrade::from_server_str);
-    let played_at = date
-        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-        .map(|dt| dt.with_timezone(&Utc));
+    let played_at = date.and_then(|date| {
+        arrowcloud_canonical_utc(date).or_else(|| {
+            DateTime::parse_from_rfc3339(date)
+                .ok()
+                .map(|dt| dt.with_timezone(&Utc))
+        })
+    });
     Some(ArrowCloudScore {
         score_percent: percent_0_100 / 100.0,
         server_grade,
