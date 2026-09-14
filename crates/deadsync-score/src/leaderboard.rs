@@ -955,19 +955,23 @@ impl PlayerLeaderboardCacheState {
         chart_hash: &str,
         invalidated_at: Instant,
     ) {
-        let matching_keys: HashSet<PlayerLeaderboardCacheKey> = self
-            .by_key
-            .keys()
-            .chain(self.in_flight.keys())
-            .chain(self.pending_refresh.keys())
-            .chain(self.invalidated_after.keys())
-            .filter(|key| key.api_key == api_key && key.chart_hash.eq_ignore_ascii_case(chart_hash))
-            .cloned()
-            .collect();
-        for key in matching_keys {
-            self.by_key.remove(&key);
-            self.in_flight.remove(&key);
-            self.pending_refresh.remove(&key);
+        let matches = |key: &PlayerLeaderboardCacheKey| {
+            key.api_key == api_key && key.chart_hash.eq_ignore_ascii_case(chart_hash)
+        };
+        // Existing tombstones need only a new timestamp. Move removed keys from
+        // the other tables instead of cloning all matches into a temporary set.
+        for (key, stamp) in &mut self.invalidated_after {
+            if matches(key) {
+                *stamp = invalidated_at;
+            }
+        }
+        for (key, _) in self.by_key.extract_if(|key, _| matches(key)) {
+            self.invalidated_after.insert(key, invalidated_at);
+        }
+        for (key, _) in self.in_flight.extract_if(|key, _| matches(key)) {
+            self.invalidated_after.insert(key, invalidated_at);
+        }
+        for (key, _) in self.pending_refresh.extract_if(|key, _| matches(key)) {
             self.invalidated_after.insert(key, invalidated_at);
         }
     }

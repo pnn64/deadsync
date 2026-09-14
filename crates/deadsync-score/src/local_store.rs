@@ -611,15 +611,18 @@ fn scan_local_scores_dir_into(dir: &Path, index: &mut LocalScoreIndex, buf: &mut
 
     for item in read_dir.flatten() {
         let path = item.path();
-        if !path.is_file() {
-            continue;
-        }
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
         let Some((chart_hash, _played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
+        if !item
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
+            continue;
+        }
         let Some(header) = read_local_score_header_into(&path, buf) else {
             continue;
         };
@@ -647,7 +650,10 @@ pub fn load_local_score_index_from_root(root: &Path) -> LocalScoreIndex {
     };
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if path.is_dir() {
+        if entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_dir() || (kind.is_symlink() && path.is_dir()))
+        {
             scan_local_scores_dir_into(&path, &mut index, &mut buf);
         }
     }
@@ -1375,16 +1381,17 @@ where
     (written, false)
 }
 
-fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScore>) {
+fn scan_gs_scores_dir(
+    dir: &Path,
+    best_by_chart: &mut HashMap<String, CachedScore>,
+    buf: &mut Vec<u8>,
+) {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return;
     };
 
     for item in read_dir.flatten() {
         let path = item.path();
-        if !path.is_file() {
-            continue;
-        }
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
@@ -1400,10 +1407,22 @@ fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScor
         }
         let chart_hash = &base[..idx];
 
-        let Ok(bytes) = fs::read(&path) else {
+        if !item
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
+            continue;
+        }
+        let Ok(mut file) = fs::File::open(&path) else {
             continue;
         };
-        let Some(entry) = crate::decode_gs_score_entry_ref(&bytes) else {
+        buf.clear();
+        // Reuse storage across every shard; larger records can still grow it.
+        buf.reserve(128);
+        if file.read_to_end(buf).is_err() {
+            continue;
+        }
+        let Some(entry) = crate::decode_gs_score_entry_ref(buf) else {
             continue;
         };
         let cached = entry.cached_score();
@@ -1432,10 +1451,14 @@ pub fn best_gs_scores_from_dir(dir: &Path) -> HashMap<String, CachedScore> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return best_by_chart;
     };
+    let mut buf = Vec::new();
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if path.is_dir() {
-            scan_gs_scores_dir(&path, &mut best_by_chart);
+        if entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_dir() || (kind.is_symlink() && path.is_dir()))
+        {
+            scan_gs_scores_dir(&path, &mut best_by_chart, &mut buf);
         }
     }
 
@@ -1772,3 +1795,7 @@ mod candidates_perf {
 #[cfg(test)]
 #[path = "../tests/score_storage/mod.rs"]
 mod score_storage;
+
+#[cfg(test)]
+#[path = "../tests/cache_preparation/mod.rs"]
+mod cache_preparation;

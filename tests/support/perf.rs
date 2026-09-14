@@ -222,3 +222,50 @@ fn thread_cycles() -> u64 {
 fn thread_cycles() -> u64 {
     0 // Unavailable on this platform; never interpreted as a measured improvement.
 }
+
+/// Measure a mutating operation with a fresh fixture for every call. Setup and
+/// fixture destruction are outside both timing and allocation accounting.
+/// Per-operation clock overhead is included equally in both variants.
+#[allow(dead_code)]
+pub fn measure_sampled_with_setup<T>(
+    name: &str,
+    iterations: usize,
+    units: usize,
+    mut setup: impl FnMut() -> T,
+    mut work: impl FnMut(&mut T),
+) {
+    for _ in 0..3 {
+        work(&mut setup());
+    }
+    let mut nanos = [0.0; 7];
+    let mut cycles = [0.0; 7];
+    for (ns, cpu) in nanos.iter_mut().zip(&mut cycles) {
+        for _ in 0..iterations {
+            let mut fixture = setup();
+            let first_cycles = thread_cycles();
+            let started = Instant::now();
+            work(black_box(&mut fixture));
+            *ns += started.elapsed().as_nanos() as f64;
+            *cpu += (thread_cycles() - first_cycles) as f64;
+            black_box(fixture);
+        }
+        *ns /= iterations as f64;
+        *cpu /= iterations as f64;
+    }
+    nanos.sort_by(f64::total_cmp);
+    cycles.sort_by(f64::total_cmp);
+    let mut fixture = setup();
+    let tracking = Tracking::start();
+    work(black_box(&mut fixture));
+    let counts = COUNTS.get().expect("tracking is active");
+    drop(tracking);
+    black_box(fixture);
+    eprintln!(
+        "{name}: median {:.1} ns/op (range {:.1}..{:.1}), {:.1} thread cycles/op, {:.1} units/s; {counts:?}/op",
+        nanos[3],
+        nanos[0],
+        nanos[6],
+        cycles[3],
+        units as f64 * 1e9 / nanos[3],
+    );
+}

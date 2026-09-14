@@ -6252,7 +6252,7 @@ pub const GROOVESTATS_REASON_COUNT: usize = 12;
 
 #[must_use]
 pub fn groovestats_reason_lines(checks: &[bool; GROOVESTATS_REASON_COUNT]) -> Vec<String> {
-    let mut out = Vec::with_capacity(6);
+    let mut out = Vec::with_capacity(checks.iter().filter(|passed| !**passed).count());
     for (idx, passed) in checks.iter().enumerate() {
         if *passed {
             continue;
@@ -6278,7 +6278,7 @@ pub fn groovestats_reason_lines(checks: &[bool; GROOVESTATS_REASON_COUNT]) -> Ve
 
 #[must_use]
 pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> GrooveStatsEvalState {
-    let chart_type = input.chart_type.trim().to_ascii_lowercase();
+    let chart_type = input.chart_type.trim().as_bytes();
     let rate = if input.music_rate.is_finite() && input.music_rate > 0.0 {
         input.music_rate
     } else {
@@ -6286,8 +6286,15 @@ pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> Gro
     };
 
     let mut checks = [true; GROOVESTATS_REASON_COUNT];
-    checks[0] = chart_type.starts_with("dance") || chart_type.starts_with("pump");
-    checks[1] = !chart_type.contains("solo");
+    checks[0] = chart_type
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"dance"))
+        || chart_type
+            .get(..4)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"pump"));
+    checks[1] = !chart_type
+        .windows(4)
+        .any(|part| part.eq_ignore_ascii_case(b"solo"));
     checks[2] = !input.is_course_mode || input.course_submit_allowed;
     checks[3] = true;
     checks[4] = true;
