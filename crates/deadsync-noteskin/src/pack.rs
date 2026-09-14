@@ -186,6 +186,14 @@ impl fmt::Display for Selection {
 
 /// Resolve a portable relative path and reject escapes, including symlinks.
 pub fn checked_path(root: &Path, relative: &str) -> Result<PathBuf, Error> {
+    checked_path_with_root(root, relative, None)
+}
+
+fn checked_path_with_root(
+    root: &Path,
+    relative: &str,
+    canonical_root: Option<&Path>,
+) -> Result<PathBuf, Error> {
     let path = Path::new(relative);
     if relative.is_empty()
         || relative.contains(['\\', ':'])
@@ -196,7 +204,14 @@ pub fn checked_path(root: &Path, relative: &str) -> Result<PathBuf, Error> {
         return Err(Error::Invalid(format!("invalid pack path: {relative}")));
     }
     let resolved = root.join(path).canonicalize()?;
-    if !resolved.starts_with(root.canonicalize()?) {
+    let owned_root;
+    let canonical_root = if let Some(root) = canonical_root {
+        root
+    } else {
+        owned_root = root.canonicalize()?;
+        &owned_root
+    };
+    if !resolved.starts_with(canonical_root) {
         return Err(Error::Invalid(format!(
             "pack path escapes its directory: {relative}"
         )));
@@ -226,19 +241,20 @@ impl InstalledPack {
                 "unsupported or invalid noteskin pack".into(),
             ));
         }
-        let mut ids = HashSet::new();
+        let canonical_root = root.canonicalize()?;
+        let mut ids = HashSet::with_capacity(manifest.skins.len());
         for skin in &manifest.skins {
             if !valid_id(&skin.id) || !ids.insert(&skin.id) || skin.options.len() > MAX_CHOICES {
                 return Err(Error::Invalid("invalid or duplicate pack skin ID".into()));
             }
-            let base = checked_path(root, &skin.base)?;
+            let base = checked_path_with_root(root, &skin.base, Some(&canonical_root))?;
             if !base.join("metrics.ini").is_file() || !base.join("NoteSkin.lua").is_file() {
                 return Err(Error::Invalid(format!(
                     "incomplete base noteskin: {}",
                     skin.id
                 )));
             }
-            let preview = checked_path(root, &skin.preview)?;
+            let preview = checked_path_with_root(root, &skin.preview, Some(&canonical_root))?;
             if image::image_dimensions(preview).map_err(|e| Error::Invalid(e.to_string()))?
                 != (2048, 2048)
             {
@@ -246,9 +262,9 @@ impl InstalledPack {
                     "pack preview must be a 2048x2048 atlas".into(),
                 ));
             }
-            validate_choices(root, &base, skin)?;
+            validate_choices(&canonical_root, &base, skin)?;
         }
-        let root = root.canonicalize()?;
+        let root = canonical_root;
         let mut hash = XxHash64::default();
         hash.write(&bytes);
         hash.write(root.to_string_lossy().as_bytes());
@@ -269,35 +285,56 @@ impl InstalledPack {
 
     /// Distinguish pack revisions and all selected parts in runtime caches.
     pub fn runtime_key(&self, selection: &Selection) -> String {
+        self.selection_key(selection, |_, _| true)
+    }
+
+    fn selection_key(
+        &self,
+        selection: &Selection,
+        mut include: impl FnMut(&str, &str) -> bool,
+    ) -> String {
+        use std::fmt::Write;
+
         let mut hash = XxHash64::default();
         hash.write(self.fingerprint.as_bytes());
-        hash.write(selection.to_string().as_bytes());
-        format!("{}-{:016x}", selection.skin, hash.finish())
+        hash.write(selection.skin.as_bytes());
+        let mut separator = b'?';
+        for (slot, id) in &selection.options {
+            if include(slot, id) {
+                hash.write(&[separator]);
+                hash.write(slot.as_bytes());
+                hash.write(b"=");
+                hash.write(id.as_bytes());
+                separator = b'&';
+            }
+        }
+        let mut key = String::with_capacity(selection.skin.len() + 17);
+        write!(key, "{}-{:016x}", selection.skin, hash.finish()).expect("writing to a String");
+        key
     }
 
     /// PNG replacements change runtime textures, but not compiled Lua programs.
     /// Keep metric and all other file changes in the compiler identity.
     pub fn compiler_key(&self, selection: &Selection) -> String {
-        let mut program = selection.clone();
-        if let Some(skin) = self.skin(&selection.skin) {
-            program.options.retain(|slot, id| {
+        let skin = self.skin(&selection.skin);
+        self.selection_key(selection, |slot, id| {
+            skin.and_then(|skin| {
                 skin.options
                     .iter()
-                    .find(|choice| choice.slot == *slot && choice.id == *id)
-                    .is_none_or(|choice| {
-                        !choice.metrics.is_empty()
-                            || choice.files.iter().any(|swap| {
-                                [&swap.source, &swap.target].into_iter().any(|path| {
-                                    !Path::new(path)
-                                        .extension()
-                                        .and_then(|ext| ext.to_str())
-                                        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-                                })
-                            })
+                    .find(|choice| choice.slot == slot && choice.id == id)
+            })
+            .is_none_or(|choice| {
+                !choice.metrics.is_empty()
+                    || choice.files.iter().any(|swap| {
+                        [&swap.source, &swap.target].into_iter().any(|path| {
+                            !Path::new(path)
+                                .extension()
+                                .and_then(|ext| ext.to_str())
+                                .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                        })
                     })
-            });
-        }
-        self.runtime_key(&program)
+            })
+        })
     }
 
     /// Resolve selected assets with the bundled common fallback.
@@ -355,7 +392,10 @@ impl InstalledPack {
 }
 
 fn validate_choices(root: &Path, base: &Path, skin: &Skin) -> Result<(), Error> {
-    let mut ids = HashSet::new();
+    // Both roots were canonicalized by load. Reuse them for the whole skin;
+    // every referenced path is still independently canonicalized and checked.
+    let mut ids = HashSet::with_capacity(skin.options.len());
+    let mut targets = HashSet::new();
     for choice in &skin.options {
         if !SLOTS.contains(&choice.slot.as_str())
             || !valid_id(&choice.id)
@@ -368,10 +408,10 @@ fn validate_choices(root: &Path, base: &Path, skin: &Skin) -> Result<(), Error> 
         {
             return Err(Error::Invalid(format!("invalid option in {}", skin.id)));
         }
-        let mut targets = HashSet::new();
+        targets.clear();
         for swap in &choice.files {
-            let target = checked_path(base, &swap.target)?;
-            let source = checked_path(root, &swap.source)?;
+            let target = checked_path_with_root(base, &swap.target, Some(base))?;
+            let source = checked_path_with_root(root, &swap.source, Some(root))?;
             if !source.is_file() || !target.is_file() || !targets.insert(target) {
                 return Err(Error::Invalid(
                     "invalid or duplicate replacement file".into(),
@@ -441,3 +481,7 @@ pub fn discover(roots: &[PathBuf]) -> Vec<InstalledPack> {
     }
     found
 }
+
+#[cfg(test)]
+#[path = "../tests/pack_preparation/mod.rs"]
+mod pack_preparation;

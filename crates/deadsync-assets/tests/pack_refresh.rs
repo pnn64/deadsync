@@ -10,7 +10,7 @@ impl Drop for Fixture {
 }
 
 #[test]
-fn downloaded_pack_appears_after_startup_and_queues_previews() {
+fn downloaded_pack_appears_after_startup_without_decoding_atlases() {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -58,7 +58,12 @@ fn downloaded_pack_appears_after_startup_and_queues_previews() {
     let key = deadsync_assets::textures::canonical_texture_key(
         target.canonicalize().unwrap().join("preview.png"),
     );
-    let texture =
-        deadlib_assets::generated_texture(&key).expect("preview queued for render upload");
-    assert_eq!(texture.image.dimensions(), (2048, 2048));
+    assert!(
+        deadlib_assets::generated_texture(&key).is_none(),
+        "catalog refresh leaves atlas pixels on disk for on-demand loading"
+    );
+    assert_eq!(
+        image::image_dimensions(target.join("preview.png")).unwrap(),
+        (2048, 2048)
+    );
 }

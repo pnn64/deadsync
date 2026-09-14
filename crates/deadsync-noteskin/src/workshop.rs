@@ -217,19 +217,29 @@ fn base_name<'a>(names: &'a BTreeMap<String, String>, target: &str) -> Result<&'
 
 fn slug(label: &str) -> String {
     let mut result = String::with_capacity(label.len());
-    for c in label.to_lowercase().chars() {
+    for c in label.chars().flat_map(char::to_lowercase) {
         if c.is_ascii_alphanumeric() {
             result.push(c);
         } else if !result.is_empty() && !result.ends_with('-') {
             result.push('-');
         }
     }
-    result.trim_end_matches('-').to_owned()
+    if result.ends_with('-') {
+        result.pop();
+    }
+    // IDs live in the manifest; do not retain space removed by normalization.
+    result.shrink_to_fit();
+    result
 }
 
 fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choice>, Error> {
+    if files.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut groups = BTreeMap::<(String, String), Choice>::new();
     let other = if family == "Cel" { "Metal" } else { "Cel" };
+    let mut label = String::new();
+    let mut folder_text = String::new();
     for path in files {
         let relative = path
             .strip_prefix(root)
@@ -237,27 +247,31 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             .to_str()
             .ok_or_else(|| Error::Invalid("non-UTF8 workshop path".into()))?
             .replace('\\', "/");
-        let parts: Vec<_> = relative.split('/').collect();
-        if parts.len() < 4 {
+        let mut parts = relative.splitn(3, '/');
+        parts.next();
+        let category = parts.next();
+        let Some((folders, filename)) = parts.next().and_then(|rest| rest.rsplit_once('/')) else {
             return Err(Error::Invalid(format!("invalid customization: {relative}")));
-        }
-        let folders = &parts[2..parts.len() - 1];
-        if folders.iter().any(|s| s.contains(other)) {
+        };
+        if folders.split('/').any(|folder| folder.contains(other)) {
             continue;
         }
-        let label = folders
-            .iter()
-            .map(|s| s.replace(family, ""))
-            .map(|s| {
-                s.trim_matches(|c: char| c.is_whitespace() || c == '-')
-                    .to_owned()
-            })
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join(" / ");
-        let filename = parts[parts.len() - 1];
+        label.clear();
+        for folder in folders.split('/') {
+            folder_text.clear();
+            for part in folder.split(family) {
+                folder_text.push_str(part);
+            }
+            let trimmed = folder_text.trim_matches(|c: char| c.is_whitespace() || c == '-');
+            if !trimmed.is_empty() {
+                if !label.is_empty() {
+                    label.push_str(" / ");
+                }
+                label.push_str(trimmed);
+            }
+        }
         let inactive = filename.to_lowercase().contains("inactive");
-        let slot = match parts[1] {
+        let slot = match category.expect("three path components were present") {
             "Arrows" => "arrows",
             "Receptors" => "receptors",
             "Tap Explosions" => "tap_explosions",
@@ -311,7 +325,11 @@ fn choices_for(files: &[PathBuf], root: &Path, family: &str) -> Result<Vec<Choic
             });
         }
     }
-    choices.sort_by_cached_key(|c| (c.slot.clone(), c.label.to_lowercase()));
+    // BTreeMap already groups slots in lexical order. Sort only within each
+    // slot, retaining the same stable label order without cloning slot keys.
+    for slot in choices.chunk_by_mut(|a, b| a.slot == b.slot) {
+        slot.sort_by_cached_key(|choice| choice.label.to_lowercase());
+    }
     Ok(choices)
 }
 
@@ -501,3 +519,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/workshop_preparation/mod.rs"]
+mod workshop_preparation;
