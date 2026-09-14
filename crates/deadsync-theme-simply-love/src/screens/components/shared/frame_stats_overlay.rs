@@ -1,7 +1,7 @@
 use crate::act;
 use crate::views::{HISTOGRAM_BINS, frame_histogram as histogram};
 use deadlib_present::actors::{Actor, TextContent};
-use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
+use deadlib_present::cache::{TextCache, text_cache_with_capacity};
 use deadsync_theme::views::{FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle};
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -9,18 +9,76 @@ use std::sync::Arc;
 const DEBUG_OVERLAY_Z: i16 = 32030;
 const TEXT_CACHE_LIMIT: usize = 1024;
 
-// Each readout owns a separate bounded, presentation-thread cache because
-// its source fields change at different rates. Entries never evict, new keys
-// stop being admitted at `TEXT_CACHE_LIMIT`, and all storage drops with the
-// thread. Stable summaries clone `Arc` handles without formatting or heap
-// churn; changing telemetry still produces exact fresh text.
+// Each presentation-thread readout retains a bounded key cache, its last value,
+// and a formatting buffer. The last formatted key bypasses hashing; keys with the
+// same displayed text reuse the last Arc, even after cache saturation. Such
+// consecutive duplicates do not enter the map. There is no eviction or pruning;
+// all storage drops with the thread. Scratch grows only to the largest readout.
 thread_local! {
-    static SUMMARY_TEXT_CACHE: RefCell<TextCache<SummaryTextKey>> = RefCell::new(text_cache_with_capacity(128));
-    static LOAD_TEXT_CACHE: RefCell<TextCache<LoadTextKey>> = RefCell::new(text_cache_with_capacity(128));
-    static STUTTER_TEXT_CACHE: RefCell<TextCache<StutterTextKey>> = RefCell::new(text_cache_with_capacity(128));
-    static DISPLAY_TEXT_CACHE: RefCell<TextCache<DisplayTextKey>> = RefCell::new(text_cache_with_capacity(128));
-    static AUDIO_TEXT_CACHE: RefCell<TextCache<AudioTextKey>> = RefCell::new(text_cache_with_capacity(128));
-    static COMPACT_TEXT_CACHE: RefCell<TextCache<CompactTextKey>> = RefCell::new(text_cache_with_capacity(128));
+    static SUMMARY_TEXT_CACHE: RefCell<ReadoutCache<SummaryTextKey>> = RefCell::new(ReadoutCache::new());
+    static LOAD_TEXT_CACHE: RefCell<ReadoutCache<LoadTextKey>> = RefCell::new(ReadoutCache::new());
+    static STUTTER_TEXT_CACHE: RefCell<ReadoutCache<StutterTextKey>> = RefCell::new(ReadoutCache::new());
+    static DISPLAY_TEXT_CACHE: RefCell<ReadoutCache<DisplayTextKey>> = RefCell::new(ReadoutCache::new());
+    static AUDIO_TEXT_CACHE: RefCell<ReadoutCache<AudioTextKey>> = RefCell::new(ReadoutCache::new());
+    static COMPACT_TEXT_CACHE: RefCell<ReadoutCache<CompactTextKey>> = RefCell::new(ReadoutCache::new());
+}
+
+struct ReadoutCache<K> {
+    entries: TextCache<K>,
+    scratch: String,
+    last: Option<(K, Arc<str>)>,
+    // Keep the preceding equivalent key too: alternating inputs can round to
+    // the same readout without ever needing another format or map entry.
+    last_alias: Option<K>,
+}
+
+impl<K: Copy + Eq + std::hash::Hash> ReadoutCache<K> {
+    fn new() -> Self {
+        Self {
+            entries: text_cache_with_capacity(128),
+            scratch: String::with_capacity(128),
+            last: None,
+            last_alias: None,
+        }
+    }
+
+    fn get(&mut self, key: K, build: impl FnOnce(&mut String)) -> Arc<str> {
+        if let Some((last_key, text)) = &self.last
+            && (*last_key == key || self.last_alias == Some(key))
+        {
+            return Arc::clone(text);
+        }
+        if let Some(text) = self.entries.get(&key) {
+            // A cached hit already owns its text. Avoid another Arc clone/drop
+            // merely to replace the last formatted value.
+            return Arc::clone(text);
+        }
+        self.scratch.clear();
+        build(&mut self.scratch);
+        if let Some((last_key, text)) = &mut self.last
+            && text.as_ref() == self.scratch
+        {
+            self.last_alias = Some(*last_key);
+            *last_key = key;
+            return Arc::clone(text);
+        }
+        let text: Arc<str> = Arc::from(self.scratch.as_str());
+        if self.entries.len() < TEXT_CACHE_LIMIT {
+            self.entries.insert(key, Arc::clone(&text));
+        }
+        self.last_alias = None;
+        self.last = Some((key, Arc::clone(&text)));
+        text
+    }
+}
+
+#[inline(always)]
+fn cached_readout<K: Copy + Eq + std::hash::Hash>(
+    cache: &'static std::thread::LocalKey<RefCell<ReadoutCache<K>>>,
+    key: K,
+    build: impl FnOnce(&mut String),
+) -> Arc<str> {
+    cache.with(|cache| cache.borrow_mut().get(key, build))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -552,8 +610,13 @@ fn ms(us: u32) -> f32 {
 /// decaying-histogram p99, slow-decay max-hold) so they read steadily instead of flickering.
 /// In minimal style the p99 line is omitted (osu! reports no percentile).
 fn summary_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
-    use std::fmt::Write;
     let mut text = String::with_capacity(96);
+    summary_text_into(summary, show_p99, &mut text);
+    text
+}
+
+fn summary_text_into(summary: &FrameStatsSummary, show_p99: bool, text: &mut String) {
+    use std::fmt::Write;
     let _ = write!(
         text,
         "FRAME STATS\n{:.0} FPS\navg {:.2} \u{00b1}{:.2}ms",
@@ -568,7 +631,6 @@ fn summary_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
     if summary.target_frame_us > 0 {
         let _ = write!(text, "\ntgt {:.2}ms", ms(summary.target_frame_us));
     }
-    text
 }
 
 /// Second data cell: live CPU/GPU load breakdown. Shows the smoothed CPU work and GPU/swap
@@ -576,6 +638,12 @@ fn summary_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
 /// the frame ("lim CPU/GPU", or "none" when idle headroom dominates = frame-rate capped).
 /// Replaces the old static color legend with numbers that actually move.
 fn load_text(summary: &FrameStatsSummary) -> String {
+    let mut text = String::with_capacity(64);
+    load_text_into(summary, &mut text);
+    text
+}
+
+fn load_text_into(summary: &FrameStatsSummary, text: &mut String) {
     use std::fmt::Write;
     let cpu = summary.cpu_work_us;
     let gpu = summary.gpu_wait_us;
@@ -592,7 +660,6 @@ fn load_text(summary: &FrameStatsSummary) -> String {
     } else {
         "CPU"
     };
-    let mut text = String::with_capacity(64);
     let _ = write!(
         text,
         "LOAD\ncpu {:.2}ms\ngpu {:.2}ms\nidle {:.0}%\nlim {}",
@@ -601,7 +668,6 @@ fn load_text(summary: &FrameStatsSummary) -> String {
         idle_pct,
         lim,
     );
-    text
 }
 
 /// Third data cell: stutter tally — how often and how badly the frame loop hitched recently.
@@ -609,8 +675,13 @@ fn load_text(summary: &FrameStatsSummary) -> String {
 /// `catch-ups` counts distinct display-clock resync events, and `worst` is the slow-decay
 /// worst-frame hold. All a steady "did I hitch?" readout that matches the graph's markers.
 fn stutter_text(summary: &FrameStatsSummary) -> String {
-    use std::fmt::Write;
     let mut text = String::with_capacity(64);
+    stutter_text_into(summary, &mut text);
+    text
+}
+
+fn stutter_text_into(summary: &FrameStatsSummary, text: &mut String) {
+    use std::fmt::Write;
     let _ = write!(
         text,
         "STUTTER\nover-budget {}\ncatch-ups {}\nworst {:.2}ms",
@@ -618,13 +689,17 @@ fn stutter_text(summary: &FrameStatsSummary) -> String {
         summary.catch_up_count,
         ms(summary.spike_hold_us),
     );
-    text
 }
 
 /// Bottom-left data cell: display-clock sync health. The p99 line is omitted in minimal style.
 fn display_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
-    use std::fmt::Write;
     let mut text = String::with_capacity(64);
+    display_text_into(summary, show_p99, &mut text);
+    text
+}
+
+fn display_text_into(summary: &FrameStatsSummary, show_p99: bool, text: &mut String) {
+    use std::fmt::Write;
     if summary.in_gameplay {
         let _ = write!(
             text,
@@ -647,13 +722,17 @@ fn display_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
     } else {
         let _ = write!(text, "DISPLAY CLOCK\nn/a (menu)");
     }
-    text
 }
 
 /// Bottom-right data cell: audio output health.
 fn audio_text(summary: &FrameStatsSummary) -> String {
-    use std::fmt::Write;
     let mut text = String::with_capacity(64);
+    audio_text_into(summary, &mut text);
+    text
+}
+
+fn audio_text_into(summary: &FrameStatsSummary, text: &mut String) {
+    use std::fmt::Write;
     let _ = write!(
         text,
         "AUDIO\ngap {:.2}ms\nunderruns {}\nout {:.2}ms\nq {}",
@@ -662,7 +741,6 @@ fn audio_text(summary: &FrameStatsSummary) -> String {
         summary.audio_output_delay_ms,
         summary.audio_queued_frames,
     );
-    text
 }
 
 /// Push a left-aligned miso text block at `(x, y)`.
@@ -680,9 +758,14 @@ fn push_text_block(actors: &mut Vec<Actor>, x: f32, y: f32, zoom: f32, text: Tex
 }
 
 fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
+    let mut text = String::with_capacity(96);
+    compact_readout_text_into(summary, show_p99, &mut text);
+    text
+}
+
+fn compact_readout_text_into(summary: &FrameStatsSummary, show_p99: bool, text: &mut String) {
     use std::fmt::Write;
 
-    let mut text = String::with_capacity(96);
     let _ = write!(
         text,
         "{:.0} FPS  avg {:.2}\u{00b1}{:.2}",
@@ -714,7 +797,6 @@ fn compact_readout_text(summary: &FrameStatsSummary, show_p99: bool) -> String {
             summary.audio_underruns, summary.audio_output_delay_ms, summary.audio_callback_gap_ms,
         );
     }
-    text
 }
 
 #[inline(always)]
@@ -728,8 +810,8 @@ fn retained_summary_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str
         target_frame_us: summary.target_frame_us,
         show_p99,
     };
-    cached_text(&SUMMARY_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        summary_text(summary, show_p99)
+    cached_readout(&SUMMARY_TEXT_CACHE, key, |text| {
+        summary_text_into(summary, show_p99, text)
     })
 }
 
@@ -740,9 +822,7 @@ fn retained_load_text(summary: &FrameStatsSummary) -> Arc<str> {
         gpu_wait_us: summary.gpu_wait_us,
         avg_frame_us: summary.avg_frame_us,
     };
-    cached_text(&LOAD_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        load_text(summary)
-    })
+    cached_readout(&LOAD_TEXT_CACHE, key, |text| load_text_into(summary, text))
 }
 
 #[inline(always)]
@@ -752,8 +832,8 @@ fn retained_stutter_text(summary: &FrameStatsSummary) -> Arc<str> {
         catch_up_count: summary.catch_up_count,
         spike_hold_us: summary.spike_hold_us,
     };
-    cached_text(&STUTTER_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        stutter_text(summary)
+    cached_readout(&STUTTER_TEXT_CACHE, key, |text| {
+        stutter_text_into(summary, text)
     })
 }
 
@@ -767,8 +847,8 @@ fn retained_display_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str
         display_catching_up: summary.display_catching_up,
         show_p99,
     };
-    cached_text(&DISPLAY_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        display_text(summary, show_p99)
+    cached_readout(&DISPLAY_TEXT_CACHE, key, |text| {
+        display_text_into(summary, show_p99, text)
     })
 }
 
@@ -780,8 +860,8 @@ fn retained_audio_text(summary: &FrameStatsSummary) -> Arc<str> {
         output_delay_bits: summary.audio_output_delay_ms.to_bits(),
         queued_frames: summary.audio_queued_frames,
     };
-    cached_text(&AUDIO_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        audio_text(summary)
+    cached_readout(&AUDIO_TEXT_CACHE, key, |text| {
+        audio_text_into(summary, text)
     })
 }
 
@@ -801,8 +881,8 @@ fn retained_compact_text(summary: &FrameStatsSummary, show_p99: bool) -> Arc<str
         audio_callback_gap_bits: summary.audio_callback_gap_ms.to_bits(),
         show_p99,
     };
-    cached_text(&COMPACT_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        compact_readout_text(summary, show_p99)
+    cached_readout(&COMPACT_TEXT_CACHE, key, |text| {
+        compact_readout_text_into(summary, show_p99, text)
     })
 }
 

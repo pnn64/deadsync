@@ -103,6 +103,10 @@ pub const fn frame_stats_two_player(play_style: PlayStyle, num_players: usize) -
 pub struct DecayingHist {
     bins: [f32; DHIST_BINS],
     total: f32,
+    // Bins outside this range are positive zero. Unusual decay factors use
+    // the full range so zero * NaN/infinity and signed zeros stay unchanged.
+    occupied_start: usize,
+    occupied_end: usize,
 }
 
 impl DecayingHist {
@@ -111,6 +115,8 @@ impl DecayingHist {
         Self {
             bins: [0.0; DHIST_BINS],
             total: 0.0,
+            occupied_start: DHIST_BINS,
+            occupied_end: 0,
         }
     }
 
@@ -118,6 +124,8 @@ impl DecayingHist {
     pub const fn reset(&mut self) {
         self.bins = [0.0; DHIST_BINS];
         self.total = 0.0;
+        self.occupied_start = DHIST_BINS;
+        self.occupied_end = 0;
     }
 
     /// Decay all bins and add the new `value_us` to its bucket.
@@ -125,8 +133,22 @@ impl DecayingHist {
     pub fn update(&mut self, value_us: u32, gamma: f32, bucket_us: u32) {
         let bucket_us = bucket_us.max(1);
         let idx = (value_us / bucket_us).min(DHIST_BINS as u32 - 1) as usize;
-        for bin in &mut self.bins {
-            *bin *= gamma;
+        if self.occupied_start == 0 && self.occupied_end == DHIST_BINS {
+            // Once every bucket is in range, retain the fixed-size decay loop.
+            for bin in &mut self.bins {
+                *bin *= gamma;
+            }
+        } else {
+            if gamma.is_finite() && !gamma.is_sign_negative() {
+                self.occupied_start = self.occupied_start.min(idx);
+                self.occupied_end = self.occupied_end.max(idx + 1);
+            } else {
+                self.occupied_start = 0;
+                self.occupied_end = DHIST_BINS;
+            }
+            for bin in &mut self.bins[self.occupied_start..self.occupied_end] {
+                *bin *= gamma;
+            }
         }
         self.bins[idx] += 1.0;
         self.total = self.total.mul_add(gamma, 1.0);
@@ -141,7 +163,8 @@ impl DecayingHist {
         let bucket_us = bucket_us.max(1);
         let target = (self.total * pct.clamp(0.0, 1.0)).max(f32::MIN_POSITIVE);
         let mut cumulative = 0.0;
-        for (idx, &bin) in self.bins.iter().enumerate() {
+        for idx in self.occupied_start..self.occupied_end {
+            let bin = self.bins[idx];
             cumulative += bin;
             if cumulative >= target {
                 return (idx as u32 + 1) * bucket_us;

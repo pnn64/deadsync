@@ -349,13 +349,14 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
     /// Copy the ring into `out` in chronological order.
     pub fn snapshot(&self, out: &mut Vec<T>) {
         out.clear();
-        if N == 0 {
+        if N == 0 || self.len == 0 {
             return;
         }
         let start = self.cursor.saturating_add(N).saturating_sub(self.len) % N;
-        for i in 0..self.len {
-            out.push(self.samples[(start + i) % N]);
-        }
+        let first_len = self.len.min(N - start);
+        out.reserve(self.len);
+        out.extend_from_slice(&self.samples[start..start + first_len]);
+        out.extend_from_slice(&self.samples[..self.len - first_len]);
     }
 
     /// Copy samples whose timestamp is inside `window_ns`, in chronological order.
