@@ -107,11 +107,50 @@ pub fn grade_from_itg(grade: &str) -> Option<Grade> {
     }
 }
 
+// ITGmania writes this fixed-width form. Unusual inputs continue through
+// Chrono's format parser, including leap seconds and relaxed field widths.
+#[inline]
+fn canonical_itg_datetime(input: &str) -> Option<Option<NaiveDateTime>> {
+    let bytes = input.as_bytes();
+    if bytes.len() != 19
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b' '
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[5] > b'1'
+        || bytes[17] >= b'6'
+    {
+        return None;
+    }
+    let number = |digits: &[u8]| {
+        digits.iter().try_fold(0u32, |value, digit| {
+            digit
+                .is_ascii_digit()
+                .then(|| value * 10 + u32::from(digit - b'0'))
+        })
+    };
+    let year = number(&bytes[..4])? as i32;
+    let month = number(&bytes[5..7])?;
+    let day = number(&bytes[8..10])?;
+    let hour = number(&bytes[11..13])?;
+    let minute = number(&bytes[14..16])?;
+    let second = number(&bytes[17..19])?;
+    // A canonical but out-of-range date is already known to be invalid;
+    // distinguish it from a different format so it is not parsed twice.
+    Some(
+        chrono::NaiveDate::from_ymd_opt(year, month, day)
+            .and_then(|date| date.and_hms_opt(hour, minute, second)),
+    )
+}
+
 /// Parses an `ITGmania` `<DateTime>` (`"YYYY-MM-DD HH:MM:SS"`, local time) into
 /// epoch milliseconds. Returns `None` if the string can't be parsed.
 #[must_use]
 pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
-    let naive = NaiveDateTime::parse_from_str(date_time.trim(), "%Y-%m-%d %H:%M:%S").ok()?;
+    let date_time = date_time.trim();
+    let naive = canonical_itg_datetime(date_time)
+        .unwrap_or_else(|| NaiveDateTime::parse_from_str(date_time, "%Y-%m-%d %H:%M:%S").ok())?;
     // ITGmania writes timestamps in machine-local time. Interpret them the same
     // way; if the local offset is ambiguous (DST fold) take the earliest.
     match chrono::Local.from_local_datetime(&naive) {

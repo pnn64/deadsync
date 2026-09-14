@@ -694,6 +694,47 @@ pub fn imported_player_score_from_leaderboard_entries(
     })
 }
 
+// The response owns these rows; move the selected comment before converting
+// the leaderboard so its allocation survives in the imported score.
+fn take_imported_player_score(
+    gs_entries: &mut [LeaderboardApiEntry],
+    ex_entries: &[LeaderboardApiEntry],
+    username: &str,
+) -> Option<ImportedPlayerScore> {
+    let index = gs_entries
+        .iter()
+        .position(|entry| entry.is_self)
+        .or_else(|| {
+            gs_entries
+                .iter()
+                .position(|entry| leaderboard_username_matches(&entry.name, username))
+        })?;
+    let entry = &mut gs_entries[index];
+    let ex_evidence =
+        gs_ex_evidence_from_leaderboard(ex_entries, username, entry.comments.as_deref());
+    Some(ImportedPlayerScore {
+        score_10000: entry.score,
+        comments: entry.comments.take(),
+        is_fail: entry.is_fail,
+        ex_evidence,
+    })
+}
+
+// A row can be present while its failed/non-finite score or zero rank is absent.
+fn leaderboard_self_summary(
+    entries: &[LeaderboardApiEntry],
+    username: &str,
+) -> (bool, Option<u32>, Option<u32>) {
+    let Some(entry) = leaderboard_self_entry(entries, username) else {
+        return (false, None, None);
+    };
+    (
+        true,
+        leaderboard_entry_score_10000(entry).map(|score| score.round() as u32),
+        leaderboard_nonzero_rank(entry.rank),
+    )
+}
+
 #[derive(Debug)]
 pub struct FetchedPlayerLeaderboards {
     pub data: PlayerLeaderboardData,
@@ -740,17 +781,13 @@ pub fn fetched_player_leaderboards_from_api(
     if let Some(player) = decoded.player1 {
         let LeaderboardApiPlayer {
             is_ranked: _is_ranked,
-            gs_leaderboard,
+            mut gs_leaderboard,
             ex_leaderboard,
             srpg,
             itl,
         } = player;
 
-        imported_score = imported_player_score_from_leaderboard_entries(
-            &gs_leaderboard,
-            &ex_leaderboard,
-            username,
-        );
+        imported_score = take_imported_player_score(&mut gs_leaderboard, &ex_leaderboard, username);
         if show_ex_score {
             push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
             push_leaderboard_pane(&mut panes, "GrooveStats", gs_leaderboard, false);
@@ -774,9 +811,8 @@ pub fn fetched_player_leaderboards_from_api(
         if let Some(itl) = itl
             && !itl.itl_leaderboard.is_empty()
         {
-            itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
-            itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
-            itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+            (itl_self_found, itl_self_score, itl_self_rank) =
+                leaderboard_self_summary(&itl.itl_leaderboard, username);
             let name = if itl.name.trim().is_empty() {
                 "ITL"
             } else {
@@ -857,12 +893,12 @@ pub fn player_score_import_result_from_api(
     endpoint: ScoreImportEndpoint,
     username: &str,
 ) -> PlayerScoreImportResult {
-    let Some(player) = decoded.player1 else {
+    let Some(mut player) = decoded.player1 else {
         return PlayerScoreImportResult::empty();
     };
 
     let mut result = PlayerScoreImportResult::empty();
-    if let Some(entry) = player.gs_leaderboard.iter().find(|entry| {
+    if let Some(entry) = player.gs_leaderboard.iter_mut().find(|entry| {
         score_import_entry_matches_profile(entry.name.as_str(), entry.is_self, endpoint, username)
     }) {
         let ex_score = player
@@ -881,7 +917,7 @@ pub fn player_score_import_result_from_api(
         result.score_proves_nonquint_ex = ex_evidence.proves_nonquint();
         result.score = Some(ImportedPlayerScore {
             score_10000: entry.score,
-            comments: entry.comments.clone(),
+            comments: entry.comments.take(),
             is_fail: entry.is_fail,
             ex_evidence,
         });
@@ -890,9 +926,11 @@ pub fn player_score_import_result_from_api(
     if let Some(itl) = player.itl
         && !itl.itl_leaderboard.is_empty()
     {
-        result.itl_self_found = leaderboard_self_entry(&itl.itl_leaderboard, username).is_some();
-        result.itl_self_score = leaderboard_self_score_10000(&itl.itl_leaderboard, username);
-        result.itl_self_rank = leaderboard_self_rank(&itl.itl_leaderboard, username);
+        (
+            result.itl_self_found,
+            result.itl_self_score,
+            result.itl_self_rank,
+        ) = leaderboard_self_summary(&itl.itl_leaderboard, username);
     }
 
     result
@@ -6125,5 +6163,13 @@ mod preparation_perf {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/perf/groovestats_preparation.rs"
+    ));
+}
+
+#[cfg(test)]
+mod player_responses {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/perf/player_responses/mod.rs"
     ));
 }
