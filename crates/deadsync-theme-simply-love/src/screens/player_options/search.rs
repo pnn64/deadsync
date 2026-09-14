@@ -27,26 +27,20 @@ pub(super) struct SettingMatch {
     pub pane: OptionsPane,
     pub label: Arc<str>,
     pub score: i32,
-    /// Actor-ready labels prepared at the query-change boundary. Index zero is
-    /// the ordinary row and index one is the focused row.
-    row_text: [Arc<str>; 2],
+    row_text: super::search_ranking::SearchRowText,
     pane_text: Arc<str>,
     retained_text: super::search_text::SearchResultText,
 }
 
 impl SettingMatch {
-    fn new(row_id: RowId, pane: OptionsPane, label: String, score: i32) -> Self {
-        let label: Arc<str> = label.into();
+    fn new(row_id: RowId, pane: OptionsPane, label: Arc<str>, score: i32) -> Self {
         Self {
             choice_index: None,
             thumb: None,
             row_id,
             pane,
             score,
-            row_text: [
-                Arc::from(format!("  {label}")),
-                Arc::from(format!("▸ {label}")),
-            ],
+            row_text: super::search_ranking::SearchRowText::default(),
             pane_text: pane_label(pane),
             retained_text: super::search_text::SearchResultText::default(),
             label,
@@ -92,18 +86,6 @@ const SEARCH_PANE_ORDER: [OptionsPane; OptionsPane::COUNT] = [
     OptionsPane::Advanced,
     OptionsPane::Uncommon,
 ];
-
-/// Strip multi-line/templated i18n names down to a single clean label, e.g.
-/// `Music Rate\nbpm: {bpm}` -> `Music Rate`.
-fn clean_label(raw: &str) -> String {
-    let mut end = raw.len();
-    for pat in ["\\n", "\n", "{"] {
-        if let Some(i) = raw.find(pat) {
-            end = end.min(i);
-        }
-    }
-    raw[..end].trim().to_string()
-}
 
 /// English synonym keywords matched alongside the localized label, so queries
 /// like "cmod" or "arrows" resolve. Lives here because `fuzzy` is domain-agnostic.
@@ -156,11 +138,8 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             }
             seen[id.index()] = true;
 
-            let label = clean_label(&row.name.get());
-            if q.is_empty() {
-                matches.push(SettingMatch::new(id, pane, label, 0));
-            } else if let Some(score) =
-                fuzzy::best_match_score(&q, &fuzzy::fold_diacritics(&label), row_aliases(id))
+            if let Some((label, score)) =
+                super::search_ranking::matched_setting_label(&q, &row.name.get(), row_aliases(id))
             {
                 matches.push(SettingMatch::new(id, pane, label, score));
             }
@@ -227,7 +206,8 @@ fn component_matches(state: &State, row: RowId, player: usize, query: &str) -> V
             };
             score
         };
-        let mut item = SettingMatch::new(row, OptionsPane::Display, label.to_string(), score);
+        let mut item =
+            SettingMatch::new(row, OptionsPane::Display, Arc::from(label.as_str()), score);
         item.choice_index = Some(index);
         item.thumb = state.pack_menu.choice_thumb(state, player, row, index);
         item.pane_text = Arc::from("");
@@ -569,7 +549,7 @@ pub(super) fn push_overlay(actors: &mut Vec<Actor>, state: &State) {
             panel_w * 0.62
         };
         actors.push(act!(text:
-            font("miso"): settext(Arc::clone(&m.row_text[usize::from(focused)])):
+            font("miso"): settext(m.row_text.get(&m.label, focused)):
             align(0.0, 0.5): xy(choice_x, y): zoom(0.85):
             maxwidth(choice_width):
             diffuse(text_rgb[0], text_rgb[1], text_rgb[2], 1.0): z(Z_TEXT + 1): horizalign(left)

@@ -5620,6 +5620,63 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn lazy_search_rows_follow_component_scrolling_filtering_and_reopening() {
+        fn check_rows(state: &super::State) {
+            let super::search::SettingSearchState::Open(open) = &state.search else {
+                panic!("search should be open");
+            };
+            let expected: Vec<_> = super::search::visible_range(open)
+                .map(|index| {
+                    let label = &open.matches[index].label;
+                    if index == open.selected_index {
+                        format!("\u{25b8} {label}")
+                    } else {
+                        format!("  {label}")
+                    }
+                })
+                .collect();
+            for _ in 0..2 {
+                let mut actors = Vec::new();
+                super::search::push_overlay(&mut actors, state);
+                let actual: Vec<_> = actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        deadlib_present::actors::Actor::Text { content, .. }
+                            if content.as_str().starts_with("  Choice ")
+                                || content.as_str().starts_with("\u{25b8} Choice ") =>
+                        {
+                            Some(content.as_str().to_owned())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(actual, expected);
+            }
+        }
+
+        ensure_i18n();
+        let (mut state, _asset_manager) = setup_state();
+        let row = state.pane_mut().row_map.get_mut(RowId::NoteSkin).unwrap();
+        row.choices = (0..32)
+            .map(|index| TextContent::from(format!("Choice {index:02} \u{65e5}")))
+            .collect();
+        row.selected_choice_index[0] = 31;
+        for _ in 0..2 {
+            super::search::open_component(&mut state, 0, RowId::NoteSkin);
+            check_rows(&state);
+            for delta in [1, 1, 9, -1, -20] {
+                super::search::move_selection(&mut state, delta);
+                check_rows(&state);
+            }
+            super::search::add_text(&mut state, "choice 1");
+            check_rows(&state);
+            super::search::backspace(&mut state);
+            check_rows(&state);
+            super::search::close(&mut state);
+        }
+    }
+
+    #[test]
     fn focused_match_exposes_help_text() {
         ensure_i18n();
         let (state, _asset_manager) = setup_state();
