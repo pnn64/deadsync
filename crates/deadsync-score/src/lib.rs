@@ -4941,6 +4941,7 @@ pub fn update_local_score_index(
     );
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Encode, Decode)]
 struct GsScoreEntryV1 {
     score_percent: f64,
@@ -4987,26 +4988,74 @@ pub fn cached_score_from_gs_entry(entry: &GsScoreEntry) -> CachedScore {
     ))
 }
 
-#[must_use]
-pub fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
-    if let Ok((entry, _)) =
-        bincode::decode_from_slice::<GsScoreEntry, _>(bytes, bincode::config::standard())
-    {
+#[derive(bincode::BorrowDecode)]
+struct GsScoreEntryV1Ref<'a> {
+    score_percent: f64,
+    grade_code: u8,
+    lamp_index: Option<u8>,
+    username: &'a str,
+    fetched_at_ms: i64,
+}
+
+// The wire fields/order match GsScoreEntry. Readers that only compare or
+// summarize scores can borrow the username from their reusable input buffer.
+#[derive(bincode::BorrowDecode)]
+pub(crate) struct GsScoreEntryRef<'a> {
+    pub score_percent: f64,
+    pub grade_code: u8,
+    pub lamp_index: Option<u8>,
+    pub lamp_judge_count: Option<u8>,
+    pub username: &'a str,
+    pub fetched_at_ms: i64,
+}
+
+impl GsScoreEntryRef<'_> {
+    fn into_owned(self) -> GsScoreEntry {
+        GsScoreEntry {
+            score_percent: self.score_percent,
+            grade_code: self.grade_code,
+            lamp_index: self.lamp_index,
+            lamp_judge_count: self.lamp_judge_count,
+            username: self.username.to_owned(),
+            fetched_at_ms: self.fetched_at_ms,
+        }
+    }
+
+    pub(crate) fn cached_score(&self) -> CachedScore {
+        fix_gs_cached_score(cached_score(
+            grade_from_code(self.grade_code),
+            self.score_percent,
+            self.lamp_index,
+            self.lamp_judge_count,
+        ))
+    }
+}
+
+pub(crate) fn decode_gs_score_entry_ref(bytes: &[u8]) -> Option<GsScoreEntryRef<'_>> {
+    if let Ok((entry, _)) = bincode::borrow_decode_from_slice::<GsScoreEntryRef<'_>, _>(
+        bytes,
+        bincode::config::standard(),
+    ) {
         return Some(entry);
     }
-    if let Ok((v1, _)) =
-        bincode::decode_from_slice::<GsScoreEntryV1, _>(bytes, bincode::config::standard())
-    {
-        return Some(GsScoreEntry {
-            score_percent: v1.score_percent,
-            grade_code: v1.grade_code,
-            lamp_index: v1.lamp_index,
-            lamp_judge_count: None,
-            username: v1.username,
-            fetched_at_ms: v1.fetched_at_ms,
-        });
-    }
-    None
+    let (v1, _) = bincode::borrow_decode_from_slice::<GsScoreEntryV1Ref<'_>, _>(
+        bytes,
+        bincode::config::standard(),
+    )
+    .ok()?;
+    Some(GsScoreEntryRef {
+        score_percent: v1.score_percent,
+        grade_code: v1.grade_code,
+        lamp_index: v1.lamp_index,
+        lamp_judge_count: None,
+        username: v1.username,
+        fetched_at_ms: v1.fetched_at_ms,
+    })
+}
+
+#[must_use]
+pub fn decode_gs_score_entry(bytes: &[u8]) -> Option<GsScoreEntry> {
+    decode_gs_score_entry_ref(bytes).map(GsScoreEntryRef::into_owned)
 }
 
 #[must_use]

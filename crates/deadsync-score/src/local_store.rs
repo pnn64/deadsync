@@ -10,11 +10,11 @@ use crate::leaderboard::{machine_leaderboard_entry, machine_replay_entry};
 use crate::{
     ArrowCloudScores, CachedScore, Grade, GsScoreEntry, LeaderboardEntry, LocalScoreEntry,
     LocalScoreHeader, LocalScoreIndex, MachineBest, MachineBestScalar, MachineLeaderboardPlay,
-    MachineLocalScoreBests, MachineReplayEntry, MachineReplayPlay, cached_score_from_gs_entry,
-    decode_gs_score_entry, decode_local_score_entry, decode_local_score_header,
-    decode_local_score_index, encode_gs_score_entry, encode_local_score_entry,
-    encode_local_score_index, fix_gs_cached_score, grade_from_code, gs_score_entry_from_cached,
-    is_better_itg, parse_score_file_name, score_file_shard, update_local_score_index,
+    MachineLocalScoreBests, MachineReplayEntry, MachineReplayPlay, decode_gs_score_entry,
+    decode_local_score_entry, decode_local_score_header, decode_local_score_index,
+    encode_gs_score_entry, encode_local_score_entry, encode_local_score_index, fix_gs_cached_score,
+    grade_from_code, gs_score_entry_from_cached, is_better_itg, parse_score_file_name,
+    score_file_shard, update_local_score_index,
 };
 
 #[derive(Debug)]
@@ -739,16 +739,21 @@ pub fn push_local_leaderboard_plays_from_dir(
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
         let Some((file_hash, played_at_ms)) = parse_score_file_name(file_name) else {
             continue;
         };
         if file_hash != chart_hash {
+            continue;
+        }
+        // Regular files use the type from directory enumeration; links retain
+        // the existing follow-target behavior. Other charts need neither.
+        if !entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
             continue;
         }
         let Some(header) = read_local_score_header(&path) else {
@@ -777,16 +782,21 @@ pub fn push_local_replay_plays_from_dir(
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
         let Some((file_hash, played_at_ms)) = parse_score_file_name(name) else {
             continue;
         };
         if file_hash != chart_hash {
+            continue;
+        }
+        // Regular files use the type from directory enumeration; links retain
+        // the existing follow-target behavior. Other charts need neither.
+        if !entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
             continue;
         }
         let Some(full) = read_local_score_entry(&path) else {
@@ -929,16 +939,21 @@ fn push_local_leaderboard_candidates_from_dir<'a>(
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
         let Some((file_hash, played_at_ms)) = parse_score_file_name(file_name) else {
             continue;
         };
         if file_hash != chart_hash {
+            continue;
+        }
+        // Regular files use the type from directory enumeration; links retain
+        // the existing follow-target behavior. Other charts need neither.
+        if !entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
             continue;
         }
         let Some(header) = read_local_score_header_into(&path, header_buf) else {
@@ -1165,16 +1180,21 @@ fn push_local_replay_candidates_from_dir<'a>(
 
     for entry in read_dir.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
         let Some((file_hash, played_at_ms)) = parse_score_file_name(file_name) else {
             continue;
         };
         if file_hash != chart_hash {
+            continue;
+        }
+        // Regular files use the type from directory enumeration; links retain
+        // the existing follow-target behavior. Other charts need neither.
+        if !entry
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
             continue;
         }
         let Some(header) = read_local_score_header_into(&path, header_buf) else {
@@ -1453,10 +1473,10 @@ fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScor
         let Ok(bytes) = fs::read(&path) else {
             continue;
         };
-        let Some(entry) = decode_gs_score_entry(&bytes) else {
+        let Some(entry) = crate::decode_gs_score_entry_ref(&bytes) else {
             continue;
         };
-        let cached = cached_score_from_gs_entry(&entry);
+        let cached = entry.cached_score();
 
         match best_by_chart.get_mut(chart_hash) {
             Some(existing) => {
@@ -1523,6 +1543,54 @@ pub fn gs_entries_for_chart(chart_hash: &str, dir: &Path) -> Vec<GsScoreEntry> {
     entries
 }
 
+fn gs_score_is_duplicate(dir: &Path, chart_hash: &str, new_entry: &GsScoreEntry) -> bool {
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return false;
+    };
+    let mut bytes = Vec::new();
+    for item in read_dir.flatten() {
+        let path = item.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if !name.ends_with(".bin")
+            || !name
+                .strip_prefix(chart_hash)
+                .is_some_and(|rest| rest.starts_with('-'))
+        {
+            continue;
+        }
+        if !item
+            .file_type()
+            .is_ok_and(|kind| kind.is_file() || (kind.is_symlink() && path.is_file()))
+        {
+            continue;
+        }
+        let Ok(mut file) = fs::File::open(&path) else {
+            continue;
+        };
+        bytes.clear();
+        // Most records fit here; allocate only after finding a readable match.
+        // Reuse any larger capacity until this directory scan is finished.
+        bytes.reserve(128);
+        if file.read_to_end(&mut bytes).is_err() {
+            continue;
+        }
+        let Some(existing) = crate::decode_gs_score_entry_ref(&bytes) else {
+            continue;
+        };
+        if existing.username.eq_ignore_ascii_case(&new_entry.username)
+            && (existing.score_percent - new_entry.score_percent).abs() <= 1e-9_f64
+            && existing.lamp_index == new_entry.lamp_index
+            && existing.lamp_judge_count == new_entry.lamp_judge_count
+            && existing.grade_code == new_entry.grade_code
+        {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn write_gs_score_entry_file(
     dir: &Path,
     chart_hash: &str,
@@ -1534,18 +1602,9 @@ pub fn write_gs_score_entry_file(
         return Ok(ScoreStoreWriteStatus::SkippedDuplicate);
     }
 
-    let entries = gs_entries_for_chart(chart_hash, dir);
     let new_entry = gs_score_entry_from_cached(score, username, fetched_at_ms);
-    let epsilon = 1e-9_f64;
-    for existing in &entries {
-        if existing.username.eq_ignore_ascii_case(username)
-            && (existing.score_percent - new_entry.score_percent).abs() <= epsilon
-            && existing.lamp_index == new_entry.lamp_index
-            && existing.lamp_judge_count == new_entry.lamp_judge_count
-            && existing.grade_code == new_entry.grade_code
-        {
-            return Ok(ScoreStoreWriteStatus::SkippedDuplicate);
-        }
+    if gs_score_is_duplicate(dir, chart_hash, &new_entry) {
+        return Ok(ScoreStoreWriteStatus::SkippedDuplicate);
     }
 
     fs::create_dir_all(dir).map_err(|error| ScoreStoreWriteError::CreateDir {
@@ -1779,3 +1838,7 @@ mod candidates_perf {
         "/tests/perf/replay_candidates.rs"
     ));
 }
+
+#[cfg(test)]
+#[path = "../tests/score_storage/mod.rs"]
+mod score_storage;
