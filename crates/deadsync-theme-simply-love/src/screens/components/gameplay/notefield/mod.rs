@@ -634,12 +634,8 @@ pub(crate) fn compose_frame(
     flat_draws.clear();
     hud_actors.clear();
     hud_flat_draws.clear();
-    let hold_judgment_texture = judgment_assets
-        .hold_judgment()
-        .zip(judgment_assets.hold_judgment_sprite_metadata());
-    let held_miss_texture = judgment_assets
-        .held_miss()
-        .zip(judgment_assets.held_miss_sprite_metadata());
+    let hold_judgment_texture = judgment_assets.hold_judgment();
+    let held_miss_texture = judgment_assets.held_miss();
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
@@ -1091,32 +1087,34 @@ pub(crate) fn compose_frame(
         } else {
             &[]
         };
-    let held_miss_sprite = held_misses
-        .iter()
-        .any(Option::is_some)
-        .then(|| {
-            held_miss_texture.map(|((texture, scale), sprite)| IndicatorSprite {
-                source: texture.actor_texture_source(actor_resources, textures),
-                frame_size: sprite.frame_size,
-                frame_cols: sprite.frame_cols,
-                frame_rows: sprite.frame_rows,
-                scale,
-            })
+    let held_miss_sprite = if held_misses.iter().any(Option::is_some)
+        && let Some((texture, scale)) = held_miss_texture
+        && let Some(sprite) = judgment_assets.held_miss_sprite_metadata()
+    {
+        Some(IndicatorSprite {
+            source: texture.actor_texture_source(actor_resources, textures),
+            frame_size: sprite.frame_size,
+            frame_cols: sprite.frame_cols,
+            frame_rows: sprite.frame_rows,
+            scale,
         })
-        .flatten();
-    let hold_sprite = hold_judgments
-        .iter()
-        .any(Option::is_some)
-        .then(|| {
-            hold_judgment_texture.map(|(texture, sprite)| IndicatorSprite {
-                source: texture.actor_texture_source(actor_resources, textures),
-                frame_size: sprite.frame_size,
-                frame_cols: sprite.frame_cols,
-                frame_rows: sprite.frame_rows,
-                scale: 1.0,
-            })
+    } else {
+        None
+    };
+    let hold_sprite = if hold_judgments.iter().any(Option::is_some)
+        && let Some(texture) = hold_judgment_texture
+        && let Some(sprite) = judgment_assets.hold_judgment_sprite_metadata()
+    {
+        Some(IndicatorSprite {
+            source: texture.actor_texture_source(actor_resources, textures),
+            frame_size: sprite.frame_size,
+            frame_cols: sprite.frame_cols,
+            frame_rows: sprite.frame_rows,
+            scale: 1.0,
         })
-        .flatten();
+    } else {
+        None
+    };
     let judgment_frame = (tap.is_some() || held_miss_sprite.is_some() || hold_sprite.is_some())
         .then_some(JudgmentHudFrame {
             tap,
