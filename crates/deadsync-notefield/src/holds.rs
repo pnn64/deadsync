@@ -512,47 +512,41 @@ fn compose_hold_sprite<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    if pass.alpha > f32::EPSILON {
-        draws.push(FlatDraw::Sprite(FlatSprite {
-            center: pass.center,
-            world_z: pass.world_z,
-            size: pass.size,
-            source: sprite_source(pass.slot),
-            tint: [
-                pass.diffuse[0],
-                pass.diffuse[1],
-                pass.diffuse[2],
-                pass.diffuse[3] * pass.alpha,
-            ],
-            glow: [1.0, 1.0, 1.0, 0.0],
-            uv_rect: pass.uv,
-            flip_x: false,
-            flip_y: false,
-            fade: [0.0; 4],
-            blend: BlendMode::Alpha,
-            rot_y_deg: pass.rotation_y_deg,
-            rot_z_deg: pass.rotation_z_deg,
-            z: pass.diffuse_z,
-        }));
+    let diffuse_visible = pass.alpha > f32::EPSILON;
+    let glow_visible = pass.glow > f32::EPSILON;
+    if !diffuse_visible && !glow_visible {
+        return;
     }
-    if pass.glow > f32::EPSILON {
-        draws.push(FlatDraw::Sprite(FlatSprite {
-            center: pass.center,
-            world_z: pass.world_z,
-            size: pass.size,
-            source: sprite_source(pass.slot),
-            tint: [1.0, 1.0, 1.0, 0.0],
-            glow: [1.0, 1.0, 1.0, pass.glow],
-            uv_rect: pass.uv,
-            flip_x: false,
-            flip_y: false,
-            fade: [0.0; 4],
-            blend: BlendMode::Alpha,
-            rot_y_deg: pass.rotation_y_deg,
-            rot_z_deg: pass.rotation_z_deg,
-            z: pass.glow_z,
-        }));
+    let mut sprite = FlatSprite {
+        center: pass.center,
+        world_z: pass.world_z,
+        size: pass.size,
+        source: sprite_source(pass.slot),
+        tint: [
+            pass.diffuse[0],
+            pass.diffuse[1],
+            pass.diffuse[2],
+            pass.diffuse[3] * pass.alpha,
+        ],
+        glow: [1.0, 1.0, 1.0, 0.0],
+        uv_rect: pass.uv,
+        flip_x: false,
+        flip_y: false,
+        fade: [0.0; 4],
+        blend: BlendMode::Alpha,
+        rot_y_deg: pass.rotation_y_deg,
+        rot_z_deg: pass.rotation_z_deg,
+        z: pass.diffuse_z,
+    };
+    if glow_visible {
+        if diffuse_visible {
+            draws.push(FlatDraw::Sprite(sprite.clone()));
+        }
+        sprite.tint = [1.0, 1.0, 1.0, 0.0];
+        sprite.glow = [1.0, 1.0, 1.0, pass.glow];
+        sprite.z = pass.glow_z;
     }
+    draws.push(FlatDraw::Sprite(sprite));
 }
 
 fn compose_hold_body<S, F, P>(
@@ -2397,6 +2391,70 @@ mod tests {
     }
 
     #[test]
+    fn hold_sprite_preserves_pass_visibility_and_geometry() {
+        let slot = TestSlot::sprite("hold-passes");
+        for alpha in [0.0, -0.0, f32::EPSILON, 0.5, f32::NAN] {
+            for glow in [0.0, -0.0, f32::EPSILON, 0.75, f32::NAN] {
+                let mut draws = Vec::new();
+                let source_calls = Cell::new(0);
+                compose_hold_sprite(
+                    &mut draws,
+                    HoldSpritePass {
+                        slot: &slot,
+                        center: [13.0, 27.0],
+                        size: [31.0, 49.0],
+                        uv: [0.1, 0.2, 0.8, 0.9],
+                        rotation_y_deg: 17.0,
+                        rotation_z_deg: -23.0,
+                        diffuse: [0.2, 0.4, 0.6, 0.8],
+                        alpha,
+                        glow,
+                        diffuse_z: 110,
+                        glow_z: 111,
+                        world_z: -0.0,
+                    },
+                    &|slot| {
+                        source_calls.set(source_calls.get() + 1);
+                        test_source(slot)
+                    },
+                );
+
+                let diffuse_visible = alpha > f32::EPSILON;
+                let glow_visible = glow > f32::EPSILON;
+                assert_eq!(
+                    draws.len(),
+                    usize::from(diffuse_visible) + usize::from(glow_visible)
+                );
+                assert_eq!(source_calls.get(), usize::from(!draws.is_empty()));
+                for (index, draw) in draws.iter().enumerate() {
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        panic!("expected hold sprite");
+                    };
+                    assert_eq!(sprite.center, [13.0, 27.0]);
+                    assert_eq!(sprite.size, [31.0, 49.0]);
+                    assert_eq!(sprite.source.texture_key(), Some("hold-passes"));
+                    assert_eq!(sprite.uv_rect, [0.1, 0.2, 0.8, 0.9]);
+                    assert_eq!((sprite.flip_x, sprite.flip_y), (false, false));
+                    assert_eq!(sprite.fade, [0.0; 4]);
+                    assert_eq!(sprite.blend, BlendMode::Alpha);
+                    assert_eq!(sprite.rot_y_deg, 17.0);
+                    assert_eq!(sprite.rot_z_deg, -23.0);
+                    assert_eq!(sprite.world_z.to_bits(), (-0.0_f32).to_bits());
+                    if index == 0 && diffuse_visible {
+                        assert_eq!(sprite.tint, [0.2, 0.4, 0.6, 0.4]);
+                        assert_eq!(sprite.glow, [1.0, 1.0, 1.0, 0.0]);
+                        assert_eq!(sprite.z, 110);
+                    } else {
+                        assert_eq!(sprite.tint, [1.0, 1.0, 1.0, 0.0]);
+                        assert_eq!(sprite.glow, [1.0, 1.0, 1.0, 0.75]);
+                        assert_eq!(sprite.z, 111);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn legacy_body_and_caps_preserve_diffuse_glow_order() {
         let body = TestSlot::sprite("body");
         let top = TestSlot::sprite("top");
@@ -2660,7 +2718,7 @@ mod tests {
                 .iter()
                 .all(|draw| matches!(draw, FlatDraw::Sprite(_)))
         );
-        assert_eq!(source_calls.get(), actors.len());
+        assert_eq!(source_calls.get() * 2, actors.len());
         assert_eq!(body.uv_elapsed.get(), 2.0);
         assert!(actors.iter().all(|actor| sprite_key(actor) == "model-body"));
     }

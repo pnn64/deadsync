@@ -306,23 +306,12 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 },
             );
             if let Some(glow) = glow {
-                append_receptor_sprite(
-                    draws,
-                    slot,
-                    sprite_source,
-                    ReceptorSpriteDraw {
-                        align: [0.5, 0.5],
-                        center: request.center,
-                        size,
-                        zoom: [1.0, 1.0],
-                        tint: glow,
-                        rotation_y_deg: 0.0,
-                        rotation_z_deg: -final_rotation,
-                        uv,
-                        blend,
-                        z: request.style.hold_explosion_z,
-                    },
-                );
+                let Some(FlatDraw::Sprite(sprite)) = draws.last() else {
+                    unreachable!("hold explosion sprite was appended above");
+                };
+                let mut sprite = sprite.clone();
+                sprite.tint = glow;
+                draws.push(FlatDraw::Sprite(sprite));
             }
         }
     }
@@ -931,6 +920,74 @@ mod tests {
         assert_eq!(hold.uv_samples.get(), 0);
         assert_eq!(actors.len(), 1);
         assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
+    }
+
+    #[test]
+    fn hold_sprite_glow_preserves_tint_geometry_and_cached_source() {
+        for model_fallback in [false, true] {
+            for glow in [None, Some([0.2, 0.4, 0.6, 0.5]), Some([0.0; 4])] {
+                let mut hold = if model_fallback {
+                    let mut slot = TestSlot::model("hold-glow");
+                    slot.model.as_mut().expect("model").vertices = Arc::from([]);
+                    slot.draw.visible = false;
+                    slot
+                } else {
+                    TestSlot::sprite("hold-glow")
+                };
+                hold.draw.tint = [0.3, 0.5, 0.7, 0.9];
+                hold.draw.zoom = [0.5, 0.75, 1.0];
+                hold.draw.rot[2] = 7.0;
+                hold.draw.blend_add = true;
+                hold.def.rotation_deg = 13;
+                hold.glow = glow;
+                let pulse = pulse();
+                let mut request = request(None, Some(&hold), &pulse);
+                request.hide_targets = true;
+                request.field_zoom = 0.5;
+                request.effect_zoom = -2.0;
+                request.confusion_rotation_deg = 11.0;
+                request.rotation_y_deg = 19.0;
+                let source_calls = Cell::new(0);
+                let mut draws = Vec::new();
+
+                compose_receptor_draws(
+                    &mut draws,
+                    &mut ModelMeshCache::default(),
+                    request,
+                    || None,
+                    &|slot| {
+                        source_calls.set(source_calls.get() + 1);
+                        texture_source(slot)
+                    },
+                );
+
+                assert_eq!(draws.len(), 1 + usize::from(glow.is_some()));
+                assert_eq!(source_calls.get(), 1);
+                for (index, draw) in draws.iter().enumerate() {
+                    assert_sprite(draw, "hold-glow", 145, BlendMode::Add);
+                    let FlatDraw::Sprite(sprite) = draw else {
+                        unreachable!()
+                    };
+                    assert_eq!(sprite.center, [10.0, 20.0]);
+                    assert_eq!(sprite.size, [32.0, 48.0]);
+                    assert_eq!(sprite.world_z, 0.0);
+                    assert_eq!(
+                        sprite.tint,
+                        if index == 0 {
+                            hold.draw.tint
+                        } else {
+                            glow.unwrap()
+                        }
+                    );
+                    assert_eq!(sprite.glow, [1.0, 1.0, 1.0, 0.0]);
+                    assert_eq!(sprite.uv_rect, [0.1, 0.2, 0.8, 0.9]);
+                    assert_eq!((sprite.flip_x, sprite.flip_y), (false, false));
+                    assert_eq!(sprite.fade, [0.0; 4]);
+                    assert_eq!(sprite.rot_y_deg, 0.0);
+                    assert_eq!(sprite.rot_z_deg, -175.0);
+                }
+            }
+        }
     }
 
     #[test]

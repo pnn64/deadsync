@@ -327,14 +327,7 @@ struct MineSlotPass<'a, S> {
 }
 
 #[inline(always)]
-fn flat_sprite<S, F>(
-    slot: &S,
-    request: &NoteLayerRequest<'_, S>,
-    tint: [f32; 4],
-    glow: [f32; 4],
-    blend: BlendMode,
-    sprite_source: &F,
-) -> FlatDraw
+fn flat_sprite<S, F>(slot: &S, request: &NoteLayerRequest<'_, S>, sprite_source: &F) -> FlatDraw
 where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
@@ -344,13 +337,13 @@ where
         world_z: request.world_z,
         size: request.size,
         source: sprite_source(slot),
-        tint,
-        glow,
+        tint: request.tint,
+        glow: [1.0, 1.0, 1.0, 0.0],
         uv_rect: request.uv,
         flip_x: slot.sprite_def().mirror_h,
         flip_y: slot.sprite_def().mirror_v,
         fade: request.draw.fade,
-        blend,
+        blend: request.blend,
         rot_y_deg: request.rotation_y_deg,
         rot_z_deg: request.sprite_rotation_z_deg,
         z: request.z,
@@ -385,14 +378,7 @@ pub(crate) fn compose_flat_note_layer<S, F>(
         mesh.world_z = request.world_z;
         draws.push(FlatDraw::TexturedMesh(mesh));
     } else {
-        draws.push(flat_sprite(
-            request.slot,
-            &request,
-            request.tint,
-            [1.0, 1.0, 1.0, 0.0],
-            request.blend,
-            sprite_source,
-        ));
+        draws.push(flat_sprite(request.slot, &request, sprite_source));
     }
 
     let glow_alpha = itg_actor_glow_alpha(request.glow_alpha);
@@ -410,15 +396,14 @@ pub(crate) fn compose_flat_note_layer<S, F>(
         mesh.tint = model_tint([1.0, 1.0, 1.0, 0.0], request.draw);
         mesh.glow = glow;
         draws.push(FlatDraw::TexturedMesh(mesh));
+    } else if let Some(FlatDraw::Sprite(sprite)) = draws.last() {
+        let mut sprite = sprite.clone();
+        sprite.tint = [1.0, 1.0, 1.0, 0.0];
+        sprite.glow = glow;
+        sprite.blend = glow_blend;
+        draws.push(FlatDraw::Sprite(sprite));
     } else {
-        draws.push(flat_sprite(
-            request.slot,
-            &request,
-            [1.0, 1.0, 1.0, 0.0],
-            glow,
-            glow_blend,
-            sprite_source,
-        ));
+        unreachable!("note layer always emits a mesh or sprite above");
     }
 }
 
@@ -1448,12 +1433,16 @@ mod tests {
         let mut request = layer_request(&slot);
         request.draw.blend_add = true;
         request.draw.fade = [0.1, 0.2, 0.3, 0.4];
-        request.blend = BlendMode::Add;
-        let source = |_: &GlowSlot| SpriteSource::static_texture("flat-layer");
+        let source_calls = Cell::new(0);
+        let source = |_: &GlowSlot| {
+            source_calls.set(source_calls.get() + 1);
+            SpriteSource::static_texture("flat-layer")
+        };
         let mut draws = Vec::new();
 
         compose_flat_note_layer(&mut draws, &mut ModelMeshCache::default(), request, &source);
 
+        assert_eq!(source_calls.get(), 1);
         let [FlatDraw::Sprite(diffuse), FlatDraw::Sprite(glow)] = draws.as_slice() else {
             panic!("sprite note layer should emit diffuse and glow sprites");
         };
@@ -1467,13 +1456,23 @@ mod tests {
         assert!(diffuse.flip_x);
         assert!(diffuse.flip_y);
         assert_eq!(diffuse.fade, [0.1, 0.2, 0.3, 0.4]);
-        assert_eq!(diffuse.blend, BlendMode::Add);
+        assert_eq!(diffuse.blend, BlendMode::Alpha);
         assert_eq!(diffuse.rot_y_deg, 12.0);
         assert_eq!(diffuse.rot_z_deg, 34.0);
         assert_eq!(diffuse.z, 140);
         assert_eq!(glow.tint, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(glow.glow, [1.0, 1.0, 1.0, 0.75]);
         assert_eq!(glow.blend, BlendMode::Add);
+        assert_eq!(glow.center, diffuse.center);
+        assert_eq!(glow.world_z.to_bits(), diffuse.world_z.to_bits());
+        assert_eq!(glow.size, diffuse.size);
+        assert_eq!(glow.source.texture_key(), diffuse.source.texture_key());
+        assert_eq!(glow.uv_rect, diffuse.uv_rect);
+        assert_eq!((glow.flip_x, glow.flip_y), (diffuse.flip_x, diffuse.flip_y));
+        assert_eq!(glow.fade, diffuse.fade);
+        assert_eq!(glow.rot_y_deg, diffuse.rot_y_deg);
+        assert_eq!(glow.rot_z_deg, diffuse.rot_z_deg);
+        assert_eq!(glow.z, diffuse.z);
     }
 
     #[test]
