@@ -290,7 +290,6 @@ pub struct State {
     mvp_location: UniformLocation,
     mesh_mvp_location: UniformLocation,
     tmesh_mvp_location: UniformLocation,
-    tmesh_texture_location: UniformLocation,
     texture_yuv_location: UniformLocation,
     yuv_levels_location: UniformLocation,
     yuv_coeffs_location: UniformLocation,
@@ -702,12 +701,14 @@ pub fn init(
         gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
-        // The sprite program is never relinked, and sampler uniforms persist
-        // across program switches. Set its texture units once.
+        // Programs are never relinked, and sampler uniforms persist across
+        // program switches. Set their texture units once.
         gl.uniform_1_i32(Some(&texture_location), 0);
         gl.uniform_1_i32(Some(&texture_u_location), 1);
         gl.uniform_1_i32(Some(&texture_v_location), 2);
         gl.uniform_1_i32(Some(&texture_yuv_location), 0);
+        gl.use_program(Some(tmesh_program));
+        gl.uniform_1_i32(Some(&tmesh_texture_location), 0);
         gl.use_program(None);
     }
 
@@ -723,7 +724,6 @@ pub fn init(
         mvp_location,
         mesh_mvp_location,
         tmesh_mvp_location,
-        tmesh_texture_location,
         texture_yuv_location,
         yuv_levels_location,
         yuv_coeffs_location,
@@ -1583,7 +1583,6 @@ fn draw_modern_offscreen_pass(
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
-                        gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                         last_prog = Some(2);
                         last_tmesh_instance_start = None;
                         tmesh_buffer_cache.reset();
@@ -1929,7 +1928,6 @@ fn draw_legacy_offscreen_pass(
                     apply_blend(run.blend, &mut last_blend);
                     apply_depth(run.depth_test, &mut last_depth);
                     gl.use_program(Some(state.tmesh_program));
-                    gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                     gl.enable_vertex_attrib_array(0);
                     gl.enable_vertex_attrib_array(1);
                     gl.enable_vertex_attrib_array(2);
@@ -2478,7 +2476,6 @@ pub fn draw(
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));
                             gl.bind_vertex_array(Some(tmesh_vao));
-                            gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                             last_prog = Some(2);
                             last_tmesh_instance_start = None;
                             tmesh_buffer_cache.reset();
@@ -2848,7 +2845,6 @@ pub fn draw(
 
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));
-                            gl.uniform_1_i32(Some(&state.tmesh_texture_location), 0);
                             gl.enable_vertex_attrib_array(0);
                             gl.enable_vertex_attrib_array(1);
                             gl.enable_vertex_attrib_array(2);
