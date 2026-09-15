@@ -183,10 +183,9 @@ impl TexturedMeshBufferCache {
 /// Backend-owned resolution storage for retained textured geometry.
 ///
 /// Owner: one GPU backend on the render thread. Lifetime: session. Capacity is
-/// warmed by ordinary frames and retained between frames. A frame whose entire
-/// retained geometry signature is unchanged reuses its resolved sources.
-/// Mixed frames also reuse unchanged retained slots, while transient vertices
-/// are copied every frame and uncached keys retry admission. The signature is
+/// warmed by ordinary frames and retained between frames. Each unchanged retained
+/// slot reuses its resolved source, while transient vertices are copied every
+/// frame and uncached keys retry admission. The signature is
 /// bounded by the frame's geometry count and uses the existing prewarmed
 /// vectors. No eviction, pruning, or GPU destruction happens here; those
 /// policies remain backend-owned. A changed slot costs at most one cache
@@ -196,7 +195,6 @@ pub struct TexturedMeshUploads {
     pub vertices: Vec<TexturedMeshVertex>,
     pub sources: Vec<TexturedMeshSource>,
     cache_keys: Vec<TMeshCacheKey>,
-    all_cached: bool,
 }
 
 impl TexturedMeshUploads {
@@ -206,7 +204,6 @@ impl TexturedMeshUploads {
             vertices: Vec::with_capacity(vertices),
             sources: Vec::with_capacity(geometries),
             cache_keys: Vec::with_capacity(geometries),
-            all_cached: false,
         }
     }
 
@@ -246,24 +243,6 @@ pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
 {
     let geometries = geometries.into_iter();
     let geometry_count = geometries.clone().count();
-    if uploads.all_cached
-        && uploads.sources.len() == geometry_count
-        && uploads.cache_keys.len() == geometry_count
-        && geometries
-            .clone()
-            .zip(&uploads.cache_keys)
-            .zip(&uploads.sources)
-            .all(|((geometry, cache_key), source)| {
-                geometry.cache_key != INVALID_TMESH_CACHE_KEY
-                    && geometry.cache_key == *cache_key
-                    && source.buffer_key().is_some()
-                    && source.vertex_count() == saturating_u32(geometry.vertices.len())
-            })
-    {
-        uploads.vertices.clear();
-        return;
-    }
-
     uploads.vertices.clear();
     uploads
         .cache_keys
@@ -271,7 +250,6 @@ pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
     uploads
         .sources
         .resize(geometry_count, TexturedMeshSource::transient(0, 0));
-    uploads.all_cached = true;
     for ((geometry, cache_key), source) in geometries
         .zip(&mut uploads.cache_keys)
         .zip(&mut uploads.sources)
@@ -292,7 +270,6 @@ pub fn resolve_textured_mesh_geometries<'a, I, EnsureCached>(
         } else {
             let vertex_start = saturating_u32(uploads.vertices.len());
             uploads.vertices.extend_from_slice(vertices);
-            uploads.all_cached = false;
             TexturedMeshSource::transient(vertex_start, vertex_count)
         };
         *cache_key = geometry.cache_key;
