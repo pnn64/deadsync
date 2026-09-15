@@ -1222,7 +1222,9 @@ fn run_inner(mut ctx: Box<Ctx>) {
             if ok.0 <= 0 {
                 break;
             }
-            let _ = TranslateMessage(&raw const msg);
+            if msg.message != WM_INPUT {
+                let _ = TranslateMessage(&raw const msg);
+            }
             DispatchMessageW(&raw const msg);
         }
 
