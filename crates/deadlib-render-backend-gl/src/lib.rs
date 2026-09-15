@@ -1474,6 +1474,7 @@ fn draw_modern_offscreen_pass(
         let mut last_cameras = [CameraUploadCache::default(); 3];
         let mut last_sprite_instance_start = None;
         let mut last_tmesh_instance_start = None;
+        // The textured-mesh VAO retains its vertex bindings across draw-type switches.
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth = None;
 
@@ -1487,7 +1488,6 @@ fn draw_modern_offscreen_pass(
                         gl.bind_vertex_array(Some(shared_vao));
                         last_prog = Some(0);
                         last_sprite_instance_start = None;
-                        tmesh_buffer_cache.reset();
                     }
                     if !state.base_instance
                         && last_sprite_instance_start != Some(run.instance_start)
@@ -1568,7 +1568,6 @@ fn draw_modern_offscreen_pass(
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(mesh_vao));
                         last_prog = Some(1);
-                        tmesh_buffer_cache.reset();
                     }
                     if last_cameras[1].update_required(run.camera) {
                         let matrix = flipped_camera(run.camera).to_cols_array_2d();
@@ -1596,7 +1595,6 @@ fn draw_modern_offscreen_pass(
                         gl.bind_vertex_array(Some(tmesh_vao));
                         last_prog = Some(2);
                         last_tmesh_instance_start = None;
-                        tmesh_buffer_cache.reset();
                     }
                     if tmesh_buffer_cache.update_required(source) {
                         let stride = mem::size_of::<TexturedMeshVertex>() as i32;
@@ -2125,6 +2123,7 @@ pub fn draw(
         let mut last_cameras = [CameraUploadCache::default(); 3];
         let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
+        // Modern VAOs retain vertex bindings; legacy draw-type switches reset below.
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth_test = Some(false);
 
@@ -2197,7 +2196,6 @@ pub fn draw(
                             gl.bind_vertex_array(Some(shared_vao));
                             last_prog = Some(0);
                             last_sprite_instance_start = None;
-                            tmesh_buffer_cache.reset();
                         }
 
                         if !state.base_instance
@@ -2349,7 +2347,6 @@ pub fn draw(
                             gl.use_program(Some(state.mesh_program));
                             gl.bind_vertex_array(Some(mesh_vao));
                             last_prog = Some(1);
-                            tmesh_buffer_cache.reset();
                         }
 
                         if last_cameras[1].update_required(run.camera) {
@@ -2385,7 +2382,6 @@ pub fn draw(
                             gl.bind_vertex_array(Some(tmesh_vao));
                             last_prog = Some(2);
                             last_tmesh_instance_start = None;
-                            tmesh_buffer_cache.reset();
                         }
 
                         if tmesh_buffer_cache.update_required(source) {
@@ -3525,6 +3521,14 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
         NonZeroU32::new(height.max(1)).expect("surface height is clamped to at least 1"),
     )
 }
+
+#[cfg(all(
+    test,
+    target_os = "windows",
+    not(target_pointer_width = "32"),
+    not(target_vendor = "win7")
+))]
+mod vertex_state_tests;
 
 #[cfg(test)]
 mod tests {
