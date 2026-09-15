@@ -2094,13 +2094,12 @@ fn sort_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
     }
 
     scratch.z_perm.clear();
-    scratch.z_perm.resize(objects.len(), 0);
-    for (old_index, object) in objects.iter().enumerate() {
+    scratch.z_perm.extend(objects.iter().map(|object| {
         let bucket = (i32::from(object.z) - min_z_i) as usize;
         let new_index = scratch.z_counts[bucket];
         scratch.z_counts[bucket] = new_index + 1;
-        scratch.z_perm[old_index] = new_index;
-    }
+        new_index
+    }));
 
     for start in 0..objects.len() {
         while scratch.z_perm[start] != start {
@@ -2234,14 +2233,13 @@ fn sort_draw_items_from_sparse_counts(objects: &mut [DrawItem], scratch: &mut Co
     }
 
     scratch.z_perm.clear();
-    scratch.z_perm.resize(objects.len(), 0);
-    for (old_index, object) in objects.iter().enumerate() {
+    scratch.z_perm.extend(objects.iter().map(|object| {
         let encoded_z = (i32::from(object.z) - i32::from(i16::MIN)) as usize;
         let bucket = scratch.sparse_z_bucket_by_key[encoded_z] as usize;
         let new_index = scratch.z_counts[bucket];
         scratch.z_counts[bucket] = new_index + 1;
-        scratch.z_perm[old_index] = new_index;
-    }
+        new_index
+    }));
 
     let permutation = &mut scratch.z_perm;
     for start in 0..objects.len() {
