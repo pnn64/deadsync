@@ -2734,7 +2734,8 @@ pub fn draw(
         retire_completed_textures(state);
 
         let in_flight = state.images_in_flight[image_index as usize];
-        if in_flight != vk::Fence::null() {
+        // This frame's fence was already waited above and is reset only below.
+        if in_flight != vk::Fence::null() && in_flight != fence {
             let wait_started = Instant::now();
             device.wait_for_fences(&[in_flight], true, u64::MAX)?;
             let wait_us = elapsed_us_since(wait_started);
