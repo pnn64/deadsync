@@ -6662,6 +6662,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 let (cols, rows) = grid.unwrap_or_else(|| {
                     texture_cache.sprite_sheet_dims(texture_ctx, texture_key_ptr, texture_name)
                 });
+                chosen_grid = Some((cols, rows));
                 let total = cols.saturating_mul(rows).max(1);
 
                 let start_linear: u32 = match *cell {
@@ -6678,10 +6679,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     let steps = (total_elapsed / *state_delay).floor().max(0.0) as u32;
                     let idx = (start_linear + (steps % total)) % total;
                     chosen_cell = Some((idx, u32::MAX));
-                    chosen_grid = Some((cols, rows));
                 } else if chosen_cell.is_none() && total > 1 {
                     chosen_cell = Some((0, u32::MAX));
-                    chosen_grid = Some((cols, rows));
                 }
             }
 
@@ -12072,6 +12071,70 @@ mod tests {
         assert_eq!(arena_render.ops, owned_render.ops);
         assert_eq!(arena_render.sprite_instances, owned_render.sprite_instances);
         assert_eq!(sprite_run(&arena_render, 0).texture_handle, 17);
+    }
+
+    #[test]
+    fn inferred_sprite_grid_matches_explicit_grid() {
+        use deadlib_render_core::frame_compare::compare_render_frames_semantic;
+
+        let metrics = Metrics {
+            left: 0.0,
+            right: 256.0,
+            top: 256.0,
+            bottom: 0.0,
+        };
+        let fonts = font::FontMap::default();
+        for (key, sheet) in [("grid 4x2.png", (4, 2)), ("grid 1x1.png", (1, 1))] {
+            let mut texture_ctx = TestTextureContext::default();
+            texture_ctx
+                .dims
+                .insert(key.into(), TextureMeta { w: 128, h: 64 });
+            texture_ctx.handles.insert(key.into(), 17);
+            let compose = |actor| {
+                super::build_screen_with_texture_context(
+                    &[actor],
+                    [0.0; 4],
+                    &metrics,
+                    &fonts,
+                    0.7,
+                    &texture_ctx,
+                )
+            };
+            for selected_cell in [None, Some((5, u32::MAX)), Some((1, 1)), Some((77, 9))] {
+                for dimensions in [[0.0, 0.0], [48.0, 0.0], [0.0, 48.0], [48.0, 48.0]] {
+                    for (animated, delay) in [(false, 0.0), (true, 0.0), (true, 0.125)] {
+                        let mut inferred = test_sprite(SpriteSource::TextureStatic(key));
+                        let Actor::Sprite {
+                            cell,
+                            size,
+                            animate,
+                            state_delay,
+                            glow,
+                            ..
+                        } = &mut inferred
+                        else {
+                            unreachable!()
+                        };
+                        *cell = selected_cell;
+                        *size = dimensions.map(SizeSpec::Px);
+                        *animate = animated;
+                        *state_delay = delay;
+                        *glow = [0.2, 0.4, 0.6, 0.5];
+                        let mut explicit = inferred.clone();
+                        let Actor::Sprite { grid, .. } = &mut explicit else {
+                            unreachable!()
+                        };
+                        *grid = Some(sheet);
+                        let expected = compose(explicit);
+                        let actual = compose(inferred);
+                        assert!(!actual.ops.is_empty());
+                        compare_render_frames_semantic(&expected, &actual).unwrap_or_else(|error| {
+                            panic!("{key}, cell {selected_cell:?}, size {dimensions:?}, animate {animated}, delay {delay}: {error}")
+                        });
+                    }
+                }
+            }
+        }
     }
 
     #[test]
