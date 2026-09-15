@@ -39,13 +39,18 @@ pub fn compare_render_frames(expected: &RenderFrame, actual: &RenderFrame) -> Co
         &expected.clear_color,
         &actual.clear_color,
     )?;
-    compare_render_targets(&expected.render_targets, &actual.render_targets)?;
+    compare_render_targets(
+        &expected.render_targets,
+        &actual.render_targets,
+        compare_render_pass,
+    )?;
     compare_render_pass(expected, actual)
 }
 
 fn compare_render_targets(
     expected: &[RenderTargetFrame],
     actual: &[RenderTargetFrame],
+    compare_pass: impl Fn(&RenderTargetFrame, &RenderTargetFrame) -> CompareResult,
 ) -> CompareResult {
     compare_count("render_target", expected.len(), actual.len())?;
     for (index, (expected, actual)) in expected.iter().zip(actual).enumerate() {
@@ -84,7 +89,7 @@ fn compare_render_targets(
             expected.preserve,
             actual.preserve,
         )?;
-        compare_render_pass(expected, actual)?;
+        compare_pass(expected, actual)?;
     }
     Ok(())
 }
@@ -166,8 +171,8 @@ fn compare_render_pass(expected: &impl RenderPass, actual: &impl RenderPass) -> 
     compare_values("draw_op", expected.ops(), actual.ops())
 }
 
-/// Compares backend-visible painter output while allowing sprite instances to
-/// be gathered into different contiguous runs.
+/// Compares backend-visible painter output while allowing compatible draws to
+/// be gathered into different contiguous runs, including offscreen passes.
 ///
 /// This is stricter than an image comparison: every sprite instance and mesh
 /// byte is checked in painter order. Retained allocation identity is ignored
@@ -183,38 +188,19 @@ pub fn compare_render_frames_semantic(
         &expected.clear_color,
         &actual.clear_color,
     )?;
-    compare_render_targets(&expected.render_targets, &actual.render_targets)?;
-    compare_mat_slices("camera", &expected.cameras, &actual.cameras)?;
-    compare_pod_slices(
-        "mesh_vertex",
-        &expected.mesh_vertices,
-        &actual.mesh_vertices,
+    compare_render_targets(
+        &expected.render_targets,
+        &actual.render_targets,
+        compare_render_pass_semantic,
     )?;
-    compare_pod_slices(
-        "tmesh_instance",
-        &expected.tmesh_instances,
-        &actual.tmesh_instances,
-    )?;
-    compare_count(
-        "tmesh_geometry",
-        expected.tmesh_geometries.len(),
-        actual.tmesh_geometries.len(),
-    )?;
-    for (index, (expected, actual)) in expected
-        .tmesh_geometries
-        .iter()
-        .zip(&actual.tmesh_geometries)
-        .enumerate()
-    {
-        compare_value(
-            "tmesh_geometry",
-            index,
-            "cache_key",
-            expected.cache_key,
-            actual.cache_key,
-        )?;
-        compare_tmesh_vertex_bytes(index, &expected.vertices, &actual.vertices)?;
-    }
+    compare_render_pass_semantic(expected, actual)
+}
+
+fn compare_render_pass_semantic(
+    expected: &impl RenderPass,
+    actual: &impl RenderPass,
+) -> CompareResult {
+    compare_mat_slices("camera", expected.cameras(), actual.cameras())?;
 
     let mut expected = SemanticDraws::new(expected);
     let mut actual = SemanticDraws::new(actual);
@@ -241,8 +227,36 @@ pub fn compare_render_frames_semantic(
                     actual_instance,
                 )?;
             }
-            (Some(SemanticDraw::Other(expected)), Some(SemanticDraw::Other(actual))) => {
-                compare_value("draw_primitive", index, "value", expected, actual)?;
+            (Some(SemanticDraw::Mesh(a, av)), Some(SemanticDraw::Mesh(b, bv))) => {
+                compare_value(
+                    "draw_primitive",
+                    index,
+                    "mesh_state",
+                    (a.blend, a.camera),
+                    (b.blend, b.camera),
+                )?;
+                compare_pod_slices_at("mesh_triangle", index, av, bv)?;
+            }
+            (
+                Some(SemanticDraw::TexturedMesh(a, ai, ag)),
+                Some(SemanticDraw::TexturedMesh(b, bi, bg)),
+            ) => {
+                compare_value(
+                    "draw_primitive",
+                    index,
+                    "tmesh_state",
+                    (a.blend, a.texture_handle, a.camera, a.depth_test),
+                    (b.blend, b.texture_handle, b.camera, b.depth_test),
+                )?;
+                compare_pod_value("tmesh_instance", index, "value", ai, bi)?;
+                compare_value(
+                    "tmesh_geometry",
+                    index,
+                    "cache_key",
+                    ag.cache_key,
+                    bg.cache_key,
+                )?;
+                compare_tmesh_vertex_bytes(index, &ag.vertices, &bg.vertices)?;
             }
             (Some(_), Some(_)) => return difference("draw_primitive", index, "kind"),
             _ => return difference("draw_primitive", index, "count"),
@@ -254,49 +268,62 @@ pub fn compare_render_frames_semantic(
 #[derive(Clone, Copy)]
 enum SemanticDraw<'a> {
     Sprite(SpriteRun, &'a SpriteInstanceRaw),
-    Other(DrawOp),
+    Mesh(crate::MeshRun, &'a [crate::MeshVertex]),
+    TexturedMesh(
+        crate::TexturedMeshRun,
+        &'a crate::TexturedMeshInstanceRaw,
+        &'a crate::TexturedMeshGeometry,
+    ),
 }
 
-struct SemanticDraws<'a> {
-    frame: &'a RenderFrame,
+struct SemanticDraws<'a, P> {
+    frame: &'a P,
     op: usize,
-    sprite_offset: u32,
+    offset: u32,
 }
 
-impl<'a> SemanticDraws<'a> {
-    const fn new(frame: &'a RenderFrame) -> Self {
+impl<'a, P: RenderPass> SemanticDraws<'a, P> {
+    const fn new(frame: &'a P) -> Self {
         Self {
             frame,
             op: 0,
-            sprite_offset: 0,
+            offset: 0,
         }
     }
 }
 
-impl<'a> Iterator for SemanticDraws<'a> {
+impl<'a, P: RenderPass> Iterator for SemanticDraws<'a, P> {
     type Item = SemanticDraw<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            let op = *self.frame.ops.get(self.op)?;
+            let op = *self.frame.ops().get(self.op)?;
             match op {
-                DrawOp::Sprite(run) if self.sprite_offset < run.instance_count => {
+                DrawOp::Sprite(run) if self.offset < run.instance_count => {
                     let instance = self
                         .frame
-                        .sprite_instances
-                        .get(run.instance_start.saturating_add(self.sprite_offset) as usize)
+                        .sprite_instances()
+                        .get(run.instance_start.saturating_add(self.offset) as usize)
                         .expect("sprite draw range references a live instance");
-                    self.sprite_offset += 1;
+                    self.offset += 1;
                     return Some(SemanticDraw::Sprite(run, instance));
                 }
-                DrawOp::Sprite(_) => {
-                    self.op += 1;
-                    self.sprite_offset = 0;
+                DrawOp::Mesh(run) if self.offset < run.vertex_count / 3 => {
+                    let start = (run.vertex_start + self.offset * 3) as usize;
+                    let triangle = &self.frame.mesh_vertices()[start..start + 3];
+                    self.offset += 1;
+                    return Some(SemanticDraw::Mesh(run, triangle));
                 }
-                other => {
+                DrawOp::TexturedMesh(run) if self.offset < run.instance_count => {
+                    let instance =
+                        &self.frame.tmesh_instances()[(run.instance_start + self.offset) as usize];
+                    let geometry = &self.frame.tmesh_geometries()[run.geometry as usize];
+                    self.offset += 1;
+                    return Some(SemanticDraw::TexturedMesh(run, instance, geometry));
+                }
+                _ => {
                     self.op += 1;
-                    self.sprite_offset = 0;
-                    return Some(SemanticDraw::Other(other));
+                    self.offset = 0;
                 }
             }
         }

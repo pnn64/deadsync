@@ -162,3 +162,84 @@ fn semantic_comparison_accepts_equivalent_sprite_run_coalescing() {
     assert_ne!(compare_render_frames(&expected, &actual), Ok(()));
     assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
 }
+
+#[test]
+fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
+    let mut split = render_fixture();
+    split.mesh_vertices.extend(
+        [MeshVertex {
+            pos: [0.25, 0.5],
+            color: [0.5; 4],
+        }; 3],
+    );
+    split.ops.insert(
+        2,
+        DrawOp::Mesh(MeshRun {
+            vertex_start: 3,
+            vertex_count: 3,
+            blend: BlendMode::Add,
+            camera: 0,
+        }),
+    );
+    split.tmesh_instances.push(TexturedMeshInstanceRaw::new(
+        Mat4::from_rotation_z(0.25),
+        [0.5; 4],
+        [1.0; 2],
+        [0.0; 2],
+        [0.0; 2],
+        true,
+    ));
+    split.ops.push(DrawOp::TexturedMesh(TexturedMeshRun {
+        geometry: 0,
+        instance_start: 1,
+        instance_count: 1,
+        blend: BlendMode::Alpha,
+        texture_handle: 8,
+        camera: 0,
+        depth_test: true,
+    }));
+    let mut joined = split.clone();
+    let DrawOp::Mesh(run) = &mut joined.ops[1] else {
+        unreachable!()
+    };
+    run.vertex_count = 6;
+    joined.ops.remove(2);
+    let DrawOp::TexturedMesh(run) = &mut joined.ops[2] else {
+        unreachable!()
+    };
+    run.instance_count = 2;
+    joined.ops.pop();
+    assert_eq!(compare_render_frames_semantic(&split, &joined), Ok(()));
+    let mut wrong = joined.clone();
+    wrong.mesh_vertices.swap(0, 3);
+    assert!(compare_render_frames_semantic(&split, &wrong).is_err());
+    let mut wrong = joined.clone();
+    wrong.tmesh_instances.swap(0, 1);
+    assert!(compare_render_frames_semantic(&split, &wrong).is_err());
+
+    let target_frame = |frame: RenderFrame| {
+        let mut outer = render_fixture();
+        outer
+            .render_targets
+            .push(deadlib_render_core::RenderTargetFrame {
+                texture_handle: deadlib_render_core::render_target_texture_handle(1),
+                width: 64,
+                height: 64,
+                alpha: true,
+                depth: true,
+                preserve: false,
+                cameras: frame.cameras,
+                sprite_instances: frame.sprite_instances,
+                mesh_vertices: frame.mesh_vertices,
+                tmesh_instances: frame.tmesh_instances,
+                tmesh_geometries: frame.tmesh_geometries,
+                ops: frame.ops,
+            });
+        outer
+    };
+    let expected = target_frame(split);
+    let mut actual = target_frame(joined);
+    assert_eq!(compare_render_frames_semantic(&expected, &actual), Ok(()));
+    actual.render_targets[0].depth = false;
+    assert!(compare_render_frames_semantic(&expected, &actual).is_err());
+}

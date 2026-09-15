@@ -1784,8 +1784,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 }
                 let mut instance_count = 1u32;
                 while let Some(next) = builder.items.get(cursor + instance_count as usize) {
-                    if next.z != item.z
-                        || next.texture_handle != texture_handle
+                    if next.texture_handle != texture_handle
                         || next.blend != blend
                         || next.camera != camera
                         || next.kind != DrawKind::Sprite
@@ -1832,6 +1831,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 append_mesh_vertices(mesh_vertices, &transform, tint, vertices.as_ref());
                 let mut object_count = 1usize;
                 while let Some(next) = builder.items.get(cursor + object_count).copied() {
+                    // A layer boundary restarts triangle assembly if the preceding
+                    // mesh run ends with one or two unused vertices.
                     let compatible = next.z == item.z
                         && next.blend == blend
                         && next.camera == camera
@@ -1890,8 +1891,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                 while identity.is_some()
                     && let Some(next) = builder.items.get(cursor + object_count).copied()
                 {
-                    let compatible = next.z == item.z
-                        && next.texture_handle == texture_handle
+                    let compatible = next.texture_handle == texture_handle
                         && next.blend == blend
                         && next.camera == camera
                         && next.kind == DrawKind::TexturedMesh
@@ -13202,11 +13202,11 @@ mod tests {
         let fonts = font::FontMap::default();
         let render = build_screen(&actors, [0.0, 0.0, 0.0, 1.0], &metrics, &fonts, 0.0);
 
-        assert_eq!(render.ops.len(), 2);
-        let (_, shadow_instance, shadow_geometry) = tmesh_draw(&render, 0);
-        let (_, original_instance, original_geometry) = tmesh_draw(&render, 1);
-        assert_eq!(shadow_geometry.cache_key, CACHE_KEY);
-        assert_eq!(original_geometry.cache_key, CACHE_KEY);
+        assert_eq!(render.ops.len(), 1);
+        let (run, shadow_instance, geometry) = tmesh_draw(&render, 0);
+        assert_eq!(run.instance_count, 2);
+        let original_instance = &render.tmesh_instances[run.instance_start as usize + 1];
+        assert_eq!(geometry.cache_key, CACHE_KEY);
         assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
         assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
     }
