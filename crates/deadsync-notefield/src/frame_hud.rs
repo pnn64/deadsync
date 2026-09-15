@@ -453,13 +453,6 @@ fn compose_judgment<S>(
     } else {
         (None, None)
     };
-    let held_miss_sprite = (!prepared.blind_active
-        && frame.held_misses.iter().any(Option::is_some))
-    .then(|| frame.held_miss_sprite.as_ref())
-    .flatten();
-    let hold_sprite = (!prepared.blind_active && frame.hold_judgments.iter().any(Option::is_some))
-        .then(|| frame.hold_sprite.as_ref())
-        .flatten();
     let field = prepared.field;
     let noteskin_column_xs = prepared
         .notes
@@ -482,9 +475,9 @@ fn compose_judgment<S>(
                 request.visual.perspective.skew,
             ),
             held_misses: frame.held_misses,
-            held_miss_sprite,
+            held_miss_sprite: frame.held_miss_sprite.as_ref(),
             hold_judgments: frame.hold_judgments,
-            hold_sprite,
+            hold_sprite: frame.hold_sprite.as_ref(),
             current_beat: prepared.current_beat,
             arrow_effect_time: request.arrow_effect_time_s,
             mini: prepared.mini,
