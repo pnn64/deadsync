@@ -6288,7 +6288,7 @@ impl App {
     fn append_stage_results_from_eval(
         &mut self,
         eval_state: &evaluation::State,
-    ) -> Option<stage_stats::StageSummary> {
+    ) -> Option<(f32, f32)> {
         let in_course_run = self.state.session.course_run.is_some();
         let session = profile::get_session_snapshot();
         let stage_summary = stage_summary_from_score_info(
@@ -6316,10 +6316,13 @@ impl App {
         } else {
             None
         };
+        let stage_timing = stage_summary
+            .as_ref()
+            .map(|stage| (stage.song.precise_last_second(), stage.music_rate));
         self.state
             .session
-            .record_stage_result(stage_summary.clone(), course_page);
-        stage_summary
+            .record_stage_result(stage_summary, course_page);
+        stage_timing
     }
 
     fn finalize_entered_evaluation(&mut self, config: &config::app_config::Config) {
@@ -6335,8 +6338,8 @@ impl App {
         let color_idx = self.state.screens.evaluation_state.active_color_index;
         let eval_snapshot = self.state.screens.evaluation_state.clone();
         let in_course_run = self.state.session.course_run.is_some();
-        let stage = self.append_stage_results_from_eval(&eval_snapshot);
-        if let Some(stage) = stage {
+        let stage_timing = self.append_stage_results_from_eval(&eval_snapshot);
+        if let Some((song_seconds, music_rate)) = stage_timing {
             if in_course_run {
                 self.state.coin.record_course_stage();
             } else {
@@ -6346,12 +6349,9 @@ impl App {
                         .iter()
                         .flatten()
                         .any(|score| !score.score_valid && !score.disqualified);
-                self.state.coin.record_stage(
-                    config.coin,
-                    stage.song.precise_last_second(),
-                    stage.music_rate,
-                    gave_up,
-                );
+                self.state
+                    .coin
+                    .record_stage(config.coin, song_seconds, music_rate, gave_up);
             }
         }
         self.state.screens.evaluation_state.return_to_course =
