@@ -23,7 +23,7 @@ mod backend {
             let mut objects = Vec::new();
             let mut meshes = Vec::with_capacity(64);
             let mut tmeshes = Vec::with_capacity(64);
-            prepare_objects(
+            let fixed = prepare_objects(
                 pass,
                 Matrix4::IDENTITY,
                 textures,
@@ -34,7 +34,6 @@ mod backend {
                 &mut tmeshes,
                 stage,
             );
-            let fixed = objects.iter().map(PreparedObject::fixed_vertices).sum();
             let mut pixels = vec![0xff101820; 96 * 96];
             let mut bins = StripeBins::warmed();
             bins.build(&objects, &meshes, &tmeshes, 96);

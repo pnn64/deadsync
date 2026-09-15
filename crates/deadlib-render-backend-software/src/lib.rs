@@ -126,7 +126,6 @@ enum PreparedObject {
     Mesh {
         triangle_start: u32,
         triangle_count: u32,
-        projected_count: u32,
         rows: ScreenRows,
         blend: BlendMode,
     },
@@ -139,7 +138,6 @@ enum PreparedObject {
     TexturedMesh {
         triangle_start: u32,
         triangle_count: u32,
-        projected_count: u32,
         rows: ScreenRows,
         texture_mask: bool,
         blend: BlendMode,
@@ -165,20 +163,6 @@ impl PreparedObject {
                 start: 0,
                 end: height as u32,
             },
-        }
-    }
-
-    #[inline(always)]
-    const fn fixed_vertices(&self) -> u32 {
-        match self {
-            Self::Sprite { .. } => 4,
-            Self::Mesh {
-                projected_count, ..
-            }
-            | Self::TexturedMesh {
-                projected_count, ..
-            } => *projected_count,
-            Self::DirectMesh { .. } | Self::DirectTexturedMesh { .. } => 0,
         }
     }
 }
@@ -592,7 +576,7 @@ fn draw_offscreen_targets(
             targets: &targets,
         };
         let software_pass = SoftwarePass::from(pass);
-        prepare_objects(
+        let fixed_vertices = prepare_objects(
             software_pass,
             state.projection,
             &resolved,
@@ -603,9 +587,6 @@ fn draw_offscreen_targets(
             &mut state.prepared_tmesh_triangles,
             false,
         );
-        let fixed_vertices = state.prepared_objects.iter().fold(0u32, |sum, object| {
-            sum.saturating_add(object.fixed_vertices())
-        });
         vertices = vertices.saturating_add(draw_rows(
             software_pass,
             &state.prepared_objects,
@@ -680,7 +661,7 @@ pub fn draw(
         targets: &state.offscreen_targets,
     };
     let software_frame = SoftwarePass::from(frame);
-    prepare_objects(
+    let fixed_vertices = prepare_objects(
         software_frame,
         default_proj,
         &resolved_textures,
@@ -699,9 +680,6 @@ pub fn draw(
             h,
         );
     }
-    let fixed_vertices = state.prepared_objects.iter().fold(0u32, |sum, object| {
-        sum.saturating_add(object.fixed_vertices())
-    });
     let backend_prepare_us = elapsed_us_since(backend_prepare_started).saturating_add(offscreen_us);
 
     let backend_setup_started = Instant::now();
@@ -811,7 +789,7 @@ fn prepare_objects(
     mesh_triangles: &mut Vec<PreparedTriangle<ScreenVertexColor>>,
     tmesh_triangles: &mut Vec<PreparedTriangle<ScreenVertexTexColor>>,
     stage_meshes: bool,
-) {
+) -> u32 {
     prepared.clear();
     prepared.reserve(
         frame
@@ -821,6 +799,7 @@ fn prepare_objects(
     );
     mesh_triangles.clear();
     tmesh_triangles.clear();
+    let mut fixed_vertices = 0u32;
 
     for op in frame.ops {
         match *op {
@@ -855,6 +834,7 @@ fn prepare_objects(
                     ) else {
                         continue;
                     };
+                    fixed_vertices = fixed_vertices.saturating_add(4);
                     prepared.push(PreparedObject::Sprite {
                         rows: sprite_rows(&vertices, height),
                         inv_denom: sprite_inv_denom(&vertices),
@@ -904,10 +884,10 @@ fn prepare_objects(
                 else {
                     continue;
                 };
+                fixed_vertices = fixed_vertices.saturating_add(projected_count);
                 prepared.push(PreparedObject::Mesh {
                     triangle_start,
                     triangle_count,
-                    projected_count,
                     rows,
                     blend: run.blend,
                 });
@@ -962,10 +942,10 @@ fn prepare_objects(
                     else {
                         continue;
                     };
+                    fixed_vertices = fixed_vertices.saturating_add(projected_count);
                     prepared.push(PreparedObject::TexturedMesh {
                         triangle_start,
                         triangle_count,
-                        projected_count,
                         rows,
                         texture_mask: instance.texture_mask != 0.0,
                         blend: run.blend,
@@ -975,6 +955,7 @@ fn prepare_objects(
             }
         }
     }
+    fixed_vertices
 }
 
 fn draw_rows(
@@ -3622,7 +3603,7 @@ mod tests {
         let mut prepared = Vec::new();
         let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
         let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP);
-        prepare_objects(
+        let staged_fixed_vertices = prepare_objects(
             (&frame).into(),
             fallback,
             &textures,
@@ -3642,8 +3623,9 @@ mod tests {
             &prepared_tmesh,
             &textures,
             &mut staged_pixels,
+            staged_fixed_vertices,
         );
-        prepare_objects(
+        let direct_fixed_vertices = prepare_objects(
             (&frame).into(),
             fallback,
             &textures,
@@ -3673,6 +3655,7 @@ mod tests {
             &prepared_tmesh,
             &textures,
             &mut direct_pixels,
+            direct_fixed_vertices,
         );
 
         assert_eq!(staged_vertices, direct_vertices);
@@ -3689,7 +3672,7 @@ mod tests {
         let mut prepared = Vec::new();
         let mut prepared_mesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
         let mut prepared_tmesh = Vec::with_capacity(MESH_STAGE_VERTEX_CAP / 3);
-        prepare_objects(
+        let fixed_vertices = prepare_objects(
             (&frame).into(),
             Matrix4::IDENTITY,
             &textures,
@@ -3732,6 +3715,7 @@ mod tests {
             &prepared_tmesh,
             &textures,
             &mut scanned,
+            fixed_vertices,
         );
         textures.lookups.store(0, Ordering::Relaxed);
         let mut indexed = vec![0xdead_beef; WIDTH * HEIGHT];
@@ -3744,6 +3728,7 @@ mod tests {
             &textures,
             &mut indexed,
             clear,
+            fixed_vertices,
         );
 
         assert_eq!(indexed_vertices, scanned_vertices);
@@ -3798,10 +3783,8 @@ mod tests {
         tmesh_triangles: &[PreparedTriangle<ScreenVertexTexColor>],
         textures: &TestTextures,
         pixels: &mut [u32],
+        fixed_vertices: u32,
     ) -> u32 {
-        let fixed_vertices = prepared.iter().fold(0u32, |sum, object| {
-            sum.saturating_add(object.fixed_vertices())
-        });
         pixels
             .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
             .enumerate()
@@ -3836,10 +3819,8 @@ mod tests {
         textures: &TestTextures,
         pixels: &mut [u32],
         clear: u32,
+        fixed_vertices: u32,
     ) -> u32 {
-        let fixed_vertices = prepared.iter().fold(0u32, |sum, object| {
-            sum.saturating_add(object.fixed_vertices())
-        });
         pixels
             .chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK)
             .enumerate()
