@@ -1026,13 +1026,6 @@ fn compose_visible_notes<S, F>(
                         mine_ns.note_display_metrics.part_texture_translate[mine_part as usize],
                         false,
                     );
-                    let circle_reference = frame_slot
-                        .map(&scale_mine_for_note)
-                        .or_else(|| fill_slot.map(&scale_mine_for_note))
-                        .unwrap_or([
-                            request.geometry.target_arrow_pixel_size * note_scale,
-                            request.geometry.target_arrow_pixel_size * note_scale,
-                        ]);
                     compose_flat_mine_layers(
                         flat_draws,
                         model_cache,
@@ -1040,10 +1033,7 @@ fn compose_visible_notes<S, F>(
                             fill_slot,
                             gradient_slot: fill_gradient_slot,
                             frame_slot,
-                            gradient_size: [
-                                circle_reference[0] * style.actors.mine_core_size_ratio,
-                                circle_reference[1] * style.actors.mine_core_size_ratio,
-                            ],
+                            gradient_size_ratio: style.actors.mine_core_size_ratio,
                             center: [column_center_x, y_pos],
                             mine_uv_phase,
                             mine_fill_phase,
