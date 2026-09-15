@@ -545,13 +545,17 @@ fn compose_field_contents<S, F>(
         // NoteDisplay interpolates the beat along the body's original endpoints,
         // then samples only the spline's X scale for each strip vertex.
         let body_head_beat = if engaged { current_beat } else { note.beat };
-        let body_beat_at_y = |y: f32| {
-            if (y_tail - y_head).abs() <= f32::EPSILON {
+        let body_zoom_offset_at_y = |y: f32| {
+            if !has_zoom_spline {
+                return 0.0;
+            }
+            let beat = if (y_tail - y_head).abs() <= f32::EPSILON {
                 body_head_beat
             } else {
                 body_head_beat
                     + (hold.end_beat - body_head_beat) * ((y - y_head) / (y_tail - y_head))
-            }
+            };
+            note_hides.zoom_offset(local_col, beat)
         };
         let hold_target_arrow_px = lane_frame.target_arrow_px;
         let hold_head_zoom = column_zoom
@@ -574,7 +578,7 @@ fn compose_field_contents<S, F>(
                 arrow_px: target_arrow_px
                     * column_zoom
                     * (visual_arrow_effect_zoom_cached(adjusted_travel, transform_cache)
-                        + note_hides.zoom_offset(local_col, body_beat_at_y(screen_y))),
+                        + body_zoom_offset_at_y(screen_y)),
             }
         };
         compose_hold_body_caps(

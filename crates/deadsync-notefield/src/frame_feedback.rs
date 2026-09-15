@@ -1742,6 +1742,117 @@ mod tests {
     }
 
     #[test]
+    fn holds_without_hide_windows_match_zero_offset_sampling() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        use deadsync_rules::note::HoldData;
+
+        let mut ns = noteskin();
+        ns.hold_columns[0].head_inactive = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_inactive = Some(TestSlot::new("body"));
+        ns.hold_columns[0].head_active = Some(TestSlot::new("head"));
+        ns.hold_columns[0].body_active = Some(TestSlot::new("body"));
+        ns.roll_columns = ns.hold_columns.clone();
+        let timing = TimingData::default();
+        let mut hold = note(0);
+        hold.beat = 8.0;
+        hold.row_index = 384;
+        hold.hold = Some(HoldData {
+            end_row_index: 576,
+            end_beat: 12.0,
+            result: None,
+            life: 1.0,
+            let_go_started_at: None,
+            let_go_starting_life: 1.0,
+            last_held_row_index: 384,
+            last_held_beat: 8.0,
+        });
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).unwrap()],
+            vec![],
+        ];
+        // This column still takes the hide-window sampling path, but the window
+        // cannot affect the hold. It is the reference for the empty-column path.
+        let distant = SongLuaNoteHideWindows::new(vec![SongLuaNoteHideWindowRuntime {
+            column: 0,
+            start_beat: 1000.0,
+            end_beat: 1001.0,
+        }]);
+        for configured_empty_spline in [false, true] {
+            let mut empty = SongLuaNoteHideWindows::default();
+            if configured_empty_spline {
+                empty.set_zoom_spline(0, 1.0 / 48.0, 482);
+            }
+            assert!(!empty.has_column_hides(0));
+            for beat in [
+                -f32::MAX,
+                -1.0,
+                -0.0,
+                0.0,
+                8.5,
+                f32::MAX,
+                f32::NAN,
+                f32::INFINITY,
+            ] {
+                assert_eq!(empty.zoom_offset(0, beat).to_bits(), 0.0_f32.to_bits());
+            }
+            for (note_type, beat) in [
+                (NoteType::Hold, 6.0),
+                (NoteType::Hold, 9.0),
+                (NoteType::Roll, 6.0),
+                (NoteType::Roll, 9.0),
+            ] {
+                hold.note_type = note_type;
+                let notes = [hold.clone()];
+                let render = |hides: &SongLuaNoteHideWindows| {
+                    let mut request =
+                        request(&ns, &timing, &notes, hides, FieldPlacement::P1, 0, 1, 2, 2);
+                    request.chart.visible_beat = beat;
+                    request.chart.search_beat = beat;
+                    request.chart.lane_note_row_indices = &lanes;
+                    request.chart.lane_hold_indices = &lanes;
+                    request.chart.note_itg_rows = &[384];
+                    request.visual.current_display_beat = beat;
+                    // Both cases use sliced geometry, independently of hide windows.
+                    request.visual.visual.bumpy = 0.3;
+                    request.visual.visual.tiny = -0.2;
+                    request.visual.visual.pulse_outer = 0.25;
+                    let prepared = prepare_notefield(&request).unwrap();
+                    let mut active = active_hold(0);
+                    active.note_type = note_type;
+                    let mut feedback = spline_feedback(&[]);
+                    if beat > 8.0 {
+                        feedback.lanes[0].active_hold = Some(&active);
+                    }
+                    let frame = NotefieldFieldFrameView {
+                        feedback,
+                        completed_rows: Default::default(),
+                    };
+                    let mut draws = Vec::new();
+                    compose_notefield_field(
+                        &mut Vec::new(),
+                        &mut draws,
+                        &mut Vec::new(),
+                        &mut ModelMeshCache::default(),
+                        &mut HoldMeshScratch::default(),
+                        &mut CapturedActorScratch::with_capacities(32, 0),
+                        &mut NotefieldCameraCache::default(),
+                        &request,
+                        &prepared,
+                        &frame,
+                        &source,
+                    );
+                    assert!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.as_ref() == "body")));
+                    format!("{draws:?}")
+                };
+                assert_eq!(render(&empty), render(&distant));
+            }
+        }
+    }
+
+    #[test]
     fn hidden_hold_head_keeps_visible_body_sections() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
