@@ -1275,7 +1275,6 @@ fn bind_sprite_texture(state: &State, texture: &Texture) {
     // program is active at both call sites. Texture units are restored to zero
     // so the mesh paths retain their existing binding contract.
     unsafe {
-        state.gl.active_texture(glow::TEXTURE0);
         match &texture.0 {
             TextureImages::Rgba(raw) => {
                 state.gl.bind_texture(glow::TEXTURE_2D, Some(*raw));
@@ -1466,7 +1465,6 @@ fn draw_modern_offscreen_pass(
         let mut last_tmesh_instance_start = None;
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
         let mut last_depth = None;
-        gl.active_texture(glow::TEXTURE0);
 
         for op in frame.ops.iter().copied() {
             match op {
@@ -1775,7 +1773,6 @@ fn draw_legacy_offscreen_pass(
                 glow::DYNAMIC_DRAW,
             );
         }
-        gl.active_texture(glow::TEXTURE0);
         let mut vertices = 0u64;
         let mut last_blend = None;
         let mut last_depth = None;
@@ -2204,8 +2201,6 @@ pub fn draw(
 
         gl.blend_equation(glow::FUNC_ADD);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-
-        gl.active_texture(glow::TEXTURE0);
 
         let mut last_bound_tex: Option<glow::Texture> = None;
         let mut last_blend = Some(BlendMode::Alpha);
