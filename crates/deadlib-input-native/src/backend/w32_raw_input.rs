@@ -964,11 +964,11 @@ where
 }
 
 #[inline(always)]
-fn handle_keyboard_input(ctx: &mut Ctx) {
+fn handle_keyboard_input(ctx: &mut Ctx, size_bytes: usize) {
     if !WINDOW_FOCUSED.load(Ordering::Relaxed) {
         return;
     }
-    if ctx.buf.len() < size_of::<RAWINPUTHEADER>() + size_of::<RAWKEYBOARD>() {
+    if size_bytes < size_of::<RAWINPUTHEADER>() + size_of::<RAWKEYBOARD>() {
         return;
     }
 
@@ -1006,43 +1006,56 @@ fn handle_keyboard_input(ctx: &mut Ctx) {
     }
 }
 
-fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
-    // SAFETY: the first call queries the required byte count, the second fills the
-    // owned `ctx.buf` allocation sized from that count, and all subsequent raw
-    // pointer reads are guarded by explicit size checks before use.
-    unsafe {
-        let mut size: u32 = 0;
-        let _ = GetRawInputData(
-            hraw,
-            RID_INPUT,
-            None,
-            &raw mut size,
-            size_of::<RAWINPUTHEADER>() as u32,
-        );
-        if size == 0 {
-            return;
+#[inline]
+fn read_raw_input(
+    buf: &mut Vec<u8>,
+    mut get_data: impl FnMut(Option<&mut [u8]>, &mut u32) -> u32,
+) -> Option<usize> {
+    let mut size = u32::try_from(buf.len()).ok()?;
+    let mut copied = if buf.is_empty() {
+        u32::MAX
+    } else {
+        get_data(Some(buf), &mut size)
+    };
+    if copied == u32::MAX {
+        // Query only on the first read or when the retained buffer cannot be used.
+        size = 0;
+        if get_data(None, &mut size) == u32::MAX || size == 0 {
+            return None;
         }
-        if ctx.buf.len() < size as usize {
-            ctx.buf.resize(size as usize, 0);
-        }
-        let mut size2 = size;
-        let rc = GetRawInputData(
-            hraw,
-            RID_INPUT,
-            Some(ctx.buf.as_mut_ptr().cast::<c_void>()),
-            &raw mut size2,
-            size_of::<RAWINPUTHEADER>() as u32,
-        );
-        if rc == u32::MAX {
-            return;
-        }
-        if (size2 as usize) < size_of::<RAWINPUTHEADER>() {
-            return;
-        }
+        buf.resize(buf.len().max(size as usize), 0);
+        copied = get_data(Some(&mut buf[..size as usize]), &mut size);
+    }
+    // The return value is the copied length; pcbSize may still be the capacity.
+    if copied == u32::MAX || !(size_of::<RAWINPUTHEADER>()..=buf.len()).contains(&(copied as usize))
+    {
+        return None;
+    }
+    Some(copied as usize)
+}
 
+fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
+    let Some(size_bytes) = read_raw_input(&mut ctx.buf, |data, size| {
+        // SAFETY: the optional slice is live writable storage for the supplied
+        // byte count; None asks Windows for the required buffer size.
+        unsafe {
+            GetRawInputData(
+                hraw,
+                RID_INPUT,
+                data.map(|buf| buf.as_mut_ptr().cast::<c_void>()),
+                size,
+                size_of::<RAWINPUTHEADER>() as u32,
+            )
+        }
+    }) else {
+        return;
+    };
+    // SAFETY: read_raw_input checked the copied header length. Each payload
+    // parser is bounded by that copied length, not the retained buffer's length.
+    unsafe {
         let header: RAWINPUTHEADER = ptr::read_unaligned(ctx.buf.as_ptr().cast::<RAWINPUTHEADER>());
         if header.dwType == RIM_TYPEKEYBOARD_U32 {
-            handle_keyboard_input(ctx);
+            handle_keyboard_input(ctx, size_bytes);
             return;
         }
         if header.dwType != RIM_TYPEHID_U32 || !ctx.enable_pad {
@@ -1055,7 +1068,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
             let host = ctx.host;
             let (emit_pad, buf, devices) = (&mut ctx.emit_pad, &mut ctx.buf, &mut ctx.devices);
             if let Some(dev) = devices.get_mut(&dev_key) {
-                process_hid_reports(emit_pad, dev, buf, size2 as usize, host, None);
+                process_hid_reports(emit_pad, dev, buf, size_bytes, host, None);
                 return;
             }
         }
@@ -1074,7 +1087,7 @@ fn handle_wm_input(ctx: &mut Ctx, hraw: HRAWINPUT) {
             emit_pad,
             dev,
             buf,
-            size2 as usize,
+            size_bytes,
             host,
             Some((timestamp, host_nanos)),
         );
@@ -1263,7 +1276,7 @@ mod tests {
     use super::{
         KEYBOARD_CAPTURE_DISABLED, KEYBOARD_CAPTURE_ENABLED, KEYBOARD_CAPTURE_UNKNOWN,
         RAWINPUTHEADER, hid_report_payload, keyboard_capture_sync_needed, rawinput_uuid,
-        remember_report, report_is_duplicate,
+        read_raw_input, remember_report, report_is_duplicate,
     };
     use std::mem::size_of;
 
@@ -1274,6 +1287,95 @@ mod tests {
         message[header_len + 4..header_len + 8].copy_from_slice(&report_count.to_ne_bytes());
         message[header_len + 8..].copy_from_slice(payload);
         message
+    }
+
+    #[test]
+    fn retained_raw_input_buffer_reads_once_and_uses_copied_length() {
+        let message = hid_message(3, 2, &[1, 2, 3, 4, 5, 6]);
+        let mut buf = vec![0xaa; 1024];
+        let ptr = buf.as_ptr();
+        let mut calls = 0;
+        let copied = read_raw_input(&mut buf, |data, size| {
+            calls += 1;
+            let data = data.expect("a warm buffer should read directly");
+            assert_eq!(*size, 1024);
+            data[..message.len()].copy_from_slice(&message);
+            // Leave pcbSize unchanged, as it is not the copied-length contract.
+            message.len() as u32
+        })
+        .unwrap();
+        assert_eq!(calls, 1);
+        assert_eq!(buf.as_ptr(), ptr);
+        assert_eq!(copied, message.len());
+        assert_eq!(&buf[..copied], message);
+        assert_eq!(buf[copied], 0xaa);
+        assert_eq!(
+            hid_report_payload(&mut buf, copied).unwrap().0,
+            [1, 2, 3, 4, 5, 6]
+        );
+    }
+
+    #[test]
+    fn raw_input_queries_and_retries_only_when_needed() {
+        let message = hid_message(5, 2, &[1; 10]);
+        for initial_len in [0, size_of::<RAWINPUTHEADER>()] {
+            let mut buf = vec![0; initial_len];
+            let mut calls = Vec::new();
+            let copied = read_raw_input(&mut buf, |data, size| {
+                calls.push(data.is_some());
+                let Some(data) = data else {
+                    *size = message.len() as u32;
+                    return 0;
+                };
+                if data.len() < message.len() {
+                    return u32::MAX;
+                }
+                data[..message.len()].copy_from_slice(&message);
+                message.len() as u32
+            })
+            .unwrap();
+            assert_eq!(copied, message.len());
+            assert_eq!(buf, message);
+            assert_eq!(
+                calls,
+                if initial_len == 0 {
+                    vec![false, true]
+                } else {
+                    vec![true, false, true]
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn raw_input_rejects_failed_and_short_reads_without_using_stale_bytes() {
+        let mut buf = vec![0xaa; 128];
+        for copied in [0, size_of::<RAWINPUTHEADER>() as u32 - 1, 129] {
+            assert!(read_raw_input(&mut buf, |_, _| copied).is_none());
+        }
+        let mut calls = 0;
+        assert!(
+            read_raw_input(&mut buf, |_, _| {
+                calls += 1;
+                u32::MAX
+            })
+            .is_none()
+        );
+        assert_eq!(calls, 2);
+        let mut calls = 0;
+        assert!(
+            read_raw_input(&mut buf, |data, size| {
+                calls += 1;
+                if data.is_none() {
+                    *size = 256;
+                    0
+                } else {
+                    u32::MAX
+                }
+            })
+            .is_none()
+        );
+        assert_eq!(calls, 3);
     }
 
     #[test]
