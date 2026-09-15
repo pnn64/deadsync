@@ -789,11 +789,9 @@ fn draw_inner(
                         }
                     }
                 }
-                if cache.sampler_changed(texture_sampler_id(texture, run.texture_handle), false) {
-                    encoder.set_fragment_sampler_state(
-                        0,
-                        Some(texture_sampler(texture, run.texture_handle, false)),
-                    );
+                let sampler = texture_sampler(texture, run.texture_handle, false);
+                if cache.sampler_changed(sampler.as_ptr() as usize) {
+                    encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
                 encoder.draw_primitives_instanced(
                     MTLPrimitiveType::Triangle,
@@ -895,11 +893,9 @@ fn draw_inner(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                if cache.sampler_changed(texture_sampler_id(texture, run.texture_handle), true) {
-                    encoder.set_fragment_sampler_state(
-                        0,
-                        Some(texture_sampler(texture, run.texture_handle, true)),
-                    );
+                let sampler = texture_sampler(texture, run.texture_handle, true);
+                if cache.sampler_changed(sampler.as_ptr() as usize) {
+                    encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {
@@ -1380,11 +1376,6 @@ fn texture_sampler(texture: &Texture, handle: TextureHandle, repeat: bool) -> &S
     }
 }
 
-#[inline(always)]
-const fn texture_sampler_id(texture: &Texture, handle: TextureHandle) -> u64 {
-    texture.id ^ ((render_target_uses_nearest(handle) as u64) << 63)
-}
-
 fn record_offscreen_pass(
     state: &State,
     encoder: &RenderCommandEncoderRef,
@@ -1481,11 +1472,9 @@ fn record_offscreen_pass(
                         }
                     }
                 }
-                if cache.sampler_changed(texture_sampler_id(texture, run.texture_handle), false) {
-                    encoder.set_fragment_sampler_state(
-                        0,
-                        Some(texture_sampler(texture, run.texture_handle, false)),
-                    );
+                let sampler = texture_sampler(texture, run.texture_handle, false);
+                if cache.sampler_changed(sampler.as_ptr() as usize) {
+                    encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
                 encoder.draw_primitives_instanced(
                     MTLPrimitiveType::Triangle,
@@ -1585,11 +1574,9 @@ fn record_offscreen_pass(
                 if cache.texture_changed(texture.id) {
                     encoder.set_fragment_texture(0, Some(texture.images.primary()));
                 }
-                if cache.sampler_changed(texture_sampler_id(texture, run.texture_handle), true) {
-                    encoder.set_fragment_sampler_state(
-                        0,
-                        Some(texture_sampler(texture, run.texture_handle, true)),
-                    );
+                let sampler = texture_sampler(texture, run.texture_handle, true);
+                if cache.sampler_changed(sampler.as_ptr() as usize) {
+                    encoder.set_fragment_sampler_state(0, Some(sampler));
                 }
                 if tmesh_buffer_cache.update_required(source) {
                     if let Some(buffer_key) = source.buffer_key() {

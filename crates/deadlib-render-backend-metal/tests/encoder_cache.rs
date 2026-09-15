@@ -33,21 +33,26 @@ fn independent_encoder_state_survives_pipeline_changes() {
     assert!(cache.pipeline_changed(DrawKind::Sprite, 0, true));
     assert!(!cache.pipeline_changed(DrawKind::Sprite, 0, true));
     assert!(cache.texture_changed(41));
-    assert!(cache.sampler_changed(41, false));
+    assert!(cache.sampler_changed(100));
     assert!(cache.depth_changed(false));
     assert!(cache.cull_changed(CullMode::Back));
 
     assert!(cache.pipeline_changed(DrawKind::Mesh, 0, false));
     assert!(!cache.texture_changed(41));
-    assert!(!cache.sampler_changed(41, false));
+    assert!(!cache.sampler_changed(100));
     assert!(!cache.depth_changed(false));
     assert!(!cache.cull_changed(CullMode::Back));
     assert!(cache.cull_changed(CullMode::None));
 
-    assert!(cache.sampler_changed(41, true));
+    assert!(cache.sampler_changed(101));
     assert!(!cache.texture_changed(41));
     assert!(cache.texture_changed(42));
-    assert!(cache.sampler_changed(42, true));
+    // Different textures can share the same selected sampler.
+    assert!(!cache.sampler_changed(101));
+    // A different filter or wrap mode still needs its own binding.
+    assert!(cache.sampler_changed(102));
+    assert!(!cache.texture_changed(42));
+    assert!(cache.sampler_changed(100));
 }
 
 #[test]
@@ -75,7 +80,7 @@ fn mixed_draw_trace_preserves_effective_state() {
     assert!(cache.pipeline_changed(DrawKind::Sprite, 1, false));
     assert!(cache.camera_changed(0, 7));
     assert!(cache.texture_changed(11));
-    assert!(cache.sampler_changed(11, false));
+    assert!(cache.sampler_changed(21));
     assert!(cache.depth_changed(false));
     assert!(cache.cull_changed(CullMode::Back));
 
@@ -94,11 +99,11 @@ fn mixed_draw_trace_preserves_effective_state() {
     assert!(cache.depth_changed(true));
     assert!(cache.cull_changed(CullMode::Back));
     assert!(!cache.texture_changed(11));
-    assert!(!cache.sampler_changed(11, false));
+    assert!(!cache.sampler_changed(21));
 
     assert_eq!(cache.instance_buffer(DrawKind::Sprite), BufferUpdate::Bind);
     assert!(cache.camera_changed(0, 7));
     assert!(!cache.camera_changed(1, 7));
     assert!(!cache.texture_changed(11));
-    assert!(!cache.sampler_changed(11, false));
+    assert!(!cache.sampler_changed(21));
 }

@@ -24,7 +24,7 @@ pub struct EncoderCache {
     pipeline: Option<(DrawKind, u8, bool)>,
     cameras: [Option<u8>; 2],
     texture: Option<u64>,
-    sampler: Option<(u64, bool)>,
+    sampler: Option<usize>,
     depth: Option<bool>,
     cull: Option<CullMode>,
 }
@@ -65,8 +65,8 @@ impl EncoderCache {
     }
 
     #[inline(always)]
-    pub(crate) fn sampler_changed(&mut self, texture: u64, repeat: bool) -> bool {
-        update(&mut self.sampler, (texture, repeat))
+    pub(crate) fn sampler_changed(&mut self, sampler: usize) -> bool {
+        update(&mut self.sampler, sampler)
     }
 
     #[inline(always)]
