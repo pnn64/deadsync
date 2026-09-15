@@ -8662,12 +8662,15 @@ fn compact_sprite_instances_for_range(
         if item.kind != DrawKind::Sprite {
             continue;
         }
-        let sprite = sprite_instances[item.payload_index as usize];
-        item.payload_index = write as u32;
-        if write < sprite_instances.len() {
-            sprite_instances[write] = sprite;
-        } else {
-            sprite_instances.push(sprite);
+        let read = item.payload_index as usize;
+        if read != write {
+            let sprite = sprite_instances[read];
+            item.payload_index = write as u32;
+            if write < sprite_instances.len() {
+                sprite_instances[write] = sprite;
+            } else {
+                sprite_instances.push(sprite);
+            }
         }
         write += 1;
     }
@@ -11256,6 +11259,78 @@ mod tests {
         for (builder, batch) in builders.iter().zip(stroke) {
             assert_eq!(builder.texture_page, batch.texture_page);
             assert_eq!(builder.vertices.as_slice(), batch.vertices.as_ref());
+        }
+    }
+
+    #[test]
+    fn sprite_compaction_preserves_mixed_draws_and_untouched_prefix() {
+        use deadlib_render_core::frame_compare::compare_render_frames_semantic;
+
+        for survivors in [&[2, 3, 4, 5][..], &[2, 4, 6], &[3, 5, 6], &[]] {
+            let mut sprites: Vec<_> = (0..8)
+                .map(|index| test_sprite_instance(index as f32))
+                .collect();
+            sprites[4].tint[0] = f32::from_bits(0x7fc0_0012);
+            sprites[5].uv_offset[1] = -0.0;
+            let capacity = sprites.capacity();
+            let mut builder = FrameBuilder::default();
+            for index in 0..2 {
+                builder.push_sprite(7, index, 0, BlendMode::Alpha, 0, index);
+            }
+            for &index in survivors {
+                builder.push_mesh(
+                    0,
+                    index,
+                    0,
+                    BlendMode::Add,
+                    0,
+                    MeshPayload {
+                        transform: Matrix4::IDENTITY,
+                        tint: [1.0; 4],
+                        vertices: MeshVertices::Shared(Arc::from([
+                            MeshVertex {
+                                pos: [0.0, 0.0],
+                                color: [1.0; 4],
+                            },
+                            MeshVertex {
+                                pos: [1.0, 0.0],
+                                color: [1.0; 4],
+                            },
+                            MeshVertex {
+                                pos: [0.0, 1.0],
+                                color: [1.0; 4],
+                            },
+                        ])),
+                    },
+                );
+                builder.push_sprite(7, index, 0, BlendMode::Alpha, 0, index);
+            }
+            let prefix = builder.items[..2].to_vec();
+            let expected = finish_test_builder(
+                FrameBuilder {
+                    items: builder.items.clone(),
+                    meshes: builder.meshes.clone(),
+                    textured_meshes: builder.textured_meshes.clone(),
+                },
+                sprites.clone(),
+            );
+
+            super::compact_sprite_instances_for_range(&mut builder, 2, &mut sprites, 2);
+
+            assert_eq!(&builder.items[..2], prefix);
+            assert_eq!(sprites.len(), 2 + survivors.len());
+            assert_eq!(sprites.capacity(), capacity);
+            assert_eq!(
+                builder
+                    .items
+                    .iter()
+                    .filter(|item| item.kind == super::DrawKind::Sprite)
+                    .map(|item| item.payload_index)
+                    .collect::<Vec<_>>(),
+                (0..sprites.len() as u32).collect::<Vec<_>>()
+            );
+            let actual = finish_test_builder(builder, sprites);
+            compare_render_frames_semantic(&expected, &actual).unwrap();
         }
     }
 
