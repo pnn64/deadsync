@@ -1263,16 +1263,7 @@ fn compose_flat_noteskin_layer<S, F>(
     if !draw.visible {
         return;
     }
-    let frame_index = slot.frame_index_from_phase(phase);
-    let uv_elapsed = if slot.model().is_some() {
-        phase
-    } else {
-        elapsed
-    };
-    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
     let base_size = note_slot_base_size(slot, scale);
-    let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
-    let rotation_sin_cos = slot.base_rot_sin_cos();
     let size = [
         base_size[0] * draw.zoom[0].max(0.0),
         base_size[1] * draw.zoom[1].max(0.0),
@@ -1280,6 +1271,15 @@ fn compose_flat_noteskin_layer<S, F>(
     if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
         return;
     }
+    let frame_index = slot.frame_index_from_phase(phase);
+    let uv_elapsed = if slot.model().is_some() {
+        phase
+    } else {
+        elapsed
+    };
+    let uv = translated_uv_rect(slot.uv_for_frame_at(frame_index, uv_elapsed), translation);
+    let local_offset = [draw.pos[0] * scale, draw.pos[1] * scale];
+    let rotation_sin_cos = slot.base_rot_sin_cos();
     let blend = if draw.blend_add {
         BlendMode::Add
     } else {
@@ -1822,6 +1822,159 @@ fn finish_field_camera(
         actors.truncate(field_start);
     } else if camera_pushed {
         actors.push(Actor::CameraPop);
+    }
+}
+
+#[cfg(test)]
+mod note_layer_tests {
+    use super::*;
+    use deadsync_noteskin::{ModelDrawState, ModelMesh, SpriteDefinition};
+    use std::cell::Cell;
+
+    struct TestSlot {
+        def: SpriteDefinition,
+        draw: ModelDrawState,
+        frame_samples: Cell<usize>,
+        uv_samples: Cell<usize>,
+    }
+
+    impl NoteskinSlot for TestSlot {
+        fn sprite_def(&self) -> &SpriteDefinition {
+            &self.def
+        }
+        fn source_size(&self) -> [i32; 2] {
+            [64, 64]
+        }
+        fn texture_key_shared(&self) -> Arc<str> {
+            Arc::from("layer")
+        }
+        fn model(&self) -> Option<&ModelMesh> {
+            None
+        }
+        fn base_rot_sin_cos(&self) -> [f32; 2] {
+            [0.0, 1.0]
+        }
+        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
+            0
+        }
+        fn frame_index_from_phase(&self, phase: f32) -> usize {
+            assert_eq!(phase, 0.25);
+            self.frame_samples.set(self.frame_samples.get() + 1);
+            2
+        }
+        fn uv_for_frame_at(&self, frame: usize, elapsed: f32) -> [f32; 4] {
+            assert_eq!((frame, elapsed), (2, 3.0));
+            self.uv_samples.set(self.uv_samples.get() + 1);
+            [0.125, 0.25, 0.5, 0.75]
+        }
+        fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
+            self.draw
+        }
+        fn model_glow_with_draw(
+            &self,
+            _draw: ModelDrawState,
+            _time: f32,
+            _beat: f32,
+            _alpha: f32,
+        ) -> Option<[f32; 4]> {
+            None
+        }
+        fn model_uv_params(&self, uv: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+            ([uv[2] - uv[0], uv[3] - uv[1]], [uv[0], uv[1]], [0.0; 2])
+        }
+    }
+
+    #[test]
+    fn note_layer_size_rejection_preserves_visible_draws() {
+        for (visible, zoom, scale, emits) in [
+            (true, [1.0, 0.5, 1.0], 0.75, true),
+            (true, [0.0, 1.0, 1.0], 1.0, false),
+            (true, [1.0, -1.0, 1.0], 1.0, false),
+            (true, [f32::NAN, 1.0, 1.0], 1.0, false),
+            (true, [1.0; 3], 0.0, false),
+            (true, [1.0; 3], -0.5, false),
+            (true, [1.0; 3], f32::EPSILON / 64.0, false),
+            (true, [1.0; 3], f32::EPSILON / 32.0, true),
+            (true, [1.0; 3], f32::NAN, true),
+            (false, [1.0; 3], 1.0, false),
+        ] {
+            let slot = TestSlot {
+                def: SpriteDefinition {
+                    size: [64, 64],
+                    mirror_h: true,
+                    ..SpriteDefinition::default()
+                },
+                draw: ModelDrawState {
+                    visible,
+                    zoom,
+                    pos: [2.0, -3.0, 0.0],
+                    rot: [0.0, 0.0, 17.0],
+                    tint: [0.25, 0.5, 0.75, 0.5],
+                    blend_add: true,
+                    ..ModelDrawState::default()
+                },
+                frame_samples: Cell::new(0),
+                uv_samples: Cell::new(0),
+            };
+            let mut draws = Vec::new();
+            compose_flat_noteskin_layer(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                &slot,
+                [120.0, 180.0],
+                scale,
+                0.25,
+                [-0.125, 0.125],
+                3.0,
+                4.0,
+                0.0,
+                13.0,
+                5.0,
+                [1.0; 4],
+                0.3,
+                140,
+                2.0,
+                false,
+                &|slot| SpriteSource::Texture(slot.texture_key_shared()),
+            );
+            assert_eq!(draws.len(), if emits { 2 } else { 0 });
+            assert_eq!(slot.frame_samples.get(), usize::from(emits));
+            assert_eq!(slot.uv_samples.get(), usize::from(emits));
+            for (pass, draw) in draws.iter().enumerate() {
+                let FlatDraw::Sprite(sprite) = draw else {
+                    panic!("expected layer sprite")
+                };
+                assert_eq!(sprite.uv_rect, [0.0, 0.375, 0.375, 0.875]);
+                assert_eq!(
+                    sprite.tint,
+                    if pass == 0 {
+                        slot.draw.tint
+                    } else {
+                        [1.0, 1.0, 1.0, 0.0]
+                    }
+                );
+                assert_eq!(
+                    sprite.glow,
+                    [1.0, 1.0, 1.0, if pass == 0 { 0.0 } else { 0.3 }]
+                );
+                assert_eq!(sprite.blend, BlendMode::Add);
+                assert_eq!(
+                    (sprite.rot_y_deg, sprite.rot_z_deg, sprite.world_z, sprite.z),
+                    (13.0, 22.0, 2.0, 140)
+                );
+                assert!(sprite.flip_x && !sprite.flip_y);
+                if scale.is_finite() {
+                    assert_eq!(
+                        sprite.center.map(f32::to_bits),
+                        [120.0 + 2.0 * scale, 180.0 - 3.0 * scale].map(f32::to_bits)
+                    );
+                    assert_eq!(
+                        sprite.size.map(f32::to_bits),
+                        [64.0 * scale * zoom[0], 64.0 * scale * zoom[1]].map(f32::to_bits)
+                    );
+                }
+            }
+        }
     }
 }
 
