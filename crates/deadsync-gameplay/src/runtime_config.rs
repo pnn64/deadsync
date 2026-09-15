@@ -855,11 +855,11 @@ pub fn song_clock_music_time_ns(
     captured_at: Instant,
     captured_host_nanos: u64,
 ) -> SongTimeNs {
-    let slope = normalized_song_rate(snapshot.seconds_per_second);
     if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
         let dt_nanos = i128::from(captured_host_nanos) - i128::from(snapshot.valid_at_host_nanos);
         return clamp_song_time_ns(
-            i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(dt_nanos, slope),
+            i128::from(snapshot.song_time_ns)
+                + scaled_song_delta_ns(dt_nanos, snapshot.seconds_per_second),
         );
     }
     let delta_host_nanos = if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at)
@@ -871,7 +871,8 @@ pub fn song_clock_music_time_ns(
         0
     };
     clamp_song_time_ns(
-        i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(delta_host_nanos, slope),
+        i128::from(snapshot.song_time_ns)
+            + scaled_song_delta_ns(delta_host_nanos, snapshot.seconds_per_second),
     )
 }
 
