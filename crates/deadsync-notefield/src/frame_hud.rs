@@ -16,8 +16,8 @@ use crate::hud::{
     zmod_hud_column_width,
 };
 use crate::judgment_feedback::{
-    IndicatorSprite, JudgmentFeedbackRequest, TapJudgmentFeedback, TapJudgmentSprite,
-    compose_judgment_feedback,
+    HoldIndicatorGeometry, IndicatorSprite, JudgmentFeedbackRequest, TapJudgmentFeedback,
+    TapJudgmentSprite, compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
 use deadlib_present::actors::{Actor, FlatDraw, InlineText, TextContent};
@@ -483,6 +483,12 @@ fn compose_judgment<S>(
             mini: prepared.mini,
             visual: request.visual.visual,
             noteskin_column_xs,
+            prepared_geometry: prepared.notes.as_ref().map(|notes| HoldIndicatorGeometry {
+                col_offsets: &notes.col_offsets[..prepared.frame_plan.num_cols],
+                invert: &notes.invert_distances[..prepared.frame_plan.num_cols],
+                tornado: &notes.tornado_bounds[..prepared.frame_plan.num_cols],
+                beat_factor: notes.beat_factor,
+            }),
             num_cols: prepared.frame_plan.num_cols,
             spacing_multiplier: request.visual.spacing_multiplier,
             field_zoom: prepared.field_zoom,

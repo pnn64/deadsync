@@ -37,6 +37,14 @@ pub(crate) struct TapJudgmentFeedback<'a> {
     pub rotation_deg: f32,
 }
 
+/// Geometry borrowed from note preparation for this frame's active lane span.
+pub(crate) struct HoldIndicatorGeometry<'a> {
+    pub col_offsets: &'a [f32],
+    pub invert: &'a [f32],
+    pub tornado: &'a [TornadoBounds],
+    pub beat_factor: f32,
+}
+
 pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub style: JudgmentFeedbackStyle,
     pub blind: bool,
@@ -55,6 +63,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub mini: f32,
     pub visual: VisualEffects,
     pub noteskin_column_xs: Option<&'a [i32]>,
+    pub prepared_geometry: Option<HoldIndicatorGeometry<'a>>,
     pub num_cols: usize,
     pub spacing_multiplier: f32,
     pub field_zoom: f32,
@@ -174,27 +183,42 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
         .num_cols
         .min(MAX_COLS)
         .min(request.column_reverse_percent.len());
-    let mut col_offsets = [0.0_f32; MAX_COLS];
-    fill_lane_col_offsets(
-        &mut col_offsets,
-        request.noteskin_column_xs,
-        num_cols,
-        request.spacing_multiplier,
-        request.field_zoom,
-    );
-    let mut invert = [0.0_f32; MAX_COLS];
-    let mut tornado = [TornadoBounds::default(); MAX_COLS];
-    compute_active_note_geometry(
-        &request.visual,
-        &col_offsets[..num_cols],
-        &mut invert[..num_cols],
-        &mut tornado[..num_cols],
-    );
-    // Flip mirrors against the last active lane, not the backing buffer's end.
-    let col_offsets = &col_offsets[..num_cols];
-    let invert = &invert[..num_cols];
-    let tornado = &tornado[..num_cols];
-    let beat_push = beat_factor(request.current_beat);
+    let mut fallback_offsets;
+    let mut fallback_invert;
+    let mut fallback_tornado;
+    let (col_offsets, invert, tornado, beat_push) =
+        if let Some(geometry) = request.prepared_geometry.as_ref() {
+            (
+                geometry.col_offsets,
+                geometry.invert,
+                geometry.tornado,
+                geometry.beat_factor,
+            )
+        } else {
+            fallback_offsets = [0.0; MAX_COLS];
+            fallback_invert = [0.0; MAX_COLS];
+            fallback_tornado = [TornadoBounds::default(); MAX_COLS];
+            fill_lane_col_offsets(
+                &mut fallback_offsets,
+                request.noteskin_column_xs,
+                num_cols,
+                request.spacing_multiplier,
+                request.field_zoom,
+            );
+            compute_active_note_geometry(
+                &request.visual,
+                &fallback_offsets[..num_cols],
+                &mut fallback_invert[..num_cols],
+                &mut fallback_tornado[..num_cols],
+            );
+            // Flip mirrors against the last active lane, not the backing buffer's end.
+            (
+                &fallback_offsets[..num_cols],
+                &fallback_invert[..num_cols],
+                &fallback_tornado[..num_cols],
+                beat_factor(request.current_beat),
+            )
+        };
 
     if let Some(sprite) = request.held_miss_sprite {
         for (i, feedback) in request.held_misses.iter().take(num_cols).enumerate() {
@@ -450,6 +474,7 @@ mod tests {
             mini: 0.0,
             visual: VisualEffects::default(),
             noteskin_column_xs: Some(&[-96, -32, 32, 96]),
+            prepared_geometry: None,
             num_cols: 4,
             spacing_multiplier: 1.0,
             field_zoom: 1.0,
@@ -705,6 +730,91 @@ mod tests {
         let mut draws = Vec::new();
         compose_judgment_feedback(&mut draws, request);
         assert!(draws.is_empty());
+    }
+
+    #[test]
+    fn prepared_hold_geometry_matches_fallback_draws_bitwise() {
+        let holds = [Some(HoldJudgmentRenderInfo {
+            result: HoldResult::LetGo,
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let misses = [Some(HeldMissRenderInfo {
+            started_at_screen_s: 2.0,
+        }); MAX_COLS];
+        let reverse = std::array::from_fn::<_, MAX_COLS, _>(|i| (i % 3) as f32 * 0.5);
+        let sprite = IndicatorSprite {
+            source: source("indicator"),
+            frame_size: [120.0, 30.0],
+            frame_cols: 1,
+            frame_rows: 2,
+            scale: 0.75,
+        };
+        for columns in [None, Some(&[-121, -37, 35, 119][..])] {
+            for num_cols in [0, 1, 4, 5, 8, MAX_COLS] {
+                for amount in [0.0, 0.35, -0.75] {
+                    for elapsed in [2.0, 2.05, 2.2, 2.49, 3.0] {
+                        let mut request = empty_request(&misses, &holds);
+                        request.noteskin_column_xs = columns;
+                        request.num_cols = num_cols;
+                        request.column_reverse_percent = &reverse[..num_cols];
+                        request.elapsed_screen = elapsed;
+                        request.hold_sprite = Some(&sprite);
+                        request.held_miss_sprite = Some(&sprite);
+                        request.spacing_multiplier = 1.17;
+                        request.field_zoom = 0.73;
+                        request.current_beat = 4.05;
+                        request.visual.tornado = amount;
+                        request.visual.invert = -amount;
+                        request.visual.flip = amount;
+                        request.visual.drunk = -amount;
+                        request.visual.beat = amount;
+                        request.visual.tiny = 0.7;
+                        request.visual.move_x_cols[0] = -0.2;
+                        let mut expected = Vec::new();
+                        append_hold_indicators(&mut expected, &request);
+
+                        let mut offsets = [0.0; MAX_COLS];
+                        let mut invert = [0.0; MAX_COLS];
+                        let mut tornado = [TornadoBounds::default(); MAX_COLS];
+                        fill_lane_col_offsets(&mut offsets, columns, num_cols, 1.17, 0.73);
+                        compute_active_note_geometry(
+                            &request.visual,
+                            &offsets[..num_cols],
+                            &mut invert[..num_cols],
+                            &mut tornado[..num_cols],
+                        );
+                        request.prepared_geometry = Some(HoldIndicatorGeometry {
+                            col_offsets: &offsets[..num_cols],
+                            invert: &invert[..num_cols],
+                            tornado: &tornado[..num_cols],
+                            beat_factor: beat_factor(request.current_beat),
+                        });
+                        // Prepared geometry must bypass all fallback calculations.
+                        request.spacing_multiplier = f32::NAN;
+                        request.field_zoom = f32::NAN;
+                        request.current_beat = f32::NAN;
+                        let mut actual = Vec::new();
+                        append_hold_indicators(&mut actual, &request);
+                        assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+                        for (actual, expected) in actual.iter().zip(&expected) {
+                            let (FlatDraw::Sprite(actual), FlatDraw::Sprite(expected)) =
+                                (actual, expected)
+                            else {
+                                panic!("expected indicator sprites");
+                            };
+                            assert_eq!(
+                                actual.center.map(f32::to_bits),
+                                expected.center.map(f32::to_bits)
+                            );
+                        }
+                        request.blind = true;
+                        actual.clear();
+                        compose_judgment_feedback(&mut actual, request);
+                        assert!(actual.is_empty());
+                    }
+                }
+            }
+        }
     }
 
     #[test]
