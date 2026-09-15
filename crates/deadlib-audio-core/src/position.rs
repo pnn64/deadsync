@@ -28,7 +28,7 @@ pub fn normalized_music_rate(rate: f32) -> f32 {
 
 #[inline(always)]
 #[must_use]
-pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f32) -> (f32, f32) {
+pub fn fallback_music_position(stream_seconds: f64, cut_start_sec: f64, rate: f32) -> (f64, f32) {
     let rate = normalized_music_rate(rate);
     let stream_seconds = if stream_seconds.is_finite() {
         stream_seconds.max(0.0)
@@ -40,10 +40,7 @@ pub fn fallback_music_position(stream_seconds: f32, cut_start_sec: f64, rate: f3
     } else {
         0.0
     };
-    (
-        (cut_start_sec + f64::from(stream_seconds * rate)) as f32,
-        rate,
-    )
+    (cut_start_sec + stream_seconds * f64::from(rate), rate)
 }
 
 #[inline(always)]
@@ -55,7 +52,7 @@ pub fn music_clock_seed_enabled(cut_start_sec: f64) -> bool {
 #[derive(Clone, Copy, Debug)]
 pub struct MusicStreamClockSnapshot {
     pub stream_seconds: f32,
-    pub music_seconds: f32,
+    /// Authoritative music position, converted directly from f64 seconds.
     pub music_nanos: i64,
     pub music_seconds_per_second: f32,
     pub has_music_mapping: bool,
@@ -155,7 +152,7 @@ pub fn set_music_clock_rate(rate: f32) {
 }
 
 #[inline(always)]
-pub fn seeded_music_position(stream_seconds: f32) -> Option<(f32, f32)> {
+pub fn seeded_music_position(stream_seconds: f64) -> Option<(f64, f32)> {
     if !MUSIC_CLOCK_SEEDED.load(Ordering::Acquire) {
         return None;
     }
@@ -653,6 +650,24 @@ mod tests {
         assert!((zero_slope - 2.0).abs() <= 0.000_01);
         assert!((song_music_sec - 0.5).abs() <= 0.000_01);
         assert!((song_slope - 2.0).abs() <= 0.000_01);
+    }
+
+    #[test]
+    fn fallback_music_position_sanitizes_invalid_inputs() {
+        for stream_seconds in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(
+                fallback_music_position(stream_seconds, 37.5, 1.5),
+                (37.5, 1.5)
+            );
+        }
+        for cut_start in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(fallback_music_position(0.25, cut_start, 1.5), (0.375, 1.5));
+        }
+        for rate in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let (seconds, slope) = fallback_music_position(3_600.000_1, 0.000_2, rate);
+            assert_eq!(music_nanos_from_seconds(seconds), 3_600_000_300_000);
+            assert_eq!(slope, 1.0);
+        }
     }
 
     #[test]

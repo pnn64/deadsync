@@ -59,7 +59,7 @@ fn drain_played_map(runtime: &mut MusicMapRuntime) {
     }
 }
 
-fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f32)> {
+fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f64, f32)> {
     let mut runtime = MUSIC_MAP_RUNTIME.lock().unwrap();
     drain_played_map(&mut runtime);
     runtime
@@ -67,7 +67,7 @@ fn lookup_music_position(stream_frames: f64, sample_rate: u32) -> Option<(f32, f
         .search(stream_frames)
         .map(|(music_seconds, seconds_per_frame)| {
             (
-                music_seconds as f32,
+                music_seconds,
                 (seconds_per_frame * f64::from(sample_rate)) as f32,
             )
         })
@@ -114,7 +114,7 @@ impl MusicClock {
         self.sample_rate
     }
 
-    pub(crate) fn lookup(&self, stream_frames: f64) -> Option<(f32, f32)> {
+    pub(crate) fn lookup(&self, stream_frames: f64) -> Option<(f64, f32)> {
         lookup_music_position(stream_frames, self.sample_rate)
     }
 

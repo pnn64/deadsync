@@ -413,7 +413,7 @@ impl App {
             None
         };
         let music_position_seconds = if self.audio.is_available() {
-            f64::from(self.music_clock.snapshot().music_seconds)
+            self.music_clock.snapshot().music_nanos as f64 * 1e-9
         } else {
             0.0
         };
