@@ -1,4 +1,5 @@
 use deadsync_config as config;
+use deadsync_simfile::scan::SongScanMode;
 use deadsync_theme_simply_love::views::{
     SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
 };
@@ -87,7 +88,7 @@ impl Service {
         audio_available: bool,
     ) {
         self.start(move |tx| {
-            scan_library(&tx, &songs_root, &courses_root);
+            scan_library(&tx, &songs_root, &courses_root, SongScanMode::Startup);
             prewarm_artwork(&tx);
             compile_noteskins(&tx);
             analyze_replaygain(&tx, None, audio_available);
@@ -102,7 +103,7 @@ impl Service {
         audio_available: bool,
     ) {
         self.start(move |tx| {
-            scan_library(&tx, &songs_root, &courses_root);
+            scan_library(&tx, &songs_root, &courses_root, SongScanMode::Reload);
             analyze_replaygain(&tx, None, audio_available);
             send_finished(&tx);
         });
@@ -185,6 +186,7 @@ fn scan_library(
     tx: &SyncSender<SimplyLoveContentReloadEvent>,
     songs_root: &Path,
     courses_root: &Path,
+    mode: SongScanMode,
 ) {
     let _ = tx.send(SimplyLoveContentReloadEvent::Phase(
         SimplyLoveContentReloadPhase::Songs,
@@ -208,6 +210,7 @@ fn scan_library(
     };
     deadsync_simfile::app_runtime::scan_and_load_songs_with_progress_counts(
         songs_root,
+        mode,
         &mut on_song,
     );
 

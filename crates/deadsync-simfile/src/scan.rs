@@ -51,6 +51,14 @@ pub struct SongLoadOptions {
     pub song_parsing_threads: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SongScanMode {
+    /// Honor FastLoad when populating the library at startup.
+    Startup,
+    /// Check cached songs against the current contents of their folders.
+    Reload,
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SongLoadStats {
     pub songs_cache_hits: usize,
@@ -324,6 +332,7 @@ pub fn scan_and_load_songs_with_progress_counts_runtime<
     NeverCache,
 >(
     env: RuntimeSongScanEnv,
+    mode: SongScanMode,
     progress: &mut Progress,
     init_worker: InitWorker,
     process_song: Process,
@@ -337,7 +346,12 @@ pub fn scan_and_load_songs_with_progress_counts_runtime<
         Fn(&mut Worker, PathBuf, bool, bool, f32) -> Result<(SongData, bool), String> + Send + Sync,
     NeverCache: Fn(&str) -> bool,
 {
-    let input = runtime_song_scan_input(&env, &mut event);
+    let mut input = runtime_song_scan_input(&env, &mut event);
+    if mode == SongScanMode::Reload {
+        // An explicit reload must discover added assets even when the cache
+        // records no path for them. Unchanged songs can still reuse the cache.
+        input.load_options.fastload = false;
+    }
     scan_and_load_songs_runtime(
         input,
         Some(progress),

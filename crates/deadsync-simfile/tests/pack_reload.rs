@@ -5,7 +5,7 @@ use deadsync_simfile::runtime::{
 use deadsync_simfile::runtime_cache::get_song_cache;
 use deadsync_simfile::scan::{
     RuntimeScanAdapterEvent, RuntimeSongScanEnv, RuntimeSongScanEvent, SongLoadOptions,
-    reload_song_dirs_with_progress_counts_runtime,
+    SongScanMode, reload_song_dirs_with_progress_counts_runtime,
     scan_and_load_songs_with_progress_counts_runtime,
 };
 use deadsync_simfile::song::{ParseSongOptions, SongAnalyzer, SongParseScratch};
@@ -82,6 +82,7 @@ fn downloaded_pack_reload_refreshes_changed_charts_with_fastload_enabled() {
         let mut progress = |_, _, _: &str, _: &str| {};
         scan_and_load_songs_with_progress_counts_runtime(
             env.clone(),
+            SongScanMode::Startup,
             &mut progress,
             SongParseScratch::default,
             process,

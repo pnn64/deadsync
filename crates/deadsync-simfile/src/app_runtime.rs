@@ -10,7 +10,7 @@ use crate::runtime::{
 };
 use crate::scan::{
     RuntimeCourseScanEnv, RuntimeScanAdapterEvent, RuntimeScanLogEntry, RuntimeScanLogLevel,
-    RuntimeSongScanEnv, SongLoadOptions, SongScanRootEvent,
+    RuntimeSongScanEnv, SongLoadOptions, SongScanMode, SongScanRootEvent,
     reload_song_dirs_with_progress_counts_runtime, runtime_collect_song_scan_roots,
     runtime_song_scan_log_entry, scan_and_load_courses_with_progress_counts_runtime,
     scan_and_load_songs_with_progress_counts_runtime,
@@ -48,8 +48,11 @@ fn paths() -> &'static ScanPaths {
     PATHS.get().expect("scan paths initialized at startup")
 }
 
-pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
-where
+pub fn scan_and_load_songs_with_progress_counts<F>(
+    root_path: &Path,
+    mode: SongScanMode,
+    progress: &mut F,
+) where
     F: FnMut(usize, usize, &str, &str),
 {
     let env = song_scan_env(root_path);
@@ -59,6 +62,7 @@ where
     let capture_debug_logs = log::log_enabled!(log::Level::Debug);
     scan_and_load_songs_with_progress_counts_runtime(
         env,
+        mode,
         progress,
         SongParseScratch::default,
         move |scratch, path, fastload, cachesongs, offset| {
