@@ -1393,10 +1393,10 @@ pub fn update_default_profile_for_side(
     profile: &ActiveProfile,
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
 ) {
-    let defaults = default_profile_ids_after_side_update(default_profiles, side, profile, |id| {
+    let [p1, p2] = default_profile_ids_after_side_update(default_profiles, side, profile, |id| {
         is_local_profile_id(id) && local_profile_dir(id).is_dir()
     });
-    update_default_profiles(defaults[0].clone(), defaults[1].clone());
+    update_default_profiles(p1, p2);
 }
 
 pub fn update_default_profile_for_side_from_config(side: PlayerSide, profile: ActiveProfile) {
@@ -1433,8 +1433,8 @@ pub fn update_default_profiles_from_selection(
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
 ) {
-    let defaults = crate::runtime_default_profile_ids_after_current_selection(default_profiles);
-    update_default_profiles(defaults[0].clone(), defaults[1].clone());
+    let [p1, p2] = crate::runtime_default_profile_ids_after_current_selection(default_profiles);
+    update_default_profiles(p1, p2);
 }
 
 pub fn smx_gif_packs<T: Copy>(
@@ -1595,10 +1595,8 @@ pub fn create_local_profile(
         player_options,
         default_profiles,
     )?;
-    update_default_profiles(
-        result.default_profiles[0].clone(),
-        result.default_profiles[1].clone(),
-    );
+    let [p1, p2] = result.default_profiles;
+    update_default_profiles(p1, p2);
     Ok(result.id)
 }
 
@@ -1655,10 +1653,8 @@ pub fn delete_local_profile_with_defaults(
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
 ) -> Result<(), std::io::Error> {
     let result = crate::runtime_delete_local_profile(&local_profile_dir(id), id, default_profiles)?;
-    update_default_profiles(
-        result.default_profiles[0].clone(),
-        result.default_profiles[1].clone(),
-    );
+    let [p1, p2] = result.default_profiles;
+    update_default_profiles(p1, p2);
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if result.changed_sides[player_side_index(side)] {
             load_profile_for_side(side);
