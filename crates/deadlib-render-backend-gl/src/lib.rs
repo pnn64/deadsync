@@ -1273,6 +1273,51 @@ fn gl_state_update<T: Copy + PartialEq>(last: &mut Option<T>, wanted: T) -> bool
     }
 }
 
+#[inline(always)]
+fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>) {
+    if !gl_state_update(last, want) {
+        return;
+    }
+    // SAFETY: blend-state calls only mutate GL state on the current context and
+    // do not retain Rust pointers.
+    unsafe {
+        match want {
+            BlendMode::Alpha => {
+                gl.blend_equation(glow::FUNC_ADD);
+                gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            }
+            BlendMode::Add => {
+                gl.blend_equation(glow::FUNC_ADD);
+                gl.blend_func(glow::SRC_ALPHA, glow::ONE);
+            }
+            BlendMode::Multiply => {
+                gl.blend_equation(glow::FUNC_ADD);
+                gl.blend_func(glow::DST_COLOR, glow::ZERO);
+            }
+            BlendMode::Subtract => {
+                gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
+                gl.blend_func(glow::ONE, glow::ONE);
+            }
+        }
+    }
+}
+
+#[inline(always)]
+fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
+    if !gl_state_update(last, want) {
+        return;
+    }
+    // SAFETY: depth-state calls only mutate GL state on the current context and
+    // do not retain Rust pointers.
+    unsafe {
+        if want {
+            gl.enable(glow::DEPTH_TEST);
+        } else {
+            gl.disable(glow::DEPTH_TEST);
+        }
+    }
+}
+
 fn bind_sprite_texture(state: &State, texture: &Texture) {
     // SAFETY: every handle belongs to the current context and the sprite
     // program is active at both call sites. Texture units are restored to zero
@@ -1413,41 +1458,6 @@ fn draw_modern_offscreen_pass(
             );
         }
 
-        let apply_blend = |want: BlendMode, last: &mut Option<BlendMode>| {
-            if *last == Some(want) {
-                return;
-            }
-            match want {
-                BlendMode::Alpha => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-                }
-                BlendMode::Add => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE);
-                }
-                BlendMode::Multiply => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::DST_COLOR, glow::ZERO);
-                }
-                BlendMode::Subtract => {
-                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
-                    gl.blend_func(glow::ONE, glow::ONE);
-                }
-            }
-            *last = Some(want);
-        };
-        let apply_depth = |want: bool, last: &mut Option<bool>| {
-            if *last == Some(want) {
-                return;
-            }
-            if want {
-                gl.enable(glow::DEPTH_TEST);
-            } else {
-                gl.disable(glow::DEPTH_TEST);
-            }
-            *last = Some(want);
-        };
         let flipped_camera = |camera: u8| {
             Matrix4::from_scale(glam::Vec3::new(1.0, -1.0, 1.0))
                 * frame
@@ -1470,8 +1480,8 @@ fn draw_modern_offscreen_pass(
         for op in frame.ops.iter().copied() {
             match op {
                 DrawOp::Sprite(run) => {
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(false, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth);
                     if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
@@ -1552,8 +1562,8 @@ fn draw_modern_offscreen_pass(
                     if run.vertex_count == 0 {
                         continue;
                     }
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(false, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth);
                     if last_prog != Some(1) {
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(mesh_vao));
@@ -1579,8 +1589,8 @@ fn draw_modern_offscreen_pass(
                     let Some(source) = state.uploads.source(run.geometry) else {
                         continue;
                     };
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(run.depth_test, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, run.depth_test, &mut last_depth);
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
@@ -1686,7 +1696,7 @@ fn draw_modern_offscreen_pass(
                 }
             }
         }
-        apply_depth(false, &mut last_depth);
+        apply_depth_test(gl, false, &mut last_depth);
         gl.bind_vertex_array(None);
         gl.use_program(None);
         vertices
@@ -1712,45 +1722,6 @@ fn draw_legacy_offscreen_pass(
                 .get(index as usize)
                 .copied()
                 .unwrap_or(state.projection)
-    };
-    let apply_blend = |mode: BlendMode, last: &mut Option<BlendMode>| {
-        if !gl_state_update(last, mode) {
-            return;
-        }
-        // SAFETY: these calls only mutate state on the current context.
-        unsafe {
-            match mode {
-                BlendMode::Alpha => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-                }
-                BlendMode::Add => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE);
-                }
-                BlendMode::Multiply => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::DST_COLOR, glow::ZERO);
-                }
-                BlendMode::Subtract => {
-                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
-                    gl.blend_func(glow::ONE, glow::ONE);
-                }
-            }
-        }
-    };
-    let apply_depth = |enabled: bool, last: &mut Option<bool>| {
-        if !gl_state_update(last, enabled) {
-            return;
-        }
-        // SAFETY: these calls only mutate state on the current context.
-        unsafe {
-            if enabled {
-                gl.enable(glow::DEPTH_TEST);
-            } else {
-                gl.disable(glow::DEPTH_TEST);
-            }
-        }
     };
 
     // SAFETY: all buffers, programs, textures, and uniform locations belong to
@@ -1782,8 +1753,8 @@ fn draw_legacy_offscreen_pass(
                     else {
                         continue;
                     };
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(false, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth);
                     gl.use_program(Some(state.program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
@@ -1882,8 +1853,8 @@ fn draw_legacy_offscreen_pass(
                     if run.vertex_count == 0 {
                         continue;
                     }
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(false, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, false, &mut last_depth);
                     gl.use_program(Some(state.mesh_program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
                     let stride = mem::size_of::<deadlib_render_core::MeshVertex>() as i32;
@@ -1921,8 +1892,8 @@ fn draw_legacy_offscreen_pass(
                     else {
                         continue;
                     };
-                    apply_blend(run.blend, &mut last_blend);
-                    apply_depth(run.depth_test, &mut last_depth);
+                    apply_blend(gl, run.blend, &mut last_blend);
+                    apply_depth_test(gl, run.depth_test, &mut last_depth);
                     gl.use_program(Some(state.tmesh_program));
                     gl.enable_vertex_attrib_array(0);
                     gl.enable_vertex_attrib_array(1);
@@ -2027,7 +1998,7 @@ fn draw_legacy_offscreen_pass(
                 }
             }
         }
-        apply_depth(false, &mut last_depth);
+        apply_depth_test(gl, false, &mut last_depth);
         gl.use_program(None);
         vertices
     }
@@ -2055,53 +2026,6 @@ pub fn draw(
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
         return Ok(DrawStats::default());
-    }
-
-    #[inline(always)]
-    fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>) {
-        if *last == Some(want) {
-            return;
-        }
-        // SAFETY: blend-state calls only mutate GL state on the current context and
-        // do not retain Rust pointers.
-        unsafe {
-            match want {
-                BlendMode::Alpha => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-                }
-                BlendMode::Add => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::SRC_ALPHA, glow::ONE);
-                }
-                BlendMode::Multiply => {
-                    gl.blend_equation(glow::FUNC_ADD);
-                    gl.blend_func(glow::DST_COLOR, glow::ZERO);
-                }
-                BlendMode::Subtract => {
-                    gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
-                    gl.blend_func(glow::ONE, glow::ONE);
-                }
-            }
-        }
-        *last = Some(want);
-    }
-
-    #[inline(always)]
-    fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
-        if *last == Some(want) {
-            return;
-        }
-        // SAFETY: depth-state calls only mutate GL state on the current context and
-        // do not retain Rust pointers.
-        unsafe {
-            if want {
-                gl.enable(glow::DEPTH_TEST);
-            } else {
-                gl.disable(glow::DEPTH_TEST);
-            }
-        }
-        *last = Some(want);
     }
 
     ensure_offscreen_targets(state, frame).map_err(std::io::Error::other)?;
