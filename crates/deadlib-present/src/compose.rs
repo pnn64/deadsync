@@ -5788,56 +5788,57 @@ fn build_flat_sprite<T: TextureContext + ?Sized>(
     );
     let blend = style.blend.unwrap_or(sprite.blend);
     let layer = base_z.saturating_add(sprite.z);
-    let mut push_pass = |tint: [f32; 4], glow_pass: bool| {
-        let before = out.len();
-        push_sprite(
-            out,
-            sprite_instances,
-            camera,
-            rect,
-            m,
-            is_solid,
-            texture_name,
-            texture_key_ptr,
-            tints.apply(tint),
-            Some(sprite.uv_rect),
-            None,
-            None,
-            sprite.flip_x,
-            sprite.flip_y,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            sprite.fade[0],
-            sprite.fade[1],
-            sprite.fade[2],
-            sprite.fade[3],
-            blend,
-            0.0,
-            sprite.rot_y_deg,
-            sprite.rot_z_deg,
-            [0.0, 0.0],
-            sprite.world_z,
-            [0.0, 0.0],
-            [0.0, 1.0],
-            None,
-            sprite_source_handle(&sprite.source, texture_cache.generation),
-            texture_cache,
-            texture_ctx,
-            total_elapsed,
-            glow_pass,
-        );
-        for item in &mut out.items[before..] {
-            item.z = layer;
-            item.order = *order_counter;
-            *order_counter = order_counter.saturating_add(1);
-        }
+    let mut passes = [tints.apply(sprite.tint), [0.0; 4]];
+    let pass_count = if sprite.glow[3] > 0.0001 {
+        passes[1] = tints.apply(sprite.glow);
+        2
+    } else {
+        1
     };
-    push_pass(sprite.tint, false);
-    if sprite.glow[3] > 0.0001 {
-        push_pass(sprite.glow, true);
-    }
+    push_sprite_passes(
+        out,
+        sprite_instances,
+        camera,
+        rect,
+        m,
+        is_solid,
+        texture_name,
+        texture_key_ptr,
+        &passes[..pass_count],
+        Some(sprite.uv_rect),
+        None,
+        None,
+        sprite.flip_x,
+        sprite.flip_y,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        sprite.fade[0],
+        sprite.fade[1],
+        sprite.fade[2],
+        sprite.fade[3],
+        blend,
+        0.0,
+        sprite.rot_y_deg,
+        sprite.rot_z_deg,
+        [0.0, 0.0],
+        sprite.world_z,
+        [0.0, 0.0],
+        [0.0, 1.0],
+        None,
+        sprite_source_handle(&sprite.source, texture_cache.generation),
+        texture_cache,
+        texture_ctx,
+        total_elapsed,
+        |out, _, before, _, _| {
+            for item in &mut out.items[before..] {
+                item.z = layer;
+                item.order = *order_counter;
+                *order_counter = order_counter.saturating_add(1);
+            }
+        },
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -6729,9 +6730,14 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 return;
             }
 
-            let before = out.len();
-            let before_sprite = sprite_instances.len();
-            push_sprite(
+            let mut passes = [effect_tint, [0.0; 4]];
+            let pass_count = if glow[3] > 0.0001 {
+                passes[1] = mul_rgba(*glow, style.tint);
+                2
+            } else {
+                1
+            };
+            push_sprite_passes(
                 out,
                 sprite_instances,
                 camera,
@@ -6740,7 +6746,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 is_solid,
                 texture_name,
                 texture_key_ptr,
-                effect_tint,
+                &passes[..pass_count],
                 *uv_rect,
                 chosen_cell,
                 chosen_grid,
@@ -6767,102 +6773,41 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 texture_cache,
                 texture_ctx,
                 total_elapsed,
-                false,
-            );
-            if *mask_dest {
-                clip_objects_range_to_world_masks(
-                    out,
-                    sprite_instances,
-                    before,
-                    before_sprite,
-                    masks,
-                    &mut scratch.recycled_text_mesh_vertices,
-                );
-            }
+                |out, sprite_instances, before, before_sprite, glow_pass| {
+                    if *mask_dest {
+                        clip_objects_range_to_world_masks(
+                            out,
+                            sprite_instances,
+                            before,
+                            before_sprite,
+                            masks,
+                            &mut scratch.recycled_text_mesh_vertices,
+                        );
+                    }
 
-            let end = out.len();
-            let layer = base_z.saturating_add(*z);
-            for obj in out.items.iter_mut().take(end).skip(before) {
-                obj.z = layer;
-                obj.order = {
-                    let o = *order_counter;
-                    *order_counter += 1;
-                    o
-                };
-            }
-            if has_shadow(*shadow_len) {
-                push_shadow_objects_for_range(
-                    out,
-                    sprite_instances,
-                    &mut scratch.recycled_text_mesh_vertices,
-                    before,
-                    end,
-                    *shadow_len,
-                    mul_rgba(*shadow_color, style.tint),
-                );
-            }
-            if glow[3] > 0.0001 {
-                let before = out.len();
-                let before_sprite = sprite_instances.len();
-                push_sprite(
-                    out,
-                    sprite_instances,
-                    camera,
-                    rect,
-                    m,
-                    is_solid,
-                    texture_name,
-                    texture_key_ptr,
-                    mul_rgba(*glow, style.tint),
-                    *uv_rect,
-                    chosen_cell,
-                    chosen_grid,
-                    *flip_x,
-                    *flip_y,
-                    *cropleft,
-                    *cropright,
-                    *croptop,
-                    *cropbottom,
-                    *fadeleft,
-                    *faderight,
-                    *fadetop,
-                    *fadebottom,
-                    actor_blend,
-                    effect_rot[0],
-                    effect_rot[1],
-                    effect_rot[2],
-                    *skew,
-                    *world_z,
-                    *local_offset,
-                    *local_offset_rot_sin_cos,
-                    *texcoordvelocity,
-                    sprite_source_handle(source, texture_cache.generation),
-                    texture_cache,
-                    texture_ctx,
-                    total_elapsed,
-                    true,
-                );
-                if *mask_dest {
-                    clip_objects_range_to_world_masks(
-                        out,
-                        sprite_instances,
-                        before,
-                        before_sprite,
-                        masks,
-                        &mut scratch.recycled_text_mesh_vertices,
-                    );
-                }
-                let end = out.len();
-                for index in before..end.min(out.len()) {
-                    let obj = &mut out.items[index];
-                    obj.z = layer;
-                    obj.order = {
-                        let o = *order_counter;
-                        *order_counter += 1;
-                        o
-                    };
-                }
-            }
+                    let end = out.len();
+                    let layer = base_z.saturating_add(*z);
+                    for obj in out.items.iter_mut().take(end).skip(before) {
+                        obj.z = layer;
+                        obj.order = {
+                            let o = *order_counter;
+                            *order_counter += 1;
+                            o
+                        };
+                    }
+                    if !glow_pass && has_shadow(*shadow_len) {
+                        push_shadow_objects_for_range(
+                            out,
+                            sprite_instances,
+                            &mut scratch.recycled_text_mesh_vertices,
+                            before,
+                            end,
+                            *shadow_len,
+                            mul_rgba(*shadow_color, style.tint),
+                        );
+                    }
+                },
+            );
         }
 
         actors::Actor::Mesh {
@@ -7371,7 +7316,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 match bg {
                     actors::Background::Color(c) => {
                         let before = out.len();
-                        push_sprite(
+                        push_sprite_passes(
                             out,
                             sprite_instances,
                             camera,
@@ -7380,7 +7325,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             true,
                             "__white",
                             str_ptr("__white"),
-                            *c,
+                            &[*c],
                             None,
                             None,
                             None,
@@ -7407,7 +7352,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             texture_cache,
                             texture_ctx,
                             total_elapsed,
-                            false,
+                            |_, _, _, _, _| {},
                         );
                         for obj in out.items.iter_mut().skip(before) {
                             obj.z = layer;
@@ -7420,7 +7365,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     }
                     actors::Background::Texture(tex) => {
                         let before = out.len();
-                        push_sprite(
+                        push_sprite_passes(
                             out,
                             sprite_instances,
                             camera,
@@ -7429,7 +7374,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             false,
                             tex,
                             str_ptr(tex),
-                            [1.0; 4],
+                            &[[1.0; 4]],
                             None,
                             None,
                             None,
@@ -7456,7 +7401,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             texture_cache,
                             texture_ctx,
                             total_elapsed,
-                            false,
+                            |_, _, _, _, _| {},
                         );
                         for obj in out.items.iter_mut().skip(before) {
                             obj.z = layer;
@@ -7512,7 +7457,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 match bg {
                     actors::Background::Color(c) => {
                         let before = out.len();
-                        push_sprite(
+                        push_sprite_passes(
                             out,
                             sprite_instances,
                             camera,
@@ -7521,7 +7466,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             true,
                             "__white",
                             str_ptr("__white"),
-                            *c,
+                            &[*c],
                             None,
                             None,
                             None,
@@ -7548,7 +7493,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             texture_cache,
                             texture_ctx,
                             total_elapsed,
-                            false,
+                            |_, _, _, _, _| {},
                         );
                         for obj in out.items.iter_mut().skip(before) {
                             obj.z = layer;
@@ -7561,7 +7506,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     }
                     actors::Background::Texture(tex) => {
                         let before = out.len();
-                        push_sprite(
+                        push_sprite_passes(
                             out,
                             sprite_instances,
                             camera,
@@ -7570,7 +7515,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             false,
                             tex,
                             str_ptr(tex),
-                            [1.0; 4],
+                            &[[1.0; 4]],
                             None,
                             None,
                             None,
@@ -7597,7 +7542,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             texture_cache,
                             texture_ctx,
                             total_elapsed,
-                            false,
+                            |_, _, _, _, _| {},
                         );
                         for obj in out.items.iter_mut().skip(before) {
                             obj.z = layer;
@@ -7911,8 +7856,11 @@ fn fold_sprite_xy_rot(
     (flip_x, flip_y, size_x, size_y)
 }
 
+// The first tint is diffuse; the optional second tint is glow. Finish each
+// visible pass before emitting the next so clipping and diffuse shadows keep
+// their original ordering, while both passes reuse the unmodified geometry.
 #[inline(always)]
-fn push_sprite<T: TextureContext + ?Sized>(
+fn push_sprite_passes<T: TextureContext + ?Sized>(
     out: &mut FrameBuilder,
     sprite_instances: &mut Vec<renderer::SpriteInstanceRaw>,
     camera: u8,
@@ -7921,7 +7869,7 @@ fn push_sprite<T: TextureContext + ?Sized>(
     is_solid: bool,
     texture_id: &str,
     texture_key_ptr: *const str,
-    tint: [f32; 4],
+    tints: &[[f32; 4]],
     uv_rect: Option<[f32; 4]>,
     cell: Option<(u32, u32)>,
     grid: Option<(u32, u32)>,
@@ -7948,9 +7896,15 @@ fn push_sprite<T: TextureContext + ?Sized>(
     texture_cache: &mut TextureLookupCache,
     texture_ctx: &T,
     total_elapsed: f32,
-    texture_mask: bool,
+    mut finish_pass: impl FnMut(
+        &mut FrameBuilder,
+        &mut Vec<renderer::SpriteInstanceRaw>,
+        usize,
+        usize,
+        bool,
+    ),
 ) {
-    if tint[3] <= 0.0 {
+    if tints.iter().all(|tint| tint[3] <= 0.0) {
         return;
     }
 
@@ -8080,46 +8034,66 @@ fn push_sprite<T: TextureContext + ?Sized>(
             * skew_y
             * Matrix4::from_translation(Vector3::new(crop_offset.x, crop_offset.y, 0.0))
             * Matrix4::from_scale(Vector3::new(size_x, size_y, 1.0));
-        out.push_textured_mesh(
-            texture_handle,
-            0,
-            0,
-            blend,
-            camera,
-            TexturedMeshPayload {
-                instance: renderer::TexturedMeshInstanceRaw::new(
-                    transform,
-                    tint,
-                    uv_scale,
-                    uv_offset,
-                    [0.0, 0.0],
-                    texture_mask,
-                ),
-                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
-                    skewed_sprite_vertices(),
-                )),
-                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
-                depth_test: false,
-            },
+        let mut instance = renderer::TexturedMeshInstanceRaw::new(
+            transform,
+            tints[0],
+            uv_scale,
+            uv_offset,
+            [0.0, 0.0],
+            false,
         );
+        for (pass, &tint) in tints.iter().enumerate() {
+            if tint[3] <= 0.0 {
+                continue;
+            }
+            let before = out.len();
+            let before_sprite = sprite_instances.len();
+            instance.tint = tint;
+            instance.texture_mask = f32::from(pass != 0);
+            out.push_textured_mesh(
+                texture_handle,
+                0,
+                0,
+                blend,
+                camera,
+                TexturedMeshPayload {
+                    instance,
+                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
+                        skewed_sprite_vertices(),
+                    )),
+                    geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+                    depth_test: false,
+                },
+            );
+            finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
+        }
         return;
     }
 
-    let sprite_index = sprite_instances.len() as u32;
-    sprite_instances.push(renderer::SpriteInstanceRaw {
+    let mut instance = renderer::SpriteInstanceRaw {
         center: [center_x, center_y, world_z, 0.0],
         size: [size_x, size_y],
         rot_sin_cos: [sin_z, cos_z],
-        tint,
+        tint: tints[0],
         uv_scale,
         uv_offset,
         local_offset,
         local_offset_rot_sin_cos,
         edge_fade,
-        texture_mask: f32::from(u8::from(texture_mask)),
-    });
-
-    out.push_sprite(texture_handle, 0, 0, blend, camera, sprite_index);
+        texture_mask: 0.0,
+    };
+    for (pass, &tint) in tints.iter().enumerate() {
+        if tint[3] <= 0.0 {
+            continue;
+        }
+        let before = out.len();
+        let before_sprite = sprite_instances.len();
+        instance.tint = tint;
+        instance.texture_mask = f32::from(pass != 0);
+        sprite_instances.push(instance);
+        out.push_sprite(texture_handle, 0, 0, blend, camera, before_sprite as u32);
+        finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
+    }
 }
 
 fn skewed_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
@@ -9385,6 +9359,10 @@ fn clip_rotated_sprite_to_world_rect(
 
 #[cfg(test)]
 mod tests {
+    mod sprite_passes {
+        include!("compose_sprite_passes.rs");
+    }
+
     use super::{
         ActorSegment, ActorXFold, ByteIndex, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
