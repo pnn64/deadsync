@@ -886,10 +886,8 @@ where
         measure_counter_segments[p] = outputs.counter_segments;
         mini_indicator_total_stream_measures[p] = outputs.total_stream.max(0.0);
         mini_indicator_stream_segments[p] = outputs.zmod_segments;
-        if indicator_mode == GameplayMiniIndicatorMode::None {
-            continue;
-        }
 
+        // Missed-target actions need the selected target even when the indicator is hidden.
         let personal_best = mini_indicator_data.personal_best_percent[p];
         let machine_best = mini_indicator_data.machine_best_percent[p];
 
@@ -900,6 +898,9 @@ where
             machine_best,
         );
 
+        if indicator_mode == GameplayMiniIndicatorMode::None {
+            continue;
+        }
         mini_indicator_rival_score_percent[p] =
             mini_indicator_data.rival_score_percent[p].unwrap_or(0.0);
     }

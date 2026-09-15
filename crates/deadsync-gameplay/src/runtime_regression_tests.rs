@@ -24,6 +24,8 @@ mod runtime_regression_tests {
         fantastic_feedback_options: FantasticFeedbackOptions,
         noteskin_name: &'static str,
         mini_percent: f32,
+        mini_indicator_options: GameplayMiniIndicatorOptions,
+        target_score: GameplayTargetScoreSetting,
         density_graph: bool,
         combo_milestones_enabled: bool,
     }
@@ -45,6 +47,8 @@ mod runtime_regression_tests {
                 fantastic_feedback_options: FantasticFeedbackOptions::default(),
                 noteskin_name: DEFAULT_NOTESKIN_NAME,
                 mini_percent: 0.0,
+                mini_indicator_options: GameplayMiniIndicatorOptions::default(),
+                target_score: GameplayTargetScoreSetting::default(),
                 density_graph: false,
                 combo_milestones_enabled: true,
             }
@@ -109,11 +113,11 @@ mod runtime_regression_tests {
         }
 
         fn mini_indicator_options(&self) -> GameplayMiniIndicatorOptions {
-            GameplayMiniIndicatorOptions::default()
+            self.mini_indicator_options
         }
 
         fn target_score(&self) -> GameplayTargetScoreSetting {
-            GameplayTargetScoreSetting::default()
+            self.target_score
         }
 
         fn timing_disabled_windows(&self) -> [bool; 5] {
@@ -1086,6 +1090,94 @@ mod runtime_regression_tests {
         state.chart_runtime.mine_scan.next_mine_ix_cursor[0] = 0;
         state.chart_runtime.mine_scan.next_mine_avoid_cursor[0] = note_index;
         state.progress.chart_totals.mines_total[0] = 1;
+    }
+
+    #[test]
+    fn gameplay_target_scores_do_not_depend_on_indicator_visibility() {
+        let song = Arc::new(regression_song());
+        let chart = Arc::new(song.charts[0].clone());
+        let gameplay_chart = Arc::new(regression_payload_with_segments(
+            TimingSegments::default(),
+            96,
+        ));
+        for mode in [
+            GameplayMiniIndicatorMode::None,
+            GameplayMiniIndicatorMode::Pacemaker,
+        ] {
+            for (targets, expected) in [
+                (
+                    [
+                        GameplayTargetScoreSetting::Star2,
+                        GameplayTargetScoreSetting::SPlus,
+                    ],
+                    [98.0, 94.0],
+                ),
+                (
+                    [GameplayTargetScoreSetting::SpecifiedValue; MAX_PLAYERS],
+                    [97.0, 96.0],
+                ),
+                (
+                    [GameplayTargetScoreSetting::PersonalBest; MAX_PLAYERS],
+                    [95.25, 93.5],
+                ),
+                (
+                    [GameplayTargetScoreSetting::MachineBest; MAX_PLAYERS],
+                    [99.5, 98.75],
+                ),
+            ] {
+                let state = init_gameplay_runtime(
+                    song.clone(),
+                    [chart.clone(), chart.clone()],
+                    [gameplay_chart.clone(), gameplay_chart.clone()],
+                    GameplayViewport::default(),
+                    GameplaySession {
+                        play_style: GameplayInputPlayStyle::Versus,
+                        ..GameplaySession::default()
+                    },
+                    GameplayConfig::default(),
+                    SyncPref::Default,
+                    GameplayMiniIndicatorData {
+                        specified_target_percent: [97.0, 96.0],
+                        personal_best_percent: [Some(95.25), Some(93.5)],
+                        machine_best_percent: [Some(99.5), Some(98.75)],
+                        ..GameplayMiniIndicatorData::default()
+                    },
+                    GameplayNoteskinData::default(),
+                    NoSongLuaRuntime,
+                    empty_crossover_annotations,
+                    5,
+                    1.0,
+                    [ScrollSpeedSetting::default(); MAX_PLAYERS],
+                    std::array::from_fn(|player| TestProfile {
+                        mini_indicator_options: GameplayMiniIndicatorOptions {
+                            requested_mode: mode,
+                            ..GameplayMiniIndicatorOptions::default()
+                        },
+                        target_score: targets[player],
+                        ..TestProfile::default()
+                    }),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    [CourseLifeConfig::Bar; MAX_PLAYERS],
+                    false,
+                    [0; MAX_PLAYERS],
+                );
+                assert_eq!(state.num_players(), MAX_PLAYERS);
+                for player in 0..MAX_PLAYERS {
+                    assert_eq!(
+                        state.mini_indicator_target_score_percent(player),
+                        expected[player],
+                        "player {player}, mode {mode:?}, target {:?}",
+                        targets[player],
+                    );
+                }
+            }
+        }
     }
 
     #[test]
