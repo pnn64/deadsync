@@ -144,8 +144,6 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             .unwrap_or_default()
             .state(request.reverse);
         let rotation = slot.sprite_def().rotation_deg as f32 + reverse.base_rotation_z();
-        let frame = slot.frame_index(request.elapsed, request.beat);
-        let uv = slot.uv_for_frame_at(frame, request.elapsed);
         let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
@@ -153,6 +151,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         let alpha = color[3] * draw.tint[3] * request.receptor_alpha;
         if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
         {
+            let frame = slot.frame_index(request.elapsed, request.beat);
+            let uv = slot.uv_for_frame_at(frame, request.elapsed);
             let center = draw_center(
                 slot,
                 request.center,
@@ -196,8 +196,6 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             .unwrap_or_default()
             .state(request.reverse);
         let rotation = slot.sprite_def().rotation_deg as f32 + reverse.base_rotation_z();
-        let frame = slot.frame_index(request.elapsed, request.beat);
-        let uv = slot.uv_for_frame_at(frame, request.elapsed);
         let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
@@ -206,6 +204,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             * request.receptor_alpha;
         if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
         {
+            let frame = slot.frame_index(request.elapsed, request.beat);
+            let uv = slot.uv_for_frame_at(frame, request.elapsed);
             let center = draw_center(
                 slot,
                 request.center,
@@ -246,8 +246,6 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             model_cache.draw_at(slot, request.elapsed, request.beat),
             request.rotation_y_deg,
         );
-        let frame = slot.frame_index(request.elapsed, request.beat);
-        let uv = slot.uv_for_frame_at(frame, request.elapsed);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [
             base_size[0] * draw.zoom[0].max(0.0),
@@ -256,6 +254,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
             return;
         }
+        let frame = slot.frame_index(request.elapsed, request.beat);
+        let uv = slot.uv_for_frame_at(frame, request.elapsed);
         let final_rotation =
             slot.sprite_def().rotation_deg as f32 - draw.rot[2] - request.confusion_rotation_deg
                 + if request.effect_zoom < 0.0 {
@@ -335,8 +335,6 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         let slot = press.slot;
         let alpha = alpha * request.receptor_alpha;
         if alpha > f32::EPSILON {
-            let frame = slot.frame_index(request.elapsed, request.beat);
-            let uv = slot.uv_for_frame_at(frame, request.elapsed);
             let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
             let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
             let reverse = press.reverse.unwrap_or_default().state(request.reverse);
@@ -346,6 +344,8 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 base_size[1] * zoom * draw.zoom[1],
             ];
             if draw.visible && size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+                let frame = slot.frame_index(request.elapsed, request.beat);
+                let uv = slot.uv_for_frame_at(frame, request.elapsed);
                 let center = draw_center(
                     slot,
                     request.center,
@@ -471,6 +471,8 @@ mod tests {
         draw: ModelDrawState,
         glow: Option<[f32; 4]>,
         texture: Arc<str>,
+        frame_samples: Cell<usize>,
+        uv_samples: Cell<usize>,
     }
 
     impl TestSlot {
@@ -485,6 +487,8 @@ mod tests {
                 draw: ModelDrawState::default(),
                 glow: None,
                 texture: Arc::from(key),
+                frame_samples: Cell::new(0),
+                uv_samples: Cell::new(0),
             }
         }
 
@@ -528,6 +532,7 @@ mod tests {
         }
 
         fn frame_index(&self, _time: f32, _beat: f32) -> usize {
+            self.frame_samples.set(self.frame_samples.get() + 1);
             0
         }
 
@@ -536,6 +541,7 @@ mod tests {
         }
 
         fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
+            self.uv_samples.set(self.uv_samples.get() + 1);
             [0.1, 0.2, 0.8, 0.9]
         }
 
@@ -695,6 +701,8 @@ mod tests {
         );
 
         assert_eq!(actors.len(), 2);
+        assert_eq!(glow.frame_samples.get(), 1);
+        assert_eq!(glow.uv_samples.get(), 1);
         assert_sprite(&actors[1], "glow", 105, BlendMode::Add);
         let FlatDraw::Sprite(FlatSprite { tint, .. }) = &actors[1] else {
             panic!("expected idle glow sprite");
@@ -726,6 +734,8 @@ mod tests {
             );
 
             assert_eq!(actors.len(), 1, "beat={beat}, delay={is_in_delay}");
+            assert_eq!(glow.frame_samples.get(), 0);
+            assert_eq!(glow.uv_samples.get(), 0);
             assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
         }
     }
@@ -914,6 +924,8 @@ mod tests {
         );
 
         assert_eq!(resolved.get(), 0);
+        assert_eq!(hold.frame_samples.get(), 0);
+        assert_eq!(hold.uv_samples.get(), 0);
         assert_eq!(actors.len(), 1);
         assert_sprite(&actors[0], "target", 100, BlendMode::Alpha);
     }
