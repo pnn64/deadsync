@@ -72,6 +72,7 @@ pub struct NotefieldFeedbackFrameView<'a> {
 
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine
 /// explosions in the canonical field ordering.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compose_notefield_feedback<S, F>(
     draws: &mut Vec<FlatDraw>,
     hud_draws: &mut Vec<FlatDraw>,
@@ -79,6 +80,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &NotefieldFeedbackFrameView<'_>,
+    lane_move_y_offsets: &[f32],
+    lane_tipsy_offsets: &[f32],
     sprite_source: &F,
 ) where
     S: NoteskinSlot,
@@ -200,7 +203,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             &tornado_bounds[..num_cols],
             &notes.tornado_lane_caches[..num_cols],
             &notes.move_x_offsets[..num_cols],
-            &visual.move_y_cols,
+            lane_move_y_offsets[local_col],
             NoteXParams {
                 screen_height: request.geometry.screen_height,
                 tornado: visual.tornado,
@@ -210,7 +213,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 beat: visual.beat,
             },
             notes.tiny_spacing_scale,
-            visual.tipsy,
+            lane_tipsy_offsets[local_col],
         );
         center[0] += prepared.column_x_offsets[local_col];
         lane_centers[local_col] = center;
@@ -440,6 +443,40 @@ mod tests {
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
     };
+
+    // Standalone feedback tests prepare the same components as the field composer.
+    fn compose_notefield_feedback(
+        draws: &mut Vec<FlatDraw>,
+        hud_draws: &mut Vec<FlatDraw>,
+        model_cache: &mut ModelMeshCache,
+        request: &NotefieldComposeRequest<'_, TestSlot>,
+        prepared: &PreparedNotefield<'_, TestSlot>,
+        frame: &NotefieldFeedbackFrameView<'_>,
+        sprite_source: &impl Fn(&TestSlot) -> SpriteSource,
+    ) {
+        let mut move_y = [0.0; MAX_COLS];
+        let mut tipsy = [0.0; MAX_COLS];
+        crate::fill_gameplay_lane_effects(
+            &request.visual.visual,
+            request.arrow_effect_time_s,
+            prepared.frame_plan.num_cols,
+            &mut [crate::VisualEffectParams::default(); MAX_COLS],
+            &mut [0.0; MAX_COLS],
+            &mut tipsy,
+            &mut move_y,
+        );
+        super::compose_notefield_feedback(
+            draws,
+            hud_draws,
+            model_cache,
+            request,
+            prepared,
+            frame,
+            &move_y,
+            &tipsy,
+            sprite_source,
+        );
+    }
 
     #[derive(Clone, Debug)]
     struct TestSlot {

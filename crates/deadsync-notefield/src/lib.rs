@@ -168,19 +168,19 @@ pub(crate) use transforms::{
     NoteXParams, TornadoLaneCache, VisualEffectParams, appearance_note_alpha_glow_cached,
     beat_factor, bumpy_frame_cache, compute_active_note_geometry, compute_tornado_lane_caches,
     fill_gameplay_lane_effects, fill_move_col_extras, fill_static_note_x_offsets,
-    gameplay_visual_effect_params, lane_note_transform_cache, move_col_extra,
-    note_appearance_cache, note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached,
-    smoothstep01, tiny_spacing_scale, tipsy_y_extra, visual_arrow_effect_zoom,
-    visual_arrow_effect_zoom_cached, visual_confusion_rotation_deg,
-    visual_hold_body_needs_z_buffer, visual_hold_head_rotation_z_cached,
-    visual_note_rotation_z_cached, visual_use_legacy_hold_sprites,
+    gameplay_visual_effect_params, lane_note_transform_cache, note_appearance_cache,
+    note_world_z_for_bumpy_cached, note_x_offset, note_x_offset_cached, smoothstep01,
+    tiny_spacing_scale, visual_arrow_effect_zoom, visual_arrow_effect_zoom_cached,
+    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
+    visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
+    visual_use_legacy_hold_sprites,
 };
 #[cfg(test)]
 use transforms::{
     appearance_needs_rows, beat_x_extra, drunk_x_extra, itg_actor_rotation_z, mod_divisor,
-    note_x_extra, quantize_step, signed_effect_active, sm_scale, tornado_x_extra,
-    visual_effect_params_for_col, visual_pulse_inner_zoom, visual_pulse_zoom_for_y,
-    visual_tiny_zoom,
+    move_col_extra, note_x_extra, quantize_step, signed_effect_active, sm_scale, tipsy_y_extra,
+    tornado_x_extra, visual_effect_params_for_col, visual_pulse_inner_zoom,
+    visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
 pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
@@ -1517,10 +1517,10 @@ mod tests {
             &tornado,
             &[],
             &[0.0; 4],
-            &[0.0, 0.0, -0.25, 0.0],
+            -16.0,
             params,
             1.0,
-            1.0,
+            tipsy_y_extra(2, 0.37, 1.0),
         );
         let expected_x = 320.0
             + note_x_offset(
@@ -1546,7 +1546,7 @@ mod tests {
     fn receptor_positions_preserve_effect_arithmetic_bitwise() {
         let columns = [-224.0, -157.5, -96.0, -32.0, 32.0, 96.0, 160.0, 231.25];
         let move_x = [0.0, -0.0, 0.375, -0.625, f32::NAN, f32::INFINITY];
-        let move_y = [-0.2, 0.0, 0.5, f32::NAN];
+        let move_y = [-0.2, 0.0, 0.5, f32::NAN, f32::INFINITY, -0.0];
         let mut move_x_offsets = [0.0; 8];
         super::fill_move_col_extras(&move_x, &mut move_x_offsets);
         for num_cols in [1, 4, 5, 8] {
@@ -1556,7 +1556,29 @@ mod tests {
             compute_invert_distances(cols, &mut invert[..num_cols]);
             compute_tornado_bounds(cols, &mut tornado[..num_cols]);
             for tiny in [0.0, -0.0, 0.7, -1.25, f32::NAN, f32::INFINITY] {
-                for amount in [0.0, 0.35, -0.75] {
+                for (amount, tipsy) in [
+                    (0.0, 0.0),
+                    (0.35, 0.7),
+                    (-0.75, -0.7),
+                    (0.35, f32::NAN),
+                    (0.35, f32::INFINITY),
+                ] {
+                    let mut visual = deadsync_gameplay::VisualEffects {
+                        tipsy,
+                        ..Default::default()
+                    };
+                    visual.move_y_cols[..move_y.len()].copy_from_slice(&move_y);
+                    let mut move_y_offsets = [0.0; 8];
+                    let mut tipsy_offsets = [0.0; 8];
+                    super::fill_gameplay_lane_effects(
+                        &visual,
+                        0.37,
+                        num_cols,
+                        &mut [super::VisualEffectParams::default(); 8],
+                        &mut [0.0; 8],
+                        &mut tipsy_offsets,
+                        &mut move_y_offsets,
+                    );
                     let params = NoteXParams {
                         screen_height: 480.0,
                         tornado: amount,
@@ -1584,10 +1606,10 @@ mod tests {
                             &tornado[..num_cols],
                             &tornado_cache[..num_cols],
                             &move_x_offsets[..num_cols],
-                            &move_y,
+                            move_y_offsets[local_col],
                             params,
                             tiny_spacing_scale(tiny),
-                            0.7,
+                            tipsy_offsets[local_col],
                         );
                         let expected = [
                             320.25
@@ -1605,7 +1627,7 @@ mod tests {
                                 ),
                             115.125
                                 + move_col_extra(&move_y, local_col)
-                                + tipsy_y_extra(local_col, 0.37, 0.7),
+                                + tipsy_y_extra(local_col, 0.37, tipsy),
                         ];
                         assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
                     }

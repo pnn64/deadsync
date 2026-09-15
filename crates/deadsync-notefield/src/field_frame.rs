@@ -364,6 +364,8 @@ fn compose_field_contents<S, F>(
         request,
         prepared,
         &frame.feedback,
+        &lane_move_y_offsets[..num_cols],
+        &lane_tipsy_offsets[..num_cols],
         sprite_source,
     );
 
