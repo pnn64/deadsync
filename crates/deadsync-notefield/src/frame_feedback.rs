@@ -157,6 +157,16 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     if lane_work_mask == 0 {
         return;
     }
+    let (pulse_color, idle_glow_alpha) = if targets_enabled {
+        (
+            receptor.receptor_pulse.color_for_beat(current_beat),
+            receptor
+                .receptor_idle_glow
+                .alpha(current_beat, prepared.is_in_delay),
+        )
+    } else {
+        ([1.0; 4], 0.0)
+    };
 
     for draw_index in 0..num_cols {
         let local_col = column_draw_col(num_cols, draw_index);
@@ -276,12 +286,12 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     confusion_rotation_deg,
                     elapsed: elapsed_screen,
                     beat: current_beat,
-                    is_in_delay: prepared.is_in_delay,
+                    idle_glow_alpha,
                     press_visual: lane.receptor_press_visual,
                     receptor_alpha: prepared.receptor_alpha,
                     field_zoom,
                     rotation_y_deg: 0.0,
-                    pulse: &receptor.receptor_pulse,
+                    pulse_color,
                     idle_glow: receptor.receptor_idle_glow,
                     press_behavior: receptor.receptor_glow_behavior,
                     style: request.style.receptor,
@@ -1166,6 +1176,93 @@ mod tests {
             );
         }
         assert!(hud.is_empty());
+    }
+
+    #[test]
+    fn receptor_beat_effects_preserve_lane_tints_and_delay_boundaries() {
+        let mut ns = noteskin();
+        ns.receptor_pulse = ReceptorPulse {
+            effect_color1: [0.25, 0.5, 0.75, 0.6],
+            effect_color2: [0.9, 0.7, 0.3, 0.2],
+            ramp_to_half: 0.25,
+            hold_at_half: 0.125,
+            ramp_to_full: 0.5,
+            hold_at_full: 0.125,
+            ..ReceptorPulse::default()
+        };
+        ns.receptor_idle_glow_layers =
+            vec![Some(TestSlot::new("idle0")), Some(TestSlot::new("idle1"))];
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let frame = spline_feedback(&[]);
+        for idle in [
+            ReceptorIdleGlow::None,
+            ReceptorIdleGlow::BeatFade,
+            ReceptorIdleGlow::ActorEffect,
+        ] {
+            ns.receptor_idle_glow = idle;
+            for (beat, in_delay, hide_targets) in [
+                (-0.25, false, false),
+                (0.0, false, false),
+                (0.25, false, false),
+                (0.5, false, false),
+                (0.75, false, false),
+                (4.0, true, false),
+                (0.25, false, true),
+                (f32::NAN, false, false),
+            ] {
+                let mut request =
+                    request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.visible_beat = beat;
+                request.chart.is_in_delay = in_delay;
+                request.visual.visibility.dark = 0.25;
+                request.options.hide_targets = hide_targets;
+                let prepared = prepare_notefield(&request).unwrap();
+                let mut draws = Vec::new();
+                compose_notefield_feedback(
+                    &mut draws,
+                    &mut Vec::new(),
+                    &mut ModelMeshCache::default(),
+                    &request,
+                    &prepared,
+                    &frame,
+                    &source,
+                );
+                let mut expected = Vec::new();
+                if !hide_targets {
+                    for (target_key, idle_key) in [("target0", "idle0"), ("target1", "idle1")] {
+                        let color = ns.receptor_pulse.color_for_beat(beat);
+                        let alpha = color[3] * 1.0 * prepared.receptor_alpha;
+                        if alpha > f32::EPSILON {
+                            expected.push((
+                                target_key,
+                                [color[0], color[1], color[2], alpha].map(f32::to_bits),
+                            ));
+                        }
+                        let alpha = idle.alpha(beat, in_delay) * 1.0 * prepared.receptor_alpha;
+                        if idle.is_visible() && alpha > f32::EPSILON {
+                            expected.push((idle_key, [1.0, 1.0, 1.0, alpha].map(f32::to_bits)));
+                        }
+                    }
+                }
+                let actual: Vec<_> = draws
+                    .iter()
+                    .map(|draw| {
+                        let FlatDraw::Sprite(sprite) = draw else {
+                            panic!("receptor sprite")
+                        };
+                        (
+                            sprite.source.texture_key().unwrap(),
+                            sprite.tint.map(f32::to_bits),
+                        )
+                    })
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "beat={beat}, delay={in_delay}, idle={idle:?}"
+                );
+            }
+        }
     }
 
     #[test]

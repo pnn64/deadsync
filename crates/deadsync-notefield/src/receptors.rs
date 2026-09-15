@@ -2,7 +2,7 @@ use crate::*;
 use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
 use deadsync_noteskin::{
-    NoteskinSlot, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorPulse, ReceptorReverseBehavior,
+    NoteskinSlot, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorReverseBehavior,
 };
 use deadsync_theme::ReceptorStyle;
 
@@ -85,12 +85,12 @@ pub(crate) struct ReceptorDrawRequest<'a, S> {
     pub confusion_rotation_deg: f32,
     pub elapsed: f32,
     pub beat: f32,
-    pub is_in_delay: bool,
+    pub idle_glow_alpha: f32,
     pub press_visual: Option<(f32, f32)>,
     pub receptor_alpha: f32,
     pub field_zoom: f32,
     pub rotation_y_deg: f32,
-    pub pulse: &'a ReceptorPulse,
+    pub pulse_color: [f32; 4],
     pub idle_glow: ReceptorIdleGlow,
     pub press_behavior: ReceptorGlowBehavior,
     pub style: ReceptorStyle,
@@ -147,7 +147,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
-        let color = request.pulse.color_for_beat(request.beat);
+        let color = request.pulse_color;
         let alpha = color[3] * draw.tint[3] * request.receptor_alpha;
         if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
         {
@@ -199,9 +199,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         let draw = model_cache.draw_at(slot, request.elapsed, request.beat);
         let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
-        let alpha = request.idle_glow.alpha(request.beat, request.is_in_delay)
-            * draw.tint[3]
-            * request.receptor_alpha;
+        let alpha = request.idle_glow_alpha * draw.tint[3] * request.receptor_alpha;
         if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
         {
             let frame = slot.frame_index(request.elapsed, request.beat);
@@ -459,7 +457,8 @@ mod tests {
     use super::*;
     use deadlib_present::actors::FlatDraw;
     use deadsync_noteskin::{
-        ModelDrawState, ModelMesh, ModelVertex, ReceptorReverseState, SpriteDefinition,
+        ModelDrawState, ModelMesh, ModelVertex, ReceptorPulse, ReceptorReverseState,
+        SpriteDefinition,
     };
     use std::cell::Cell;
     use std::sync::Arc;
@@ -607,12 +606,12 @@ mod tests {
             confusion_rotation_deg: 0.0,
             elapsed: 2.0,
             beat: 3.0,
-            is_in_delay: false,
+            idle_glow_alpha: 0.0,
             press_visual: None,
             receptor_alpha: 1.0,
             field_zoom: 1.0,
             rotation_y_deg: 0.0,
-            pulse,
+            pulse_color: pulse.color_for_beat(3.0),
             idle_glow: ReceptorIdleGlow::None,
             press_behavior: ReceptorGlowBehavior::default(),
             style: style(),
@@ -690,6 +689,7 @@ mod tests {
         request.idle_glow_slot = Some(&glow);
         request.idle_glow_shares_press = true;
         request.beat = 0.25;
+        request.idle_glow_alpha = request.idle_glow.alpha(request.beat, false);
         let mut actors = Vec::new();
 
         compose_receptor_draws(
@@ -722,7 +722,7 @@ mod tests {
             request.idle_glow_slot = Some(&glow);
             request.idle_glow_shares_press = true;
             request.beat = beat;
-            request.is_in_delay = is_in_delay;
+            request.idle_glow_alpha = request.idle_glow.alpha(beat, is_in_delay);
             let mut actors = Vec::new();
 
             compose_receptor_draws(
@@ -748,6 +748,7 @@ mod tests {
         let pulse = pulse();
         let mut request = request(Some(&target), None, &pulse);
         request.idle_glow = ReceptorIdleGlow::ActorEffect;
+        request.idle_glow_alpha = request.idle_glow.alpha(request.beat, false);
         request.idle_glow_slot = Some(&idle);
         let mut actors = Vec::new();
 
