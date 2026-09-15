@@ -691,6 +691,10 @@ pub fn init(
     // below were created successfully in this function.
     unsafe {
         gl.viewport(0, 0, initial_width as i32, initial_height as i32);
+        // These blend and depth settings stay fixed across all render passes.
+        gl.enable(glow::BLEND);
+        gl.depth_func(glow::LEQUAL);
+        gl.clear_depth(1.0);
         // This backend is the sole owner of the context. All texture uploads use
         // tightly packed RGBA or single-channel plane slices, so establish their
         // invariant unpack state once instead of issuing four driver calls for
@@ -1411,7 +1415,6 @@ fn draw_modern_offscreen_pass(
             if *last == Some(want) {
                 return;
             }
-            gl.enable(glow::BLEND);
             match want {
                 BlendMode::Alpha => {
                     gl.blend_equation(glow::FUNC_ADD);
@@ -1438,7 +1441,6 @@ fn draw_modern_offscreen_pass(
             }
             if want {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_func(glow::LEQUAL);
                 gl.depth_mask(true);
             } else {
                 gl.depth_mask(false);
@@ -1718,7 +1720,6 @@ fn draw_legacy_offscreen_pass(
         }
         // SAFETY: these calls only mutate state on the current context.
         unsafe {
-            gl.enable(glow::BLEND);
             match mode {
                 BlendMode::Alpha => {
                     gl.blend_equation(glow::FUNC_ADD);
@@ -1747,7 +1748,6 @@ fn draw_legacy_offscreen_pass(
         unsafe {
             if enabled {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_func(glow::LEQUAL);
                 gl.depth_mask(true);
             } else {
                 gl.depth_mask(false);
@@ -2069,7 +2069,6 @@ pub fn draw(
         // SAFETY: blend-state calls only mutate GL state on the current context and
         // do not retain Rust pointers.
         unsafe {
-            gl.enable(glow::BLEND);
             match want {
                 BlendMode::Alpha => {
                     gl.blend_equation(glow::FUNC_ADD);
@@ -2102,7 +2101,6 @@ pub fn draw(
         unsafe {
             if want {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_func(glow::LEQUAL);
                 gl.depth_mask(true);
             } else {
                 gl.depth_mask(false);
@@ -2140,7 +2138,6 @@ pub fn draw(
                 .gl
                 .viewport(0, 0, target.width as i32, target.height as i32);
             state.gl.color_mask(true, true, true, true);
-            state.gl.clear_depth(1.0);
             state.gl.depth_mask(true);
             let mut clear = glow::DEPTH_BUFFER_BIT;
             if !target_frame.preserve || !target.initialized {
@@ -2196,7 +2193,6 @@ pub fn draw(
         let c = frame.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
-        gl.clear_depth(1.0);
         gl.depth_mask(true);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         gl.depth_mask(false);
@@ -2206,7 +2202,6 @@ pub fn draw(
         // treat the game as translucent and the whole scene looks ghosted.
         gl.color_mask(true, true, true, false);
 
-        gl.enable(glow::BLEND);
         gl.blend_equation(glow::FUNC_ADD);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
