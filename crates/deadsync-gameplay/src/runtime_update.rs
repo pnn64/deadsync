@@ -3130,8 +3130,8 @@ where
                     .time_to_beat_caches
                     .notefield_search_info(player, timing_player, music_time_ns)
             };
-            let visible_beat = if shares_song_timing && visible_time_ns == music_time_ns {
-                beat_info.beat
+            let visible_beat = if visible_time_ns == music_time_ns {
+                self.clock.visible_timing.notefield_song_position[player].beat
             } else if shares_song_timing && visible_time_ns == display_time_ns {
                 display_info.beat
             } else {

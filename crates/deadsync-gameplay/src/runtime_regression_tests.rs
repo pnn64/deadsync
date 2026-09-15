@@ -1385,6 +1385,86 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn player_clock_reuse_preserves_timing_boundaries_and_clock_changes() {
+        use deadsync_rules::timing::{StopSegment, WarpSegment};
+        let mut state = regression_state_with_session(GameplaySession {
+            play_style: GameplayInputPlayStyle::Versus,
+            ..GameplaySession::default()
+        });
+        state.timing_runtime.timing_players = std::array::from_fn(|player| {
+            let mut timing = TimingData::from_segments(
+                0.0,
+                0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0), (4.0, 180.0), (8.0, 90.0)],
+                    delays: vec![DelaySegment {
+                        beat: 2.0,
+                        duration: 0.125,
+                    }],
+                    stops: vec![StopSegment {
+                        beat: 4.0,
+                        duration: 0.25,
+                    }],
+                    warps: vec![WarpSegment {
+                        beat: 6.0,
+                        length: 1.0,
+                    }],
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            timing.shift_song_offset_seconds(0.125 * (player + 1) as f32);
+            Arc::new(timing)
+        });
+        state.reset_time_to_beat_caches();
+        let mut times = Vec::new();
+        for timing in &state.timing_runtime.timing_players {
+            for beat in [-1.0, 0.0, 2.0, 4.0, 6.0, 7.0, 8.0, 12.0] {
+                let time = timing.get_time_for_beat_ns(beat);
+                for delta in [-1, 0, 1, 62_500_000, 125_000_000, 250_000_000] {
+                    times.push(time + delta);
+                }
+            }
+        }
+        times.sort_unstable();
+        times.dedup();
+        for (scroll_shift, delays) in [
+            (0, [0.0, 0.0]),
+            (0, [0.1, -0.05]),
+            (20_000_000, [0.0, 0.0]),
+            (0, [0.0, 0.0]),
+        ] {
+            state.clock.visible_timing.global_visual_delay_seconds = 0.0;
+            state.clock.visible_timing.player_visual_delay_seconds = delays;
+            for &music_time in times.iter().chain(times.iter().rev()) {
+                let visual_time = music_time + scroll_shift;
+                state.update_song_position_from_time(
+                    music_time,
+                    music_time + 50_000_000,
+                    visual_time,
+                );
+                for player in 0..MAX_PLAYERS {
+                    let timing = &state.timing_runtime.timing_players[player];
+                    let expected_search = timing.get_beat_for_time_ns(music_time);
+                    let expected_visible = timing.get_beat_for_time_ns(visible_notefield_time_ns(
+                        visual_time,
+                        delays[player],
+                    ));
+                    assert_eq!(
+                        state.notefield_search_beat(player).to_bits(),
+                        expected_search.to_bits()
+                    );
+                    assert_eq!(
+                        state.visible_beat(player).to_bits(),
+                        expected_visible.to_bits(),
+                        "player={player}, time={music_time}, shift={scroll_shift}, delays={delays:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn live_input_snapshots_leave_inactive_column_capacity_empty() {
         let mut state = regression_state();
         assert_eq!(state.setup.num_cols, 4);
