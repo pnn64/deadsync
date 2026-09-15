@@ -291,7 +291,6 @@ pub struct State {
     mesh_mvp_location: UniformLocation,
     tmesh_mvp_location: UniformLocation,
     tmesh_texture_location: UniformLocation,
-    texture_location: UniformLocation,
     texture_yuv_location: UniformLocation,
     yuv_levels_location: UniformLocation,
     yuv_coeffs_location: UniformLocation,
@@ -703,6 +702,8 @@ pub fn init(
         gl.pixel_store_i32(glow::UNPACK_SKIP_PIXELS, 0);
         gl.use_program(Some(program));
         gl.active_texture(glow::TEXTURE0);
+        // The sprite program is never relinked, and sampler uniforms persist
+        // across program switches. Set its texture units once.
         gl.uniform_1_i32(Some(&texture_location), 0);
         gl.uniform_1_i32(Some(&texture_u_location), 1);
         gl.uniform_1_i32(Some(&texture_v_location), 2);
@@ -723,7 +724,6 @@ pub fn init(
         mesh_mvp_location,
         tmesh_mvp_location,
         tmesh_texture_location,
-        texture_location,
         texture_yuv_location,
         yuv_levels_location,
         yuv_coeffs_location,
@@ -1474,7 +1474,6 @@ fn draw_modern_offscreen_pass(
                     if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
-                        gl.uniform_1_i32(Some(&state.texture_location), 0);
                         last_prog = Some(0);
                         last_sprite_instance_start = None;
                         tmesh_buffer_cache.reset();
@@ -1791,7 +1790,6 @@ fn draw_legacy_offscreen_pass(
                     apply_blend(run.blend, &mut last_blend);
                     apply_depth(false, &mut last_depth);
                     gl.use_program(Some(state.program));
-                    gl.uniform_1_i32(Some(&state.texture_location), 0);
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
                     let stride = (4 * mem::size_of::<f32>()) as i32;
@@ -2292,7 +2290,6 @@ pub fn draw(
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
                             gl.bind_vertex_array(Some(shared_vao));
-                            gl.uniform_1_i32(Some(&state.texture_location), 0);
                             last_prog = Some(0);
                             last_sprite_instance_start = None;
                             tmesh_buffer_cache.reset();
@@ -2677,7 +2674,6 @@ pub fn draw(
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
-                            gl.uniform_1_i32(Some(&state.texture_location), 0);
                             gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
                             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
                             let stride = (4 * mem::size_of::<f32>()) as i32;
