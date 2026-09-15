@@ -330,11 +330,10 @@ pub(super) fn apply_pane(state: &mut State, pane: OptionsPane) {
 
 fn refresh_pane_defaults(state: &mut State) {
     let pane_idx = state.current_pane.index();
-    let profiles = state.player_options.clone();
     for player_idx in 0..PLAYER_SLOTS {
         panes::apply_profile_defaults(
             &mut state.panes[pane_idx].row_map,
-            &profiles[player_idx],
+            &state.player_options[player_idx],
             player_idx,
             &mut state.option_masks[player_idx],
         );
