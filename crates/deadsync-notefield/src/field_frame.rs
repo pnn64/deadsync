@@ -263,7 +263,7 @@ fn compose_field_contents<S, F>(
         &col_offsets[..num_cols],
         &invert_distances[..num_cols],
         &tornado_bounds[..num_cols],
-        &visual.move_x_cols,
+        &note_inputs.move_x_offsets[..num_cols],
         NoteXParams {
             screen_height: request.geometry.screen_height,
             tornado: visual.tornado,
@@ -272,7 +272,7 @@ fn compose_field_contents<S, F>(
             invert: visual.invert,
             beat: visual.beat,
         },
-        visual.tiny,
+        note_inputs.tiny_spacing_scale,
         &mut static_note_x_offsets,
     );
     let (note_start, note_end) = request.chart.note_range;

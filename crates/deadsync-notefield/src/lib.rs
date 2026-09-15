@@ -1415,6 +1415,88 @@ mod tests {
     }
 
     #[test]
+    fn static_note_x_offsets_match_uncached_positions_bitwise() {
+        let col_offsets = [-224.0, -157.5, -96.0, -32.0, 32.0, 96.0, 160.0, 231.25];
+        let move_x = [0.0, -0.0, 0.375, -0.625, f32::NAN, f32::INFINITY];
+        let mut move_x_offsets = [0.0; 8];
+        super::fill_move_col_extras(&move_x, &mut move_x_offsets);
+        for num_cols in [0, 1, 3, 4, 6, 8] {
+            let cols = &col_offsets[..num_cols];
+            let mut invert = [0.0; 8];
+            compute_invert_distances(cols, &mut invert[..num_cols]);
+            let tornado = [TornadoBounds::default(); 8];
+            for tiny in [0.0, -0.0, 0.7, -1.25, f32::EPSILON, f32::NAN, f32::INFINITY] {
+                for (flip, invert_amount) in [(0.0, 0.0), (0.35, -0.75), (-1.0, 1.25)] {
+                    let params = NoteXParams {
+                        screen_height: 480.0,
+                        flip,
+                        invert: invert_amount,
+                        ..NoteXParams::default()
+                    };
+                    let mut offsets = [123.0; 8];
+                    assert!(super::fill_static_note_x_offsets(
+                        num_cols,
+                        cols,
+                        &invert[..num_cols],
+                        &tornado[..num_cols],
+                        &move_x_offsets[..num_cols],
+                        params,
+                        tiny_spacing_scale(tiny),
+                        &mut offsets,
+                    ));
+                    for (col, offset) in offsets.iter().take(num_cols).enumerate() {
+                        let expected = note_x_offset(
+                            col,
+                            0.0,
+                            0.0,
+                            0.0,
+                            cols,
+                            &invert[..num_cols],
+                            &tornado[..num_cols],
+                            &move_x,
+                            params,
+                            tiny,
+                        );
+                        assert_eq!(
+                            offset.to_bits(),
+                            expected.to_bits(),
+                            "cols={num_cols}, col={col}, tiny={tiny}, flip={flip}, invert={invert_amount}",
+                        );
+                    }
+                    assert!(offsets[num_cols..].iter().all(|&offset| offset == 123.0));
+                }
+            }
+        }
+        for params in [
+            NoteXParams {
+                tornado: 0.5,
+                ..NoteXParams::default()
+            },
+            NoteXParams {
+                drunk: -0.5,
+                ..NoteXParams::default()
+            },
+            NoteXParams {
+                beat: 0.5,
+                ..NoteXParams::default()
+            },
+        ] {
+            let mut offsets = [123.0; 8];
+            assert!(!super::fill_static_note_x_offsets(
+                8,
+                &col_offsets,
+                &[],
+                &[],
+                &move_x_offsets,
+                params,
+                1.0,
+                &mut offsets,
+            ));
+            assert_eq!(offsets, [123.0; 8]);
+        }
+    }
+
+    #[test]
     fn receptor_row_center_uses_zero_travel_x_and_tipsy_y() {
         let col_offsets = [-96.0, -32.0, 32.0, 96.0];
         let invert = [0.0; 4];

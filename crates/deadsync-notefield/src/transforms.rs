@@ -1063,9 +1063,9 @@ pub(crate) fn fill_static_note_x_offsets(
     col_offsets: &[f32],
     invert: &[f32],
     tornado: &[TornadoBounds],
-    move_x: &[f32],
+    move_x_offsets: &[f32],
     params: NoteXParams,
-    tiny_zoom: f32,
+    tiny_scale: f32,
     out: &mut [f32],
 ) -> bool {
     if signed_effect_active(params.tornado)
@@ -1076,7 +1076,7 @@ pub(crate) fn fill_static_note_x_offsets(
     }
     let columns = num_cols.min(out.len());
     for (local_col, offset) in out.iter_mut().take(columns).enumerate() {
-        *offset = note_x_offset(
+        *offset = note_x_offset_cached(
             local_col,
             0.0,
             0.0,
@@ -1084,9 +1084,10 @@ pub(crate) fn fill_static_note_x_offsets(
             col_offsets,
             invert,
             tornado,
-            move_x,
+            &[],
+            move_x_offsets,
             params,
-            tiny_zoom,
+            tiny_scale,
         );
     }
     true
