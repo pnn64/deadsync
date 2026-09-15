@@ -139,7 +139,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
     let invert_distances = notes.invert_distances;
     let tornado_bounds = notes.tornado_bounds;
     let beat_factor = notes.beat_factor;
-    let mut lane_effects = [crate::VisualEffectParams::default(); MAX_COLS];
+    let mut lane_base_zooms = [0.0; MAX_COLS];
+    let mut lane_rotations = [0.0; MAX_COLS];
     let mut lane_centers = [[0.0; 2]; MAX_COLS];
     let mut lane_zooms = [0.0; MAX_COLS];
     let targets_enabled = !options.hide_targets && prepared.receptor_alpha > f32::EPSILON;
@@ -165,8 +166,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }
         let lane = frame.lanes[local_col];
         let effect = gameplay_visual_effect_params(&visual, local_col);
-        lane_effects[local_col] = effect;
-        let effect_zoom = (visual_arrow_effect_zoom(0.0, effect)
+        let base_zoom = visual_arrow_effect_zoom(0.0, effect);
+        lane_base_zooms[local_col] = base_zoom;
+        let effect_zoom = (base_zoom
             + request
                 .song_lua
                 .note_hides
@@ -176,6 +178,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         let hidden = effect_zoom.abs() <= f32::EPSILON;
         let confusion_rotation_deg = visual_confusion_rotation_deg(current_beat, effect)
             + prepared.column_rotations_deg[local_col];
+        lane_rotations[local_col] = confusion_rotation_deg;
         let mut center = receptor_row_center(
             field.playfield_center_x,
             local_col,
@@ -310,7 +313,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             ) else {
                 continue;
             };
-            let effect = lane_effects[local_col];
             let center = lane_centers[local_col];
             compose_explosion_layers(
                 draws,
@@ -328,8 +330,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     effect_zoom: lane_zooms[local_col],
                     rotation: ExplosionRotation::Tap {
                         rotation_y_deg: 0.0,
-                        extra_z_deg: visual_confusion_rotation_deg(current_beat, effect)
-                            + prepared.column_rotations_deg[local_col],
+                        extra_z_deg: lane_rotations[local_col],
                     },
                     z: request.style.actors.tap_explosion_z,
                 },
@@ -350,7 +351,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             let Some(active) = active.as_ref() else {
                 continue;
             };
-            let effect = lane_effects[local_col];
             compose_explosion_layers(
                 draws,
                 ExplosionComposeRequest {
@@ -362,7 +362,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     uv_elapsed_s: elapsed_screen,
                     center: lane_centers[local_col],
                     field_zoom,
-                    effect_zoom: visual_arrow_effect_zoom(0.0, effect),
+                    effect_zoom: lane_base_zooms[local_col],
                     rotation: ExplosionRotation::Mine,
                     z: request.style.actors.mine_explosion_z,
                 },
@@ -1044,7 +1044,15 @@ mod tests {
         request.visual.visual.move_x_cols[0] = 0.25;
         request.visual.visual.move_y_cols[0] = -0.2;
         request.visual.visual.confusion_offset_cols[0] = 0.3;
-        let prepared = prepare_notefield(&request).expect("test notefield should prepare");
+        request.visual.visual.confusion = 0.7;
+        request.visual.visual.tiny = 0.5;
+        request.visual.visual.tiny_cols[1] = -0.25;
+        request.visual.visual.pulse_outer = 0.75;
+        request.visual.visual.pulse_period = 0.4;
+        request.visual.visual.pulse_offset = 0.3;
+        let mut prepared = prepare_notefield(&request).expect("test notefield should prepare");
+        prepared.column_zooms[..2].copy_from_slice(&[1.75, 0.65]);
+        prepared.column_rotations_deg[..2].copy_from_slice(&[13.5, -7.25]);
         let hold = active_hold(0);
         let flashes = [
             Some(ActiveColumnFlash {
@@ -1125,6 +1133,39 @@ mod tests {
             .expect("lane-zero mine position");
         assert_eq!(tap.map(f32::to_bits), target.map(f32::to_bits));
         assert_eq!(mine.map(f32::to_bits), target.map(f32::to_bits));
+        let explosions: Vec<_> = actors
+            .iter()
+            .filter_map(|draw| match draw {
+                FlatDraw::Sprite(sprite)
+                    if matches!(sprite.source.texture_key(), Some("tap0" | "tap1" | "mine")) =>
+                {
+                    Some(sprite)
+                }
+                _ => None,
+            })
+            .collect();
+        for local_col in 0..2 {
+            let effect = gameplay_visual_effect_params(&request.visual.visual, local_col);
+            let base_zoom = visual_arrow_effect_zoom(0.0, effect);
+            let tap_zoom = base_zoom * prepared.column_zooms[local_col];
+            let tap_size = crate::scale_effect_size([64.0; 2], prepared.field_zoom, tap_zoom.abs());
+            let mine_size =
+                crate::scale_effect_size([64.0; 2], prepared.field_zoom, base_zoom.abs());
+            assert_eq!(
+                explosions[local_col].size.map(f32::to_bits),
+                tap_size.map(f32::to_bits)
+            );
+            assert_eq!(
+                explosions[local_col + 2].size.map(f32::to_bits),
+                mine_size.map(f32::to_bits)
+            );
+            let rotation = visual_confusion_rotation_deg(prepared.current_beat, effect)
+                + prepared.column_rotations_deg[local_col];
+            assert_eq!(
+                explosions[local_col].rot_z_deg.to_bits(),
+                rotation.to_bits()
+            );
+        }
         assert!(hud.is_empty());
     }
 
