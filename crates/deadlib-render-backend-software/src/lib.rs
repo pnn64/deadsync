@@ -538,7 +538,7 @@ fn ensure_offscreen_targets(targets: &mut Vec<OffscreenTarget>, frame: &RenderFr
     }
 }
 
-fn copy_target_pixels(target: &mut OffscreenTarget) {
+fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) {
     for (rgba, pixel) in target
         .texture
         .image
@@ -546,8 +546,12 @@ fn copy_target_pixels(target: &mut OffscreenTarget) {
         .as_chunks_mut::<4>()
         .0
         .iter_mut()
-        .zip(target.pixels.iter().copied())
+        .zip(&mut target.pixels)
     {
+        if !PRESERVE_ALPHA {
+            *pixel |= 0xff00_0000;
+        }
+        let pixel = *pixel;
         rgba[0] = (pixel >> 16) as u8;
         rgba[1] = (pixel >> 8) as u8;
         rgba[2] = pixel as u8;
@@ -601,14 +605,13 @@ fn draw_offscreen_targets(
             &mut pixels,
             fixed_vertices,
         ));
-        if !pass.alpha {
-            for pixel in &mut pixels {
-                *pixel |= 0xff00_0000;
-            }
-        }
         targets[index].pixels = pixels;
         targets[index].initialized = true;
-        copy_target_pixels(&mut targets[index]);
+        if pass.alpha {
+            copy_target_pixels::<true>(&mut targets[index]);
+        } else {
+            copy_target_pixels::<false>(&mut targets[index]);
+        }
     }
     state.offscreen_targets = targets;
     vertices
@@ -3173,6 +3176,45 @@ mod tests {
                     wrap_index(index, max, SamplerWrap::Repeat),
                     index.rem_euclid(max as i32) as usize
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn offscreen_copy_preserves_pixels_across_alpha_mode_changes() {
+        for (width, height) in [(1, 1), (17, 17)] {
+            for modes in [[false, false], [false, true], [true, false], [true, true]] {
+                let mut target = create_offscreen_target(7, width, height);
+                for (index, pixel) in target.pixels.iter_mut().enumerate() {
+                    *pixel = u32::from_be_bytes([index as u8, 17, (index * 31) as u8, 209]);
+                }
+                let mut expected = target.pixels.clone();
+                for alpha in modes {
+                    // Each pass blends over the retained previous pass.
+                    for (pixel, expected) in target.pixels.iter_mut().zip(&mut expected) {
+                        *pixel = blend_src_over(*pixel, 0.2, 0.4, 0.7, 0.3);
+                        *expected = blend_src_over(*expected, 0.2, 0.4, 0.7, 0.3);
+                    }
+                    if !alpha {
+                        for pixel in &mut expected {
+                            *pixel |= 0xff00_0000;
+                        }
+                    }
+                    if alpha {
+                        copy_target_pixels::<true>(&mut target);
+                    } else {
+                        copy_target_pixels::<false>(&mut target);
+                    }
+                    assert_eq!(target.pixels, expected);
+                    let expected_rgba: Vec<_> = expected
+                        .iter()
+                        .flat_map(|pixel| {
+                            let [a, r, g, b] = pixel.to_be_bytes();
+                            [r, g, b, a]
+                        })
+                        .collect();
+                    assert_eq!(target.texture.image.as_raw(), &expected_rgba);
+                }
             }
         }
     }
