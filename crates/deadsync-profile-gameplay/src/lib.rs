@@ -135,11 +135,11 @@ pub fn gameplay_runtime_profile_data(
     player_profiles: &[deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS],
     session: &deadsync_gameplay::GameplaySession,
 ) -> [deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS] {
-    let mut runtime_profiles = (*player_profiles).clone();
-    if session.p2_runtime_player() {
-        runtime_profiles[0] = runtime_profiles[1].clone();
-    }
-    runtime_profiles
+    let first_player = usize::from(session.p2_runtime_player());
+    [
+        player_profiles[first_player].clone(),
+        player_profiles[1].clone(),
+    ]
 }
 
 #[must_use]
