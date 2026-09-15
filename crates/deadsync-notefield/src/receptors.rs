@@ -15,14 +15,15 @@ pub(crate) fn receptor_row_center(
     col_offsets: &[f32],
     invert: &[f32],
     tornado: &[TornadoBounds],
-    move_x: &[f32],
+    tornado_cache: &[TornadoLaneCache],
+    move_x_offsets: &[f32],
     move_y: &[f32],
     params: NoteXParams,
-    tiny_zoom: f32,
+    tiny_scale: f32,
     tipsy: f32,
 ) -> [f32; 2] {
     let x = field_center_x
-        + note_x_offset(
+        + note_x_offset_cached(
             local_col,
             0.0,
             beat_factor_value,
@@ -30,9 +31,10 @@ pub(crate) fn receptor_row_center(
             col_offsets,
             invert,
             tornado,
-            move_x,
+            tornado_cache,
+            move_x_offsets,
             params,
-            tiny_zoom,
+            tiny_scale,
         );
     let y =
         receptor_y + move_col_extra(move_y, local_col) + tipsy_y_extra(local_col, elapsed, tipsy);

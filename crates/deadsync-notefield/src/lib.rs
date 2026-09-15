@@ -1515,10 +1515,11 @@ mod tests {
             &col_offsets,
             &invert,
             &tornado,
+            &[],
             &[0.0; 4],
             &[0.0, 0.0, -0.25, 0.0],
             params,
-            0.0,
+            1.0,
             1.0,
         );
         let expected_x = 320.0
@@ -1539,6 +1540,78 @@ mod tests {
         assert!((center[0] - expected_x).abs() <= 1e-6);
         assert!((center[1] - expected_y).abs() <= 1e-6);
         assert!((center[1] - beat_coupled_y).abs() > 1e-3);
+    }
+
+    #[test]
+    fn receptor_positions_preserve_effect_arithmetic_bitwise() {
+        let columns = [-224.0, -157.5, -96.0, -32.0, 32.0, 96.0, 160.0, 231.25];
+        let move_x = [0.0, -0.0, 0.375, -0.625, f32::NAN, f32::INFINITY];
+        let move_y = [-0.2, 0.0, 0.5, f32::NAN];
+        let mut move_x_offsets = [0.0; 8];
+        super::fill_move_col_extras(&move_x, &mut move_x_offsets);
+        for num_cols in [1, 4, 5, 8] {
+            let cols = &columns[..num_cols];
+            let mut invert = [0.0; 8];
+            let mut tornado = [TornadoBounds::default(); 8];
+            compute_invert_distances(cols, &mut invert[..num_cols]);
+            compute_tornado_bounds(cols, &mut tornado[..num_cols]);
+            for tiny in [0.0, -0.0, 0.7, -1.25, f32::NAN, f32::INFINITY] {
+                for amount in [0.0, 0.35, -0.75] {
+                    let params = NoteXParams {
+                        screen_height: 480.0,
+                        tornado: amount,
+                        drunk: -amount,
+                        flip: amount,
+                        invert: -amount,
+                        beat: amount,
+                    };
+                    let mut tornado_cache = [super::TornadoLaneCache::default(); 8];
+                    super::compute_tornado_lane_caches(
+                        cols,
+                        &tornado[..num_cols],
+                        amount,
+                        &mut tornado_cache[..num_cols],
+                    );
+                    for local_col in 0..num_cols {
+                        let actual = receptor_row_center(
+                            320.25,
+                            local_col,
+                            115.125,
+                            7.5,
+                            0.37,
+                            cols,
+                            &invert[..num_cols],
+                            &tornado[..num_cols],
+                            &tornado_cache[..num_cols],
+                            &move_x_offsets[..num_cols],
+                            &move_y,
+                            params,
+                            tiny_spacing_scale(tiny),
+                            0.7,
+                        );
+                        let expected = [
+                            320.25
+                                + note_x_offset(
+                                    local_col,
+                                    0.0,
+                                    7.5,
+                                    0.37,
+                                    cols,
+                                    &invert[..num_cols],
+                                    &tornado[..num_cols],
+                                    &move_x,
+                                    params,
+                                    tiny,
+                                ),
+                            115.125
+                                + move_col_extra(&move_y, local_col)
+                                + tipsy_y_extra(local_col, 0.37, 0.7),
+                        ];
+                        assert_eq!(actual.map(f32::to_bits), expected.map(f32::to_bits));
+                    }
+                }
+            }
+        }
     }
 
     #[test]

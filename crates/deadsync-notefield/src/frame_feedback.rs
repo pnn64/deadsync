@@ -198,7 +198,8 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             &col_offsets[..num_cols],
             &invert_distances[..num_cols],
             &tornado_bounds[..num_cols],
-            &visual.move_x_cols,
+            &notes.tornado_lane_caches[..num_cols],
+            &notes.move_x_offsets[..num_cols],
             &visual.move_y_cols,
             NoteXParams {
                 screen_height: request.geometry.screen_height,
@@ -208,7 +209,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 invert: visual.invert,
                 beat: visual.beat,
             },
-            visual.tiny,
+            notes.tiny_spacing_scale,
             visual.tipsy,
         );
         center[0] += prepared.column_x_offsets[local_col];
