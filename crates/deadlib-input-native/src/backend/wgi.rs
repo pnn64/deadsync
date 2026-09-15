@@ -365,16 +365,14 @@ fn gamepad_button_edges(
 fn scale_axis(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
     let v = v.clamp(-1.0, 1.0);
-    let x = (v * 32767.0) as i32;
-    x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
+    (v * 32767.0) as i16
 }
 
 #[inline(always)]
 fn scale_trigger(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
     let v = v.clamp(0.0, 1.0);
-    let x = (v * 32767.0) as i32;
-    x.clamp(0, i32::from(i16::MAX)) as i16
+    (v * 32767.0) as i16
 }
 
 #[inline(always)]
@@ -1107,6 +1105,36 @@ mod reading_clock_tests {
         assert_eq!(gated.last_raw, eager.last_raw);
         assert_eq!(gated.last_poll_host_nanos, eager.last_poll_host_nanos);
         assert_eq!(gated_edge, eager_edge);
+    }
+
+    #[test]
+    fn controller_scaling_preserves_bounds_and_truncation() {
+        for (input, axis, trigger) in [
+            (f64::NAN, 0, 0),
+            (f64::NEG_INFINITY, 0, 0),
+            (f64::INFINITY, 0, 0),
+            (-f64::MAX, -32767, 0),
+            (-1.1, -32767, 0),
+            (-1.0, -32767, 0),
+            ((-1.0_f64).next_up(), -32766, 0),
+            (-0.5, -16383, 0),
+            (-0.00004, -1, 0),
+            (-0.00002, 0, 0),
+            (-f64::MIN_POSITIVE, 0, 0),
+            (-0.0, 0, 0),
+            (0.0, 0, 0),
+            (f64::MIN_POSITIVE, 0, 0),
+            (0.00002, 0, 0),
+            (0.00004, 1, 1),
+            (0.5, 16383, 16383),
+            (1.0_f64.next_down(), 32766, 32766),
+            (1.0, 32767, 32767),
+            (1.1, 32767, 32767),
+            (f64::MAX, 32767, 32767),
+        ] {
+            assert_eq!(scale_axis(input), axis, "axis input {input}");
+            assert_eq!(scale_trigger(input), trigger, "trigger input {input}");
+        }
     }
 
     #[test]
