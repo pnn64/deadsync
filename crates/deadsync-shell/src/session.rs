@@ -69,14 +69,12 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
         course_page: Option<EvaluationPage>,
     ) {
         if let Some(stage) = stage {
-            self.played_stages.push(stage.clone());
-            if self.course_run.is_some() {
-                self.course_individual_stage_indices
-                    .push(self.played_stages.len().saturating_sub(1));
-            }
             if let Some(course) = self.course_run.as_mut() {
-                course.stage_summaries.push(stage);
+                self.course_individual_stage_indices
+                    .push(self.played_stages.len());
+                course.stage_summaries.push(stage.clone());
             }
+            self.played_stages.push(stage);
         }
         if let Some(page) = course_page {
             self.course_stage_eval_pages.push(page);
