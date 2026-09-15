@@ -4854,19 +4854,31 @@ impl FromStr for TargetScoreSetting {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Preserve the grade signs written by Display before compacting named aliases.
+        match s.trim() {
+            "C-" | "c-" => return Ok(Self::CMinus),
+            "C+" | "c+" => return Ok(Self::CPlus),
+            "B-" | "b-" => return Ok(Self::BMinus),
+            "B+" | "b+" => return Ok(Self::BPlus),
+            "A-" | "a-" => return Ok(Self::AMinus),
+            "A+" | "a+" => return Ok(Self::APlus),
+            "S-" | "s-" => return Ok(Self::SMinus),
+            "S+" | "s+" => return Ok(Self::SPlus),
+            _ => {}
+        }
         with_compact_option_key(s, |key| match key {
-            "cminus" | "c-" => Ok(Self::CMinus),
+            "cminus" => Ok(Self::CMinus),
             "c" => Ok(Self::C),
-            "cplus" | "c+" => Ok(Self::CPlus),
-            "bminus" | "b-" => Ok(Self::BMinus),
+            "cplus" => Ok(Self::CPlus),
+            "bminus" => Ok(Self::BMinus),
             "b" => Ok(Self::B),
-            "bplus" | "b+" => Ok(Self::BPlus),
-            "aminus" | "a-" => Ok(Self::AMinus),
+            "bplus" => Ok(Self::BPlus),
+            "aminus" => Ok(Self::AMinus),
             "a" => Ok(Self::A),
-            "aplus" | "a+" => Ok(Self::APlus),
-            "sminus" | "s-" => Ok(Self::SMinus),
+            "aplus" => Ok(Self::APlus),
+            "sminus" => Ok(Self::SMinus),
             "" | "s" => Ok(Self::S),
-            "splus" | "s+" => Ok(Self::SPlus),
+            "splus" => Ok(Self::SPlus),
             "star" | "star1" | "1star" => Ok(Self::Star1),
             "star2" | "2star" => Ok(Self::Star2),
             "star3" | "3star" => Ok(Self::Star3),
@@ -14518,22 +14530,14 @@ ApiKey = gs-key
             ("personalbest", TargetScoreSetting::PersonalBest),
         ] {
             assert_eq!(TargetScoreSetting::from_str(raw), Ok(setting));
+            assert_eq!(
+                TargetScoreSetting::from_str(&setting.to_string()),
+                Ok(setting)
+            );
         }
 
-        // Preserve the existing punctuation-stripping parser behavior.
-        assert_eq!(
-            TargetScoreSetting::from_str("C-"),
-            Ok(TargetScoreSetting::C)
-        );
-        assert_eq!(
-            TargetScoreSetting::from_str("A+"),
-            Ok(TargetScoreSetting::A)
-        );
-        assert_eq!(
-            TargetScoreSetting::from_str("S-"),
-            Ok(TargetScoreSetting::S)
-        );
         assert!(TargetScoreSetting::from_str("ss").is_err());
+        assert!(TargetScoreSetting::from_str("17").is_err());
     }
 
     #[test]

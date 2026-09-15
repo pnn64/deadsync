@@ -171,7 +171,8 @@ never points at a missing texture).
 ### 4.3 Enum-valued settings
 
 Translated via DeadSync's `FromStr`, which normalises case/punctuation and
-rejects unknown vocabularies (unknown → default preserved).
+rejects unknown vocabularies (unknown → default preserved). `TargetScore` also
+maps stock Simply Love's numeric choice indices before parsing named values.
 
 | Simply Love key | DeadSync field | Accepted values |
 | --- | --- | --- |
@@ -185,7 +186,9 @@ rejects unknown vocabularies (unknown → default preserved).
 | `MiniIndicator` | `mini_indicator` | `None`, `SubtractiveScoring`, `PredictiveScoring`, `PaceScoring`, `RivalScoring`, `Pacemaker`, `StreamProg` |
 | `DataVisualizations` | `step_statistics` | `None`/`Target Score Graph` → empty; `Step Statistics` → all widgets |
 | `StepStatsExtra` | `step_stats_extra` | `None`, `ErrorStats`, and the GIF widgets (`AmongUs`, `CatJAM`, `Nyan Cat`, `Sonic`, …) |
-| `TargetScore` | `target_score` | only `Machine best` / `Personal best` (SL's `SpecifiedValue`+number and `Ghost Data` have no equivalent → default) |
+| `TargetScore` | `target_score` | Stock SL: `1`–`16` → `C-` through `Star4`, `17` → `Machine best`, `18` → `Personal best`. Named grades, best-score sources, and zmod's `SpecifiedValue` are also accepted. Unknown values preserve the default. |
+| `TargetScoreNumber` | `target_score_percent` | zmod's specified percentage; parsed as an unsigned byte and capped at `100`. Separate from stock SL's choice index. |
+| `ActionOnMissedTarget` | `target_score_miss_policy` | `Nothing`, `Fail`, `Restart`, or zmod's `DimSScore` |
 
 ### 4.4 SelectMultiple flag groups → bitmasks
 
@@ -353,7 +356,7 @@ partially) are noted inline and are not repeated here.
 | Setting(s) | Reason | Detail |
 | --- | --- | --- |
 | `MiniIndicatorColor` | `NO-MAP` | SL is a **fixed-color** picker (`Default`, `Red`, `Blue`, `Yellow`, `Green`, `Magenta`, `White`). DeadSync's enum is a **coloring strategy** (`Default`/`Detailed` = score gradient, `Combo` = match combo color). Only `Default`↔`Default` lines up — a no-op — and every actual color choice has no representation. |
-| `TargetScore` = `SpecifiedValue` (+ `TargetScoreNumber`), `Ghost Data`; `ActionOnMissedTarget` | `NO-MAP` | DeadSync's `target_score` is a grade (`C-`…`S+`) or `Machine/Personal best`; it has no numeric-percent or ghost-data target. **`Machine best` / `Personal best` *are* imported.** |
+| `TargetScore` = `Ghost Data` | `NO-MAP` | No ghost-data target source. Grade, best-score, and specified-percentage targets and `ActionOnMissedTarget` **are imported**. |
 | `PackBanner`, `StepInfo` | `NO-MAP` | These would set individual `step_statistics` bits (`PACK_BANNER` / `SONG_INFO`), but they collide with the all-or-nothing `DataVisualizations` → `step_statistics` mapping we already apply. |
 | `SBITGScore`, `SBExScore`, `SBEvents` | `NO-TARGET` | Scorebox sub-toggles with no matching DeadSync field. |
 | `TrackRecalc`, `TrackFoot` | `NO-TARGET` | No corresponding DeadSync option. |

@@ -23,7 +23,9 @@
 //!   `BackgroundFilter`, `ComboColors`, `ComboMode`, `LifeMeterType`,
 //!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
 //!   `StepStatsExtra`, `DataVisualizations` -> `step_statistics`,
-//!   `TargetScore`, `ActionOnMissedTarget`
+//!   `ActionOnMissedTarget`
+//! * `TargetScore` -> stock SL choice indices or named targets from forks;
+//!   `TargetScoreNumber` -> zmod's specified percentage
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
 //! * `SelectMultiple` flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
 //!   `Average` -> `error_bar_active_mask`; `Flash*` -> `column_flash_mask`
@@ -79,6 +81,32 @@ fn sl_f32(map: &SlSettings, key: &str) -> Option<f32> {
 /// case/punctuation and reject unknown vocabularies, so this never guesses.
 fn sl_enum<T: FromStr>(map: &SlSettings, key: &str) -> Option<T> {
     sl_str(map, key)?.parse::<T>().ok()
+}
+
+/// Stock SL saves one-based choice indices from `SL-PlayerOptions.lua`.
+/// Forks can also save named targets understood by the profile parser.
+fn target_score_from_sl(map: &SlSettings) -> Option<TargetScoreSetting> {
+    Some(match sl_str(map, "TargetScore")? {
+        "1" => TargetScoreSetting::CMinus,
+        "2" => TargetScoreSetting::C,
+        "3" => TargetScoreSetting::CPlus,
+        "4" => TargetScoreSetting::BMinus,
+        "5" => TargetScoreSetting::B,
+        "6" => TargetScoreSetting::BPlus,
+        "7" => TargetScoreSetting::AMinus,
+        "8" => TargetScoreSetting::A,
+        "9" => TargetScoreSetting::APlus,
+        "10" => TargetScoreSetting::SMinus,
+        "11" => TargetScoreSetting::S,
+        "12" => TargetScoreSetting::SPlus,
+        "13" => TargetScoreSetting::Star1,
+        "14" => TargetScoreSetting::Star2,
+        "15" => TargetScoreSetting::Star3,
+        "16" => TargetScoreSetting::Star4,
+        "17" => TargetScoreSetting::MachineBest,
+        "18" => TargetScoreSetting::PersonalBest,
+        raw => return raw.parse().ok(),
+    })
 }
 
 /// Parse a signed integer out of a value that may carry trailing units, e.g.
@@ -302,10 +330,10 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(v) = sl_enum::<StepStatsExtra>(map, "StepStatsExtra") {
         out.step_stats_extra = v;
     }
-    // zmod stores its exact numeric target separately from the target source.
-    if let Some(v) = sl_enum::<TargetScoreSetting>(map, "TargetScore") {
+    if let Some(v) = target_score_from_sl(map) {
         out.target_score = v;
     }
+    // zmod stores its exact numeric target separately from the target source.
     if let Some(percent) = sl_str(map, "TargetScoreNumber").and_then(|v| v.parse::<u8>().ok()) {
         out.target_score_percent = percent.min(100);
     }
@@ -703,6 +731,114 @@ mod tests {
         );
         assert_eq!(out.combo_colors, base.combo_colors);
         assert_eq!(out.measure_counter, base.measure_counter);
+    }
+
+    #[test]
+    fn translates_stock_target_score_indices() {
+        let base = PlayerOptionsData::default();
+        for (raw, expected) in [
+            ("1", TargetScoreSetting::CMinus),
+            ("2", TargetScoreSetting::C),
+            ("3", TargetScoreSetting::CPlus),
+            ("4", TargetScoreSetting::BMinus),
+            ("5", TargetScoreSetting::B),
+            ("6", TargetScoreSetting::BPlus),
+            ("7", TargetScoreSetting::AMinus),
+            ("8", TargetScoreSetting::A),
+            ("9", TargetScoreSetting::APlus),
+            ("10", TargetScoreSetting::SMinus),
+            ("11", TargetScoreSetting::S),
+            ("12", TargetScoreSetting::SPlus),
+            ("13", TargetScoreSetting::Star1),
+            ("14", TargetScoreSetting::Star2),
+            ("15", TargetScoreSetting::Star3),
+            ("16", TargetScoreSetting::Star4),
+            ("17", TargetScoreSetting::MachineBest),
+            ("18", TargetScoreSetting::PersonalBest),
+            (" 18 ", TargetScoreSetting::PersonalBest),
+        ] {
+            let out = translate_player_options(&sl(&[("TargetScore", raw)]), &base);
+            assert_eq!(out.target_score, expected, "TargetScore={raw:?}");
+            assert_eq!(out.target_score_percent, base.target_score_percent);
+
+            let mut content = String::new();
+            deadsync_profile::append_player_options_section(
+                &mut content,
+                "PlayerOptionsSingles",
+                &out,
+            );
+            let mut ini = crate::ini::SimpleIni::new();
+            ini.load_from_str(&content);
+            let reloaded = deadsync_profile::load_player_options_section(
+                true,
+                |key| ini.get("PlayerOptionsSingles", key).map(str::to_owned),
+                &base,
+            )
+            .unwrap();
+            assert_eq!(
+                reloaded.target_score, expected,
+                "reloaded TargetScore={raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn preserves_named_target_score_formats() {
+        let base = PlayerOptionsData::default();
+        for (raw, expected) in [
+            ("C-", TargetScoreSetting::CMinus),
+            ("C+", TargetScoreSetting::CPlus),
+            ("B-", TargetScoreSetting::BMinus),
+            ("B+", TargetScoreSetting::BPlus),
+            ("A-", TargetScoreSetting::AMinus),
+            ("A+", TargetScoreSetting::APlus),
+            ("S-", TargetScoreSetting::SMinus),
+            ("S+", TargetScoreSetting::SPlus),
+            ("c-", TargetScoreSetting::CMinus),
+            ("c+", TargetScoreSetting::CPlus),
+            ("b-", TargetScoreSetting::BMinus),
+            ("b+", TargetScoreSetting::BPlus),
+            ("a-", TargetScoreSetting::AMinus),
+            ("a+", TargetScoreSetting::APlus),
+            ("s-", TargetScoreSetting::SMinus),
+            ("s+", TargetScoreSetting::SPlus),
+            ("CMinus", TargetScoreSetting::CMinus),
+            ("SPlus", TargetScoreSetting::SPlus),
+            ("Star4", TargetScoreSetting::Star4),
+            (" machine BEST ", TargetScoreSetting::MachineBest),
+            ("Personal best", TargetScoreSetting::PersonalBest),
+            ("SpecifiedValue", TargetScoreSetting::SpecifiedValue),
+        ] {
+            let out = translate_player_options(&sl(&[("TargetScore", raw)]), &base);
+            assert_eq!(out.target_score, expected, "TargetScore={raw:?}");
+        }
+    }
+
+    #[test]
+    fn invalid_or_missing_target_scores_preserve_base() {
+        let base = PlayerOptionsData {
+            target_score: TargetScoreSetting::Star3,
+            target_score_percent: 97,
+            ..PlayerOptionsData::default()
+        };
+        let missing = translate_player_options(&sl(&[]), &base);
+        assert_eq!(missing.target_score, base.target_score);
+        assert_eq!(missing.target_score_percent, base.target_score_percent);
+        for raw in [
+            "",
+            " ",
+            "0",
+            "19",
+            "-1",
+            "255",
+            "1.5",
+            "17foo",
+            "Ghost Data",
+        ] {
+            let out = translate_player_options(&sl(&[("TargetScore", raw)]), &base);
+            assert_eq!(out.target_score, base.target_score, "TargetScore={raw:?}");
+            assert_eq!(out.target_score_percent, base.target_score_percent);
+        }
     }
 
     #[test]
