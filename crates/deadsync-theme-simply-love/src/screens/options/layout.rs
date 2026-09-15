@@ -701,7 +701,7 @@ pub(super) fn update_graphics_row_tweens(state: &mut State, s: f32, list_y: f32,
         state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
     } else if state.row_tweens.len() != total_rows || visibility_changed {
         let old_tweens = std::mem::take(&mut state.row_tweens);
-        let old_visible_rows = state.graphics_prev_visible_rows.clone();
+        let old_visible_rows = &state.graphics_prev_visible_rows;
         let old_total_rows = old_visible_rows.len() + 1;
 
         let parent_from = old_visible_rows
@@ -812,7 +812,7 @@ pub(super) fn update_advanced_row_tweens(state: &mut State, s: f32, list_y: f32,
         state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
     } else if state.row_tweens.len() != total_rows || visibility_changed {
         let old_tweens = std::mem::take(&mut state.row_tweens);
-        let old_visible_rows = state.advanced_prev_visible_rows.clone();
+        let old_visible_rows = &state.advanced_prev_visible_rows;
         let old_total_rows = old_visible_rows.len() + 1;
         let old_exit_from = old_tweens
             .get(old_total_rows.saturating_sub(1))
@@ -911,7 +911,7 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         state.row_tweens = init_row_tweens(total_rows, selected, s, list_y);
     } else if state.row_tweens.len() != total_rows || visibility_changed {
         let old_tweens = std::mem::take(&mut state.row_tweens);
-        let old_visible_rows = state.select_music_prev_visible_rows.clone();
+        let old_visible_rows = &state.select_music_prev_visible_rows;
         let old_total_rows = old_visible_rows.len() + 1;
         let old_exit_from = old_tweens
             .get(old_total_rows.saturating_sub(1))
