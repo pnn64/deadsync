@@ -264,7 +264,7 @@ where
     timing_base.shift_song_offset_seconds(pack_sync_offset_seconds);
     timing_base.set_global_offset_seconds(config.global_offset_seconds);
     let timing = Arc::new(timing_base);
-    let mut timing_players: [Arc<TimingData>; MAX_PLAYERS] = std::array::from_fn(|player| {
+    let build_player_timing = |player: usize| {
         if player == 0 && player_global_offset_shift_seconds[player] == 0.0 {
             return Arc::clone(&timing);
         }
@@ -274,10 +274,13 @@ where
             config.global_offset_seconds + player_global_offset_shift_seconds[player],
         );
         Arc::new(t)
-    });
-    if num_players == 1 {
-        timing_players[1] = timing_players[0].clone();
-    }
+    };
+    let first_player_timing = build_player_timing(0);
+    let timing_players = if num_players == 1 {
+        [Arc::clone(&first_player_timing), first_player_timing]
+    } else {
+        [first_player_timing, build_player_timing(1)]
+    };
     let replay_offsets = replay_offsets.unwrap_or_else(|| ReplayOffsetSnapshot {
         beat0_time_ns: timing_players[0].get_time_for_beat_ns(0.0),
     });
