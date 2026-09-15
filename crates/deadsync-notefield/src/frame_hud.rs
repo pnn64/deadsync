@@ -448,17 +448,17 @@ fn compose_judgment<S>(
                 overlay_row,
                 rotation_deg,
             }),
-            Some(frame.sprite.clone()),
+            Some(&frame.sprite),
         )
     } else {
         (None, None)
     };
     let held_miss_sprite = (!prepared.blind_active
         && frame.held_misses.iter().any(Option::is_some))
-    .then(|| frame.held_miss_sprite.clone())
+    .then(|| frame.held_miss_sprite.as_ref())
     .flatten();
     let hold_sprite = (!prepared.blind_active && frame.hold_judgments.iter().any(Option::is_some))
-        .then(|| frame.hold_sprite.clone())
+        .then(|| frame.hold_sprite.as_ref())
         .flatten();
     let field = prepared.field;
     let noteskin_column_xs = prepared

@@ -42,14 +42,14 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub blind: bool,
     pub elapsed_screen: f32,
     pub tap: Option<TapJudgmentFeedback<'a>>,
-    pub tap_sprite: Option<TapJudgmentSprite>,
+    pub tap_sprite: Option<&'a TapJudgmentSprite>,
     pub tap_xy: [f32; 2],
     pub judgment_back: bool,
     pub judgment_zoom: f32,
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
-    pub held_miss_sprite: Option<IndicatorSprite>,
+    pub held_miss_sprite: Option<&'a IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
-    pub hold_sprite: Option<IndicatorSprite>,
+    pub hold_sprite: Option<&'a IndicatorSprite>,
     pub current_beat: f32,
     pub arrow_effect_time: f32,
     pub mini: f32,
@@ -79,7 +79,7 @@ pub(crate) fn compose_judgment_feedback(
 }
 
 fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequest<'_>) {
-    let (Some(feedback), Some(sprite)) = (request.tap, request.tap_sprite.as_ref()) else {
+    let (Some(feedback), Some(sprite)) = (request.tap, request.tap_sprite) else {
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
@@ -196,7 +196,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
     let tornado = &tornado[..num_cols];
     let beat_push = beat_factor(request.current_beat);
 
-    if let Some(sprite) = request.held_miss_sprite.as_ref() {
+    if let Some(sprite) = request.held_miss_sprite {
         for (i, feedback) in request.held_misses.iter().take(num_cols).enumerate() {
             let Some(feedback) = feedback else { continue };
             let elapsed = (request.elapsed_screen - feedback.started_at_screen_s).max(0.0);
@@ -222,7 +222,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
         }
     }
 
-    if let Some(sprite) = request.hold_sprite.as_ref() {
+    if let Some(sprite) = request.hold_sprite {
         for (i, feedback) in request.hold_judgments.iter().take(num_cols).enumerate() {
             let Some(feedback) = feedback else { continue };
             let elapsed = (request.elapsed_screen - feedback.started_at_screen_s).max(0.0);
@@ -471,12 +471,13 @@ mod tests {
             overlay_row: Some(1),
             rotation_deg: -7.5,
         });
-        request.tap_sprite = Some(TapJudgmentSprite {
+        let tap_sprite = TapJudgmentSprite {
             source: source("judgment"),
             frame_size: [200.0, 28.0],
             frame_cols: 2,
             frame_rows: 7,
-        });
+        };
+        request.tap_sprite = Some(&tap_sprite);
         let mut draws = Vec::new();
 
         compose_judgment_feedback(&mut draws, request);
@@ -531,20 +532,22 @@ mod tests {
             }),
         ];
         let mut request = empty_request(&held_misses, &hold_judgments);
-        request.held_miss_sprite = Some(IndicatorSprite {
+        let held_miss_sprite = IndicatorSprite {
             source: source("held-miss"),
             frame_size: [100.0, 40.0],
             frame_cols: 1,
             frame_rows: 1,
             scale: 0.5,
-        });
-        request.hold_sprite = Some(IndicatorSprite {
+        };
+        request.held_miss_sprite = Some(&held_miss_sprite);
+        let hold_sprite = IndicatorSprite {
             source: source("hold-judgment"),
             frame_size: [120.0, 30.0],
             frame_cols: 1,
             frame_rows: 2,
             scale: 1.0,
-        });
+        };
+        request.hold_sprite = Some(&hold_sprite);
         let mut draws = Vec::new();
 
         compose_judgment_feedback(&mut draws, request);
@@ -598,14 +601,15 @@ mod tests {
                 request.column_reverse_percent = &reverse;
                 request.visual.flip = flip;
                 request.field_zoom = 1.5;
-                request.hold_sprite = Some(IndicatorSprite {
+                let hold_sprite = IndicatorSprite {
                     source: source("hold-judgment"),
                     frame_size: [120.0, 30.0],
                     frame_cols: 1,
                     frame_rows: 2,
                     scale: 1.0,
-                });
-                request.held_miss_sprite = request.hold_sprite.clone();
+                };
+                request.hold_sprite = Some(&hold_sprite);
+                request.held_miss_sprite = request.hold_sprite;
                 let mut draws = Vec::new();
                 compose_judgment_feedback(&mut draws, request);
                 assert_eq!(draws.len(), xs.len() * 2);
@@ -650,26 +654,29 @@ mod tests {
             overlay_row: Some(1),
             rotation_deg: 0.0,
         });
-        request.tap_sprite = Some(TapJudgmentSprite {
+        let tap_sprite = TapJudgmentSprite {
             source: source("judgment"),
             frame_size: [200.0, 28.0],
             frame_cols: 2,
             frame_rows: 7,
-        });
-        request.held_miss_sprite = Some(IndicatorSprite {
+        };
+        request.tap_sprite = Some(&tap_sprite);
+        let held_miss_sprite = IndicatorSprite {
             source: source("held-miss"),
             frame_size: [100.0, 40.0],
             frame_cols: 1,
             frame_rows: 1,
             scale: 0.5,
-        });
-        request.hold_sprite = Some(IndicatorSprite {
+        };
+        request.held_miss_sprite = Some(&held_miss_sprite);
+        let hold_sprite = IndicatorSprite {
             source: source("hold-judgment"),
             frame_size: [120.0, 30.0],
             frame_cols: 1,
             frame_rows: 2,
             scale: 1.0,
-        });
+        };
+        request.hold_sprite = Some(&hold_sprite);
         request.noteskin_column_xs = None;
         request.num_cols = MAX_COLS;
         request.column_reverse_percent = &reverse;
@@ -687,13 +694,14 @@ mod tests {
         })];
         let mut request = empty_request(&held_misses, &[]);
         request.blind = true;
-        request.held_miss_sprite = Some(IndicatorSprite {
+        let held_miss_sprite = IndicatorSprite {
             source: source("held-miss"),
             frame_size: [100.0, 40.0],
             frame_cols: 1,
             frame_rows: 1,
             scale: 1.0,
-        });
+        };
+        request.held_miss_sprite = Some(&held_miss_sprite);
         let mut draws = Vec::new();
         compose_judgment_feedback(&mut draws, request);
         assert!(draws.is_empty());
