@@ -2601,7 +2601,6 @@ struct CachedTextLayout {
     font_height: i32,
     line_spacing: i32,
     max_logical_width_i: i32,
-    glyph_count: usize,
     texture_pages: Vec<CachedTextPage>,
     lines: Vec<CachedLine>,
     glyphs: Vec<CachedGlyph>,
@@ -2616,7 +2615,6 @@ impl CachedTextLayout {
             font_height: 0,
             line_spacing: 0,
             max_logical_width_i: 0,
-            glyph_count: 0,
             texture_pages: Vec::new(),
             lines: Vec::new(),
             glyphs: Vec::new(),
@@ -2631,7 +2629,6 @@ impl CachedTextLayout {
             font_height: 0,
             line_spacing: 0,
             max_logical_width_i: 0,
-            glyph_count: 0,
             texture_pages: Vec::with_capacity(2),
             lines: Vec::with_capacity(1),
             glyphs: Vec::with_capacity(actors::InlineText::CAPACITY),
@@ -2645,7 +2642,6 @@ impl CachedTextLayout {
         self.font_height = 0;
         self.line_spacing = 0;
         self.max_logical_width_i = 0;
-        self.glyph_count = 0;
         self.texture_pages.clear();
         self.lines.clear();
         self.glyphs.clear();
@@ -2997,7 +2993,6 @@ impl FrameInlineLayoutSlot {
             0,
             self.layout.glyphs.len(),
         );
-        self.layout.glyph_count = self.layout.glyphs.len();
         let mesh_seed = if self.cache_prepared_meshes {
             text_layout_mesh_seed(key, text.as_str())
         } else {
@@ -3144,7 +3139,6 @@ impl PreparedU32LayoutSlot {
             0,
             self.layout.glyphs.len(),
         );
-        self.layout.glyph_count = self.layout.glyphs.len();
         let prepared = self.meshes.as_mut().is_some_and(|meshes| {
             meshes.rebuild(
                 self.layout.font_height,
@@ -3399,7 +3393,7 @@ impl TextLayoutCache {
             .saturating_add(saturating_u32(layout.lines.len()));
         frame_stats.built_glyphs = frame_stats
             .built_glyphs
-            .saturating_add(saturating_u32(layout.glyph_count));
+            .saturating_add(saturating_u32(layout.glyphs.len()));
     }
 
     fn insert_owned_layout(
@@ -3525,7 +3519,7 @@ impl TextLayoutCache {
             );
             let _ = layout.fill_batches(align);
             built_lines = built_lines.saturating_add(layout.lines.len());
-            built_glyphs = built_glyphs.saturating_add(layout.glyph_count);
+            built_glyphs = built_glyphs.saturating_add(layout.glyphs.len());
             layouts.push(layout);
         }
         let slot = &mut self.prewarmed_u16_domains[domain_index];
@@ -3624,7 +3618,7 @@ impl TextLayoutCache {
             frame_stats.built_lines = frame_stats.built_lines.saturating_add(1);
             frame_stats.built_glyphs = frame_stats
                 .built_glyphs
-                .saturating_add(saturating_u32(slot.layout.glyph_count));
+                .saturating_add(saturating_u32(slot.layout.glyphs.len()));
         }
         ResolvedTextLayout {
             layout: &slot.layout,
@@ -3680,7 +3674,7 @@ impl TextLayoutCache {
                 .saturating_add(saturating_u32(slot.layout.lines.len()));
             frame_stats.built_glyphs = frame_stats
                 .built_glyphs
-                .saturating_add(saturating_u32(slot.layout.glyph_count));
+                .saturating_add(saturating_u32(slot.layout.glyphs.len()));
         }
         ResolvedTextLayout {
             layout: &slot.layout,
@@ -3830,7 +3824,7 @@ impl TextLayoutCache {
                 key.wrap_width_pixels,
                 text_layout_mesh_seed(key, text),
             );
-            (layout.lines.len(), layout.glyph_count)
+            (layout.lines.len(), layout.glyphs.len())
         };
         if let Some(frame_stats) = self.frame_stats.as_mut() {
             frame_stats.misses = frame_stats.misses.saturating_add(1);
@@ -3868,7 +3862,7 @@ pub fn prewarm_frame_inline_text_slot(
     }
     let content = actors::TextContent::frame_inline_slot(text, slot);
     let layout = cache.get_or_build(font, fonts, &content, None, None, actors::TextAlign::Center);
-    let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
+    let vertices_per_buffer = layout.glyphs.len().saturating_mul(6);
     let texture_pages = layout.texture_pages.len().max(1);
     prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
 }
@@ -3964,7 +3958,7 @@ fn prewarm_prepared_inline_text_slot_impl(
     );
     let content = actors::TextContent::frame_inline_slot(glyph_domain, slot);
     let layout = cache.get_or_build(font, fonts, &content, None, None, align);
-    let vertices_per_buffer = layout.glyph_count.saturating_mul(6);
+    let vertices_per_buffer = layout.glyphs.len().saturating_mul(6);
     let texture_pages = layout.texture_pages.len().max(1);
     prewarm_transient_text_scratch(scratch, vertices_per_buffer, texture_pages, vertex_buffers);
 }
@@ -5094,7 +5088,6 @@ fn build_cached_text_layout_reusing(
         font_height: font.height,
         line_spacing,
         max_logical_width_i,
-        glyph_count: glyphs.len(),
         texture_pages,
         lines,
         glyphs,
@@ -9768,7 +9761,6 @@ mod tests {
             font_height: 10,
             line_spacing: 10,
             max_logical_width_i: 0,
-            glyph_count: 0,
             texture_pages: Vec::new(),
             lines: Vec::new(),
             glyphs: Vec::new(),
@@ -11057,7 +11049,7 @@ mod tests {
             (
                 layout.layout_seed,
                 layout.max_logical_width_i,
-                layout.glyph_count,
+                layout.glyphs.len(),
                 layout
                     .lines
                     .iter()
@@ -11160,7 +11152,7 @@ mod tests {
         assert_eq!(std::mem::size_of::<CachedGlyph>(), 56);
         assert_eq!(std::mem::size_of::<CachedTextMeshBatch>(), 32);
         assert_eq!(std::mem::size_of::<CachedTextMeshVariants>(), 48);
-        assert_eq!(std::mem::size_of::<CachedTextLayout>(), 200);
+        assert_eq!(std::mem::size_of::<CachedTextLayout>(), 192);
         assert_eq!(std::mem::size_of::<TextMeshBatchBuilder>(), 32);
         assert_eq!(std::mem::size_of::<CachedTextPage>(), 32);
     }
@@ -12063,7 +12055,7 @@ mod tests {
             (
                 layout.line_spacing,
                 layout.max_logical_width_i,
-                layout.glyph_count,
+                layout.glyphs.len(),
                 layout
                     .lines
                     .iter()
@@ -12824,7 +12816,7 @@ mod tests {
         let stats = cache.frame_stats();
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.built_lines, layout.lines.len() as u32);
-        assert_eq!(stats.built_glyphs, layout.glyph_count as u32);
+        assert_eq!(stats.built_glyphs, layout.glyphs.len() as u32);
 
         cache.begin_frame_stats(false);
         cache.record_layout_build(&layout);
