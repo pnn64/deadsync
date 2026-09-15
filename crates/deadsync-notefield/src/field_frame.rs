@@ -336,6 +336,7 @@ fn compose_field_contents<S, F>(
             column_xs: &note_inputs.measure_column_xs,
             column_dirs: &column_dirs,
             column_receptor_ys: &column_receptor_ys,
+            lane_offset: lane_offsets[0],
             num_cols,
             spacing_multiplier: spacing_mult,
             field_zoom,

@@ -26,6 +26,8 @@ pub(crate) struct MeasureComposeRequest<'a, 'travel> {
     pub column_xs: &'a [f32],
     pub column_dirs: &'a [f32],
     pub column_receptor_ys: &'a [f32],
+    /// Prepared lane-0 Tipsy + MoveY offset, shared by both direction groups.
+    pub lane_offset: f32,
     pub num_cols: usize,
     pub spacing_multiplier: f32,
     pub field_zoom: f32,
@@ -52,6 +54,15 @@ struct MeasureGroup {
     max_x: f32,
     receptor_y: f32,
     direction: f32,
+}
+
+impl MeasureGroup {
+    fn y_for_beat(self, request: &MeasureComposeRequest<'_, '_>, beat: f32) -> f32 {
+        self.direction.mul_add(
+            request.travel.adjusted(request.travel.raw_beat(beat)),
+            self.receptor_y,
+        ) + request.lane_offset
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -514,9 +525,7 @@ fn append_group_lines(
         let Some((beat, info)) = candidate_for_unit(unit, plan, backward_cursor.as_mut()) else {
             break;
         };
-        let y = request
-            .travel
-            .lane_y_for_beat(0, beat, group.receptor_y, group.direction);
+        let y = group.y_for_beat(request, beat);
         if !y.is_finite() {
             break;
         }
@@ -549,9 +558,7 @@ fn append_group_lines(
         let Some((beat, info)) = candidate_for_unit(unit, plan, forward_cursor.as_mut()) else {
             break;
         };
-        let y = request
-            .travel
-            .lane_y_for_beat(0, beat, group.receptor_y, group.direction);
+        let y = group.y_for_beat(request, beat);
         if !y.is_finite() {
             break;
         }
@@ -602,9 +609,7 @@ fn append_group_cues(
     let y_min = -request.style.measure_line_overscan_y;
     let y_max = request.screen_height + request.style.measure_line_overscan_y;
     let mut append_cue = |beat: f32, color: [f32; 3]| {
-        let y = request
-            .travel
-            .lane_y_for_beat(0, beat, group.receptor_y, group.direction);
+        let y = group.y_for_beat(request, beat);
         if y.is_finite() && y >= y_min && y <= y_max {
             append_cue_bar(
                 draws,
@@ -989,8 +994,8 @@ mod tests {
         )
     }
 
-    fn travel(timing: &TimingData, speed: ScrollSpeedSetting) -> ScrollTravel<'_> {
-        scroll_travel(ScrollTravelRequest {
+    fn travel_request(timing: &TimingData, speed: ScrollSpeedSetting) -> ScrollTravelRequest<'_> {
+        ScrollTravelRequest {
             timing,
             accel: AccelYParams::default(),
             random_speed: 0.0,
@@ -1012,7 +1017,11 @@ mod tests {
             arrow_effect_time_s: 0.0,
             lane_tipsy: 0.0,
             lane_move_y: &[],
-        })
+        }
+    }
+
+    fn travel(timing: &TimingData, speed: ScrollSpeedSetting) -> ScrollTravel<'_> {
+        scroll_travel(travel_request(timing, speed))
     }
 
     fn request<'a, 'travel>(
@@ -1029,6 +1038,7 @@ mod tests {
             column_xs: &COLUMN_XS,
             column_dirs,
             column_receptor_ys,
+            lane_offset: travel.lane_offset(0),
             num_cols: 4,
             spacing_multiplier: 1.0,
             field_zoom: 1.0,
@@ -1064,6 +1074,92 @@ mod tests {
             return None;
         };
         Some((*center, *size, *tint, *z))
+    }
+
+    #[test]
+    fn measure_and_cue_positions_match_uncached_lane_offsets_bitwise() {
+        let timing = timing();
+        let dirs = [1.0, 1.0, -1.0, -1.0];
+        let receptors = [100.125, 100.125, 380.375, 380.375];
+        let bpms = [(0.0, 120.0), (2.0, 180.0)];
+        let stops = [StopSegment {
+            beat: 3.0,
+            duration: 0.25,
+        }];
+        for speed in [
+            ScrollSpeedSetting::XMod(1.0),
+            ScrollSpeedSetting::CMod(120.0),
+            ScrollSpeedSetting::MMod(120.0),
+        ] {
+            for (tipsy, move_y) in [
+                (0.0, -0.0),
+                (0.625, 0.25),
+                (-0.75, -0.25),
+                (f32::NAN, f32::NAN),
+                (f32::INFINITY, f32::NEG_INFINITY),
+            ] {
+                for arrow_time in [0.37, 12_345.75] {
+                    let mut visual = deadsync_gameplay::VisualEffects {
+                        tipsy,
+                        ..deadsync_gameplay::VisualEffects::default()
+                    };
+                    visual.move_y_cols.fill(9.0);
+                    visual.move_y_cols[0] = move_y;
+                    let travel = scroll_travel(ScrollTravelRequest {
+                        arrow_effect_time_s: arrow_time,
+                        lane_tipsy: tipsy,
+                        lane_move_y: &visual.move_y_cols,
+                        ..travel_request(&timing, speed)
+                    });
+                    let mut lane_offsets = [0.0; 4];
+                    crate::fill_gameplay_lane_effects(
+                        &visual,
+                        arrow_time,
+                        4,
+                        &mut [crate::VisualEffectParams::default(); 4],
+                        &mut lane_offsets,
+                        &mut [0.0; 4],
+                        &mut [0.0; 4],
+                    );
+                    let mut request = request(MeasureLineMode::Measure, &travel, &dirs, &receptors);
+                    request.lane_offset = lane_offsets[0];
+                    request.scroll_speed = speed;
+                    request.style.measure_line_overscan_y = 0.0;
+                    request.show_cues = true;
+                    request.bpms = &bpms;
+                    request.stops = &stops;
+                    let mut actors = Vec::new();
+                    let mut draws = Vec::new();
+                    compose_measure_lines(&mut actors, &mut draws, request);
+                    assert!(actors.is_empty());
+
+                    // With these bounds, each group contains measure beats 0/4
+                    // followed by BPM/stop cues at beats 2/3. Both groups use lane 0.
+                    let mut expected = Vec::new();
+                    for beats in [[0.0, 4.0], [2.0, 3.0]] {
+                        for (direction, receptor) in [(1.0, receptors[0]), (-1.0, receptors[2])] {
+                            for beat in beats {
+                                expected.push(
+                                    travel
+                                        .lane_y_for_beat(0, beat, receptor, direction)
+                                        .to_bits(),
+                                );
+                            }
+                        }
+                    }
+                    let actual: Vec<_> = draws
+                        .iter()
+                        .map(|draw| {
+                            sprite_parts(draw).expect("measure or cue sprite").0[1].to_bits()
+                        })
+                        .collect();
+                    assert_eq!(
+                        actual, expected,
+                        "speed={speed:?}, tipsy={tipsy}, move_y={move_y}, time={arrow_time}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
