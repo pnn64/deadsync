@@ -6298,13 +6298,8 @@ fn build_flat_prepared_text<T: TextureContext + ?Sized>(
         }
     }
     if let Some(stroke_start) = stroke_start {
-        for object in out.items.iter_mut().skip(stroke_start) {
-            object.z = layer;
-            object.order = *order_counter;
-            *order_counter = order_counter.saturating_add(1);
-            object.blend = blend;
-            object.camera = camera;
-        }
+        // Preserve the reserved stroke slots; the final pass writes metadata.
+        *order_counter = order_counter.saturating_add(saturating_u32(out.len() - stroke_start));
     }
     let end = out.len();
     for object in out.items.iter_mut().take(end).skip(before) {
@@ -7143,16 +7138,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     &mut scratch.recycled_text_mesh_vertices,
                                 );
                             }
-                            for obj in out.items.iter_mut().skip(stroke_start) {
-                                obj.z = layer;
-                                obj.order = {
-                                    let o = *order_counter;
-                                    *order_counter += 1;
-                                    o
-                                };
-                                obj.blend = actor_blend;
-                                obj.camera = camera;
-                            }
+                            // Reserve these slots before masking and final metadata assignment.
+                            *order_counter += (out.len() - stroke_start) as u32;
                         }
                     } else {
                         let (builders, recycled_vertices, attr_scratch) =
@@ -7240,16 +7227,8 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                                     recycled_vertices,
                                 );
                             }
-                            for obj in out.items.iter_mut().skip(stroke_start) {
-                                obj.z = layer;
-                                obj.order = {
-                                    let o = *order_counter;
-                                    *order_counter += 1;
-                                    o
-                                };
-                                obj.blend = actor_blend;
-                                obj.camera = camera;
-                            }
+                            // Reserve these slots before masking and final metadata assignment.
+                            *order_counter += (out.len() - stroke_start) as u32;
                         }
                     }
                     out.len()
@@ -11277,6 +11256,141 @@ mod tests {
         for (builder, batch) in builders.iter().zip(stroke) {
             assert_eq!(builder.texture_page, batch.texture_page);
             assert_eq!(builder.vertices.as_slice(), batch.vertices.as_ref());
+        }
+    }
+
+    #[test]
+    fn stroked_text_preserves_order_slots_before_final_metadata() {
+        let fonts = font::FontMap::from_iter([(
+            "test",
+            test_split_stroke_font(
+                &Arc::from("fill_a"),
+                &Arc::from("fill_b"),
+                &Arc::from("stroke_a"),
+                &Arc::from("stroke_b"),
+            ),
+        )]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 200.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let parent = super::SmRect {
+            x: 0.0,
+            y: 0.0,
+            w: 200.0,
+            h: 100.0,
+        };
+        let style = super::ComposeStyle {
+            tint: [0.8; 4],
+            blend: Some(BlendMode::Add),
+        };
+        // Clipping before stroke bookkeeping frees its slots; a later mask
+        // still consumes them, even when it removes every draw item.
+        for (flat, transient, clipping, start, expected_count, expected_next) in [
+            (false, false, 0, 11, 4, 17),
+            (false, true, 0, 11, 4, 17),
+            (false, false, 1, 11, 0, 11),
+            (false, true, 1, 11, 0, 11),
+            (false, false, 2, 11, 0, 13),
+            (false, true, 2, 11, 0, 13),
+            (false, false, 0, u32::MAX - 6, 4, u32::MAX),
+            (true, false, 0, 11, 4, 17),
+            (true, false, 0, u32::MAX - 3, 4, u32::MAX),
+        ] {
+            let mut out = FrameBuilder::default();
+            let mut sprites = Vec::new();
+            let mut scratch = ComposeScratch::default();
+            let mut text_cache = TextLayoutCache::default();
+            let mut texture_cache = TextureLookupCache::default();
+            let mut next = start;
+            if flat {
+                super::build_flat_prepared_text(
+                    super::FlatPreparedTextView {
+                        align: [0.0; 2],
+                        offset: [10.0, 20.0],
+                        color: [1.0; 4],
+                        font: "test",
+                        content: TextContent::static_str("AB"),
+                        align_text: TextAlign::Left,
+                        z: 0,
+                        scale: [1.0; 2],
+                        blend: BlendMode::Alpha,
+                        shadow_len: [0.0; 2],
+                        shadow_color: [0.0; 4],
+                    },
+                    parent,
+                    &metrics,
+                    &fonts,
+                    &mut scratch,
+                    7,
+                    2,
+                    style,
+                    None,
+                    &mut next,
+                    &mut out,
+                    &mut sprites,
+                    &mut text_cache,
+                    &texture_cache,
+                    &TestDrawTextureContext,
+                );
+            } else {
+                let mut actor = test_stroked_text_actor();
+                let Actor::Text {
+                    jitter,
+                    clip,
+                    mask_dest,
+                    ..
+                } = &mut actor
+                else {
+                    unreachable!()
+                };
+                *jitter = transient;
+                *clip = (clipping == 1).then_some([150.0, 150.0, 10.0, 10.0]);
+                *mask_dest = clipping == 2;
+                let mut masks = vec![WorldRect {
+                    left: 150.0,
+                    right: 160.0,
+                    bottom: 150.0,
+                    top: 160.0,
+                }];
+                super::build_actor_recursive(
+                    &actor,
+                    parent,
+                    &metrics,
+                    &fonts,
+                    &mut scratch,
+                    7,
+                    2,
+                    style,
+                    None,
+                    &mut Vec::new(),
+                    &mut masks,
+                    &mut next,
+                    &mut out,
+                    &mut sprites,
+                    &mut text_cache,
+                    &mut texture_cache,
+                    &TestDrawTextureContext,
+                    None,
+                    0.25,
+                    None,
+                );
+            }
+            assert_eq!(
+                out.len(),
+                expected_count,
+                "flat {flat}, transient {transient}, clip {clipping}"
+            );
+            assert_eq!(next, expected_next);
+            for (index, item) in out.items.iter().enumerate() {
+                assert_eq!(
+                    item.order,
+                    start.saturating_add(2).saturating_add(index as u32)
+                );
+                assert_eq!((item.z, item.camera, item.blend), (7, 2, BlendMode::Add));
+            }
         }
     }
 
