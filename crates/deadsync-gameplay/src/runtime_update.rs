@@ -1034,23 +1034,25 @@ where
         );
     }
 
-    pub fn refresh_player_attacks(
-        &mut self,
-        player: usize,
-        now: f32,
-        delta_time: f32,
-        base: AttackBaseEffects,
-    ) {
+    pub fn refresh_player_attacks(&mut self, player: usize, now: f32, delta_time: f32) {
         if player >= self.setup.num_players || player >= MAX_PLAYERS {
             return;
         }
 
+        let profile = &self.profiles_runtime.profiles[player];
         let player_transform = self.mods.song_lua_player_transforms[player];
-        if let Some(transform) =
-            self.mods
-                .attacks
-                .refresh_player(player, now, delta_time, base, player_transform)
-        {
+        if let Some(transform) = self.mods.attacks.refresh_player(
+            player,
+            now,
+            delta_time,
+            base_appearance_effects(profile),
+            || AttackBaseEffects {
+                visual: base_visual_effects(profile),
+                scroll: profile.scroll_effects(),
+                mini_percent: profile.mini_percent(),
+            },
+            player_transform,
+        ) {
             self.mods.song_lua_player_transforms[player] = transform;
         }
     }

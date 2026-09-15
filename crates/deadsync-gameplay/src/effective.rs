@@ -112,18 +112,7 @@ pub fn refresh_active_attack_masks<Profile, OverlayActor, CapturedActor, StateDe
 {
     for player in 0..state.setup.num_players {
         let now = state.visible_music_time_seconds(player);
-        let profile = &state.profiles_runtime.profiles[player];
-        state.refresh_player_attacks(
-            player,
-            now,
-            delta_time,
-            AttackBaseEffects {
-                appearance: base_appearance_effects(profile),
-                visual: base_visual_effects(profile),
-                scroll: profile.scroll_effects(),
-                mini_percent: profile.mini_percent(),
-            },
-        );
+        state.refresh_player_attacks(player, now, delta_time);
     }
 }
 

@@ -2273,29 +2273,124 @@ mod tests {
     fn settled_attack_refresh_skips_only_unchanged_idle_state() {
         let mut state = GameplayAttackRuntimeState::default();
         let base = AttackBaseEffects::default();
+        let base_appearance = AppearanceEffects::default();
+        let base_builds = std::cell::Cell::new(0);
+        let build_base = || {
+            base_builds.set(base_builds.get() + 1);
+            base
+        };
         let default_transform = SongLuaPlayerTransform::default();
 
         let first = state
-            .refresh_player(0, 0.0, 1.0 / 120.0, base, default_transform)
+            .refresh_player(
+                0,
+                0.0,
+                1.0 / 120.0,
+                base_appearance,
+                build_base,
+                default_transform,
+            )
             .expect("first refresh canonicalizes derived fields");
         assert_eq!(first, default_transform);
-        assert_eq!(state.refresh_player(0, 0.1, 1.0 / 120.0, base, first), None);
+        assert_eq!(base_builds.get(), 1);
+        assert_eq!(
+            state.refresh_player(0, 0.1, 1.0 / 120.0, base_appearance, build_base, first),
+            None
+        );
+        assert_eq!(
+            base_builds.get(),
+            1,
+            "settled frames must not construct unused base effects"
+        );
 
         state.visual[0].drunk = Some(0.5);
         let reset = state
-            .refresh_player(0, 0.2, 1.0 / 120.0, base, first)
+            .refresh_player(0, 0.2, 1.0 / 120.0, base_appearance, build_base, first)
             .expect("externally changed state must be canonicalized");
         assert_eq!(state.visual[0], VisualOverrides::default());
         assert_eq!(reset, default_transform);
+        assert_eq!(base_builds.get(), 2);
 
         let changed_transform = SongLuaPlayerTransform {
             rotation_z: 45.0,
             ..SongLuaPlayerTransform::default()
         };
         assert_eq!(
-            state.refresh_player(0, 0.3, 1.0 / 120.0, base, changed_transform),
+            state.refresh_player(
+                0,
+                0.3,
+                1.0 / 120.0,
+                base_appearance,
+                build_base,
+                changed_transform
+            ),
             Some(default_transform),
         );
+        assert_eq!(base_builds.get(), 3);
+        assert_eq!(
+            state.refresh_player(
+                MAX_PLAYERS,
+                0.3,
+                1.0 / 120.0,
+                base_appearance,
+                build_base,
+                default_transform
+            ),
+            None
+        );
+        assert_eq!(
+            base_builds.get(),
+            3,
+            "invalid players must not construct base effects"
+        );
+
+        let changed_appearance = AppearanceEffects {
+            hidden: 0.25,
+            ..base_appearance
+        };
+        assert_eq!(
+            state.refresh_player(
+                0,
+                1.3,
+                1.0,
+                changed_appearance,
+                build_base,
+                default_transform
+            ),
+            Some(default_transform)
+        );
+        assert_eq!(state.appearance[0].hidden, 0.25);
+        assert_eq!(
+            base_builds.get(),
+            4,
+            "base appearance changes must still refresh"
+        );
+        assert_eq!(
+            state.refresh_player(
+                0,
+                1.4,
+                0.1,
+                changed_appearance,
+                build_base,
+                default_transform
+            ),
+            None
+        );
+        assert_eq!(base_builds.get(), 4);
+
+        state.cleared_for_outro = true;
+        assert_eq!(
+            state.refresh_player(
+                0,
+                1.5,
+                0.1,
+                changed_appearance,
+                build_base,
+                default_transform
+            ),
+            Some(default_transform)
+        );
+        assert_eq!(base_builds.get(), 5, "outro clearing must still refresh");
     }
 
     #[test]

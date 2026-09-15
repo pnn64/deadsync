@@ -1064,7 +1064,7 @@ fn transform_ease_fixture_reaches_runtime_windows() {
 #[test]
 fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
     use deadsync_gameplay::{
-        AttackBaseEffects, GameplayAttackRuntimeState, SongLuaPlayerTransform,
+        AppearanceEffects, AttackBaseEffects, GameplayAttackRuntimeState, SongLuaPlayerTransform,
     };
     let root = deadsync_root().join("tests/fixtures/song_lua");
     let mut context = test_song_lua_double_context(&root, "Riddle approach");
@@ -1106,9 +1106,14 @@ fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
     let mut runtime = GameplayAttackRuntimeState::new([constants, vec![]], [windows, vec![]]);
     let mut transform = SongLuaPlayerTransform::default();
     let mut advance = |runtime: &mut GameplayAttackRuntimeState, now, dt| {
-        if let Some(next) =
-            runtime.refresh_player(0, now, dt, AttackBaseEffects::default(), transform)
-        {
+        if let Some(next) = runtime.refresh_player(
+            0,
+            now,
+            dt,
+            AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            transform,
+        ) {
             transform = next;
         }
     };

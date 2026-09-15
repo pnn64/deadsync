@@ -3788,7 +3788,6 @@ pub struct ActiveAttackRefreshInput<'a> {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AttackBaseEffects {
-    pub appearance: AppearanceEffects,
     pub visual: VisualEffects,
     pub scroll: ScrollEffects,
     pub mini_percent: f32,
@@ -4192,20 +4191,23 @@ impl GameplayAttackRuntimeState {
     ///
     /// `None` means the caller should retain `player_transform`; the attack
     /// state was already settled and no source windows can change it.
+    /// The remaining base effects are constructed only when a refresh is needed.
     pub fn refresh_player(
         &mut self,
         player: usize,
         now: f32,
         delta_time: f32,
-        base: AttackBaseEffects,
+        base_appearance: AppearanceEffects,
+        base_effects: impl FnOnce() -> AttackBaseEffects,
         player_transform: SongLuaPlayerTransform,
     ) -> Option<SongLuaPlayerTransform> {
         if player >= MAX_PLAYERS
-            || self.idle_player_settled(player, base.appearance, player_transform)
+            || self.idle_player_settled(player, base_appearance, player_transform)
         {
             return None;
         }
 
+        let base = base_effects();
         self.update_window_indices(player, now);
         let (attack_window_indices, ease_window_indices) = self.active_window_indices(player);
         let output = refresh_active_attack_player_indexed(
@@ -4213,7 +4215,7 @@ impl GameplayAttackRuntimeState {
                 now,
                 delta_time,
                 attacks_cleared_for_outro: self.cleared_for_outro,
-                base_appearance: base.appearance,
+                base_appearance,
                 base_visual: base.visual,
                 base_scroll: base.scroll,
                 base_mini_percent: base.mini_percent,
