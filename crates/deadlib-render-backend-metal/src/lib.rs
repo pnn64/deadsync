@@ -765,8 +765,6 @@ fn draw_inner(
                     match &texture.images {
                         TextureImages::Rgba(raw) => {
                             encoder.set_fragment_texture(0, Some(raw));
-                            encoder.set_fragment_texture(1, None);
-                            encoder.set_fragment_texture(2, None);
                         }
                         TextureImages::Yuv420 {
                             planes: [y, u, v],
@@ -1448,8 +1446,6 @@ fn record_offscreen_pass(
                     match &texture.images {
                         TextureImages::Rgba(raw) => {
                             encoder.set_fragment_texture(0, Some(raw));
-                            encoder.set_fragment_texture(1, None);
-                            encoder.set_fragment_texture(2, None);
                         }
                         TextureImages::Yuv420 {
                             planes: [y, u, v],
