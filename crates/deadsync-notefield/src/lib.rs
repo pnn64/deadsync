@@ -149,7 +149,7 @@ pub(crate) use notes::{
     lane_window_bounds_by_note_row_from_cursor, mine_hides_after_resolution, note_part_phase_cache,
     note_part_phase_cached, note_part_uv_translation_for_quantization, scroll_travel,
 };
-pub(crate) use noteskin_model::noteskin_model_flat_draw_cached;
+pub(crate) use noteskin_model::{model_tint, noteskin_model_flat_draw_cached};
 
 #[cfg(test)]
 use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};

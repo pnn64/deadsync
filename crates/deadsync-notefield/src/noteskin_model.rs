@@ -379,7 +379,7 @@ fn build_model_geometry<S: NoteskinSlot>(slot: &S) -> Arc<[TexturedMeshVertex]> 
 }
 
 #[inline(always)]
-fn model_tint(color: [f32; 4], draw: ModelDrawState) -> [f32; 4] {
+pub(crate) fn model_tint(color: [f32; 4], draw: ModelDrawState) -> [f32; 4] {
     [
         color[0] * draw.tint[0],
         color[1] * draw.tint[1],

@@ -270,7 +270,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         } else {
             BlendMode::Alpha
         };
-        if let Some(mesh) = noteskin_model_flat_draw_cached(
+        if let Some(mut mesh) = noteskin_model_flat_draw_cached(
             slot,
             draw,
             request.center,
@@ -282,23 +282,11 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             request.style.hold_explosion_z,
             model_cache,
         ) {
-            draws.push(FlatDraw::TexturedMesh(mesh));
-            if let Some(glow) = glow
-                && let Some(mesh) = noteskin_model_flat_draw_cached(
-                    slot,
-                    draw,
-                    request.center,
-                    size,
-                    uv,
-                    -final_rotation,
-                    glow,
-                    blend,
-                    request.style.hold_explosion_z,
-                    model_cache,
-                )
-            {
-                draws.push(FlatDraw::TexturedMesh(mesh));
+            if let Some(glow) = glow {
+                draws.push(FlatDraw::TexturedMesh(mesh.clone()));
+                mesh.tint = model_tint(glow, draw);
             }
+            draws.push(FlatDraw::TexturedMesh(mesh));
         } else {
             append_receptor_sprite(
                 draws,
@@ -935,6 +923,9 @@ mod tests {
         let target = TestSlot::sprite("target");
         let mut hold = TestSlot::model("hold-model");
         hold.draw.tint = [0.5, 0.25, 0.75, 0.8];
+        hold.draw.rot = [13.0, 27.0, 31.0];
+        hold.draw.zoom = [0.8, 1.2, 0.6];
+        hold.draw.pos = [1.0, 2.0, 3.0];
         hold.glow = Some([0.2, 0.4, 0.6, 0.5]);
         let pulse = pulse();
         let mut actors = Vec::new();
@@ -962,9 +953,23 @@ mod tests {
             assert!((actual - expected).abs() <= 1e-6);
         }
         assert_eq!(
+            glow.local_transform.to_cols_array().map(f32::to_bits),
+            diffuse.local_transform.to_cols_array().map(f32::to_bits)
+        );
+        assert_eq!(glow.offset, diffuse.offset);
+        assert_eq!(glow.world_z.to_bits(), diffuse.world_z.to_bits());
+        assert_eq!(glow.uv_scale, diffuse.uv_scale);
+        assert_eq!(glow.uv_offset, diffuse.uv_offset);
+        assert_eq!(glow.uv_tex_shift, diffuse.uv_tex_shift);
+        assert_eq!(glow.geom_cache_key, diffuse.geom_cache_key);
+        assert_eq!(glow.texture, diffuse.texture);
+        assert_eq!(glow.blend, diffuse.blend);
+        assert_eq!(glow.depth_test, diffuse.depth_test);
+        assert_eq!(glow.z, diffuse.z);
+        assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 2,
+                hits: 1,
                 misses: 1,
                 saturated_misses: 0,
             }

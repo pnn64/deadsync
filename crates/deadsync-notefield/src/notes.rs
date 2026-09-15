@@ -5,7 +5,8 @@ use crate::transforms::{
     apply_accel_y_with_peak_cached, move_col_extra, tipsy_y_extra,
 };
 use crate::{
-    ModelMeshCache, itg_actor_glow_alpha, noteskin_model_flat_draw_cached, song_lua_note_model_draw,
+    ModelMeshCache, itg_actor_glow_alpha, model_tint, noteskin_model_flat_draw_cached,
+    song_lua_note_model_draw,
 };
 use deadlib_present::actors::{FlatDraw, FlatSprite, SpriteSource};
 use deadlib_render_core::BlendMode;
@@ -404,21 +405,9 @@ pub(crate) fn compose_flat_note_layer<S, F>(
     } else {
         BlendMode::Alpha
     };
-    if !request.prefer_sprite
-        && let Some(mut mesh) = noteskin_model_flat_draw_cached(
-            request.slot,
-            request.draw,
-            request.model_center,
-            request.size,
-            request.uv,
-            request.model_rotation_z_deg,
-            [1.0, 1.0, 1.0, 0.0],
-            request.blend,
-            request.z,
-            model_cache,
-        )
-    {
-        mesh.world_z = request.world_z;
+    if let Some(FlatDraw::TexturedMesh(mesh)) = draws.last() {
+        let mut mesh = mesh.clone();
+        mesh.tint = model_tint([1.0, 1.0, 1.0, 0.0], request.draw);
         mesh.glow = glow;
         draws.push(FlatDraw::TexturedMesh(mesh));
     } else {
@@ -1495,7 +1484,12 @@ mod tests {
         cache.begin_hit_stats(true);
 
         for _ in 0..2 {
-            compose_flat_note_layer(&mut draws, &mut cache, layer_request(&slot), &|_| {
+            let mut request = layer_request(&slot);
+            request.draw.tint = [0.5, -0.25, 0.75, -0.0];
+            request.draw.rot = [13.0, 27.0, 31.0];
+            request.draw.zoom = [0.8, 1.2, 0.6];
+            request.draw.pos = [1.0, 2.0, 3.0];
+            compose_flat_note_layer(&mut draws, &mut cache, request, &|_| {
                 panic!("model-backed note layer must not resolve a sprite source")
             });
         }
@@ -1504,7 +1498,7 @@ mod tests {
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 3,
+                hits: 1,
                 misses: 1,
                 saturated_misses: 0,
             }
@@ -1513,7 +1507,10 @@ mod tests {
             panic!("model-backed diffuse pass should emit a textured mesh");
         };
         assert_eq!(mesh.offset, [10.0, 20.0]);
-        assert_eq!(mesh.tint, [0.2, 0.3, 0.4, 0.5]);
+        assert_eq!(
+            mesh.tint.map(f32::to_bits),
+            [0.1_f32, -0.075, 0.3, -0.0].map(f32::to_bits)
+        );
         assert_eq!(mesh.glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(mesh.blend, BlendMode::Alpha);
         assert_eq!(mesh.world_z, 9.0);
@@ -1522,8 +1519,25 @@ mod tests {
         let FlatDraw::TexturedMesh(glow) = &draws[1] else {
             panic!("model-backed glow pass should follow the diffuse pass");
         };
-        assert_eq!(glow.tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(
+            glow.tint.map(f32::to_bits),
+            [0.5_f32, -0.25, 0.75, -0.0].map(f32::to_bits)
+        );
         assert_eq!(glow.glow, [1.0, 1.0, 1.0, 0.75]);
+        assert_eq!(
+            glow.local_transform.to_cols_array().map(f32::to_bits),
+            mesh.local_transform.to_cols_array().map(f32::to_bits)
+        );
+        assert_eq!(glow.offset, mesh.offset);
+        assert_eq!(glow.world_z.to_bits(), mesh.world_z.to_bits());
+        assert_eq!(glow.uv_scale, mesh.uv_scale);
+        assert_eq!(glow.uv_offset, mesh.uv_offset);
+        assert_eq!(glow.uv_tex_shift, mesh.uv_tex_shift);
+        assert_eq!(glow.geom_cache_key, mesh.geom_cache_key);
+        assert_eq!(glow.texture, mesh.texture);
+        assert_eq!(glow.blend, mesh.blend);
+        assert_eq!(glow.depth_test, mesh.depth_test);
+        assert_eq!(glow.z, mesh.z);
     }
 
     fn named_slot(mut slot: GlowSlot, key: &'static str) -> GlowSlot {
@@ -1670,7 +1684,7 @@ mod tests {
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
-                hits: 2,
+                hits: 1,
                 misses: 1,
                 saturated_misses: 0,
             }
