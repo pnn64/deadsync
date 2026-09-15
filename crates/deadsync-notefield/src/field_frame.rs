@@ -1018,10 +1018,7 @@ fn compose_visible_notes<S, F>(
                         return;
                     }
                     let mine_part = mine_part();
-                    let mine_uv_phase = note_part_phase_cached(
-                        note.beat,
-                        notes.mine_part_phase_caches[mine_part as usize],
-                    );
+                    let mine_uv_phase = note_part_phase_cached(note.beat, notes.mine_phase_cache);
                     let mine_translation = note_part_uv_translation_for_quantization(
                         note.beat,
                         note.quantization_idx,

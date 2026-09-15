@@ -246,7 +246,7 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub(crate) bumpy_frame_cache: BumpyFrameCache,
     pub(crate) tiny_spacing_scale: f32,
     pub(crate) part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
-    pub(crate) mine_part_phase_caches: [NotePartPhaseCache; NOTE_ANIM_PART_COUNT],
+    pub(crate) mine_phase_cache: NotePartPhaseCache,
     pub measure_column_xs: [f32; MAX_COLS],
     pub note_display_time_scale: f32,
     pub travel: ScrollTravel<'a>,
@@ -430,14 +430,12 @@ fn prepare_notes<'a, S>(
             base.part_animation_is_beat_based[part as usize],
         )
     });
-    let mine_part_phase_caches = NoteAnimPart::ALL.map(|part| {
-        note_part_phase_cache(
-            request.visual.elapsed_screen_s,
-            request.chart.visible_beat,
-            mine.note_display_metrics.part_animation[part as usize],
-            mine.part_animation_is_beat_based[part as usize],
-        )
-    });
+    let mine_phase_cache = note_part_phase_cache(
+        request.visual.elapsed_screen_s,
+        request.chart.visible_beat,
+        mine.note_display_metrics.part_animation[NoteAnimPart::Mine as usize],
+        mine.part_animation_is_beat_based[NoteAnimPart::Mine as usize],
+    );
     let travel = scroll_travel(ScrollTravelRequest {
         timing,
         accel: crate::AccelYParams {
@@ -484,7 +482,7 @@ fn prepare_notes<'a, S>(
         bumpy_frame_cache,
         tiny_spacing_scale,
         part_phase_caches,
-        mine_part_phase_caches,
+        mine_phase_cache,
         measure_column_xs,
         note_display_time_scale: request.geometry.num_players as f32 + 1.0,
         travel,
