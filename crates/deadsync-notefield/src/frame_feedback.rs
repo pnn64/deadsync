@@ -384,11 +384,10 @@ fn feedback_lane_work_mask(
     mine_explosions: &[Option<ActiveMineExplosion>],
 ) -> u16 {
     let num_cols = num_cols.min(MAX_COLS);
-    let mut mask = if targets_enabled {
-        (1_u16 << num_cols) - 1
-    } else {
-        0
-    };
+    if targets_enabled {
+        return (1_u16 << num_cols) - 1;
+    }
+    let mut mask = 0;
     for local_col in 0..num_cols {
         let hold_active = hold_explosions_enabled && lanes[local_col].active_hold.is_some();
         let tap_active =
