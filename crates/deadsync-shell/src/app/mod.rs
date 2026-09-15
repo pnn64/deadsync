@@ -3879,12 +3879,14 @@ impl App {
                         | CurrentScreen::SelectMusic
                 )
                 .then(crate::smx_config::smx_assignment_view);
-                let coin_options = config::runtime::get().coin;
-                let premium_seconds_left = matches!(
-                    profile::get_session_play_mode(),
-                    profile_data::PlayMode::PremiumFree
-                )
+                let premium_seconds_left = (self.state.screens.current_screen
+                    == CurrentScreen::SelectMusic
+                    && matches!(
+                        profile::get_session_play_mode(),
+                        profile_data::PlayMode::PremiumFree
+                    ))
                 .then(|| {
+                    let coin_options = config::runtime::get().coin;
                     self.state
                         .coin
                         .premium_seconds_left(coin_options, redraw_started)
