@@ -695,6 +695,9 @@ pub fn init(
         gl.enable(glow::BLEND);
         gl.depth_func(glow::LEQUAL);
         gl.clear_depth(1.0);
+        // Disabling depth testing also prevents depth writes. Keep the mask
+        // enabled for depth-tested meshes and depth-buffer clears.
+        gl.depth_mask(true);
         // This backend is the sole owner of the context. All texture uploads use
         // tightly packed RGBA or single-channel plane slices, so establish their
         // invariant unpack state once instead of issuing four driver calls for
@@ -1440,9 +1443,7 @@ fn draw_modern_offscreen_pass(
             }
             if want {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_mask(true);
             } else {
-                gl.depth_mask(false);
                 gl.disable(glow::DEPTH_TEST);
             }
             *last = Some(want);
@@ -1746,9 +1747,7 @@ fn draw_legacy_offscreen_pass(
         unsafe {
             if enabled {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_mask(true);
             } else {
-                gl.depth_mask(false);
                 gl.disable(glow::DEPTH_TEST);
             }
         }
@@ -2098,9 +2097,7 @@ pub fn draw(
         unsafe {
             if want {
                 gl.enable(glow::DEPTH_TEST);
-                gl.depth_mask(true);
             } else {
-                gl.depth_mask(false);
                 gl.disable(glow::DEPTH_TEST);
             }
         }
@@ -2135,7 +2132,6 @@ pub fn draw(
                 .gl
                 .viewport(0, 0, target.width as i32, target.height as i32);
             state.gl.color_mask(true, true, true, true);
-            state.gl.depth_mask(true);
             let mut clear = glow::DEPTH_BUFFER_BIT;
             if !target_frame.preserve || !target.initialized {
                 state
@@ -2145,7 +2141,6 @@ pub fn draw(
             }
             state.gl.clear(clear);
             state.gl.color_mask(true, true, true, target_frame.alpha);
-            state.gl.depth_mask(false);
             if state.path == GlPath::Modern {
                 offscreen_vertices += draw_modern_offscreen_pass(state, target_frame, textures);
             } else {
@@ -2190,9 +2185,7 @@ pub fn draw(
         let c = frame.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
-        gl.depth_mask(true);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-        gl.depth_mask(false);
         gl.disable(glow::DEPTH_TEST);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
