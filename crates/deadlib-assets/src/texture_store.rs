@@ -416,7 +416,12 @@ impl<T> TextureStore<T> {
             .pop_next(budget, drained_uploads, drained_bytes)?;
         let (handle, upload) = &next;
         let (width, height) = (upload.image().width(), upload.image().height());
-        if !self.upload_dims_match(*handle, width, height) {
+        // The popped handle is no longer in the pending queue.
+        if !self
+            .uploaded_texture_dims
+            .get(handle)
+            .is_some_and(|meta| meta.w == width && meta.h == height)
+        {
             self.revision.set(next_texture_revision());
         }
         Some(next)
