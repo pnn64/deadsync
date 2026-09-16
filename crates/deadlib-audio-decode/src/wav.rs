@@ -312,9 +312,7 @@ fn decode_packet_into(
     if !bytes.len().is_multiple_of(encoding.sample_bytes()) {
         return Err("WAV packet ended mid-sample");
     }
-    let samples = bytes.len() / encoding.sample_bytes();
     out.clear();
-    out.reserve(samples);
     match encoding {
         Encoding::Pcm8 => out.extend(bytes.iter().map(|sample| (i16::from(*sample) - 128) << 8)),
         Encoding::Pcm16 => out.extend(
