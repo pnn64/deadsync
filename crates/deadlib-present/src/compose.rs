@@ -9177,24 +9177,19 @@ fn clip_textured_mesh_to_world_rect_with(
         let uv2 = baked_tmesh_uv(&tri[2], uv_scale, uv_offset, uv_tex_shift);
         if left >= clip.left && right <= clip.right && bottom >= clip.bottom && top <= clip.top {
             let out = clipped_text_mesh_out(&mut out, &mut recycled_vertices, vertices.len());
-            out.push(renderer::TexturedMeshVertex {
-                pos: [p0[0], p0[1], 0.0],
-                uv: uv0,
-                tex_matrix_scale: [1.0, 1.0],
-                color: tri[0].color,
-            });
-            out.push(renderer::TexturedMeshVertex {
-                pos: [p1[0], p1[1], 0.0],
-                uv: uv1,
-                tex_matrix_scale: [1.0, 1.0],
-                color: tri[1].color,
-            });
-            out.push(renderer::TexturedMeshVertex {
-                pos: [p2[0], p2[1], 0.0],
-                uv: uv2,
-                tex_matrix_scale: [1.0, 1.0],
-                color: tri[2].color,
-            });
+            out.extend(
+                [
+                    (p0, uv0, tri[0].color),
+                    (p1, uv1, tri[1].color),
+                    (p2, uv2, tri[2].color),
+                ]
+                .map(|(pos, uv, color)| renderer::TexturedMeshVertex {
+                    pos: [pos[0], pos[1], 0.0],
+                    uv,
+                    tex_matrix_scale: [1.0, 1.0],
+                    color,
+                }),
+            );
             continue;
         }
 
@@ -9224,14 +9219,14 @@ fn clip_textured_mesh_to_world_rect_with(
         let base = clipped[0];
         let mut i = 1usize;
         while i + 1 < clipped.len() {
-            for vertex in [base, clipped[i], clipped[i + 1]] {
-                out.push(renderer::TexturedMeshVertex {
+            out.extend([base, clipped[i], clipped[i + 1]].map(|vertex| {
+                renderer::TexturedMeshVertex {
                     pos: [vertex.pos[0], vertex.pos[1], 0.0],
                     uv: vertex.uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color: vertex.color,
-                });
-            }
+                }
+            }));
             i += 1;
         }
     }
