@@ -793,8 +793,8 @@ fn music_decoder_thread_loop(
                             &mut backpressure,
                         )?;
                     } else {
-                        out_tmp.clear();
                         if in_ch == out_ch {
+                            out_tmp.clear();
                             out_tmp.extend_from_slice(direct);
                         } else {
                             write_channel_mapped_i16(direct, in_ch, out_ch, &mut out_tmp);
