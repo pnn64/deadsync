@@ -126,9 +126,6 @@ impl FrameBuilder {
     fn append_retained(&mut self, cached: &Self, sprite_start: u32, order_counter: &mut u32) {
         let mesh_start = saturating_u32(self.meshes.len());
         let textured_mesh_start = saturating_u32(self.textured_meshes.len());
-        self.items.reserve(cached.items.len());
-        self.meshes.reserve(cached.meshes.len());
-        self.textured_meshes.reserve(cached.textured_meshes.len());
         self.meshes.extend(cached.meshes.iter().cloned());
         self.textured_meshes
             .extend(cached.textured_meshes.iter().cloned());
