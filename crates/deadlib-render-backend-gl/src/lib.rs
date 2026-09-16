@@ -2068,7 +2068,10 @@ pub fn draw(
     // main pass executes.
     unsafe {
         state.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-        state.gl.viewport(0, 0, width as i32, height as i32);
+        // Init and resize maintain this viewport until an offscreen pass changes it.
+        if !frame.render_targets.is_empty() {
+            state.gl.viewport(0, 0, width as i32, height as i32);
+        }
     }
     let offscreen_us = elapsed_us_since(offscreen_started);
 
