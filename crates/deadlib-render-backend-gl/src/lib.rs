@@ -1485,7 +1485,6 @@ fn draw_modern_offscreen_pass(
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
                         last_prog = Some(0);
-                        last_sprite_instance_start = None;
                     }
                     if !state.base_instance
                         && last_sprite_instance_start != Some(run.instance_start)
@@ -1592,7 +1591,6 @@ fn draw_modern_offscreen_pass(
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
                         last_prog = Some(2);
-                        last_tmesh_instance_start = None;
                     }
                     if tmesh_buffer_cache.update_required(source) {
                         let stride = mem::size_of::<TexturedMeshVertex>() as i32;
@@ -2191,7 +2189,6 @@ pub fn draw(
                             gl.use_program(Some(state.program));
                             gl.bind_vertex_array(Some(shared_vao));
                             last_prog = Some(0);
-                            last_sprite_instance_start = None;
                         }
 
                         if !state.base_instance
@@ -2377,7 +2374,6 @@ pub fn draw(
                             gl.use_program(Some(state.tmesh_program));
                             gl.bind_vertex_array(Some(tmesh_vao));
                             last_prog = Some(2);
-                            last_tmesh_instance_start = None;
                         }
 
                         if tmesh_buffer_cache.update_required(source) {
