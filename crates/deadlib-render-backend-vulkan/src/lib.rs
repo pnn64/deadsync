@@ -2297,20 +2297,28 @@ fn record_render_pass(
                                 sprite_pipeline
                             },
                         );
-                        let vertex = state.vertex_buffer.as_ref().unwrap().buffer;
-                        let instances = state.instance_ring.as_ref().unwrap().buffer;
-                        if bindings.instance_required(InstanceBinding::Sprite) {
-                            device.cmd_bind_vertex_buffers(cmd, 0, &[vertex, instances], &[0, 0]);
-                        } else {
-                            device.cmd_bind_vertex_buffers(cmd, 0, &[vertex], &[0]);
-                        }
-                        if bindings.index_required() {
-                            device.cmd_bind_index_buffer(
-                                cmd,
-                                state.index_buffer.as_ref().unwrap().buffer,
-                                0,
-                                vk::IndexType::UINT16,
-                            );
+                        // RGBA and YUV sprites share vertex and index bindings.
+                        if !matches!(bound, Bound::Sprite | Bound::YuvSprite) {
+                            let vertex = state.vertex_buffer.as_ref().unwrap().buffer;
+                            let instances = state.instance_ring.as_ref().unwrap().buffer;
+                            if bindings.instance_required(InstanceBinding::Sprite) {
+                                device.cmd_bind_vertex_buffers(
+                                    cmd,
+                                    0,
+                                    &[vertex, instances],
+                                    &[0, 0],
+                                );
+                            } else {
+                                device.cmd_bind_vertex_buffers(cmd, 0, &[vertex], &[0]);
+                            }
+                            if bindings.index_required() {
+                                device.cmd_bind_index_buffer(
+                                    cmd,
+                                    state.index_buffer.as_ref().unwrap().buffer,
+                                    0,
+                                    vk::IndexType::UINT16,
+                                );
+                            }
                         }
                         bound = if yuv420 {
                             Bound::YuvSprite
@@ -2904,16 +2912,19 @@ pub fn draw(
                                 state.sprite_pipeline
                             },
                         );
-                        let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
-                        let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
-                        if bindings.instance_required(InstanceBinding::Sprite) {
-                            device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
-                        } else {
-                            device.cmd_bind_vertex_buffers(cmd, 0, &[vb0], &[0]);
-                        }
-                        if bindings.index_required() {
-                            let ib = state.index_buffer.as_ref().unwrap().buffer;
-                            device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
+                        // RGBA and YUV sprites share vertex and index bindings.
+                        if !matches!(bound, Bound::Sprite | Bound::YuvSprite) {
+                            let vb0 = state.vertex_buffer.as_ref().unwrap().buffer;
+                            let inst_buf = state.instance_ring.as_ref().unwrap().buffer;
+                            if bindings.instance_required(InstanceBinding::Sprite) {
+                                device.cmd_bind_vertex_buffers(cmd, 0, &[vb0, inst_buf], &[0, 0]);
+                            } else {
+                                device.cmd_bind_vertex_buffers(cmd, 0, &[vb0], &[0]);
+                            }
+                            if bindings.index_required() {
+                                let ib = state.index_buffer.as_ref().unwrap().buffer;
+                                device.cmd_bind_index_buffer(cmd, ib, 0, vk::IndexType::UINT16);
+                            }
                         }
                         bound = if yuv420 {
                             Bound::YuvSprite
