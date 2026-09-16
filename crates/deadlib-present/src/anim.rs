@@ -1009,6 +1009,11 @@ impl RuntimeSegment {
             return true;
         }
 
+        // Sleeps still consume time, but have no properties to interpolate.
+        if self.prepared.is_empty() {
+            return false;
+        }
+
         let a = ease_apply(self.ease, self.elapsed / self.dur);
 
         for p in &self.prepared {
