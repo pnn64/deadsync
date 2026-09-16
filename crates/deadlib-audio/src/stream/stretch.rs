@@ -61,15 +61,12 @@ fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Ve
         out.extend_from_slice(current);
         return;
     }
-    out.reserve(prev.len());
-    append_crossfade_calculated(prev, current, weights, out);
-}
-
-#[inline]
-fn append_crossfade_calculated(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
-    for ((&a, &b), &t) in prev.iter().zip(current).zip(weights) {
-        out.push((b - a).mul_add(t, a));
-    }
+    out.extend(
+        prev.iter()
+            .zip(current)
+            .zip(weights)
+            .map(|((&a, &b), &t)| (b - a).mul_add(t, a)),
+    );
 }
 
 #[inline(always)]
