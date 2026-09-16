@@ -303,8 +303,7 @@ impl RenderState {
                 advance_gain(&mut self.music_gain_current, target_gain);
             }
         }
-        mix_f32[frame * channels..frames * channels].fill(0.0);
-        mix_f32[frames * channels..len].fill(0.0);
+        mix_f32[frame * channels..].fill(0.0);
         popped_samples
     }
 
