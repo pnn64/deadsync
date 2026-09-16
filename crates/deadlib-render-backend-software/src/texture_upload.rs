@@ -35,13 +35,9 @@ pub(super) fn update_yuv420_image(
 fn rgba_pixel(y: u8, u: f32, v: f32, levels: [f32; 4], coeffs: [f32; 4]) -> [u8; 4] {
     let y = (f32::from(y) / 255.0).mul_add(levels[0], levels[1]);
     [
-        (coeffs[0].mul_add(v, y).clamp(0.0, 1.0) * 255.0).round() as u8,
-        (coeffs[2]
-            .mul_add(v, coeffs[1].mul_add(u, y))
-            .clamp(0.0, 1.0)
-            * 255.0)
-            .round() as u8,
-        (coeffs[3].mul_add(u, y).clamp(0.0, 1.0) * 255.0).round() as u8,
+        (coeffs[0].mul_add(v, y) * 255.0).round() as u8,
+        (coeffs[2].mul_add(v, coeffs[1].mul_add(u, y)) * 255.0).round() as u8,
+        (coeffs[3].mul_add(u, y) * 255.0).round() as u8,
         255,
     ]
 }
