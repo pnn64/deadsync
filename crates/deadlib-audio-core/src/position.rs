@@ -412,22 +412,17 @@ fn stream_position_frames_from_anchor_pair(
     if earlier_nanos_plus_one == 0 || later_nanos_plus_one == 0 {
         return None;
     }
-    let earlier_nanos = earlier_nanos_plus_one.saturating_sub(1);
-    let later_nanos = later_nanos_plus_one.saturating_sub(1);
+    let earlier_nanos = earlier_nanos_plus_one - 1;
+    let later_nanos = later_nanos_plus_one - 1;
     if later_nanos <= earlier_nanos || later_base_frames <= earlier_base_frames {
         return None;
     }
-    let nanos_span = later_nanos.saturating_sub(earlier_nanos) as f64;
-    if nanos_span <= 0.0 {
-        return None;
-    }
+    // Ordered u64 anchors guarantee positive, finite spans and slope.
+    let nanos_span = (later_nanos - earlier_nanos) as f64;
     let frames_per_ns = (later_base_frames - earlier_base_frames) as f64 / nanos_span;
-    if !frames_per_ns.is_finite() || frames_per_ns <= 0.0 {
-        return None;
-    }
     let dt_ns = at_nanos as f64 - later_nanos as f64;
     let frames_now = later_base_frames as f64 + dt_ns * frames_per_ns;
-    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
+    Some(frames_now.max(start_frame as f64) - start_frame as f64)
 }
 
 #[inline(always)]
