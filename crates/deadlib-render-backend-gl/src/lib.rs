@@ -1275,30 +1275,28 @@ fn gl_state_update<T: Copy + PartialEq>(last: &mut Option<T>, wanted: T) -> bool
 
 #[inline(always)]
 fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>) {
+    let previous = *last;
     if !gl_state_update(last, want) {
         return;
     }
     // SAFETY: blend-state calls only mutate GL state on the current context and
     // do not retain Rust pointers.
     unsafe {
-        match want {
-            BlendMode::Alpha => {
-                gl.blend_equation(glow::FUNC_ADD);
-                gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            }
-            BlendMode::Add => {
-                gl.blend_equation(glow::FUNC_ADD);
-                gl.blend_func(glow::SRC_ALPHA, glow::ONE);
-            }
-            BlendMode::Multiply => {
-                gl.blend_equation(glow::FUNC_ADD);
-                gl.blend_func(glow::DST_COLOR, glow::ZERO);
-            }
-            BlendMode::Subtract => {
-                gl.blend_equation(glow::FUNC_REVERSE_SUBTRACT);
-                gl.blend_func(glow::ONE, glow::ONE);
-            }
+        let subtract = want == BlendMode::Subtract;
+        if previous.map(|mode| mode == BlendMode::Subtract) != Some(subtract) {
+            gl.blend_equation(if subtract {
+                glow::FUNC_REVERSE_SUBTRACT
+            } else {
+                glow::FUNC_ADD
+            });
         }
+        let (src, dst) = match want {
+            BlendMode::Alpha => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
+            BlendMode::Add => (glow::SRC_ALPHA, glow::ONE),
+            BlendMode::Multiply => (glow::DST_COLOR, glow::ZERO),
+            BlendMode::Subtract => (glow::ONE, glow::ONE),
+        };
+        gl.blend_func(src, dst);
     }
 }
 
