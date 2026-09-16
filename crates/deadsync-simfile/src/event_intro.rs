@@ -125,6 +125,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            last_second_hint: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
     }

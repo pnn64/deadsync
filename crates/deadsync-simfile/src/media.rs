@@ -792,6 +792,7 @@ second.ogv=1
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            last_second_hint: 0.0,
             charts: Vec::new(),
         }
     }

@@ -764,6 +764,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         first_second: 0.0,
         total_length_seconds: meta.total_length_seconds.max(0),
         precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
+        last_second_hint: 0.0,
         charts: Vec::new(),
     }
 }
@@ -3393,6 +3394,7 @@ mod song_lookup_tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            last_second_hint: 0.0,
             charts: chart_hashes.iter().map(|hash| chart(hash)).collect(),
         })
     }

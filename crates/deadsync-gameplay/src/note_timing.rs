@@ -244,9 +244,12 @@ pub fn compute_end_times_ns(
     hold_end_time_cache_ns: &[SongTimeNs],
     rate: f32,
     audio_end_time_ns: SongTimeNs,
+    last_second_hint_ns: SongTimeNs,
 ) -> (SongTimeNs, SongTimeNs) {
     let mut last_judgable_time_ns = 0;
-    let mut last_relevant_time_ns = 0;
+    // Like ITGmania's GetMusicEndTiming, apply the late-resolution window after
+    // the hint. Audio EOF and note transforms must not shorten this minimum.
+    let mut last_relevant_time_ns = last_second_hint_ns.max(0);
     for (i, note) in notes.iter().enumerate() {
         let start_time_ns = note_time_cache_ns[i];
         if song_time_ns_invalid(start_time_ns) {
@@ -1062,10 +1065,11 @@ pub fn compute_gameplay_time_bounds_ns(
     hold_end_time_cache_ns: &[SongTimeNs],
     rate: f32,
     audio_end_time_ns: SongTimeNs,
+    last_second_hint_ns: SongTimeNs,
 ) -> GameplayTimeBounds {
     let mut first_judgable_second: Option<f32> = None;
     let mut last_judgable_time_ns = 0;
-    let mut last_relevant_time_ns = 0;
+    let mut last_relevant_time_ns = last_second_hint_ns.max(0);
     for (index, note) in notes.iter().enumerate() {
         let start_time_ns = note_time_cache_ns[index];
         if note.can_be_judged {

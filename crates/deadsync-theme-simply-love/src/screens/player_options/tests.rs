@@ -276,6 +276,7 @@ pub(super) mod tests {
             first_second: 0.0,
             total_length_seconds: 120,
             precise_last_second_seconds: 120.0,
+            last_second_hint: 0.0,
             charts: vec![test_chart()],
         })
     }

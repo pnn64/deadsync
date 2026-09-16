@@ -221,10 +221,12 @@ pub struct SongData {
     /// First charted step second across the song, mirroring `ITGmania`'s
     /// `Song::GetFirstSecond()` selection behavior.
     pub first_second: f32,
-    /// Length of the chart in seconds based on the last note/hold (`Song::GetLastSecond()` semantics).
+    /// Song end in seconds based on the last note/hold or `#LASTSECONDHINT`.
     pub total_length_seconds: i32,
     /// Float-precision song end time used by graph scaling and preview helpers.
     pub precise_last_second_seconds: f32,
+    /// Minimum song end in music seconds from SSC `#LASTSECONDHINT`; zero if absent.
+    pub last_second_hint: f32,
     pub charts: Vec<ChartData>,
 }
 
@@ -813,6 +815,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            last_second_hint: 0.0,
             charts: Vec::new(),
         }
     }

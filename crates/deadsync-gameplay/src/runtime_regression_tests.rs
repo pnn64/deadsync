@@ -863,6 +863,7 @@ mod runtime_regression_tests {
             first_second: 0.0,
             total_length_seconds: 60,
             precise_last_second_seconds: 60.0,
+            last_second_hint: 0.0,
             charts: vec![regression_chart()],
         }
     }
@@ -2114,6 +2115,65 @@ mod runtime_regression_tests {
             song_time_ns_from_seconds(1.2),
         ));
         assert_eq!(state.chart_runtime.notes[0].mine_result, None);
+    }
+
+    #[test]
+    fn last_second_hint_survives_timing_changes() {
+        let mut song = regression_song();
+        song.last_second_hint = 75.25;
+        song.precise_last_second_seconds = 75.25;
+        song.total_length_seconds = 75;
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(regression_payload_with_segments(
+            TimingSegments::default(),
+            96,
+        ));
+        let mut state = init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession::default(),
+            GameplayConfig::default(),
+            SyncPref::Default,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+        assert_eq!(
+            state.music_end_time_ns(),
+            75_250_000_000 + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.0)
+        );
+        for rate in [1.5, 0.75] {
+            assert!(state.set_music_rate(rate));
+            let end_ns =
+                75_250_000_000 + max_step_distance_ns(&state.timing_runtime.timing_profile, rate);
+            assert_eq!(state.music_end_time_ns(), end_ns);
+            assert!(state.apply_global_offset_delta(0.125));
+            assert_eq!(state.music_end_time_ns(), end_ns);
+            state.clock.song_position.current_music_time_ns = end_ns - 1;
+            assert!(state.finish_gameplay_if_ready(false).is_none());
+        }
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns();
+        assert!(matches!(
+            state.finish_gameplay_if_ready(false),
+            Some(GameplayAction::Navigate(GameplayExit::Complete))
+        ));
     }
 
     #[test]

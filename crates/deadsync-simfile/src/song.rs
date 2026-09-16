@@ -269,6 +269,11 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
     .map(SerializableSongBackgroundChange::from)
     .collect();
 
+    let last_second_hint = summary
+        .last_second_hint
+        .map(|seconds| seconds as f32)
+        .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
+        .unwrap_or(0.0);
     SerializableSongData {
         simfile_path: path.to_string_lossy().into_owned(),
         title: summary.title_str,
@@ -303,8 +308,9 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         music_path: song_music_path.map(|p| p.to_string_lossy().into_owned()),
         music_length_seconds,
         first_second: 0.0,
-        total_length_seconds: summary.total_length,
-        precise_last_second_seconds: summary.total_length.max(0) as f32,
+        total_length_seconds: summary.total_length.max(last_second_hint as i32),
+        precise_last_second_seconds: (summary.total_length.max(0) as f32).max(last_second_hint),
+        last_second_hint,
         charts,
     }
 }
@@ -906,6 +912,60 @@ mod tests {
 
         assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
         assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn last_second_hint_extends_ssc_song_bounds() {
+        let root = test_dir("last-second-hint");
+        let simfile = root.join("song.ssc");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (tag, hint, end) in [
+            ("", 0.0, 8.0),
+            ("#LASTSECONDHINT:12.75;", 12.75, 12.75),
+            ("#LASTSECONDHINT:6;", 6.0, 8.0),
+            ("#LASTSECONDHINT:0;", 0.0, 8.0),
+            ("#LASTSECONDHINT:-10;", 0.0, 8.0),
+            ("#LASTSECONDHINT:garbage;", 0.0, 8.0),
+            ("#LASTSECONDHINT:NaN;", 0.0, 8.0),
+            ("#LASTSECONDHINT:inf;", 0.0, 8.0),
+            ("#LASTSECONDHINT:1e100;", 0.0, 8.0),
+        ] {
+            fs::write(
+                &simfile,
+                format!(
+                    "#VERSION:0.83;\n#TITLE:Hint;\n#BPMS:0=60;\n{tag}\n\
+                     #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n\
+                     #METER:1;\n#NOTES:\n0000\n,\n2000\n,\n3000\n;"
+                ),
+            )
+            .unwrap();
+            let data = parse_song_data_file(&simfile, &options, 0.0, |_| 5.0).unwrap();
+            assert_eq!(data.last_second_hint, hint, "{tag}");
+            let song = build_song_meta(data, 0.0);
+            assert_eq!(song.last_second_hint, hint, "{tag}");
+            assert_eq!(song.precise_first_second(), 4.0, "{tag}");
+            assert_eq!(song.precise_last_second(), end, "{tag}");
+            assert_eq!(song.total_length_seconds, end as i32, "{tag}");
+            assert_eq!(song.music_length_seconds, 5.0);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn last_second_hint_is_ignored_in_sm_like_itg() {
+        let root = test_dir("sm-last-second-hint");
+        let simfile = root.join("song.sm");
+        fs::write(
+            &simfile,
+            "#TITLE:Hint;\n#BPMS:0=60;\n#LASTSECONDHINT:12.75;\n\
+             #NOTES:dance-single::Challenge:1:0,0,0,0,0:\n1000\n,\n0100\n;",
+        )
+        .unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let song = parse_song_meta_file(&simfile, &options, 0.0, |_| 5.0).unwrap();
+        assert_eq!(song.last_second_hint, 0.0);
+        assert_eq!(song.precise_last_second(), 4.0);
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn test_dir(name: &str) -> PathBuf {

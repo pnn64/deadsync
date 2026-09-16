@@ -12760,6 +12760,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: chart_end,
+            last_second_hint: 0.0,
             charts: Vec::new(),
         }
     }
@@ -14057,11 +14058,70 @@ mod tests {
         let hold_end_times = [INVALID_SONG_TIME_NS];
         let audio_end_time_ns = song_time_ns_from_seconds(10.0);
 
-        let (notes_end_time_ns, music_end_time_ns) =
-            compute_end_times_ns(&notes, &note_times, &hold_end_times, 1.0, audio_end_time_ns);
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            1.0,
+            audio_end_time_ns,
+            0,
+        );
 
         assert!(notes_end_time_ns < audio_end_time_ns);
         assert_eq!(music_end_time_ns, audio_end_time_ns);
+    }
+
+    #[test]
+    fn last_second_hint_extends_gameplay_end() {
+        let notes = [test_note_at(
+            NoteType::Hold,
+            Some(HoldData {
+                end_row_index: 192,
+                end_beat: 4.0,
+                ..test_hold()
+            }),
+            false,
+            48,
+            1.0,
+        )];
+        let note_times = [1_000_000_000];
+        let hold_end_times = [4_000_000_000];
+        for hint_ns in [0, 2_000_000_000, 12_750_000_000] {
+            for audio_ns in [0, 5_000_000_000, 20_000_000_000] {
+                for rate in [0.5, 1.0, 1.5] {
+                    let slack =
+                        max_step_distance_ns(&TimingProfile::default_itg_with_fa_plus(), rate);
+                    let expected = (
+                        4_000_000_000 + slack,
+                        (4_000_000_000_i64.max(hint_ns) + slack).max(audio_ns),
+                    );
+                    let ends = compute_end_times_ns(
+                        &notes,
+                        &note_times,
+                        &hold_end_times,
+                        rate,
+                        audio_ns,
+                        hint_ns,
+                    );
+                    assert_eq!(ends, expected);
+                    let bounds = compute_gameplay_time_bounds_ns(
+                        &notes,
+                        &note_times,
+                        &hold_end_times,
+                        rate,
+                        audio_ns,
+                        hint_ns,
+                    );
+                    assert_eq!(bounds.first_judgable_second, 1.0);
+                    assert_eq!(
+                        (bounds.notes_end_time_ns, bounds.music_end_time_ns),
+                        expected
+                    );
+                }
+            }
+        }
+        let (_, end_ns) = compute_end_times_ns(&[], &[], &[], 1.0, 0, 12_750_000_000);
+        assert!(end_ns > 12_750_000_000);
     }
 
     #[test]
@@ -14076,7 +14136,7 @@ mod tests {
         let hold_end_times = [INVALID_SONG_TIME_NS; 2];
 
         let (notes_end_time_ns, music_end_time_ns) =
-            compute_end_times_ns(&notes, &note_times, &hold_end_times, 1.0, 0);
+            compute_end_times_ns(&notes, &note_times, &hold_end_times, 1.0, 0, 0);
 
         assert!(notes_end_time_ns < note_times[1]);
         assert!(music_end_time_ns > note_times[1]);

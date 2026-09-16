@@ -100,6 +100,7 @@ fn song(charts: Vec<SerializableChartData>) -> SerializableSongData {
         first_second: 0.0,
         total_length_seconds: 2,
         precise_last_second_seconds: 2.0,
+        last_second_hint: 0.0,
         charts,
     }
 }

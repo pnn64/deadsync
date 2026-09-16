@@ -26,7 +26,7 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-pub const SONG_CACHE_VERSION: u8 = 22;
+pub const SONG_CACHE_VERSION: u8 = 23;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -851,6 +851,7 @@ pub struct SerializableSongData {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub last_second_hint: f32,
     pub charts: Vec<SerializableChartData>,
 }
 
@@ -860,7 +861,9 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         .iter()
         .any(|chart| !chart.difficulty.eq_ignore_ascii_case("edit"));
     let mut first = f32::INFINITY;
-    let mut last = 0.0_f32;
+    // ITGmania seeds Song::ReCalculateStepStatsAndLastSecond with the hint,
+    // then extends it for later notes. It is an absolute music second, not a beat.
+    let mut last = song.last_second_hint;
     for chart in &song.charts {
         if !song_length_chart_candidate(chart, has_non_edit) {
             continue;
@@ -991,6 +994,7 @@ pub struct CachedSongMeta {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub last_second_hint: f32,
     pub charts: Vec<CachedChartMeta>,
 }
 
@@ -1074,6 +1078,7 @@ struct BorrowedCachedSongMeta<'a> {
     first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
+    last_second_hint: f32,
     charts: Vec<BorrowedCachedChartMeta<'a>>,
 }
 
@@ -1562,6 +1567,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        last_second_hint: song.last_second_hint,
         charts: song
             .charts
             .into_iter()
@@ -1605,6 +1611,7 @@ pub fn build_cached_song_meta(
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        last_second_hint: song.last_second_hint,
         charts: song
             .charts
             .iter()
@@ -1645,6 +1652,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             first_second: song.first_second,
             total_length_seconds: song.total_length_seconds,
             precise_last_second_seconds: song.precise_last_second_seconds,
+            last_second_hint: song.last_second_hint,
             charts: song
                 .charts
                 .iter()
@@ -1705,6 +1713,7 @@ pub fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        last_second_hint: song.last_second_hint,
         charts: song
             .charts
             .into_iter()
@@ -2976,6 +2985,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 2,
             precise_last_second_seconds: 2.0,
+            last_second_hint: 0.0,
             charts: vec![
                 test_serializable_chart("dance-single", "Edit", 1, None),
                 test_serializable_chart("lights-cabinet", "Challenge", 12, None),
@@ -2987,6 +2997,35 @@ mod tests {
 
         assert_eq!(song.first_second, 2.5);
         assert_eq!(song.precise_last_second_seconds, 6.5);
+    }
+
+    #[test]
+    fn last_second_hint_survives_song_cache_round_trip() {
+        let root = test_dir("last-second-hint-round-trip");
+        let simfile = root.join("song.ssc");
+        let cache_path = root.join("cache.bin");
+        fs::write(&simfile, b"#TITLE:Hint;\n#LASTSECONDHINT:12.75;").unwrap();
+        let mut data = cached_song(&simfile);
+        data.last_second_hint = 12.75;
+        data.total_length_seconds = 12;
+        data.charts = vec![test_serializable_chart(
+            "dance-single",
+            "Challenge",
+            4,
+            Some(8),
+        )];
+        update_precise_song_bounds(&mut data, 0.0);
+        assert_eq!(data.precise_last_second_seconds, 12.75);
+        update_precise_song_bounds(&mut data, 0.125);
+        assert_eq!(data.precise_last_second_seconds, 12.75);
+
+        write_song_cache_file(&cache_path, &data, 0.125).unwrap();
+        let cached = load_cached_song(&simfile, &cache_path, false).unwrap();
+        let song = build_song_meta_from_cache(cached.data);
+        assert_eq!(song.last_second_hint, 12.75);
+        assert_eq!(song.precise_last_second(), 12.75);
+        assert_eq!(song.total_length_seconds, 12);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3028,6 +3067,7 @@ mod tests {
         data.music_path = Some("music.ogg".to_string());
         data.display_bpm = "120:180".to_string();
         data.normalized_bpms = "0=120,64=180".to_string();
+        data.last_second_hint = 12.75;
         let mut chart = test_serializable_chart("dance-single", "Challenge", 4, Some(12));
         chart.description = "Wire-compatible chart".to_string();
         chart.chart_name = "Borrowed header".to_string();
@@ -3316,6 +3356,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            last_second_hint: 0.0,
             charts: Vec::new(),
         }
     }
