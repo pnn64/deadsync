@@ -508,7 +508,6 @@ impl Reader {
                 // Empty / priming packet - produces no output frames.
                 continue;
             }
-            out.clear();
             audio.copy_to_vec_interleaved::<i16>(out);
             return Ok(Some(ts));
         }
