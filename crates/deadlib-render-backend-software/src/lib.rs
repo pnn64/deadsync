@@ -2455,12 +2455,12 @@ fn sample_tex_nearest<const OPAQUE: bool>(
     sampler: SamplerDesc,
 ) -> Option<[f32; 4]> {
     let tx = wrap_index(
-        (wrap_uv(u, sampler.wrap) * tex_w as f32).floor() as i32,
+        (wrap_uv(u, sampler.wrap) * tex_w as f32) as i32,
         tex_w,
         sampler.wrap,
     );
     let ty = wrap_index(
-        (wrap_uv(v, sampler.wrap) * tex_h as f32).floor() as i32,
+        (wrap_uv(v, sampler.wrap) * tex_h as f32) as i32,
         tex_h,
         sampler.wrap,
     );
@@ -2490,12 +2490,12 @@ fn sample_alpha_nearest(
     sampler: SamplerDesc,
 ) -> Option<f32> {
     let tx = wrap_index(
-        (wrap_uv(u, sampler.wrap) * tex_w as f32).floor() as i32,
+        (wrap_uv(u, sampler.wrap) * tex_w as f32) as i32,
         tex_w,
         sampler.wrap,
     );
     let ty = wrap_index(
-        (wrap_uv(v, sampler.wrap) * tex_h as f32).floor() as i32,
+        (wrap_uv(v, sampler.wrap) * tex_h as f32) as i32,
         tex_h,
         sampler.wrap,
     );
