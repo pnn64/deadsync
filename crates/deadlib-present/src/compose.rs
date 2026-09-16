@@ -5246,7 +5246,14 @@ fn apply_effect_to_sprite(
             .rem_euclid(360.0);
     }
 
-    if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseBlink
+            | anim::EffectMode::DiffuseRamp
+            | anim::EffectMode::DiffuseShift
+            | anim::EffectMode::Pulse
+    ) && let Some(percent) = anim::effect_mix(effect, elapsed, beat)
+    {
         match effect.mode {
             anim::EffectMode::DiffuseBlink => {
                 let alpha = tint[3];
@@ -5309,7 +5316,14 @@ fn apply_effect_to_text(
 ) {
     // We currently don't have song beat/time split plumbed here, so use elapsed for both.
     let beat = elapsed;
-    if let Some(percent) = anim::effect_mix(effect, elapsed, beat) {
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseBlink
+            | anim::EffectMode::DiffuseRamp
+            | anim::EffectMode::DiffuseShift
+            | anim::EffectMode::Pulse
+    ) && let Some(percent) = anim::effect_mix(effect, elapsed, beat)
+    {
         match effect.mode {
             anim::EffectMode::DiffuseBlink => {
                 let alpha = color[3];
