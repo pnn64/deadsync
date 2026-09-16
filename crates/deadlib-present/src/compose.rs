@@ -4520,43 +4520,38 @@ fn push_text_mesh_quad_vertices(
     let v1 = uv_offset[1] + uv_scale[1];
     let tex_matrix_scale = [1.0, 1.0];
 
-    out.reserve(6);
-    out.push(renderer::TexturedMeshVertex {
+    let top_left = renderer::TexturedMeshVertex {
         pos: [x0, y0, 0.0],
         uv: [u0, v0],
         tex_matrix_scale,
         color,
-    });
-    out.push(renderer::TexturedMeshVertex {
+    };
+    let bottom_left = renderer::TexturedMeshVertex {
         pos: [x0, y1, 0.0],
         uv: [u0, v1],
         tex_matrix_scale,
         color,
-    });
-    out.push(renderer::TexturedMeshVertex {
+    };
+    let bottom_right = renderer::TexturedMeshVertex {
         pos: [x1, y1, 0.0],
         uv: [u1, v1],
         tex_matrix_scale,
         color,
-    });
-    out.push(renderer::TexturedMeshVertex {
-        pos: [x0, y0, 0.0],
-        uv: [u0, v0],
-        tex_matrix_scale,
-        color,
-    });
-    out.push(renderer::TexturedMeshVertex {
-        pos: [x1, y1, 0.0],
-        uv: [u1, v1],
-        tex_matrix_scale,
-        color,
-    });
-    out.push(renderer::TexturedMeshVertex {
+    };
+    let top_right = renderer::TexturedMeshVertex {
         pos: [x1, y0, 0.0],
         uv: [u1, v0],
         tex_matrix_scale,
         color,
-    });
+    };
+    out.extend_from_slice(&[
+        top_left,
+        bottom_left,
+        bottom_right,
+        top_left,
+        bottom_right,
+        top_right,
+    ]);
 }
 
 #[inline(always)]
