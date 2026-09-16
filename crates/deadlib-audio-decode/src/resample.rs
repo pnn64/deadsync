@@ -178,9 +178,7 @@ pub fn write_resampler_output(
         }
         return produced_frames;
     }
-    let produced_frames = produced_frames
-        .min(out[0].len())
-        .min(out.iter().map(Vec::len).min().unwrap_or(0));
+    let produced_frames = produced_frames.min(out.iter().map(Vec::len).min().unwrap_or(0));
     if out_ch == 1 {
         // Mono uses the first channel; the shortest input still limits output.
         write_mono_output(&out[0][..produced_frames], out_tmp);
