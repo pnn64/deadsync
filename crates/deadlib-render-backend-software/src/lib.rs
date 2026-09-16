@@ -276,7 +276,6 @@ impl StripeBins {
             self.offsets[stripe + 1] += self.offsets[stripe];
         }
 
-        self.items.clear();
         self.items
             .resize(self.offsets[stripe_count] as usize, StripeItem(0));
         self.cursors.clear();
