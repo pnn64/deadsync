@@ -12,8 +12,7 @@ pub fn music_nanos_from_seconds(seconds: f64) -> i64 {
     if !seconds.is_finite() {
         return 0;
     }
-    let nanos = (seconds * NANOS_PER_SECOND).round();
-    nanos.clamp(i64::MIN as f64, i64::MAX as f64) as i64
+    (seconds * NANOS_PER_SECOND).round() as i64
 }
 
 #[inline(always)]
@@ -687,9 +686,15 @@ mod tests {
     }
 
     #[test]
-    fn music_nanos_from_seconds_rounds_and_rejects_non_finite() {
+    fn music_nanos_from_seconds_rounds_saturates_and_rejects_non_finite() {
         assert_eq!(music_nanos_from_seconds(1.25), 1_250_000_000);
         assert_eq!(music_nanos_from_seconds(-0.5), -500_000_000);
+        assert_eq!(music_nanos_from_seconds(0.5e-9), 1);
+        assert_eq!(music_nanos_from_seconds(-0.5e-9), -1);
+        assert_eq!(music_nanos_from_seconds(f64::MAX), i64::MAX);
+        assert_eq!(music_nanos_from_seconds(f64::MIN), i64::MIN);
+        assert_eq!(music_nanos_from_seconds(f64::INFINITY), 0);
+        assert_eq!(music_nanos_from_seconds(f64::NEG_INFINITY), 0);
         assert_eq!(music_nanos_from_seconds(f64::NAN), 0);
     }
 
