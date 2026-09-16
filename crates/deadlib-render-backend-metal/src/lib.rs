@@ -1789,7 +1789,6 @@ fn stage_texture_rows<'a>(
         .zip(scratch.chunks_exact_mut(row_bytes))
     {
         destination[..packed_row_bytes].copy_from_slice(source_row);
-        destination[packed_row_bytes..].fill(0);
     }
     scratch
 }
@@ -1994,23 +1993,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn texture_row_staging_preserves_pixels_and_zeroes_padding() {
-        let source = (0..24).collect::<Vec<u8>>();
+    fn texture_row_staging_preserves_pixels_when_reusing_scratch() {
         let mut scratch = vec![0xff; 40];
 
-        let staged = stage_texture_rows(&source, 8, 3, 16, &mut scratch);
+        for (packed_row_bytes, rows, row_bytes) in [
+            (8, 3, 16),
+            (12, 2, 16),
+            (3, 5, 256),
+            (260, 4, 512),
+            (8, 3, 16),
+        ] {
+            let source = (0..packed_row_bytes * rows)
+                .map(|i| (i % 251) as u8)
+                .collect::<Vec<_>>();
+            let staged =
+                stage_texture_rows(&source, packed_row_bytes, rows, row_bytes, &mut scratch);
 
-        assert_eq!(staged.len(), 48);
-        for row in 0..3 {
-            assert_eq!(
-                &staged[row * 16..row * 16 + 8],
-                &source[row * 8..row * 8 + 8]
-            );
-            assert!(
-                staged[row * 16 + 8..(row + 1) * 16]
-                    .iter()
-                    .all(|byte| *byte == 0)
-            );
+            assert_eq!(staged.len(), row_bytes * rows);
+            for row in 0..rows {
+                assert_eq!(
+                    &staged[row * row_bytes..row * row_bytes + packed_row_bytes],
+                    &source[row * packed_row_bytes..(row + 1) * packed_row_bytes]
+                );
+            }
         }
     }
 
