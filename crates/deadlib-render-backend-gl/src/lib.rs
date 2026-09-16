@@ -1692,9 +1692,6 @@ fn draw_modern_offscreen_pass(
                 }
             }
         }
-        apply_depth_test(gl, false, &mut last_depth);
-        gl.bind_vertex_array(None);
-        gl.use_program(None);
         vertices
     }
 }
@@ -1994,8 +1991,6 @@ fn draw_legacy_offscreen_pass(
                 }
             }
         }
-        apply_depth_test(gl, false, &mut last_depth);
-        gl.use_program(None);
         vertices
     }
 }
@@ -2886,11 +2881,6 @@ pub fn draw(
                 }
             }
         }
-        apply_depth_test(gl, false, &mut last_depth_test);
-        if state.path == GlPath::Modern {
-            gl.bind_vertex_array(None);
-        }
-        gl.use_program(None);
     }
     stats.backend_record_us =
         elapsed_us_since(backend_record_started).saturating_sub(stats.backend_upload_us);
@@ -3018,6 +3008,8 @@ pub fn cleanup(state: &mut State) {
             state.gl.delete_framebuffer(target.framebuffer);
             state.gl.delete_renderbuffer(target.depth);
         }
+        // Release the active program at teardown so deletion is immediate.
+        state.gl.use_program(None);
         state.gl.delete_program(state.program);
         state.gl.delete_program(state.mesh_program);
         state.gl.delete_program(state.tmesh_program);
