@@ -681,14 +681,6 @@ fn draw_inner(
         let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
         clear_render_target(&target.pass.color);
         target_encoder.set_label("DeadSync native Metal offscreen pass");
-        target_encoder.set_viewport(MTLViewport {
-            originX: 0.0,
-            originY: 0.0,
-            width: f64::from(target.width),
-            height: f64::from(target.height),
-            znear: 0.0,
-            zfar: 1.0,
-        });
         target_encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
         offscreen_vertices = offscreen_vertices.saturating_add(record_offscreen_pass(
             state,
@@ -704,14 +696,6 @@ fn draw_inner(
     let encoder = command.new_render_command_encoder(&state.render_pass.descriptor);
     clear_render_target(&state.render_pass.color);
     encoder.set_label("DeadSync native Metal render pass");
-    encoder.set_viewport(MTLViewport {
-        originX: 0.0,
-        originY: 0.0,
-        width: f64::from(width),
-        height: f64::from(height),
-        znear: 0.0,
-        zfar: 1.0,
-    });
     encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
     stats.backend_setup_us = elapsed_us(setup_started);
 
