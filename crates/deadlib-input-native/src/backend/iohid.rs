@@ -626,12 +626,16 @@ extern "C" fn on_input(
             else {
                 return;
             };
+            // Unchanged logical directions emit no edges and need no timestamp.
+            // Keep raw hat reports uncoalesced: devices can reuse HID usages.
+            if let PadValueKind::Directions(want) = kind
+                && want == dev.dir
+            {
+                return;
+            }
             let (timestamp, host_nanos) = event_time(ctx.host, ctx.host_clock, value);
             match kind {
                 PadValueKind::Directions(want) => {
-                    // `emit_dir_edges` filters unchanged logical directions. Raw
-                    // hat values remain uncoalesced because devices can reuse HID
-                    // usages across elements.
                     emit_dir_edges(
                         &mut ctx.emit_pad,
                         dev.id,
