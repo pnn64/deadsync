@@ -47,9 +47,6 @@ impl PlanarAccum {
         if frames == 0 {
             return;
         }
-        for channel in &mut self.channels {
-            channel.reserve(frames);
-        }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
                 channel.extend(
@@ -66,6 +63,9 @@ impl PlanarAccum {
             left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
             right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
+        }
+        for channel in &mut self.channels {
+            channel.reserve(frames);
         }
         for frame in interleaved.chunks_exact(channels) {
             for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
