@@ -610,14 +610,14 @@ extern "C" fn on_input(
             return;
         }
         let key = device as usize;
+        let Some(input_dev) = ctx.devices.get(&key).copied() else {
+            return;
+        };
         let usage_page = IOHIDElementGetUsagePage(elem) as u16;
         let usage = IOHIDElementGetUsage(elem) as u16;
         let code = ((usage_page as u32) << 16) | (usage as u32);
         let v = IOHIDValueGetIntegerValue(value) as i64;
 
-        let Some(input_dev) = ctx.devices.get(&key).copied() else {
-            return;
-        };
         if let InputDev::Pad(pad_index) = input_dev {
             let Some(dev) = ctx.pads.get_mut(pad_index) else {
                 return;
