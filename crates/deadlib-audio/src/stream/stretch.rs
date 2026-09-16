@@ -57,11 +57,11 @@ fn append_stereo_i16(left: &mut Vec<f32>, right: &mut Vec<f32>, interleaved: &[i
 fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
     debug_assert_eq!(prev.len(), current.len());
     debug_assert_eq!(prev.len(), weights.len());
-    out.reserve(prev.len());
     if std::ptr::eq(prev.as_ptr(), current.as_ptr()) {
         out.extend_from_slice(current);
         return;
     }
+    out.reserve(prev.len());
     append_crossfade_calculated(prev, current, weights, out);
 }
 
