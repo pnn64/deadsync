@@ -6676,7 +6676,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 };
 
                 if *animate && *state_delay > 0.0 && total > 1 {
-                    let steps = (total_elapsed / *state_delay).floor().max(0.0) as u32;
+                    let steps = (total_elapsed / *state_delay) as u32;
                     let idx = (start_linear + (steps % total)) % total;
                     chosen_cell = Some((idx, u32::MAX));
                 } else if chosen_cell.is_none() && total > 1 {
@@ -7147,7 +7147,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             layout,
                             *align_text,
                             attributes.as_slice(),
-                            jitter.then(|| (total_elapsed * 8.0).floor() as u32),
+                            jitter.then(|| (total_elapsed * 8.0) as u32),
                             text_distortion,
                             false,
                             builders,
