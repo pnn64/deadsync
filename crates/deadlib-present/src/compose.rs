@@ -2064,7 +2064,6 @@ fn sort_draw_items(objects: &mut [DrawItem], scratch: &mut ComposeScratch) {
 
     scratch.z_counts.clear();
     scratch.z_counts.resize(range, 0);
-    scratch.z_perm.clear();
     scratch.z_perm.resize(range, 0);
 
     let min_z_i = i32::from(min_z);
@@ -2200,7 +2199,6 @@ fn sort_draw_items_in_sparse_buckets(objects: &mut [DrawItem], scratch: &mut Com
     let bucket_count = scratch.sparse_z_keys.len();
     scratch.z_counts.clear();
     scratch.z_counts.resize(bucket_count, 0);
-    scratch.z_perm.clear();
     scratch.z_perm.resize(bucket_count, 0);
     let mut buckets_ordered = true;
     for object in objects.iter() {
