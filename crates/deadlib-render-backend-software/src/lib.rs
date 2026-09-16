@@ -1295,12 +1295,12 @@ const fn clamp01(x: f32) -> f32 {
 
 #[inline(always)]
 const fn pack_rgba(c: [f32; 4]) -> u32 {
-    let r = clamp01(c[0]).mul_add(255.0, 0.5) as u32;
-    let g = clamp01(c[1]).mul_add(255.0, 0.5) as u32;
-    let b = clamp01(c[2]).mul_add(255.0, 0.5) as u32;
-    let a = clamp01(c[3]).mul_add(255.0, 0.5) as u32;
-
-    (a << 24) | (r << 16) | (g << 8) | b
+    u32::from_be_bytes([
+        c[3].mul_add(255.0, 0.5) as u8,
+        c[0].mul_add(255.0, 0.5) as u8,
+        c[1].mul_add(255.0, 0.5) as u8,
+        c[2].mul_add(255.0, 0.5) as u8,
+    ])
 }
 
 #[derive(Clone, Copy)]
