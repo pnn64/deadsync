@@ -1361,7 +1361,7 @@ impl ScreenRows {
     #[inline(always)]
     fn from_bounds(min_y: f32, max_y: f32, height: usize) -> Self {
         debug_assert!(height > 0);
-        let start = min_y.floor().max(0.0) as u32;
+        let start = min_y as u32;
         let max = max_y.ceil().min((height - 1) as f32) as u32;
         if start > max {
             Self { start: 0, end: 0 }
@@ -2683,9 +2683,9 @@ fn raster_bounds(
     stripe_y_start: usize,
     stripe_y_end: usize,
 ) -> Option<(i32, i32, i32, i32, i32)> {
-    let min_x = min_x.floor().max(0.0) as i32;
+    let min_x = min_x.max(0.0) as i32;
     let max_x = max_x.ceil().min((width - 1) as f32) as i32;
-    let mut min_y = min_y.floor().max(0.0) as i32;
+    let mut min_y = min_y.max(0.0) as i32;
     let mut max_y = max_y.ceil().min((height - 1) as f32) as i32;
     if min_x > max_x || min_y > max_y {
         return None;
