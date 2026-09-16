@@ -37,7 +37,8 @@ impl Registry {
             return Some(state);
         }
 
-        let index = *self.indices.get(&id)?;
+        let stored_index = self.indices.get_mut(&id)?;
+        let index = *stored_index;
         if self.entries[index].last_seen_frame == self.frame {
             return Some(*self.entries[index].seq.state());
         }
@@ -46,10 +47,7 @@ impl Registry {
         if index != cursor {
             self.entries.swap(index, cursor);
             let displaced_id = self.entries[index].id;
-            *self
-                .indices
-                .get_mut(&id)
-                .expect("cached tween must have an index") = cursor;
+            *stored_index = cursor;
             *self
                 .indices
                 .get_mut(&displaced_id)
