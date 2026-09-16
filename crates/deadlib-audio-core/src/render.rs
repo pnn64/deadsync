@@ -403,11 +403,9 @@ impl RenderState {
         let frames = emitted_samples
             .checked_div(self.device_channels)
             .unwrap_or(0);
-        let popped_frames = popped_samples
-            .checked_div(self.device_channels)
-            .unwrap_or(0);
-        let output_underrun =
-            music_track_active_relaxed() && music_track_has_started() && popped_frames < frames;
+        let output_underrun = music_track_active_relaxed()
+            && music_track_has_started()
+            && popped_samples < frames * self.device_channels;
         if frames > 0 {
             publish_callback_window_end(total_before, frames as u64);
         }
@@ -766,6 +764,34 @@ mod tests {
         assert_eq!(render.mix_f32[0].to_bits(), i16_to_f32(1234).to_bits());
         assert_eq!(render.mix_f32[1].to_bits(), i16_to_f32(-1234).to_bits());
         assert_eq!(&render.mix_f32[2..5], &[0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn underrun_reporting_counts_only_complete_frames() {
+        let _guard = GlobalAudioGuard::acquire();
+        let (_stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        let mut render = test_render(render_handle);
+        activate_music_track();
+        crate::mark_music_track_started(0);
+
+        for (channels, emitted, popped, underrun) in [
+            (0, 5, 0, false),
+            (1, 5, 4, true),
+            (2, 1, 0, false),
+            (2, 5, 4, false),
+            (2, 5, 3, true),
+            (2, 5, 6, false),
+            (6, 17, 12, false),
+            (6, 17, 11, true),
+        ] {
+            render.device_channels = channels;
+            assert_eq!(
+                render.finish_callback(0, emitted, popped),
+                underrun,
+                "channels={channels}, emitted={emitted}, popped={popped}"
+            );
+        }
+        stop_music_track();
     }
 
     #[test]
