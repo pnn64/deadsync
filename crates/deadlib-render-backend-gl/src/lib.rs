@@ -2102,24 +2102,20 @@ pub fn draw(
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-        gl.disable(glow::DEPTH_TEST);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
         // treat the game as translucent and the whole scene looks ghosted.
         gl.color_mask(true, true, true, false);
 
-        gl.blend_equation(glow::FUNC_ADD);
-        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-
         let mut last_bound_tex: Option<glow::Texture> = None;
-        let mut last_blend = Some(BlendMode::Alpha);
+        let mut last_blend = None;
         let mut last_prog: Option<u8> = None; // 0=sprite, 1=mesh, 2=textured mesh
         let mut last_cameras = [CameraUploadCache::default(); 3];
         let mut last_sprite_instance_start: Option<u32> = None;
         let mut last_tmesh_instance_start: Option<u32> = None;
         // Modern VAOs retain vertex bindings; legacy draw-type switches reset below.
         let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-        let mut last_depth_test = Some(false);
+        let mut last_depth_test = None;
 
         let backend_upload_started = Instant::now();
         if state.path == GlPath::Modern && !frame.sprite_instances.is_empty() {
