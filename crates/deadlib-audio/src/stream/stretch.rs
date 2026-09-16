@@ -298,7 +298,7 @@ impl SolaStretcher {
         }
         debug_assert_eq!(interleaved.len() % self.channels, 0);
         let frames = interleaved.len() / self.channels;
-        self.reserve_source_frames(frames);
+        self.reclaim_source_prefix(frames);
         match self.channels {
             1 => append_mono_i16(&mut self.state[0].data, interleaved),
             2 => {
@@ -306,6 +306,9 @@ impl SolaStretcher {
                 append_stereo_i16(&mut left[0].data, &mut right[0].data, interleaved);
             }
             _ => {
+                for channel in &mut self.state {
+                    channel.data.reserve(frames);
+                }
                 for frame in interleaved.chunks_exact(self.channels) {
                     for (ch, sample) in self.state.iter_mut().zip(frame) {
                         ch.data.push(f32::from(*sample) * I16_SCALE);
@@ -377,7 +380,7 @@ impl SolaStretcher {
     /// retained allocation already has enough room for the live frames and the
     /// incoming packet. This keeps decoder packet-size jitter from turning
     /// erased history into avoidable reallocations between periodic compactions.
-    fn reserve_source_frames(&mut self, frames: usize) {
+    fn reclaim_source_prefix(&mut self, frames: usize) {
         let reuse_prefix = self.state.iter().any(|channel| {
             prefix_can_satisfy_reserve(
                 &channel.data,
@@ -388,9 +391,6 @@ impl SolaStretcher {
         });
         if reuse_prefix {
             self.compact_storage();
-        }
-        for channel in &mut self.state {
-            channel.data.reserve(frames);
         }
     }
 
@@ -896,7 +896,7 @@ mod tests {
     }
 
     #[test]
-    fn source_reserve_reuses_dead_prefix_without_growing() {
+    fn source_prefix_reclaimed_without_growing() {
         let mut stretcher = SolaStretcher::new(2, 48_000);
         stretcher.data_start = 8;
         stretcher.data_avail_frames = 6;
@@ -917,7 +917,7 @@ mod tests {
             .map(|channel| channel.data.capacity())
             .collect::<Vec<_>>();
 
-        stretcher.reserve_source_frames(4);
+        stretcher.reclaim_source_prefix(4);
 
         assert_eq!(stretcher.data_start, 0);
         for ((channel, expected), capacity) in stretcher.state.iter().zip(&expected).zip(capacities)
