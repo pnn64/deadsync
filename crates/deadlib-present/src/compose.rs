@@ -4699,12 +4699,17 @@ fn rebuild_prepared_text_mesh_batches(
     align: actors::TextAlign,
     stroke: bool,
 ) {
+    *used_len = 0;
+    // Prewarming includes every page this pass can use. Without any pages,
+    // walking the glyphs cannot emit geometry (e.g. a font without strokes).
+    if batches.is_empty() {
+        return;
+    }
     for batch in batches.iter_mut() {
         Arc::get_mut(&mut batch.vertices)
             .expect("prepared text bank must be uniquely owned")
             .clear();
     }
-    *used_len = 0;
     visit_text_mesh_quads(
         font_height,
         line_spacing,
