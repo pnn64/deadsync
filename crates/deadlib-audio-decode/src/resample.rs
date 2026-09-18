@@ -74,22 +74,10 @@ impl PlanarAccum {
     pub fn consume_frames(&mut self, frames: usize) {
         let total_frames = self.channels.first().map_or(0, Vec::len);
         self.start_frame = (self.start_frame + frames).min(total_frames);
-        self.compact_if_needed();
-    }
-
-    pub fn clear(&mut self) {
-        self.start_frame = 0;
-        for channel in &mut self.channels {
-            channel.clear();
-        }
-    }
-
-    fn compact_if_needed(&mut self) {
         if self.start_frame == 0 {
             return;
         }
-        let total_frames = self.channels.first().map_or(0, Vec::len);
-        let remaining_frames = total_frames.saturating_sub(self.start_frame);
+        let remaining_frames = total_frames - self.start_frame;
         if remaining_frames == 0 {
             self.clear();
             return;
@@ -103,6 +91,13 @@ impl PlanarAccum {
             channel.truncate(remaining_frames);
         }
         self.start_frame = 0;
+    }
+
+    pub fn clear(&mut self) {
+        self.start_frame = 0;
+        for channel in &mut self.channels {
+            channel.clear();
+        }
     }
 }
 
