@@ -165,8 +165,6 @@ struct Dev {
     name: String,
     path: String,
     file: std::fs::File,
-    hat_x: i32,
-    hat_y: i32,
     dir: [bool; 4],
 }
 
@@ -918,8 +916,6 @@ fn open_dev(
         name: spec.name,
         path: spec.path,
         file,
-        hat_x: 0,
-        hat_y: 0,
         dir: [false; 4],
     })
 }
@@ -1261,10 +1257,8 @@ fn run_inner(
                 });
 
                 let horizontal = if ev.code == ABS_HAT0X {
-                    dev.hat_x = ev.value;
                     true
                 } else if ev.code == ABS_HAT0Y {
-                    dev.hat_y = ev.value;
                     false
                 } else {
                     continue;
