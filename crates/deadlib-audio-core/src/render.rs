@@ -349,16 +349,13 @@ impl RenderState {
         I: IntoIterator<Item = QueuedSfx>,
     {
         self.queue_sfx(queued_sfx);
-        let channels = self.device_channels.max(1);
         let chunk_samples = self.mix_f32.len();
-        let mut emitted_samples = 0;
         let mut popped_samples = 0;
         let mut mixed_sfx = false;
-        for out_chunk in out.chunks_mut(chunk_samples) {
-            let chunk_total = total_before + (emitted_samples / channels) as u64;
+        for (chunk, out_chunk) in out.chunks_mut(chunk_samples).enumerate() {
+            let chunk_total = total_before + (chunk * MIX_CHUNK_FRAMES) as u64;
             let (popped, chunk_mixed_sfx) = self.mix_f32_buffer_into(chunk_total, out_chunk);
             mixed_sfx |= chunk_mixed_sfx;
-            emitted_samples += out_chunk.len();
             popped_samples += popped;
         }
         if mixed_sfx {
@@ -374,12 +371,10 @@ impl RenderState {
         I: IntoIterator<Item = QueuedSfx>,
     {
         self.queue_sfx(queued_sfx);
-        let channels = self.device_channels.max(1);
         let chunk_samples = self.mix_f32.len();
-        let mut emitted_samples = 0;
         let mut popped_samples = 0;
-        for out_chunk in out.chunks_mut(chunk_samples) {
-            let chunk_total = total_before + (emitted_samples / channels) as u64;
+        for (chunk, out_chunk) in out.chunks_mut(chunk_samples).enumerate() {
+            let chunk_total = total_before + (chunk * MIX_CHUNK_FRAMES) as u64;
             let chunk_len = out_chunk.len();
             let (popped, mixed_sfx) = self.mix_f32_buffer(chunk_total, chunk_len);
             write_i16_samples(
@@ -387,7 +382,6 @@ impl RenderState {
                 out_chunk,
                 popped > 0 || mixed_sfx,
             );
-            emitted_samples += out_chunk.len();
             popped_samples += popped;
         }
         popped_samples
