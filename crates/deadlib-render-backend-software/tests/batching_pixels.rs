@@ -91,6 +91,47 @@ mod backend {
         }
 
         #[test]
+        fn mesh_colors_match_unity_tinted_reference() {
+            let texture = create_texture(&RgbaImage::new(1, 1), SamplerDesc::default()).unwrap();
+            let textures = Textures(texture);
+            let colors = [
+                [0.1, 0.4, 0.8, 0.5],
+                [-0.0, 0.0, f32::from_bits(1), 1.0],
+                [f32::MIN, f32::MAX, -1.0, 2.0],
+                [f32::NEG_INFINITY, f32::INFINITY, 0.5, 1.0],
+                [f32::from_bits(0x7f800001), 0.5, 1.0, 0.5],
+                [0.25, f32::from_bits(0xffc12345), 0.75, 1.0],
+                [0.25, 0.5, 0.75, f32::from_bits(0xff800001)],
+            ];
+            for blend in [BlendMode::Alpha, BlendMode::Add] {
+                for (case, color) in colors.iter().enumerate() {
+                    let mut frame = fixtures::fixture(1, blend, false, false);
+                    for (index, vertex) in frame.mesh_vertices.iter_mut().enumerate() {
+                        vertex.color = if index % 3 == 0 {
+                            *color
+                        } else {
+                            colors[(case + index) % colors.len()]
+                        };
+                    }
+                    let mut reference = frame.clone();
+                    for vertex in &mut reference.mesh_vertices {
+                        // Preserve the old arithmetic, including NaN quieting.
+                        for channel in &mut vertex.color {
+                            *channel *= std::hint::black_box(1.0);
+                        }
+                    }
+                    for stage in [false, true] {
+                        assert_eq!(
+                            render((&frame).into(), &textures, stage),
+                            render((&reference).into(), &textures, stage),
+                            "blend={blend:?} case={case} stage={stage}"
+                        );
+                    }
+                }
+            }
+        }
+
+        #[test]
         fn batch_coalescing_preserves_direct_and_staged_software_pixels() {
             let texture = create_texture(
                 &RgbaImage::from_fn(4, 4, |x, y| {

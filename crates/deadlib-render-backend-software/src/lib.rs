@@ -878,7 +878,6 @@ fn prepare_objects(
                         mesh_triangles,
                         prepared.len() as u32,
                         &projection,
-                        [1.0; 4],
                         vertices,
                         width,
                         height,
@@ -1120,7 +1119,6 @@ fn draw_prepared<'a>(
             };
             rasterize_mesh_triangles(
                 projection,
-                [1.0; 4],
                 vertices,
                 *blend,
                 width,
@@ -1474,7 +1472,6 @@ fn prepare_mesh_triangles(
     out: &mut Vec<PreparedTriangle<ScreenVertexColor>>,
     object: u32,
     mvp: &Matrix4,
-    tint: [f32; 4],
     vertices: &[deadlib_render_core::MeshVertex],
     width: usize,
     height: usize,
@@ -1506,12 +1503,7 @@ fn prepare_mesh_triangles(
             tri[i] = ScreenVertexColor {
                 x: f32::midpoint(ndc_x, 1.0) * width as f32,
                 y: ((1.0 - ndc_y) * 0.5) * height as f32,
-                color: [
-                    chunk[i].color[0] * tint[0],
-                    chunk[i].color[1] * tint[1],
-                    chunk[i].color[2] * tint[2],
-                    chunk[i].color[3] * tint[3],
-                ],
+                color: chunk[i].color,
             };
         }
         projected_count = projected_count.saturating_add(3);
@@ -1860,7 +1852,6 @@ fn rasterize_prepared_tmesh(
 
 fn rasterize_mesh_triangles(
     mvp: &Matrix4,
-    tint: [f32; 4],
     vertices: &[deadlib_render_core::MeshVertex],
     blend: BlendMode,
     width: usize,
@@ -1898,12 +1889,7 @@ fn rasterize_mesh_triangles(
             tri[i] = ScreenVertexColor {
                 x: sx,
                 y: sy,
-                color: [
-                    chunk[i].color[0] * tint[0],
-                    chunk[i].color[1] * tint[1],
-                    chunk[i].color[2] * tint[2],
-                    chunk[i].color[3] * tint[3],
-                ],
+                color: chunk[i].color,
             };
         }
 
