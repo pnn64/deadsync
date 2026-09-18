@@ -26736,6 +26736,69 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_ddr_explosions_honor_resolution_hints() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            640.0, 480.0,
+        ));
+        for skin in ["ddr-note", "ddr-vivid", "ddr-rainbow"] {
+            for (file, expected) in [
+                ("Down Tap Explosion Dim (doubleres).png", 64.0),
+                ("Down Tap Explosion Bright.png", 96.0),
+            ] {
+                let path = workspace_root()
+                    .join("assets/noteskins/dance")
+                    .join(skin)
+                    .join(file);
+                let key = path.to_string_lossy().into_owned();
+                let mut assets = AssetManager::new();
+                assets.queue_texture_upload(key.clone(), image::open(&path).unwrap().into_rgba8());
+                let overlay = SongLuaOverlayActor {
+                    kind: test_sprite_kind(&key),
+                    name: None,
+                    parent_index: None,
+                    initial_state: SongLuaOverlayState::default(),
+                    message_commands: Vec::new(),
+                };
+                let mut scratch =
+                    SongLuaProjectedMeshScratch::textured(PROJECTED_MESH_VERTEX_CAPACITY);
+                // Cover both the immediate and retained bindings, and the skin's zoom tween.
+                for retained in [false, true, true] {
+                    for zoom in [1.0, 1.1] {
+                        let actor = build_song_lua_overlay_actor_with_scratch(
+                            &overlay,
+                            SongLuaOverlayState {
+                                x: 320.0,
+                                y: 240.0,
+                                zoom,
+                                ..Default::default()
+                            },
+                            None,
+                            &assets,
+                            1,
+                            screen_width(),
+                            screen_height(),
+                            0.0,
+                            0.0,
+                            0.0,
+                            retained.then_some(&mut scratch),
+                        )
+                        .expect_actor("DDR explosion");
+                        let Actor::Sprite {
+                            size: [SizeSpec::Px(w), SizeSpec::Px(h)],
+                            ..
+                        } = actor
+                        else {
+                            panic!("expected explosion sprite");
+                        };
+                        assert!((w - expected * zoom).abs() < 0.001, "{skin}/{file}: {w}");
+                        assert!((h - expected * zoom).abs() < 0.001, "{skin}/{file}: {h}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn song_lua_sprite_binding_tracks_availability_key_changes_and_reload() {
         let mut textures = deadlib_assets::TextureStore::<()>::new();
         let key: Arc<str> = Arc::from("lua-binding 4x2.png");

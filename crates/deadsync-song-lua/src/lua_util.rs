@@ -3473,17 +3473,32 @@ pub fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)
 }
 
 pub fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
-    let sheet_dims = actor_texture_path(actor)?
+    let path = actor_texture_path(actor)?;
+    let sheet_dims = path
         .as_ref()
         .map(|path| parse_sprite_sheet_dims(path.to_string_lossy().as_ref()));
     Ok(sprite_image_frame_size(
-        actor_image_texture_size(actor)?,
+        path.as_deref().and_then(image_source_size),
         actor
             .get::<Option<bool>>("__songlua_state_sprite_animate")?
             .unwrap_or(false),
         actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
         sheet_dims,
     ))
+}
+
+fn image_source_size(path: &Path) -> Option<(f32, f32)> {
+    if !is_song_lua_image_path(path) {
+        return None;
+    }
+    let (width, height) = image_dimensions(path).ok()?;
+    // RageBitmapTexture applies the res override before halving doubleres.
+    let (width, height) = deadlib_assets::texture_source_dims_from_real(
+        path.to_string_lossy().as_ref(),
+        width,
+        height,
+    );
+    Some((width as f32, height as f32))
 }
 
 pub fn actor_crop_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
@@ -3511,10 +3526,8 @@ pub fn crop_actor_to(lua: &Lua, actor: &Table, width: f32, height: f32) -> mlua:
 }
 
 pub fn texture_source_size(lua: &Lua, actor: &Table, path: &Path) -> mlua::Result<(f32, f32)> {
-    if is_song_lua_image_path(path)
-        && let Ok((width, height)) = image_dimensions(path)
-    {
-        return Ok((width as f32, height as f32));
+    if let Some(size) = image_source_size(path) {
+        return Ok(size);
     }
     if is_song_lua_video_path(path) {
         return song_lua_screen_size(lua);
@@ -3837,6 +3850,8 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
             .as_deref()
             .unwrap_or_else(|| Path::new(&raw_texture)),
     )?;
+    let (texture_width, texture_height) =
+        actor_image_texture_size(actor)?.unwrap_or((source_width, source_height));
     install_texture_proxy_methods(
         lua,
         &texture,
@@ -3844,8 +3859,8 @@ pub fn create_texture_proxy(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
         path,
         source_width,
         source_height,
-        source_width,
-        source_height,
+        texture_width,
+        texture_height,
         frame_count,
     )?;
     Ok(texture)

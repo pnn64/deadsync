@@ -4,7 +4,7 @@ use crate::registry::{
 };
 use crate::{
     GeneratedTexture, TexMeta, ascii_ci_hash, parse_sprite_sheet_dims, register_texture_dims,
-    texture_dims, texture_registry_generation,
+    texture_dims, texture_registry_generation, texture_source_dims_from_real,
     upload::{PendingTextureUpload, TextureUploadBudget, TextureUploadQueue},
 };
 use deadlib_present::texture::{TextureContext, TextureMeta};
@@ -21,6 +21,7 @@ use std::sync::{Arc, mpsc::SyncSender};
 #[derive(Clone, Copy, Debug)]
 pub struct BoundTexture {
     pub handle: TextureHandle,
+    /// Logical source size after res/doubleres hints, before dividing into frames.
     /// None while a reserved name has neither decoded metadata nor an upload.
     pub dimensions: Option<TexMeta>,
     pub sheet: (u32, u32),
@@ -107,18 +108,24 @@ impl<T> TextureStore<T> {
 
     /// Binds a reserved identity; metadata alone never invents a GPU handle.
     ///
-    /// A queued upload can already supply native dimensions. Rendering may use
-    /// that handle once the application's upload drain installs the texture.
+    /// A queued upload can already supply dimensions. Source-size hints are
+    /// resolved here so retained bindings do no filename parsing on each draw.
+    /// Rendering may use the handle once the upload drain installs the texture.
     pub fn bind_texture(&self, key: &str) -> Option<BoundTexture> {
         let handle = self.texture_handle(key);
         if handle == INVALID_TEXTURE_HANDLE {
             return None;
         }
+        let key = self.texture_key(handle);
         Some(BoundTexture {
             handle,
             dimensions: self
                 .dimensions(handle)
-                .or_else(|| texture_dims(self.texture_key(handle))),
+                .or_else(|| texture_dims(key))
+                .map(|meta| {
+                    let (w, h) = texture_source_dims_from_real(key, meta.w, meta.h);
+                    TexMeta { w, h }
+                }),
             sheet: *self.sheets.get(&handle)?,
         })
     }
@@ -544,6 +551,37 @@ mod tests {
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
+    }
+
+    #[test]
+    fn binding_dimensions_honor_resolution_hints() {
+        for (key, expected) in [
+            ("bound-hints 4x2.png", (128, 64)),
+            ("bound-hints 4x2 (doubleres).png", (64, 32)),
+            ("bound-hints 4x2 (res 80x48).png", (80, 48)),
+            ("bound-hints 4x2 (res 80x48) (doubleres).png", (40, 24)),
+        ] {
+            register_texture_dims(key, 128, 64);
+            // Bindings may be created from metadata, pending uploads, or GPU textures.
+            for source in 0..3 {
+                let mut store = TextureStore::<()>::new();
+                let handle = store.reserve_texture_handle(key.into());
+                match source {
+                    1 => store.queue_texture_upload(key.into(), blank_rgba(128, 64)),
+                    2 => {
+                        store.insert_texture(key.into(), (), 128, 64);
+                    }
+                    _ => {}
+                }
+                let binding = store.bind_texture(&key.to_ascii_uppercase()).unwrap();
+                let dimensions = binding.dimensions.unwrap();
+                assert_eq!(binding.handle, handle);
+                assert_eq!(binding.sheet, (4, 2));
+                assert_eq!((dimensions.w, dimensions.h), expected, "{key}");
+                let physical = store.texture_dims(key).unwrap();
+                assert_eq!((physical.w, physical.h), (128, 64));
+            }
+        }
     }
 
     #[test]

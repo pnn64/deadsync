@@ -11128,6 +11128,56 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn compile_song_lua_sprite_resolution_hints() {
+        let song_dir = test_dir("sprite-resolution-hints");
+        let entry = song_dir.join("default.lua");
+        for (name, expected) in [
+            ("panel 4x2.png", "32:32:128:64:128:64"),
+            ("panel 4x2 (doubleres).png", "16:16:64:32:128:64"),
+            ("panel 4x2 (res 80x48).png", "20:24:80:48:128:64"),
+            (
+                "panel 4x2 (res 80x48) (doubleres).png",
+                "10:12:40:24:128:64",
+            ),
+        ] {
+            image::RgbaImage::new(128, 64)
+                .save(song_dir.join(name))
+                .unwrap();
+            fs::write(
+                &entry,
+                format!(
+                    r#"
+return Def.Sprite{{
+    Texture="{name}",
+    OnCommand=function(self)
+        local texture = self:GetTexture()
+        mod_actions = {{{{1, string.format("%.0f:%.0f:%.0f:%.0f:%.0f:%.0f",
+            self:GetWidth(), self:GetHeight(),
+            texture:GetSourceWidth(), texture:GetSourceHeight(),
+            texture:GetTextureWidth(), texture:GetTextureHeight()), true}}}}
+        self:setstate(0):addimagecoords(16, 8)
+    end,
+}}
+"#
+                ),
+            )
+            .unwrap();
+            let compiled = test_compile_song_lua(
+                &entry,
+                &SongLuaCompileContext::new(&song_dir, "Sprite Resolution Hints"),
+            )
+            .unwrap();
+            assert_eq!(compiled.messages[0].message, expected, "{name}");
+            // Pixel-coordinate offsets still use the physical texture dimensions.
+            assert_eq!(
+                compiled.overlays[0].initial_state.custom_texture_rect,
+                Some([0.125, 0.125, 0.375, 0.625]),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn compile_song_lua_setstate_uses_sprite_sheet_cell_size() {
         let song_dir = test_dir("sprite-setstate");
         let image_path = song_dir.join("panel 4x3.png");
