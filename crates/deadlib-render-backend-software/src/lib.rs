@@ -1760,9 +1760,9 @@ fn rasterize_prepared_sprite(
     stripe_y_start: usize,
     stripe_y_end: usize,
     buffer: &mut [u32],
-) -> u32 {
-    if tint[3] <= 0.0 || width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
-        return 0;
+) {
+    if width == 0 || height == 0 || stripe_y_start >= stripe_y_end {
+        return;
     }
 
     if let Some(inv_denom) = inv_denom[0] {
@@ -1803,8 +1803,6 @@ fn rasterize_prepared_sprite(
             buffer,
         );
     }
-
-    4
 }
 
 fn rasterize_prepared_mesh(
