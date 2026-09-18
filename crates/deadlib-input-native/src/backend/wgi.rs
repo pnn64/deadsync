@@ -409,6 +409,7 @@ struct GamepadState {
 }
 
 struct RawState {
+    // Current/previous buffers are sized together at creation and never resized.
     buttons_prev: Vec<bool>,
     buttons_now: Vec<bool>,
     switches: Vec<GameControllerSwitchPosition>,
@@ -718,7 +719,6 @@ fn pump_raw<F>(
         return;
     };
 
-    let n = st.buttons_now.len().min(st.buttons_prev.len());
     let mut want = [false; 4];
     for s in &st.switches {
         let (x, y) = dir_xy_from_switch(*s);
@@ -727,12 +727,11 @@ fn pump_raw<F>(
         want[2] |= x < 0;
         want[3] |= x > 0;
     }
-    let n_axes = st.axes.len().min(st.axes_prev.len());
     if !raw_reading_changed(
-        &st.buttons_prev[..n],
-        &st.buttons_now[..n],
-        &st.axes_prev[..n_axes],
-        &st.axes[..n_axes],
+        &st.buttons_prev,
+        &st.buttons_now,
+        &st.axes_prev,
+        &st.axes,
         st.dir,
         want,
     ) {
@@ -743,8 +742,8 @@ fn pump_raw<F>(
     let (polled_at, poll_host_nanos) = host.sample_time();
     let (timestamp, host_nanos) = st.clock.sample_time(time, polled_at, poll_host_nanos, host);
 
-    for i in 0..n {
-        if st.buttons_now[i] == st.buttons_prev[i] {
+    for (i, (&pressed, &previous)) in st.buttons_now.iter().zip(&st.buttons_prev).enumerate() {
+        if pressed == previous {
             continue;
         }
         let Some(code_u32) = RAW_BTN_BASE.checked_add(i as u32) else {
@@ -756,20 +755,20 @@ fn pump_raw<F>(
             host_nanos,
             code: PadCode(code_u32),
             uuid,
-            value: if st.buttons_now[i] { 1.0 } else { 0.0 },
-            pressed: st.buttons_now[i],
+            value: if pressed { 1.0 } else { 0.0 },
+            pressed,
         });
     }
     std::mem::swap(&mut st.buttons_prev, &mut st.buttons_now);
 
     emit_dir_edges(emit_pad, id, &mut st.dir, timestamp, host_nanos, want);
 
-    for i in 0..n_axes {
-        let v = scale_axis(st.axes[i]);
-        if st.axes_prev[i] == v {
+    for (i, (&axis, previous)) in st.axes.iter().zip(&mut st.axes_prev).enumerate() {
+        let v = scale_axis(axis);
+        if *previous == v {
             continue;
         }
-        st.axes_prev[i] = v;
+        *previous = v;
         let Some(code_u32) = RAW_AXIS_BASE.checked_add(i as u32) else {
             continue;
         };
