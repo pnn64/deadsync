@@ -9038,20 +9038,14 @@ fn clip_poly_edge_into(
         } else {
             curr.pos[axis] <= bound
         };
-        if prev_in && curr_in {
-            out.push(curr);
-        } else if prev_in && !curr_in {
+        if prev_in != curr_in {
             let denom = curr.pos[axis] - prev.pos[axis];
             if denom.abs() > 1e-6 {
                 let t = (bound - prev.pos[axis]) / denom;
                 out.push(lerp_clip(prev, curr, t));
             }
-        } else if !prev_in && curr_in {
-            let denom = curr.pos[axis] - prev.pos[axis];
-            if denom.abs() > 1e-6 {
-                let t = (bound - prev.pos[axis]) / denom;
-                out.push(lerp_clip(prev, curr, t));
-            }
+        }
+        if curr_in {
             out.push(curr);
         }
         prev = curr;
