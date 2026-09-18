@@ -594,8 +594,6 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
     if buffer.len() <= correlate.len() {
         return 0;
     }
-    let distance = buffer.len() - correlate.len();
-    let mut best_offset = 0usize;
     // Silence produces a perfect first candidate. Peel it so the mathematical
     // lower bound exits immediately without adding a condition to every
     // ordinary, nonmatching candidate.
@@ -603,11 +601,19 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
     if first_score == 0.0 {
         return 0;
     }
-    let mut best_score = if first_score.is_nan() {
+    let best_score = if first_score.is_nan() {
         f32::INFINITY
     } else {
         first_score
     };
+    find_closest_match_after_first(buffer, correlate, best_score)
+}
+
+// Continue with candidate zero already scored, preserving its lead on ties.
+#[inline]
+fn find_closest_match_after_first(buffer: &[f32], correlate: &[f32], mut best_score: f32) -> usize {
+    let distance = buffer.len() - correlate.len();
+    let mut best_offset = 0usize;
     for i in 1..=distance {
         let frames = &buffer[i..i + correlate.len()];
         let score = correlation_score(frames, correlate, best_score);
@@ -670,7 +676,7 @@ fn find_closest_match_stereo(
     // independent-channel path; signed-zero differences have the same L1 score.
     if left_first == right_first && left_buffer == right_buffer && left_correlate == right_correlate
     {
-        let offset = find_closest_match(left_buffer, left_correlate);
+        let offset = find_closest_match_after_first(left_buffer, left_correlate, left_best_score);
         return (offset, offset);
     }
     for offset in 1..=distance {
