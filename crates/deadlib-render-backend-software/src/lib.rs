@@ -222,7 +222,7 @@ impl StripeItem {
 
     #[inline(always)]
     const fn is_tmesh(self) -> bool {
-        self.0 & Self::TEXTURED != 0 && !self.is_whole()
+        self.0 & Self::TEXTURED != 0
     }
 }
 
@@ -988,7 +988,7 @@ fn draw_rows(
                 (mesh_triangles[triangle].object as usize, Some(triangle))
             };
             let prepared = &prepared_objects[object];
-            let drawn = if let Some(triangle) = triangle {
+            if let Some(triangle) = triangle {
                 draw_prepared_triangle(
                     prepared,
                     triangle as u32,
@@ -1000,9 +1000,9 @@ fn draw_rows(
                     stripe_y_end,
                     buffer,
                     width,
-                )
+                );
             } else {
-                draw_prepared(
+                vertices_drawn = vertices_drawn.saturating_add(draw_prepared(
                     prepared,
                     true,
                     frame,
@@ -1015,9 +1015,8 @@ fn draw_rows(
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
-                )
-            };
-            vertices_drawn = vertices_drawn.saturating_add(drawn);
+                ));
+            }
         }
     } else {
         for prepared in prepared_objects {
@@ -1211,7 +1210,7 @@ fn draw_prepared_triangle<'a>(
     stripe_y_end: usize,
     buffer: &mut [u32],
     width: usize,
-) -> u32 {
+) {
     match prepared {
         PreparedObject::Mesh { blend, .. } => {
             let triangle = &mesh_triangles[triangle as usize];
@@ -1232,7 +1231,7 @@ fn draw_prepared_triangle<'a>(
             ..
         } => {
             let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
-                return 0;
+                return;
             };
             let triangle = &tmesh_triangles[triangle as usize];
             rasterize_triangle_tex_color_prepared(
@@ -1254,7 +1253,6 @@ fn draw_prepared_triangle<'a>(
         }
         _ => debug_assert!(false, "whole objects must use whole-object stripe items"),
     }
-    0
 }
 
 #[inline(always)]
