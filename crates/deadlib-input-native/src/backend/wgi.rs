@@ -116,27 +116,6 @@ const fn apply_offset(reading_ns: u64, offset_ns: i64) -> u64 {
     }
 }
 
-#[inline(always)]
-fn instant_from_host_sample(
-    target_host_nanos: u64,
-    sample_host_nanos: u64,
-    sample: Instant,
-) -> Instant {
-    if target_host_nanos >= sample_host_nanos {
-        sample
-            .checked_add(Duration::from_nanos(
-                target_host_nanos.saturating_sub(sample_host_nanos),
-            ))
-            .unwrap_or(sample)
-    } else {
-        sample
-            .checked_sub(Duration::from_nanos(
-                sample_host_nanos.saturating_sub(target_host_nanos),
-            ))
-            .unwrap_or(sample)
-    }
-}
-
 impl ReadingClock {
     #[inline(always)]
     const fn seed(&mut self, raw: u64, poll_host_nanos: u64) {
@@ -281,10 +260,11 @@ impl ReadingClock {
         host: BackendHost,
     ) -> (Instant, u64) {
         let host_nanos = self.sample_host_nanos(raw, poll_host_nanos, host);
-        (
-            instant_from_host_sample(host_nanos, poll_host_nanos, polled_at),
-            host_nanos,
-        )
+        // Mapped timestamps are clamped to the poll sample, including fallback.
+        let timestamp = polled_at
+            .checked_sub(Duration::from_nanos(poll_host_nanos - host_nanos))
+            .unwrap_or(polled_at);
+        (timestamp, host_nanos)
     }
 
     #[inline(always)]
