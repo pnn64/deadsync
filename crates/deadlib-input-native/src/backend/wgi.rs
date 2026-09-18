@@ -381,10 +381,8 @@ fn gamepad_reading_changed(
     buttons_now: GamepadButtons,
     axes_prev: [i16; 6],
     axes_now: [i16; 6],
-    dir_prev: [bool; 4],
-    dir_now: [bool; 4],
 ) -> bool {
-    buttons_now != buttons_prev || axes_now != axes_prev || dir_now != dir_prev
+    buttons_now != buttons_prev || axes_now != axes_prev
 }
 
 #[inline(always)]
@@ -665,15 +663,7 @@ fn pump_gamepad<F>(
     let ry = scale_axis(reading.RightThumbstickY);
 
     let axis_values = [lt, rt, lx, ly, rx, ry];
-    let want = gamepad_dirs(reading.Buttons, axis_values);
-    if !gamepad_reading_changed(
-        st.buttons_prev,
-        reading.Buttons,
-        st.axes_prev,
-        axis_values,
-        st.dir,
-        want,
-    ) {
+    if !gamepad_reading_changed(st.buttons_prev, reading.Buttons, st.axes_prev, axis_values) {
         // Frozen WGI readings cannot improve clock calibration. If only the
         // hardware timestamp advanced, retain that sample without constructing
         // the `Instant` needed solely by emitted events.
@@ -681,6 +671,8 @@ fn pump_gamepad<F>(
         return;
     }
 
+    // Directions are derived entirely from the buttons and scaled axes above.
+    let want = gamepad_dirs(reading.Buttons, axis_values);
     let (polled_at, poll_host_nanos) = host.sample_time();
     let (timestamp, host_nanos) =
         st.clock
@@ -1146,32 +1138,24 @@ mod reading_clock_tests {
             GamepadButtons::None,
             axes,
             axes,
-            dirs,
-            dirs,
         ));
         assert!(gamepad_reading_changed(
             GamepadButtons::None,
             GamepadButtons::A,
             axes,
             axes,
-            dirs,
-            dirs,
         ));
         assert!(gamepad_reading_changed(
             GamepadButtons::None,
             GamepadButtons::None,
             axes,
             [0, 0, 1, 0, 0, 0],
-            dirs,
-            dirs,
         ));
         assert!(gamepad_reading_changed(
             GamepadButtons::None,
-            GamepadButtons::None,
+            GamepadButtons::DPadUp,
             axes,
             axes,
-            dirs,
-            [true, false, false, false],
         ));
 
         assert!(!raw_reading_changed(
