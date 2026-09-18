@@ -326,22 +326,20 @@ impl SolaStretcher {
         if max_frames == 0 {
             return 0;
         }
-        let mut produced = 0usize;
         let mut remaining = max_frames;
         loop {
             let cursor_avail = self.cursor_avail();
             if cursor_avail == 0 {
                 if !self.step() {
-                    return produced;
+                    return max_frames - remaining;
                 }
                 continue;
             }
             let n = cursor_avail.min(remaining);
             self.emit(output, n);
-            produced += n;
             remaining -= n;
             if remaining == 0 {
-                return produced;
+                return max_frames;
             }
         }
     }
@@ -536,9 +534,6 @@ impl SolaStretcher {
     }
 
     fn erase_front(&mut self, frames: usize) {
-        if frames == 0 {
-            return;
-        }
         debug_assert!(frames <= self.data_avail_frames);
         debug_assert!(frames <= self.uncorrelated_pos);
         for ch in &mut self.state {
