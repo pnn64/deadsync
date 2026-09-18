@@ -338,7 +338,7 @@ impl StripeBins {
         let end = (rows.end as usize)
             .div_ceil(SOFTWARE_ROW_CHUNK)
             .min(stripe_count);
-        for stripe in first.min(stripe_count)..end {
+        for stripe in first..end {
             offsets[stripe + 1] += 1;
         }
     }
@@ -349,7 +349,7 @@ impl StripeBins {
         let end = (rows.end as usize)
             .div_ceil(SOFTWARE_ROW_CHUNK)
             .min(stripe_count);
-        for stripe in first.min(stripe_count)..end {
+        for stripe in first..end {
             let slot = self.cursors[stripe] as usize;
             self.items[slot] = item;
             self.cursors[stripe] += 1;
