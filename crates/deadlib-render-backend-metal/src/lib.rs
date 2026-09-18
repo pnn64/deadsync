@@ -713,7 +713,6 @@ fn draw_inner(
                     run.instance_start as u64 * mem::size_of::<SpriteInstanceRaw>() as u64;
                 match cache.instance_buffer(DrawKind::Sprite) {
                     BufferUpdate::Bind => {
-                        tmesh_buffer_cache.reset();
                         encoder.set_vertex_buffer(
                             0,
                             Some(&state.frames[slot_index].sprites.raw),
@@ -788,7 +787,6 @@ fn draw_inner(
                     continue;
                 }
                 if cache.kind_changed(DrawKind::Mesh) {
-                    tmesh_buffer_cache.reset();
                     encoder.set_vertex_buffer(0, Some(&state.frames[slot_index].meshes.raw), 0);
                 }
                 if cache.cull_changed(CullMode::None) {
@@ -1398,7 +1396,6 @@ fn record_offscreen_pass(
                 let offset = run.instance_start as u64 * mem::size_of::<SpriteInstanceRaw>() as u64;
                 match cache.instance_buffer(DrawKind::Sprite) {
                     BufferUpdate::Bind => {
-                        tmesh_buffer_cache.reset();
                         encoder.set_vertex_buffer(0, Some(&buffers.sprites.raw), offset);
                     }
                     BufferUpdate::Offset => encoder.set_vertex_buffer_offset(0, offset),
@@ -1469,7 +1466,6 @@ fn record_offscreen_pass(
                     continue;
                 }
                 if cache.kind_changed(DrawKind::Mesh) {
-                    tmesh_buffer_cache.reset();
                     encoder.set_vertex_buffer(0, Some(&buffers.meshes.raw), 0);
                 }
                 if cache.cull_changed(CullMode::None) {

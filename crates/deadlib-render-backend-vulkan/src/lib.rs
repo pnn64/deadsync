@@ -2326,7 +2326,6 @@ fn record_render_pass(
                             Bound::Sprite
                         };
                         last_camera = CameraUploadCache::default();
-                        tmesh_buffer_cache.reset();
                     }
                     if last_camera.update_required(run.camera) {
                         let projection = pass
@@ -2400,7 +2399,6 @@ fn record_render_pass(
                             &[0],
                         );
                         bound = Bound::Mesh;
-                        tmesh_buffer_cache.reset();
                     }
                     if last_camera.update_required(run.camera) {
                         let projection = pass
@@ -2932,7 +2930,6 @@ pub fn draw(
                             Bound::Sprite
                         };
                         last_camera = CameraUploadCache::default();
-                        tmesh_buffer_cache.reset();
                     }
 
                     if last_camera.update_required(run.camera) {
@@ -2999,7 +2996,6 @@ pub fn draw(
                         let vb = state.mesh_ring.as_ref().unwrap().buffer;
                         device.cmd_bind_vertex_buffers(cmd, 0, &[vb], &[0]);
                         bound = Bound::Mesh;
-                        tmesh_buffer_cache.reset();
                     }
 
                     if last_camera.update_required(draw.camera) {

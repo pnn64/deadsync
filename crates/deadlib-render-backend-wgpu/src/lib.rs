@@ -1540,8 +1540,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         // uniform projection bindings remain valid.
                         bindings.reset_camera();
                     }
-                    tmesh_buffer_cache.reset();
-                    last_tmesh_depth_test = None;
                 }
                 let yuv = tex.images.is_yuv420();
                 if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
@@ -1598,8 +1596,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     if matches!(state.proj, ProjState::Immediates) {
                         bindings.reset_camera();
                     }
-                    tmesh_buffer_cache.reset();
-                    last_tmesh_depth_test = None;
                 }
                 if last_blend != Some(run.blend) {
                     pass.set_pipeline(mesh_pipelines.get(run.blend));
