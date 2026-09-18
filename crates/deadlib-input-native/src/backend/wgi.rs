@@ -182,7 +182,7 @@ impl ReadingClock {
         prev_host_nanos: u64,
         poll_host_nanos: u64,
         host: BackendHost,
-    ) -> Option<ReadingClockKind> {
+    ) -> Option<(ReadingClockKind, u64)> {
         let host_delta = poll_host_nanos.saturating_sub(prev_host_nanos);
         let mut best = None;
         let mut best_error = u64::MAX;
@@ -199,7 +199,7 @@ impl ReadingClock {
         }
         let threshold_ns = 5_000_000_u64.max(host_delta / 2);
         if best_error <= threshold_ns {
-            best
+            best.map(|kind| (kind, best_error))
         } else {
             None
         }
@@ -207,7 +207,7 @@ impl ReadingClock {
 
     #[inline(always)]
     fn update_kind(&mut self, raw: u64, poll_host_nanos: u64, host: BackendHost) {
-        let Some(best_kind) = Self::pick_kind(
+        let Some((best_kind, best_error)) = Self::pick_kind(
             self.last_raw,
             raw,
             self.last_poll_host_nanos,
@@ -216,21 +216,14 @@ impl ReadingClock {
         ) else {
             return;
         };
+        if self.kind == best_kind {
+            return;
+        }
         if self.kind == ReadingClockKind::Unknown {
             self.kind = best_kind;
             self.offset_ns = 0;
             return;
         }
-        let Some(best_error) = Self::delta_error(
-            best_kind,
-            self.last_raw,
-            raw,
-            self.last_poll_host_nanos,
-            poll_host_nanos,
-            host,
-        ) else {
-            return;
-        };
         let Some(current_error) = Self::delta_error(
             self.kind,
             self.last_raw,
