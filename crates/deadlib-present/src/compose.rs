@@ -6029,15 +6029,15 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
             }
         }
         if fixed_z {
+            let items = &mut out.items[proxy_start..];
+            // Flat draws allocate increasing orders; shadows reuse their source
+            // order. The first emitted draw therefore has the minimum order.
+            let first_order = items.first().map_or(*order_counter, |item| item.order);
+            debug_assert!(items.iter().all(|item| item.order >= first_order));
             // ActorProxy normalizes each camera-delimited source run by local
             // Z before its own fixed layer replaces those values.
-            out.items[proxy_start..].sort_unstable_by_key(|item| item.sort_key());
-            let first_order = out.items[proxy_start..]
-                .iter()
-                .map(|item| item.order)
-                .min()
-                .unwrap_or(*order_counter);
-            for (index, item) in out.items[proxy_start..].iter_mut().enumerate() {
+            items.sort_unstable_by_key(|item| item.sort_key());
+            for (index, item) in items.iter_mut().enumerate() {
                 item.z = segment.z_shift;
                 item.order = first_order.saturating_add(saturating_u32(index));
             }
@@ -14060,6 +14060,112 @@ mod tests {
             sprite_painter_stream(&actor_render)
         );
         assert_eq!(direct_render.cameras, actor_render.cameras);
+    }
+
+    #[test]
+    fn flat_proxy_preserves_reserved_orders_and_shadow_order() {
+        let fonts = font::FontMap::from_iter([("numeric", test_numeric_font())]);
+        let metrics = Metrics {
+            left: 0.0,
+            right: 100.0,
+            top: 100.0,
+            bottom: 0.0,
+        };
+        let mesh = FlatTexturedMesh {
+            offset: [0.0; 2],
+            world_z: 0.0,
+            local_transform: Matrix4::IDENTITY,
+            texture: Arc::from("proxy-mesh"),
+            tint: [0.0; 4],
+            glow: [0.0; 4],
+            vertices: FlatMeshVertices::Shared(Arc::from([TexturedMeshVertex::default(); 3])),
+            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            uv_scale: [1.0; 2],
+            uv_offset: [0.0; 2],
+            uv_tex_shift: [0.0; 2],
+            depth_test: false,
+            blend: BlendMode::Alpha,
+            z: 10,
+        };
+        let mut draws = [
+            // Reserves an order without emitting a draw.
+            FlatDraw::TexturedMesh(mesh.clone()),
+            FlatDraw::TexturedMesh(FlatTexturedMesh {
+                glow: [1.0; 4],
+                ..mesh
+            }),
+            FlatDraw::PreparedU32(FlatPreparedU32 {
+                align: [0.0; 2],
+                offset: [0.0; 2],
+                color: [1.0; 4],
+                font: "numeric",
+                text: InlineU32Text::new(123),
+                slot: 0,
+                align_text: TextAlign::Left,
+                z: -10,
+                scale: [1.0; 2],
+                blend: BlendMode::Alpha,
+                shadow_len: [2.0; 2],
+                shadow_color: [0.5; 4],
+            }),
+        ];
+        let compose = |segment: ActorSegment<'_>, mut order| {
+            let mut builder = FrameBuilder::default();
+            let mut sprites = Vec::new();
+            super::build_flat_draws(
+                &segment,
+                super::SmRect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+                &metrics,
+                &fonts,
+                &mut ComposeScratch::default(),
+                &mut super::ActorSequenceState::new(0),
+                &mut Vec::new(),
+                &mut order,
+                &mut builder,
+                &mut sprites,
+                &mut TextLayoutCache::default(),
+                &mut TextureLookupCache::default(),
+                &TestDrawTextureContext,
+                None,
+                0.0,
+            );
+            (builder.items, order)
+        };
+        // Cover empty output, reserved gaps before the first draw, text-first
+        // runs with stroke reservations, and saturation of the order counter.
+        for _ in 0..draws.len() {
+            for len in 0..=draws.len() {
+                for start_order in [0, 37, u32::MAX - 2, u32::MAX] {
+                    let draws = &draws[..len];
+                    let (mut expected, next_order) = compose(
+                        ActorSegment::new(&[]).with_flat_draws(draws, None),
+                        start_order,
+                    );
+                    let first_order = expected
+                        .iter()
+                        .map(|item| item.order)
+                        .min()
+                        .unwrap_or(next_order);
+                    expected.sort_unstable_by_key(|item| item.sort_key());
+                    for (index, item) in expected.iter_mut().enumerate() {
+                        item.z = 42;
+                        item.order = first_order.saturating_add(index as u32);
+                    }
+                    let (actual, actual_next_order) = compose(
+                        ActorSegment::flat_proxy(draws, [0.0; 2], 42, &[1.0; 4], BlendMode::Alpha),
+                        start_order,
+                    );
+                    assert_eq!(actual, expected);
+                    assert_eq!(actual_next_order, next_order);
+                }
+            }
+            draws.rotate_left(1);
+        }
     }
 
     #[test]
