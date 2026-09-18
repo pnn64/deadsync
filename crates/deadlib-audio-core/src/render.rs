@@ -247,7 +247,6 @@ impl RenderState {
         let target_gain = music_target_gain();
         let mut track_frame_start = None;
         let mut frame = 0;
-        let mut popped_samples = 0;
         while frame < frames && self.load_music_block() {
             let Some(active) = self.active_music.as_ref() else {
                 break;
@@ -262,21 +261,16 @@ impl RenderState {
             let block_frame = self.active_sample / channels;
             let consumed = take * channels;
             let dst_start = frame * channels;
-            {
-                let Some(active) = self.active_music.as_ref() else {
-                    break;
-                };
-                let src = &active.samples()[self.active_sample..self.active_sample + consumed];
-                let dst = &mut mix_f32[dst_start..dst_start + consumed];
-                convert_music_samples(
-                    src,
-                    dst,
-                    channels,
-                    music_vol,
-                    target_gain,
-                    &mut self.music_gain_current,
-                );
-            }
+            let src = &active.samples()[self.active_sample..self.active_sample + consumed];
+            let dst = &mut mix_f32[dst_start..dst_start + consumed];
+            convert_music_samples(
+                src,
+                dst,
+                channels,
+                music_vol,
+                target_gain,
+                &mut self.music_gain_current,
+            );
             self.transport.push_played(
                 timing.generation,
                 MusicMapSeg {
@@ -288,12 +282,8 @@ impl RenderState {
                 },
             );
             self.active_sample += consumed;
-            popped_samples += consumed;
             frame += take;
-            let exhausted = self
-                .active_music
-                .as_ref()
-                .is_some_and(|block| self.active_sample == block.samples().len());
+            let exhausted = self.active_sample == active.samples().len();
             if exhausted && !self.recycle_active() {
                 break;
             }
@@ -303,7 +293,8 @@ impl RenderState {
                 advance_gain(&mut self.music_gain_current, target_gain);
             }
         }
-        mix_f32[frame * channels..].fill(0.0);
+        let popped_samples = frame * channels;
+        mix_f32[popped_samples..].fill(0.0);
         popped_samples
     }
 
