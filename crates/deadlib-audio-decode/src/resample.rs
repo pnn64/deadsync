@@ -43,10 +43,6 @@ impl PlanarAccum {
             return;
         }
         debug_assert_eq!(channels, self.channels.len());
-        let frames = interleaved.len() / channels;
-        if frames == 0 {
-            return;
-        }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
                 channel.extend(
@@ -64,6 +60,7 @@ impl PlanarAccum {
             right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
         }
+        let frames = interleaved.len() / channels;
         for channel in &mut self.channels {
             channel.reserve(frames);
         }
