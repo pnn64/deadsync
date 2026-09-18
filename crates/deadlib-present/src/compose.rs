@@ -5726,19 +5726,6 @@ fn resolved_sprite_source<'a>(
     source: &'a actors::SpriteSource,
     actor_textures: Option<&'a [Arc<str>]>,
 ) -> Option<(bool, &'a str, *const str)> {
-    let arena_texture_key = if let actors::SpriteSource::ArenaTextureHandle { id, .. } = source {
-        let Some(textures) = actor_textures else {
-            debug_assert!(false, "arena texture draw composed without its arena");
-            return None;
-        };
-        let Some(key) = textures.get(id.0 as usize) else {
-            debug_assert!(false, "arena texture draw has an invalid texture ID");
-            return None;
-        };
-        Some(key.as_ref())
-    } else {
-        None
-    };
     Some(match source {
         actors::SpriteSource::TextureStatic(name) => (false, *name, str_ptr(name)),
         actors::SpriteSource::Texture(name) => {
@@ -5749,8 +5736,16 @@ fn resolved_sprite_source<'a>(
             let name = key.as_ref();
             (false, name, str_ptr(name))
         }
-        actors::SpriteSource::ArenaTextureHandle { .. } => {
-            let name = arena_texture_key.expect("arena texture key resolved above");
+        actors::SpriteSource::ArenaTextureHandle { id, .. } => {
+            let Some(textures) = actor_textures else {
+                debug_assert!(false, "arena texture draw composed without its arena");
+                return None;
+            };
+            let Some(key) = textures.get(id.0 as usize) else {
+                debug_assert!(false, "arena texture draw has an invalid texture ID");
+                return None;
+            };
+            let name = key.as_ref();
             (false, name, str_ptr(name))
         }
         actors::SpriteSource::RenderTarget { .. } => {
