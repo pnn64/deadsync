@@ -932,8 +932,7 @@ fn run_inner(
         }
 
         let topology_changed = !hotplug.is_empty() || !remove.is_empty() || !key_remove.is_empty();
-        remove.sort_unstable();
-        remove.dedup();
+        // Polling appends each device index at most once, in ascending order.
         for &idx in remove.iter().rev() {
             let dev = devs.swap_remove(idx);
             emit_sys(GpSystemEvent::Disconnected {
@@ -943,8 +942,6 @@ fn run_inner(
                 initial: false,
             });
         }
-        key_remove.sort_unstable();
-        key_remove.dedup();
         for &idx in key_remove.iter().rev() {
             key_devs.swap_remove(idx);
         }

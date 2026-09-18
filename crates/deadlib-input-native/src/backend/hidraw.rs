@@ -885,8 +885,7 @@ pub fn run(
         }
 
         let topology_changed = !hotplug.is_empty() || !remove.is_empty();
-        remove.sort_unstable();
-        remove.dedup();
+        // Polling appends each device index at most once, in ascending order.
         for &idx in remove.iter().rev() {
             let dev = devs.swap_remove(idx);
             emit_sys(GpSystemEvent::Disconnected {
