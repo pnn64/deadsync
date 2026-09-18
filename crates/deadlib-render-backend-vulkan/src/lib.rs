@@ -2648,29 +2648,19 @@ pub fn draw(
     }
     stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
 
-    let needed_instances = frame.sprite_instances.len()
-        + frame
-            .render_targets
-            .iter()
-            .map(|target| target.sprite_instances.len())
-            .sum::<usize>();
-    let needed_mesh_vertices = frame.mesh_vertices.len()
-        + frame
-            .render_targets
-            .iter()
-            .map(|target| target.mesh_vertices.len())
-            .sum::<usize>();
+    let mut needed_instances = frame.sprite_instances.len();
+    let mut needed_mesh_vertices = frame.mesh_vertices.len();
+    let mut needed_tmesh_instances = frame.tmesh_instances.len();
+    for target in &frame.render_targets {
+        needed_instances += target.sprite_instances.len();
+        needed_mesh_vertices += target.mesh_vertices.len();
+        needed_tmesh_instances += target.tmesh_instances.len();
+    }
     let needed_tmesh_vertices = state.uploads.vertices.len()
         + state
             .target_uploads
             .iter()
             .map(|uploads| uploads.vertices.len())
-            .sum::<usize>();
-    let needed_tmesh_instances = frame.tmesh_instances.len()
-        + frame
-            .render_targets
-            .iter()
-            .map(|target| target.tmesh_instances.len())
             .sum::<usize>();
 
     let backend_upload_started = Instant::now();
