@@ -937,11 +937,7 @@ where
     if hat >= dev.hat_min && hat <= dev.hat_max {
         let span = dev.hat_max - dev.hat_min + 1;
         let idx = hat - dev.hat_min;
-        if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && idx == 8 {
-            hat0 = -1;
-        } else if span == 8 {
-            hat0 = idx;
-        } else if span == 9 && dev.hat_min == 0 && dev.hat_max == 8 && (0..=7).contains(&idx) {
+        if span == 8 || (span == 9 && dev.hat_min == 0 && idx < 8) {
             hat0 = idx;
         } else if span == 4 {
             hat0 = idx * 2;
