@@ -337,14 +337,15 @@ fn gamepad_button_edges(
 #[inline(always)]
 fn scale_axis(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
-    let v = v.clamp(-1.0, 1.0);
+    // The i16 cast already saturates the upper bound at 32767.
+    let v = v.max(-1.0);
     (v * 32767.0) as i16
 }
 
 #[inline(always)]
 fn scale_trigger(v: f64) -> i16 {
     let v = if v.is_finite() { v } else { 0.0 };
-    let v = v.clamp(0.0, 1.0);
+    let v = v.max(0.0);
     (v * 32767.0) as i16
 }
 
