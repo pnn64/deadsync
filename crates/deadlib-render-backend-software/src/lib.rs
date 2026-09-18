@@ -1065,10 +1065,10 @@ fn draw_prepared<'a>(
             blend,
             texture_handle,
         } => {
-            let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
-                return 0;
-            };
             if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
+                let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
+                    return 0;
+                };
                 rasterize_prepared_sprite(
                     vertices,
                     *inv_denom,
@@ -1140,10 +1140,10 @@ fn draw_prepared<'a>(
             texture_handle,
             ..
         } => {
-            let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
-                return 0;
-            };
             if rows_known_visible || rows.overlaps(stripe_y_start, stripe_y_end) {
+                let Some(tex) = resolve_texture(textures, texture_cache, *texture_handle) else {
+                    return 0;
+                };
                 let start = *triangle_start as usize;
                 let end = start + *triangle_count as usize;
                 rasterize_prepared_tmesh(
