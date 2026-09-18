@@ -331,10 +331,7 @@ pub fn publish_callback_window_start_nanos(
     );
     LAST_CALLBACK_BASE_FRAMES.store(total_before, Ordering::Relaxed);
     LAST_CALLBACK_FRAMES.store(0, Ordering::Relaxed);
-    LAST_CALLBACK_ELAPSED_NANOS.store(
-        anchor_nanos.min(u64::MAX - 1).saturating_add(1),
-        Ordering::Relaxed,
-    );
+    LAST_CALLBACK_ELAPSED_NANOS.store(anchor_nanos.saturating_add(1), Ordering::Relaxed);
     end_callback_clock_write();
 }
 
@@ -390,14 +387,15 @@ fn stream_position_frames_from_callback(
     if cb_nanos_plus_one == 0 {
         return None;
     }
-    let cb_nanos = cb_nanos_plus_one.saturating_sub(1);
+    let cb_nanos = cb_nanos_plus_one - 1;
     if at_nanos < cb_nanos {
         return None;
     }
-    let dt = (at_nanos.saturating_sub(cb_nanos) as f64) * 1e-9;
-    let frames_since_cb = (dt * f64::from(sample_rate)).clamp(0.0, buf_frames as f64);
+    let dt = ((at_nanos - cb_nanos) as f64) * 1e-9;
+    // Guarded unsigned differences and integer rates produce finite, nonnegative frames.
+    let frames_since_cb = (dt * f64::from(sample_rate)).min(buf_frames as f64);
     let frames_now = base_frames as f64 + frames_since_cb;
-    Some((frames_now.max(start_frame as f64) - start_frame as f64).max(0.0))
+    Some(frames_now.max(start_frame as f64) - start_frame as f64)
 }
 
 #[inline(always)]
@@ -691,6 +689,49 @@ mod tests {
         assert_eq!(music_nanos_from_seconds(f64::INFINITY), 0);
         assert_eq!(music_nanos_from_seconds(f64::NEG_INFINITY), 0);
         assert_eq!(music_nanos_from_seconds(f64::NAN), 0);
+    }
+
+    #[test]
+    fn callback_position_preserves_boundary_arithmetic() {
+        let values = [0, 1, 256, (1 << 53) - 1, 1 << 53, (1 << 53) + 1, u64::MAX];
+        for sample_rate in [0, 1, 44_100, 48_000, u32::MAX] {
+            for at_nanos in values {
+                for encoded_nanos in values {
+                    for base_frames in values {
+                        for start_frame in values {
+                            for buf_frames in [0, 1, 256, u64::MAX] {
+                                let expected = if encoded_nanos == 0 {
+                                    None
+                                } else {
+                                    let nanos = encoded_nanos.saturating_sub(1);
+                                    if at_nanos < nanos {
+                                        None
+                                    } else {
+                                        let dt = (at_nanos.saturating_sub(nanos) as f64) * 1e-9;
+                                        let elapsed = (dt * f64::from(sample_rate))
+                                            .clamp(0.0, buf_frames as f64);
+                                        let now = base_frames as f64 + elapsed;
+                                        Some(
+                                            (now.max(start_frame as f64) - start_frame as f64)
+                                                .max(0.0),
+                                        )
+                                    }
+                                };
+                                let actual = super::stream_position_frames_from_callback(
+                                    sample_rate,
+                                    start_frame,
+                                    at_nanos,
+                                    encoded_nanos,
+                                    base_frames,
+                                    buf_frames,
+                                );
+                                assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     #[test]
