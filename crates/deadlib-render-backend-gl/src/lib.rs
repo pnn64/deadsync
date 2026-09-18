@@ -2578,7 +2578,6 @@ pub fn draw(
                             gl.disable_vertex_attrib_array(2);
                             gl.disable_vertex_attrib_array(3);
                             last_prog = Some(0);
-                            tmesh_buffer_cache.reset();
                         }
 
                         if last_cameras[0].update_required(run.camera) {
@@ -2702,7 +2701,6 @@ pub fn draw(
                             gl.disable_vertex_attrib_array(2);
                             gl.disable_vertex_attrib_array(3);
                             last_prog = Some(1);
-                            tmesh_buffer_cache.reset();
                         }
 
                         if last_cameras[1].update_required(run.camera) {

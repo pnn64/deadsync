@@ -1487,7 +1487,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     let mut last_sprite_yuv = None;
     let mut bindings = DrawBindingCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-    let mut last_tmesh_depth_test = None;
+    let mut last_tmesh_depth_test = false;
     let pipelines = if write_alpha {
         &state.alpha_pipelines
     } else {
@@ -1644,16 +1644,15 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         bindings.reset_camera();
                     }
                     tmesh_buffer_cache.reset();
-                    last_tmesh_depth_test = None;
                 }
-                if last_blend != Some(run.blend) || last_tmesh_depth_test != Some(run.depth_test) {
+                if last_blend != Some(run.blend) || last_tmesh_depth_test != run.depth_test {
                     pass.set_pipeline(if run.depth_test {
                         tmesh_depth_pipelines.get(run.blend)
                     } else {
                         tmesh_pipelines.get(run.blend)
                     });
                     last_blend = Some(run.blend);
-                    last_tmesh_depth_test = Some(run.depth_test);
+                    last_tmesh_depth_test = run.depth_test;
                 }
                 if bindings.camera_required(run.camera) {
                     set_camera(
