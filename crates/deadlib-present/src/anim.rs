@@ -1414,22 +1414,15 @@ impl TweenSeq {
             // drive current step
             let seg = self.current.as_mut().unwrap();
             let before = seg.elapsed;
-            let finished_now = seg.update(&mut self.state, dt);
-            let consumed = (seg.elapsed - before).max(0.0);
-            dt -= consumed;
-
-            if finished_now {
-                // Take the finished step out of `current`.
-                if let Some(seg) = self.current.take() {
-                    // Snap to exact targets. Sleeps have no prepared operations.
-                    for p in &seg.prepared {
-                        p.apply_final(&mut self.state);
-                    }
-                }
-                // Loop continues to consume remaining dt on next steps.
-            } else {
-                // Current step still running; exit this update.
+            if !seg.update(&mut self.state, dt) {
                 break;
+            }
+            // Only completed steps pass unused time to the next queued step.
+            dt -= (seg.elapsed - before).max(0.0);
+            let seg = self.current.take().unwrap();
+            // Snap to exact targets. Sleeps have no prepared operations.
+            for p in &seg.prepared {
+                p.apply_final(&mut self.state);
             }
         }
     }
