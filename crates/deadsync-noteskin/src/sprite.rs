@@ -824,7 +824,7 @@ pub fn sprite_frame_index_from_phase_with_timing(
             return idx;
         }
     }
-    ((p * frames as f32).floor() as usize).min(frames - 1)
+    ((p * frames as f32) as usize).min(frames - 1)
 }
 
 #[must_use]
@@ -1244,9 +1244,7 @@ fn duration_frame_index_with_timing(
         && position.is_finite()
         && timing.duration_count > 0
     {
-        return Some(
-            ((position / duration).floor() as usize).min(timing.duration_count.saturating_sub(1)),
-        );
+        return Some(((position / duration) as usize).min(timing.duration_count.saturating_sub(1)));
     }
     duration_frame_index(durations, frames, position)
 }
@@ -1636,6 +1634,38 @@ mod tests {
             1
         );
         assert_eq!(sprite_frame_index_from_phase(2, Some(&durations), -0.05), 1);
+    }
+
+    #[test]
+    fn sprite_frame_indices_preserve_boundaries_and_wrapping() {
+        let durations = [0.125; 8];
+        for (phase, expected) in [
+            (0.0, 0),
+            (-0.0, 0),
+            (0.125_f32.next_down(), 0),
+            (0.125, 1),
+            (0.125_f32.next_up(), 1),
+            (1.0_f32.next_down(), 7),
+            (1.0, 0),
+            (1.125, 1),
+            (-0.125, 7),
+            (-0.125 - f32::EPSILON, 6),
+        ] {
+            assert_eq!(sprite_frame_index_from_phase(8, None, phase), expected);
+            assert_eq!(
+                sprite_frame_index_from_phase(8, Some(&durations), phase),
+                expected
+            );
+        }
+        for phase in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(sprite_frame_index_from_phase(8, None, phase), 0);
+            assert_eq!(sprite_frame_index_from_phase(8, Some(&durations), phase), 7);
+        }
+        // Signed clock-based indices still floor before wrapping negative time.
+        assert_eq!(
+            sprite_frame_index(8, AnimationRate::FramesPerSecond(8.0), None, -0.01, 0.0),
+            7
+        );
     }
     #[test]
     fn static_atlas_uv_cache_preserves_both_inset_variants() {
