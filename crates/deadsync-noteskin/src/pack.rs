@@ -277,10 +277,8 @@ impl InstalledPack {
 
     /// Find an installed skin by its stable profile name.
     pub fn skin(&self, name: &str) -> Option<&Skin> {
-        self.manifest
-            .skins
-            .iter()
-            .find(|skin| skin.id == base_name(name))
+        let name = base_name(name);
+        self.manifest.skins.iter().find(|skin| skin.id == name)
     }
 
     /// Distinguish pack revisions and all selected parts in runtime caches.
