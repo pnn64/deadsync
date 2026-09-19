@@ -1627,17 +1627,8 @@ fn project_tmesh_polygon(
         };
     }
 
-    let clipped;
-    let polygon: &[ClipVertexTexColor] = if triangle
-        .iter()
-        .all(|vertex| vertex.clip.z + vertex.clip.w >= 0.0)
-    {
-        &triangle
-    } else {
-        let result = clip_tmesh_near(triangle);
-        clipped = result.0;
-        &clipped[..result.1]
-    };
+    let (clipped, len) = clip_tmesh_near(triangle);
+    let polygon = &clipped[..len];
     let mut projected = [ScreenVertexTexColor {
         x: 0.0,
         y: 0.0,
