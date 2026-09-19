@@ -243,8 +243,13 @@ async fn run_enabled(
             .clone();
         if !current.enabled {
             stop_scans(&adapters).await;
-            let stopped: Vec<String> = monitors.keys().cloned().collect();
-            monitors.into_values().for_each(|task| task.abort());
+            let stopped: Vec<String> = monitors
+                .into_iter()
+                .map(|(id, task)| {
+                    task.abort();
+                    id
+                })
+                .collect();
             disconnect_devices(&stopped, &devices).await;
             set_disabled(shared);
             return Ok(());
