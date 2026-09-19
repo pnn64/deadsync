@@ -514,7 +514,7 @@ pub(crate) fn visual_use_legacy_hold_sprites(
 ) -> bool {
     [bumpy, tiny, pulse_outer, pulse_inner, arrow_effect]
         .iter()
-        .all(|v| v.is_finite() && v.abs() <= f32::EPSILON)
+        .all(|v| v.abs() <= f32::EPSILON)
 }
 
 pub(crate) fn visual_tiny_zoom(params: VisualEffectParams) -> f32 {

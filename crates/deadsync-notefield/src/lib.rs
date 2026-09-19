@@ -1340,6 +1340,36 @@ mod tests {
     }
 
     #[test]
+    fn visual_legacy_hold_sprites_preserve_thresholds_and_reject_nonfinite_effects() {
+        for (value, expected) in [
+            (0.0, true),
+            (f32::from_bits(1), true),
+            (f32::from_bits(f32::EPSILON.to_bits() - 1), true),
+            (f32::EPSILON, true),
+            (f32::from_bits(f32::EPSILON.to_bits() + 1), false),
+            (f32::MAX, false),
+            (f32::INFINITY, false),
+            (f32::NAN, false),
+            (f32::from_bits(0x7f80_0001), false),
+        ] {
+            for value in [value, -value] {
+                for lane in 0..5 {
+                    let mut effects = [0.0; 5];
+                    effects[lane] = value;
+                    assert_eq!(
+                        visual_use_legacy_hold_sprites(
+                            effects[0], effects[1], effects[2], effects[3], effects[4],
+                        ),
+                        expected,
+                        "effect {lane}, bits {:08x}",
+                        value.to_bits(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn visual_effect_params_for_col_applies_column_mods() {
         let params = visual_effect_params_for_col(
             VisualEffectParams {
