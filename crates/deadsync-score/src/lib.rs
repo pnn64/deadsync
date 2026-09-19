@@ -6634,11 +6634,7 @@ pub fn save_itl_chart_result(
 
     itl_rebuild_song_ranks(data);
     let current_totals = itl_point_totals(data);
-    let current_entry = data
-        .hash_map
-        .get(input.chart_hash)
-        .cloned()
-        .unwrap_or(new_entry);
+    let current_entry = data.hash_map.get(input.chart_hash).unwrap_or(&new_entry);
     let prev_entry = prev.unwrap_or_default();
     let mut progress = ItlEventProgress {
         kind: EventProgressKind::Itl,
