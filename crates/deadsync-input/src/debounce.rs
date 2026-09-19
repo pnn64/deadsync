@@ -120,9 +120,15 @@ impl DebounceStore {
                 self.sift_up(scheduled_ix);
             }
             (Some(_), None) => self.unschedule_slot(slot),
-            (Some(_), Some(due_at)) => {
+            (Some(old_due_at), Some(due_at)) => {
                 self.slots[slot].due_at = Some(due_at);
-                self.repair_due_slot(slot);
+                let ix = self.slots[slot].scheduled_ix as usize;
+                // Only one heap direction can be disturbed by a deadline change.
+                if due_at < old_due_at {
+                    self.sift_up(ix);
+                } else {
+                    self.sift_down(ix);
+                }
             }
             (None, None) => {}
         }
