@@ -93,8 +93,7 @@ pub fn song_pack_group(song: &deadsync_chart::SongData) -> Arc<str> {
             .and_then(|p| p.parent())
             .and_then(|p| p.file_name())
             .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_owned(),
+            .unwrap_or(""),
     )
 }
 
