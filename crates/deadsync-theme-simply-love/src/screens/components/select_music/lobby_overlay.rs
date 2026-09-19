@@ -1099,13 +1099,17 @@ fn lobby_player_screen_suffix(player: &lobby_data::LobbyPlayer) -> String {
 }
 
 fn truncate_text(text: &str, max_chars: usize) -> String {
-    let count = text.chars().count();
-    if count <= max_chars {
+    // Byte length is an upper bound on the number of characters.
+    if text.len() <= max_chars || text.chars().count() <= max_chars {
         return text.to_string();
     }
     let keep = max_chars.saturating_sub(3);
-    let mut out = String::with_capacity(max_chars);
-    out.extend(text.chars().take(keep));
+    let end = text
+        .char_indices()
+        .nth(keep)
+        .map_or(text.len(), |(end, _)| end);
+    let mut out = String::with_capacity(end + 3);
+    out.push_str(&text[..end]);
     out.push_str("...");
     out
 }
@@ -1698,6 +1702,27 @@ fn password_prompt_value(prompt: &PasswordPromptState) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_truncation_preserves_unicode_and_small_limit_behavior() {
+        for (text, limit, expected) in [
+            ("", 0, ""),
+            ("a", 0, "..."),
+            ("a", 1, "a"),
+            ("ab", 1, "..."),
+            ("abc", 2, "..."),
+            ("abc", 3, "abc"),
+            ("abcd", 3, "..."),
+            ("abcde", 4, "a..."),
+            ("é界🎵ab", 4, "é..."),
+            ("é界🎵abc", 5, "é界..."),
+            ("é界🎵", 3, "é界🎵"),
+            ("e\u{301}abc", 4, "e..."),
+            ("unchanged", usize::MAX, "unchanged"),
+        ] {
+            assert_eq!(truncate_text(text, limit), expected, "{text:?}, {limit}");
+        }
+    }
 
     #[test]
     fn password_sounds_leave_the_component_as_ordered_cues() {
