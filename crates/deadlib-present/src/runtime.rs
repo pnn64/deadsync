@@ -77,17 +77,13 @@ impl Registry {
             seq: tween,
             last_seen_frame: self.frame,
         });
-        self.indices.insert(id, new_index);
+        self.indices.insert(id, cursor);
 
         // New actors can appear before retained-but-unseen actors. Keep the
         // observed order contiguous so the next stable frame is hash-free.
         if cursor != new_index {
             self.entries.swap(cursor, new_index);
             let displaced_id = self.entries[new_index].id;
-            *self
-                .indices
-                .get_mut(&id)
-                .expect("inserted tween must have an index") = cursor;
             *self
                 .indices
                 .get_mut(&displaced_id)
