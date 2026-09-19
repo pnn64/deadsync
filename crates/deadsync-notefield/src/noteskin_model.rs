@@ -222,11 +222,10 @@ impl ModelMeshCache {
         let geom_cache_key = hashed_model_cache_key(stable_id);
         self.stats.misses = self.stats.misses.saturating_add(1);
         let vertices = build();
-        if let Some(index) = self.register_slot(slot, Some((geom_cache_key, vertices.clone()))) {
-            if self.slots[index].geometry.is_none() {
-                self.slots[index].geometry = Some((geom_cache_key, vertices.clone()));
-            }
-        } else {
+        if self
+            .register_slot(slot, Some((geom_cache_key, vertices.clone())))
+            .is_none()
+        {
             self.stats.saturated_misses = self.stats.saturated_misses.saturating_add(1);
         }
         (geom_cache_key, vertices)
@@ -259,6 +258,9 @@ impl ModelMeshCache {
     ) -> Option<usize> {
         let stable_id = slot.stable_id();
         if let Some(index) = self.find_slot(stable_id) {
+            if self.slots[index].geometry.is_none() {
+                self.slots[index].geometry = geometry;
+            }
             return Some(index);
         }
         if self.sealed {
