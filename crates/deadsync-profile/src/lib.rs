@@ -6372,10 +6372,9 @@ fn normalize_graphic_key(
         return Ok("None".to_string());
     }
 
-    let normalized = basename.to_ascii_lowercase();
     if let Some((_, key)) = stock_aliases
         .iter()
-        .find(|(alias, _)| alias.eq_ignore_ascii_case(&normalized))
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(basename))
     {
         return Ok((*key).to_string());
     }
@@ -6404,10 +6403,9 @@ fn recognized_stock_key(raw: &str, stock_aliases: &[(&str, &str)]) -> Option<Str
     if basename.eq_ignore_ascii_case("none") {
         return Some("None".to_string());
     }
-    let normalized = basename.to_ascii_lowercase();
     stock_aliases
         .iter()
-        .find(|(alias, _)| alias.eq_ignore_ascii_case(&normalized))
+        .find(|(alias, _)| alias.eq_ignore_ascii_case(basename))
         .map(|(_, key)| (*key).to_string())
 }
 
