@@ -2996,7 +2996,7 @@ impl FrameInlineLayoutSlot {
                 mesh_seed,
             )
         });
-        self.layout.layout_seed = if prepared {
+        self.layout.layout_seed = if prepared || self.cache_prepared_meshes {
             mesh_seed
         } else {
             text_layout_mesh_seed(key, text.as_str())
@@ -3034,7 +3034,7 @@ impl FrameInlineLayoutSlot {
                 mesh_seed,
             )
         });
-        self.layout.layout_seed = if prepared {
+        self.layout.layout_seed = if prepared || self.cache_prepared_meshes {
             mesh_seed
         } else {
             text_layout_mesh_seed(key, text.as_str())
