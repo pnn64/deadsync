@@ -189,19 +189,11 @@ fn itg_resolve_animated_texture_ini(
     path: &Path,
 ) -> Option<ItgResolvedModelTexture> {
     let ini = noteskin_itg::IniData::parse_file(path).ok()?;
-    let first_frame_idx = if ini.get("AnimatedTexture", "Frame0000").is_some() {
-        0
+    let (first_frame_idx, frame) = if let Some(frame) = ini.get("AnimatedTexture", "Frame0000") {
+        (0, frame)
     } else {
-        1
+        (1, ini.get("AnimatedTexture", "Frame0001")?)
     };
-    let frame = ini.get(
-        "AnimatedTexture",
-        if first_frame_idx == 0 {
-            "Frame0000"
-        } else {
-            "Frame0001"
-        },
-    )?;
     let texture_path = itg_resolve_relative_or_noteskin_path(data, path, frame)?;
     let tex_velocity_x = ini
         .get("AnimatedTexture", "TexVelocityX")
@@ -992,6 +984,44 @@ Materials: 1
 
         assert_eq!(slots, ["tap:model"]);
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn animated_texture_keeps_zero_based_precedence_and_one_based_fallback() {
+        let root = temp_model_root("first-frame");
+        for name in ["zero.png", "one.png"] {
+            fs::write(root.join(name), []).unwrap();
+        }
+        let path = root.join("texture.ini");
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        for (frames, expected) in [
+            (
+                "Frame0000=zero.png\nFrame0001=one.png\nDelay0000=0.25\nDelay0001=0.5\n",
+                Some(("zero.png", 0.75)),
+            ),
+            ("Frame0001=one.png\nDelay0001=0.5\n", Some(("one.png", 0.5))),
+            ("Frame0000=\nFrame0001=one.png\nDelay0001=0.5\n", None),
+            ("Delay0000=1\n", None),
+        ] {
+            fs::write(&path, format!("[AnimatedTexture]\n{frames}")).unwrap();
+            let resolved = itg_resolve_animated_texture_ini(&data, &path);
+            if let Some((name, cycle)) = expected {
+                let resolved = resolved.expect("first frame should resolve");
+                assert_eq!(resolved.texture_path, root.join(name));
+                assert_eq!(resolved.tex.uv_cycle_seconds, Some(cycle));
+            } else {
+                assert!(resolved.is_none());
+            }
+        }
+        for name in ["zero.png", "one.png", "texture.ini"] {
+            fs::remove_file(root.join(name)).unwrap();
+        }
+        fs::remove_dir(root).unwrap();
     }
 
     #[test]
