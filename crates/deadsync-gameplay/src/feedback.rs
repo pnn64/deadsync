@@ -1085,7 +1085,7 @@ impl GameplayReceptorStepBehavior {
         if duration <= f32::EPSILON {
             return self.zoom_end.max(0.0);
         }
-        let elapsed = (duration - timer_remaining.clamp(0.0, duration)).clamp(0.0, duration);
+        let elapsed = duration - timer_remaining.clamp(0.0, duration);
         let progress = elapsed / duration;
         let eased = self.tween.ease(progress);
         (self.zoom_end - self.zoom_start)
