@@ -362,12 +362,12 @@ fn login(username: &str, password: &str) -> Result<(ShopSession, String), SrpgSh
 
 fn fetch_snapshot(
     session: &ShopSession,
-    shop_zero_html: Option<String>,
+    mut shop_zero_html: Option<String>,
 ) -> Result<SrpgShopSnapshot, SrpgShopError> {
     let mut workers = Vec::with_capacity(SRPG_SHOP_IDS.len());
     for shop_id in SRPG_SHOP_IDS {
         let session = session.clone();
-        let page = (shop_id == 0).then(|| shop_zero_html.clone()).flatten();
+        let page = (shop_id == 0).then(|| shop_zero_html.take()).flatten();
         workers.push(thread::spawn(move || fetch_shop(&session, shop_id, page)));
     }
 
