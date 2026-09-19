@@ -2977,9 +2977,8 @@ fn apply_space_nbsp_symmetry<S: BuildHasher>(char_to_frame: &mut HashMap<char, u
     // If SPACE exists but NBSP doesn't, map NBSP -> SPACE frame.
     if let Some(&space_idx) = char_to_frame.get(&' ') {
         char_to_frame.entry('\u{00A0}').or_insert(space_idx);
-    }
-    // If NBSP exists but SPACE doesn't, map SPACE -> NBSP frame. (Wendy relies on this)
-    if let Some(&nbsp_idx) = char_to_frame.get(&'\u{00A0}') {
+    } else if let Some(&nbsp_idx) = char_to_frame.get(&'\u{00A0}') {
+        // SPACE is absent: map it to NBSP's frame. (Wendy relies on this)
         char_to_frame.entry(' ').or_insert(nbsp_idx);
     }
 }
@@ -2997,6 +2996,31 @@ fn synthesize_space_from_nbsp(all_glyphs: &mut GlyphMap) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn space_nbsp_symmetry_fills_only_missing_mappings() {
+        for (space, nbsp) in [
+            (None, None),
+            (Some(3), None),
+            (None, Some(7)),
+            (Some(3), Some(7)),
+        ] {
+            let mut frames = HashMap::from([('A', 11)]);
+            if let Some(frame) = space {
+                frames.insert(' ', frame);
+            }
+            if let Some(frame) = nbsp {
+                frames.insert('\u{00A0}', frame);
+            }
+            apply_space_nbsp_symmetry(&mut frames);
+            assert_eq!(frames.get(&' ').copied(), space.or(nbsp));
+            assert_eq!(frames.get(&'\u{00A0}').copied(), nbsp.or(space));
+            assert_eq!(frames[&'A'], 11);
+            let once = frames.clone();
+            apply_space_nbsp_symmetry(&mut frames);
+            assert_eq!(frames, once);
+        }
+    }
 
     fn test_glyph(advance_i32: i32) -> Glyph {
         Glyph {
