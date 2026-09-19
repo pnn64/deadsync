@@ -3,7 +3,9 @@ use super::hid_report_cache::{
     HidReportCache, HidReportRoute, HidReportTime, required_report_buffer_len,
 };
 use super::poll_registration;
-use super::{BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, uuid_from_bytes};
+use super::{
+    BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges, uuid_from_bytes,
+};
 use deadlib_platform::input::{PadCode, PadDir, PadEvent, PadId};
 use hidparser::{Report, ReportField, VariableField, parse_report_descriptor};
 use log::{debug, warn};
@@ -215,9 +217,6 @@ fn hat_dirs(field: &VariableField, raw_value: i64) -> [bool; 4] {
     let idx = (raw_value as i32).saturating_sub(min);
     if span == 4 {
         return [idx == 0, idx == 2, idx == 3, idx == 1];
-    }
-    if !(0..=7).contains(&idx) {
-        return [false; 4];
     }
     [
         matches!(idx, 0 | 1 | 7),
@@ -673,22 +672,7 @@ fn process_report(
                     value: value as f32,
                 });
                 let want = hat_dirs(&field.field, value);
-                for (idx, dir) in [PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right]
-                    .into_iter()
-                    .enumerate()
-                {
-                    if field.dir[idx] == want[idx] {
-                        continue;
-                    }
-                    field.dir[idx] = want[idx];
-                    emit_pad(PadEvent::Dir {
-                        id,
-                        timestamp,
-                        host_nanos,
-                        dir,
-                        pressed: want[idx],
-                    });
-                }
+                emit_dir_edges(emit_pad, id, &mut field.dir, timestamp, host_nanos, want);
             }
             FieldSpec::Dpad(field) => {
                 let Some(value) = field.field.field_value(payload) else {
