@@ -132,12 +132,15 @@ pub(super) fn update_sync_curve_mesh(
     let y_bottom = graph_h * 0.9;
     let visible_len = cols.end - cols.first;
     let storage = mesh.get_or_insert_with(|| Arc::new(Vec::new()));
-    if Arc::get_mut(storage).is_none() {
-        // A previously emitted actor still owns this version of the geometry.
-        // Start fresh so that actor's vertices remain immutable.
-        *storage = Arc::new(Vec::new());
-    }
-    let out = Arc::get_mut(storage).expect("curve storage has one owner");
+    let out = match Arc::get_mut(storage) {
+        Some(out) => out,
+        None => {
+            // A previously emitted actor still owns this version of the geometry.
+            // Start fresh so that actor's vertices remain immutable.
+            *storage = Arc::new(Vec::new());
+            Arc::get_mut(storage).expect("curve storage has one owner")
+        }
+    };
     out.clear();
     out.reserve(visible_len.saturating_sub(1) * 6);
     let point = |i: usize| {

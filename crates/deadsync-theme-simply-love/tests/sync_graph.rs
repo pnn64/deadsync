@@ -423,6 +423,30 @@ fn curve_storage_reuses_unique_buffers_and_preserves_shared_snapshots() {
             mesh.clone(),
         );
     }
+    let weak = Arc::downgrade(mesh.as_ref().unwrap());
+    sync_graph::update_sync_curve_mesh(
+        &mut mesh,
+        &input,
+        0,
+        cols,
+        512.0,
+        132.0,
+        GraphOrientation::Vertical,
+        [1.0; 4],
+    );
+    assert!(weak.upgrade().is_none());
+    assert_mesh(
+        baseline::build_sync_curve_mesh(
+            &input,
+            0,
+            cols,
+            512.0,
+            132.0,
+            GraphOrientation::Vertical,
+            [1.0; 4],
+        ),
+        mesh,
+    );
 }
 
 #[test]

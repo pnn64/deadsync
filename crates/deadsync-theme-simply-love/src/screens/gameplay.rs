@@ -1251,11 +1251,14 @@ fn update_song_lua_shared_vec<T>(
     fill: impl FnOnce(&mut Vec<T>),
 ) -> Arc<Vec<T>> {
     let shared = shared.get_or_insert_with(|| Arc::new(Vec::with_capacity(capacity)));
-    if Arc::get_mut(shared).is_none() {
-        *replacements = (*replacements).saturating_add(1);
-        *shared = Arc::new(Vec::with_capacity(capacity));
-    }
-    let values = Arc::get_mut(shared).expect("shared vector was just made unique");
+    let values = match Arc::get_mut(shared) {
+        Some(values) => values,
+        None => {
+            *replacements = (*replacements).saturating_add(1);
+            *shared = Arc::new(Vec::with_capacity(capacity));
+            Arc::get_mut(shared).expect("shared vector was just made unique")
+        }
+    };
     values.clear();
     fill(values);
     Arc::clone(shared)
@@ -24993,6 +24996,42 @@ mod tests {
             }
             other => panic!("expected sprite-backed quad, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn song_lua_shared_vec_preserves_observers_and_reuses_unique_storage() {
+        let mut shared = None;
+        let mut replacements = 0;
+        let first = update_song_lua_shared_vec(&mut shared, 8, &mut replacements, |out| {
+            out.extend([1, 2, 3]);
+        });
+        assert_eq!(replacements, 0);
+        let second = update_song_lua_shared_vec(&mut shared, 8, &mut replacements, |out| {
+            out.push(4);
+        });
+        assert_eq!(first.as_slice(), &[1, 2, 3]);
+        assert_eq!(second.as_slice(), &[4]);
+        assert_eq!(replacements, 1);
+
+        let weak = Arc::downgrade(&second);
+        drop(second);
+        let third = update_song_lua_shared_vec(&mut shared, 8, &mut replacements, |out| {
+            out.extend([5, 6]);
+        });
+        assert!(weak.upgrade().is_none());
+        assert_eq!(third.as_slice(), &[5, 6]);
+        assert_eq!(replacements, 2);
+        let pointer = third.as_ptr();
+        let capacity = third.capacity();
+        drop(third);
+
+        let fourth = update_song_lua_shared_vec(&mut shared, 8, &mut replacements, |out| {
+            out.push(7);
+        });
+        assert_eq!(fourth.as_slice(), &[7]);
+        assert_eq!(fourth.as_ptr(), pointer);
+        assert_eq!(fourth.capacity(), capacity);
+        assert_eq!(replacements, 2);
     }
 
     #[test]
