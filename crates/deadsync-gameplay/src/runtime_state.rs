@@ -1060,11 +1060,11 @@ pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(
     player_profiles: &[Profile; MAX_PLAYERS],
     session: &GameplaySession,
 ) -> [Profile; MAX_PLAYERS] {
-    let mut runtime_profiles = (*player_profiles).clone();
-    if session.p2_runtime_player() {
-        runtime_profiles[0] = runtime_profiles[1].clone();
-    }
-    runtime_profiles
+    let first_player = usize::from(session.p2_runtime_player());
+    [
+        player_profiles[first_player].clone(),
+        player_profiles[1].clone(),
+    ]
 }
 
 #[must_use]
@@ -1072,10 +1072,6 @@ pub fn gameplay_runtime_charts(
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     session: &GameplaySession,
 ) -> [Arc<ChartData>; MAX_PLAYERS] {
-    let mut runtime_charts: [Arc<ChartData>; MAX_PLAYERS] =
-        std::array::from_fn(|player| charts[player].clone());
-    if session.p2_runtime_player() {
-        runtime_charts[0] = runtime_charts[1].clone();
-    }
-    runtime_charts
+    let first_player = usize::from(session.p2_runtime_player());
+    [charts[first_player].clone(), charts[1].clone()]
 }
