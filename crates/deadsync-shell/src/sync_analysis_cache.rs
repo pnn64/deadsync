@@ -451,7 +451,7 @@ impl Cache {
             plots,
             legacy_plot: None,
         };
-        if let Err(error) = write_cache_file(&self.path, &payload) {
+        if let Err(error) = write_cache_file(&self.path, payload) {
             log::warn!(
                 "Failed to write null-or-die sync cache '{}': {error}",
                 self.path.display()
@@ -643,12 +643,11 @@ fn load_entries(
     Some((entries, plots))
 }
 
-fn write_cache_file(path: &Path, payload: &CacheFile) -> Result<(), String> {
+fn write_cache_file(path: &Path, mut payload: CacheFile) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "cache path has no parent directory".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let mut payload = payload.clone();
     let mut bytes = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
     while bytes.len() as u64 > MAX_CACHE_BYTES && !payload.plots.is_empty() {
         payload.plots.pop();
