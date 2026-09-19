@@ -742,12 +742,6 @@ pub fn itg_roll_explosion_from_resolved_layers<T: Clone>(
     let actor_commands = wrapper_layers
         .iter()
         .find(|sprite| sprite.commands.contains_key("rolloncommand"))
-        .or_else(|| {
-            wrapper_layers
-                .iter()
-                .find(|sprite| actor::element_contains_hint(&sprite.element, "roll explosion"))
-        })
-        .filter(|sprite| sprite.commands.contains_key("rolloncommand"))
         .map(|sprite| &sprite.commands);
     itg_roll_explosion_from_resolved(
         roll_blank,
@@ -3809,14 +3803,26 @@ mod tests {
 
     #[test]
     fn roll_explosion_from_resolved_layers_selects_wrapper_commands() {
-        let wrapper = [ItgResolvedSprite {
-            element: "Roll Explosion".to_string(),
-            slot: Slot(7),
-            commands: HashMap::from([(
-                "rolloncommand".to_string(),
-                "linear,0.2;diffusealpha,0".to_string(),
-            )]),
-        }];
+        let wrapper = [
+            ItgResolvedSprite {
+                element: "Roll Explosion".to_string(),
+                slot: Slot(6),
+                commands: HashMap::new(),
+            },
+            ItgResolvedSprite {
+                element: "Explosion".to_string(),
+                slot: Slot(7),
+                commands: HashMap::from([(
+                    "rolloncommand".to_string(),
+                    "linear,0.2;diffusealpha,0".to_string(),
+                )]),
+            },
+            ItgResolvedSprite {
+                element: "Roll Explosion".to_string(),
+                slot: Slot(8),
+                commands: HashMap::from([("rolloncommand".to_string(), "zoom,2".to_string())]),
+            },
+        ];
 
         let selected = itg_roll_explosion_from_resolved_layers(
             &wrapper,
@@ -3828,15 +3834,48 @@ mod tests {
                 2 => "noteskins/dance/default/Down Hold Explosion.png".to_string(),
                 _ => String::new(),
             },
-            |_| None,
+            |_| panic!("wrapper commands should take precedence over metrics"),
             |slot, commands, key| {
                 assert_eq!(slot, &Slot(2));
-                assert!(commands.contains_key(key));
+                assert_eq!(commands.get(key).unwrap(), "linear,0.2;diffusealpha,0");
                 Slot(12)
             },
         );
 
         assert_eq!(selected, Some(Slot(12)));
+    }
+
+    #[test]
+    fn roll_explosion_hint_without_on_command_uses_metrics() {
+        let wrapper = [ItgResolvedSprite {
+            element: "Roll Explosion".to_string(),
+            slot: Slot(7),
+            commands: HashMap::from([("rolloffcommand".to_string(), "zoom,2".to_string())]),
+        }];
+        let mut metrics_read = Vec::new();
+        let selected = itg_roll_explosion_from_resolved_layers(
+            &wrapper,
+            false,
+            Some(Slot(1)),
+            Some(Slot(2)),
+            |slot| match slot.0 {
+                1 => "noteskins/common/common/Fallback Hold Explosion.png".to_string(),
+                2 => "noteskins/dance/default/Down Hold Explosion.png".to_string(),
+                _ => String::new(),
+            },
+            |key| {
+                metrics_read.push(key.to_string());
+                (key == "RollOnCommand").then(|| "zoom,3".to_string())
+            },
+            |slot, commands, key| {
+                assert_eq!(slot, &Slot(2));
+                assert_eq!(commands.len(), 1);
+                assert_eq!(commands.get(key).unwrap(), "zoom,3");
+                Slot(12)
+            },
+        );
+        assert_eq!(selected, Some(Slot(12)));
+        assert_eq!(metrics_read, ["RollOnCommand", "RollOffCommand"]);
     }
 
     #[test]
