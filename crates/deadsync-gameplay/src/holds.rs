@@ -1510,7 +1510,7 @@ fn random_range_song_time_ns(rng: &mut TurnRng, min: SongTimeNs, max: SongTimeNs
         return min;
     }
     let span = i128::from(max) - i128::from(min);
-    let offset = (span as f64 * f64::from(rng.next_f32_unit())).floor() as i128;
+    let offset = (span as f64 * f64::from(rng.next_f32_unit())) as i128;
     clamp_song_time_ns(i128::from(min) + offset)
 }
 
