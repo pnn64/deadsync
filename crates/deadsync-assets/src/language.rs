@@ -126,8 +126,8 @@ pub fn available_locales() -> Vec<(String, String)> {
         if stem == "pseudo" {
             continue;
         }
-        let locale_code = stem.to_string();
-        locales.push((locale_code.clone(), native_name(&path, &locale_code)));
+        let name = native_name(&path, stem);
+        locales.push((stem.to_string(), name));
     }
     locales.sort_by(|a, b| a.0.cmp(&b.0));
     locales
