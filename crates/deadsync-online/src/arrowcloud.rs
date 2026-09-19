@@ -2965,12 +2965,12 @@ fn run_device_login_session_with<S, P, F, W>(
 
     let mut interval_s = clamp_device_login_poll_interval(start.poll_interval_seconds);
     let poll_req = DeviceLoginPollReq {
-        session_id: start.session_id.clone(),
-        poll_token: start.poll_token.clone(),
+        session_id: start.session_id,
+        poll_token: start.poll_token,
     };
 
     if !dispatch(DeviceLoginEvent::Started {
-        short_code: start.short_code.clone(),
+        short_code: start.short_code,
         verification_url: start.verification_url,
     }) {
         return;
