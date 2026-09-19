@@ -838,11 +838,11 @@ pub fn itg_hit_mine_command_with_init(
     metric_command: Option<String>,
 ) -> Option<String> {
     let command = commands
-        .and_then(|commands| commands.get("hitminecommand").cloned())
-        .or(metric_command)?;
+        .and_then(|commands| commands.get("hitminecommand").map(String::as_str))
+        .or(metric_command.as_deref())?;
     itg_command_with_init(
         commands.and_then(|commands| commands.get("initcommand").map(String::as_str)),
-        &command,
+        command,
     )
 }
 
@@ -1398,6 +1398,41 @@ mod tests {
             itg_hit_mine_command_with_init(None, Some("diffusealpha,0".to_string())),
             Some("diffusealpha,0".to_string())
         );
+    }
+
+    #[test]
+    fn hit_mine_command_preserves_empty_overrides_and_trimmed_fallbacks() {
+        for (source, init, metric, expected) in [
+            (Some(""), Some("zoom,2"), Some("diffusealpha,1"), None),
+            (Some(" \t "), None, Some("diffusealpha,1"), None),
+            (
+                None,
+                Some(" zoom,2 "),
+                Some(" diffusealpha,1 "),
+                Some("zoom,2;diffusealpha,1"),
+            ),
+            (
+                Some(" diffusealpha,1 "),
+                Some(" \t "),
+                None,
+                Some("diffusealpha,1"),
+            ),
+            (None, Some("zoom,2"), None, None),
+            (None, Some("zoom,2"), Some(" \n "), None),
+        ] {
+            let mut commands = HashMap::new();
+            if let Some(source) = source {
+                commands.insert("hitminecommand".to_owned(), source.to_owned());
+            }
+            if let Some(init) = init {
+                commands.insert("initcommand".to_owned(), init.to_owned());
+            }
+            assert_eq!(
+                itg_hit_mine_command_with_init(Some(&commands), metric.map(str::to_owned))
+                    .as_deref(),
+                expected,
+            );
+        }
     }
 
     #[test]
