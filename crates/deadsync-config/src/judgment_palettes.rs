@@ -182,7 +182,8 @@ impl JudgmentPaletteCatalog {
     pub fn resolve(&self, selection: Option<&str>) -> JudgmentPalette {
         selection
             .and_then(|id| self.palette(id))
-            .or_else(|| self.palette(self.resolved_default_id()))
+            .or_else(|| self.palette(&self.default_palette_id))
+            .or_else(|| self.palette(self.built_in.id))
             .map_or(self.built_in.palette, |entry| entry.palette)
     }
 
@@ -323,6 +324,31 @@ mod tests {
         let catalog = JudgmentPaletteCatalog::new(PRESET);
         assert_eq!(catalog.resolve(None), PRESET.palette);
         assert_eq!(catalog.resolve(Some("missing")), PRESET.palette);
+    }
+
+    #[test]
+    fn resolution_preserves_selection_and_missing_entry_fallbacks() {
+        let mut catalog = JudgmentPaletteCatalog::new(PRESET);
+        let default_id = catalog.create_palette("Default", PRESET.id).unwrap();
+        catalog
+            .set_color(&default_id, JudgmentColorRole::Miss, Color::BLACK)
+            .unwrap();
+        catalog.set_default_palette(&default_id).unwrap();
+        let custom = catalog.palette(&default_id).unwrap().palette;
+        assert_ne!(custom, PRESET.palette);
+        assert_eq!(catalog.resolve(None), custom);
+        assert_eq!(catalog.resolve(Some("missing")), custom);
+        assert_eq!(catalog.resolve(Some(PRESET.id)), PRESET.palette);
+
+        catalog.default_palette_id = "missing".to_owned();
+        assert_eq!(catalog.resolve(Some(&default_id)), custom);
+        assert_eq!(catalog.resolve(None), PRESET.palette);
+        // Public entries may differ from the preset, even for its ID.
+        catalog.palettes[0].palette = custom;
+        assert_eq!(catalog.resolve(None), custom);
+        catalog.palettes.clear();
+        assert_eq!(catalog.resolve(None), PRESET.palette);
+        assert_eq!(catalog.resolve(Some(&default_id)), PRESET.palette);
     }
 
     #[test]
