@@ -350,13 +350,11 @@ pub fn update_line_mesh_reusable(
     let feather = feather.max(0.0);
     let max_len = (window.point_count - 1) * LINE_SEGMENT_VERTS;
 
-    if mesh.as_mut().and_then(Arc::get_mut).is_none() {
-        *mesh = Some(Arc::new(Vec::with_capacity(max_len)));
-    }
-    let vertices = mesh
-        .as_mut()
-        .and_then(Arc::get_mut)
-        .expect("replacement line mesh must be uniquely owned");
+    let vertices = match mesh.as_mut().and_then(Arc::get_mut) {
+        Some(vertices) => vertices,
+        None => Arc::get_mut(mesh.insert(Arc::new(Vec::with_capacity(max_len))))
+            .expect("replacement line mesh must be uniquely owned"),
+    };
     if vertices.len() >= max_len {
         let written = fill_line_vertices(vertices, points, window, half, feather, color);
         vertices.truncate(written);
@@ -637,5 +635,20 @@ mod tests {
             &previous
         ));
         assert_mesh_matches(previous.as_slice(), &previous_vertices);
+    }
+
+    #[test]
+    fn reusable_line_mesh_replaces_storage_with_a_weak_observer() {
+        let points = [[0.0, 8.0], [12.0, 8.0], [24.0, 20.0]];
+        let mut mesh = None;
+        update_line_mesh_reusable(&mut mesh, &points, 0.0, 32.0, 2.0, 0.5, [1.0; 4]);
+        let observer = Arc::downgrade(mesh.as_ref().unwrap());
+
+        update_line_mesh_reusable(&mut mesh, &points[..2], 0.0, 32.0, 2.0, 0.5, [0.5; 4]);
+
+        assert!(observer.upgrade().is_none());
+        let mut expected = None;
+        update_line_mesh(&mut expected, &points[..2], 0.0, 32.0, 2.0, 0.5, [0.5; 4]);
+        assert_mesh_matches(mesh.as_ref().unwrap(), expected.as_ref().unwrap());
     }
 }
