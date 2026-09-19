@@ -156,10 +156,12 @@ pub fn resolve_song_asset_path_like_itg(song_dir: &Path, asset_tag: &str) -> Opt
 
 #[must_use]
 pub fn resolve_dir_default_lua_like_itg(dir: &Path) -> Option<PathBuf> {
-    let direct = dir.join("default.lua");
     resolve_song_dir_entry_ci(dir, "default.lua")
         .filter(|path| path.is_file())
-        .or_else(|| direct.is_file().then_some(direct))
+        .or_else(|| {
+            let direct = dir.join("default.lua");
+            direct.is_file().then_some(direct)
+        })
 }
 
 #[must_use]
