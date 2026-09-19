@@ -546,13 +546,13 @@ mod imp {
         if is_known_adp(info) {
             return true;
         }
-        let haystack = format!(
+        let mut haystack = format!(
             "{} {} {}",
             info.manufacturer_string().unwrap_or(""),
             info.product_string().unwrap_or(""),
             info.path().to_string_lossy()
-        )
-        .to_ascii_lowercase();
+        );
+        haystack.make_ascii_lowercase();
         [
             "fsr", "force", "dance", "step", "itg", "adp", "arrow", "sensor", "cabinet", "i/o",
             "io board", "arduino", "teensy", "pico", "rp2040", "stm32", "adafruit", "sparkfun",
