@@ -2453,26 +2453,20 @@ struct PreparedTextMeshes {
 impl PreparedTextMeshes {
     fn new<'a, I>(glyphs: I, glyph_capacity: usize, align: actors::TextAlign) -> Self
     where
-        I: Iterator<Item = &'a CachedGlyph> + Clone,
+        I: Iterator<Item = &'a CachedGlyph>,
     {
-        let pages = |glyphs: I, stroke: bool| {
-            let mut pages = Vec::with_capacity(glyph_capacity);
-            for glyph in glyphs {
-                let page = if stroke {
-                    glyph.stroke_page
-                } else {
-                    glyph.draw_quad.then_some(glyph.texture_page)
-                };
-                if let Some(page) = page
-                    && !pages.contains(&page)
-                {
-                    pages.push(page);
-                }
+        let mut fill_pages = Vec::with_capacity(glyph_capacity);
+        let mut stroke_pages = Vec::with_capacity(glyph_capacity);
+        for glyph in glyphs {
+            if glyph.draw_quad && !fill_pages.contains(&glyph.texture_page) {
+                fill_pages.push(glyph.texture_page);
             }
-            pages
-        };
-        let fill_pages = pages(glyphs.clone(), false);
-        let stroke_pages = pages(glyphs, true);
+            if let Some(page) = glyph.stroke_page
+                && !stroke_pages.contains(&page)
+            {
+                stroke_pages.push(page);
+            }
+        }
         Self {
             align,
             banks: std::array::from_fn(|_| {
