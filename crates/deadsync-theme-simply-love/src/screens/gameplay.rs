@@ -2505,7 +2505,9 @@ impl State {
             .foreground_lua_changes
             .iter()
             .find(|change| change.start_beat <= 0.0 && change.path.is_file())
-            .map_or(0.0, |change| gameplay.music_time_for_beat(change.start_beat));
+            .map_or(0.0, |change| {
+                gameplay.music_time_for_beat(change.start_beat)
+            });
         let song_lua_visuals = gameplay.song_lua_visuals();
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &song_lua_visuals.overlays,
@@ -3402,14 +3404,13 @@ fn gameplay_song_lua_data(
         return GameplaySongLuaData::default();
     }
 
-    let mut runtime_charts = [charts[0].clone(), charts[1].clone()];
-    let mut runtime_profiles = (*player_profiles).clone();
-    let mut runtime_scroll_speed = [scroll_speed[0], scroll_speed[1]];
-    if session.p2_runtime_player() {
-        runtime_charts[0] = runtime_charts[1].clone();
-        runtime_profiles[0] = runtime_profiles[1].clone();
-        runtime_scroll_speed[0] = runtime_scroll_speed[1];
-    }
+    let first_player = usize::from(session.p2_runtime_player());
+    let runtime_charts = [charts[first_player].clone(), charts[1].clone()];
+    let runtime_profiles = [
+        player_profiles[first_player].clone(),
+        player_profiles[1].clone(),
+    ];
+    let runtime_scroll_speed = [scroll_speed[first_player], scroll_speed[1]];
 
     let mut context = song_lua_compile_context(
         song,
