@@ -190,13 +190,11 @@ impl OnlineItlSelfCacheState {
         if api_key.is_empty() {
             return HashMap::new();
         }
-        let loaded_count = profile_id
-            .and_then(|profile_id| self.loaded_profiles.get(profile_id))
-            .map_or(0, hashbrown::HashMap::len);
-        let mut by_chart = HashMap::with_capacity(loaded_count + self.session_by_key.len());
-        if let Some(profile_id) = profile_id
-            && let Some(values) = self.loaded_profiles.get(profile_id)
-        {
+        let loaded = profile_id.and_then(|profile_id| self.loaded_profiles.get(profile_id));
+        let mut by_chart = HashMap::with_capacity(
+            loaded.map_or(0, hashbrown::HashMap::len) + self.session_by_key.len(),
+        );
+        if let Some(values) = loaded {
             for (key, value) in values {
                 if key.api_key == api_key {
                     by_chart.insert(key.chart_hash.clone(), *value);
