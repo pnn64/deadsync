@@ -970,10 +970,6 @@ fn post_form(
     referer: &str,
     ajax: bool,
 ) -> Result<String, SrpgShopError> {
-    let pairs: Vec<(&str, &str)> = params
-        .iter()
-        .map(|(key, value)| (*key, value.as_str()))
-        .collect();
     let mut request = agent
         .post(url)
         .header(
@@ -986,7 +982,7 @@ fn post_form(
         request = request.header("X-Requested-With", "XMLHttpRequest");
     }
     let mut response = request
-        .send_form(pairs)
+        .send_form(params.iter().map(|(key, value)| (*key, value.as_str())))
         .map_err(|error| network_error(network::error_from_ureq(error)))?;
     response
         .body_mut()
