@@ -2695,10 +2695,8 @@ pub fn parse_with_texture_context(
                                         char_to_frame.insert(ch.to_ascii_lowercase(), frame_index);
                                     }
                                 }
-                            } else if spec.chars().count() == 1 {
-                                if let Some(ch) = spec.chars().next()
-                                    && frame_index < total_frames
-                                {
+                            } else if let Ok(ch) = spec.parse::<char>() {
+                                if frame_index < total_frames {
                                     char_to_frame.insert(ch.to_ascii_lowercase(), frame_index);
                                 }
                             } else if let Some(ch) = lookup_font_char_alias(spec)
