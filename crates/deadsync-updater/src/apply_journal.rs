@@ -305,10 +305,10 @@ pub fn is_portability_marker(rel: &Path) -> bool {
 /// target path collides with another op's backup path.
 pub fn check_no_case_collisions(ops: &[Op]) -> Result<(), UpdaterError> {
     use std::collections::HashMap;
-    let mut seen: HashMap<String, PathBuf> = HashMap::with_capacity(ops.len() * 2);
+    let mut seen: HashMap<String, &Path> = HashMap::with_capacity(ops.len() * 2);
     for op in ops {
         let key = op.target.to_string_lossy().to_lowercase();
-        if let Some(prev) = seen.insert(key, op.target.clone()) {
+        if let Some(prev) = seen.insert(key, &op.target) {
             return Err(io_err_msg(format!(
                 "case-insensitive path collision in release archive: '{}' and '{}' resolve to the same target on this filesystem",
                 prev.display(),
@@ -317,7 +317,7 @@ pub fn check_no_case_collisions(ops: &[Op]) -> Result<(), UpdaterError> {
         }
         if op.target_existed {
             let key = op.backup.to_string_lossy().to_lowercase();
-            if let Some(prev) = seen.insert(key, op.backup.clone()) {
+            if let Some(prev) = seen.insert(key, &op.backup) {
                 return Err(io_err_msg(format!(
                     "case-insensitive path collision between '{}' and backup path '{}'",
                     prev.display(),
