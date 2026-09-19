@@ -167,14 +167,16 @@ pub fn partition_point_from_hint<T>(
                 return lower + values[lower..].partition_point(predicate);
             }
             if !predicate(&values[probe]) {
-                return lower + values[lower..=probe].partition_point(predicate);
+                // The failed probe is already the exclusive upper bound.
+                return lower + values[lower..probe].partition_point(predicate);
             }
             lower = probe + 1;
             step = step.saturating_mul(2);
         }
     }
     if cursor > 0 && !predicate(&values[cursor - 1]) {
-        let mut upper = cursor;
+        // Keep known-false elements outside the remaining search range.
+        let mut upper = cursor - 1;
         let mut step = 1usize;
         loop {
             let Some(probe) = cursor.checked_sub(step + 1) else {
@@ -184,7 +186,7 @@ pub fn partition_point_from_hint<T>(
                 let lower = probe + 1;
                 return lower + values[lower..upper].partition_point(predicate);
             }
-            upper = probe + 1;
+            upper = probe;
             step = step.saturating_mul(2);
         }
     }
@@ -218,6 +220,21 @@ mod hinted_partition_tests {
                     values.partition_point(|&value| value < target),
                 );
             }
+        }
+    }
+
+    #[test]
+    fn hinted_partition_does_not_retest_adjacent_boundaries() {
+        let values = [0, 1, 2];
+        for (hint, boundary, expected_calls) in [(0, 1, 2), (2, 1, 3), (2, 0, 3)] {
+            let mut calls = [0; 3];
+            let actual = partition_point_from_hint(&values, hint, |&value| {
+                calls[value] += 1;
+                value < boundary
+            });
+            assert_eq!(actual, boundary);
+            assert_eq!(calls.iter().sum::<usize>(), expected_calls);
+            assert!(calls.iter().all(|&count| count <= 1));
         }
     }
 }
