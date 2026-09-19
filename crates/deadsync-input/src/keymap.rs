@@ -486,10 +486,9 @@ impl Keymap {
 
     #[inline(always)]
     pub fn bind(&mut self, action: VirtualAction, inputs: &[InputBinding]) {
-        if let Some(prev) = self.map.remove(&action) {
+        if let Some(prev) = self.map.insert(action, inputs.to_vec()) {
             self.remove_rev(action, &prev);
         }
-        self.map.insert(action, inputs.to_vec());
         self.add_rev(action, inputs);
     }
 
@@ -931,6 +930,49 @@ fn input_events(edge: DebouncedEdge) -> impl Iterator<Item = InputEvent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rebinding_replaces_reverse_entries_without_disturbing_shared_bindings() {
+        let mut km = Keymap::default();
+        let shared = [
+            InputBinding::Key(KeyCode::ArrowLeft),
+            InputBinding::PadDir(PadDir::Left),
+            InputBinding::PadDirOn {
+                device: 2,
+                dir: PadDir::Left,
+            },
+            InputBinding::GamepadCode(GamepadCodeBinding {
+                code_u32: 77,
+                device: Some(2),
+                uuid: Some([1; 16]),
+            }),
+        ];
+        km.bind(VirtualAction::p1_left, &shared);
+        km.bind(VirtualAction::p2_left, &shared);
+        let replacement = [InputBinding::Key(KeyCode::ArrowRight)];
+        km.bind(VirtualAction::p1_left, &replacement);
+        km.bind(VirtualAction::p1_left, &replacement);
+
+        assert_eq!(km.bindings_for_action(VirtualAction::p1_left), replacement);
+        assert_eq!(km.bindings_for_action(VirtualAction::p2_left), shared);
+        assert_eq!(km.key_actions(KeyCode::ArrowLeft), [VirtualAction::p2_left]);
+        assert_eq!(
+            km.key_actions(KeyCode::ArrowRight),
+            [VirtualAction::p1_left]
+        );
+        assert_eq!(km.pad_dir_rev[PadDir::Left.ix()], [VirtualAction::p2_left]);
+        assert_eq!(
+            km.pad_dir_on_rev[&(2, PadDir::Left)],
+            [VirtualAction::p2_left]
+        );
+        assert_eq!(km.pad_code_rev[&77].len(), 1);
+        assert_eq!(km.pad_code_rev[&77][0].act, VirtualAction::p2_left);
+
+        km.bind(VirtualAction::p1_left, &[]);
+        assert!(km.bindings_for_action(VirtualAction::p1_left).is_empty());
+        assert!(km.key_actions(KeyCode::ArrowRight).is_empty());
+        assert_eq!(km.key_actions(KeyCode::ArrowLeft), [VirtualAction::p2_left]);
+    }
 
     #[test]
     fn set_keymap_prepares_dense_debounce_slots() {
