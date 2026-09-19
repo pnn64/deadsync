@@ -19,9 +19,7 @@ pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
             out.push_str(&source[index..end]);
             index = end;
         } else if lua_cmd_token_at(source, index) {
-            let (replacement, end) = parse_lua_cmd_call(source, index)?;
-            out.push_str(&replacement);
-            index = end;
+            index = parse_lua_cmd_call(source, index, &mut out)?;
         } else {
             let ch = source[index..].chars().next().unwrap();
             out.push(ch);
@@ -44,18 +42,18 @@ fn lua_cmd_token_at(source: &str, index: usize) -> bool {
     lua_skip_ws(source, after).is_some_and(|next| source.as_bytes().get(next) == Some(&b'('))
 }
 
-fn parse_lua_cmd_call(source: &str, index: usize) -> Result<(String, usize), String> {
+fn parse_lua_cmd_call(source: &str, index: usize, out: &mut String) -> Result<usize, String> {
     let Some(open) = lua_skip_ws(source, index + 3) else {
         return Err("unterminated cmd expression".to_string());
     };
     let close = lua_matching_paren(source, open)?;
     let body = &source[open + 1..close];
-    let replacement = lua_cmd_function(body)?;
-    Ok((replacement, close + 1))
+    lua_cmd_function(body, out)?;
+    Ok(close + 1)
 }
 
-fn lua_cmd_function(body: &str) -> Result<String, String> {
-    let mut out = String::from("function(self) ");
+fn lua_cmd_function(body: &str, out: &mut String) -> Result<(), String> {
+    out.push_str("function(self) ");
     for command in lua_cmd_commands(body)? {
         let command = command.trim();
         if command.is_empty() {
@@ -77,7 +75,7 @@ fn lua_cmd_function(body: &str) -> Result<String, String> {
         out.push_str("); ");
     }
     out.push_str("return self end");
-    Ok(out)
+    Ok(())
 }
 
 fn lua_cmd_name(command: &str) -> Result<(&str, &str), String> {
@@ -243,5 +241,28 @@ mod tests {
             preprocess_lua_cmd_syntax(source).unwrap(),
             "local s = \"cmd(zoom, 2)\" -- cmd(diffuse, 1)\nreturn function(self) self:linear(1); return self end"
         );
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_appends_multiple_expansions_and_preserves_surroundings() {
+        let source = "local a = cmd(); local b = cmd(zoom, f(1, 2); diffuse, {1, 0, 0, 1}); return cmd(settext, [=[cmd(x); y]=]) -- cmd(noop)";
+        assert_eq!(
+            preprocess_lua_cmd_syntax(source).unwrap(),
+            "local a = function(self) return self end; local b = function(self) self:zoom(f(1, 2)); self:diffuse({1, 0, 0, 1}); return self end; return function(self) self:settext([=[cmd(x); y]=]); return self end -- cmd(noop)"
+        );
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_keeps_errors_after_an_earlier_expansion() {
+        for (command, expected) in [
+            ("cmd(zoom, 1", "unterminated cmd expression"),
+            ("cmd(1zoom, 1)", "invalid cmd command '1zoom, 1'"),
+            ("cmd(zoom 1)", "invalid cmd command 'zoom 1'"),
+            ("cmd(settext, 'abc)", "unterminated Lua string"),
+            ("cmd(settext, [[abc)", "unterminated Lua long string"),
+        ] {
+            let source = format!("local a = cmd(zoom, 2); return {command}");
+            assert_eq!(preprocess_lua_cmd_syntax(&source).unwrap_err(), expected);
+        }
     }
 }
