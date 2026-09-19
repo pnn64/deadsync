@@ -214,18 +214,17 @@ impl<T> TextureStore<T> {
         let handle = self.reserve_texture_handle(key);
         if !self
             .uploaded_texture_dims
-            .get(&handle)
+            .insert(
+                handle,
+                TexMeta {
+                    w: width,
+                    h: height,
+                },
+            )
             .is_some_and(|meta| meta.w == width && meta.h == height)
         {
             self.revision.set(next_texture_revision());
         }
-        self.uploaded_texture_dims.insert(
-            handle,
-            TexMeta {
-                w: width,
-                h: height,
-            },
-        );
         self.textures.insert(handle, texture)
     }
 
@@ -452,18 +451,17 @@ impl<T> TextureStore<T> {
     ) -> Option<T> {
         if !self
             .uploaded_texture_dims
-            .get(&handle)
+            .insert(
+                handle,
+                TexMeta {
+                    w: width,
+                    h: height,
+                },
+            )
             .is_some_and(|meta| meta.w == width && meta.h == height)
         {
             self.revision.set(next_texture_revision());
         }
-        self.uploaded_texture_dims.insert(
-            handle,
-            TexMeta {
-                w: width,
-                h: height,
-            },
-        );
         self.textures.insert(handle, texture)
     }
 }
@@ -548,6 +546,33 @@ impl<T> Default for TextureStore<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn texture_replacement_updates_revision_only_when_uploaded_size_changes() {
+        for by_handle in [false, true] {
+            let mut textures = TextureStore::<u32>::new();
+            let key = "replacement-size-test";
+            let handle = textures.reserve_texture_handle(key.into());
+            for (value, width, height, expected_old, resized) in [
+                (1, 640, 360, None, true),
+                (2, 640, 360, Some(1), false),
+                (3, 1280, 360, Some(2), true),
+                (4, 1280, 720, Some(3), true),
+                (5, 1280, 720, Some(4), false),
+            ] {
+                let revision = textures.revision.get();
+                let old = if by_handle {
+                    textures.set_texture_for_handle(handle, value, width, height)
+                } else {
+                    textures.insert_texture(key.into(), value, width, height)
+                };
+                assert_eq!(old, expected_old);
+                assert_eq!(textures.revision.get() != revision, resized);
+                assert!(textures.uploaded_texture_dims_match(key, width, height));
+                assert_eq!(textures.textures.get(&handle), Some(&value));
+            }
+        }
+    }
 
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
