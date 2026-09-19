@@ -82,7 +82,7 @@ pub enum MineGradientSampleWarning {
 
 #[inline(always)]
 fn mine_grad_byte(v: f32) -> u8 {
-    (v.clamp(0.0, 1.0) * 255.0).round() as u8
+    (v * 255.0).round() as u8
 }
 
 fn build_mine_gradient_profile() -> MineGradientProfile {
@@ -360,6 +360,33 @@ pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mine_gradient_bytes_round_and_saturate() {
+        for (value, expected) in [
+            (f32::NEG_INFINITY, 0),
+            (-f32::MAX, 0),
+            (-1.0, 0),
+            (-0.0, 0),
+            (0.0, 0),
+            (f32::from_bits(1), 0),
+            (0.25 / 255.0, 0),
+            (0.5 / 255.0, 1),
+            (0.5, 128),
+            (254.5 / 255.0, 255),
+            (1.0, 255),
+            (2.0, 255),
+            (f32::MAX, 255),
+            (f32::INFINITY, 255),
+            (f32::NAN, 0),
+            (f32::from_bits(0xff80_0001), 0),
+        ] {
+            assert_eq!(mine_grad_byte(value), expected, "{value:?}");
+        }
+        for value in 0..=255u8 {
+            assert_eq!(mine_grad_byte(f32::from(value) / 255.0), value);
+        }
+    }
 
     #[test]
     fn mine_fill_slots_maps_present_mines_only() {
