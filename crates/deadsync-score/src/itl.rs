@@ -1943,7 +1943,7 @@ pub fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_scor
     const CURVE_DENOMINATOR: f64 = 10_118.288_512_538_815;
     let curve_ratio = ((ex_score.max(0.0) * EXP2_PER_EX_POINT).exp2() - 1.0) / CURVE_DENOMINATOR;
     let percent = (curve_ratio * 1_000_000.0).round() / 1_000_000.0;
-    passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
+    passing_points.saturating_add((f64::from(max_scoring_points) * percent) as u32)
 }
 
 fn apply_itl_overall_ranks(out: &mut OnlineItlOverallRanks, mut by_chart_points: Vec<(&str, u32)>) {
