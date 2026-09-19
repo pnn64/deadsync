@@ -124,7 +124,11 @@ fn thumbnail_sources(skins: &[Skin]) -> BTreeMap<&str, Vec<(usize, u16)>> {
             let path = choice
                 .files
                 .iter()
-                .find(|swap| swap.source.to_ascii_lowercase().ends_with(".png"))
+                .find(|swap| {
+                    swap.source
+                        .rsplit_once('.')
+                        .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("png"))
+                })
                 .map(|swap| swap.source.as_str());
             // Mine-size entries contain no PNG, so use the base mine texture.
             let path = path.unwrap_or(if skin.id == "cel-workshop" {
