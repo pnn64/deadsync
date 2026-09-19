@@ -967,7 +967,7 @@ pub fn load_and_resample_sfx(
         let start = in_planar.start_frame;
         let end = start + copy_frames;
         for (dst, channel) in resample_in.iter_mut().zip(&in_planar.channels) {
-            dst[..need].fill(0.0);
+            dst[copy_frames..need].fill(0.0);
             dst[..copy_frames].copy_from_slice(&channel[start..end]);
         }
         let produced_frames =

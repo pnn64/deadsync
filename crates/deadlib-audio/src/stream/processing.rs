@@ -195,7 +195,7 @@ impl MusicStages {
         } else {
             let start = converter.input.start_frame;
             for (dst, source) in converter.padded.iter_mut().zip(&converter.input.channels) {
-                dst[..need].fill(0.0);
+                dst[consumed..need].fill(0.0);
                 dst[..consumed].copy_from_slice(&source[start..start + consumed]);
             }
             converter.drained = consumed == 0;
