@@ -37,10 +37,10 @@ pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
         "top-center",
         "bottom-center",
     ];
-    let value = value.trim().to_ascii_lowercase();
+    let value = value.trim();
     KEYS.iter()
         .copied()
-        .find(|&key| key == value)
+        .find(|&key| key.eq_ignore_ascii_case(value))
         .unwrap_or(DEFAULT_FRAME_STATS_OVERLAY_ANCHOR)
 }
 
