@@ -406,7 +406,7 @@ impl Cache {
             let Ok(path) = canonical_path(path) else {
                 continue;
             };
-            let Some(mut entry) = state.entries.get(&path).cloned() else {
+            let Some(entry) = state.entries.get_mut(&path) else {
                 continue;
             };
             if (quantized_delta(entry.result.bias_ms) - delta_seconds).abs() > 0.000_1 {
@@ -423,7 +423,6 @@ impl Cache {
             };
             entry.simfile = stamp;
             entry.result.applied = true;
-            state.entries.insert(path.clone(), entry);
             clear_plot(&mut state, &path);
             mark_changed(&mut state);
         }
