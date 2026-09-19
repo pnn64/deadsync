@@ -93,12 +93,18 @@ fn map_event_time(
 ) -> Option<(Instant, u64)> {
     if event_clock_nanos >= sample_clock_nanos {
         let delta = event_clock_nanos - sample_clock_nanos;
+        if delta > EVENT_FUTURE_TOLERANCE_NS {
+            return None;
+        }
         return Some((
             sample.instant.checked_add(Duration::from_nanos(delta))?,
             sample.host_nanos.saturating_add(delta),
         ));
     }
     let delta = sample_clock_nanos - event_clock_nanos;
+    if delta > EVENT_STALE_TOLERANCE_NS {
+        return None;
+    }
     Some((
         sample.instant.checked_sub(Duration::from_nanos(delta))?,
         sample.host_nanos.saturating_sub(delta),
@@ -114,11 +120,6 @@ pub fn event_time(sample: EventTimeSample, sec: i64, usec: i64) -> (Instant, u64
     let Some(event_clock_nanos) = event_clock_nanos(sec, usec) else {
         return (sample.instant, sample.host_nanos);
     };
-    if event_clock_nanos > sample_clock_nanos.saturating_add(EVENT_FUTURE_TOLERANCE_NS)
-        || sample_clock_nanos.saturating_sub(event_clock_nanos) > EVENT_STALE_TOLERANCE_NS
-    {
-        return (sample.instant, sample.host_nanos);
-    }
     map_event_time(sample, event_clock_nanos, sample_clock_nanos)
         .unwrap_or((sample.instant, sample.host_nanos))
 }
@@ -164,6 +165,72 @@ mod tests {
         let (timestamp, host_nanos) = event_time(sample, 15, 0);
         assert_eq!(host_nanos, 100);
         assert_eq!(timestamp, base);
+    }
+
+    #[test]
+    fn event_time_preserves_tolerance_boundaries() {
+        let base = Instant::now();
+        let sample = EventTimeSample {
+            instant: base,
+            host_nanos: 9_000_000_000,
+            clock_nanos: Some(42_000_000_000),
+        };
+        for (sec, usec, expected_delta_us) in [
+            (36, 999_999, 0), // More than five seconds stale: receipt time.
+            (37, 0, -5_000_000),
+            (37, 1, -4_999_999),
+            (41, 999_999, -1),
+            (42, 0, 0),
+            (42, 1, 1),
+            (42, 49_999, 49_999),
+            (42, 50_000, 50_000),
+            (42, 50_001, 0), // More than 50 milliseconds future: receipt time.
+            (-1, 0, 0),
+            (42, -1, 0),
+            (42, 1_000_000, 0),
+        ] {
+            let expected_delta_us: i64 = expected_delta_us;
+            let duration = Duration::from_micros(expected_delta_us.unsigned_abs());
+            let expected_timestamp = if expected_delta_us < 0 {
+                base - duration
+            } else {
+                base + duration
+            };
+            let expected_host_nanos =
+                (i128::from(sample.host_nanos) + i128::from(expected_delta_us) * 1_000) as u64;
+            assert_eq!(
+                event_time(sample, sec, usec),
+                (expected_timestamp, expected_host_nanos),
+                "kernel timestamp {sec}:{usec}"
+            );
+        }
+    }
+
+    #[test]
+    fn event_time_preserves_saturating_clock_boundaries() {
+        let base = Instant::now();
+        let event_clock = u64::MAX / 1_000 * 1_000;
+        let sec = (event_clock / 1_000_000_000) as i64;
+        let usec = (event_clock % 1_000_000_000 / 1_000) as i64;
+        let sample = EventTimeSample {
+            instant: base,
+            host_nanos: u64::MAX - 5_000_000,
+            clock_nanos: Some(event_clock - 20_000_000),
+        };
+        // The old future bound saturated at u64::MAX; this timestamp still fits.
+        assert_eq!(
+            event_time(sample, sec, usec),
+            (base + Duration::from_millis(20), u64::MAX)
+        );
+        let sample = EventTimeSample {
+            instant: base,
+            host_nanos: 100,
+            clock_nanos: Some(u64::MAX),
+        };
+        assert_eq!(
+            event_time(sample, sec, usec),
+            (base - Duration::from_nanos(u64::MAX - event_clock), 0)
+        );
     }
 
     #[test]
