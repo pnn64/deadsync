@@ -582,7 +582,8 @@ impl PlaybackPosMap {
         let mut closest_dist = f64::INFINITY;
         for seg in &self.queue {
             let sec_per_frame = seg.music_sec_per_frame;
-            if !sec_per_frame.is_finite() || sec_per_frame == 0.0 {
+            // Insertion rejects non-finite slopes; zero slopes remain non-invertible.
+            if sec_per_frame == 0.0 {
                 continue;
             }
             let start_sec = seg.music_start_sec;
@@ -843,5 +844,41 @@ mod tests {
             music_sec_per_frame: 1.0 / 48_000.0,
         });
         assert!(map.invert(f64::NAN).is_none());
+    }
+
+    #[test]
+    fn playback_pos_map_validates_slopes_on_insert() {
+        let mut map = PlaybackPosMap::default();
+        for slope in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            map.insert(MusicMapSeg {
+                frames: 48_000,
+                music_sec_per_frame: slope,
+                ..MusicMapSeg::default()
+            });
+            assert!(map.search(0.0).is_none());
+            assert!(map.invert(0.0).is_none());
+        }
+        for slope in [0.0, -0.0] {
+            map.clear();
+            map.insert(MusicMapSeg {
+                frames: 48_000,
+                music_start_sec: 1.0,
+                music_sec_per_frame: slope,
+                ..MusicMapSeg::default()
+            });
+            assert_eq!(map.search(24_000.0).unwrap().0, 1.0);
+            assert!(map.invert(1.0).is_none());
+        }
+        map.clear();
+        map.insert(MusicMapSeg {
+            frames: 96_000,
+            music_start_sec: 2.0,
+            music_sec_per_frame: -1.0 / 48_000.0,
+            ..MusicMapSeg::default()
+        });
+        // Cleanup trims this reverse-playback segment but preserves its slope.
+        let frame = map.invert(1.0).unwrap();
+        assert!((frame - 48_000.0).abs() <= 1e-9);
+        assert!((map.search(frame).unwrap().0 - 1.0).abs() <= 1e-9);
     }
 }
