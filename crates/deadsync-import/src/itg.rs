@@ -264,18 +264,18 @@ fn read_editable(path: &Path) -> ItgEditable {
     if ini.load(path).is_err() {
         return ItgEditable::default();
     }
-    let get = |k: &str| ini.get("Editable", k).map(|s| s.trim().to_string());
+    let get = |k: &str| ini.get("Editable", k).map(str::trim);
     ItgEditable {
-        display_name: get("DisplayName").unwrap_or_default(),
+        display_name: get("DisplayName").unwrap_or_default().to_owned(),
         weight_pounds: get("WeightPounds")
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0),
         birth_year: get("BirthYear")
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0),
-        last_used_high_score_name: get("LastUsedHighScoreName").unwrap_or_default(),
+        last_used_high_score_name: get("LastUsedHighScoreName").unwrap_or_default().to_owned(),
         ignore_step_count_calories: get("IgnoreStepCountCalories")
-            .map(|s| parse_bool(&s))
+            .map(parse_bool)
             .unwrap_or(false),
     }
 }
