@@ -314,9 +314,9 @@ fn resolve_background_changes_from_values<'a>(
         blocks_beat_zero,
         has_any_file,
     } = summarize_bgchange_fallbacks(&out);
-    let movies = list_bgchange_song_movies(song_dir);
+    let mut movies = list_bgchange_song_movies(song_dir);
     if movies.len() == 1 && !has_explicit_movie {
-        let movie = movies[0].clone();
+        let movie = movies.pop().unwrap();
         if saw_no_song_bg {
             if let Some(ix) = beat_zero_still_ix {
                 out[ix].target = SongBackgroundChangeTarget::File(movie);
