@@ -8144,12 +8144,12 @@ fn lrint_ties_even(v: f32) -> f32 {
     if !v.is_finite() {
         return 0.0;
     }
-    // Fast path: already an integer (including -0.0)
-    if v.fract() == 0.0 {
+    let floor = v.floor();
+    // Reuse the floor for the integer check, preserving -0.0 on return.
+    if v == floor {
         return v;
     }
 
-    let floor = v.floor();
     let frac = v - floor;
 
     if frac < 0.5 {
