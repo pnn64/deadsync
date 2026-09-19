@@ -83,13 +83,9 @@ pub fn pack_and_song_name_from_path(song_path: &str) -> Option<(String, String)>
 
 #[must_use]
 pub fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
-    let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
-    let pack_dir = song
-        .simfile_path
-        .parent()?
-        .parent()?
-        .file_name()?
-        .to_str()?;
+    let song_path = song.simfile_path.parent()?;
+    let song_dir = song_path.file_name()?.to_str()?;
+    let pack_dir = song_path.parent()?.file_name()?.to_str()?;
     Some((pack_dir, song_dir))
 }
 
