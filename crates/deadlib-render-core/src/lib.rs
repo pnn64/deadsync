@@ -122,14 +122,19 @@ impl<V> DenseSlotMap<V> {
     /// Panics if the function's input or state invariants are violated.
     pub fn insert(&mut self, key: u64, value: V) -> u64 {
         assert!(key != 0, "dense slot identity zero is reserved");
-        if let Some(&slot) = self.slots.get(&key) {
-            self.values[slot as usize] = value;
-            return u64::from(slot) + 1;
-        }
-
-        let slot = u32::try_from(self.values.len()).expect("dense slot count exceeds u32");
-        self.values.push(value);
-        self.slots.insert(key, slot);
+        let slot = match self.slots.entry(key) {
+            std::collections::hash_map::Entry::Occupied(entry) => {
+                let slot = *entry.get();
+                self.values[slot as usize] = value;
+                slot
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let slot = u32::try_from(self.values.len()).expect("dense slot count exceeds u32");
+                self.values.push(value);
+                entry.insert(slot);
+                slot
+            }
+        };
         u64::from(slot) + 1
     }
 
