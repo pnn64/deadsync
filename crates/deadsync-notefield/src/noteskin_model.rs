@@ -162,10 +162,7 @@ impl ModelMeshCache {
 
     #[inline(always)]
     pub fn draw_at<S: NoteskinSlot>(&mut self, slot: &S, time: f32, beat: f32) -> ModelDrawState {
-        let Some(index) = self
-            .find_slot(slot.stable_id())
-            .or_else(|| self.ensure_slot(slot))
-        else {
+        let Some(index) = self.ensure_slot(slot) else {
             self.frame_stats.unregistered_misses =
                 self.frame_stats.unregistered_misses.saturating_add(1);
             self.frame_stats.saturated_misses = self.frame_stats.saturated_misses.saturating_add(1);
@@ -200,14 +197,6 @@ impl ModelMeshCache {
         slot: &S,
     ) -> Option<(TMeshCacheKey, Arc<[TexturedMeshVertex]>)> {
         slot.model()?;
-        if let Some(index) = self.find_slot(slot.stable_id())
-            && let Some((key, vertices)) = &self.slots[index].geometry
-        {
-            if self.collect_hit_stats {
-                self.stats.hits = self.stats.hits.saturating_add(1);
-            }
-            return Some((*key, vertices.clone()));
-        }
         Some(self.get_or_insert_with(slot, || build_model_geometry(slot)))
     }
 
@@ -222,15 +211,15 @@ impl ModelMeshCache {
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
     {
         let stable_id = slot.stable_id();
-        let geom_cache_key = hashed_model_cache_key(stable_id);
         if let Some(index) = self.find_slot(stable_id)
-            && let Some((_, vertices)) = &self.slots[index].geometry
+            && let Some((key, vertices)) = &self.slots[index].geometry
         {
             if self.collect_hit_stats {
                 self.stats.hits = self.stats.hits.saturating_add(1);
             }
-            return (geom_cache_key, vertices.clone());
+            return (*key, vertices.clone());
         }
+        let geom_cache_key = hashed_model_cache_key(stable_id);
         self.stats.misses = self.stats.misses.saturating_add(1);
         let vertices = build();
         if let Some(index) = self.register_slot(slot, Some((geom_cache_key, vertices.clone()))) {
@@ -1004,6 +993,45 @@ mod tests {
         assert_eq!(cache.slots.len(), 1);
         assert!(cache.slots[0].geometry.is_none());
         assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+    }
+
+    #[test]
+    fn geometry_can_fill_a_registered_non_model_slot() {
+        let mut slot = TestSlot::model();
+        let model = slot.model.take();
+        let mut cache = ModelMeshCache::with_capacity(1);
+        assert!(cache.prewarm_slot(&slot));
+        assert!(cache.model_geometry(&slot).is_none());
+        assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+
+        slot.model = model;
+        let (key, vertices) = cache.model_geometry(&slot).expect("model geometry");
+        assert_eq!(key, hashed_model_cache_key(slot.stable_id()));
+        assert_eq!(vertices[0].pos, [2.0, 3.0, 4.0]);
+        cache.begin_hit_stats(true);
+        let (cached_key, cached_vertices) = cache.model_geometry(&slot).expect("cached geometry");
+        assert_eq!(key, cached_key);
+        assert!(Arc::ptr_eq(&vertices, &cached_vertices));
+        assert_eq!(cache.slots.len(), 1);
+        assert_eq!(cache.stats().misses, 1);
+        assert_eq!(cache.stats().hits, 1);
+        assert_eq!(cache.stats().saturated_misses, 0);
+    }
+
+    #[test]
+    fn sealed_geometry_misses_keep_building_without_retaining() {
+        let slot = TestSlot::model();
+        let mut cache = ModelMeshCache::with_capacity(1);
+        cache.seal();
+        let (first_key, first) = cache.model_geometry(&slot).expect("first geometry");
+        let (second_key, second) = cache.model_geometry(&slot).expect("second geometry");
+        assert_eq!(first_key, second_key);
+        assert_eq!(first[0].pos, second[0].pos);
+        assert!(!Arc::ptr_eq(&first, &second));
+        assert!(cache.slots.is_empty());
+        assert_eq!(cache.stats().misses, 2);
+        assert_eq!(cache.stats().saturated_misses, 2);
+        assert_eq!(cache.stats().hits, 0);
     }
 
     #[test]
