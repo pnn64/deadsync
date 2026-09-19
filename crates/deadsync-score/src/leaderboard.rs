@@ -1055,13 +1055,13 @@ impl PlayerLeaderboardCacheState {
             }
         }
 
-        let queued_fetch = self.pending_refresh.remove(key).map(|max_entries| {
-            self.in_flight.insert(key.clone(), max_entries);
-            QueuedPlayerLeaderboardFetch {
-                key: key.clone(),
-                max_entries,
-            }
-        });
+        let queued_fetch = self
+            .pending_refresh
+            .remove_entry(key)
+            .map(|(key, max_entries)| {
+                self.in_flight.insert(key.clone(), max_entries);
+                QueuedPlayerLeaderboardFetch { key, max_entries }
+            });
 
         PlayerLeaderboardFetchCompletion {
             fetched_itl_self,
