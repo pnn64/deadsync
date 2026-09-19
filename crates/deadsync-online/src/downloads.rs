@@ -1079,7 +1079,7 @@ pub fn write_unlock_cache_file(
         fs::create_dir_all(parent)
             .map_err(|error| WriteUnlockCacheError::CreateDir(error.to_string()))?;
     }
-    let text = serde_json::to_string(&UnlockCacheFile(cache.clone()))
+    let text = serde_json::to_string(cache)
         .map_err(|error| WriteUnlockCacheError::Encode(error.to_string()))?;
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, text).map_err(|error| WriteUnlockCacheError::WriteTemp(error.to_string()))?;
@@ -1203,6 +1203,35 @@ mod tests {
             "https://example.com/unlock.zip",
             "Other Pack"
         ));
+    }
+
+    #[test]
+    fn unlock_cache_file_preserves_newtype_format_and_round_trips() {
+        let root = temp_root("cache-format");
+        let path = root.join("nested").join("cache.json");
+        for cache in [
+            UnlockCache::new(),
+            HashMap::from([
+                ("empty".to_string(), HashMap::new()),
+                (
+                    "https://example.invalid/雪.zip".to_string(),
+                    HashMap::from([
+                        ("Pack \\\"雪\n".to_string(), true),
+                        ("Other pack".to_string(), false),
+                    ]),
+                ),
+            ]),
+        ] {
+            write_unlock_cache_file(&path, &cache).expect("write cache");
+            assert_eq!(
+                fs::read_to_string(&path).expect("read JSON"),
+                serde_json::to_string(&UnlockCacheFile(cache.clone())).expect("legacy JSON")
+            );
+            assert_eq!(read_unlock_cache_file(&path).expect("decode cache"), cache);
+        }
+        fs::remove_file(&path).expect("remove cache file");
+        fs::remove_dir(path.parent().unwrap()).expect("remove cache directory");
+        fs::remove_dir(root).expect("remove cache fixture");
     }
 
     #[test]
