@@ -6502,6 +6502,12 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
         return;
     }
 
+    if !(mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) {
+        // Invisible passes still consume the actor's position in painter order.
+        *order_counter = order_counter.saturating_add(1);
+        return;
+    }
+
     let offset = x_fold.map_or(mesh.offset, |fold| fold.offset(mesh.offset));
     let rect = place_rect(parent, mesh.align, offset, mesh.size);
     let base_x = m.left + rect.x;
