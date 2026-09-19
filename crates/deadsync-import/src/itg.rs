@@ -853,12 +853,11 @@ fn find_case_insensitive(dir: &Path, name: &str) -> Option<PathBuf> {
         return Some(direct);
     }
     let entries = fs::read_dir(dir).ok()?;
-    let lower = name.to_ascii_lowercase();
     for entry in entries.flatten() {
         if entry
             .file_name()
             .to_str()
-            .is_some_and(|n| n.eq_ignore_ascii_case(&lower) || n.to_ascii_lowercase() == lower)
+            .is_some_and(|n| n.eq_ignore_ascii_case(name))
         {
             let path = entry.path();
             if path.is_file() {
