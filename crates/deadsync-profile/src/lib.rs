@@ -7137,9 +7137,7 @@ pub fn save_favorited_series_dir(dir: &Path, series: &HashSet<String>) {
 }
 
 fn toggle_named_favorite(names: &mut HashSet<String>, name: &str) -> bool {
-    let existing = names.iter().find(|existing| *existing == name).cloned();
-    if let Some(existing) = existing {
-        names.remove(&existing);
+    if names.remove(name) {
         false
     } else {
         names.insert(name.to_string());
