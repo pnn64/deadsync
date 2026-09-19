@@ -109,7 +109,6 @@ impl DebounceStore {
         new_due_at: Option<Instant>,
     ) {
         if old_due_at == new_due_at {
-            self.slots[slot].due_at = new_due_at;
             return;
         }
         match (old_due_at, new_due_at) {
@@ -125,7 +124,7 @@ impl DebounceStore {
                 self.slots[slot].due_at = Some(due_at);
                 self.repair_due_slot(slot);
             }
-            (None, None) => self.slots[slot].due_at = None,
+            (None, None) => {}
         }
     }
 
@@ -413,15 +412,12 @@ fn should_prune_debounce_state(
 
 #[inline(always)]
 fn debounce_due_at(state: DebounceState, windows: DebounceWindows) -> Option<Instant> {
-    if state.held_raw != state.held_reported {
-        return state.last_report_time.checked_add(windows.window);
+    if state.held_raw && state.held_reported {
+        return None;
     }
-    // Keep a fully released slot around for one more window so a rapid repress
-    // is still compared against the last reported release before we drop state.
-    if !state.held_raw && !state.held_reported {
-        return state.last_report_time.checked_add(windows.prune_window());
-    }
-    None
+    // Pending edges and fully released slots share the same deadline. Retaining
+    // released state for one window keeps a rapid repress gated by its release.
+    state.last_report_time.checked_add(windows.window)
 }
 
 #[inline(always)]
