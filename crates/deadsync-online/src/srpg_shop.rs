@@ -424,9 +424,17 @@ fn fetch_shop(
     catalog_params.extend(common.clone());
     catalog_params.push(("type", "buy".to_string()));
     let referer = shop_url(shop_id);
-    let catalog = match get_form(&session.agent, CATALOG_API, &catalog_params, &referer, true) {
-        Ok(body) if parse_catalog(&body, shop_id, lifetime_balance).is_ok() => body,
-        _ => post_form(&session.agent, CATALOG_API, &catalog_params, &referer, true)?,
+    let catalog = match get_form(&session.agent, CATALOG_API, &catalog_params, &referer, true)
+        .and_then(|body| parse_catalog(&body, shop_id, lifetime_balance))
+    {
+        Ok(items) => Ok(items),
+        Err(_) => Err(post_form(
+            &session.agent,
+            CATALOG_API,
+            &catalog_params,
+            &referer,
+            true,
+        )?),
     };
     let mut download_params = common.to_vec();
     download_params.push(("type", "unlocks".to_string()));
@@ -437,7 +445,11 @@ fn fetch_shop(
         &referer,
         true,
     )?;
-    let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
+    // Parse a fallback POST body only after the download request succeeds.
+    let mut items = match catalog {
+        Ok(items) => items,
+        Err(body) => parse_catalog(&body, shop_id, lifetime_balance)?,
+    };
     merge_downloads(&mut items, parse_downloads(&downloads)?);
     retain_song_unlocks(&mut items);
     order_shop_items(&mut items);
