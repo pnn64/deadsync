@@ -799,11 +799,10 @@ pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
 }
 
 pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
-    let key = slot.texture_key().to_string();
     let (tex_w, tex_h) = match slot.source.as_ref() {
         SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
     };
-    let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
+    let (grid_x, grid_y) = assets::sprite_sheet_dims(slot.texture_key());
     let plan = sprite_sheet_frame(
         [tex_w, tex_h],
         [grid_x.max(1) as usize, grid_y.max(1) as usize],
@@ -836,8 +835,8 @@ pub(super) fn itg_apply_note_animation(
     if slot.model.is_some() || matches!(slot.source.as_ref(), SpriteSource::Animated { .. }) {
         return;
     }
-    let key = slot.texture_key().to_string();
-    let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
+    let key = slot.texture_key();
+    let (grid_x, grid_y) = assets::sprite_sheet_dims(key);
     let (grid_x, grid_y) = (grid_x.max(1) as usize, grid_y.max(1) as usize);
     if grid_x.saturating_mul(grid_y) <= 1 {
         return;
@@ -869,7 +868,7 @@ pub(super) fn itg_apply_note_animation(
     let frames_per_cycle = frame_indices.len() as f32 / animation.length.max(1e-6);
     slot.source = source_from_plan(
         SpriteSourcePlan::Animated {
-            texture_key: key,
+            texture_key: key.to_string(),
             tex_dims,
             frame_size: [frame_w, frame_h],
             grid: (grid_x, grid_y),
