@@ -2240,21 +2240,14 @@ fn draw_offscreen_targets(
     stats.backend_prepare_us = stats
         .backend_prepare_us
         .saturating_add(elapsed_us(prepare_started.elapsed()));
-    let total_tmesh_instances = frame
-        .render_targets
-        .iter()
-        .map(|target| target.tmesh_instances.len())
-        .sum();
-    let total_instances = frame
-        .render_targets
-        .iter()
-        .map(|target| target.sprite_instances.len())
-        .sum();
-    let total_mesh_vertices = frame
-        .render_targets
-        .iter()
-        .map(|target| target.mesh_vertices.len())
-        .sum();
+    let mut total_tmesh_instances = 0;
+    let mut total_instances = 0;
+    let mut total_mesh_vertices = 0;
+    for target in &frame.render_targets {
+        total_tmesh_instances += target.tmesh_instances.len();
+        total_instances += target.sprite_instances.len();
+        total_mesh_vertices += target.mesh_vertices.len();
+    }
 
     let upload_started = Instant::now();
     ensure_instance_capacity(state, total_instances);
