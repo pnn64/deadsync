@@ -559,15 +559,11 @@ pub fn update_density_hist_mesh_reusable(
     };
 
     let len = (window.point_count - 1) * 6;
-    let can_reuse = mesh
-        .as_mut()
-        .is_some_and(|vertices| Arc::get_mut(vertices).is_some());
-    if !can_reuse {
-        *mesh = Some(Arc::new(Vec::with_capacity(len)));
-    }
-
-    let vertices = Arc::get_mut(mesh.as_mut().expect("mesh initialized above"))
-        .expect("mesh has no other owners");
+    let vertices = match mesh.as_mut().and_then(Arc::get_mut) {
+        Some(vertices) => vertices,
+        None => Arc::get_mut(mesh.insert(Arc::new(Vec::with_capacity(len))))
+            .expect("mesh has no other owners"),
+    };
     if vertices.len() >= len {
         let written = cache.fill_mesh_vertices(vertices, window);
         vertices.truncate(written);
