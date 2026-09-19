@@ -177,9 +177,7 @@ pub fn quantize_centi_i32(value: f64) -> i32 {
     if !value.is_finite() {
         return 0;
     }
-    (value * 100.0)
-        .round()
-        .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+    (value * 100.0).round() as i32
 }
 
 #[must_use]
@@ -187,7 +185,7 @@ pub fn quantize_centi_u32(value: f64) -> u32 {
     if !value.is_finite() || value <= 0.0 {
         return 0;
     }
-    (value * 100.0).round().min(f64::from(u32::MAX)) as u32
+    (value * 100.0).round() as u32
 }
 
 #[must_use]
@@ -200,7 +198,7 @@ pub const fn clamp_rounded_i16(value: f32) -> i16 {
     if !value.is_finite() {
         return 0;
     }
-    value.round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
+    value.round() as i16
 }
 
 pub(crate) fn beat_factor(song_beat: f32) -> f32 {

@@ -945,6 +945,66 @@ mod tests {
         assert_eq!(clamp_rounded_i16(40_000.0), i16::MAX);
     }
 
+    #[test]
+    fn quantized_keys_match_explicit_saturation_at_boundaries() {
+        for value in [
+            f64::NEG_INFINITY,
+            f64::MIN,
+            -21_474_836.49,
+            -21_474_836.48,
+            -1.235,
+            -0.0,
+            0.0,
+            0.005,
+            1.235,
+            21_474_836.47,
+            21_474_836.48,
+            42_949_672.95,
+            42_949_672.96,
+            f64::MAX,
+            f64::INFINITY,
+            f64::NAN,
+        ] {
+            let signed = if value.is_finite() {
+                (value * 100.0)
+                    .round()
+                    .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32
+            } else {
+                0
+            };
+            let unsigned = if value.is_finite() && value > 0.0 {
+                (value * 100.0).round().min(f64::from(u32::MAX)) as u32
+            } else {
+                0
+            };
+            assert_eq!(quantize_centi_i32(value), signed, "{value}");
+            assert_eq!(quantize_centi_u32(value), unsigned, "{value}");
+        }
+        for value in [
+            f32::NEG_INFINITY,
+            f32::MIN,
+            -32768.5,
+            -32768.0,
+            -32767.5,
+            -0.0,
+            0.0,
+            0.5,
+            32766.5,
+            32767.0,
+            32767.5,
+            f32::MAX,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            let expected = if value.is_finite() {
+                value.round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
+            } else {
+                0
+            };
+            assert_eq!(clamp_rounded_i16(value), expected, "{value}");
+        }
+    }
+
     fn empty_mods_params() -> GameplayModsTextParams<'static> {
         GameplayModsTextParams {
             speed: ScrollSpeedSetting::XMod(1.0),
