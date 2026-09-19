@@ -140,27 +140,26 @@ pub(super) fn update_sync_curve_mesh(
     let out = Arc::get_mut(storage).expect("curve storage has one owner");
     out.clear();
     out.reserve(visible_len.saturating_sub(1) * 6);
-    for i in cols.first..cols.end.saturating_sub(1) {
+    let point = |i: usize| {
         let denom = visible_len.saturating_sub(1) as f32;
-        let axis0 = (i - cols.first) as f32 / denom;
-        let axis1 = (i + 1 - cols.first) as f32 / denom;
-        let t0 = sync_heat_norm01(values[i], min_value, max_value) as f32;
-        let t1 = sync_heat_norm01(values[i + 1], min_value, max_value) as f32;
-        let (x0, y0, x1, y1) = match orientation {
+        let axis = (i - cols.first) as f32 / denom;
+        let t = sync_heat_norm01(values[i], min_value, max_value) as f32;
+        match orientation {
             GraphOrientation::Vertical => (
-                axis0 * (graph_w - 1.0).max(0.0),
-                (y_top - y_bottom).mul_add(t0, y_bottom),
-                axis1 * (graph_w - 1.0).max(0.0),
-                (y_top - y_bottom).mul_add(t1, y_bottom),
+                axis * (graph_w - 1.0).max(0.0),
+                (y_top - y_bottom).mul_add(t, y_bottom),
             ),
             GraphOrientation::Horizontal => (
-                (x_right - x_left).mul_add(t0, x_left),
-                (1.0 - axis0) * (graph_h - 1.0).max(0.0),
-                (x_right - x_left).mul_add(t1, x_left),
-                (1.0 - axis1) * (graph_h - 1.0).max(0.0),
+                (x_right - x_left).mul_add(t, x_left),
+                (1.0 - axis) * (graph_h - 1.0).max(0.0),
             ),
-        };
+        }
+    };
+    let (mut x0, mut y0) = point(cols.first);
+    for i in cols.first + 1..cols.end {
+        let (x1, y1) = point(i);
         push_line_segment(out, x0, y0, x1, y1, 1.5, color);
+        (x0, y0) = (x1, y1);
     }
     if out.is_empty() {
         *mesh = None;
