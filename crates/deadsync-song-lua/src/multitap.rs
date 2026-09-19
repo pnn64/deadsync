@@ -288,9 +288,11 @@ pub fn push_multitap_actor_eases(
     if context.player_timing[player].is_some() {
         // Only motion needs extra samples. Keep noteskin/color resolution at
         // the authored boundaries, and bake the timing curve before gameplay.
-        let boundaries = beats.clone();
-        for pair in boundaries.windows(2) {
-            sample_multitap_y(&mut beats, context, player, desc, pair[0], pair[1], 0);
+        // Sampling only appends, so the original boundary indices stay valid.
+        for index in 1..beats.len() {
+            let start = beats[index - 1];
+            let end = beats[index];
+            sample_multitap_y(&mut beats, context, player, desc, start, end, 0);
         }
         beats.sort_by(f32::total_cmp);
         beats.dedup();
@@ -1233,6 +1235,88 @@ pub fn overlay_delta_pair_from_states(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn multitap_timed_actor_curves_cover_refined_bounce_intervals() {
+        use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingData, TimingSegments};
+
+        let mut context = SongLuaCompileContext::new(".", "Refined multitap boundaries");
+        context.player_timing[0] = Some(TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                speeds: vec![SpeedSegment {
+                    beat: 4.0,
+                    ratio: 2.0,
+                    delay: 4.0,
+                    unit: SpeedUnit::Beats,
+                }],
+                ..Default::default()
+            },
+            &[],
+        ));
+        let baseline = SongLuaOverlayState {
+            visible: false,
+            ..Default::default()
+        };
+        for taps in [vec![4.0, 6.0, 9.0], vec![4.0, 4.0, 6.0, 9.0]] {
+            let desc = MultitapDesc {
+                lane: 1,
+                taps,
+                peak: Some(1.5),
+            };
+            let mut out = Vec::new();
+            push_multitap_actor_eases(
+                &mut out,
+                1,
+                baseline,
+                2,
+                baseline,
+                3,
+                baseline,
+                &[],
+                &context,
+                0,
+                SongLuaNoteskinResolver::default(),
+                "default",
+                &desc,
+                false,
+            );
+            let curves: Vec<_> = out
+                .iter()
+                .filter(|ease| {
+                    ease.overlay_index == 1 && ease.from.y.is_some() && ease.to.y.is_some()
+                })
+                .collect();
+            assert!(curves.len() > desc.taps.len() * 3);
+            assert!(
+                curves
+                    .iter()
+                    .any(|ease| ease.start >= 8.0 && ease.limit > 0.0)
+            );
+            for ease in curves {
+                for (beat, y) in [
+                    (ease.start, ease.from.y.unwrap()),
+                    (ease.start + ease.limit, ease.to.y.unwrap()),
+                ] {
+                    let expected = multitap_frame_state(
+                        baseline,
+                        &context,
+                        0,
+                        desc.lane,
+                        beat,
+                        calc_multitap_phase(&desc, beat),
+                    );
+                    assert!(
+                        (y - expected.y).abs() < 0.001,
+                        "beat={beat}, y={y}, expected={}",
+                        expected.y
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn multitap_travel_obeys_chart_timing_and_speedmod() {
