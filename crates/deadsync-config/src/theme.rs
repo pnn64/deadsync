@@ -1474,7 +1474,7 @@ impl LanguageFlag {
 /// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
 #[must_use]
 pub fn normalize_locale(raw: &str) -> String {
-    let lower = raw
+    let mut lower = raw
         .trim()
         .split('.')
         .next()
@@ -1482,8 +1482,8 @@ pub fn normalize_locale(raw: &str) -> String {
         .split('@')
         .next()
         .unwrap_or(raw)
-        .replace('_', "-")
-        .to_ascii_lowercase();
+        .replace('_', "-");
+    lower.make_ascii_lowercase();
 
     if lower.starts_with("zh") {
         if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
