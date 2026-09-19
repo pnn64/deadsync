@@ -89,31 +89,27 @@ pub fn cabinet_light_plan(song: &SongData, fallback_chart_ix: usize) -> Option<C
         });
     }
 
-    let fallback = song
-        .charts
+    song.charts
         .get(fallback_chart_ix)
-        .filter(|chart| chart.has_note_data)
-        .map(|chart| (fallback_chart_ix, chart.short_hash.clone()))?;
-    let (marquee_ix, marquee_hash) = closest_standard_chart_ix(
+        .filter(|chart| chart.has_note_data)?;
+    let marquee_ix = closest_standard_chart_ix(
         song,
         LIGHTS_PRIMARY_CHART_TYPE,
         LIGHTS_MARQUEE_DIFFICULTY_INDEX,
     )
-    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
-    .unwrap_or_else(|| fallback.clone());
-    let (bass_ix, bass_hash) = closest_standard_chart_ix(
+    .unwrap_or(fallback_chart_ix);
+    let bass_ix = closest_standard_chart_ix(
         song,
         LIGHTS_PRIMARY_CHART_TYPE,
         LIGHTS_BASS_DIFFICULTY_INDEX,
     )
-    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
-    .unwrap_or_else(|| fallback);
+    .unwrap_or(fallback_chart_ix);
 
     Some(CabinetLightPlan::Generated {
         marquee_ix,
-        marquee_hash,
+        marquee_hash: song.charts[marquee_ix].short_hash.clone(),
         bass_ix,
-        bass_hash,
+        bass_hash: song.charts[bass_ix].short_hash.clone(),
     })
 }
 
@@ -599,6 +595,44 @@ mod tests {
             }
             CabinetLightPlan::Explicit { .. } => panic!("expected generated lights"),
         }
+    }
+
+    #[test]
+    fn cabinet_light_plan_uses_fallback_for_nonstandard_charts() {
+        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["unused", "fallback"]);
+        song.charts[0] = test_chart_with("pump-single", "Hard", "unused");
+        song.charts[1] = test_chart_with("pump-single", "Edit", "fallback");
+
+        let plan = cabinet_light_plan(&song, 1).expect("fallback light plan");
+        match plan {
+            CabinetLightPlan::Generated {
+                marquee_ix,
+                marquee_hash,
+                bass_ix,
+                bass_hash,
+            } => {
+                assert_eq!((marquee_ix, bass_ix), (1, 1));
+                assert_eq!(marquee_hash, "fallback");
+                assert_eq!(bass_hash, "fallback");
+            }
+            CabinetLightPlan::Explicit { .. } => panic!("expected generated lights"),
+        }
+    }
+
+    #[test]
+    fn cabinet_light_plan_requires_valid_fallback_unless_explicit() {
+        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["hard", "medium"]);
+        song.charts[0] = test_chart_with("dance-single", "Hard", "hard");
+        song.charts[1].has_note_data = false;
+        assert!(cabinet_light_plan(&song, 1).is_none());
+        assert!(cabinet_light_plan(&song, usize::MAX).is_none());
+
+        song.charts
+            .push(test_chart_with("lights-cabinet", "Medium", "lights"));
+        assert!(matches!(
+            cabinet_light_plan(&song, usize::MAX),
+            Some(CabinetLightPlan::Explicit { chart_ix: 2, .. })
+        ));
     }
 
     #[test]
