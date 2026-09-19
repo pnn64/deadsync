@@ -231,13 +231,13 @@ impl SmxPanelDriver {
             // feedback here (the game events still flash as before).
             if !engaged
                 && let Some((pad, p)) = panel
-                && let Some(press_anim) = self.judgement_gifs[pad].press.clone()
+                && let Some(press_anim) = &self.judgement_gifs[pad].press
             {
                 if press_edge == Some(true) {
                     self.lights.play_press_overlay(
                         pad,
                         p,
-                        press_anim,
+                        press_anim.clone(),
                         OverlayDrive::Sustain { resume: false },
                     );
                 } else if released {
