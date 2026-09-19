@@ -112,17 +112,16 @@ pub fn configure(enabled: bool, discover: bool, device_ids: [Option<&str>; 2]) {
     }
     let changed_players: [bool; 2] =
         std::array::from_fn(|player| desired.device_ids[player].as_deref() != device_ids[player]);
-    let next = Desired {
+    *desired = Desired {
         enabled,
         discover,
         device_ids: device_ids.map(|id| id.map(Arc::from)),
     };
-    *desired = next.clone();
     drop(desired);
 
     let readings = player_readings();
-    for (player, (reading, id)) in readings.into_iter().zip(next.device_ids.iter()).enumerate() {
-        let reading = if !next.enabled || id.is_none() {
+    for (player, (reading, id)) in readings.into_iter().zip(device_ids).enumerate() {
+        let reading = if !enabled || id.is_none() {
             PlayerReading::default()
         } else if changed_players[player] {
             PlayerReading {
