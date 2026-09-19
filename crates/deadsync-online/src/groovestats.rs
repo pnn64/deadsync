@@ -3659,7 +3659,7 @@ where
 {
     match Option::<U32OrString>::deserialize(deserializer)? {
         Some(U32OrString::U32(v)) => Ok(v),
-        Some(U32OrString::F64(v)) => Ok(v.max(0.0).floor() as u32),
+        Some(U32OrString::F64(v)) => Ok(v as u32),
         Some(U32OrString::String(text)) => Ok(text.trim().parse::<u32>().unwrap_or(0)),
         None => Ok(0),
     }
