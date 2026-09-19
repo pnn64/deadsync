@@ -241,13 +241,21 @@ fn version_tag(version: &str) -> Option<String> {
 }
 
 fn truncate(s: &str, max_chars: usize) -> String {
-    if s.chars().count() <= max_chars {
-        s.to_owned()
-    } else {
-        let mut out: String = s.chars().take(max_chars.saturating_sub(1)).collect();
-        out.push('…');
-        out
+    // Byte length is an upper bound on the number of characters.
+    if s.len() <= max_chars {
+        return s.to_owned();
     }
+    let mut chars = s.char_indices();
+    let Some((end, _)) = chars.nth(max_chars.saturating_sub(1)) else {
+        return s.to_owned();
+    };
+    if max_chars > 0 && chars.next().is_none() {
+        return s.to_owned();
+    }
+    let mut out = String::with_capacity(end + '…'.len_utf8());
+    out.push_str(&s[..end]);
+    out.push('…');
+    out
 }
 
 #[cfg(test)]
@@ -327,5 +335,24 @@ mod tests {
         assert_eq!(version_tag("v7.1.1").as_deref(), Some("v7.1.1"));
         assert_eq!(version_tag("  7.0  ").as_deref(), Some("v7.0"));
         assert_eq!(version_tag(""), None);
+    }
+
+    #[test]
+    fn truncate_preserves_character_boundaries_and_exact_limits() {
+        for (input, limit, expected) in [
+            ("", 0, ""),
+            ("a", 0, "…"),
+            ("a", 1, "a"),
+            ("ab", 1, "…"),
+            ("hello", 5, "hello"),
+            ("hello", 10, "hello"),
+            ("hello", usize::MAX, "hello"),
+            ("0123456789abcdef", 8, "0123456…"),
+            ("é好🙂x", 3, "é好…"),
+            ("é好🙂x", 4, "é好🙂x"),
+            ("e\u{301}xy", 3, "e\u{301}…"),
+        ] {
+            assert_eq!(truncate(input, limit), expected);
+        }
     }
 }
