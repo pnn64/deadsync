@@ -798,7 +798,6 @@ fn multitap_y_offset(
     pos_beats: f32,
 ) -> f32 {
     if let Some(timing) = &context.player_timing[player] {
-        let seconds = timing.get_time_for_beat_exact(beat);
         if let SongLuaSpeedMod::C(value) = context.players[player].speedmod {
             return (timing.get_time_for_beat(beat + pos_beats) - timing.get_time_for_beat(beat))
                 * value
@@ -806,6 +805,7 @@ fn multitap_y_offset(
                 / crate::song_music_rate(context)
                 * 64.0;
         }
+        let seconds = timing.get_time_for_beat_exact(beat);
         return (timing.get_displayed_beat(beat + pos_beats) - timing.get_displayed_beat(beat))
             * timing.get_speed_multiplier(beat, seconds)
             * 64.0
