@@ -202,9 +202,7 @@ pub fn density_graph_life_catch_up_steps(
         return 0;
     }
     let elapsed = (total_elapsed - next_update_elapsed).max(0.0_f32);
-    ((elapsed / update_rate).floor() as u32)
-        .saturating_add(1)
-        .min(64)
+    ((elapsed / update_rate) as u32).saturating_add(1).min(64)
 }
 
 /// Maximum number of life samples the gameplay density graph can retain for a song.

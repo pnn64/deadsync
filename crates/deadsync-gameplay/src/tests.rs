@@ -1374,6 +1374,24 @@ mod tests {
         assert_eq!(density_graph_life_catch_up_steps(1.0, 1.0, 0.25), 1);
         assert_eq!(density_graph_life_catch_up_steps(20.0, 1.0, 0.25), 64);
         assert_eq!(density_graph_life_catch_up_steps(1.0, 1.0, 0.0), 0);
+        assert_eq!(density_graph_life_catch_up_steps(1.249, 1.0, 0.25), 1);
+        assert_eq!(density_graph_life_catch_up_steps(1.25, 1.0, 0.25), 2);
+        assert_eq!(density_graph_life_catch_up_steps(1.251, 1.0, 0.25), 2);
+        assert_eq!(
+            density_graph_life_catch_up_steps(f32::MAX, 0.0, f32::MIN_POSITIVE),
+            64
+        );
+        assert_eq!(density_graph_life_catch_up_steps(f32::NAN, 0.0, 0.25), 0);
+        assert_eq!(
+            density_graph_life_catch_up_steps(f32::INFINITY, 0.0, 0.25),
+            0
+        );
+        assert_eq!(density_graph_life_catch_up_steps(1.0, f32::NAN, 0.25), 1);
+        assert_eq!(
+            density_graph_life_catch_up_steps(1.0, f32::NEG_INFINITY, 0.25),
+            64
+        );
+        assert_eq!(density_graph_life_catch_up_steps(1.0, 0.0, f32::NAN), 0);
 
         assert_eq!(
             density_graph_life_sample_x(0.0, 0.0, 10.0, 10.0, 100.0),
