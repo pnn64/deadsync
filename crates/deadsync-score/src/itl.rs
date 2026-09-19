@@ -855,10 +855,7 @@ pub fn save_online_itl_self_index_file(
         error,
     })?;
 
-    let std_by_key: OnlineItlSelfIndexMap = by_key
-        .iter()
-        .map(|(key, value)| (key.clone(), *value))
-        .collect();
+    let std_by_key: HashMap<_, _> = by_key.iter().collect();
     let buf = bincode::encode_to_vec(&std_by_key, bincode::config::standard()).map_err(|_| {
         OnlineItlSelfIndexWriteError::Encode {
             path: path.to_path_buf(),
