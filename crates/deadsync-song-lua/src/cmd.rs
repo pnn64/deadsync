@@ -14,12 +14,12 @@ pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
             let end = lua_quoted_end(source, index)?;
             out.push_str(&source[index..end]);
             index = end;
-        } else if lua_long_bracket_end(source, index).is_some() {
-            let end = lua_long_string_end(source, index)?;
+        } else if let Some(open_end) = lua_long_bracket_end(source, index) {
+            let end = lua_long_string_end(source, index, open_end)?;
             out.push_str(&source[index..end]);
             index = end;
-        } else if lua_cmd_token_at(source, index) {
-            index = parse_lua_cmd_call(source, index, &mut out)?;
+        } else if let Some(open) = lua_cmd_open_at(source, index) {
+            index = parse_lua_cmd_call(source, open, &mut out)?;
         } else {
             let ch = source[index..].chars().next().unwrap();
             out.push(ch);
@@ -29,23 +29,20 @@ pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
     Ok(out)
 }
 
-fn lua_cmd_token_at(source: &str, index: usize) -> bool {
+fn lua_cmd_open_at(source: &str, index: usize) -> Option<usize> {
     let bytes = source.as_bytes();
     if !source[index..].starts_with("cmd") {
-        return false;
+        return None;
     }
     let before_is_ident = index > 0 && lua_ident_byte(bytes[index - 1]);
     let after = index + 3;
     if before_is_ident || after >= bytes.len() || lua_ident_byte(bytes[after]) {
-        return false;
+        return None;
     }
-    lua_skip_ws(source, after).is_some_and(|next| source.as_bytes().get(next) == Some(&b'('))
+    lua_skip_ws(source, after).filter(|&next| bytes.get(next) == Some(&b'('))
 }
 
-fn parse_lua_cmd_call(source: &str, index: usize, out: &mut String) -> Result<usize, String> {
-    let Some(open) = lua_skip_ws(source, index + 3) else {
-        return Err("unterminated cmd expression".to_string());
-    };
+fn parse_lua_cmd_call(source: &str, open: usize, out: &mut String) -> Result<usize, String> {
     let close = lua_matching_paren(source, open)?;
     let body = &source[open + 1..close];
     lua_cmd_function(body, out)?;
@@ -106,8 +103,8 @@ fn lua_cmd_commands(body: &str) -> Result<Vec<&str>, String> {
             index = lua_comment_end(body, index);
         } else if matches!(bytes[index], b'\'' | b'"') {
             index = lua_quoted_end(body, index)?;
-        } else if lua_long_bracket_end(body, index).is_some() {
-            index = lua_long_string_end(body, index)?;
+        } else if let Some(open_end) = lua_long_bracket_end(body, index) {
+            index = lua_long_string_end(body, index, open_end)?;
         } else {
             match bytes[index] {
                 b'(' => paren += 1,
@@ -138,8 +135,8 @@ fn lua_matching_paren(source: &str, open: usize) -> Result<usize, String> {
             index = lua_comment_end(source, index);
         } else if matches!(bytes[index], b'\'' | b'"') {
             index = lua_quoted_end(source, index)?;
-        } else if lua_long_bracket_end(source, index).is_some() {
-            index = lua_long_string_end(source, index)?;
+        } else if let Some(open_end) = lua_long_bracket_end(source, index) {
+            index = lua_long_string_end(source, index, open_end)?;
         } else {
             match bytes[index] {
                 b'(' => depth += 1,
@@ -170,8 +167,8 @@ const fn lua_ident_byte(byte: u8) -> bool {
 }
 
 fn lua_comment_end(source: &str, index: usize) -> usize {
-    if source[index + 2..].starts_with('[')
-        && let Ok(end) = lua_long_string_end(source, index + 2)
+    if let Some(open_end) = lua_long_bracket_end(source, index + 2)
+        && let Ok(end) = lua_long_string_end(source, index + 2, open_end)
     {
         return end;
     }
@@ -209,10 +206,7 @@ fn lua_long_bracket_end(source: &str, index: usize) -> Option<usize> {
     (bytes.get(cursor) == Some(&b'[')).then_some(cursor + 1)
 }
 
-fn lua_long_string_end(source: &str, index: usize) -> Result<usize, String> {
-    let Some(open_end) = lua_long_bracket_end(source, index) else {
-        return Err("invalid Lua long string".to_string());
-    };
+fn lua_long_string_end(source: &str, index: usize, open_end: usize) -> Result<usize, String> {
     let equals = &source[index + 1..open_end - 1];
     let close = format!("]{equals}]");
     source[open_end..]
@@ -264,5 +258,36 @@ mod tests {
             let source = format!("local a = cmd(zoom, 2); return {command}");
             assert_eq!(preprocess_lua_cmd_syntax(&source).unwrap_err(), expected);
         }
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_reuses_openings_across_whitespace_and_long_strings() {
+        let source = "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn cmd \t\r\n (settext, [==[x; cmd(noop); )]==]; zoom, 2)";
+        assert_eq!(
+            preprocess_lua_cmd_syntax(source).unwrap(),
+            "local s = [==[cmd(noop); )]==]; --[=[cmd(noop)]=]\nreturn function(self) self:settext([==[x; cmd(noop); )]==]); self:zoom(2); return self end"
+        );
+        for source in ["cmd", "cmd  \t", "cmdx(zoom, 1)", "xcmd(zoom, 1)"] {
+            assert_eq!(preprocess_lua_cmd_syntax(source).unwrap(), source);
+        }
+    }
+
+    #[test]
+    fn preprocess_lua_cmd_preserves_invalid_comment_openings() {
+        for comment in [
+            "--[not a long string",
+            "--[=not a long string",
+            "--[=[unclosed",
+        ] {
+            let source = format!("{comment}\nreturn cmd(zoom, 2)");
+            assert_eq!(
+                preprocess_lua_cmd_syntax(&source).unwrap(),
+                format!("{comment}\nreturn function(self) self:zoom(2); return self end")
+            );
+        }
+        assert_eq!(
+            preprocess_lua_cmd_syntax("return [=[unclosed").unwrap_err(),
+            "unterminated Lua long string"
+        );
     }
 }
