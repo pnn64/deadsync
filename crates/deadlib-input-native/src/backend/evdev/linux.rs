@@ -882,6 +882,7 @@ fn remove_dev_by_path(
     }
     if let Some(idx) = key_devs.iter().position(|dev| dev.path == path) {
         key_devs.swap_remove(idx);
+        publish_keyboard_backend_state(key_devs);
     }
 }
 
@@ -1342,10 +1343,11 @@ fn run_inner(
                 initial: false,
             });
         }
+        // Ordinary input does not change keyboard presence.
         for &idx in key_remove.iter().rev() {
             key_devs.swap_remove(idx);
+            publish_keyboard_backend_state(&key_devs);
         }
-        publish_keyboard_backend_state(&key_devs);
 
         for event in hotplug.drain(..) {
             match event {
@@ -1360,7 +1362,6 @@ fn run_inner(
                 },
                 HotplugEvent::Remove(path) => {
                     remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys);
-                    publish_keyboard_backend_state(&key_devs);
                 }
             }
         }
@@ -1394,6 +1395,27 @@ fn run_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboard_removal_publishes_presence_without_poll_refresh() {
+        let mut devs = Vec::new();
+        let mut key_devs: Vec<_> = ["first", "last"]
+            .into_iter()
+            .map(|path| KeyDev {
+                path: path.to_owned(),
+                file: std::fs::File::open("/dev/null").unwrap(),
+            })
+            .collect();
+        publish_keyboard_backend_state(&key_devs);
+        assert!(keyboard_backend_active());
+        for (path, expected_active) in [("missing", true), ("first", true), ("last", false)] {
+            remove_dev_by_path(path, &mut devs, &mut key_devs, &mut |_| {
+                panic!("keyboard removal must not emit a pad disconnect");
+            });
+            assert_eq!(keyboard_backend_active(), expected_active);
+        }
+        assert!(key_devs.is_empty());
+    }
 
     #[test]
     fn keyboard_capture_requires_enabled_and_focused_flags() {

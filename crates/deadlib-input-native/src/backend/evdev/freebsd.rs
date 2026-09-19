@@ -666,6 +666,7 @@ fn remove_dev_by_path(
     }
     if let Some(idx) = key_devs.iter().position(|dev| dev.path == path) {
         key_devs.swap_remove(idx);
+        publish_keyboard_backend_state(key_devs);
     }
 }
 
@@ -942,10 +943,11 @@ fn run_inner(
                 initial: false,
             });
         }
+        // Ordinary input does not change keyboard presence.
         for &idx in key_remove.iter().rev() {
             key_devs.swap_remove(idx);
+            publish_keyboard_backend_state(&key_devs);
         }
-        publish_keyboard_backend_state(&key_devs);
         for event in hotplug.drain(..) {
             match event {
                 DevdEvent::Create(path) => {
@@ -963,11 +965,9 @@ fn run_inner(
                 }
                 DevdEvent::Destroy(path) => {
                     remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys);
-                    publish_keyboard_backend_state(&key_devs);
                 }
             }
         }
-        publish_keyboard_backend_state(&key_devs);
         if topology_changed {
             (watch_offset, key_offset) = poll_registration::rebuild(
                 watch_pollfd,
