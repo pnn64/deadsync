@@ -352,11 +352,12 @@ fn login(username: &str, password: &str) -> Result<(ShopSession, String), SrpgSh
         false,
     )?;
     let shop_html = get_text(&agent, &shop_url(0))?;
-    if looks_logged_out(&shop_html) {
+    let lower_html = shop_html.to_ascii_lowercase();
+    if looks_logged_out(&lower_html) {
         return Err(SrpgShopError::LoginFailed);
     }
     let entrant_id =
-        find_number_after_key(&shop_html, "entrantid").ok_or(SrpgShopError::MissingEntrant)?;
+        find_number_after_key(&lower_html, "entrantid").ok_or(SrpgShopError::MissingEntrant)?;
     Ok((ShopSession { agent, entrant_id }, shop_html))
 }
 
@@ -397,10 +398,11 @@ fn fetch_shop(
     shop_id: u32,
     page: Option<String>,
 ) -> Result<SrpgShop, SrpgShopError> {
-    let page = match page {
+    let mut page = match page {
         Some(page) => page,
         None => get_text(&session.agent, &shop_url(shop_id))?,
     };
+    page.make_ascii_lowercase();
     if looks_logged_out(&page) {
         return Err(SrpgShopError::LoginFailed);
     }
@@ -1033,23 +1035,23 @@ fn shop_url(shop_id: u32) -> String {
     format!("{BASE_ORIGIN}/index.php?page=genshop&shopid={shop_id}")
 }
 
-fn looks_logged_out(html: &str) -> bool {
-    let lower = html.to_ascii_lowercase();
-    lower.contains("you need to be logged in")
-        || lower.contains("please log in")
-        || (lower.contains("username:")
-            && lower.contains("password:")
-            && lower.contains("log in")
-            && !lower.contains("log out")
-            && !lower.contains("logout"))
+// Callers share an ASCII-lowercased page between these page helpers.
+fn looks_logged_out(lower_html: &str) -> bool {
+    lower_html.contains("you need to be logged in")
+        || lower_html.contains("please log in")
+        || (lower_html.contains("username:")
+            && lower_html.contains("password:")
+            && lower_html.contains("log in")
+            && !lower_html.contains("log out")
+            && !lower_html.contains("logout"))
 }
 
-fn find_number_after_key(haystack: &str, key: &str) -> Option<String> {
-    let lower = haystack.to_ascii_lowercase();
-    let start = lower.find(&key.to_ascii_lowercase())? + key.len();
+// Both the page and the key must already be ASCII lowercase.
+fn find_number_after_key(lower_html: &str, key: &str) -> Option<String> {
+    let start = lower_html.find(key)? + key.len();
     let mut digits = String::new();
     let mut found = false;
-    for ch in haystack[start..].chars().take(200) {
+    for ch in lower_html[start..].chars().take(200) {
         if ch.is_ascii_digit() {
             digits.push(ch);
             found = true;
