@@ -248,10 +248,12 @@ pub fn push_multitap_actor_eases(
         .collect::<Vec<_>>();
     for &beat in &beats {
         let phase = calc_multitap_phase(desc, beat);
-        frame_samples.push((
-            beat,
-            multitap_frame_state(frame_baseline, context, player, desc.lane, beat, phase),
-        ));
+        if context.player_timing[player].is_none() {
+            frame_samples.push((
+                beat,
+                multitap_frame_state(frame_baseline, context, player, desc.lane, beat, phase),
+            ));
+        }
         push_multitap_arrow_sample(
             &mut arrow_samples,
             beat,
