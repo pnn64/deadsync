@@ -340,7 +340,7 @@ pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Optio
     for i in 0..sample_count {
         let t = i as f32 / divisor;
         let position = t * max_index;
-        let base_index = position.floor() as usize;
+        let base_index = position as usize;
         let next_index = (base_index + 1).min(colors.len() - 1);
         let frac = (position - base_index as f32).clamp(0.0, 1.0);
 
