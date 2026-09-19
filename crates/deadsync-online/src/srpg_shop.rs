@@ -438,7 +438,7 @@ fn fetch_shop(
             true,
         )?),
     };
-    let mut download_params = common.to_vec();
+    let mut download_params = Vec::from(common);
     download_params.push(("type", "unlocks".to_string()));
     let downloads = post_form(
         &session.agent,
