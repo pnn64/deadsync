@@ -199,8 +199,10 @@ impl DebounceStore {
     #[inline(always)]
     fn repair_due_slot(&mut self, slot: usize) {
         let ix = self.slots[slot].scheduled_ix as usize;
-        let ix = self.sift_up(ix);
-        self.sift_down(ix);
+        // Moving upward already establishes order with both children.
+        if self.sift_up(ix) == ix {
+            self.sift_down(ix);
+        }
     }
 
     #[inline(always)]
@@ -1176,6 +1178,70 @@ mod tests {
         ));
         assert!(emitted.is_empty());
         assert_eq!(states.lock().unwrap().active_len, 0);
+    }
+
+    #[test]
+    fn due_schedule_matches_ordered_reference_after_mixed_updates() {
+        let t0 = Instant::now();
+        let mut store = DebounceStore::new();
+        let mut deadlines = [None; 32];
+        store.prepare_slots(deadlines.len());
+        let mut random = 0x1234_5678_9abc_def0_u64;
+
+        for step in 0..4096 {
+            random = random.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let slot = (random >> 32) as usize % deadlines.len();
+            // Include unchanged deadlines, cancellation, earlier/later updates,
+            // and ties between different slots.
+            let new_due = match (random >> 16) % 4 {
+                0 => None,
+                1 => deadlines[slot],
+                _ => Some(t0 + Duration::from_millis((random >> 48) % 16)),
+            };
+            store.refresh_due_slot(slot, deadlines[slot], new_due);
+            deadlines[slot] = new_due;
+
+            if step % 3 == 0 {
+                let now = t0 + Duration::from_millis((random >> 40) % 16);
+                let expected = deadlines
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(slot, &due)| due.map(|due| (due, slot)))
+                    .min()
+                    .filter(|&(due, _)| due <= now)
+                    .map(|(_, slot)| slot);
+                assert_eq!(store.take_next_due_slot(now), expected, "step {step}");
+                if let Some(slot) = expected {
+                    deadlines[slot] = None;
+                }
+            }
+
+            assert_eq!(
+                store.due_slots.len(),
+                deadlines.iter().filter(|due| due.is_some()).count(),
+            );
+            for (slot, &due) in deadlines.iter().enumerate() {
+                assert_eq!(store.slots[slot].due_at, due);
+                let ix = store.slots[slot].scheduled_ix;
+                if due.is_some() {
+                    assert_eq!(store.due_slots[ix as usize], slot);
+                } else {
+                    assert_eq!(ix, NOT_SCHEDULED);
+                }
+            }
+        }
+
+        let mut remaining: Vec<_> = deadlines
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, &due)| due.map(|due| (due, slot)))
+            .collect();
+        remaining.sort_unstable();
+        let now = t0 + Duration::from_millis(16);
+        for (_, slot) in remaining {
+            assert_eq!(store.take_next_due_slot(now), Some(slot));
+        }
+        assert_eq!(store.take_next_due_slot(now), None);
     }
 
     #[test]
