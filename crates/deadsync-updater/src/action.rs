@@ -674,8 +674,6 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
     }
     let dest = downloads_dir().join(&asset.name);
 
-    let info_for_progress = info.clone();
-    let asset_for_progress = asset.clone();
     // Track the first observed (instant, written) sample so we can
     // estimate remaining time as a running average over the live
     // download.  Anchoring at the first chunk (rather than the
@@ -683,7 +681,7 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
     // would otherwise drag the early estimate way too high.
     let mut first_sample: Option<(Instant, u64)> = None;
     let mut throttle = ProgressThrottle::default();
-    let progress = move |written: u64, total: Option<u64>| {
+    let progress = |written: u64, total: Option<u64>| {
         let now = Instant::now();
         let (start_t, start_w) = *first_sample.get_or_insert((now, written));
         let eta_secs = match total {
@@ -715,8 +713,8 @@ fn run_download(info: ReleaseInfo, asset: ReleaseAsset, generation: u64) {
         set_phase_if_current(
             generation,
             ActionPhase::Downloading {
-                info: info_for_progress.clone(),
-                asset: asset_for_progress.clone(),
+                info: info.clone(),
+                asset: asset.clone(),
                 written,
                 total,
                 eta_secs,
