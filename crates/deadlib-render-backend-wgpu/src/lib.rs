@@ -1563,7 +1563,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -1608,7 +1608,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -1661,7 +1661,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -2455,8 +2455,7 @@ fn stage_offscreen_projection_upload<'a>(
     let mut offset = 0;
     for cameras in camera_sets {
         for matrix in cameras.iter().chain(std::iter::once(&fallback)) {
-            let columns = matrix.to_cols_array();
-            let bytes = cast_slice(std::slice::from_ref(&columns));
+            let bytes = bytemuck::bytes_of::<[f32; 16]>(matrix.as_ref());
             let destination = &mut upload[offset..offset + bytes.len()];
             if destination != bytes {
                 destination.copy_from_slice(bytes);
@@ -2510,8 +2509,7 @@ fn stage_projection_upload(
     let mut changed = upload.len() != needed * stride;
     upload.resize(needed * stride, 0);
     for (index, matrix) in cameras.iter().chain(std::iter::once(&fallback)).enumerate() {
-        let columns = matrix.to_cols_array();
-        let bytes = cast_slice(std::slice::from_ref(&columns));
+        let bytes = bytemuck::bytes_of::<[f32; 16]>(matrix.as_ref());
         let offset = index * stride;
         let slot = &mut upload[offset..offset + bytes.len()];
         if slot != bytes {
@@ -2528,14 +2526,13 @@ fn set_camera(
     camera: u8,
     camera_count: usize,
     cameras: &[Matrix4],
-    fallback: Matrix4,
+    fallback: &Matrix4,
     binding: CameraBinding,
 ) {
     match proj {
         ProjState::Immediates => {
-            let vp = cameras.get(camera as usize).copied().unwrap_or(fallback);
-            let vp_array = vp.to_cols_array_2d();
-            pass.set_immediates(0, cast_slice(&vp_array));
+            let vp = cameras.get(camera as usize).unwrap_or(fallback);
+            pass.set_immediates(0, bytemuck::bytes_of::<[f32; 16]>(vp.as_ref()));
         }
         ProjState::Uniform {
             group,
