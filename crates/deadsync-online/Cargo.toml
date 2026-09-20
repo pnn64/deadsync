@@ -18,7 +18,7 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-version = { path = "../deadsync-version" }
 chrono = "0.4.45"
 log = "0.4.34"
-rand = "0.10.2"
+rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 tungstenite = "0.30.0"

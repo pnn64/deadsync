@@ -34,13 +34,13 @@ deadsync-theme = { path = "../deadsync-theme" }
 deadsync-version = { path = "../deadsync-version" }
 bitflags = "2.13.2"
 chrono = "0.4.45"
-glam = "0.33.7"
+glam = "0.33.8"
 image = "0.25.10"
 log = "0.4.34"
 memchr = "2.8.3"
 mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
 qrcodegen = "1.8.0"
-rand = "0.10.2"
+rand = "0.10.3"
 rustc-hash = "2.1.3"
 smallvec = "1.16.1"
 strsim = "0.11.1"
