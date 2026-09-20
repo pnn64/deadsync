@@ -391,6 +391,30 @@ impl ApplicationHandler for CaptureApp {
                 // The benchmark uses these target handles too. Restore the test image.
                 assert_eq!(capture(&mut state, &frame, &textures), image);
             }
+            // Growing either uniform buffer replaces both buffers. Unchanged
+            // camera data must still be uploaded into each replacement.
+            frame.cameras.resize(17, Mat4::IDENTITY);
+            assert_eq!(
+                capture(&mut state, &frame, &textures),
+                image,
+                "{api}: main projection capacity growth"
+            );
+            assert_eq!(
+                capture(&mut state, &frame, &textures),
+                image,
+                "{api}: offscreen projection restored after main growth"
+            );
+            frame.render_targets[2].cameras.resize(65, Mat4::IDENTITY);
+            assert_eq!(
+                capture(&mut state, &frame, &textures),
+                image,
+                "{api}: offscreen projection capacity growth"
+            );
+            assert_eq!(
+                capture(&mut state, &frame, &textures),
+                image,
+                "{api}: warm frame after projection growth"
+            );
             frame.render_targets[2].preserve = true;
             frame.render_targets[2].ops.clear();
             assert_eq!(

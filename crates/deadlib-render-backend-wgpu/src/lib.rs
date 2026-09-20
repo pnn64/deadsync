@@ -2415,7 +2415,7 @@ fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
         .iter()
         .map(|target| target.cameras.len() + 1)
         .sum::<usize>();
-    let buffer_recreated = ensure_projection_capacity(state, matrix_count.max(1));
+    ensure_projection_capacity(state, matrix_count.max(1));
     let changed = stage_offscreen_projection_upload(
         &mut state.offscreen_projection_upload,
         frame
@@ -2426,7 +2426,7 @@ fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
         stride,
         matrix_count,
     );
-    if matrix_count == 0 || !(buffer_recreated || changed) {
+    if matrix_count == 0 || !changed {
         return;
     }
 
@@ -2474,7 +2474,7 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         return;
     };
     let needed = cameras.len().saturating_add(1).max(1);
-    let buffer_recreated = ensure_projection_capacity(state, needed);
+    ensure_projection_capacity(state, needed);
 
     let ProjState::Uniform { stride, .. } = &state.proj else {
         return;
@@ -2487,7 +2487,7 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         state.projection,
         stride,
     );
-    if !changed && !buffer_recreated {
+    if !changed {
         return;
     }
 
@@ -2635,7 +2635,7 @@ fn ensure_tmesh_instance_capacity(state: &mut State, needed: usize) {
     state.tmesh_instance_capacity = new_cap;
 }
 
-fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
+fn ensure_projection_capacity(state: &mut State, needed: usize) {
     let ProjState::Uniform {
         stride,
         capacity,
@@ -2646,10 +2646,10 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         layout,
     } = &mut state.proj
     else {
-        return false;
+        return;
     };
     if needed <= *capacity {
-        return false;
+        return;
     }
     let new_cap = needed.next_power_of_two().max(4);
     *buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
@@ -2681,9 +2681,9 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         }],
     });
     *capacity = new_cap;
+    // Empty staging forces the next upload to initialize each new buffer.
     state.projection_upload.clear();
     state.offscreen_projection_upload.clear();
-    true
 }
 
 fn reconfigure_surface(state: &mut State) {
