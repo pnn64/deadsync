@@ -1847,12 +1847,14 @@ fn retire_frame_slot(state: &mut State, index: usize, stats: &mut DrawStats) {
 fn poll_completions(state: &mut State) {
     let mut completed = state.completed_present_id;
     for frame in &state.frames {
-        if frame
-            .command
-            .as_ref()
-            .is_some_and(|command| command_complete(command))
+        // Older IDs cannot advance this snapshot, regardless of command status.
+        if frame.submitted_id > completed
+            && frame
+                .command
+                .as_ref()
+                .is_some_and(|command| command_complete(command))
         {
-            completed = completed.max(frame.submitted_id);
+            completed = frame.submitted_id;
         }
     }
     if completed > state.completed_present_id {
