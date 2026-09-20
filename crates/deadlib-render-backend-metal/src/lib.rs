@@ -741,7 +741,7 @@ fn draw_inner(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -804,7 +804,7 @@ fn draw_inner(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 encoder.draw_primitives(
@@ -867,7 +867,7 @@ fn draw_inner(
                     1,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -1420,7 +1420,7 @@ fn record_offscreen_pass(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -1483,7 +1483,7 @@ fn record_offscreen_pass(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 encoder.draw_primitives(
@@ -1544,7 +1544,7 @@ fn record_offscreen_pass(
                     1,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -1817,17 +1817,17 @@ fn set_camera(
     cache_slot: usize,
     camera: u8,
     cameras: &[Matrix4],
-    fallback: Matrix4,
+    fallback: &Matrix4,
     cache: &mut EncoderCache,
 ) {
     if !cache.camera_changed(cache_slot, camera) {
         return;
     }
-    let projection = cameras.get(camera as usize).copied().unwrap_or(fallback);
-    let columns = projection.to_cols_array();
+    let projection = cameras.get(camera as usize).unwrap_or(fallback);
+    let columns: &[f32; 16] = projection.as_ref();
     encoder.set_vertex_bytes(
         buffer_index,
-        mem::size_of_val(&columns) as u64,
+        mem::size_of_val(columns) as u64,
         columns.as_ptr().cast(),
     );
 }
