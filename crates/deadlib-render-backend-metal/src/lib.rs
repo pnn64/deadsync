@@ -636,13 +636,14 @@ fn draw_inner(
     stats.backend_upload_us = elapsed_us(upload_started);
 
     let acquire_started = Instant::now();
-    let Some(drawable) = state.layer.next_drawable().map(ToOwned::to_owned) else {
+    // draw()'s autorelease pool keeps the borrowed drawable alive through presentation.
+    let Some(drawable) = state.layer.next_drawable() else {
         stats.acquire_us = elapsed_us(acquire_started);
         return Ok(stats);
     };
     stats.acquire_us = elapsed_us(acquire_started);
     let waited_for_image = stats.acquire_us >= IMAGE_WAIT_THRESHOLD_US;
-    let submitted_id = next_present_id(state);
+    let submitted_id = next_present_id(&mut state.next_present_id);
 
     let setup_started = Instant::now();
     configure_render_pass(
@@ -913,7 +914,7 @@ fn draw_inner(
     stats.backend_record_us = elapsed_us(record_started);
 
     let present_started = Instant::now();
-    command.present_drawable(&drawable);
+    command.present_drawable(drawable);
     stats.present_us = elapsed_us(present_started);
     let submit_started = Instant::now();
     command.commit();
@@ -1865,9 +1866,9 @@ fn mark_completed(state: &mut State, present_id: u32) {
     }
 }
 
-fn next_present_id(state: &mut State) -> u32 {
-    let id = state.next_present_id.max(1);
-    state.next_present_id = id.wrapping_add(1).max(1);
+fn next_present_id(next: &mut u32) -> u32 {
+    let id = (*next).max(1);
+    *next = id.wrapping_add(1).max(1);
     id
 }
 
