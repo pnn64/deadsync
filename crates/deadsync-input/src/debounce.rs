@@ -331,15 +331,18 @@ fn debounce_step(
     // the new raw state, so a delayed release can still report just ahead of a
     // later repress instead of being silently lost.
     let first = debounce_emit_if_due(state, input_slot, now, windows);
-    if state.held_raw != pressed {
+    let second = if state.held_raw != pressed {
         state.action_mask = action_mask;
         state.source = source;
         state.held_raw = pressed;
         state.last_raw_change_time = timestamp;
         state.last_raw_change_host_nanos = timestamp_host_nanos;
         state.last_raw_store_time = now;
-    }
-    let second = debounce_emit_if_due(state, input_slot, now, windows);
+        debounce_emit_if_due(state, input_slot, now, windows)
+    } else {
+        // The first check already handled this unchanged raw state.
+        None
+    };
     DebounceEdges { first, second }
 }
 
