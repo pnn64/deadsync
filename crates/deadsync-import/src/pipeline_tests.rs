@@ -289,6 +289,63 @@ fn chart_resolver_handles_case_edits_and_missing_charts() {
 }
 
 #[test]
+fn zmod_lamps_survive_import_and_cache_round_trips() {
+    use deadsync_score::{
+        CachedLamp, Grade, LocalScoreIndex, cached_score_from_local_header,
+        decode_local_score_index, encode_local_score_index, update_local_score_index,
+    };
+
+    let mut index = LocalScoreIndex::default();
+    for (score, grade, lamp, judge_count) in [
+        ("", Grade::Tier01, 1, None),
+        ("<Score>3</Score>", Grade::Tier01, 1, Some(3)),
+        ("<Score>0</Score>", Grade::Quint, 0, None),
+    ] {
+        let root = xml::parse(&format!(
+            r#"<SongScores><Song Dir="Songs/My Pack/Cool Song/">
+                <Steps StepsType="dance-single" Difficulty="Hard"><HighScoreList>
+                    <HighScore><Grade>Tier01</Grade><PercentDP>1.000000</PercentDP>
+                        {score}<TapNoteScores><W1>100</W1></TapNoteScores>
+                        <HoldNoteScores><Held>2</Held></HoldNoteScores>
+                    </HighScore>
+                </HighScoreList></Steps>
+            </Song></SongScores>"#
+        ))
+        .expect("zmod Stats.xml");
+        let source = ItgSource {
+            songs: parse_song_scores(&root),
+            ..Default::default()
+        };
+        let prepared = prepare_import(
+            &source,
+            &PlayerOptionsData::default(),
+            &PlayerOptionsData::default(),
+            &library(),
+        );
+        assert_eq!(prepared.score_entries.len(), 1);
+        let (hash, entry) = &prepared.score_entries[0];
+        assert_eq!(hash, "abc123def456");
+        let bytes = encode_local_score_entry(entry).expect("encode imported score");
+        let reloaded = decode_local_score_entry(&bytes).expect("reload imported score");
+        let header = reloaded.header();
+        let cached = cached_score_from_local_header(&header);
+        assert_eq!(cached.grade, grade);
+        assert_eq!(cached.lamp_index, Some(lamp));
+        assert_eq!(cached.lamp_judge_count, judge_count);
+        update_local_score_index(&mut index, hash, &header);
+        let bytes = encode_local_score_index(&index).expect("encode index");
+        index = decode_local_score_index(&bytes).expect("reload index");
+        assert_eq!(
+            index.best_lamp[hash],
+            CachedLamp {
+                index: lamp,
+                judge_count
+            }
+        );
+    }
+}
+
+#[test]
 fn score_output_reserves_the_source_record_count() {
     let mut source = ItgSource::default();
     source.songs.push(ItgSongScores {

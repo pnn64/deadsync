@@ -602,6 +602,7 @@ fn parse_high_score(node: &XmlNode) -> ImportedHighScore {
     ImportedHighScore {
         grade: node.child_text("Grade").to_string(),
         percent_dp: node.child_parse::<f64>("PercentDP").unwrap_or(0.0),
+        score: node.child_parse::<u32>("Score"),
         date_time: node.child_text("DateTime").to_string(),
         w1: tap_count("W1"),
         w2: tap_count("W2"),
@@ -801,6 +802,7 @@ fn parse_high_score_owned(node: XmlNode) -> ImportedHighScore {
     const MODIFIERS: u8 = 1 << 4;
     const TAP: u8 = 1 << 5;
     const HOLD: u8 = 1 << 6;
+    const SCORE: u8 = 1 << 7;
 
     let mut score = ImportedHighScore::default();
     let mut seen = 0u8;
@@ -813,6 +815,10 @@ fn parse_high_score_owned(node: XmlNode) -> ImportedHighScore {
             "PercentDP" if seen & PERCENT_DP == 0 => {
                 seen |= PERCENT_DP;
                 score.percent_dp = child.text.trim().parse().unwrap_or(0.0);
+            }
+            "Score" if seen & SCORE == 0 => {
+                seen |= SCORE;
+                score.score = child.text.trim().parse().ok();
             }
             "DateTime" if seen & DATE_TIME == 0 => {
                 seen |= DATE_TIME;
@@ -962,6 +968,7 @@ mod tests {
                             <HighScore>
                                 <Grade>Tier02</Grade><Grade>Failed</Grade>
                                 <PercentDP>0.98</PercentDP><PercentDP>invalid</PercentDP>
+                                <Score>3</Score><Score>0</Score>
                                 <DateTime>2025-01-02 03:04:05</DateTime>
                                 <TapNoteScores><W1>321</W1><W1>999</W1><Miss>4</Miss></TapNoteScores>
                                 <HoldNoteScores><Held>12</Held><Held>99</Held><LetGo>2</LetGo></HoldNoteScores>
@@ -980,6 +987,7 @@ mod tests {
         assert_eq!(songs[0].dir, "Songs/Pack/Song/");
         assert_eq!(score.grade, "Tier02");
         assert!((score.percent_dp - 0.98).abs() < f64::EPSILON);
+        assert_eq!(score.score, Some(3));
         assert_eq!(score.date_time, "2025-01-02 03:04:05");
         assert_eq!(score.w1, 321);
         assert_eq!(score.miss, 4);
@@ -987,6 +995,30 @@ mod tests {
         assert_eq!(score.let_go, 2);
         assert!((score.survive_seconds - 45.5).abs() < f32::EPSILON);
         assert_eq!(score.modifiers, "1.2xMusic");
+    }
+
+    #[test]
+    fn score_parsers_distinguish_zero_from_unknown_whites() {
+        for (field, expected) in [
+            ("", None),
+            ("<Score/>", None),
+            ("<Score>invalid</Score>", None),
+            ("<Score>-1</Score>", None),
+            ("<Score>1.5</Score>", None),
+            ("<Score>4294967296</Score>", None),
+            ("<Score>0</Score>", Some(0)),
+            ("<Score> 9 </Score>", Some(9)),
+            ("<Score>4294967295</Score>", Some(u32::MAX)),
+            ("<Score>0</Score><Score>9</Score>", Some(0)),
+            ("<Score>invalid</Score><Score>0</Score>", None),
+        ] {
+            let root =
+                xml::parse(&format!("<HighScore>{field}</HighScore>")).expect("high score XML");
+            let borrowed = parse_high_score(&root);
+            let owned = parse_high_score_owned(root);
+            assert_eq!(borrowed.score, expected, "{field}");
+            assert_eq!(owned, borrowed, "{field}");
+        }
     }
 
     #[test]
