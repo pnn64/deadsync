@@ -162,10 +162,10 @@ enum ProjState {
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    bind_group: Arc<wgpu::BindGroup>,
-    bind_group_repeat: Arc<wgpu::BindGroup>,
-    nearest_bind_group: Option<Arc<wgpu::BindGroup>>,
-    nearest_bind_group_repeat: Option<Arc<wgpu::BindGroup>>,
+    bind_group: wgpu::BindGroup,
+    bind_group_repeat: wgpu::BindGroup,
+    nearest_bind_group: Option<wgpu::BindGroup>,
+    nearest_bind_group_repeat: Option<wgpu::BindGroup>,
 }
 
 impl Texture {
@@ -1101,7 +1101,7 @@ fn create_texture_groups(
     sampler_desc: SamplerDesc,
     views: [&wgpu::TextureView; 3],
     conversion: Option<&wgpu::Buffer>,
-) -> (Arc<wgpu::BindGroup>, Arc<wgpu::BindGroup>) {
+) -> (wgpu::BindGroup, wgpu::BindGroup) {
     let sampler = get_sampler(state, sampler_desc);
     let sampler_repeat = get_sampler(
         state,
@@ -1163,7 +1163,7 @@ fn create_texture_groups(
             },
         ],
     });
-    (Arc::new(bind_group), Arc::new(bind_group_repeat))
+    (bind_group, bind_group_repeat)
 }
 
 #[inline(always)]
@@ -1426,14 +1426,14 @@ fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) ->
     match (render_target_uses_nearest(handle), repeat) {
         (true, false) => texture
             .nearest_bind_group
-            .as_deref()
-            .unwrap_or_else(|| texture.bind_group.as_ref()),
+            .as_ref()
+            .unwrap_or(&texture.bind_group),
         (true, true) => texture
             .nearest_bind_group_repeat
-            .as_deref()
-            .unwrap_or_else(|| texture.bind_group_repeat.as_ref()),
-        (false, false) => texture.bind_group.as_ref(),
-        (false, true) => texture.bind_group_repeat.as_ref(),
+            .as_ref()
+            .unwrap_or(&texture.bind_group_repeat),
+        (false, false) => &texture.bind_group,
+        (false, true) => &texture.bind_group_repeat,
     }
 }
 
