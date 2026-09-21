@@ -5,7 +5,7 @@ use deadlib_present::actors::{
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
 use deadsync_notefield::song_lua_player_y_fold_actor as fold;
-use deadsync_theme_simply_love::screens::gameplay::actor_capture_test_support as current;
+use deadsync_song_lua::playback::actor_capture_test_support as current;
 use glam::Mat4 as Matrix4;
 use std::hint::black_box;
 use std::sync::Arc;

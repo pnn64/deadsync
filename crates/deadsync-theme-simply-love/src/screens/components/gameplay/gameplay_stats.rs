@@ -8,7 +8,8 @@ use crate::screens::components::gameplay::score_counter::{
 use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::density;
 use crate::screens::components::shared::heart_rate;
-use crate::screens::gameplay::{self as gameplay_screen, GameplayCoreState, State};
+use crate::screens::gameplay::GameplayCoreState;
+use crate::screens::gameplay::{self as gameplay_screen, State};
 use crate::step_stats as step_stats_theme;
 use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,

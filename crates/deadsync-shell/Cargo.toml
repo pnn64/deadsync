@@ -52,6 +52,9 @@ smallvec = "1.16.1"
 winit = "0.30.13"
 
 [dev-dependencies]
+deadsync-song-lua = { path = "../deadsync-song-lua", features = ["test-support"] }
+deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
+
 deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love", features = ["test-support"] }
 

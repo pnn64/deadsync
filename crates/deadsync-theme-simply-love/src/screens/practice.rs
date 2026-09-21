@@ -8,7 +8,6 @@ use crate::screens::Screen;
 use crate::screens::components::shared::density;
 use crate::screens::gameplay as gameplay_screen;
 use crate::views::PracticeRuntimeView;
-use deadlib_assets::AssetManager;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec};
@@ -1080,23 +1079,7 @@ fn set_offset_adjust_flash(state: &mut State) {
     state.flash = Some((text, FLASH_DURATION_SECS));
 }
 
-pub fn push_actors(
-    actors: &mut Vec<Actor>,
-    state: &mut State,
-    asset_manager: &AssetManager,
-    arrow_effect_time_s: f32,
-    visual_policy: crate::views::SimplyLoveVisualPolicyView,
-) -> gameplay_screen::GameplayActorSegments {
-    actors.reserve(128);
-    let view = practice_view(state);
-    let segments = gameplay_screen::push_actors(
-        actors,
-        &mut state.gameplay,
-        asset_manager,
-        view,
-        arrow_effect_time_s,
-        visual_policy,
-    );
+pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);
         append_density_graph(state, actors);
@@ -1108,10 +1091,9 @@ pub fn push_actors(
     // Render any active flash text regardless of mode so music-rate changes
     // (and other transient feedback) are visible during loop playback as well.
     append_flash_overlay(state, actors);
-    segments
 }
 
-fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
+pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     let playback_visuals = practice_playback_visuals(state.mode);
     let mut notefield = if playback_visuals {
         gameplay_screen::NotefieldViewOverride::default()

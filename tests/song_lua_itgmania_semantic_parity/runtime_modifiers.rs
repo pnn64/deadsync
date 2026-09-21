@@ -176,7 +176,7 @@ fn modifier_runtime(
         compiled
             .iter()
             .flat_map(|layer| {
-                deadsync_profile_gameplay::build_song_lua_constant_windows_for_player(
+                deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
                     layer, &timing, player, 0.0,
                 )
             })
@@ -187,7 +187,7 @@ fn modifier_runtime(
             .iter()
             .flat_map(|layer| {
                 let (eases, unsupported) =
-                    deadsync_profile_gameplay::build_song_lua_ease_windows_for_player(
+                    deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
                         layer,
                         &timing,
                         player,
@@ -226,7 +226,8 @@ fn sampled_mini_and_xmod_pulse_preserves_note_spacing() {
             0,
             second,
             1.0 / 180.0,
-            AttackBaseEffects::default(),
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
             transform,
         ) {
             transform = next;
@@ -297,7 +298,8 @@ fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
             0,
             second,
             1.0 / 180.0,
-            AttackBaseEffects::default(),
+            deadsync_gameplay::AppearanceEffects::default(),
+            AttackBaseEffects::default,
             transform,
         ) {
             transform = next;
@@ -352,7 +354,8 @@ fn native_modifier_values_match_deadsync() {
                 player,
                 second,
                 1_000_000.0,
-                AttackBaseEffects::default(),
+                deadsync_gameplay::AppearanceEffects::default(),
+                AttackBaseEffects::default,
                 *transform,
             ) {
                 *transform = next;

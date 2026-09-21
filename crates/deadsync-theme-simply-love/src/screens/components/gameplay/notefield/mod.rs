@@ -1,5 +1,6 @@
 use crate::color;
-use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
+use crate::screens::gameplay::GameplayCoreState as State;
+use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;

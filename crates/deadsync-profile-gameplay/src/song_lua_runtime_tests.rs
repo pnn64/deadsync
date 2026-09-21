@@ -230,11 +230,14 @@ fn constant_window_bridge_filters_by_player() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
     for player in 0..2 {
-        let actual =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, player, 0.25);
+        let actual = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+            &compiled, &timing, player, 0.25,
+        );
         assert_eq!(actual.len(), 3);
     }
-    let windows = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.25);
+    let windows = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+        &compiled, &timing, 0, 0.25,
+    );
     assert_eq!(windows[0].start_second, 0.75);
     assert_eq!(windows[0].end_second, 1.25);
     assert_eq!(windows[2].start_second, 8.0);
@@ -245,7 +248,13 @@ fn ease_window_bridge_maps_supported_targets() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.25, &[]);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.25,
+            &[],
+        );
     assert_eq!(windows.len(), 2);
     assert_eq!(unsupported, 1);
     assert!(matches!(
@@ -260,13 +269,14 @@ fn column_offset_bridge_filters_by_player() {
     let timing = test_timing(16 * 48);
     let compiled = runtime_window_bridge_fixture();
     for (player, expected_len) in [(0, 2), (1, 1)] {
-        let actual = super::build_song_lua_column_offset_windows_for_player(
+        let actual = deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
             &compiled, &timing, player, 0.25,
         );
         assert_eq!(actual.len(), expected_len);
     }
-    let windows =
-        super::build_song_lua_column_offset_windows_for_player(&compiled, &timing, 1, 0.25);
+    let windows = deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
+        &compiled, &timing, 1, 0.25,
+    );
     assert_eq!(windows[0].column, 7);
     assert_eq!(windows[0].start_second, 2.75);
 }
@@ -287,8 +297,11 @@ fn song_lua_overlay_updates_keep_absolute_song_time() {
     };
     let global_offset_seconds = 0.25;
 
-    let tracks =
-        super::build_song_lua_overlay_update_tracks(&compiled, &timing, global_offset_seconds);
+    let tracks = deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(
+        &compiled,
+        &timing,
+        global_offset_seconds,
+    );
 
     let expected =
         deadsync_gameplay::song_lua_message_second(4.0, &timing, global_offset_seconds).unwrap();
@@ -347,7 +360,8 @@ fn song_lua_overlay_eases_stop_after_later_message_blocks() {
         ..Default::default()
     };
 
-    let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+    let windows =
+        deadsync_song_lua::gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].cutoff_second, Some(4.0));
@@ -406,7 +420,8 @@ fn song_lua_overlay_eases_ignore_same_timestamp_setup_blocks() {
         ..Default::default()
     };
 
-    let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+    let windows =
+        deadsync_song_lua::gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].cutoff_second, None);
@@ -465,7 +480,8 @@ fn song_lua_overlay_eases_stop_persisting_after_later_reset_messages() {
         ..Default::default()
     };
 
-    let windows = super::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+    let windows =
+        deadsync_song_lua::gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
     assert_eq!(windows.len(), 1);
     assert_eq!(windows[0].end_second, 2.0);
@@ -542,7 +558,13 @@ fn song_lua_eases_persist_until_later_override() {
     };
 
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
 
     assert_eq!(unsupported, 0);
     assert_eq!(windows.len(), 4);
@@ -597,9 +619,13 @@ fn song_lua_constant_mod_cuts_prior_ease_tail() {
         ..Default::default()
     };
 
-    let constants = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+    let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+        &compiled, &timing, 0, 0.0,
+    );
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled, &timing, 0, 0.0, &constants,
+        );
 
     assert_eq!(unsupported, 0);
     assert_eq!(windows.len(), 1);
@@ -650,8 +676,9 @@ fn song_lua_column_offsets_persist_until_next_column_offset() {
         ..Default::default()
     };
 
-    let windows =
-        super::build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
+    let windows = deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
+        &compiled, &timing, 0, 0.0,
+    );
 
     assert_eq!(windows.len(), 2);
     assert_eq!(windows[0].sustain_end_second, 2.0);
@@ -773,7 +800,13 @@ fn song_lua_builds_playerxy_playerz_rotationx_skewy_zoom_and_zoomz_runtime_targe
     };
 
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
 
     assert_eq!(unsupported, 0);
     assert_eq!(windows.len(), 7);
@@ -866,7 +899,13 @@ fn song_lua_skew_mod_eases_scale_to_player_skews() {
     };
 
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
 
     assert_eq!(unsupported, 0);
     assert_eq!(windows.len(), 2);
@@ -905,7 +944,13 @@ fn song_lua_confusion_offset_ease_scales_like_itgmania() {
     };
 
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled,
+            &timing,
+            0,
+            0.0,
+            &[],
+        );
 
     assert_eq!(unsupported, 0);
     assert_eq!(windows.len(), 1);
@@ -944,7 +989,9 @@ fn confusion_offset_fixture_reaches_runtime_windows() {
     };
     let timing =
         TimingData::from_segments(0.036, 0.0, &timing_segments, &test_row_to_beat(72 * 48));
-    let windows = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+    let windows = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+        &compiled, &timing, 0, 0.0,
+    );
 
     assert!(windows.iter().any(|window| {
         (window.start_second - timing.get_time_for_beat(70.5)).abs() <= 0.001
@@ -1024,9 +1071,13 @@ fn transform_ease_fixture_reaches_runtime_windows() {
         ..TimingSegments::default()
     };
     let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(200 * 48));
-    let constants = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+    let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+        &compiled, &timing, 0, 0.0,
+    );
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled, &timing, 0, 0.0, &constants,
+        );
 
     assert_eq!(unsupported, 0);
     assert!(windows.iter().any(|window| {
@@ -1088,9 +1139,13 @@ fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
         },
         &test_row_to_beat(8 * 48),
     );
-    let constants = super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+    let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+        &compiled, &timing, 0, 0.0,
+    );
     let (windows, unsupported) =
-        super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+        deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled, &timing, 0, 0.0, &constants,
+        );
     assert_eq!(unsupported, 0);
     let invert = windows
         .iter()
