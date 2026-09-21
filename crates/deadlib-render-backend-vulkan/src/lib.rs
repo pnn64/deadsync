@@ -1959,17 +1959,17 @@ pub fn update_yuv420_texture(
     else {
         return Err(std::io::Error::other("cannot upload YUV420 into RGBA texture").into());
     };
-    let device = texture.device.clone();
-    let (staging, offsets) = stage_yuv420(state, &device, upload.y, upload.u, upload.v)?;
+    let device = texture.device.as_ref();
+    let (staging, offsets) = stage_yuv420(state, device, upload.y, upload.u, upload.v)?;
     let cmd = match begin_pending_texture_upload_cmd(state) {
         Ok(cmd) => cmd,
         Err(error) => {
-            destroy_buffer(&device, &staging.resource);
+            destroy_buffer(device, &staging.resource);
             return Err(error);
         }
     };
     record_yuv420_upload(
-        &device,
+        device,
         cmd,
         staging.resource.buffer,
         images,
