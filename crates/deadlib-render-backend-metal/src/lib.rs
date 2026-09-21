@@ -140,10 +140,22 @@ struct FrameBuffers {
 
 #[derive(Default)]
 struct TextureUploadState {
-    command: Option<CommandBuffer>,
-    blit: Option<BlitCommandEncoder>,
+    batch: Option<(CommandBuffer, BlitCommandEncoder)>,
     uploads: u64,
     batches: u64,
+}
+
+impl TextureUploadState {
+    #[inline]
+    fn blit(&mut self, queue: &CommandQueueRef) -> &BlitCommandEncoderRef {
+        let (_, blit) = self.batch.get_or_insert_with(|| {
+            let command = queue.new_command_buffer();
+            command.set_label("DeadSync native Metal texture uploads");
+            let blit = command.new_blit_command_encoder().to_owned();
+            (command.to_owned(), blit)
+        });
+        blit
+    }
 }
 
 impl FrameBuffers {
@@ -1648,16 +1660,7 @@ fn upload_texture(
             MTLResourceOptions::StorageModeShared,
         )
     });
-    if uploads.command.is_none() {
-        let command = queue.new_command_buffer();
-        command.set_label("DeadSync native Metal texture uploads");
-        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
-        uploads.command = Some(command.to_owned());
-    }
-    let blit = uploads
-        .blit
-        .as_ref()
-        .expect("texture upload command always has a blit encoder");
+    let blit = uploads.blit(queue);
     blit.copy_from_buffer_to_texture(
         &staging,
         0,
@@ -1692,16 +1695,7 @@ fn upload_plane(
             MTLResourceOptions::StorageModeShared,
         )
     });
-    if uploads.command.is_none() {
-        let command = queue.new_command_buffer();
-        command.set_label("DeadSync native Metal texture uploads");
-        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
-        uploads.command = Some(command.to_owned());
-    }
-    let blit = uploads
-        .blit
-        .as_ref()
-        .expect("texture upload command always has a blit encoder");
+    let blit = uploads.blit(queue);
     blit.copy_from_buffer_to_texture(
         &staging,
         0,
@@ -1718,12 +1712,8 @@ fn upload_plane(
 }
 
 fn flush_texture_uploads(uploads: &mut TextureUploadState) -> Option<CommandBuffer> {
-    let blit = uploads.blit.take()?;
+    let (command, blit) = uploads.batch.take()?;
     blit.end_encoding();
-    let command = uploads
-        .command
-        .take()
-        .expect("texture upload blit encoder always has a command buffer");
     command.commit();
     uploads.batches = uploads.batches.saturating_add(1);
     Some(command)
@@ -1978,7 +1968,8 @@ mod tests {
                             );
                         }
                     });
-                    let command = uploads.command.as_ref().expect("pending batch").as_ptr();
+                    let (command, _) = uploads.batch.as_ref().expect("pending batch");
+                    let command = command.as_ptr();
                     assert_eq!(*batch_command.get_or_insert(command), command);
                     textures.push((
                         texture,
@@ -1994,9 +1985,25 @@ mod tests {
             let command = flush_texture_uploads(&mut uploads).expect("pending batch");
             command.wait_until_completed();
             assert_eq!(command.status(), MTLCommandBufferStatus::Completed);
-            assert!(uploads.command.is_none());
-            assert!(uploads.blit.is_none());
+            assert!(uploads.batch.is_none());
             assert_eq!(uploads.batches, 1);
+            assert!(flush_texture_uploads(&mut uploads).is_none());
+
+            // Reopen a flushed batch and replace pixels before readback, so the
+            // second upload must use a fresh, still-open command encoder.
+            let (texture, pixels, _, width, height) = &mut textures[0];
+            pixels.fill(71);
+            let replacement = RgbaImage::from_raw(*width, *height, pixels.clone())
+                .expect("replacement RGBA image");
+            autoreleasepool(|| {
+                upload_texture(&device, &queue, &mut uploads, texture, &replacement, false);
+            });
+            assert_eq!(uploads.uploads, textures.len() as u64 + 1);
+            let command = flush_texture_uploads(&mut uploads).expect("second batch");
+            command.wait_until_completed();
+            assert_eq!(command.status(), MTLCommandBufferStatus::Completed);
+            assert_eq!(uploads.batches, 2);
+            assert!(uploads.batch.is_none());
             assert!(flush_texture_uploads(&mut uploads).is_none());
 
             for (texture, expected, packed_row_bytes, width, height) in textures {
