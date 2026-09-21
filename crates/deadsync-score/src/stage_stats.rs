@@ -554,6 +554,27 @@ mod tests {
     }
 
     #[test]
+    fn summary_score_lamps_keep_hold_and_roll_results() {
+        let mut summary = test_player_summary(test_chart("chart"), Grade::Tier01, 500, 500);
+        summary.ex_score_percent = 99.0;
+        summary.window_counts.w1 = 3;
+        summary.window_counts.w0 = 17;
+        for (held, rolled, expected) in [(2, 1, Some(1)), (1, 1, None), (2, 0, None)] {
+            summary.holds_held = held;
+            summary.rolls_held = rolled;
+            let entry = crate::local_score_entry_from_stage_summary(1234, 1.0, &summary);
+            assert_eq!((entry.holds_held, entry.holds_total), (held, 2));
+            assert_eq!((entry.rolls_held, entry.rolls_total), (rolled, 1));
+            assert_eq!(entry.lamp_index, expected);
+            assert_eq!(entry.lamp_judge_count, expected.map(|_| 3));
+            assert_eq!(
+                crate::cached_score_from_local_header(&entry.header()).lamp_index,
+                expected
+            );
+        }
+    }
+
+    #[test]
     fn course_summary_uses_trail_totals_and_keeps_timing_graphs() {
         let song_a = test_song("Songs/Test/a.ssc", "a", 60.0);
         let song_b = test_song("Songs/Test/b.ssc", "b", 90.0);

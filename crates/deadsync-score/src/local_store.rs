@@ -1680,6 +1680,8 @@ mod tests {
         let tree = TempTree::new("lamp-index-upgrade");
         let paths = ScoreProfilePaths::new(tree.path());
         let mut fc = score_entry(1, 0.98, false, 0);
+        fc.holds_held = fc.holds_total;
+        fc.rolls_held = fc.rolls_total;
         let mut high_score = score_entry(2, 0.99, false, 0);
         high_score.lamp_index = None;
         high_score.lamp_judge_count = None;
@@ -1721,6 +1723,62 @@ mod tests {
             load_local_score_index_file(&paths.local_index_path()),
             Some(rebuilt)
         );
+    }
+
+    #[test]
+    fn old_local_index_removes_lamps_with_dropped_holds() {
+        for (held, rolled) in [(5, 8), (6, 7)] {
+            let tree = TempTree::new("hold-lamp-upgrade");
+            let paths = ScoreProfilePaths::new(tree.path());
+            let mut valid = score_entry(1, 0.98, false, 0);
+            valid.holds_held = valid.holds_total;
+            valid.rolls_held = valid.rolls_total;
+            let mut dropped = score_entry(2, 0.99, false, 0);
+            dropped.holds_held = held;
+            dropped.rolls_held = rolled;
+            dropped.lamp_index = Some(1);
+            let mut index = LocalScoreIndex::default();
+            update_local_score_index(&mut index, "chart", &valid.header());
+            write_local_score_entry_for_profile(&paths, "chart", &mut valid).expect("save FC");
+            for chart in ["chart", "drop-only"] {
+                write_local_score_entry_for_profile(&paths, chart, &mut dropped)
+                    .expect("save drop");
+                // Version 4 accepted these lamps without checking hold results.
+                index.best_itg.insert(
+                    chart.into(),
+                    crate::cached_score(Grade::Tier03, 0.99, Some(1), Some(4)),
+                );
+                index.best_lamp.insert(
+                    chart.into(),
+                    crate::CachedLamp {
+                        index: 1,
+                        judge_count: Some(4),
+                    },
+                );
+            }
+            let bytes = bincode::encode_to_vec((4u16, index), bincode::config::standard())
+                .expect("encode old index");
+            fs::write(paths.local_index_path(), bytes).expect("write old index");
+
+            let rebuilt = load_local_score_index_from_root(&paths.local_dir());
+            assert_eq!(
+                rebuilt.best_lamp["chart"],
+                crate::CachedLamp {
+                    index: 2,
+                    judge_count: Some(4)
+                }
+            );
+            assert!(!rebuilt.best_lamp.contains_key("drop-only"));
+            for chart in ["chart", "drop-only"] {
+                assert_eq!(rebuilt.best_itg[chart].score_percent, 0.99);
+                assert_eq!(rebuilt.best_itg[chart].lamp_index, None);
+                assert_eq!(rebuilt.best_itg[chart].lamp_judge_count, None);
+            }
+            assert_eq!(
+                load_local_score_index_file(&paths.local_index_path()),
+                Some(rebuilt)
+            );
+        }
     }
 
     #[test]

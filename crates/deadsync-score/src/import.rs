@@ -172,7 +172,7 @@ pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
 /// * `score_percent` is taken from `PercentDP` directly (both are 0.0–1.0).
 /// * `music_rate` is recovered from the `<Modifiers>` rate token (default 1.0).
 /// * EX / Hard-EX are unrecoverable → `0.0`.
-/// * The lamp is recomputed from the judgment counts (W0 split unknown).
+/// * The lamp uses tap and hold judgments (W0 split unknown).
 #[must_use]
 pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
     let grade = grade_from_itg(&hs.grade)?;
@@ -184,7 +184,8 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
         .saturating_add(hs.missed_hold);
     let mines_total = hs.hit_mine.saturating_add(hs.avoid_mine);
 
-    let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, None);
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(counts, grade, None, hs.let_go == 0 && hs.missed_hold == 0);
 
     let fail_time = if grade == Grade::Failed {
         Some(hs.survive_seconds.max(0.0))
@@ -329,6 +330,31 @@ mod tests {
         let e = local_score_from_itg(&hs).expect("entry");
         assert_eq!(e.holds_held, 10);
         assert_eq!(e.holds_total, 15);
+    }
+
+    #[test]
+    fn imported_lamps_require_all_holds_and_rolls_held() {
+        for (let_go, missed_hold, expected) in [(0, 0, Some(2)), (1, 0, None), (0, 1, None)] {
+            let hs = ImportedHighScore {
+                grade: "Grade_Tier03".into(),
+                percent_dp: 0.98,
+                w1: 100,
+                w2: 3,
+                held: 10,
+                let_go,
+                missed_hold,
+                hit_mine: 1,
+                ..Default::default()
+            };
+            let entry = local_score_from_itg(&hs).expect("passing score should import");
+            assert_eq!(entry.lamp_index, expected);
+            assert_eq!(entry.lamp_judge_count, expected.map(|_| 3));
+            assert_eq!(entry.score_percent, 0.98);
+            assert_eq!(
+                crate::cached_score_from_local_header(&entry.header()).lamp_index,
+                expected
+            );
+        }
     }
 
     #[test]

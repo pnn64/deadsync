@@ -4374,7 +4374,7 @@ pub fn fix_local_ex_grade(grade: Grade, ex_score_percent: f64) -> Grade {
 }
 
 pub const LOCAL_SCORE_VERSION: u16 = 1;
-pub const LOCAL_SCORE_INDEX_VERSION: u16 = 4;
+pub const LOCAL_SCORE_INDEX_VERSION: u16 = 5;
 
 #[derive(Debug, Clone, Encode, Decode)]
 struct LocalScoreIndexFile {
@@ -4779,8 +4779,12 @@ pub fn local_score_entry_from_gameplay_input(
         );
 
     grade = promote_quint_grade(grade, ex_score_percent);
-    let (lamp_index, lamp_judge_count) =
-        compute_local_lamp(input.counts, grade, input.white_fantastics);
+    let (lamp_index, lamp_judge_count) = compute_local_lamp(
+        input.counts,
+        grade,
+        input.white_fantastics,
+        input.holds_held >= input.holds_total && input.rolls_held >= input.rolls_total,
+    );
 
     LocalScoreEntry {
         version: LOCAL_SCORE_VERSION,
@@ -4823,8 +4827,12 @@ pub fn local_score_entry_from_stage_summary(
         summary.window_counts.w5,
         summary.window_counts.miss,
     ];
-    let (lamp_index, lamp_judge_count) =
-        compute_local_lamp(counts, summary.grade, Some(summary.window_counts.w1));
+    let (lamp_index, lamp_judge_count) = compute_local_lamp(
+        counts,
+        summary.grade,
+        Some(summary.window_counts.w1),
+        summary.holds_held >= summary.holds_total && summary.rolls_held >= summary.rolls_total,
+    );
     LocalScoreEntry {
         version: LOCAL_SCORE_VERSION,
         played_at_ms,
@@ -4840,10 +4848,10 @@ pub fn local_score_entry_from_stage_summary(
         ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
         hard_ex_score_percent: summary.hard_ex_score_percent.clamp(0.0, 100.0),
         judgment_counts: counts,
-        holds_held: 0,
-        holds_total: 0,
-        rolls_held: 0,
-        rolls_total: 0,
+        holds_held: summary.holds_held,
+        holds_total: summary.holds_total,
+        rolls_held: summary.rolls_held,
+        rolls_total: summary.rolls_total,
         mines_avoided: 0,
         mines_total: 0,
         hands_achieved: 0,
@@ -4866,8 +4874,10 @@ pub fn compute_local_lamp(
     counts: [u32; 6],
     grade: Grade,
     white_fantastics: Option<u32>,
+    holds_complete: bool,
 ) -> (Option<u8>, Option<u8>) {
-    if grade == Grade::Failed {
+    // Both holds and rolls must be held; tap judgments alone do not prove FC.
+    if grade == Grade::Failed || !holds_complete {
         return (None, None);
     }
     if grade == Grade::Quint {
@@ -4911,13 +4921,17 @@ pub fn cached_score_from_local_header(h: &LocalScoreHeader) -> CachedScore {
         local_score_grade(h.grade_code, h.fail_time.is_some()),
         h.ex_score_percent,
     );
-    let (lamp_index, lamp_judge_count) = if grade == Grade::Quint {
-        (Some(0), None)
-    } else if h.lamp_index == Some(0) {
-        compute_local_lamp(h.judgment_counts, grade, None)
-    } else {
-        (h.lamp_index, h.lamp_judge_count)
-    };
+    let (lamp_index, lamp_judge_count) =
+        if h.holds_held < h.holds_total || h.rolls_held < h.rolls_total {
+            // Old records can contain tap-only lamps despite dropped holds/rolls.
+            (None, None)
+        } else if grade == Grade::Quint {
+            (Some(0), None)
+        } else if h.lamp_index == Some(0) {
+            compute_local_lamp(h.judgment_counts, grade, None, true)
+        } else {
+            (h.lamp_index, h.lamp_judge_count)
+        };
     cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
 }
 
@@ -8130,13 +8144,53 @@ mod tests {
     #[test]
     fn local_lamp_uses_white_fantastics_for_quad() {
         assert_eq!(
-            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5)),
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5), true),
             (Some(1), Some(5))
         );
         assert_eq!(
-            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0), true),
             (Some(0), None)
         );
+    }
+
+    #[test]
+    fn local_lamps_require_complete_holds_for_every_tier() {
+        for (counts, grade, white, expected) in [
+            ([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0), (Some(0), None)),
+            (
+                [12, 0, 0, 0, 0, 0],
+                Grade::Tier01,
+                Some(5),
+                (Some(1), Some(5)),
+            ),
+            ([12, 3, 0, 0, 0, 0], Grade::Tier03, None, (Some(2), Some(3))),
+            ([12, 3, 2, 0, 0, 0], Grade::Tier03, None, (Some(3), Some(2))),
+            ([12, 3, 2, 1, 0, 0], Grade::Tier03, None, (Some(4), Some(1))),
+        ] {
+            assert_eq!(compute_local_lamp(counts, grade, white, true), expected);
+            assert_eq!(
+                compute_local_lamp(counts, grade, white, false),
+                (None, None)
+            );
+        }
+    }
+
+    #[test]
+    fn cached_lamps_reject_dropped_holds_and_rolls() {
+        let mut header = test_local_score_entry(1, 0.98).header();
+        // Mines do not break ITG full-combo lamps.
+        header.mines_avoided = 0;
+        header.mines_total = 1;
+        for (held, rolled, expected) in [(6, 8, Some(2)), (5, 8, None), (6, 7, None), (5, 7, None)]
+        {
+            header.holds_held = held;
+            header.rolls_held = rolled;
+            let cached = cached_score_from_local_header(&header);
+            assert_eq!(cached.lamp_index, expected);
+            assert_eq!(cached.lamp_judge_count, expected.map(|_| 4));
+            assert_eq!(cached.grade, Grade::Tier03);
+            assert_eq!(cached.score_percent, 0.98);
+        }
     }
 
     #[test]
@@ -8283,10 +8337,10 @@ mod tests {
             lamp_judge_count: Some(4),
             ex_score_percent: score_percent * 100.0,
             hard_ex_score_percent: score_percent * 100.0,
-            judgment_counts: [100, 4, 3, 2, 1, 0],
-            holds_held: 5,
+            judgment_counts: [100, 4, 0, 0, 0, 0],
+            holds_held: 6,
             holds_total: 6,
-            rolls_held: 7,
+            rolls_held: 8,
             rolls_total: 8,
             mines_avoided: 9,
             mines_total: 10,
@@ -8848,6 +8902,36 @@ mod tests {
         assert!((written[0].3.score_percent - 0.96).abs() < f64::EPSILON);
         assert_eq!(written[0].3.played_at_ms, 1234);
         assert_eq!(written[0].3.beat0_time_ns, 123);
+
+        for (held, rolled, expected) in [(1, 1, Some(2)), (0, 1, None), (1, 0, None)] {
+            let mut play = player(0, true, Vec::new());
+            play.holds_total = 1;
+            play.rolls_total = 1;
+            play.holds_held = held;
+            play.rolls_held = rolled;
+            play.holds_held_for_score = held;
+            play.rolls_held_for_score = rolled;
+            play.possible_grade_points = 510;
+            let mut saved = None;
+            save_local_gameplay_scores(
+                1234,
+                1.0,
+                false,
+                [play],
+                |_, _, _, entry| {
+                    saved = Some(entry.clone());
+                    true
+                },
+                |_| panic!("valid play must be saved"),
+            );
+            let saved = saved.expect("valid play should produce a score");
+            assert_eq!(saved.lamp_index, expected);
+            assert_eq!(saved.lamp_judge_count, None);
+            assert_eq!(
+                cached_score_from_local_header(&saved.header()).lamp_index,
+                expected
+            );
+        }
     }
 
     #[test]
