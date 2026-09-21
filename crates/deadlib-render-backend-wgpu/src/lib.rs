@@ -416,7 +416,6 @@ pub struct State {
     pipelines: PipelineSet,
     alpha_pipelines: PipelineSet,
     yuv_shader: wgpu::ShaderModule,
-    yuv_pipeline_layout: wgpu::PipelineLayout,
     yuv_pipelines: PipelineSet,
     alpha_yuv_pipelines: PipelineSet,
     mesh_shader: wgpu::ShaderModule,
@@ -424,7 +423,6 @@ pub struct State {
     mesh_pipelines: MeshPipelineSet,
     alpha_mesh_pipelines: MeshPipelineSet,
     tmesh_shader: wgpu::ShaderModule,
-    tmesh_pipeline_layout: wgpu::PipelineLayout,
     tmesh_pipelines: PipelineSet,
     tmesh_depth_pipelines: PipelineSet,
     alpha_tmesh_pipelines: PipelineSet,
@@ -698,20 +696,20 @@ fn init(
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
-    let (shader, pipeline_layout, pipelines, alpha_pipelines) =
-        build_pipeline_set(&device, &proj, &bind_layout, format, false);
-    let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
-        build_pipeline_set(&device, &proj, &bind_layout, format, true);
+    let pipeline_layout = build_texture_pipeline_layout(&device, &proj, &bind_layout);
+    let (shader, pipelines, alpha_pipelines) =
+        build_pipeline_set(&device, &proj, &pipeline_layout, format, false);
+    let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) =
+        build_pipeline_set(&device, &proj, &pipeline_layout, format, true);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
     let (
         tmesh_shader,
-        tmesh_pipeline_layout,
         tmesh_pipelines,
         tmesh_depth_pipelines,
         alpha_tmesh_pipelines,
         alpha_tmesh_depth_pipelines,
-    ) = build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
+    ) = build_textured_mesh_pipeline_set(&device, &proj, &pipeline_layout, format);
 
     let vertex_data = [
         Vertex {
@@ -797,7 +795,6 @@ fn init(
         pipelines,
         alpha_pipelines,
         yuv_shader,
-        yuv_pipeline_layout,
         yuv_pipelines,
         alpha_yuv_pipelines,
         mesh_shader,
@@ -805,7 +802,6 @@ fn init(
         mesh_pipelines,
         alpha_mesh_pipelines,
         tmesh_shader,
-        tmesh_pipeline_layout,
         tmesh_pipelines,
         tmesh_depth_pipelines,
         alpha_tmesh_pipelines,
@@ -1533,13 +1529,13 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                             wgpu::IndexFormat::Uint16,
                         );
                     }
-                    last_kind = Some(0);
-                    last_blend = None;
-                    if matches!(state.proj, ProjState::Immediates) {
-                        // Pipeline layout changes clear wgpu's immediate storage;
-                        // uniform projection bindings remain valid.
+                    if last_kind == Some(1) && matches!(state.proj, ProjState::Immediates) {
+                        // Only untextured meshes use a different layout. Sprites
+                        // and textured meshes share immediate projection storage.
                         bindings.reset_camera();
                     }
+                    last_kind = Some(0);
+                    last_blend = None;
                 }
                 let yuv = tex.images.is_yuv420();
                 if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
@@ -1548,11 +1544,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     } else {
                         pipelines.get(run.blend)
                     });
-                    if last_sprite_yuv.is_some_and(|last| last != yuv)
-                        && matches!(state.proj, ProjState::Immediates)
-                    {
-                        bindings.reset_camera();
-                    }
                     last_blend = Some(run.blend);
                     last_sprite_yuv = Some(yuv);
                 }
@@ -1637,12 +1628,12 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                                 .slice(data.tmesh_instance_offset..),
                         );
                     }
+                    if last_kind == Some(1) && matches!(state.proj, ProjState::Immediates) {
+                        bindings.reset_camera();
+                    }
                     last_kind = Some(2);
                     last_blend = None;
                     last_sprite_yuv = None;
-                    if matches!(state.proj, ProjState::Immediates) {
-                        bindings.reset_camera();
-                    }
                     tmesh_buffer_cache.reset();
                 }
                 if last_blend != Some(run.blend) || last_tmesh_depth_test != run.depth_test {
@@ -2728,26 +2719,24 @@ fn reconfigure_surface(state: &mut State) {
     }
 
     if format_changed {
-        let (shader, pipeline_layout, pipelines, alpha_pipelines) = build_pipeline_set(
+        let (shader, pipelines, alpha_pipelines) = build_pipeline_set(
             &state.device,
             &state.proj,
-            &state.bind_layout,
+            &state.pipeline_layout,
             state.config.format,
             false,
         );
-        let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
-            build_pipeline_set(
-                &state.device,
-                &state.proj,
-                &state.bind_layout,
-                state.config.format,
-                true,
-            );
+        let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) = build_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.pipeline_layout,
+            state.config.format,
+            true,
+        );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
         let (
             tmesh_shader,
-            tmesh_pipeline_layout,
             tmesh_pipelines,
             tmesh_depth_pipelines,
             alpha_tmesh_pipelines,
@@ -2755,15 +2744,13 @@ fn reconfigure_surface(state: &mut State) {
         ) = build_textured_mesh_pipeline_set(
             &state.device,
             &state.proj,
-            &state.bind_layout,
+            &state.pipeline_layout,
             state.config.format,
         );
         state.shader = shader;
-        state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
         state.alpha_pipelines = alpha_pipelines;
         state.yuv_shader = yuv_shader;
-        state.yuv_pipeline_layout = yuv_pipeline_layout;
         state.yuv_pipelines = yuv_pipelines;
         state.alpha_yuv_pipelines = alpha_yuv_pipelines;
         state.mesh_shader = mesh_shader;
@@ -2771,7 +2758,6 @@ fn reconfigure_surface(state: &mut State) {
         state.mesh_pipelines = mesh_pipelines;
         state.alpha_mesh_pipelines = alpha_mesh_pipelines;
         state.tmesh_shader = tmesh_shader;
-        state.tmesh_pipeline_layout = tmesh_pipeline_layout;
         state.tmesh_pipelines = tmesh_pipelines;
         state.tmesh_depth_pipelines = tmesh_depth_pipelines;
         state.alpha_tmesh_pipelines = alpha_tmesh_pipelines;
@@ -2935,30 +2921,14 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
     }
 }
 
-fn build_pipeline_set(
+// All textured pipelines use these exact bindings. Reusing the layout also
+// keeps wgpu from clearing immediate data when switching between them.
+fn build_texture_pipeline_layout(
     device: &wgpu::Device,
     proj: &ProjState,
     bind_layout: &wgpu::BindGroupLayout,
-    format: wgpu::TextureFormat,
-    yuv420: bool,
-) -> (
-    wgpu::ShaderModule,
-    wgpu::PipelineLayout,
-    PipelineSet,
-    PipelineSet,
-) {
-    let shader_src = match (proj, yuv420) {
-        (ProjState::Immediates, false) => SHADER_IMM,
-        (ProjState::Uniform { .. }, false) => SHADER_UBO,
-        (ProjState::Immediates, true) => YUV_SHADER_IMM,
-        (ProjState::Uniform { .. }, true) => YUV_SHADER_UBO,
-    };
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("wgpu shader module"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
-    });
-
-    let pipeline_layout = match proj {
+) -> wgpu::PipelineLayout {
+    match proj {
         ProjState::Immediates => {
             let layouts = [Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -2975,24 +2945,43 @@ fn build_pipeline_set(
                 immediate_size: 0,
             })
         }
+    }
+}
+
+fn build_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    pipeline_layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    yuv420: bool,
+) -> (wgpu::ShaderModule, PipelineSet, PipelineSet) {
+    let shader_src = match (proj, yuv420) {
+        (ProjState::Immediates, false) => SHADER_IMM,
+        (ProjState::Uniform { .. }, false) => SHADER_UBO,
+        (ProjState::Immediates, true) => YUV_SHADER_IMM,
+        (ProjState::Uniform { .. }, true) => YUV_SHADER_UBO,
     };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
 
     let pipelines = build_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         surface_write_mask(),
     );
     let alpha_pipelines = build_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         wgpu::ColorWrites::ALL,
     );
 
-    (shader, pipeline_layout, pipelines, alpha_pipelines)
+    (shader, pipelines, alpha_pipelines)
 }
 
 fn build_pipelines(
@@ -3109,11 +3098,10 @@ fn build_mesh_pipelines(
 fn build_textured_mesh_pipeline_set(
     device: &wgpu::Device,
     proj: &ProjState,
-    bind_layout: &wgpu::BindGroupLayout,
+    pipeline_layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
 ) -> (
     wgpu::ShaderModule,
-    wgpu::PipelineLayout,
     PipelineSet,
     PipelineSet,
     PipelineSet,
@@ -3128,28 +3116,9 @@ fn build_textured_mesh_pipeline_set(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
     });
 
-    let pipeline_layout = match proj {
-        ProjState::Immediates => {
-            let layouts = [Some(bind_layout)];
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("wgpu textured-mesh pipeline layout"),
-                bind_group_layouts: &layouts,
-                immediate_size: PROJ_BYTES as u32,
-            })
-        }
-        ProjState::Uniform { layout, .. } => {
-            let layouts = [Some(layout), Some(bind_layout)];
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("wgpu textured-mesh pipeline layout"),
-                bind_group_layouts: &layouts,
-                immediate_size: 0,
-            })
-        }
-    };
-
     let pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         false,
@@ -3157,7 +3126,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let depth_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         true,
@@ -3165,7 +3134,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let alpha_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         false,
@@ -3173,7 +3142,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let alpha_depth_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         true,
@@ -3182,7 +3151,6 @@ fn build_textured_mesh_pipeline_set(
 
     (
         shader,
-        pipeline_layout,
         pipelines,
         depth_pipelines,
         alpha_pipelines,
@@ -3539,6 +3507,14 @@ const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
 const YUV_SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_yuv_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
+
+#[cfg(all(
+    test,
+    target_os = "windows",
+    not(target_pointer_width = "32"),
+    not(target_vendor = "win7")
+))]
+mod pipeline_state_tests;
 
 #[cfg(test)]
 mod tests {
