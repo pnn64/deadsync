@@ -2643,7 +2643,7 @@ pub fn draw(
         let mut back_pressure_waited = false;
         let mut queue_idle_waited = false;
         let fence = state.in_flight_fences[state.current_frame];
-        let device = Arc::clone(state.device.as_ref().unwrap());
+        let device = state.device.as_deref().unwrap();
         let wait_started = Instant::now();
         device.wait_for_fences(&[fence], true, u64::MAX)?;
         stats.gpu_wait_us = stats
@@ -2674,6 +2674,7 @@ pub fn draw(
         record_cpu_present_completion(state, image_index);
         retire_completed_textures(state);
 
+        let device = state.device.as_deref().unwrap();
         let in_flight = state.images_in_flight[image_index as usize];
         // This frame's fence was already waited above and is reset only below.
         if in_flight != vk::Fence::null() && in_flight != fence {
@@ -3054,7 +3055,7 @@ pub fn draw(
                 let copy_size = (bytes_per_row * height as usize) as vk::DeviceSize;
                 let (staging_buffer, staging_memory) = create_gpu_buffer(
                     &state.instance,
-                    &device,
+                    device,
                     state.pdevice,
                     copy_size,
                     vk::BufferUsageFlags::TRANSFER_DST,
@@ -3205,6 +3206,7 @@ pub fn draw(
             recreate_swapchain_and_dependents(state)?;
         }
         if apply_present_back_pressure && screenshot_staging.is_none() {
+            let device = state.device.as_deref().unwrap();
             // Match the wgpu Vulkan pacing path: when the app is running
             // uncapped, wait for this frame's GPU work to retire so the CPU
             // cannot build a long queue of stale Mailbox presents.
@@ -3215,6 +3217,7 @@ pub fn draw(
             back_pressure_waited = wait_us >= VULKAN_BACK_PRESSURE_THRESHOLD_US;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
+            let device = state.device.as_deref().unwrap();
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
             stats.gpu_wait_us = stats
@@ -3226,7 +3229,7 @@ pub fn draw(
                 match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
                     Ok(ptr) => ptr,
                     Err(e) => {
-                        destroy_buffer(&device, &staging);
+                        destroy_buffer(device, &staging);
                         return Err(e.into());
                     }
                 };
@@ -3258,7 +3261,7 @@ pub fn draw(
                 }
             }
             device.unmap_memory(staging.memory);
-            destroy_buffer(&device, &staging);
+            destroy_buffer(device, &staging);
             state.captured_frame = RgbaImage::from_raw(width, height, rgba);
         }
 
