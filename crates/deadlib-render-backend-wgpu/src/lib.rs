@@ -206,7 +206,7 @@ pub trait TextureLookup {
 }
 
 struct CachedTMeshGeom {
-    buffer: Arc<wgpu::Buffer>,
+    buffer: wgpu::Buffer,
     vertex_count: u32,
 }
 
@@ -1790,13 +1790,11 @@ fn ensure_cached_tmesh(
         return None;
     }
 
-    let buffer = Arc::new(
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("wgpu cached textured-mesh vertex buffer"),
-            contents: cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        }),
-    );
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wgpu cached textured-mesh vertex buffer"),
+        contents: cast_slice(vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
     let buffer_key = cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
