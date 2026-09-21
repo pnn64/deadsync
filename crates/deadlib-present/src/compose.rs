@@ -1513,21 +1513,13 @@ impl ComposeScratch {
             self.recycled_text_mesh_vertices.push(vertices);
         }
         self.tmesh_geometries = geometries;
-        let mut sprite_instances = std::mem::take(&mut render.sprite_instances);
-        sprite_instances.clear();
-        self.sprite_instances = sprite_instances;
-        let mut mesh_vertices = std::mem::take(&mut render.mesh_vertices);
-        mesh_vertices.clear();
-        self.mesh_vertices = mesh_vertices;
-        let mut tmesh_instances = std::mem::take(&mut render.tmesh_instances);
-        tmesh_instances.clear();
-        self.tmesh_instances = tmesh_instances;
-        let mut ops = std::mem::take(&mut render.ops);
-        ops.clear();
-        self.ops = ops;
-        let mut cameras = std::mem::take(&mut render.cameras);
-        cameras.clear();
-        self.cameras = cameras;
+        // These buffers contain plain values and are cleared before the next
+        // composition pass. Geometry above releases shared ownership now.
+        self.sprite_instances = std::mem::take(&mut render.sprite_instances);
+        self.mesh_vertices = std::mem::take(&mut render.mesh_vertices);
+        self.tmesh_instances = std::mem::take(&mut render.tmesh_instances);
+        self.ops = std::mem::take(&mut render.ops);
+        self.cameras = std::mem::take(&mut render.cameras);
     }
 
     fn recycle_target_frame(&mut self, mut target: renderer::RenderTargetFrame) {
@@ -1542,15 +1534,10 @@ impl ComposeScratch {
             }
         }
         self.tmesh_geometries = geometries;
-        target.sprite_instances.clear();
         self.sprite_instances = target.sprite_instances;
-        target.mesh_vertices.clear();
         self.mesh_vertices = target.mesh_vertices;
-        target.tmesh_instances.clear();
         self.tmesh_instances = target.tmesh_instances;
-        target.ops.clear();
         self.ops = target.ops;
-        target.cameras.clear();
         self.cameras = target.cameras;
     }
 
