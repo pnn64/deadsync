@@ -372,6 +372,18 @@ impl PresentCompletionCell {
             }
         }
     }
+
+    // Report each observed interval once; the cell retains the clock and refresh
+    // estimate even when no new completion arrives.
+    fn load_since(&self, last_present_id: &mut u32) -> PresentCompletion {
+        let mut completion = self.load();
+        if completion.present_id == *last_present_id {
+            completion.interval_ns = 0;
+        } else {
+            *last_present_id = completion.present_id;
+        }
+        completion
+    }
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -456,8 +468,6 @@ pub struct State {
     next_present_id: u32,
     present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
-    last_host_present_ns: u64,
-    last_present_interval_ns: u64,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
@@ -831,8 +841,6 @@ fn init(
         next_present_id: 1,
         present_done,
         last_completed_present_id: 0,
-        last_host_present_ns: 0,
-        last_present_interval_ns: 0,
         screenshot_requested: false,
         captured_frame: None,
     })
@@ -882,25 +890,6 @@ fn next_present_id(state: &mut State) -> u32 {
         state.next_present_id = 1;
     }
     id
-}
-
-#[inline(always)]
-fn drain_present_completions(state: &mut State) -> PresentCompletion {
-    let mut latest = PresentCompletion {
-        present_id: state.last_completed_present_id,
-        host_ns: state.last_host_present_ns,
-        interval_ns: 0,
-        refresh_ns: state.last_present_interval_ns,
-    };
-    let done = state.present_done.load();
-    if done.present_id == 0 || done.present_id == state.last_completed_present_id {
-        return latest;
-    }
-    state.last_completed_present_id = done.present_id;
-    state.last_host_present_ns = done.host_ns;
-    state.last_present_interval_ns = done.refresh_ns;
-    latest = done;
-    latest
 }
 
 #[inline(always)]
@@ -2156,7 +2145,9 @@ pub fn draw(
             warn!("wgpu screenshot readback failed: map_async returned error");
         }
     }
-    let completion = drain_present_completions(state);
+    let completion = state
+        .present_done
+        .load_since(&mut state.last_completed_present_id);
     let in_flight_images = if completion.present_id == 0 {
         1
     } else if submitted_present_id >= completion.present_id {
@@ -2181,7 +2172,7 @@ pub fn draw(
         suboptimal,
         submitted_present_id,
         completed_present_id: completion.present_id,
-        refresh_ns: state.last_present_interval_ns,
+        refresh_ns: completion.refresh_ns,
         actual_interval_ns: completion.interval_ns,
         present_margin_ns: 0,
         host_present_ns: completion.host_ns,
@@ -3849,6 +3840,59 @@ mod tests {
                 refresh_ns: 17,
             }
         );
+    }
+
+    #[test]
+    fn completion_cell_reports_each_observed_interval_once() {
+        let cell = PresentCompletionCell::new();
+        let mut last_present_id = 0;
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion::default()
+        );
+
+        // The reader may skip completions; smoothing still includes them all.
+        cell.publish(1, 100);
+        cell.publish(2, 116);
+        cell.publish(3, 136);
+        let latest = PresentCompletion {
+            present_id: 3,
+            host_ns: 136,
+            interval_ns: 20,
+            refresh_ns: 17,
+        };
+        assert_eq!(cell.load_since(&mut last_present_id), latest);
+        assert_eq!(last_present_id, 3);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                interval_ns: 0,
+                ..latest
+            }
+        );
+
+        // An unavailable timestamp preserves the clock and refresh estimate.
+        cell.publish(u32::MAX, 0);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                present_id: u32::MAX,
+                interval_ns: 0,
+                ..latest
+            }
+        );
+        // Present IDs wrap to one, which must still be observed as new.
+        cell.publish(1, 140);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                present_id: 1,
+                host_ns: 140,
+                interval_ns: 4,
+                refresh_ns: 13,
+            }
+        );
+        assert_eq!(last_present_id, 1);
     }
 
     #[test]
