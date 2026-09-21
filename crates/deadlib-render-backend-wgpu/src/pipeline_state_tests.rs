@@ -84,6 +84,64 @@ fn capture(state: &mut State, frame: &RenderFrame, textures: &TestTextures) -> R
     capture_frame(state).expect("capture")
 }
 
+fn check_buffer_uploads(state: &State) {
+    let destination = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("concatenated upload destination"),
+        size: 64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+    let readback = state.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("concatenated upload readback"),
+        size: 64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let cases: &[&[&[u8]]] = &[
+        &[],
+        &[&[], &[]],
+        &[&[], &[1; 8], &[]],
+        &[&[2; 4], &[], &[3; 12], &[4; 8], &[]],
+        &[&[5; 32], &[6; 32]],
+        &[&[7; 4], &[8; 4]],
+    ];
+    for chunks in cases {
+        let bytes = chunks.concat();
+        let mut expected = [0xa5; 64];
+        expected[..bytes.len()].copy_from_slice(&bytes);
+        state.queue.write_buffer(&destination, 0, &[0xa5; 64]);
+        upload_buffer_slices(
+            &state.queue,
+            &destination,
+            bytes.len(),
+            chunks.iter().copied(),
+        );
+        let mut encoder = state.device.create_command_encoder(&Default::default());
+        encoder.copy_buffer_to_buffer(&destination, 0, &readback, 0, 64);
+        state.queue.submit([encoder.finish()]);
+        let (tx, rx) = mpsc::channel();
+        readback.map_async(wgpu::MapMode::Read, .., move |result| {
+            tx.send(result).unwrap()
+        });
+        state
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            })
+            .unwrap();
+        rx.recv().unwrap().unwrap();
+        {
+            let actual = readback.get_mapped_range(..).unwrap();
+            assert_eq!(
+                &*actual, &expected,
+                "concatenation and untouched tail for {chunks:?}"
+            );
+        }
+        readback.unmap();
+    }
+}
+
 #[test]
 #[ignore = "requires a wgpu graphics device and a window system"]
 fn pipeline_switches_preserve_camera_pixels() {
@@ -124,6 +182,7 @@ fn pipeline_switches_preserve_camera_pixels() {
             "test must exercise immediates"
         );
     }
+    check_buffer_uploads(&state);
     let rgba = RgbaImage::from_fn(4, 4, |x, y| {
         image::Rgba([180 + x as u8 * 20, 160 + y as u8 * 20, 230, 100])
     });

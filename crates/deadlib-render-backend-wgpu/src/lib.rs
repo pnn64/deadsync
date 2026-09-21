@@ -2253,35 +2253,33 @@ fn draw_offscreen_targets(
         );
     }
     upload_offscreen_projections(state, frame);
-    let mut instance_start = 0usize;
-    let mut mesh_start = 0usize;
-    let mut tmesh_instance_start = 0usize;
-    for target in &frame.render_targets {
-        if !target.sprite_instances.is_empty() {
-            state.queue.write_buffer(
-                &state.instance_buffer,
-                (instance_start * mem::size_of::<InstanceRaw>()) as u64,
-                cast_slice(target.sprite_instances.as_slice()),
-            );
-        }
-        if !target.mesh_vertices.is_empty() {
-            state.queue.write_buffer(
-                &state.mesh_vertex_buffer,
-                (mesh_start * mem::size_of::<deadlib_render_core::MeshVertex>()) as u64,
-                cast_slice(target.mesh_vertices.as_slice()),
-            );
-        }
-        if !target.tmesh_instances.is_empty() {
-            state.queue.write_buffer(
-                &state.tmesh_instance_buffer,
-                (tmesh_instance_start * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
-                cast_slice(&target.tmesh_instances),
-            );
-        }
-        tmesh_instance_start += target.tmesh_instances.len();
-        instance_start += target.sprite_instances.len();
-        mesh_start += target.mesh_vertices.len();
-    }
+    upload_buffer_slices(
+        &state.queue,
+        &state.instance_buffer,
+        total_instances * mem::size_of::<InstanceRaw>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.sprite_instances)),
+    );
+    upload_buffer_slices(
+        &state.queue,
+        &state.mesh_vertex_buffer,
+        total_mesh_vertices * mem::size_of::<deadlib_render_core::MeshVertex>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.mesh_vertices)),
+    );
+    upload_buffer_slices(
+        &state.queue,
+        &state.tmesh_instance_buffer,
+        total_tmesh_instances * mem::size_of::<TexturedMeshInstanceRaw>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.tmesh_instances)),
+    );
     stats.backend_upload_us = stats
         .backend_upload_us
         .saturating_add(elapsed_us(upload_started.elapsed()));
@@ -2394,6 +2392,35 @@ fn draw_offscreen_targets(
 #[inline(always)]
 fn elapsed_us(elapsed: std::time::Duration) -> u32 {
     elapsed.as_micros().min(u128::from(u32::MAX)) as u32
+}
+
+fn upload_buffer_slices<'a>(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    byte_len: usize,
+    slices: impl Iterator<Item = &'a [u8]>,
+) {
+    let Some(size) = wgpu::BufferSize::new(byte_len as u64) else {
+        return;
+    };
+    let mut slices = slices.filter(|bytes| !bytes.is_empty());
+    let first = slices.next().expect("nonempty buffer upload");
+    if first.len() == byte_len {
+        queue.write_buffer(buffer, 0, first);
+        return;
+    }
+    // Fill wgpu's staging memory directly, with one transfer for this buffer
+    // across all targets. The destination offsets remain in target order.
+    let Some(mut upload) = queue.write_buffer_with(buffer, 0, size) else {
+        return;
+    };
+    let mut offset = 0;
+    for bytes in std::iter::once(first).chain(slices) {
+        let end = offset + bytes.len();
+        upload.slice(offset..end).copy_from_slice(bytes);
+        offset = end;
+    }
+    debug_assert_eq!(offset, byte_len);
 }
 
 fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
