@@ -2351,6 +2351,8 @@ fn draw_offscreen_targets(
             textures,
             target_frame.alpha,
         ));
+        drop(pass);
+        state.offscreen_targets[index].initialized = true;
         geometry_start += target_frame.tmesh_geometries.len();
         tmesh_instance_start += target_frame.tmesh_instances.len();
         instance_start += target_frame.sprite_instances.len();
@@ -2366,13 +2368,6 @@ fn draw_offscreen_targets(
     stats.submit_us = stats
         .submit_us
         .saturating_add(elapsed_us(submit_started.elapsed()));
-    for target in state
-        .offscreen_targets
-        .iter_mut()
-        .take(frame.render_targets.len())
-    {
-        target.initialized = true;
-    }
     vertices
 }
 

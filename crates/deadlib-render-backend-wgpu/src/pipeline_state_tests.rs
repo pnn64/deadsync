@@ -84,6 +84,58 @@ fn capture(state: &mut State, frame: &RenderFrame, textures: &TestTextures) -> R
     capture_frame(state).expect("capture")
 }
 
+fn check_offscreen_preservation(state: &mut State, textures: &TestTextures) {
+    for alpha in [false, true] {
+        let mut frame = fixtures::offscreen(fixtures::fixture(0, BlendMode::Alpha, false, false));
+        frame.render_targets[0].alpha = alpha;
+        let mut empty = frame.clone();
+        empty.render_targets[0].ops.clear();
+        let cleared = capture(state, &empty, textures);
+        let drawn = capture(state, &frame, textures);
+        assert!(
+            drawn != cleared,
+            "preservation fixture must draw visible pixels"
+        );
+
+        // A fresh target must clear even when its first pass requests preservation.
+        state.offscreen_targets.clear();
+        frame.render_targets[0].preserve = true;
+        assert!(
+            capture(state, &frame, textures) == drawn,
+            "first-use clear alpha={alpha}"
+        );
+
+        let ops = mem::take(&mut frame.render_targets[0].ops);
+        assert!(
+            capture(state, &frame, textures) == drawn,
+            "preserved pixels alpha={alpha}"
+        );
+        frame.render_targets[0].preserve = false;
+        assert!(
+            capture(state, &frame, textures) == cleared,
+            "explicit clear alpha={alpha}"
+        );
+
+        frame.render_targets[0].ops = ops;
+        assert!(
+            capture(state, &frame, textures) == drawn,
+            "redrawn pixels alpha={alpha}"
+        );
+        frame.render_targets[0].ops.clear();
+        frame.render_targets[0].preserve = true;
+        frame.render_targets[0].width /= 2;
+        frame.render_targets[0].height /= 2;
+        assert!(
+            capture(state, &frame, textures) == cleared,
+            "resized target clear alpha={alpha}"
+        );
+    }
+    eprintln!(
+        "{:?}: 10 offscreen-preservation pixel comparisons passed",
+        state.api
+    );
+}
+
 fn check_buffer_uploads(state: &State) {
     let destination = state.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("concatenated upload destination"),
@@ -238,6 +290,7 @@ fn pipeline_switches_preserve_camera_pixels() {
             }
         }
     }
+    check_offscreen_preservation(&mut state, &textures);
     cleanup(&mut state);
     eprintln!("{api:?}: {cases} pipeline-switch pixel comparisons passed");
 }
