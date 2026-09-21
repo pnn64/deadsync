@@ -2053,7 +2053,9 @@ pub fn draw(
                 clear |= glow::COLOR_BUFFER_BIT;
             }
             state.gl.clear(clear);
-            state.gl.color_mask(true, true, true, target_frame.alpha);
+            if !target_frame.alpha {
+                state.gl.color_mask(true, true, true, false);
+            }
             if state.path == GlPath::Modern {
                 offscreen_vertices += draw_modern_offscreen_pass(state, target_frame, textures);
             } else {

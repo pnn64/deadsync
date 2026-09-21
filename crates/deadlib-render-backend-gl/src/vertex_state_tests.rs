@@ -121,11 +121,15 @@ fn interleaved_vertex_buffers_preserve_pixels() {
             for blend in [BlendMode::Alpha, BlendMode::Add] {
                 for depth in [false, true] {
                     for glow in [false, true] {
-                        for target in [false, true] {
+                        for target_alpha in [None, Some(false), Some(true)] {
                             let frame = interleaved_frame(blend, depth, glow, storage);
                             let reference = distinct_buffer_reference(&frame);
-                            let (frame, reference) = if target {
-                                (fixtures::offscreen(frame), fixtures::offscreen(reference))
+                            let (frame, reference) = if let Some(alpha) = target_alpha {
+                                let mut frame = fixtures::offscreen(frame);
+                                let mut reference = fixtures::offscreen(reference);
+                                frame.render_targets[0].alpha = alpha;
+                                reference.render_targets[0].alpha = alpha;
+                                (frame, reference)
                             } else {
                                 (frame, reference)
                             };
@@ -137,7 +141,7 @@ fn interleaved_vertex_buffers_preserve_pixels() {
                             );
                             assert!(
                                 actual.as_raw() == expected.as_raw(),
-                                "base_instance={base_instance} storage={storage} blend={blend:?} depth={depth} glow={glow} target={target}"
+                                "base_instance={base_instance} storage={storage} blend={blend:?} depth={depth} glow={glow} target_alpha={target_alpha:?}"
                             );
                             cases += 1;
                         }
