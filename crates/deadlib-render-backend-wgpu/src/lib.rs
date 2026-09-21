@@ -1583,7 +1583,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     );
                     last_kind = Some(1);
                     last_blend = None;
-                    last_sprite_yuv = None;
                     if matches!(state.proj, ProjState::Immediates) {
                         bindings.reset_camera();
                     }
@@ -1633,7 +1632,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     }
                     last_kind = Some(2);
                     last_blend = None;
-                    last_sprite_yuv = None;
                     tmesh_buffer_cache.reset();
                 }
                 if last_blend != Some(run.blend) || last_tmesh_depth_test != run.depth_test {
