@@ -915,7 +915,6 @@ fn draw_inner(
     let present_started = Instant::now();
     command.present_drawable(&drawable);
     stats.present_us = elapsed_us(present_started);
-    let owned_command = command.to_owned();
     let submit_started = Instant::now();
     command.commit();
     stats.submit_us = elapsed_us(submit_started);
@@ -923,17 +922,19 @@ fn draw_inner(
     let mut queue_idle_waited = false;
     if apply_present_back_pressure || screenshot.is_some() {
         let wait_started = Instant::now();
-        owned_command.wait_until_completed();
+        command.wait_until_completed();
         let waited = elapsed_us(wait_started);
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(waited);
         applied_back_pressure = apply_present_back_pressure && waited >= BACK_PRESSURE_THRESHOLD_US;
         queue_idle_waited = screenshot.is_some() && waited != 0;
         mark_completed(state, submitted_id);
+    } else {
+        // The slot was emptied before upload; only in-flight work needs an owner.
+        state.frames[slot_index].command = Some(command.to_owned());
     }
     if let Some((buffer, row_bytes)) = screenshot {
         state.captured_frame = read_screenshot(&buffer, width, height, row_bytes);
     }
-    state.frames[slot_index].command = Some(owned_command);
     state.frames[slot_index].submitted_id = submitted_id;
     state.frame_index = (slot_index + 1) % FRAMES_IN_FLIGHT;
     poll_completions(state);
