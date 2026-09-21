@@ -2465,7 +2465,12 @@ fn stage_offscreen_projection_upload<'a>(
     matrix_count: usize,
 ) -> bool {
     debug_assert!(stride >= PROJ_BYTES as usize);
-    let required_len = matrix_count * stride;
+    // Matrix starts need alignment; the final binding ends after its 64 bytes.
+    let required_len = if matrix_count == 0 {
+        0
+    } else {
+        (matrix_count - 1) * stride + PROJ_BYTES as usize
+    };
     let mut changed = upload.len() != required_len;
     upload.resize(required_len, 0);
     let mut offset = 0;
@@ -2480,7 +2485,7 @@ fn stage_offscreen_projection_upload<'a>(
             offset += stride;
         }
     }
-    debug_assert_eq!(offset, upload.len());
+    debug_assert_eq!(offset, matrix_count * stride);
     changed
 }
 
@@ -2521,9 +2526,9 @@ fn stage_projection_upload(
     fallback: Matrix4,
     stride: usize,
 ) -> bool {
-    let needed = cameras.len().saturating_add(1).max(1);
-    let mut changed = upload.len() != needed * stride;
-    upload.resize(needed * stride, 0);
+    let required_len = cameras.len() * stride + PROJ_BYTES as usize;
+    let mut changed = upload.len() != required_len;
+    upload.resize(required_len, 0);
     for (index, matrix) in cameras.iter().chain(std::iter::once(&fallback)).enumerate() {
         let bytes = bytemuck::bytes_of::<[f32; 16]>(matrix.as_ref());
         let offset = index * stride;
@@ -3710,7 +3715,7 @@ mod tests {
             fallback,
             STRIDE,
         ));
-        assert_eq!(upload.len(), STRIDE * 2);
+        assert_eq!(upload.len(), STRIDE + 64);
         assert_eq!(
             &upload[..64],
             bytemuck::cast_slice(&cameras[0].to_cols_array())
@@ -3720,7 +3725,6 @@ mod tests {
             bytemuck::cast_slice(&fallback.to_cols_array())
         );
         assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
-        assert!(upload[STRIDE + 64..].iter().all(|byte| *byte == 0));
     }
 
     #[test]
@@ -3742,18 +3746,10 @@ mod tests {
         ));
 
         let expected = [first[0], fallback, second[0], second[1], fallback];
-        assert_eq!(upload.len(), expected.len() * STRIDE);
-        for (index, matrix) in expected.iter().enumerate() {
-            let offset = index * STRIDE;
-            assert_eq!(
-                &upload[offset..offset + 64],
-                bytemuck::cast_slice(&matrix.to_cols_array())
-            );
-            assert!(
-                upload[offset + 64..offset + STRIDE]
-                    .iter()
-                    .all(|byte| *byte == 0)
-            );
+        assert_eq!(upload.len(), (expected.len() - 1) * STRIDE + 64);
+        for (slot, matrix) in upload.chunks(STRIDE).zip(&expected) {
+            assert_eq!(&slot[..64], bytemuck::cast_slice(&matrix.to_cols_array()));
+            assert!(slot[64..].iter().all(|byte| *byte == 0));
         }
         assert!(!stage_offscreen_projection_upload(
             &mut upload,
@@ -3773,12 +3769,11 @@ mod tests {
             1,
         ));
         assert_eq!(upload.as_ptr(), allocation);
-        assert_eq!(upload.len(), STRIDE);
+        assert_eq!(upload.len(), 64);
         assert_eq!(
             &upload[..64],
             bytemuck::cast_slice(&fallback.to_cols_array())
         );
-        assert!(upload[64..].iter().all(|byte| *byte == 0));
 
         assert!(stage_offscreen_projection_upload(
             &mut upload,
