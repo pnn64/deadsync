@@ -372,6 +372,7 @@ pub fn create_texture(
     desc.set_usage(MTLTextureUsage::ShaderRead);
     let raw = state.device.new_texture(&desc);
     upload_texture(
+        &state.device,
         &state.queue,
         &mut state.texture_uploads,
         &raw,
@@ -413,6 +414,7 @@ pub fn update_texture(
         return Err(std::io::Error::other("Metal texture update dimensions do not match").into());
     }
     upload_texture(
+        &state.device,
         &state.queue,
         &mut state.texture_uploads,
         raw,
@@ -452,6 +454,7 @@ pub fn create_yuv420_texture(
         (&images[2], upload.v, upload.width / 2, upload.height / 2),
     ] {
         upload_plane(
+            &state.device,
             &state.queue,
             &mut state.texture_uploads,
             texture,
@@ -508,6 +511,7 @@ pub fn update_yuv420_texture(
         (&images[2], upload.v, upload.width / 2, upload.height / 2),
     ] {
         upload_plane(
+            &state.device,
             &state.queue,
             &mut state.texture_uploads,
             texture,
@@ -1627,6 +1631,7 @@ fn mip_level_count(image: &RgbaImage, mipmaps: bool) -> u64 {
 }
 
 fn upload_texture(
+    device: &DeviceRef,
     queue: &CommandQueueRef,
     uploads: &mut TextureUploadState,
     texture: &TextureRef,
@@ -1637,7 +1642,7 @@ fn upload_texture(
     let row_bytes = u64::from(image.width()) * 4;
     let pixels = image.as_raw();
     let staging = autoreleasepool(|| {
-        queue.device().new_buffer_with_data(
+        device.new_buffer_with_data(
             pixels.as_ptr().cast(),
             pixels.len() as u64,
             MTLResourceOptions::StorageModeShared,
@@ -1672,6 +1677,7 @@ fn upload_texture(
 }
 
 fn upload_plane(
+    device: &DeviceRef,
     queue: &CommandQueueRef,
     uploads: &mut TextureUploadState,
     texture: &TextureRef,
@@ -1680,7 +1686,7 @@ fn upload_plane(
     height: u32,
 ) {
     let staging = autoreleasepool(|| {
-        queue.device().new_buffer_with_data(
+        device.new_buffer_with_data(
             pixels.as_ptr().cast(),
             pixels.len() as u64,
             MTLResourceOptions::StorageModeShared,
@@ -1959,9 +1965,17 @@ mod tests {
                         if bytes_per_pixel == 4 {
                             let image = RgbaImage::from_raw(width, height, pixels.clone())
                                 .expect("RGBA image");
-                            upload_texture(&queue, &mut uploads, &texture, &image, false);
+                            upload_texture(&device, &queue, &mut uploads, &texture, &image, false);
                         } else {
-                            upload_plane(&queue, &mut uploads, &texture, &pixels, width, height);
+                            upload_plane(
+                                &device,
+                                &queue,
+                                &mut uploads,
+                                &texture,
+                                &pixels,
+                                width,
+                                height,
+                            );
                         }
                     });
                     let command = uploads.command.as_ref().expect("pending batch").as_ptr();
