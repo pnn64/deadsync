@@ -34,18 +34,13 @@ const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const PROJECTION_PUSH_BYTES: u32 = mem::size_of::<[f32; 16]>() as u32;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 // --- Structs ---
 // Vulkan consumes the shared draw-prep raw layouts directly so the dynamic
 // upload path can memcpy them into the mapped ring without repacking.
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct ProjPush {
-    proj: [[f32; 4]; 4],
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,13 +53,13 @@ fn projection_push_constant_range() -> vk::PushConstantRange {
     vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
-        .size(std::mem::size_of::<ProjPush>() as u32)
+        .size(PROJECTION_PUSH_BYTES)
 }
 
 fn yuv_push_constant_range() -> vk::PushConstantRange {
     vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-        .offset(std::mem::size_of::<ProjPush>() as u32)
+        .offset(PROJECTION_PUSH_BYTES)
         .size(std::mem::size_of::<YuvPush>() as u32)
 }
 
@@ -2276,11 +2271,7 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             if yuv420 {
@@ -2290,7 +2281,7 @@ fn record_render_pass(
                             },
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     if descriptor.update_required(set) {
@@ -2303,7 +2294,7 @@ fn record_render_pass(
                                 cmd,
                                 yuv_pipeline_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
-                                std::mem::size_of::<ProjPush>() as u32,
+                                PROJECTION_PUSH_BYTES,
                                 bytemuck::bytes_of(&conversion),
                             );
                         }
@@ -2349,17 +2340,13 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     device.cmd_draw(cmd, run.vertex_count, 1, offsets.mesh + run.vertex_start, 0);
@@ -2411,17 +2398,13 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     if descriptor.update_required(set) {
@@ -2872,11 +2855,7 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             if yuv420 {
@@ -2886,7 +2865,7 @@ pub fn draw(
                             },
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
@@ -2900,7 +2879,7 @@ pub fn draw(
                                 cmd,
                                 state.yuv_pipeline_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
-                                std::mem::size_of::<ProjPush>() as u32,
+                                PROJECTION_PUSH_BYTES,
                                 bytemuck::bytes_of(&conversion),
                             );
                         }
@@ -2938,17 +2917,13 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(draw.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             state.mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
@@ -2999,17 +2974,13 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(draw.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             state.textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
