@@ -143,18 +143,8 @@ struct TextureUploadState {
     scratch: Vec<u8>,
     command: Option<CommandBuffer>,
     blit: Option<BlitCommandEncoder>,
-    staging: Vec<Buffer>,
     uploads: u64,
     batches: u64,
-}
-
-impl TextureUploadState {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            staging: Vec::with_capacity(capacity),
-            ..Self::default()
-        }
-    }
 }
 
 impl FrameBuffers {
@@ -206,7 +196,7 @@ struct CacheStats {
 /// behind a fast key map, capped at 16 MiB, and saturates instead of pruning. A
 /// saturated miss falls back to the current frame's bounded upload buffer.
 /// Texture uploads share one render-thread-owned blit command per draw batch.
-/// Its 16-entry staging owner is cleared after commit without losing capacity.
+/// The command buffer retains staging resources from encoding through completion.
 /// Non-aligned rows use one scratch buffer that grows to the largest upload and
 /// is reused for the renderer session; aligned rows borrow their source.
 /// Cache entries are freed by the render thread during cleanup;
@@ -351,7 +341,7 @@ pub fn init(
         window_size,
         projection,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        texture_uploads: TextureUploadState::with_capacity(16),
+        texture_uploads: TextureUploadState::default(),
         cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
         cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
@@ -1684,7 +1674,6 @@ fn upload_texture(
     if mipmaps {
         blit.generate_mipmaps(texture);
     }
-    uploads.staging.push(staging);
     uploads.uploads = uploads.uploads.saturating_add(1);
 }
 
@@ -1734,7 +1723,6 @@ fn upload_plane(
         MTLOrigin::default(),
         MTLBlitOption::None,
     );
-    uploads.staging.push(staging);
     uploads.uploads = uploads.uploads.saturating_add(1);
 }
 
@@ -1746,9 +1734,6 @@ fn flush_texture_uploads(uploads: &mut TextureUploadState) -> Option<CommandBuff
         .take()
         .expect("texture upload blit encoder always has a command buffer");
     command.commit();
-    // `new_command_buffer` retains referenced resources after commit. Clearing
-    // releases Rust's extra ownership while preserving this vector's capacity.
-    uploads.staging.clear();
     uploads.batches = uploads.batches.saturating_add(1);
     Some(command)
 }
@@ -2017,7 +2002,7 @@ mod tests {
     }
 
     #[test]
-    fn texture_uploads_share_one_pending_blit_batch() {
+    fn texture_upload_batch_retains_staging_until_copies_complete() {
         autoreleasepool(|| {
             let device = Device::system_default().expect("Metal device");
             let queue = device.new_command_queue();
@@ -2030,29 +2015,61 @@ mod tests {
             desc.set_usage(MTLTextureUsage::ShaderRead);
             let first = device.new_texture(&desc);
             let second = device.new_texture(&desc);
-            let image = RgbaImage::from_raw(2, 2, vec![0x7f; 16]).expect("2x2 RGBA image");
+            desc.set_pixel_format(MTLPixelFormat::R8Unorm);
+            desc.set_width(3);
+            let plane = device.new_texture(&desc);
+            let image = RgbaImage::from_raw(2, 2, (0..16).collect()).expect("2x2 RGBA image");
+            let other_image =
+                RgbaImage::from_raw(2, 2, (128..144).collect()).expect("2x2 RGBA image");
+            let plane_pixels = [3, 7, 11, 17, 23, 31];
             let mut uploads = TextureUploadState::default();
 
-            upload_texture(&queue, &mut uploads, &first, &image, false);
+            // Drain local pools before submission. The command buffer must keep
+            // staging alive after each upload function drops its local owner.
+            autoreleasepool(|| upload_texture(&queue, &mut uploads, &first, &image, false));
             let command = uploads
                 .command
                 .as_ref()
                 .expect("first upload creates a batch")
                 .as_ptr();
-            upload_texture(&queue, &mut uploads, &second, &image, false);
+            autoreleasepool(|| upload_texture(&queue, &mut uploads, &second, &other_image, false));
+            autoreleasepool(|| upload_plane(&queue, &mut uploads, &plane, &plane_pixels, 3, 2));
 
             assert_eq!(uploads.command.as_ref().unwrap().as_ptr(), command);
-            assert_eq!(uploads.staging.len(), 2);
-            assert_eq!(uploads.uploads, 2);
-            let staging_capacity = uploads.staging.capacity();
+            assert_eq!(uploads.uploads, 3);
             let command = flush_texture_uploads(&mut uploads).expect("pending batch");
             command.wait_until_completed();
+            assert_eq!(command.status(), MTLCommandBufferStatus::Completed);
             assert!(uploads.command.is_none());
             assert!(uploads.blit.is_none());
-            assert!(uploads.staging.is_empty());
-            assert_eq!(uploads.staging.capacity(), staging_capacity);
             assert_eq!(uploads.batches, 1);
             assert!(flush_texture_uploads(&mut uploads).is_none());
+
+            for (texture, expected, packed_row_bytes, width) in [
+                (&first, image.as_raw().as_slice(), 8, 2),
+                (&second, other_image.as_raw().as_slice(), 8, 2),
+                (&plane, plane_pixels.as_slice(), 3, 3),
+            ] {
+                let readback = queue.new_command_buffer();
+                let (buffer, row_bytes) = encode_screenshot(readback, texture, width, 2);
+                readback.commit();
+                readback.wait_until_completed();
+                assert_eq!(readback.status(), MTLCommandBufferStatus::Completed);
+                for row in 0..2 {
+                    // SAFETY: The completed blit initialized these pixel bytes
+                    // within the live shared buffer; padding is excluded.
+                    let actual = unsafe {
+                        std::slice::from_raw_parts(
+                            buffer.contents().cast::<u8>().add(row * row_bytes),
+                            packed_row_bytes,
+                        )
+                    };
+                    assert_eq!(
+                        actual,
+                        &expected[row * packed_row_bytes..(row + 1) * packed_row_bytes]
+                    );
+                }
+            }
         });
     }
 
