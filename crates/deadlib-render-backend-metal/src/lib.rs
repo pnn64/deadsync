@@ -1753,14 +1753,18 @@ fn stage_texture_rows<'a>(
         return source;
     }
 
-    scratch.resize(row_bytes * rows, 0);
+    let staging_len = row_bytes * rows;
+    // Keep initialized bytes across smaller uploads so the next large plane
+    // does not zero memory that its pixel copy is about to overwrite.
+    scratch.resize(scratch.len().max(staging_len), 0);
+    let staged = &mut scratch[..staging_len];
     for (source_row, destination) in source
         .chunks_exact(packed_row_bytes)
-        .zip(scratch.chunks_exact_mut(row_bytes))
+        .zip(staged.chunks_exact_mut(row_bytes))
     {
         destination[..packed_row_bytes].copy_from_slice(source_row);
     }
-    scratch
+    staged
 }
 
 fn ensure_cached_tmesh(
@@ -1974,6 +1978,7 @@ mod tests {
             (3, 5, 256),
             (260, 4, 512),
             (8, 3, 16),
+            (260, 4, 512),
         ] {
             let source = (0..packed_row_bytes * rows)
                 .map(|i| (i % 251) as u8)
@@ -2019,11 +2024,12 @@ mod tests {
             let second = device.new_texture(&desc);
             desc.set_pixel_format(MTLPixelFormat::R8Unorm);
             desc.set_width(3);
+            desc.set_height(1);
             let plane = device.new_texture(&desc);
             let image = RgbaImage::from_raw(2, 2, (0..16).collect()).expect("2x2 RGBA image");
             let other_image =
                 RgbaImage::from_raw(2, 2, (128..144).collect()).expect("2x2 RGBA image");
-            let plane_pixels = [3, 7, 11, 17, 23, 31];
+            let plane_pixels = [3, 7, 11];
             let mut uploads = TextureUploadState::default();
 
             // Drain local pools before submission. The command buffer must keep
@@ -2034,8 +2040,9 @@ mod tests {
                 .as_ref()
                 .expect("first upload creates a batch")
                 .as_ptr();
+            // Alternate staging sizes before the copies execute.
+            autoreleasepool(|| upload_plane(&queue, &mut uploads, &plane, &plane_pixels, 3, 1));
             autoreleasepool(|| upload_texture(&queue, &mut uploads, &second, &other_image, false));
-            autoreleasepool(|| upload_plane(&queue, &mut uploads, &plane, &plane_pixels, 3, 2));
 
             assert_eq!(uploads.command.as_ref().unwrap().as_ptr(), command);
             assert_eq!(uploads.uploads, 3);
@@ -2047,17 +2054,17 @@ mod tests {
             assert_eq!(uploads.batches, 1);
             assert!(flush_texture_uploads(&mut uploads).is_none());
 
-            for (texture, expected, packed_row_bytes, width) in [
-                (&first, image.as_raw().as_slice(), 8, 2),
-                (&second, other_image.as_raw().as_slice(), 8, 2),
-                (&plane, plane_pixels.as_slice(), 3, 3),
+            for (texture, expected, packed_row_bytes, width, height) in [
+                (&first, image.as_raw().as_slice(), 8, 2, 2),
+                (&second, other_image.as_raw().as_slice(), 8, 2, 2),
+                (&plane, plane_pixels.as_slice(), 3, 3, 1),
             ] {
                 let readback = queue.new_command_buffer();
-                let (buffer, row_bytes) = encode_screenshot(readback, texture, width, 2);
+                let (buffer, row_bytes) = encode_screenshot(readback, texture, width, height);
                 readback.commit();
                 readback.wait_until_completed();
                 assert_eq!(readback.status(), MTLCommandBufferStatus::Completed);
-                for row in 0..2 {
+                for row in 0..height as usize {
                     // SAFETY: The completed blit initialized these pixel bytes
                     // within the live shared buffer; padding is excluded.
                     let actual = unsafe {
