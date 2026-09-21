@@ -7766,26 +7766,6 @@ fn lobby_player_on_screen(player: &lobby_data::LobbyPlayer, screen_name: &str) -
     player.screen_name.eq_ignore_ascii_case(screen_name)
 }
 
-fn lobby_player_has_gameplay_progress(player: &lobby_data::LobbyPlayer) -> bool {
-    if let Some(judgments) = player.judgments.as_ref()
-        && (judgments.fantastic_plus > 0
-            || judgments.fantastics > 0
-            || judgments.excellents > 0
-            || judgments.greats > 0
-            || judgments.decents > 0
-            || judgments.way_offs > 0
-            || judgments.misses > 0
-            || judgments.mines_hit > 0
-            || judgments.holds_held > 0
-            || judgments.rolls_held > 0)
-    {
-        return true;
-    }
-
-    player.score.is_some_and(|score| score > 0.0)
-        || player.ex_score.is_some_and(|score| score > 0.0)
-}
-
 fn select_music_lobby_lock_text_for(
     joined: &lobby_data::JoinedLobby,
     local_player_count: usize,
@@ -7802,11 +7782,6 @@ fn select_music_lobby_lock_text_for(
         .players
         .iter()
         .any(|player| lobby_player_on_screen(player, "ScreenGameplay"));
-    let gameplay_started = joined
-        .players
-        .iter()
-        .filter(|player| lobby_player_on_screen(player, "ScreenGameplay"))
-        .any(lobby_player_has_gameplay_progress);
     let any_in_eval = joined
         .players
         .iter()
@@ -7818,13 +7793,10 @@ fn select_music_lobby_lock_text_for(
     if any_in_eval {
         return Some(tr("Lobby", "WaitingForPlayersEvaluation").to_string());
     }
-    // Simply Love parity: once the lobby has a song selected, SelectMusic stays
-    // unlocked until gameplay has actually started, even if the local user moves
-    // to a different song first.
+    // SL-OnlineHelpers.lua allows song selection once a song is selected and
+    // nobody remains in evaluation. ITGmania's pre-song radar stats can report
+    // minesHit > 0 while paused, so scores cannot gate arrival in Gameplay.
     if joined.song_info.is_some() {
-        if any_in_gameplay && gameplay_started {
-            return Some(tr("Lobby", "WaitingForPlayersGameplay").to_string());
-        }
         return None;
     }
     if any_in_gameplay {
@@ -20533,21 +20505,79 @@ mod tests {
     }
 
     #[test]
-    fn lobby_lock_text_waits_once_remote_gameplay_has_progress() {
+    fn lobby_lock_ignores_scores() {
         let song = test_lobby_song_info("Songs/Pack/Song");
         let mut remote = test_lobby_player("ScreenGameplay");
         remote.judgments = Some(lobby_data::LobbyJudgments {
             fantastics: 1,
             ..Default::default()
         });
+        remote.score = Some(1.0);
+        remote.ex_score = Some(1.0);
         let joined = test_joined_lobby(
             vec![test_lobby_player("ScreenSelectMusic"), remote],
             Some(song),
         );
 
+        assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
+    }
+
+    #[test]
+    fn lobby_lock_ignores_mines() {
+        // ITGmania reports possible mines minus radar mines avoided. The latter
+        // stays zero until song end, including while waiting for ready-up.
+        for player_count in [2, 4] {
+            for gameplay_count in 1..player_count {
+                for ready in [false, true] {
+                    let mut remote = test_lobby_player("ScreenGameplay");
+                    remote.ready = ready;
+                    remote.judgments = Some(lobby_data::LobbyJudgments {
+                        total_steps: 100,
+                        mines_hit: 20,
+                        total_mines: 20,
+                        ..Default::default()
+                    });
+                    remote.score = Some(0.0);
+                    remote.ex_score = Some(0.0);
+                    let mut players = vec![remote; gameplay_count];
+                    players.resize(player_count, test_lobby_player("ScreenSelectMusic"));
+                    let joined =
+                        test_joined_lobby(players, Some(test_lobby_song_info("Songs/Pack/Song")));
+
+                    assert_eq!(
+                        select_music_lobby_lock_text_for(&joined, 1, None),
+                        None,
+                        "{gameplay_count}/{player_count} players in Gameplay, ready={ready}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lobby_lock_keeps_barriers() {
+        let mut joined = test_joined_lobby(
+            vec![
+                test_lobby_player("ScreenSelectMusic"),
+                test_lobby_player("ScreenGameplay"),
+            ],
+            None,
+        );
         assert_eq!(
             select_music_lobby_lock_text_for(&joined, 1, None).as_deref(),
             Some("Waiting for players to finish gameplay...")
+        );
+
+        joined.song_info = Some(test_lobby_song_info("Songs/Pack/Song"));
+        assert_eq!(
+            select_music_lobby_lock_text_for(&joined, 1, Some("Reconnecting...")).as_deref(),
+            Some("Reconnecting...")
+        );
+
+        joined.players[1] = test_lobby_player("ScreenEvaluationStage");
+        assert_eq!(
+            select_music_lobby_lock_text_for(&joined, 1, None).as_deref(),
+            Some("Waiting for players to finish evaluation...")
         );
     }
 
