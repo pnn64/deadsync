@@ -10706,6 +10706,94 @@ mod tests {
         Arc::new(song)
     }
 
+    #[test]
+    fn evaluation_barely_animates_while_graph_actors_stay_cached() {
+        use deadlib_present::actors::Actor;
+        use deadsync_profile::{PlayStyle, PlayerSide};
+        use deadsync_theme_simply_love::views::EvaluationContextView;
+
+        let assets = AssetManager::new();
+        let label = deadsync_theme_simply_love::i18n::tr("Evaluation", "Barely");
+        for (style, side) in [
+            (PlayStyle::Single, PlayerSide::P1),
+            (PlayStyle::Single, PlayerSide::P2),
+            (PlayStyle::Versus, PlayerSide::P1),
+        ] {
+            let mut score = test_score_info(
+                test_song_with_duration("barely.ssc", "barely", 100.0),
+                side,
+                "barely",
+                ScrollSpeedSetting::default(),
+                1.0,
+            );
+            score.life_history = vec![(0.0, 0.5), (50.0, 0.05), (100.0, 0.5)];
+            let second = style.is_versus().then(|| {
+                let mut second = score.clone();
+                second.side = PlayerSide::P2;
+                second
+            });
+            let mut state = evaluation::init_from_score_info(
+                [Some(score), second],
+                100.0,
+                EvaluationContextView {
+                    play_style: style,
+                    player_side: side,
+                    ..Default::default()
+                },
+            );
+            let count = if style.is_versus() { 2 } else { 1 };
+            let mut cached_graphs = Vec::new();
+            for (elapsed_us, alpha) in [
+                (0_i64, 0.0),
+                (2_100_000, 0.25),
+                (2_600_000, 1.0),
+                (3_000_000, 1.0),
+            ] {
+                state.screen_elapsed = elapsed_us as f32 / 1e6;
+                let actors = evaluation::get_actors(&state, &assets);
+                let graphs: Vec<_> = actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        Actor::SharedFrame {
+                            z: 101, children, ..
+                        } => Some(Arc::clone(children)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(graphs.len(), count);
+                if !cached_graphs.is_empty() {
+                    for (previous, current) in cached_graphs.iter().zip(&graphs) {
+                        assert!(Arc::ptr_eq(previous, current), "static graph was rebuilt");
+                    }
+                }
+                cached_graphs = graphs;
+                let markers: Vec<_> = actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        Actor::Text {
+                            content,
+                            color,
+                            offset,
+                            ..
+                        } if content.as_str() == label.as_ref() => Some((color[3], offset)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(
+                    markers.len(),
+                    count,
+                    "missing marker for {style:?}/{side:?}"
+                );
+                for (actual, _) in &markers {
+                    assert!((actual - alpha).abs() < 0.00001, "at {elapsed_us}us");
+                }
+                if style.is_versus() {
+                    assert!((markers[1].1[0] - markers[0].1[0] - 310.0).abs() < 0.0001);
+                }
+            }
+        }
+    }
+
     fn test_course_stage(song: Arc<SongData>) -> CourseStageRuntime {
         CourseStageRuntime {
             song,
