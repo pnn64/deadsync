@@ -673,13 +673,13 @@ fn draw_inner(
             } else {
                 MTLLoadAction::Clear
             });
-        configure_render_pass(
-            &target.pass.color,
-            target.texture.images.primary(),
-            [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
-        );
+        target.pass.color.set_clear_color(MTLClearColor::new(
+            0.0,
+            0.0,
+            0.0,
+            if target_frame.alpha { 0.0 } else { 1.0 },
+        ));
         let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
-        clear_render_target(&target.pass.color);
         target_encoder.set_label("DeadSync native Metal offscreen pass");
         target_encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
         offscreen_vertices = offscreen_vertices.saturating_add(record_offscreen_pass(
@@ -1280,6 +1280,9 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     let depth = create_depth_target(&state.device, width, height);
     let target_pass = create_render_pass(&depth);
+    // Offscreen attachments share the target's lifetime; only window drawables
+    // need to be attached and released each frame.
+    target_pass.color.set_texture(Some(&raw));
     OffscreenTarget {
         handle: pass.texture_handle,
         width,
