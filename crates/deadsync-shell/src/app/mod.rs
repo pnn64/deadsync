@@ -2893,7 +2893,7 @@ impl App {
         let cached_scores = request
             .read_scores
             .then(|| scores::cached_best_itg_scores(&score_queries));
-        let percentages = (read_percentages || has_srpg)
+        let wheel_scores = (request.read_scores || read_percentages || has_srpg)
             .then(|| deadsync_score::runtime_cached_wheel_scores(&score_queries));
         let slots = std::array::from_fn(|slot_idx| {
             let mut view = MusicWheelSlotRuntimeView::default();
@@ -2944,10 +2944,11 @@ impl App {
                                     .and_then(|ranks| ranks.get(chart_hash))
                                     .copied(),
                             };
-                            let personal = percentages
+                            let personal = wheel_scores
                                 .as_ref()
                                 .map(|scores| scores[slot_idx * 2 + side_idx])
                                 .unwrap_or_default();
+                            side_view.lamp = personal.lamp;
                             if is_srpg_event {
                                 side_view.srpg_pass_rate_hundredths = personal.pass_rate_hundredths;
                             }

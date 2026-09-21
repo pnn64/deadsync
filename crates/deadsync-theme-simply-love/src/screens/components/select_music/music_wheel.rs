@@ -1287,6 +1287,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             }
 
                             if p.show_music_wheel_lamps {
+                                let lamp = runtime_for_side(side).lamp;
                                 let lamp_dir = if side == profile_data::PlayerSide::P1 {
                                     -1.0
                                 } else {
@@ -1296,7 +1297,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                 let lamp_w = widescale(5.0, 6.0);
                                 let lamp_h = 31.0;
                                 let (lamp_color, lamp_pulsing, lamp_index) =
-                                    match cached_score.lamp_index {
+                                    match lamp.map(|lamp| lamp.index) {
                                         Some(0) => (col_quint_lamp(), true, Some(0u8)),
                                         Some(idx @ 1..=4) => {
                                             let color_index = (idx - 1) as usize;
@@ -1324,7 +1325,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                                     z(53)
                                 ));
                                 if let Some(lamp_index) = lamp_index
-                                    && let Some(count) = cached_score.lamp_judge_count
+                                    && let Some(count) = lamp.and_then(|lamp| lamp.judge_count)
                                     && count < 10
                                 {
                                     let judge_x = grade_x + lamp_dir * widescale(7.0, 13.0);

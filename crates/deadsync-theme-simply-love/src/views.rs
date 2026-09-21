@@ -684,6 +684,7 @@ pub struct MusicWheelScoreView {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MusicWheelSideRuntimeView {
     pub score: Option<deadsync_score::CachedScore>,
+    pub lamp: Option<deadsync_score::CachedLamp>,
     pub itl_rank: Option<u32>,
     pub srpg_pass_rate_hundredths: Option<u32>,
     pub percentage: Option<MusicWheelScoreView>,
