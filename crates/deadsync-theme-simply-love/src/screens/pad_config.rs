@@ -226,6 +226,18 @@ pub struct State {
     /// Up / Down currently held, for the Up+Down "tare" chord.
     raise_held: bool,
     lower_held: bool,
+    /// Load-cell pair before the first chord key steps it. The second key
+    /// must not preserve an accidental drag of the unfocused threshold.
+    tare_pair: Option<ThresholdPairSnapshot>,
+}
+
+#[derive(Clone, Copy)]
+struct ThresholdPairSnapshot {
+    device: PadDeviceId,
+    button: usize,
+    kind: ThresholdKind,
+    press: u16,
+    release: u16,
 }
 
 /// A held directional control and its repeat timer.
@@ -438,11 +450,7 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     // the Up+Down chord, whose second key tares the focused threshold to the
     // live reading instead of stepping it.
     if let Some(ui) = ui_action(ev.action) {
-        if note_press(state, ui, fine) {
-            tare_focused(state);
-        } else {
-            perform_ui_action(state, ui, fine);
-        }
+        apply_direction_press(state, ui, fine);
         return EditResult::Handled;
     }
 
@@ -496,22 +504,49 @@ fn perform_ui_action(state: &mut State, ui: UiAction, fine: bool) {
     }
 }
 
-/// Record a directional press: (re)start its hold-repeat timer and track the
-/// Up/Down pair. Returns true when this press completed the Up+Down chord.
-fn note_press(state: &mut State, ui: UiAction, fine: bool) -> bool {
-    match ui {
-        UiAction::Raise => state.raise_held = true,
-        UiAction::Lower => state.lower_held = true,
-        UiAction::PrevBar | UiAction::NextBar => {}
-    }
-    if state.raise_held && state.lower_held {
+/// Only a fresh Up/Down press can complete the tare chord. Horizontal input
+/// keeps navigating, even while both chord keys remain held.
+fn apply_direction_press(state: &mut State, ui: UiAction, fine: bool) {
+    let fresh = match ui {
+        UiAction::Raise => !std::mem::replace(&mut state.raise_held, true),
+        UiAction::Lower => !std::mem::replace(&mut state.lower_held, true),
+        UiAction::PrevBar | UiAction::NextBar => false,
+    };
+    let vertical = matches!(ui, UiAction::Raise | UiAction::Lower);
+    if vertical && state.raise_held && state.lower_held {
         // A chord is a one-shot: neither key keeps stepping afterwards, even
         // if they are released one at a time.
         state.held = None;
-        return true;
+        if fresh {
+            tare_focused(state);
+        }
+        return;
     }
+    state.tare_pair = if vertical {
+        focused_threshold_pair(state)
+    } else {
+        None
+    };
     begin_hold(state, ui, fine);
-    false
+    perform_ui_action(state, ui, fine);
+}
+
+fn focused_threshold_pair(state: &State) -> Option<ThresholdPairSnapshot> {
+    if state.advanced.is_some() {
+        return None;
+    }
+    let slot = selected_slot(state)?;
+    let pad = state.pads.get(slot.pad)?;
+    let bar = &pad.buttons[slot.button];
+    let (press, release) = pending_threshold_pair(state, pad.device_id, slot.button)
+        .unwrap_or((bar.aggregate_threshold, bar.release_threshold?));
+    Some(ThresholdPairSnapshot {
+        device: pad.device_id,
+        button: slot.button,
+        kind: slot.kind,
+        press,
+        release,
+    })
 }
 
 /// (Re)start the hold-repeat timer for a directional press.
@@ -542,6 +577,10 @@ fn note_release(state: &mut State, action: VirtualAction) {
     }
     if state.held.is_some_and(|h| h.ui == ui) {
         state.held = None;
+        state.tare_pair = None;
+    }
+    if !state.raise_held && !state.lower_held {
+        state.tare_pair = None;
     }
 }
 
@@ -550,6 +589,7 @@ const fn clear_hold(state: &mut State) {
     state.held = None;
     state.raise_held = false;
     state.lower_held = false;
+    state.tare_pair = None;
 }
 
 /// Snap the focused threshold(s) to the live reading ("tare": put a reference
@@ -562,6 +602,7 @@ fn tare_focused(state: &mut State) -> bool {
     if state.saving.is_some() || state.profiles_mode {
         return false;
     }
+    let original_pair = state.tare_pair.take();
     if let Some(dev) = state.advanced {
         let targets = advanced_targets(state);
         let Some(&AdvTarget::Sensor { button, sensor }) = targets.get(state.adv_sel) else {
@@ -578,6 +619,7 @@ fn tare_focused(state: &mut State) -> bool {
             .unwrap_or(sv.raw_threshold);
         let delta = i32::from(sv.raw_value) - i32::from(current);
         adjust_sensor_threshold(state, dev, button, sensor, delta);
+        state.held = None;
         return true;
     }
     let Some(slot) = selected_slot(state) else {
@@ -600,23 +642,50 @@ fn tare_focused(state: &mut State) -> bool {
             let current = current_sensor_threshold(state, device, slot.button, fw).unwrap_or(live);
             set_sensor_threshold(state, device, slot.button, fw, current, i32::from(reading));
         }
+        state.held = None;
         return true;
     }
     let reading = i32::from(bar.aggregate_value);
-    let current = match bar.release_threshold {
-        None => {
-            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold)
+    if let Some(live_release) = bar.release_threshold {
+        let current = pending_threshold_pair(state, device, slot.button)
+            .unwrap_or((bar.aggregate_threshold, live_release));
+        // The first chord key already stepped (and may already have reached
+        // hardware). Calibrate from the original pair so its partner drag is
+        // undone, including when the reading equals the original threshold.
+        let (press, release) = original_pair
+            .filter(|p| p.device == device && p.button == slot.button && p.kind == slot.kind)
+            .map_or(current, |p| (p.press, p.release));
+        let focused = match slot.kind {
+            ThresholdKind::Press => press,
+            ThresholdKind::Release => release,
+        };
+        let next = step_threshold_pair(
+            slot.kind,
+            press,
+            release,
+            reading - i32::from(focused),
+            threshold_gap(state),
+            bar.min_raw_threshold,
+            bar.max_raw_threshold,
+        )
+        .unwrap_or((press, release));
+        if next != current {
+            queue_unique(
+                state,
+                PadCommand::ThresholdPair {
+                    device,
+                    button: slot.button,
+                    press: next.0,
+                    release: next.1,
+                },
+            );
         }
-        Some(live_release) => {
-            let (press, release) = pending_threshold_pair(state, device, slot.button)
-                .unwrap_or((bar.aggregate_threshold, live_release));
-            match slot.kind {
-                ThresholdKind::Press => press,
-                ThresholdKind::Release => release,
-            }
-        }
-    };
-    adjust_simple_threshold(state, reading - i32::from(current));
+    } else {
+        let current =
+            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold);
+        adjust_simple_threshold(state, reading - i32::from(current));
+    }
+    state.held = None;
     true
 }
 
@@ -3859,6 +3928,8 @@ mod tests {
     }
 
     // ── Hold-to-repeat + tare ──
+
+    include!("pad_config_tare_tests.rs");
 
     fn ev_release(action: VirtualAction) -> InputEvent {
         ev_from(action, InputSource::Keyboard, false)
