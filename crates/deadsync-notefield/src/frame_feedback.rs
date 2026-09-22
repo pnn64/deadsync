@@ -106,7 +106,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         draws,
         hud_draws,
         ColumnFeedbackRequest {
-            style: request.style,
+            hud_style: request.hud_style,
             column_cues: frame.column_cues,
             column_cue_cursor: frame.column_cue_cursor,
             crossover_cues: frame.crossover_cues,
@@ -298,7 +298,6 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     pulse_color,
                     idle_glow: receptor.receptor_idle_glow,
                     press_behavior: receptor.receptor_glow_behavior,
-                    style: request.style.receptor,
                 },
                 resolve_press,
                 sprite_source,
@@ -346,7 +345,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                         rotation_y_deg: 0.0,
                         extra_z_deg: lane_rotations[local_col],
                     },
-                    z: request.style.actors.tap_explosion_z,
+                    z: crate::style::TAP_EXPLOSION_Z,
                 },
                 sprite_source,
             );
@@ -378,7 +377,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                     field_zoom,
                     effect_zoom: lane_base_zooms[local_col],
                     rotation: ExplosionRotation::Mine,
-                    z: request.style.actors.mine_explosion_z,
+                    z: crate::style::MINE_EXPLOSION_Z,
                 },
                 sprite_source,
             );
@@ -441,7 +440,7 @@ mod tests {
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
+        MiniIndicatorStyle, NotefieldHudStyle,
     };
 
     // Standalone feedback tests prepare the same components as the field composer.
@@ -610,27 +609,8 @@ mod tests {
         }
     }
 
-    fn style() -> NotefieldStyle {
-        NotefieldStyle {
-            layout_width_min: 640.0,
-            layout_width_max: 854.0,
-            side_center_x_ratio: 0.25,
-            receptor_normal_y: -125.0,
-            receptor_reverse_y: 145.0,
-            receptor: ReceptorStyle {
-                target_z: 100,
-                press_glow_z: 105,
-                hold_explosion_z: 145,
-            },
-            actors: NotefieldActorStyle {
-                hold_body_z: 110,
-                hold_cap_z: 110,
-                hold_glow_z: 111,
-                tap_explosion_z: 150,
-                mine_explosion_z: 101,
-                note_z: 140,
-                mine_core_size_ratio: 0.45,
-            },
+    fn style() -> NotefieldHudStyle {
+        NotefieldHudStyle {
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -638,8 +618,6 @@ mod tests {
             combo_centered_y: 155.0,
             judgment_height: 40.0,
             error_bar_offset_y: 25.0,
-            measure_line_overscan_y: 400.0,
-            measure_line_z: 80,
             measure_cue_scroll_color: [0.8, 0.7, 0.5],
             measure_cue_bpm_color: [1.0, 1.0, 0.0],
             measure_cue_delay_color: [1.0, 0.4, 0.7],
@@ -906,7 +884,7 @@ mod tests {
         total_cols: usize,
     ) -> NotefieldComposeRequest<'a, TestSlot> {
         NotefieldComposeRequest {
-            style: style(),
+            hud_style: style(),
             placement,
             view: ViewOverride::default(),
             geometry: NotefieldGeometry {
@@ -922,7 +900,6 @@ mod tests {
                 screen_height: 480.0,
                 screen_center_x: 320.0,
                 screen_center_y: 240.0,
-                target_arrow_pixel_size: 64.0,
                 field_zoom: 1.0,
                 scroll_speed: ScrollSpeedSetting::XMod(1.0),
                 draw_distance_before_targets: 480.0,

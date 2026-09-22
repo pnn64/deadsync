@@ -4,7 +4,6 @@ use deadlib_render_core::BlendMode;
 use deadsync_noteskin::{
     NoteskinSlot, ReceptorGlowBehavior, ReceptorIdleGlow, ReceptorReverseBehavior,
 };
-use deadsync_theme::ReceptorStyle;
 
 pub(crate) fn receptor_row_center(
     field_center_x: f32,
@@ -94,7 +93,6 @@ pub(crate) struct ReceptorDrawRequest<'a, S> {
     pub pulse_color: [f32; 4],
     pub idle_glow: ReceptorIdleGlow,
     pub press_behavior: ReceptorGlowBehavior,
-    pub style: ReceptorStyle,
 }
 
 /// Lazily resolved press-glow inputs, read only after hold composition succeeds.
@@ -182,7 +180,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     rotation_z_deg: draw.rot[2] - rotation + request.confusion_rotation_deg,
                     uv,
                     blend: BlendMode::Alpha,
-                    z: request.style.target_z,
+                    z: crate::style::RECEPTOR_Z,
                 },
             );
         }
@@ -234,7 +232,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     } else {
                         BlendMode::Alpha
                     },
-                    z: request.style.press_glow_z,
+                    z: crate::style::RECEPTOR_GLOW_Z,
                 },
             );
         }
@@ -278,7 +276,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             -final_rotation,
             color,
             blend,
-            request.style.hold_explosion_z,
+            crate::style::HOLD_EXPLOSION_Z,
             model_cache,
         ) {
             if let Some(glow) = glow {
@@ -301,7 +299,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     rotation_z_deg: -final_rotation,
                     uv,
                     blend,
-                    z: request.style.hold_explosion_z,
+                    z: crate::style::HOLD_EXPLOSION_Z,
                 },
             );
             if let Some(glow) = glow {
@@ -363,7 +361,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         } else {
                             BlendMode::Alpha
                         },
-                        z: request.style.press_glow_z,
+                        z: crate::style::RECEPTOR_GLOW_Z,
                     },
                 );
             }
@@ -567,14 +565,6 @@ mod tests {
         }
     }
 
-    fn style() -> ReceptorStyle {
-        ReceptorStyle {
-            target_z: 100,
-            press_glow_z: 105,
-            hold_explosion_z: 145,
-        }
-    }
-
     fn request<'a>(
         target: Option<&'a TestSlot>,
         hold: Option<&'a TestSlot>,
@@ -604,7 +594,6 @@ mod tests {
             pulse_color: pulse.color_for_beat(3.0),
             idle_glow: ReceptorIdleGlow::None,
             press_behavior: ReceptorGlowBehavior::default(),
-            style: style(),
         }
     }
 

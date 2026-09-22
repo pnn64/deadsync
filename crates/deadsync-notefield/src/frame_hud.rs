@@ -201,7 +201,7 @@ pub fn compose_notefield_hud<S>(
             actors,
             draws,
             CounterHudRequest {
-                style: request.style.counter_hud,
+                style: request.hud_style.counter_hud,
                 segments: counter.segments,
                 broken_run_lookup: counter.broken_run_lookup,
                 current_beat: prepared.current_beat,
@@ -232,7 +232,7 @@ pub fn compose_notefield_hud<S>(
             actors,
             draws,
             MiniIndicatorRequest {
-                style: request.style.mini_indicator,
+                style: request.hud_style.mini_indicator,
                 text: mini.text.clone(),
                 color: mini.color,
                 failed: mini.failed,
@@ -308,8 +308,8 @@ fn compose_combo<S>(
         [1.0; 4]
     };
     let combo_color = if show
-        && frame.miss_combo < request.style.combo_feedback.threshold
-        && frame.combo >= request.style.combo_feedback.threshold
+        && frame.miss_combo < request.hud_style.combo_feedback.threshold
+        && frame.combo >= request.hud_style.combo_feedback.threshold
     {
         frame.combo_color
     } else {
@@ -317,7 +317,7 @@ fn compose_combo<S>(
     };
     let field = prepared.field;
     let feedback = ComboFeedbackRequest {
-        style: request.style.combo_feedback,
+        style: request.hud_style.combo_feedback,
         show,
         milestone_assets,
         milestones: frame.milestones,
@@ -362,7 +362,7 @@ fn compose_error<S>(
     compose_error_bar(
         draws,
         ErrorBarComposeRequest {
-            style: request.style.error_bar,
+            style: request.hud_style.error_bar,
             modes: request.options.error_bar_modes,
             state: ErrorBarState {
                 mono_ticks: frame.mono_ticks,
@@ -461,7 +461,7 @@ fn compose_judgment<S>(
     compose_judgment_feedback(
         draws,
         JudgmentFeedbackRequest {
-            style: request.style.judgment_feedback,
+            style: request.hud_style.judgment_feedback,
             blind: prepared.blind_active,
             elapsed_screen: request.visual.elapsed_screen_s,
             tap,

@@ -227,37 +227,13 @@ pub struct ErrorBarStyle {
     pub average_z: i16,
 }
 
-/// Theme-selected draw layers consumed by canonical receptor composition.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReceptorStyle {
-    pub target_z: i16,
-    pub press_glow_z: i16,
-    pub hold_explosion_z: i16,
-}
-
-/// Theme-selected actor layers and ratios consumed by canonical note-field
-/// composition.
+/// Theme-owned HUD and guide appearance around the canonical notefield.
+///
+/// Field placement, receptor anchors, note/hold layers, mine geometry, and
+/// measure-line coverage/order belong to the shared field compositor. These metrics
+/// style feedback without changing the field's geometry or note ordering.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NotefieldActorStyle {
-    pub hold_body_z: i16,
-    pub hold_cap_z: i16,
-    pub hold_glow_z: i16,
-    pub tap_explosion_z: i16,
-    pub mine_explosion_z: i16,
-    pub note_z: i16,
-    pub mine_core_size_ratio: f32,
-}
-
-/// Concrete-theme metrics consumed by the canonical notefield layout plan.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NotefieldStyle {
-    pub layout_width_min: f32,
-    pub layout_width_max: f32,
-    pub side_center_x_ratio: f32,
-    pub receptor_normal_y: f32,
-    pub receptor_reverse_y: f32,
-    pub receptor: ReceptorStyle,
-    pub actors: NotefieldActorStyle,
+pub struct NotefieldHudStyle {
     pub judgment_normal_y: f32,
     pub judgment_reverse_y: f32,
     pub combo_normal_y: f32,
@@ -265,8 +241,6 @@ pub struct NotefieldStyle {
     pub combo_centered_y: f32,
     pub judgment_height: f32,
     pub error_bar_offset_y: f32,
-    pub measure_line_overscan_y: f32,
-    pub measure_line_z: i16,
     pub measure_cue_scroll_color: [f32; 3],
     pub measure_cue_bpm_color: [f32; 3],
     pub measure_cue_delay_color: [f32; 3],
@@ -306,33 +280,14 @@ mod tests {
     use super::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
+        MiniIndicatorStyle, NotefieldHudStyle,
     };
 
     #[test]
     // Decimal components here are authored RGB values, not mathematical constants.
     #[allow(clippy::approx_constant)]
-    fn notefield_style_is_a_plain_metric_contract() {
-        let style = NotefieldStyle {
-            layout_width_min: 640.0,
-            layout_width_max: 854.0,
-            side_center_x_ratio: 0.25,
-            receptor_normal_y: -125.0,
-            receptor_reverse_y: 145.0,
-            receptor: ReceptorStyle {
-                target_z: 100,
-                press_glow_z: 105,
-                hold_explosion_z: 145,
-            },
-            actors: NotefieldActorStyle {
-                hold_body_z: 110,
-                hold_cap_z: 110,
-                hold_glow_z: 111,
-                tap_explosion_z: 150,
-                mine_explosion_z: 101,
-                note_z: 140,
-                mine_core_size_ratio: 0.45,
-            },
+    fn hud_style_is_a_plain_metric_contract() {
+        let style = NotefieldHudStyle {
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -340,8 +295,6 @@ mod tests {
             combo_centered_y: 155.0,
             judgment_height: 40.0,
             error_bar_offset_y: 25.0,
-            measure_line_overscan_y: 400.0,
-            measure_line_z: 80,
             measure_cue_scroll_color: [0.824, 0.706, 0.549],
             measure_cue_bpm_color: [1.0, 1.0, 0.0],
             measure_cue_delay_color: [1.0, 0.45, 0.75],
@@ -533,9 +486,6 @@ mod tests {
             },
         };
 
-        assert_eq!(style.layout_width_min, 640.0);
         assert_eq!(style.error_bar_offset_y, 25.0);
-        assert_eq!(style.actors.tap_explosion_z, 150);
-        assert_eq!(style.actors.mine_core_size_ratio, 0.45);
     }
 }

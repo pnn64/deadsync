@@ -26,7 +26,7 @@ use deadsync_notefield::{
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
-use deadsync_theme::NotefieldStyle;
+use deadsync_theme::NotefieldHudStyle;
 use std::array::from_fn;
 use std::cell::{Cell, RefCell};
 
@@ -67,9 +67,6 @@ fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 }
 
 // --- CONSTANTS ---
-
-// Gameplay Layout & Feel
-const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const MEASURE_PREWARM_CAP: i32 = 64;
@@ -375,7 +372,7 @@ const fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize
 #[inline(always)]
 fn zmod_layout_params(
     profile: &profile_data::Profile,
-    style: NotefieldStyle,
+    style: NotefieldHudStyle,
     has_judgment_texture: bool,
 ) -> ZmodLayoutParams {
     // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
@@ -427,7 +424,7 @@ const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
 /// all clamps, masks, option translation, and font selection happen at warmup.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct GameplayNotefieldPlan {
-    style: NotefieldStyle,
+    hud_style: NotefieldHudStyle,
     options: NotefieldOptions,
     tap_explosion_noteskin_visible: bool,
     small_combo_font: &'static str,
@@ -559,7 +556,7 @@ pub(crate) fn gameplay_notefield_plan(
         counter_left: profile.measure_counter_left,
     };
     GameplayNotefieldPlan {
-        style,
+        hud_style: style,
         options,
         tap_explosion_noteskin_visible: !profile.tap_explosion_noteskin_hidden(),
         small_combo_font: zmod_small_combo_font(profile.combo_font),
@@ -642,7 +639,7 @@ pub(crate) fn compose_frame(
 
     // Collect concrete profile/runtime inputs here; canonical placement stays
     // independent of Profile, gameplay state, config, and theme globals.
-    let style = notefield_plan.style;
+    let style = notefield_plan.hud_style;
     let judgment_texture = judgment_assets.judgment();
     let elapsed_screen = state.total_elapsed_in_screen();
     let base_accel = AccelEffects::from_mask_bits(profile.accel_effects_active_mask.bits());
@@ -770,7 +767,7 @@ pub(crate) fn compose_frame(
     };
     let no_song_note_hides = deadsync_gameplay::SongLuaNoteHideWindows::default();
     let request = NotefieldComposeRequest {
-        style,
+        hud_style: style,
         placement,
         view,
         geometry: NotefieldGeometry {
@@ -786,7 +783,6 @@ pub(crate) fn compose_frame(
             screen_height: screen_height(),
             screen_center_x: screen_center_x(),
             screen_center_y: screen_center_y(),
-            target_arrow_pixel_size: TARGET_ARROW_PIXEL_SIZE,
             field_zoom,
             scroll_speed: if apply_attacks {
                 state.effective_scroll_speed_for_player(player_idx)

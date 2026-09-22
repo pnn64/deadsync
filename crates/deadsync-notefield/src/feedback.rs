@@ -8,7 +8,7 @@ use deadsync_gameplay::{
 };
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldStyle};
+use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldHudStyle};
 
 /// One regular countdown plus the two overlapping crossover countdowns.
 pub const COLUMN_COUNTDOWN_SLOTS_PER_PLAYER: u8 = 3;
@@ -225,7 +225,7 @@ pub(crate) fn column_cue_alpha_anchored(
 
 #[derive(Clone, Copy)]
 pub(crate) struct ColumnFeedbackRequest<'a> {
-    pub style: NotefieldStyle,
+    pub hud_style: NotefieldHudStyle,
     pub column_cues: Option<&'a [ColumnCue]>,
     // The runtime advances this cursor with the visible playhead so rendering
     // can select the latest regular cue without another binary search.
@@ -343,7 +343,7 @@ fn compose_column_cue(
     } else {
         1.0
     };
-    let style = request.style.column_cue;
+    let style = request.hud_style.column_cue;
     let lane_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
     let cue_height = match kind {
         ColumnCueKind::Regular => column_cue_height(style, request.screen_height),
@@ -404,7 +404,7 @@ fn compose_column_cue(
                     lane_width,
                     cue_height,
                     request.field_center_y,
-                    request.style.receptor_reverse_y,
+                    crate::style::RECEPTOR_REVERSE_Y,
                 )
             } else {
                 style.top_y + request.field_center_y
@@ -474,7 +474,7 @@ fn compose_column_flashes(
     request: ColumnFeedbackRequest<'_>,
     flashes: &[Option<ActiveColumnFlash>],
 ) {
-    let style = request.style.column_flash;
+    let style = request.hud_style.column_flash;
     let layout = column_flash_layout(style, request.compact_flashes);
     let lane_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
     let height = column_flash_height(request.screen_height, layout);
@@ -508,7 +508,7 @@ fn compose_column_flashes(
                 lane_width,
                 height,
                 request.field_center_y,
-                request.style.receptor_reverse_y,
+                crate::style::RECEPTOR_REVERSE_Y,
             )
         } else {
             layout.top_y + request.field_center_y
@@ -667,30 +667,10 @@ mod tests {
     use deadsync_theme::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
         ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-        NotefieldActorStyle, ReceptorStyle,
     };
 
-    fn style() -> NotefieldStyle {
-        NotefieldStyle {
-            layout_width_min: 640.0,
-            layout_width_max: 854.0,
-            side_center_x_ratio: 0.25,
-            receptor_normal_y: -125.0,
-            receptor_reverse_y: 145.0,
-            receptor: ReceptorStyle {
-                target_z: 100,
-                press_glow_z: 105,
-                hold_explosion_z: 145,
-            },
-            actors: NotefieldActorStyle {
-                hold_body_z: 110,
-                hold_cap_z: 110,
-                hold_glow_z: 111,
-                tap_explosion_z: 150,
-                mine_explosion_z: 101,
-                note_z: 140,
-                mine_core_size_ratio: 0.45,
-            },
+    fn style() -> NotefieldHudStyle {
+        NotefieldHudStyle {
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -698,8 +678,6 @@ mod tests {
             combo_centered_y: 155.0,
             judgment_height: 40.0,
             error_bar_offset_y: 25.0,
-            measure_line_overscan_y: 400.0,
-            measure_line_z: 80,
             measure_cue_scroll_color: [0.824, 0.706, 0.549],
             measure_cue_bpm_color: [1.0, 1.0, 0.0],
             measure_cue_delay_color: [1.0, 0.45, 0.75],
@@ -898,7 +876,7 @@ mod tests {
         column_flashes: Option<&'a [Option<ActiveColumnFlash>]>,
     ) -> ColumnFeedbackRequest<'a> {
         ColumnFeedbackRequest {
-            style: style(),
+            hud_style: style(),
             column_cues,
             column_cue_cursor: None,
             crossover_cues,

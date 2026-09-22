@@ -20,7 +20,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, TimingData,
 };
-use deadsync_theme::NotefieldStyle;
+use deadsync_theme::NotefieldHudStyle;
 
 /// Screen and player geometry supplied by the gameplay presentation boundary.
 #[derive(Clone, Copy, Debug)]
@@ -37,7 +37,6 @@ pub struct NotefieldGeometry {
     pub screen_height: f32,
     pub screen_center_x: f32,
     pub screen_center_y: f32,
-    pub target_arrow_pixel_size: f32,
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
     pub draw_distance_before_targets: f32,
@@ -216,7 +215,7 @@ pub struct MeasureCounterOptions {
 
 /// Canonical inputs for one player notefield composition pass.
 pub struct NotefieldComposeRequest<'a, S> {
-    pub style: NotefieldStyle,
+    pub hud_style: NotefieldHudStyle,
     pub placement: FieldPlacement,
     pub view: ViewOverride,
     pub geometry: NotefieldGeometry,
@@ -343,7 +342,7 @@ fn prepare_field<S>(
     let num_cols = frame_plan.num_cols;
     let column_reverse_percent = column_reverse_percents(request.visual.scroll, num_cols);
     field_layout(FieldLayoutRequest {
-        style: request.style,
+        hud_style: request.hud_style,
         placement: request.placement,
         num_players: request.geometry.num_players,
         single_style: request.geometry.single_style,
@@ -374,7 +373,7 @@ fn prepare_field<S>(
             zmod: request.options.zmod_layout,
             has_judgment_texture: request.options.has_judgment_texture,
             error_bar_up: request.options.error_bar_up,
-            error_bar_offset: request.style.error_bar_offset_y,
+            error_bar_offset: request.hud_style.error_bar_offset_y,
         },
     })
 }
@@ -475,7 +474,7 @@ fn prepare_notes<'a, S>(
         mine,
         receptor: request.noteskin.receptor.unwrap_or(base),
         tap_explosion: request.noteskin.tap_explosion,
-        target_arrow_px: request.geometry.target_arrow_pixel_size * field_zoom,
+        target_arrow_px: ScrollSpeedSetting::ARROW_SPACING * field_zoom,
         beat_factor: beat_factor(request.chart.visible_beat),
         col_offsets,
         invert_distances,

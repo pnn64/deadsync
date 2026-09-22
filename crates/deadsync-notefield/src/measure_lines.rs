@@ -7,7 +7,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, default_time_signature,
 };
-use deadsync_theme::NotefieldStyle;
+use deadsync_theme::NotefieldHudStyle;
 use std::ops::Range;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeasureLineMode {
@@ -22,7 +22,7 @@ pub enum MeasureLineMode {
 pub(crate) struct MeasureComposeRequest<'a, 'travel> {
     pub mode: MeasureLineMode,
     pub show_cues: bool,
-    pub style: NotefieldStyle,
+    pub hud_style: NotefieldHudStyle,
     pub column_xs: &'a [f32],
     pub column_dirs: &'a [f32],
     pub column_receptor_ys: &'a [f32],
@@ -482,7 +482,7 @@ fn append_line_candidate(
         request.field_zoom,
         line_thickness(frame, plan, request.field_zoom),
         alpha,
-        request.style.measure_line_z,
+        crate::style::MEASURE_LINE_Z,
     );
     append_edit_measure_number(
         actors,
@@ -493,8 +493,8 @@ fn append_line_candidate(
         width.mul_add(-0.5, x_center),
         y,
         request.field_zoom,
-        request.style.measure_line_z,
-        request.style.edit_measure_number_font,
+        crate::style::MEASURE_LINE_Z,
+        request.hud_style.edit_measure_number_font,
     );
 }
 
@@ -510,8 +510,8 @@ fn append_group_lines(
     let Some((x_center, width)) = group_geometry(request, group) else {
         return;
     };
-    let y_min = -request.style.measure_line_overscan_y;
-    let y_max = request.screen_height + request.style.measure_line_overscan_y;
+    let y_min = -crate::style::MEASURE_LINE_OVERSCAN_Y;
+    let y_max = request.screen_height + crate::style::MEASURE_LINE_OVERSCAN_Y;
     let start = (request.current_beat / plan.line_step).floor() as i64;
     let mut backward_cursor = edit_cursor;
     let mut forward_cursor = edit_cursor;
@@ -606,8 +606,8 @@ fn append_group_cues(
     let Some((x_center, width)) = group_geometry(request, group) else {
         return;
     };
-    let y_min = -request.style.measure_line_overscan_y;
-    let y_max = request.screen_height + request.style.measure_line_overscan_y;
+    let y_min = -crate::style::MEASURE_LINE_OVERSCAN_Y;
+    let y_max = request.screen_height + crate::style::MEASURE_LINE_OVERSCAN_Y;
     let mut append_cue = |beat: f32, color: [f32; 3]| {
         let y = group.y_for_beat(request, beat);
         if y.is_finite() && y >= y_min && y <= y_max {
@@ -618,27 +618,27 @@ fn append_group_cues(
                 width,
                 cue_thickness(beat, request.field_zoom),
                 color,
-                request.style.measure_cue_alpha,
-                request.style.measure_line_z,
+                request.hud_style.measure_cue_alpha,
+                crate::style::MEASURE_LINE_Z,
             );
         }
     };
 
     for window in request.scrolls[ranges.scrolls.clone()].windows(2) {
         if window[1].ratio != window[0].ratio {
-            append_cue(window[1].beat, request.style.measure_cue_scroll_color);
+            append_cue(window[1].beat, request.hud_style.measure_cue_scroll_color);
         }
     }
     for window in request.bpms[ranges.bpms.clone()].windows(2) {
         if window[1].1 != window[0].1 {
-            append_cue(window[1].0, request.style.measure_cue_bpm_color);
+            append_cue(window[1].0, request.hud_style.measure_cue_bpm_color);
         }
     }
     for delay in &request.delays[ranges.delays.clone()] {
-        append_cue(delay.beat, request.style.measure_cue_delay_color);
+        append_cue(delay.beat, request.hud_style.measure_cue_delay_color);
     }
     for stop in &request.stops[ranges.stops.clone()] {
-        append_cue(stop.beat, request.style.measure_cue_stop_color);
+        append_cue(stop.beat, request.hud_style.measure_cue_stop_color);
     }
 }
 
@@ -757,30 +757,11 @@ mod tests {
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldActorStyle, ReceptorStyle,
+        MiniIndicatorStyle,
     };
 
-    fn style() -> NotefieldStyle {
-        NotefieldStyle {
-            layout_width_min: 640.0,
-            layout_width_max: 854.0,
-            side_center_x_ratio: 0.25,
-            receptor_normal_y: -125.0,
-            receptor_reverse_y: 145.0,
-            receptor: ReceptorStyle {
-                target_z: 100,
-                press_glow_z: 105,
-                hold_explosion_z: 145,
-            },
-            actors: NotefieldActorStyle {
-                hold_body_z: 110,
-                hold_cap_z: 110,
-                hold_glow_z: 111,
-                tap_explosion_z: 150,
-                mine_explosion_z: 101,
-                note_z: 140,
-                mine_core_size_ratio: 0.45,
-            },
+    fn style() -> NotefieldHudStyle {
+        NotefieldHudStyle {
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -788,8 +769,6 @@ mod tests {
             combo_centered_y: 155.0,
             judgment_height: 40.0,
             error_bar_offset_y: 25.0,
-            measure_line_overscan_y: 400.0,
-            measure_line_z: 80,
             measure_cue_scroll_color: [0.824, 0.706, 0.549],
             measure_cue_bpm_color: [1.0, 1.0, 0.0],
             measure_cue_delay_color: [1.0, 0.45, 0.75],
@@ -1034,7 +1013,7 @@ mod tests {
         MeasureComposeRequest {
             mode,
             show_cues: false,
-            style: style(),
+            hud_style: style(),
             column_xs: &COLUMN_XS,
             column_dirs,
             column_receptor_ys,
@@ -1124,7 +1103,6 @@ mod tests {
                     let mut request = request(MeasureLineMode::Measure, &travel, &dirs, &receptors);
                     request.lane_offset = lane_offsets[0];
                     request.scroll_speed = speed;
-                    request.style.measure_line_overscan_y = 0.0;
                     request.show_cues = true;
                     request.bpms = &bpms;
                     request.stops = &stops;
@@ -1133,17 +1111,19 @@ mod tests {
                     compose_measure_lines(&mut actors, &mut draws, request);
                     assert!(actors.is_empty());
 
-                    // With these bounds, each group contains measure beats 0/4
-                    // followed by BPM/stop cues at beats 2/3. Both groups use lane 0.
+                    // Use the established 400px overscan, including offscreen
+                    // measures, then BPM/stop cues. Both groups use lane 0.
                     let mut expected = Vec::new();
-                    for beats in [[0.0, 4.0], [2.0, 3.0]] {
+                    for beats in [
+                        &[0.0, -4.0, -8.0, -12.0, -16.0, 4.0, 8.0, 12.0, 16.0][..],
+                        &[2.0, 3.0][..],
+                    ] {
                         for (direction, receptor) in [(1.0, receptors[0]), (-1.0, receptors[2])] {
-                            for beat in beats {
-                                expected.push(
-                                    travel
-                                        .lane_y_for_beat(0, beat, receptor, direction)
-                                        .to_bits(),
-                                );
+                            for &beat in beats {
+                                let y = travel.lane_y_for_beat(0, beat, receptor, direction);
+                                if (-400.0..=880.0).contains(&y) {
+                                    expected.push(y.to_bits());
+                                }
                             }
                         }
                     }

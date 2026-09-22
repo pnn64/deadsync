@@ -189,7 +189,7 @@ fn compose_field_contents<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let style = request.style;
+    let style = request.hud_style;
     let options = &request.options;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let visual = request.visual.visual;
@@ -316,7 +316,7 @@ fn compose_field_contents<S, F>(
     )
     .then(|| {
         crate::note_placement::expand_range(
-            travel.visible_row_range_with_extra(style.measure_line_overscan_y),
+            travel.visible_row_range_with_extra(crate::style::MEASURE_LINE_OVERSCAN_Y),
         )
     })
     .flatten();
@@ -332,7 +332,7 @@ fn compose_field_contents<S, F>(
         MeasureComposeRequest {
             mode: measure_line_mode,
             show_cues: options.frame_features.measure_cues,
-            style,
+            hud_style: style,
             column_xs: &note_inputs.measure_column_xs,
             column_dirs: &column_dirs,
             column_receptor_ys: &column_receptor_ys,
@@ -627,9 +627,9 @@ fn compose_field_contents<S, F>(
                 rotation_y_deg: note_rotation_y,
                 depth_test: hold_depth_test,
                 screen_height: request.geometry.screen_height,
-                body_z: style.actors.hold_body_z,
-                cap_z: style.actors.hold_cap_z,
-                glow_z: style.actors.hold_glow_z,
+                body_z: crate::style::HOLD_BODY_Z,
+                cap_z: crate::style::HOLD_CAP_Z,
+                glow_z: crate::style::HOLD_GLOW_Z,
             },
             &sample_hold_path,
             sprite_source,
@@ -739,7 +739,7 @@ fn compose_field_contents<S, F>(
                     tint: color,
                     glow_alpha: head_glow,
                     blend,
-                    z: style.actors.note_z,
+                    z: crate::style::NOTE_Z,
                     world_z: head_world_z,
                     prefer_sprite: prefer_sprite_note_path,
                 },
@@ -772,7 +772,7 @@ fn compose_field_contents<S, F>(
                         hold_diffuse[3] * head_alpha,
                     ],
                     head_glow,
-                    style.actors.note_z,
+                    crate::style::NOTE_Z,
                     head_world_z,
                     prefer_sprite_note_path,
                     sprite_source,
@@ -816,7 +816,7 @@ fn compose_field_contents<S, F>(
                     ],
                     glow_alpha: head_glow,
                     blend: BlendMode::Alpha,
-                    z: style.actors.note_z,
+                    z: crate::style::NOTE_Z,
                     world_z: head_world_z,
                     prefer_sprite: prefer_sprite_note_path,
                 },
@@ -901,7 +901,6 @@ fn compose_visible_notes<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let style = request.style;
     let elapsed = request.visual.elapsed_screen_s;
     let visual = request.visual.visual;
     let field_zoom = prepared.field_zoom;
@@ -1039,7 +1038,7 @@ fn compose_visible_notes<S, F>(
                             fill_slot,
                             gradient_slot: fill_gradient_slot,
                             frame_slot,
-                            gradient_size_ratio: style.actors.mine_core_size_ratio,
+                            gradient_size_ratio: crate::style::MINE_CORE_SIZE_RATIO,
                             center: [column_center_x, y_pos],
                             mine_uv_phase,
                             mine_fill_phase,
@@ -1051,7 +1050,7 @@ fn compose_visible_notes<S, F>(
                             note_rotation_z_deg: note_rotation_z,
                             alpha: note_alpha,
                             glow_alpha,
-                            note_z: style.actors.note_z,
+                            note_z: crate::style::NOTE_Z,
                             world_z,
                             prefer_sprite: prefer_sprite_note_path,
                         },
@@ -1103,7 +1102,7 @@ fn compose_visible_notes<S, F>(
                                 note_rotation_z,
                                 [1.0, 1.0, 1.0, note_alpha],
                                 glow_alpha,
-                                style.actors.note_z,
+                                crate::style::NOTE_Z,
                                 world_z,
                                 prefer_sprite_note_path,
                                 sprite_source,
@@ -1131,7 +1130,7 @@ fn compose_visible_notes<S, F>(
                             note_rotation_z,
                             [1.0, 1.0, 1.0, note_alpha],
                             glow_alpha,
-                            style.actors.note_z,
+                            crate::style::NOTE_Z,
                             world_z,
                             prefer_sprite_note_path,
                             sprite_source,
@@ -1172,7 +1171,7 @@ fn compose_visible_notes<S, F>(
                             note_rotation_z,
                             [1.0, 1.0, 1.0, note_alpha],
                             glow_alpha,
-                            style.actors.note_z,
+                            crate::style::NOTE_Z,
                             world_z,
                             prefer_sprite_note_path,
                             sprite_source,
@@ -1216,7 +1215,7 @@ fn compose_visible_notes<S, F>(
                             tint: [1.0, 1.0, 1.0, note_alpha],
                             glow_alpha,
                             blend: BlendMode::Alpha,
-                            z: style.actors.note_z,
+                            z: crate::style::NOTE_Z,
                             world_z,
                             prefer_sprite: prefer_sprite_note_path,
                         },

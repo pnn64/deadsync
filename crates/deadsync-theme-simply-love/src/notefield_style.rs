@@ -1,7 +1,7 @@
 use deadsync_theme::{
     ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
     ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-    NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
+    NotefieldHudStyle,
 };
 
 const fn rgb8(r: u8, g: u8, b: u8) -> [f32; 3] {
@@ -12,26 +12,7 @@ const fn rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
 }
 
-pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
-    layout_width_min: 640.0,
-    layout_width_max: 854.0,
-    side_center_x_ratio: 0.25,
-    receptor_normal_y: -125.0,
-    receptor_reverse_y: 145.0,
-    receptor: ReceptorStyle {
-        target_z: 100,
-        press_glow_z: 105,
-        hold_explosion_z: 145,
-    },
-    actors: NotefieldActorStyle {
-        hold_body_z: 110,
-        hold_cap_z: 110,
-        hold_glow_z: 111,
-        tap_explosion_z: 150,
-        mine_explosion_z: 101,
-        note_z: 140,
-        mine_core_size_ratio: 0.45,
-    },
+pub const SIMPLY_LOVE_HUD_STYLE: NotefieldHudStyle = NotefieldHudStyle {
     judgment_normal_y: -30.0,
     judgment_reverse_y: 30.0,
     combo_normal_y: 30.0,
@@ -39,8 +20,6 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     combo_centered_y: 155.0,
     judgment_height: 40.0,
     error_bar_offset_y: 25.0,
-    measure_line_overscan_y: 400.0,
-    measure_line_z: 80,
     measure_cue_scroll_color: [0.824, 0.706, 0.549],
     measure_cue_bpm_color: [1.0, 1.0, 0.0],
     measure_cue_delay_color: [1.0, 0.45, 0.75],
@@ -233,20 +212,20 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
 };
 
 #[must_use]
-pub const fn notefield_style() -> NotefieldStyle {
-    SIMPLY_LOVE_NOTEFIELD_STYLE
+pub const fn notefield_style() -> NotefieldHudStyle {
+    SIMPLY_LOVE_HUD_STYLE
 }
 
 #[must_use]
 pub fn notefield_style_with_palette(
     palette: deadsync_theme::color::JudgmentPalette,
-) -> NotefieldStyle {
+) -> NotefieldHudStyle {
     use deadsync_theme::color::JudgmentColorRole as Role;
 
     if palette == crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE {
-        return SIMPLY_LOVE_NOTEFIELD_STYLE;
+        return SIMPLY_LOVE_HUD_STYLE;
     }
-    let mut style = SIMPLY_LOVE_NOTEFIELD_STYLE;
+    let mut style = SIMPLY_LOVE_HUD_STYLE;
     let rgb = |color: [f32; 4]| [color[0], color[1], color[2]];
     style.column_flash.fantastic_blue_color = rgb(palette.color(Role::FantasticBlue));
     style.column_flash.fantastic_color = rgb(palette.color(Role::FantasticWhite));
@@ -273,16 +252,10 @@ mod tests {
     use deadsync_theme::color::JudgmentColorRole;
 
     #[test]
-    fn factory_keeps_simply_love_gameplay_metrics() {
+    fn simply_love_hud_metrics() {
         let style = notefield_style();
 
-        assert_eq!(style.receptor_normal_y, -125.0);
-        assert_eq!(style.receptor_reverse_y, 145.0);
-        assert_eq!(style.receptor.target_z, 100);
-        assert_eq!(style.receptor.press_glow_z, 105);
-        assert_eq!(style.receptor.hold_explosion_z, 145);
         assert_eq!(style.combo_centered_y, 155.0);
-        assert_eq!(style.measure_line_z, 80);
         assert_eq!(style.edit_measure_number_font, "miso");
         assert_eq!(style.column_cue.top_y, 80.0);
         assert_eq!(style.column_cue.reverse_anchor_y, 304.0);
@@ -344,7 +317,7 @@ mod tests {
         );
         let styled = notefield_style_with_palette(custom);
 
-        assert_eq!(styled.receptor_normal_y, baseline.receptor_normal_y);
+        assert_eq!(styled.judgment_normal_y, baseline.judgment_normal_y);
         assert_eq!(styled.column_flash.miss_color, [0.2, 0.4, 0.6]);
     }
 }

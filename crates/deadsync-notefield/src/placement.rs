@@ -1,7 +1,7 @@
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::ScrollEffects;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::NotefieldStyle;
+use deadsync_theme::NotefieldHudStyle;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::array::from_fn;
 
@@ -64,7 +64,7 @@ pub enum FieldPlacement {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct FieldLayoutRequest {
-    pub style: NotefieldStyle,
+    pub hud_style: NotefieldHudStyle,
     pub placement: FieldPlacement,
     pub num_players: usize,
     pub single_style: bool,
@@ -506,10 +506,11 @@ fn field_receptor_y(
 }
 
 pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
-    let style = request.style;
-    let clamped_width = request
-        .screen_width
-        .clamp(style.layout_width_min, style.layout_width_max);
+    let style = request.hud_style;
+    let clamped_width = request.screen_width.clamp(
+        crate::style::LAYOUT_WIDTH_MIN,
+        crate::style::LAYOUT_WIDTH_MAX,
+    );
     let side_sign = match request.placement {
         FieldPlacement::P1 => -1.0,
         FieldPlacement::P2 => 1.0,
@@ -520,7 +521,8 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        (side_sign * clamped_width).mul_add(style.side_center_x_ratio, request.screen_center_x)
+        (side_sign * clamped_width)
+            .mul_add(crate::style::SIDE_CENTER_X_RATIO, request.screen_center_x)
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
@@ -539,10 +541,10 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
         } else if request.center_receptors_y {
             (receptor_y_base, receptor_y_base, receptor_y_base)
         } else {
-            let normal = receptor_y_base + style.receptor_normal_y;
-            let reverse = receptor_y_base + style.receptor_reverse_y;
-            // ITGmania places NoteField at the midpoint of the theme's normal
-            // and reverse receptor metrics. Centered interpolates toward that
+            let normal = receptor_y_base + crate::style::RECEPTOR_NORMAL_Y;
+            let reverse = receptor_y_base + crate::style::RECEPTOR_REVERSE_Y;
+            // Keep the established ITGmania-compatible midpoint of the normal
+            // and reverse receptor anchors. Centered interpolates toward that
             // actor origin, which need not be the literal screen center.
             (normal, reverse, f32::midpoint(normal, reverse))
         };
@@ -674,7 +676,7 @@ mod tests {
     use deadsync_theme::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
+        MiniIndicatorStyle, NotefieldHudStyle,
     };
 
     fn matrix_bits(matrix: Option<glam::Mat4>) -> Option<[u32; 16]> {
@@ -744,27 +746,8 @@ mod tests {
         assert_eq!(cache.stats().hits, 1);
     }
 
-    fn style() -> NotefieldStyle {
-        NotefieldStyle {
-            layout_width_min: 640.0,
-            layout_width_max: 854.0,
-            side_center_x_ratio: 0.25,
-            receptor_normal_y: -125.0,
-            receptor_reverse_y: 145.0,
-            receptor: ReceptorStyle {
-                target_z: 100,
-                press_glow_z: 105,
-                hold_explosion_z: 145,
-            },
-            actors: NotefieldActorStyle {
-                hold_body_z: 110,
-                hold_cap_z: 110,
-                hold_glow_z: 111,
-                tap_explosion_z: 150,
-                mine_explosion_z: 101,
-                note_z: 140,
-                mine_core_size_ratio: 0.45,
-            },
+    fn style() -> NotefieldHudStyle {
+        NotefieldHudStyle {
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             combo_normal_y: 30.0,
@@ -772,8 +755,6 @@ mod tests {
             combo_centered_y: 155.0,
             judgment_height: 40.0,
             error_bar_offset_y: 25.0,
-            measure_line_overscan_y: 400.0,
-            measure_line_z: 80,
             measure_cue_scroll_color: [0.824, 0.706, 0.549],
             measure_cue_bpm_color: [1.0, 1.0, 0.0],
             measure_cue_delay_color: [1.0, 0.45, 0.75],
@@ -968,7 +949,7 @@ mod tests {
 
     fn request() -> FieldLayoutRequest {
         FieldLayoutRequest {
-            style: style(),
+            hud_style: style(),
             placement: FieldPlacement::P1,
             num_players: 1,
             single_style: true,
@@ -1014,6 +995,40 @@ mod tests {
             (actual - expected).abs() <= 0.001,
             "expected {expected}, got {actual}"
         );
+    }
+
+    #[test]
+    fn hud_keeps_field_geometry() {
+        for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+            for width in [500.0, 640.0, 854.0, 1000.0] {
+                for reverse in [0.0, 0.5, 1.0] {
+                    for centered in [0.0, 1.0, 2.0] {
+                        let mut request = request();
+                        request.placement = placement;
+                        request.screen_width = width;
+                        request.screen_center_x = width / 2.0;
+                        request.column_reverse_percent[..4].fill(reverse);
+                        request.centered_scroll = centered;
+                        request.notefield_offset_x = 20.0;
+                        request.notefield_offset_y = 10.0;
+                        request.field_zoom = 1.5;
+                        request.song_lua_column_y_offsets[0] = 8.0;
+                        let baseline = field_layout(request);
+
+                        request.hud_style.judgment_normal_y = -90.0;
+                        request.hud_style.judgment_reverse_y = 95.0;
+                        request.hud_style.combo_normal_y = 60.0;
+                        request.hud_style.combo_reverse_y = -65.0;
+                        request.hud_style.combo_centered_y = 45.0;
+                        let mut restyled = field_layout(request);
+
+                        assert_ne!(baseline.hud_layout, restyled.hud_layout);
+                        restyled.hud_layout = baseline.hud_layout;
+                        assert_eq!(baseline, restyled);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

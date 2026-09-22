@@ -36,7 +36,7 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
         crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
     );
 
-    assert_eq!(plan.style, notefield_style());
+    assert_eq!(plan.hud_style, notefield_style());
     assert_eq!(plan.options.notefield_offset, [50.0, -50.0]);
     assert_eq!(
         plan.options.judgment_offset[0],
@@ -354,27 +354,8 @@ fn hold_head_render_flags_require_engaged_life_state() {
 }
 
 #[test]
-fn receptor_glow_draws_under_hold_body() {
-    crate::tests::init_paths();
-    let style = notefield_style();
-    assert!(style.receptor.target_z < style.actors.hold_body_z);
-    assert!(style.receptor.press_glow_z < style.actors.hold_body_z);
-}
-
-#[test]
-fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
-    crate::tests::init_paths();
-    let actors = notefield_style().actors;
-    assert!(actors.hold_body_z < actors.hold_glow_z);
-    assert!(actors.hold_glow_z < actors.note_z);
-}
-
-#[test]
-fn average_error_bar_draws_under_receptors() {
-    crate::tests::init_paths();
-    let z = notefield_style().error_bar.average_z;
-    assert!(z < notefield_style().receptor.target_z);
-    assert!(z < notefield_style().actors.note_z);
+fn average_error_bar_keeps_its_hud_layer() {
+    assert_eq!(notefield_style().error_bar.average_z, 88);
 }
 
 #[test]

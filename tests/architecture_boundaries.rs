@@ -3581,7 +3581,7 @@ fn select_music_session_runtime_is_shell_prepared() {
     assert!(runtime_shell.contains("let profiles = profile_views_dirty.then("));
     assert!(runtime_shell.contains(".then(deadsync_profile::runtime_favorite_snapshot)"));
     assert!(runtime_shell.contains("fn select_music_pad_profiles("));
-    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs()"));
+    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs(profile_id)"));
     assert!(runtime_shell.contains(".profiles_stale("));
 
     let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
@@ -3617,11 +3617,11 @@ fn select_music_session_runtime_is_shell_prepared() {
         "SimplyLoveProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
         "SimplyLoveHardwareRequest::RenameSmxPadConfig",
-        "profile::rename_pad_config(&old_name, &new_name)",
+        "profile::rename_pad_config(&profile_id, &old_name, &new_name)",
         "SimplyLoveHardwareRequest::SetSmxPadConfigDefault",
-        "profile::set_default_pad_config(&serial, &name)",
+        "profile::set_default_pad_config(&profile_id, &serial, &name)",
         "SimplyLoveHardwareRequest::DeleteSmxPadConfig",
-        "profile::delete_pad_config(&name)",
+        "profile::delete_pad_config(&profile_id, &name)",
     ] {
         assert!(
             executor.contains(execution),
@@ -9675,7 +9675,6 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "pub hold_explosion_enabled: bool",
         "pub error_bar_modes: ErrorBarModes",
         "pub measure_counter: Option<MeasureCounterOptions>",
-        "pub target_arrow_pixel_size: f32",
     ] {
         assert!(
             compose.contains(field),
@@ -9717,7 +9716,9 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             "Simply Love actor emission bypasses NotefieldOptions via {profile_field}"
         );
     }
-    assert!(source.contains("target_arrow_pixel_size: TARGET_ARROW_PIXEL_SIZE"));
+    assert!(!source.contains("TARGET_ARROW_PIXEL_SIZE"));
+    assert!(!compose.contains("pub target_arrow_pixel_size:"));
+    assert!(compose.contains("target_arrow_px: ScrollSpeedSetting::ARROW_SPACING * field_zoom"));
     for concrete in [
         "deadsync_profile",
         "deadsync_assets",
@@ -10825,7 +10826,7 @@ fn noteskin_slot_contract_stays_renderer_neutral_and_asset_backed() {
 }
 
 #[test]
-fn receptor_composition_stays_canonical_and_theme_styled() {
+fn field_metrics_are_shared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/receptors.rs"))
         .expect("canonical receptor composition should be readable");
@@ -10846,6 +10847,12 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     .expect("Simply Love notefield adapter should be readable");
     let manifest = fs::read_to_string(root.join("crates/deadsync-notefield/Cargo.toml"))
         .expect("canonical notefield manifest should be readable");
+    let metrics = fs::read_to_string(root.join("crates/deadsync-notefield/src/style.rs"))
+        .expect("canonical field metrics should be readable");
+    let placement = fs::read_to_string(root.join("crates/deadsync-notefield/src/placement.rs"))
+        .expect("canonical field placement should be readable");
+    let compose = fs::read_to_string(root.join("crates/deadsync-notefield/src/compose.rs"))
+        .expect("canonical composition contract should be readable");
 
     for token in [
         "pub(crate) struct ReceptorDrawRequest",
@@ -10854,9 +10861,9 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         "S: NoteskinSlot",
         "F: Fn(&S) -> SpriteSource",
         "P: FnOnce() -> Option<ReceptorPress",
-        "request.style.target_z",
-        "request.style.press_glow_z",
-        "request.style.hold_explosion_z",
+        "crate::style::RECEPTOR_Z",
+        "crate::style::RECEPTOR_GLOW_Z",
+        "crate::style::HOLD_EXPLOSION_Z",
     ] {
         assert!(
             canonical.contains(token),
@@ -10879,22 +10886,56 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     assert!(song_lua.contains("pub fn song_lua_note_model_draw"));
     assert!(!theme.contains("fn song_lua_note_model_draw"));
 
-    assert!(contract.contains("pub struct ReceptorStyle"));
-    assert!(contract.contains("pub struct NotefieldActorStyle"));
-    assert!(contract.contains("pub receptor: ReceptorStyle"));
-    assert!(contract.contains("pub actors: NotefieldActorStyle"));
-    assert!(!contract.contains("SimplyLoveNotefieldStyle"));
-    for value in [
-        "target_z: 100",
-        "press_glow_z: 105",
-        "hold_explosion_z: 145",
-        "tap_explosion_z: 150",
-        "mine_explosion_z: 101",
+    assert!(contract.contains("pub struct NotefieldHudStyle"));
+    assert!(compose.contains("pub hud_style: NotefieldHudStyle"));
+    for removed in [
+        "NotefieldStyle",
+        "ReceptorStyle",
+        "NotefieldActorStyle",
+        "layout_width_min",
+        "layout_width_max",
+        "side_center_x_ratio",
+        "receptor_normal_y",
+        "receptor_reverse_y",
+        "target_z",
+        "press_glow_z",
+        "hold_explosion_z",
+        "hold_body_z",
+        "hold_cap_z",
+        "hold_glow_z",
+        "tap_explosion_z",
+        "mine_explosion_z",
+        "note_z",
+        "mine_core_size_ratio",
+        "measure_line_overscan_y",
+        "measure_line_z",
     ] {
         assert!(
-            theme_style.contains(value),
-            "Simply Love receptor style lost {value}"
+            !contract.contains(removed) && !theme_style.contains(removed),
+            "theme contract still controls canonical field metric {removed}"
         );
+    }
+    assert!(!canonical.contains("deadsync_theme"));
+    assert!(!canonical.contains("pub style:"));
+    for metric in [
+        "LAYOUT_WIDTH_MIN",
+        "LAYOUT_WIDTH_MAX",
+        "SIDE_CENTER_X_RATIO",
+        "RECEPTOR_NORMAL_Y",
+        "RECEPTOR_REVERSE_Y",
+    ] {
+        assert!(metrics.contains(&format!("pub(crate) const {metric}:")));
+        assert!(placement.contains(&format!("crate::style::{metric}")));
+    }
+    for metric in [
+        "HOLD_BODY_Z",
+        "HOLD_CAP_Z",
+        "HOLD_GLOW_Z",
+        "NOTE_Z",
+        "MINE_CORE_SIZE_RATIO",
+    ] {
+        assert!(metrics.contains(&format!("pub(crate) const {metric}:")));
+        assert!(field.contains(&format!("crate::style::{metric}")));
     }
 
     for token in [
@@ -10904,7 +10945,8 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         "compose_receptor_draws(",
         "ReceptorDrawRequest {",
         "ReceptorPress {",
-        "style: request.style.receptor",
+        "crate::style::TAP_EXPLOSION_Z",
+        "crate::style::MINE_EXPLOSION_Z",
     ] {
         assert!(
             frame.contains(token),
@@ -10916,7 +10958,7 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     assert!(theme.contains("compose_notefield_field("));
     assert!(field.contains("compose_notefield_feedback("));
     assert!(!theme.contains("compose_notefield_feedback("));
-    assert!(theme.contains("slot.actor_texture_source(actor_resources)"));
+    assert!(theme.contains("slot.actor_texture_source(actor_resources, textures)"));
     assert!(frame.contains("visual.tiny"));
     let ordered_markers = [
         "compose_column_feedback(",
