@@ -10897,7 +10897,7 @@ fn handle_raw_key_event_impl(
                     }
                     // Up/Down toggle the "set as default" flag (the virtual-action
                     // path can't see them — we consume every key while typing).
-                    KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                    KeyCode::ArrowUp | KeyCode::ArrowDown if !k.repeat => {
                         pad_config::toggle_save_default(&mut state.pad_config_overlay);
                     }
                     _ => {}
@@ -11456,6 +11456,10 @@ fn take_ready_song_reload_dirs(state: &mut State) -> Vec<PathBuf> {
 }
 
 pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView, effects: &mut Vec<ThemeEffect>) {
+    if state.pad_config_overlay_visible {
+        // Hold-to-repeat for the pad editor's Up/Down/Left/Right.
+        pad_config::update(&mut state.pad_config_overlay, dt);
+    }
     let effect = update_impl(state, dt, smx);
     append_pending_runtime(state, effect, effects);
 }

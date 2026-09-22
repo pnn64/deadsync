@@ -47,6 +47,11 @@ pub fn update(
         }
         match direction {
             NavDirection::Up => {
+                // ITGmania's MenuUpDown suppresses Up/Select repeats while
+                // Start is held, so opposing controls cannot oscillate rows.
+                if arcade_style && state.start_input[player_idx].held {
+                    continue;
+                }
                 move_selection_vertical(
                     state,
                     asset_manager,
@@ -446,6 +451,9 @@ pub(super) fn repeat_held_arcade_start(
     ) {
         return None;
     }
+    if state.nav_input[idx].held_direction == Some(NavDirection::Up) {
+        return None;
+    }
     handle_arcade_start_press(state, asset_manager, active, player_idx, true)
 }
 
@@ -761,8 +769,16 @@ fn handle_input_inner(
                 return action;
             }
         }
-        VirtualAction::p1_select if ev.pressed && arcade_style => {
-            handle_arcade_prev_event(state, asset_manager, active, P1);
+        VirtualAction::p1_select if arcade_style => {
+            // Select = previous row; held, it repeats upward like a held Up.
+            if ev.pressed {
+                handle_arcade_prev_event(state, asset_manager, active, P1);
+                if active[P1] {
+                    on_nav_press(state, P1, NavDirection::Up);
+                }
+            } else {
+                on_nav_release(state, P1, NavDirection::Up);
+            }
             return ThemeEffect::None;
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
@@ -823,8 +839,16 @@ fn handle_input_inner(
                 return action;
             }
         }
-        VirtualAction::p2_select if ev.pressed && arcade_style => {
-            handle_arcade_prev_event(state, asset_manager, active, P2);
+        VirtualAction::p2_select if arcade_style => {
+            // Select = previous row; held, it repeats upward like a held Up.
+            if ev.pressed {
+                handle_arcade_prev_event(state, asset_manager, active, P2);
+                if active[P2] {
+                    on_nav_press(state, P2, NavDirection::Up);
+                }
+            } else {
+                on_nav_release(state, P2, NavDirection::Up);
+            }
             return ThemeEffect::None;
         }
         _ => {}
