@@ -11390,3 +11390,48 @@ fn stage_results_are_independent_of_evaluation() {
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));
 }
+
+#[test]
+fn mp3_timeline_policy_is_selected_by_the_game() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let codec = production_source(&root.join("crates/deadlib-audio-decode/src/mp3.rs"));
+    for forbidden in ["ITG", "StepMania", "DWI", "BASS", "itg_", ".gapless(false)"] {
+        assert!(
+            !codec.contains(forbidden),
+            "engine MP3 still selects game policy: {forbidden}"
+        );
+    }
+    assert!(codec.contains(".gapless(options.mp3_gapless)"));
+    assert!(codec.contains("if !options.mp3_info_silence"));
+    let decode = production_source(&root.join("crates/deadlib-audio-decode/src/lib.rs"));
+    assert!(decode.contains("mp3::open_file(path, options)"));
+    assert!(decode.contains("mp3::file_length_seconds(path, options)"));
+    let stream = production_source(&root.join("crates/deadlib-audio/src/stream.rs"));
+    assert_eq!(
+        stream
+            .matches("decode::open_file(&path, context.decode_options)")
+            .count(),
+        3,
+        "initial open, seek fallback and looping must retain the chosen timeline"
+    );
+    assert!(stream.contains("decode::open_file(path, options)"));
+    for relative in [
+        "crates/deadsync-audio-stream/src/lib.rs",
+        "crates/deadsync-audio-analysis/src/lib.rs",
+        "crates/deadsync-simfile/src/app_runtime.rs",
+        "crates/deadsync-shell/src/sync_analysis.rs",
+    ] {
+        // sync_analysis keeps production functions after its test module.
+        let source = fs::read_to_string(root.join(relative)).expect("game audio caller");
+        assert!(
+            source.contains("mp3_gapless: false") && source.contains("mp3_info_silence: true"),
+            "{relative} must explicitly preserve DeadSync's MP3 timeline"
+        );
+    }
+    for relative in [
+        "crates/deadsync-audio-stream/src/runtime.rs",
+        "crates/deadsync-audio-stream/src/sfx_cache.rs",
+    ] {
+        assert!(production_source(&root.join(relative)).contains("crate::DECODE_OPTIONS"));
+    }
+}

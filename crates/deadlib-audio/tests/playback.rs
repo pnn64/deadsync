@@ -52,6 +52,7 @@ fn decode(wav: &Wav, cut: Cut, rate: f32, hz: u32) -> (Vec<i16>, Vec<MusicMapSeg
         true,
         stream.writer,
         MusicDecodeContext {
+            decode_options: Default::default(),
             output: OutputFormat {
                 sample_rate_hz: hz,
                 channels: 2,
@@ -187,6 +188,7 @@ fn live_and_looped_playback() {
     );
     let mut generation = music_map_generation();
     runtime.handle(StreamCommand::PlayMusic {
+        decode_options: Default::default(),
         path: wav.0.clone(),
         cut: Cut::default(),
         looping: true,

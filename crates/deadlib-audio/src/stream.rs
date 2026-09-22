@@ -130,9 +130,10 @@ pub struct OutputFormat {
     pub channels: usize,
 }
 
-/// Output format and timeline generation assigned before a decoder starts.
+/// Source options, output format and timeline generation fixed at decoder start.
 #[derive(Debug)]
 pub struct MusicDecodeContext {
+    pub decode_options: decode::DecodeOptions,
     pub output: OutputFormat,
     pub generation: u64,
 }
@@ -548,7 +549,7 @@ fn music_decoder_thread_loop(
         generation,
         wake: _,
     } = control;
-    let opened = decode::open_file(&path)?;
+    let opened = decode::open_file(&path, context.decode_options)?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;
@@ -636,7 +637,7 @@ fn music_decoder_thread_loop(
                     warn!(
                         "Music seek failed for {path:?} at frame {seek_frame}; restarting from start: {e}"
                     );
-                    let reopened = decode::open_file(&path)?;
+                    let reopened = decode::open_file(&path, context.decode_options)?;
                     debug_assert_eq!(reopened.channels, in_ch);
                     debug_assert_eq!(reopened.sample_rate_hz, in_hz);
                     reader = reopened.reader;
@@ -869,7 +870,7 @@ fn music_decoder_thread_loop(
         if !looping || stop.load(Ordering::Acquire) {
             break 'main_loop;
         }
-        match decode::open_file(&path) {
+        match decode::open_file(&path, context.decode_options) {
             Ok(reopened) => {
                 debug!("Looping music: restarted {path:?}");
                 reader = reopened.reader;
@@ -897,8 +898,9 @@ fn music_decoder_thread_loop(
 pub fn load_and_resample_sfx(
     path: &Path,
     output: OutputFormat,
+    options: decode::DecodeOptions,
 ) -> Result<Arc<[i16]>, Box<dyn std::error::Error + Send + Sync>> {
-    let opened = decode::open_file(path)?;
+    let opened = decode::open_file(path, options)?;
     let mut reader = opened.reader;
     let in_ch = opened.channels;
     let in_hz = opened.sample_rate_hz;

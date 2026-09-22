@@ -1,3 +1,4 @@
+use crate::DecodeOptions;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
@@ -18,8 +19,7 @@ use symphonia::core::units::{Duration, Timestamp};
 // still retry with a larger window (and finally from the stream start) for
 // safety.
 const SEEK_PREROLL_FRAMES: u64 = 1 << 14;
-// ITGmania gives up after 25 KiB of non-ID3 data while looking for the first
-// MPEG frame. Matching that bound also keeps this compatibility probe cheap.
+// Bound the first-frame metadata probe to 25,000 non-ID3 bytes.
 const FIRST_FRAME_SCAN_BYTES: usize = 25_000;
 
 pub(crate) struct OpenFile {
@@ -34,13 +34,10 @@ pub struct Reader {
     decoder: Box<dyn AudioDecoder>,
     track_id: u32,
     channels: usize,
-    // Symphonia's timestamp for the first decoded frame after its demuxer has
-    // removed a Xing/Info metadata frame. Gapless trimming is disabled, so this
-    // timestamp and the decoded PCM remain in the same coordinate space.
+    // Timestamp of the first emitted audio sample, after optional gapless trimming.
     base_ts: Timestamp,
-    // DWI/BASS emitted an Info header as one silent MPEG frame, and StepMania
-    // retained that behavior for chart sync compatibility. Symphonia removes
-    // both Info and Xing frames in its demuxer, so restore only the Info frame.
+    gapless: bool,
+    // Optional silence representing an Info metadata frame removed by the demuxer.
     info_lead_frames: u64,
     info_lead_pending: u64,
     pending: Option<Vec<i16>>,
@@ -85,13 +82,6 @@ fn probe_format(
             )
             .map_err(|e| format!("Cannot probe MP3 '{}': {e}", path.display()).into())
     })
-}
-
-#[inline]
-fn decoder_options() -> AudioDecoderOptions {
-    // ITGmania exposes the decoder's leading delay and trailing padding as part
-    // of the song timeline. Trimming them would shift charts synced in ITG.
-    AudioDecoderOptions::default().gapless(false)
 }
 
 fn parse_mpeg3_header(bytes: &[u8]) -> Option<Mpeg3Header> {
@@ -199,7 +189,10 @@ fn skip_id3v2(file: &mut File) -> std::io::Result<u64> {
     }
 }
 
-fn itg_info_lead_frames(path: &Path) -> std::io::Result<u64> {
+fn info_lead_frames(path: &Path, options: DecodeOptions) -> std::io::Result<u64> {
+    if !options.mp3_info_silence {
+        return Ok(0);
+    }
     let mut file = File::open(path)?;
     let audio_start = skip_id3v2(&mut file)?;
     file.seek(SeekFrom::Start(audio_start))?;
@@ -209,12 +202,16 @@ fn itg_info_lead_frames(path: &Path) -> std::io::Result<u64> {
     Ok(info_frames_in_prefix(&prefix))
 }
 
-fn itg_frames_hint(track: &Track, info_lead_frames: u64) -> Option<u64> {
+fn frames_hint(track: &Track, info_lead_frames: u64, options: DecodeOptions) -> Option<u64> {
     track.num_frames.map(|frames| {
-        frames
-            .saturating_add(u64::from(track.delay.unwrap_or(0)))
-            .saturating_add(u64::from(track.padding.unwrap_or(0)))
-            .saturating_add(info_lead_frames)
+        let frames = if options.mp3_gapless {
+            frames
+        } else {
+            frames
+                .saturating_add(u64::from(track.delay.unwrap_or(0)))
+                .saturating_add(u64::from(track.padding.unwrap_or(0)))
+        };
+        frames.saturating_add(info_lead_frames)
     })
 }
 
@@ -225,8 +222,11 @@ fn mp3_track(tracks: &[Track]) -> Option<(&Track, &AudioCodecParameters)> {
     })
 }
 
-pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
-    let info_lead_frames = itg_info_lead_frames(path)?;
+pub(crate) fn open_file(
+    path: &Path,
+    options: DecodeOptions,
+) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+    let info_lead_frames = info_lead_frames(path, options)?;
     let format = probe_format(path)?;
 
     let (track_id, channels, sample_rate_hz, frames_total_hint, decoder) = {
@@ -243,9 +243,12 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         let sample_rate_hz = cp
             .sample_rate
             .ok_or_else(|| format!("MP3 '{}' has unknown sample rate", path.display()))?;
-        let frames_total_hint = itg_frames_hint(track, info_lead_frames);
+        let frames_total_hint = frames_hint(track, info_lead_frames, options);
         let decoder = symphonia::default::get_codecs()
-            .make_audio_decoder(cp, &decoder_options())
+            .make_audio_decoder(
+                cp,
+                &AudioDecoderOptions::default().gapless(options.mp3_gapless),
+            )
             .map_err(|e| format!("Cannot create MP3 decoder for '{}': {e}", path.display()))?;
         (
             track.id,
@@ -262,13 +265,14 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
         track_id,
         channels,
         base_ts: Timestamp::ZERO,
+        gapless: options.mp3_gapless,
         info_lead_frames,
         info_lead_pending: info_lead_frames,
         pending: None,
         cursor_frames: 0,
     };
 
-    // Prime the first decoded packet and record its raw timestamp as the origin
+    // Prime the first decoded packet and record its emitted timestamp as the origin
     // for seeks. A restored Info frame, if any, is emitted before this packet.
     let mut first = Vec::new();
     match reader.next_audio_packet(&mut first)? {
@@ -293,9 +297,9 @@ pub(crate) fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Err
     })
 }
 
-pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
+pub(crate) fn file_length_seconds(path: &Path, options: DecodeOptions) -> Result<f32, String> {
     let info_lead_frames =
-        itg_info_lead_frames(path).map_err(|e| format!("Cannot inspect MP3 file: {e}"))?;
+        info_lead_frames(path, options).map_err(|e| format!("Cannot inspect MP3 file: {e}"))?;
     let mut format = probe_format(path).map_err(|e| format!("Cannot open MP3 file: {e}"))?;
 
     let (track_id, sample_rate, n_frames, decoder) = {
@@ -304,9 +308,12 @@ pub(crate) fn file_length_seconds(path: &Path) -> Result<f32, String> {
         let sample_rate = cp
             .sample_rate
             .ok_or_else(|| "MP3 sample rate is invalid".to_string())?;
-        let n_frames = itg_frames_hint(track, info_lead_frames);
+        let n_frames = frames_hint(track, info_lead_frames, options);
         let decoder = symphonia::default::get_codecs()
-            .make_audio_decoder(cp, &decoder_options())
+            .make_audio_decoder(
+                cp,
+                &AudioDecoderOptions::default().gapless(options.mp3_gapless),
+            )
             .map_err(|e| format!("Cannot create MP3 decoder: {e}"))?;
         (track.id, sample_rate, n_frames, decoder)
     };
@@ -488,15 +495,20 @@ impl Reader {
                 {
                     return Ok(None);
                 }
-                // A reset request indicates a new logical stream; game music is
-                // single-stream so we treat it as end-of-audio.
+                // This reader handles one logical stream; a reset marks its end.
                 Err(SymphoniaError::ResetRequired) => return Ok(None),
                 Err(e) => return Err(format!("MP3 read error: {e}").into()),
             };
             if packet.track_id != self.track_id {
                 continue;
             }
-            let ts = packet.pts;
+            // The decoder removes trim_start samples only in gapless mode.
+            // Seeks must use the timestamp of the first sample actually emitted.
+            let ts = if self.gapless {
+                packet.pts.saturating_add(packet.trim_start)
+            } else {
+                packet.pts
+            };
             let audio = match self.decoder.decode(&packet) {
                 Ok(audio) => audio,
                 // Recoverable per symphonia's contract: skip and continue.
@@ -520,6 +532,11 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU64, Ordering};
 
+    const UNTRIMMED_INFO: crate::DecodeOptions = crate::DecodeOptions {
+        mp3_gapless: false,
+        mp3_info_silence: true,
+    };
+
     const MPEG_FRAME_BYTES: usize = 417;
     const MPEG_FRAME_SAMPLES: u64 = 1_152;
     const AUDIO_FRAMES: u32 = 8;
@@ -531,7 +548,7 @@ mod tests {
             static NEXT_ID: AtomicU64 = AtomicU64::new(0);
             let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
             let path =
-                std::env::temp_dir().join(format!("deadsync-mp3-{}-{id}.mp3", std::process::id()));
+                std::env::temp_dir().join(format!("deadlib-mp3-{}-{id}.mp3", std::process::id()));
             std::fs::write(&path, bytes).expect("write synthetic MP3 fixture");
             Self(path)
         }
@@ -603,12 +620,14 @@ mod tests {
     #[test]
     fn info_header_after_id3_restores_one_frame() {
         let fixture = TempMp3::new(&tagged_mp3(b"Info", true));
-        let mut opened = open_file(fixture.path()).expect("open Info MP3 fixture");
+        let mut opened = open_file(fixture.path(), UNTRIMMED_INFO).expect("open Info MP3 fixture");
         let expected = (u64::from(AUDIO_FRAMES) + 1) * MPEG_FRAME_SAMPLES;
         assert_eq!(opened.frames_total_hint, Some(expected));
         let expected_sec = expected as f32 / 44_100.0;
         assert!(
-            (file_length_seconds(fixture.path()).expect("read MP3 length") - expected_sec).abs()
+            (file_length_seconds(fixture.path(), UNTRIMMED_INFO).expect("read MP3 length")
+                - expected_sec)
+                .abs()
                 < 1e-6
         );
 
@@ -632,7 +651,8 @@ mod tests {
         let fixture = TempMp3::new(&tagged_mp3(b"Info", false));
         let expected = (u64::from(AUDIO_FRAMES) + 1) * MPEG_FRAME_SAMPLES;
         for target in [0, 100, MPEG_FRAME_SAMPLES - 1, MPEG_FRAME_SAMPLES, 4_000] {
-            let mut opened = open_file(fixture.path()).expect("open Info MP3 fixture");
+            let mut opened =
+                open_file(fixture.path(), UNTRIMMED_INFO).expect("open Info MP3 fixture");
             opened.reader.seek_frame(target).expect("seek Info fixture");
             assert_eq!(opened.reader.current_frame(), target);
             assert_eq!(
@@ -646,7 +666,7 @@ mod tests {
     fn xing_seeks_keep_untrimmed_decoder_delay() {
         let fixture = TempMp3::new(&tagged_mp3(b"Xing", false));
         let expected = u64::from(AUDIO_FRAMES) * MPEG_FRAME_SAMPLES;
-        let mut opened = open_file(fixture.path()).expect("open Xing MP3 fixture");
+        let mut opened = open_file(fixture.path(), UNTRIMMED_INFO).expect("open Xing MP3 fixture");
         assert_eq!(opened.frames_total_hint, Some(expected));
         assert_eq!(
             remaining_frames(&mut opened.reader, opened.channels),
@@ -660,6 +680,212 @@ mod tests {
                 remaining_frames(&mut opened.reader, opened.channels),
                 expected - target
             );
+        }
+    }
+
+    fn decoded_samples(reader: &mut crate::Reader) -> Vec<i16> {
+        let mut samples = Vec::new();
+        let mut packet = Vec::new();
+        while reader
+            .read_dec_packet_into(&mut packet)
+            .expect("decode fixture")
+        {
+            samples.extend_from_slice(&packet);
+        }
+        samples
+    }
+
+    fn pcm_hash(samples: &[i16]) -> u64 {
+        samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .fold(0xcbf29ce484222325, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+            })
+    }
+
+    #[test]
+    fn untrimmed_pcm_duration_and_seeks_match_original_decoder() {
+        // Captured from the original decoder before introducing options.
+        let info_hashes = [
+            15560969893992054619,
+            14983663084225290539,
+            2877442967195712795,
+            5854043011290087115,
+            10585874522369775451,
+            7922433964078692820,
+            15622118114292247424,
+            6677188889937414518,
+            3890426504494482371,
+            2210928693814431973,
+        ];
+        let audio_hashes = [
+            10585874522369775451,
+            724827192895732011,
+            8524194524827948315,
+            7085875132947688989,
+            7940950622967182410,
+            1314969034773985117,
+            5865137172014919503,
+            7660452509041732399,
+            7415682538886177335,
+            16757446904589955706,
+        ];
+        let info = include_bytes!("../tests/fixtures/timeline.mp3");
+        let mut xing = info.to_vec();
+        xing[36..40].copy_from_slice(b"Xing");
+        let mut id3 = vec![b'I', b'D', b'3', 4, 0, 0, 0, 0, 0, 5];
+        id3.extend_from_slice(&[0; 5]);
+        id3.extend_from_slice(info);
+        for (bytes, frames, duration_bits, hashes) in [
+            (info.as_slice(), 108_288, 0x401d2714, info_hashes),
+            (xing.as_slice(), 107_136, 0x401b7b17, audio_hashes),
+            (&info[313..], 107_136, 0x401b7b17, audio_hashes),
+            (id3.as_slice(), 108_288, 0x401d2714, info_hashes),
+        ] {
+            let fixture = TempMp3::new(bytes);
+            let mut opened =
+                crate::open_file(fixture.path(), UNTRIMMED_INFO).expect("open fixture");
+            assert_eq!((opened.channels, opened.sample_rate_hz), (2, 44_100));
+            assert_eq!(opened.frames_total_hint, Some(frames));
+            assert_eq!(
+                crate::file_length_seconds(fixture.path(), UNTRIMMED_INFO)
+                    .expect("duration")
+                    .to_bits(),
+                duration_bits
+            );
+            let linear = decoded_samples(&mut opened.reader);
+            assert_eq!(linear.len() as u64, frames * 2);
+            assert_eq!(pcm_hash(&linear), hashes[0]);
+            for (target, expected_hash) in
+                [0, 1, 100, 1151, 1152, 2000, 16383, 40000, 80000, 100000]
+                    .into_iter()
+                    .zip(hashes)
+            {
+                opened.reader.seek_frame(target).expect("seek fixture");
+                assert_eq!(opened.reader.current_frame(), target);
+                let samples = decoded_samples(&mut opened.reader);
+                assert_eq!(samples.len() as u64, (frames - target) * 2);
+                assert_eq!(pcm_hash(&samples), expected_hash, "target {target}");
+                assert_eq!(opened.reader.current_frame(), frames);
+            }
+        }
+    }
+
+    #[test]
+    fn timeline_options_preserve_samples_and_seek_in_emitted_frames() {
+        let bytes = include_bytes!("../tests/fixtures/timeline.mp3");
+        let mut xing = bytes.to_vec();
+        xing[36..40].copy_from_slice(b"Xing");
+        for (bytes, has_info) in [(bytes.as_slice(), true), (xing.as_slice(), false)] {
+            let fixture = TempMp3::new(bytes);
+            let raw_options = crate::DecodeOptions {
+                mp3_gapless: false,
+                mp3_info_silence: false,
+            };
+            let mut raw = crate::open_file(fixture.path(), raw_options).expect("open raw");
+            let raw = decoded_samples(&mut raw.reader);
+            // The generated 2.4s stereo fixture has 1,105 delay + 191 padding frames.
+            assert_eq!(raw.len(), 107_136 * 2);
+            for gapless in [false, true] {
+                for info_silence in [false, true] {
+                    let options = crate::DecodeOptions {
+                        mp3_gapless: gapless,
+                        mp3_info_silence: info_silence,
+                    };
+                    let mut opened =
+                        crate::open_file(fixture.path(), options).expect("open options");
+                    let mut expected = vec![
+                        0;
+                        if has_info && info_silence {
+                            1152 * 2
+                        } else {
+                            0
+                        }
+                    ];
+                    expected.extend_from_slice(if gapless {
+                        &raw[1105 * 2..raw.len() - 191 * 2]
+                    } else {
+                        &raw
+                    });
+                    let frames = (expected.len() / 2) as u64;
+                    assert_eq!(opened.frames_total_hint, Some(frames));
+                    assert_eq!(
+                        crate::file_length_seconds(fixture.path(), options).expect("duration"),
+                        (frames as f64 / 44_100.0) as f32
+                    );
+                    assert!(
+                        decoded_samples(&mut opened.reader) == expected,
+                        "linear PCM mismatch"
+                    );
+                    for target in [
+                        0,
+                        1,
+                        100,
+                        1151,
+                        1152,
+                        2000,
+                        16383,
+                        40000,
+                        80000,
+                        frames - 1,
+                        frames,
+                    ] {
+                        opened
+                            .reader
+                            .seek_frame(target)
+                            .expect("seek option timeline");
+                        assert_eq!(opened.reader.current_frame(), target);
+                        assert!(
+                            decoded_samples(&mut opened.reader) == expected[target as usize * 2..],
+                            "gapless={gapless} info={info_silence} target={target}"
+                        );
+                        assert_eq!(opened.reader.current_frame(), frames);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gapless_seeks_skip_fully_trimmed_mpeg2_packets() {
+        // MPEG-2 mono, 64 kbps at 22,050 Hz: 576 samples per frame.
+        let mut frame = vec![0; 208];
+        frame[..4].copy_from_slice(&[0xff, 0xf3, 0x80, 0xc0]);
+        let mut bytes = frame.clone();
+        bytes[13..17].copy_from_slice(b"Info");
+        bytes[17..21].copy_from_slice(&1_u32.to_be_bytes());
+        bytes[21..25].copy_from_slice(&AUDIO_FRAMES.to_be_bytes());
+        bytes[25..34].copy_from_slice(b"LAME3.100");
+        let trim = (576_u32 << 12) | 576;
+        bytes[46..49].copy_from_slice(&trim.to_be_bytes()[1..]);
+        for _ in 0..AUDIO_FRAMES {
+            bytes.extend_from_slice(&frame);
+        }
+        let fixture = TempMp3::new(&bytes);
+        for gapless in [false, true] {
+            for info_silence in [false, true] {
+                let options = crate::DecodeOptions {
+                    mp3_gapless: gapless,
+                    mp3_info_silence: info_silence,
+                };
+                let expected =
+                    8 * 576 - if gapless { 1152 } else { 0 } + if info_silence { 576 } else { 0 };
+                let mut opened = open_file(fixture.path(), options).expect("open MPEG-2");
+                assert_eq!(opened.frames_total_hint, Some(expected));
+                assert_eq!(
+                    remaining_frames(&mut opened.reader, opened.channels),
+                    expected
+                );
+                for target in [0, 1, 575, 576, 1152, expected - 1, expected] {
+                    opened.reader.seek_frame(target).expect("seek MPEG-2");
+                    assert_eq!(opened.reader.current_frame(), target);
+                    assert_eq!(
+                        remaining_frames(&mut opened.reader, opened.channels),
+                        expected - target
+                    );
+                }
+            }
         }
     }
 }

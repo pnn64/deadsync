@@ -9,6 +9,28 @@ pub mod wav;
 
 use std::path::Path;
 
+/// Source timeline choices applied consistently to decoding, duration and seeks.
+/// Frame positions count emitted PCM frames, including any requested silence.
+/// Defaults trim MP3 delay/padding and omit metadata silence. Other formats
+/// retain their existing decoding behavior.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DecodeOptions {
+    /// Remove MP3 encoder delay and trailing padding when metadata provides them.
+    pub mp3_gapless: bool,
+    /// Emit one silent MPEG frame for an MP3 `Info` metadata header. `Xing`
+    /// headers are always omitted. This is independent of gapless trimming.
+    pub mp3_info_silence: bool,
+}
+
+impl Default for DecodeOptions {
+    fn default() -> Self {
+        Self {
+            mp3_gapless: true,
+            mp3_info_silence: false,
+        }
+    }
+}
+
 pub struct OpenFile {
     pub reader: Reader,
     pub channels: usize,
@@ -64,7 +86,10 @@ impl Reader {
 }
 
 #[inline(always)]
-pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
+pub fn open_file(
+    path: &Path,
+    options: DecodeOptions,
+) -> Result<OpenFile, Box<dyn std::error::Error + Send + Sync>> {
     if flac::path_is_flac(path) {
         let opened = flac::open_file(path)?;
         return Ok(OpenFile {
@@ -75,7 +100,7 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
         });
     }
     if mp3::path_is_mp3(path) {
-        let opened = mp3::open_file(path)?;
+        let opened = mp3::open_file(path, options)?;
         return Ok(OpenFile {
             reader: Reader::Mp3(opened.reader),
             channels: opened.channels,
@@ -122,12 +147,12 @@ pub fn open_file(path: &Path) -> Result<OpenFile, Box<dyn std::error::Error + Se
 }
 
 #[inline(always)]
-pub fn file_length_seconds(path: &Path) -> Result<f32, String> {
+pub fn file_length_seconds(path: &Path, options: DecodeOptions) -> Result<f32, String> {
     if flac::path_is_flac(path) {
         return flac::file_length_seconds(path);
     }
     if mp3::path_is_mp3(path) {
-        return mp3::file_length_seconds(path);
+        return mp3::file_length_seconds(path, options);
     }
     if wav::path_is_wav(path) {
         return wav::file_length_seconds(path);

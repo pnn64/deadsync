@@ -13,6 +13,7 @@ use std::thread;
 #[derive(Debug)]
 pub enum StreamCommand {
     PlayMusic {
+        decode_options: deadlib_audio_decode::DecodeOptions,
         path: PathBuf,
         cut: Cut,
         looping: bool,
@@ -51,13 +52,22 @@ impl MusicStreamRuntime {
     pub fn handle(&mut self, command: StreamCommand) {
         match command {
             StreamCommand::PlayMusic {
+                decode_options,
                 path,
                 cut,
                 looping,
                 rate,
                 preserve_pitch,
                 generation,
-            } => self.play(path, cut, looping, rate, preserve_pitch, generation),
+            } => self.play(
+                path,
+                cut,
+                looping,
+                rate,
+                preserve_pitch,
+                generation,
+                decode_options,
+            ),
             StreamCommand::StopMusic => self.stop(),
             StreamCommand::SetMusicRate { rate, generation } => self.set_rate(rate, generation),
             StreamCommand::SetPreservePitch {
@@ -76,6 +86,7 @@ impl MusicStreamRuntime {
         rate: f32,
         preserve_pitch: bool,
         generation: u64,
+        decode_options: deadlib_audio_decode::DecodeOptions,
     ) {
         self.stop_decoder();
         activate_music_track();
@@ -93,6 +104,7 @@ impl MusicStreamRuntime {
             preserve_pitch,
             writer,
             MusicDecodeContext {
+                decode_options,
                 output: self.output,
                 generation,
             },

@@ -790,8 +790,15 @@ fn sync_music_path(song: &SongData, chart_ix: usize) -> Result<PathBuf, String> 
 }
 
 fn decode_sync_audio(path: &Path) -> Result<SyncAudio, String> {
-    let opened = decode::open_file(path)
-        .map_err(|e| format!("Cannot open sync audio '{}': {e}", path.display()))?;
+    // Match gameplay: ITG chart time includes MP3 delay, padding and Info silence.
+    let opened = decode::open_file(
+        path,
+        decode::DecodeOptions {
+            mp3_gapless: false,
+            mp3_info_silence: true,
+        },
+    )
+    .map_err(|e| format!("Cannot open sync audio '{}': {e}", path.display()))?;
     if opened.channels == 0 {
         return Err(format!("Sync audio '{}' has no channels", path.display()));
     }

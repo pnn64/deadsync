@@ -48,7 +48,15 @@ pub fn gain_linear_from_info(info: ReplayGainInfo) -> f32 {
 }
 
 pub fn compute_loudness(path: &Path) -> Result<ReplayGainInfo, String> {
-    let opened = decode::open_file(path).map_err(|e| e.to_string())?;
+    // Match gameplay: ITG chart time includes MP3 delay, padding and Info silence.
+    let opened = decode::open_file(
+        path,
+        decode::DecodeOptions {
+            mp3_gapless: false,
+            mp3_info_silence: true,
+        },
+    )
+    .map_err(|e| e.to_string())?;
     let channels = opened.channels.max(1);
     let sample_rate = opened.sample_rate_hz.max(1);
     if channels > 8 {

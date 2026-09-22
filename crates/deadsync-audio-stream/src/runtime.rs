@@ -239,6 +239,7 @@ fn play_music(engine: Option<&AudioEngine>, path: PathBuf, cut: Cut, looping: bo
 
     if let Some(engine) = engine {
         let _ = engine.command_sender.send(StreamCommand::PlayMusic {
+            decode_options: crate::DECODE_OPTIONS,
             path,
             cut,
             looping,

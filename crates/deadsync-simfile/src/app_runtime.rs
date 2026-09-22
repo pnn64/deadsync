@@ -375,7 +375,14 @@ fn compute_music_length_seconds(music_path: Option<&Path>) -> f32 {
     let Some(path) = music_path else {
         return 0.0;
     };
-    match decode::file_length_seconds(path) {
+    // Match gameplay: ITG chart time includes MP3 delay, padding and Info silence.
+    match decode::file_length_seconds(
+        path,
+        decode::DecodeOptions {
+            mp3_gapless: false,
+            mp3_info_silence: true,
+        },
+    ) {
         Ok(sec) => sec,
         Err(e) => {
             warn!("Failed to compute audio length for {path:?}: {e}");

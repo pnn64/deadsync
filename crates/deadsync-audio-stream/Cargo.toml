@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadlib-audio = { path = "../deadlib-audio" }
 deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }

@@ -41,7 +41,7 @@ impl SfxCache {
             return Some(sound.clone());
         }
 
-        let decoded = match load_and_resample_sfx(path, output) {
+        let decoded = match load_and_resample_sfx(path, output, crate::DECODE_OPTIONS) {
             Ok(data) => data,
             Err(e) => {
                 warn!("Failed to prepare SFX '{}': {e}", path.display());
