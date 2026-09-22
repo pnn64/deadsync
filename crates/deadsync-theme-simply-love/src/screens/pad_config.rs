@@ -254,6 +254,9 @@ pub fn init() -> State {
 /// Apply the shell-owned FSR feature policy to input and presentation.
 pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
     state.fsr_enabled = enabled;
+    if !enabled {
+        clear_hold(state);
+    }
 }
 
 /// Replace the live pad snapshot (called by the app loop each frame while this
@@ -274,6 +277,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
     let total = total_bars(state);
     if total == 0 {
         state.selected = 0;
+        clear_hold(state);
     } else if state.selected >= total {
         state.selected = total - 1;
     }
@@ -286,6 +290,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
             if n == 0 {
                 state.advanced = None;
                 state.adv_sel = 0;
+                clear_hold(state);
             } else if state.adv_sel >= n {
                 state.adv_sel = n - 1;
             }
@@ -293,6 +298,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
         Some(_) => {
             state.advanced = None;
             state.adv_sel = 0;
+            clear_hold(state);
         }
         None => {}
     }
@@ -310,7 +316,7 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
 }
 
 /// Advance hold-to-repeat: a held direction re-fires after an initial delay,
-/// then at a steady cadence, in the Simple / Advanced views and the profiles
+/// then at an accelerating cadence, in the Simple / Advanced views and the profiles
 /// list. The name box ignores the hold (its Up/Down is a toggle).
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     tick_hold_repeat(state, dt);
@@ -607,6 +613,7 @@ pub fn begin_rename(state: &mut State) {
         set_default: entry.is_default,
         rename_of: Some(entry.name.clone()),
     });
+    clear_hold(state);
 }
 
 /// Handle a Delete press in the profiles list: the first arms a confirm, the
@@ -629,6 +636,7 @@ pub fn delete_key(state: &mut State) -> bool {
 /// disarms a pending delete, else closes the list.
 fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
     if is_back(ev.action) {
+        clear_hold(state);
         if state.delete_armed {
             state.delete_armed = false;
         } else {
@@ -643,7 +651,7 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
     if state.profiles_sel == 0 {
         // "Save current as new" — Start or Select opens the name box.
         if is_start(ev.action) || is_select(ev.action) {
-            state.saving = Some(SaveDraft::default());
+            begin_save(state);
         }
         return EditResult::Handled;
     }
@@ -1597,6 +1605,7 @@ fn enter_advanced(state: &mut State) {
         }
         state.advanced = Some(pad.device_id);
         state.adv_sel = 0;
+        clear_hold(state);
     }
 }
 
@@ -3699,6 +3708,235 @@ mod tests {
     }
 
     // ── Hold-to-repeat ──
+
+    #[test]
+    fn leaving_profiles_does_not_turn_navigation_into_threshold_edits() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        set_profiles(
+            &mut s,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
+        begin_profiles(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert!(s.pending.is_empty());
+        apply_edit(&mut s, &ev(VirtualAction::p1_back), false);
+        assert!(!is_profiles_mode(&s));
+        update(&mut s, 0.301);
+        assert!(
+            s.pending.is_empty(),
+            "profile navigation became a hardware edit: {:?}",
+            s.pending
+        );
+    }
+
+    #[test]
+    fn entering_advanced_drops_the_previous_views_hold() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert!(s.advanced.is_some());
+        update(&mut s, 0.301);
+        assert!(
+            s.pending.is_empty(),
+            "old hold edited an advanced sensor: {:?}",
+            s.pending
+        );
+    }
+
+    fn modal_release_does_not_leave_cursor_repeating(rename: bool) {
+        use crate::screens::select_music;
+        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+        let mut pad = with_pad();
+        set_save_available(&mut pad, true);
+        set_profiles(
+            &mut pad,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
+        begin_profiles(&mut pad);
+        apply_edit(&mut pad, &ev(VirtualAction::p1_down), false);
+        if !rename {
+            apply_edit(&mut pad, &ev_release(VirtualAction::p1_down), false);
+            apply_edit(&mut pad, &ev(VirtualAction::p1_down), false);
+            assert_eq!(pad.profiles_sel, 0);
+            apply_edit(&mut pad, &ev(VirtualAction::p1_start), false);
+        }
+        let mut state = select_music::init_placeholder();
+        state.pad_config_overlay_visible = true;
+        state.pad_config_overlay = pad;
+        let mut effects = Vec::new();
+        let mut key = RawKeyboardEvent {
+            code: KeyCode::KeyR,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        };
+        if rename {
+            assert!(select_music::handle_raw_key_event(
+                &mut state,
+                Some(&key),
+                None,
+                &mut effects
+            ));
+        }
+        assert!(is_saving(&state.pad_config_overlay));
+        key.code = KeyCode::ArrowDown;
+        key.pressed = false;
+        // The shell does not map consumed raw keys into virtual release events.
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        key.code = KeyCode::Escape;
+        key.pressed = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(!is_saving(&state.pad_config_overlay));
+        let selected = state.pad_config_overlay.profiles_sel;
+        update(&mut state.pad_config_overlay, 0.301);
+        assert_eq!(
+            state.pad_config_overlay.profiles_sel, selected,
+            "cursor moved after the direction was released in the name box"
+        );
+    }
+
+    #[test]
+    fn rename_modal_does_not_lose_direction_release() {
+        modal_release_does_not_leave_cursor_repeating(true);
+    }
+
+    #[test]
+    fn save_new_modal_does_not_lose_direction_release() {
+        modal_release_does_not_leave_cursor_repeating(false);
+    }
+
+    #[test]
+    fn disconnecting_the_advanced_pad_drops_its_hold() {
+        let mut s = with_pad();
+        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_pads(&mut s, vec![smx_pad(1, true)]);
+        assert!(s.advanced.is_none());
+        update(&mut s, 0.301);
+        assert!(
+            take_commands(&mut s).is_empty(),
+            "hold must not edit the remaining pad"
+        );
+    }
+
+    #[test]
+    fn disconnecting_all_pads_drops_the_hold_before_reconnection() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_pads(&mut s, Vec::new());
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        update(&mut s, 0.301);
+        assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn disabling_fsr_support_cancels_threshold_repeat() {
+        let mut s = with_pad();
+        set_fsr_enabled(&mut s, true);
+        handle_input(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_fsr_enabled(&mut s, false);
+        update(&mut s, 0.301);
+        assert!(take_commands(&mut s).is_empty());
+        set_fsr_enabled(&mut s, true);
+        update(&mut s, 1.0);
+        assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn save_default_toggle_ignores_keyboard_repeats() {
+        use crate::screens::select_music;
+        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+        let mut state = select_music::init_placeholder();
+        state.pad_config_overlay_visible = true;
+        state.pad_config_overlay = with_pad();
+        set_save_available(&mut state.pad_config_overlay, true);
+        begin_save(&mut state.pad_config_overlay);
+        let mut effects = Vec::new();
+        let mut key = RawKeyboardEvent {
+            code: KeyCode::ArrowDown,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        };
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+        key.repeat = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+        key.repeat = false;
+        key.pressed = false;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        key.pressed = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            !state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+    }
 
     fn ev_release(action: VirtualAction) -> InputEvent {
         ev_from(action, InputSource::Keyboard, false)

@@ -10925,7 +10925,7 @@ fn handle_raw_key_event_impl(
                     }
                     // Up/Down toggle the "set as default" flag (the virtual-action
                     // path can't see them — we consume every key while typing).
-                    KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                    KeyCode::ArrowUp | KeyCode::ArrowDown if !k.repeat => {
                         pad_config::toggle_save_default(&mut state.pad_config_overlay);
                     }
                     _ => {}

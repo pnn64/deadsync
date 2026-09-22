@@ -2802,50 +2802,170 @@ pub(super) mod tests {
         }
     }
 
+    fn arcade_select_event(player: usize, pressed: bool) -> deadsync_input::InputEvent {
+        let now = std::time::Instant::now();
+        deadsync_input::InputEvent::new(
+            if player == P1 {
+                deadsync_input::VirtualAction::p1_select
+            } else {
+                deadsync_input::VirtualAction::p2_select
+            },
+            0,
+            pressed,
+            deadsync_core::input::InputSource::Keyboard,
+            now,
+            0,
+            now,
+            now,
+        )
+    }
+
     #[test]
     fn held_arcade_select_repeats_previous_row() {
         ensure_i18n();
-        let now = std::time::Instant::now();
-        let select = |pressed: bool| {
-            deadsync_input::InputEvent::new(
-                deadsync_input::VirtualAction::p1_select,
-                0,
-                pressed,
-                deadsync_core::input::InputSource::Keyboard,
-                now,
-                0,
-                now,
-                now,
-            )
-        };
-        let (mut state, asset_manager) = setup_state();
-        state.policy.arcade_navigation = true;
-        super::super::prepare_presentation(&mut state, &asset_manager);
-        let start_row = 3;
-        assert!(state.pane().row_map.len() > start_row);
-        state.pane_mut().selected_row[P1] = start_row;
-        state.pane_mut().prev_selected_row[P1] = start_row;
-        let mut effects = Vec::new();
+        for player in [P1, P2] {
+            let (mut state, asset_manager) = setup_versus_state();
+            state.policy.arcade_navigation = true;
+            super::super::prepare_presentation(&mut state, &asset_manager);
+            let start_row = 3;
+            assert!(state.pane().row_map.len() > start_row);
+            state.pane_mut().selected_row = [start_row; 2];
+            state.pane_mut().prev_selected_row = [start_row; 2];
+            let mut effects = Vec::new();
 
-        // Select steps up one row and arms the hold.
-        super::super::input::handle_input(&mut state, &asset_manager, &select(true), &mut effects);
-        let after_press = state.pane().selected_row[P1];
-        assert!(after_press < start_row);
+            // Select steps up immediately, then waits for the hold delay.
+            super::super::input::handle_input(
+                &mut state,
+                &asset_manager,
+                &arcade_select_event(player, true),
+                &mut effects,
+            );
+            let after_press = state.pane().selected_row[player];
+            assert_eq!(after_press, start_row - 1);
+            update(&mut state, 0.1, &asset_manager, &mut effects);
+            assert_eq!(state.pane().selected_row[player], after_press);
+            update(
+                &mut state,
+                NAV_INITIAL_HOLD_DELAY.as_secs_f32() - 0.1 + 0.001,
+                &asset_manager,
+                &mut effects,
+            );
+            let after_repeat = state.pane().selected_row[player];
+            assert_eq!(after_repeat, after_press - 1);
 
-        // Held past the initial delay it keeps climbing.
-        update(
-            &mut state,
-            (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
-            &asset_manager,
-            &mut effects,
-        );
-        let after_repeat = state.pane().selected_row[P1];
-        assert!(after_repeat < after_press);
+            // Release stops it, and neither press nor repeat moves the other player.
+            super::super::input::handle_input(
+                &mut state,
+                &asset_manager,
+                &arcade_select_event(player, false),
+                &mut effects,
+            );
+            update(&mut state, 1.0, &asset_manager, &mut effects);
+            assert_eq!(state.pane().selected_row[player], after_repeat);
+            assert_eq!(state.pane().selected_row[1 - player], start_row);
+        }
+    }
 
-        // Release stops it.
-        super::super::input::handle_input(&mut state, &asset_manager, &select(false), &mut effects);
-        update(&mut state, 1.0, &asset_manager, &mut effects);
-        assert_eq!(state.pane().selected_row[P1], after_repeat);
+    #[test]
+    fn held_arcade_select_clamps_at_top_but_a_fresh_press_wraps() {
+        ensure_i18n();
+        // ITGmania ScreenOptions::MenuSelect -> MenuUpDown(-1):
+        // MoveRowRelative allows wrapping only on a first press, never a repeat.
+        for player in [P1, P2] {
+            let (mut state, asset_manager) = setup_versus_state();
+            state.policy.arcade_navigation = true;
+            super::super::prepare_presentation(&mut state, &asset_manager);
+            state.pane_mut().selected_row[player] = 1;
+            state.pane_mut().prev_selected_row[player] = 1;
+            let mut effects = Vec::new();
+            super::super::input::handle_input(
+                &mut state,
+                &asset_manager,
+                &arcade_select_event(player, true),
+                &mut effects,
+            );
+            assert_eq!(state.pane().selected_row[player], 0);
+            for _ in 0..3 {
+                update(&mut state, 0.5, &asset_manager, &mut effects);
+                assert_eq!(state.pane().selected_row[player], 0);
+            }
+            super::super::input::handle_input(
+                &mut state,
+                &asset_manager,
+                &arcade_select_event(player, false),
+                &mut effects,
+            );
+            super::super::input::handle_input(
+                &mut state,
+                &asset_manager,
+                &arcade_select_event(player, true),
+                &mut effects,
+            );
+            assert_eq!(
+                state.pane().selected_row[player],
+                state.pane().row_map.len() - 1
+            );
+        }
+    }
+
+    #[test]
+    fn opposing_arcade_start_and_select_holds_pause_until_one_is_released() {
+        ensure_i18n();
+        // ITGmania's MenuUpDown suppresses repeat while the opposite control
+        // is held. Stagger the presses so the repeat timers cannot cancel out.
+        for player in [P1, P2] {
+            for start_first in [false, true] {
+                let event = |start: bool, pressed: bool| {
+                    let mut ev = arcade_select_event(player, pressed);
+                    if start {
+                        ev.action = if player == P1 {
+                            deadsync_input::VirtualAction::p1_start
+                        } else {
+                            deadsync_input::VirtualAction::p2_start
+                        };
+                    }
+                    ev
+                };
+                let (mut state, asset_manager) = setup_versus_state();
+                state.policy.arcade_navigation = true;
+                super::super::prepare_presentation(&mut state, &asset_manager);
+                state.pane_mut().selected_row[player] = 3;
+                state.pane_mut().prev_selected_row[player] = 3;
+                state.pane_mut().arcade_row_focus[player] = true;
+                let mut effects = Vec::new();
+                super::super::input::handle_input(
+                    &mut state,
+                    &asset_manager,
+                    &event(start_first, true),
+                    &mut effects,
+                );
+                update(&mut state, 0.1, &asset_manager, &mut effects);
+                state.pane_mut().arcade_row_focus[player] = true;
+                super::super::input::handle_input(
+                    &mut state,
+                    &asset_manager,
+                    &event(!start_first, true),
+                    &mut effects,
+                );
+                let selected = state.pane().selected_row[player];
+                update(&mut state, 0.201, &asset_manager, &mut effects);
+                assert_eq!(state.pane().selected_row[player], selected);
+                update(&mut state, 0.2, &asset_manager, &mut effects);
+                assert_eq!(state.pane().selected_row[player], selected);
+                super::super::input::handle_input(
+                    &mut state,
+                    &asset_manager,
+                    &event(!start_first, false),
+                    &mut effects,
+                );
+                update(&mut state, 0.1, &asset_manager, &mut effects);
+                if start_first {
+                    assert!(state.pane().selected_row[player] > selected);
+                } else {
+                    assert!(state.pane().selected_row[player] < selected);
+                }
+            }
+        }
     }
 
     #[test]

@@ -47,6 +47,11 @@ pub fn update(
         }
         match direction {
             NavDirection::Up => {
+                // ITGmania's MenuUpDown suppresses Up/Select repeats while
+                // Start is held, so opposing controls cannot oscillate rows.
+                if arcade_style && state.start_input[player_idx].held {
+                    continue;
+                }
                 move_selection_vertical(
                     state,
                     asset_manager,
@@ -444,6 +449,9 @@ pub(super) fn repeat_held_arcade_start(
         NAV_REPEAT_SCROLL_INTERVAL,
         dt,
     ) {
+        return None;
+    }
+    if state.nav_input[idx].held_direction == Some(NavDirection::Up) {
         return None;
     }
     handle_arcade_start_press(state, asset_manager, active, player_idx, true)
