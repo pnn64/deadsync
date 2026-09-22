@@ -468,9 +468,9 @@ dependencies = [
 
 [[package]]
 name = "btleplug"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a4d4e33a859e1ee58567c86f75e92c298bb08eea6849065d799811dadd96264"
+checksum = "dbd99d9109865e385227c69c27dd97e090834a3c5b2ceb19172a7fcf17312cc7"
 dependencies = [
  "async-trait",
  "bitflags 2.13.2",
@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.1485"
+version = "0.5.1489"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1756,7 +1756,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.1485"
+version = "0.5.1489"
 dependencies = [
  "bitflags 2.13.2",
  "chrono",
@@ -1824,7 +1824,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.1485"
+version = "0.5.1489"
 dependencies = [
  "log",
  "semver",
@@ -2961,9 +2961,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6480ccc157a1389bb2e4891b24751b0f798ba640d22386f23143fbcc89da195a"
+checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
 dependencies = [
  "bitflags 2.13.2",
  "libc",
@@ -4533,8 +4533,8 @@ checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
 
 [[package]]
 name = "rssp"
-version = "0.4.266"
-source = "git+https://github.com/pnn64/rssp?branch=main#52bc8404d9cfe002fa695629fc8173d0d546d968"
+version = "0.4.267"
+source = "git+https://github.com/pnn64/rssp?branch=main#272f648c6ac8b0ca3e8c6605e0ffa8da37af3216"
 dependencies = [
  "foldhash",
  "memchr",
@@ -4545,8 +4545,8 @@ dependencies = [
 
 [[package]]
 name = "rssp-core"
-version = "0.4.266"
-source = "git+https://github.com/pnn64/rssp?branch=main#52bc8404d9cfe002fa695629fc8173d0d546d968"
+version = "0.4.267"
+source = "git+https://github.com/pnn64/rssp?branch=main#272f648c6ac8b0ca3e8c6605e0ffa8da37af3216"
 dependencies = [
  "memchr",
 ]
