@@ -33,21 +33,16 @@ use deadsync_score as score_data;
 
 use crate::fonts::{machine_font_key, machine_font_key_for_text};
 use crate::i18n::{tr, tr_fmt};
-use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use crate::views::SimplyLoveLobbyRuntimeView;
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::build_crossover_rows;
 use deadsync_online::lobbies as lobby_data;
-use deadsync_rules::judgment;
-use deadsync_rules::timing as timing_stats;
 use deadsync_theme::FontRole;
 use log::warn;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -66,82 +61,6 @@ use deadsync_profile as profile_data;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 
-fn collect_foot_parity<const LANES: usize>(
-    notes: &[deadsync_rules::note::Note],
-    note_range: (usize, usize),
-    timing_segments: &deadsync_rules::timing::TimingSegments,
-    col_start: usize,
-) -> (
-    Vec<(usize, timing_stats::ScatterFoot)>,
-    HashMap<(usize, usize), timing_stats::ScatterFoot>,
-) {
-    use timing_stats::ScatterFoot;
-
-    let (rows, row_to_beat, row_indices) =
-        build_crossover_rows::<LANES>(notes, note_range, col_start);
-    let annotations = deadsync_simfile::timing::crossover_annotations::<LANES>(
-        &rows,
-        &row_to_beat,
-        timing_segments,
-    );
-    let note_count = annotations
-        .iter()
-        .map(|annotation| {
-            (annotation.left_foot_mask | annotation.right_foot_mask).count_ones() as usize
-        })
-        .sum();
-    let mut row_feet = Vec::with_capacity(annotations.len());
-    let mut note_feet = HashMap::with_capacity(note_count);
-    for (annotation, row_index) in annotations.iter().zip(row_indices) {
-        let row_foot = match (
-            annotation.left_foot_mask != 0,
-            annotation.right_foot_mask != 0,
-        ) {
-            (true, true) => ScatterFoot::Both,
-            (true, false) => ScatterFoot::Left,
-            (false, true) => ScatterFoot::Right,
-            (false, false) => ScatterFoot::Unknown,
-        };
-        if row_foot != ScatterFoot::Unknown {
-            row_feet.push((row_index, row_foot));
-        }
-        for lane in 0..LANES {
-            let bit = 1u8 << lane;
-            let foot = if annotation.left_foot_mask & bit != 0 {
-                ScatterFoot::Left
-            } else if annotation.right_foot_mask & bit != 0 {
-                ScatterFoot::Right
-            } else {
-                continue;
-            };
-            note_feet.insert((row_index, col_start + lane), foot);
-        }
-    }
-    (row_feet, note_feet)
-}
-
-fn foot_parity_for_results(
-    gs: &gameplay::State,
-    player_idx: usize,
-) -> (
-    Vec<(usize, timing_stats::ScatterFoot)>,
-    HashMap<(usize, usize), timing_stats::ScatterFoot>,
-) {
-    if player_idx >= gs.num_players() {
-        return Default::default();
-    }
-    let note_range = gs.note_range_for_player(player_idx);
-    let Some(chart) = gs.gameplay_chart(player_idx) else {
-        return Default::default();
-    };
-    let cols_per_player = gs.cols_per_player();
-    let col_start = player_idx.saturating_mul(cols_per_player);
-    match cols_per_player {
-        4 => collect_foot_parity::<4>(gs.notes(), note_range, &chart.timing_segments, col_start),
-        8 => collect_foot_parity::<8>(gs.notes(), note_range, &chart.timing_segments, col_start),
-        _ => Default::default(),
-    }
-}
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 // Simply Love ScreenEvaluationStage in/default.lua (non-SRPG9 branch)
 const EVAL_STAGE_IN_BLACK_DELAY_SECONDS: f32 = 0.2;
@@ -185,7 +104,6 @@ const SUBMIT_FOOTER_TINT_AUTO_RETRY: [f32; 4] = color::JUDGMENT_RGBA[1]; // Exce
 const SUBMIT_FOOTER_TINT_MANUAL_RETRY: [f32; 4] = color::JUDGMENT_RGBA[4]; // Way Off (orange-tan)
 const SUBMIT_FOOTER_TINT_ERROR: [f32; 4] = color::JUDGMENT_RGBA[5]; // Miss (red)
 const SUBMIT_FOOTER_TINT_NEUTRAL: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-const MACHINE_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const BANNER_FALLBACK_KEYS: [&str; 12] = [
@@ -202,25 +120,6 @@ const BANNER_FALLBACK_KEYS: [&str; 12] = [
     "banner11.png",
     "banner12.png",
 ];
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ScatterWindow {
-    FantasticPlus,
-    Fantastic,
-    Great,
-}
-
-impl ScatterWindow {
-    #[inline]
-    fn ms(self) -> f32 {
-        let tw = timing_stats::effective_windows_ms();
-        match self {
-            Self::FantasticPlus => timing_stats::FA_PLUS_W0_MS,
-            Self::Fantastic => tw[0],
-            Self::Great => tw[2],
-        }
-    }
-}
 
 thread_local! {
     static BPM_TEXT_CACHE: RefCell<TextCache<(i32, i32, u32)>> = RefCell::new(text_cache_with_capacity(1024));
@@ -1016,8 +915,8 @@ mod tests {
         CellIcon, CourseGraphStage, EvalGraphPane, EvalPane, GRAPH_LIFE_SAMPLE_COUNT, Nice69Buf,
         SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
         build_course_density_graph_mesh, build_fail_label_text, cached_fail_label_text,
-        course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result,
-        eval_graph_cycle, eval_graph_pane_label, eval_graph_x, eval_pane_cycle, eval_pane_shift,
+        course_graph_stage_spans, course_graph_stripe_actors, eval_graph_cycle,
+        eval_graph_pane_label, eval_graph_x, eval_pane_cycle, eval_pane_shift,
         eval_pane_skip_duplicate, fail_seconds_remaining, graph_display_life_points,
         leaderboard_requests, life_record_lerp_at, stage_in_stinger_texture_key,
         submission_retry_available, submit_footer_gs_label, submit_footer_gs_label_for,
@@ -1224,7 +1123,7 @@ mod tests {
 
     #[test]
     fn elapsed_sync_retains_timer_text_until_the_visible_second_changes() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         super::sync_elapsed(&mut state, 65.1, 3_600.0);
         let session_text = state.session_timer.text().to_owned();
 
@@ -1258,7 +1157,7 @@ mod tests {
 
     #[test]
     fn result_dialog_and_event_overlays_open_sequentially() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         state.event_overlay_visible = true;
         state.result_dialogs[0] =
             super::ResultDialog::new(vec![Arc::<str>::from("result")].into_boxed_slice());
@@ -1296,7 +1195,7 @@ mod tests {
 
     #[test]
     fn result_dialog_input_pages_and_dismisses_before_normal_evaluation_actions() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         state.result_dialogs[0] = super::ResultDialog::new(
             vec![Arc::<str>::from("first"), Arc::<str>::from("second")].into_boxed_slice(),
         );
@@ -1366,7 +1265,7 @@ mod tests {
 
     #[test]
     fn retry_availability_uses_prepared_submission_status() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         assert!(!submission_retry_available(&state));
 
         state.submissions[0].groovestats_status =
@@ -1384,7 +1283,7 @@ mod tests {
 
     #[test]
     fn leaderboard_requests_are_plain_screen_state() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         assert_eq!(leaderboard_requests(&state), [false, false]);
 
         state.leaderboards_requested[1] = true;
@@ -1393,7 +1292,7 @@ mod tests {
 
     #[test]
     fn partial_runtime_view_retains_clean_subviews() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         state.context.players[0].display_name = "Retained".to_owned();
         state.favorites = [true, false];
         state.groovestats_service = SimplyLoveGrooveStatsService::BoogieStats;
@@ -1450,7 +1349,7 @@ mod tests {
 
     #[test]
     fn nice_eligibility_is_compiled_and_preserved_by_state_clone() {
-        let mut state = super::init(None, crate::views::EvaluationInitView::default());
+        let mut state = super::init(crate::views::EvaluationInitView::default());
         assert_eq!(state.nice_scores, [false; 2]);
 
         state.nice_scores = [true, false];
@@ -2254,14 +2153,6 @@ mod tests {
             Some("evaluation/failed.png")
         );
     }
-
-    #[test]
-    fn eval_grade_for_result_forces_failed_on_disqualification() {
-        assert_eq!(
-            eval_grade_for_result(false, true, true, 1.0),
-            score_data::Grade::Failed
-        );
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2908,11 +2799,14 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
 }
 
-pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInitView) -> State {
-    let context = init_view.context;
+pub fn init(init_view: EvaluationInitView) -> State {
+    let EvaluationInitView {
+        score_info,
+        stage_duration_seconds,
+        fail_stream_progress,
+        context,
+    } = init_view;
     let policy = context.policy;
-    let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
-    let mut fail_stream_progress = [None; MAX_PLAYERS];
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut life_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
@@ -2943,298 +2837,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         std::array::from_fn(|_| None);
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
-    let mut stage_duration_seconds: f32 = 0.0;
-    if let Some(mut gs) = gameplay_results {
-        stage_duration_seconds = gs.total_elapsed_in_screen();
-
-        let cols_per_player = gs.cols_per_player();
-        for (player_idx, score_info_slot) in score_info
-            .iter_mut()
-            .enumerate()
-            .take(gs.num_players().min(MAX_PLAYERS))
-        {
-            let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
-            let (start, end) = gs.note_range_for_player(player_idx);
-            let notes = &gs.notes()[start..end];
-            let column_judgment_eligible = &gs.column_judgment_eligible()[start..end];
-            let note_times = &gs.note_time_cache_ns()[start..end];
-            let p = &gs.players()[player_idx];
-            let prof = &gs.profiles()[player_idx];
-            let col_offset = player_idx.saturating_mul(cols_per_player);
-            fail_stream_progress[player_idx] = p.fail_time.and_then(|fail_time| {
-                let timing = gs.timing_for_player(player_idx)?;
-                let chart = gs.gameplay_chart(player_idx)?;
-                deadsync_gameplay::zmod_fail_stream_progress_for_note_data(
-                    &chart.notes,
-                    cols_per_player,
-                    timing.get_beat_for_time(fail_time),
-                )
-            });
-
-            // Compute timing statistics across all non-miss tap judgments.
-            let (foot_by_row, foot_by_note) = foot_parity_for_results(&gs, player_idx);
-            let stats = timing_stats::compute_note_timing_stats(notes);
-            let arrow_timing = timing_stats::compute_arrow_timing_stats(
-                notes,
-                col_offset,
-                cols_per_player,
-                (!foot_by_note.is_empty()).then_some(&foot_by_note),
-            );
-            // Prepare scatter points and histogram bins
-            let scatter = timing_stats::build_scatter_points(
-                notes,
-                note_times,
-                col_offset,
-                cols_per_player,
-                (!foot_by_row.is_empty()).then_some(foot_by_row.as_slice()),
-            );
-            let histogram = timing_stats::build_histogram_ms(notes);
-            let scatter_worst_window_ms = {
-                let tw = timing_stats::effective_windows_ms();
-                let observed = histogram.worst_observed_ms.max(0.0);
-                let mut idx: usize = if observed <= tw[0] {
-                    1
-                } else if observed <= tw[1] {
-                    2
-                } else if observed <= tw[2] {
-                    3
-                } else if observed <= tw[3] {
-                    4
-                } else {
-                    5
-                };
-                // `scatterplot_max_window` takes precedence over the older
-                // `scale_scatterplot` toggle. When set, the plot's worst
-                // window is min(observed worst tier, selected tier) so the
-                // scale is forced to clamp at the chosen judgment window
-                // (matching Chris's Simply-Love-SM5-8ms `ScaleGraph`
-                // semantics, generalized per tier).
-                let cap_idx: Option<usize> = match prof.scatterplot_max_window {
-                    profile_data::ScatterplotMaxWindow::Off => None,
-                    profile_data::ScatterplotMaxWindow::Fantastic => Some(1),
-                    profile_data::ScatterplotMaxWindow::Excellent => Some(2),
-                    profile_data::ScatterplotMaxWindow::Great => Some(3),
-                };
-                if let Some(cap) = cap_idx {
-                    idx = idx.min(cap);
-                    tw[idx - 1]
-                } else if prof.scale_scatterplot {
-                    // zmod-style `ScaleGraph`: cap at Great so a single
-                    // Decent/Way Off doesn't squash the plot, and floor
-                    // at Fantastic so quad/quint runs can zoom past
-                    // Excellent. Snap-to-max-error and padding stay as
-                    // internal-only knobs for future use.
-                    const MAX_WINDOW: ScatterWindow = ScatterWindow::Great;
-                    const MIN_WINDOW: ScatterWindow = ScatterWindow::Fantastic;
-                    const SNAP_MAX_ERROR: bool = true;
-                    const PADDING_PCT: u8 = 5;
-
-                    let max_w = MAX_WINDOW.ms();
-                    let min_w = MIN_WINDOW.ms();
-                    let lo = min_w.min(max_w);
-                    let hi = min_w.max(max_w);
-                    let candidate = if SNAP_MAX_ERROR {
-                        observed * (1.0 + f32::from(PADDING_PCT) / 100.0)
-                    } else {
-                        if idx == 1 {
-                            idx = 2;
-                        }
-                        let tier = tw[idx - 1];
-                        // FA+ W0 is layered on top of W1..W5 in deadsync,
-                        // so the tier-edge ladder above never lands on it.
-                        // Honor it explicitly when it's the configured
-                        // lower bound and the data fits.
-                        if MIN_WINDOW == ScatterWindow::FantasticPlus
-                            && observed <= ScatterWindow::FantasticPlus.ms()
-                        {
-                            ScatterWindow::FantasticPlus.ms().min(tier)
-                        } else {
-                            tier
-                        }
-                    };
-                    candidate.clamp(lo, hi)
-                } else {
-                    // Original deadsync behavior: Excellent floor with
-                    // no upper cap.
-                    idx = idx.max(2);
-                    tw[idx - 1]
-                }
-            };
-            let graph_first_second = 0.0_f32.min(gs.timing().get_time_for_beat(0.0));
-            let graph_last_second = gs
-                .song()
-                .precise_last_second()
-                .max(graph_first_second + 0.001);
-            let totals = gs.stage_totals_for_player(player_idx);
-
-            let score_percent = judgment::calculate_itg_score_percent_from_counts(
-                &p.scoring_counts,
-                p.holds_held_for_score,
-                p.rolls_held_for_score,
-                p.mines_hit_for_score,
-                totals.possible_grade_points,
-            );
-            let side = if gs.num_players() >= 2 {
-                if player_idx == 0 {
-                    profile_data::PlayerSide::P1
-                } else {
-                    profile_data::PlayerSide::P2
-                }
-            } else {
-                context.player_side
-            };
-            let player_init = &init_view.players[player_idx];
-            let machine_records = player_init.machine_records.clone();
-            let machine_record_highlight_rank =
-                score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
-            let personal_records = player_init.personal_records.clone();
-            let personal_record_highlight_rank =
-                score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
-            let score_valid = gs.score_valid_for_player(player_idx) && !gs.autoplay_used();
-            // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
-            // not by our broader local ranking-validity heuristics.
-            let disqualified = gs.autoplay_used();
-            let local_score_valid = score_valid && !disqualified;
-            let groovestats = player_init.groovestats.clone();
-            let itl = player_init.itl.clone();
-            let outcome = gs.individual_song_outcome(player_idx);
-            let failed =
-                score_data::gameplay_run_failed(outcome.is_failing, outcome.fail_time.is_some());
-            let passed = score_data::gameplay_run_passed(
-                outcome.song_completed_naturally,
-                outcome.is_failing,
-                outcome.life,
-                outcome.fail_time.is_some(),
-            );
-            let chart_hash = gs.charts()[player_idx].short_hash.as_str();
-            let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
-            let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
-            let expected_groovestats_submit = policy.enable_groovestats
-                && passed
-                && groovestats.valid
-                && course_life_submit_eligible
-                && prof.groovestats_is_pad_player
-                && (!gs.course_display_is_course_stage()
-                    || policy.autosubmit_course_scores_individually)
-                && !prof.groovestats_api_key.trim().is_empty();
-            let expected_arrowcloud_submit = policy.enable_arrowcloud
-                && !disqualified
-                && (passed || (failed && policy.submit_arrowcloud_fails))
-                && lua_submit_allowed
-                && (course_life_submit_eligible || (failed && policy.submit_arrowcloud_fails))
-                && (!gs.course_display_is_course_stage()
-                    || policy.autosubmit_course_scores_individually)
-                && !prof.arrowcloud_api_key.trim().is_empty();
-            let earned_machine_record = local_score_valid
-                && machine_record_highlight_rank
-                    .is_some_and(|rank| rank <= MACHINE_RECORD_ROWS as u32);
-            let earned_top2_personal =
-                local_score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
-            let machine_record_highlight_rank = local_score_valid
-                .then_some(machine_record_highlight_rank)
-                .flatten();
-            let personal_record_highlight_rank = local_score_valid
-                .then_some(personal_record_highlight_rank)
-                .flatten();
-            let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
-
-            let mut grade = eval_grade_for_result(
-                outcome.is_failing,
-                outcome.song_completed_naturally,
-                disqualified,
-                score_percent,
-            );
-
-            // Per-window counts for the FA+ pane should reflect tracked
-            // gameplay counts. These continue after failure but skip live
-            // autoplay, matching Simply Love's JudgmentMessage guards.
-            let window_counts = gs.live_window_counts(player_idx);
-            let window_counts_10ms = gs.live_window_counts_10ms(player_idx);
-            let ex_data = gs.stage_scored_ex_score_data(player_idx);
-            let ex_score_percent = judgment::ex_score_percent(&ex_data);
-            let hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
-
-            // Quint comes from the achieved result, not whether FA+ is displayed.
-            grade = score_data::promote_quint_grade(grade, ex_score_percent);
-
-            let column_judgments = score_data::compute_column_judgments(
-                notes,
-                column_judgment_eligible,
-                cols_per_player,
-                col_offset,
-                prof.show_fa_plus_window,
-            );
-            let gameplay_music_rate = gs.music_rate();
-            let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
-                gameplay_music_rate
-            } else {
-                1.0
-            };
-
-            *score_info_slot = Some(ScoreInfo {
-                song: gs.song_arc(),
-                chart: gs.charts()[player_idx].clone(),
-                course_graph_stages: Vec::new(),
-                side,
-                profile_name: prof.display_name.clone(),
-                score_valid,
-                disqualified,
-                expected_groovestats_submit,
-                expected_arrowcloud_submit,
-                groovestats,
-                itl,
-                judgment_counts: p.judgment_counts,
-                score_percent,
-                earned_grade_points: p.earned_grade_points,
-                possible_grade_points: totals.possible_grade_points,
-                grade,
-                speed_mod: gs.scroll_speed_for_player(player_idx),
-                mods_text: crate::screens::components::gameplay::notefield::preferred_mods_text(
-                    &gs, player_idx,
-                ),
-                hands_achieved: p.hands_achieved,
-                hands_total: gs.hands_total_for_player(player_idx),
-                holds_held: p.holds_held,
-                holds_held_for_score: p.holds_held_for_score,
-                holds_total: totals.holds_total,
-                rolls_held: p.rolls_held,
-                rolls_held_for_score: p.rolls_held_for_score,
-                rolls_total: totals.rolls_total,
-                mines_hit_for_score: p.mines_hit_for_score,
-                mines_avoided: p.mines_avoided,
-                mines_total: totals.mines_total,
-                timing: stats,
-                arrow_timing,
-                scatter,
-                scatter_worst_window_ms,
-                histogram,
-                graph_first_second,
-                graph_last_second,
-                music_rate,
-                life_history: p.life_history.clone(),
-                fail_time: p.fail_time,
-                window_counts,
-                window_counts_10ms,
-                ex_score_percent,
-                hard_ex_score_percent,
-                calories_burned: p.calories_burned,
-                column_judgments,
-                noteskin,
-                show_fa_plus_window: prof.show_fa_plus_window,
-                show_ex_score: prof.show_ex_score,
-                show_hard_ex_score: prof.show_hard_ex_score,
-                show_fa_plus_pane: prof.show_fa_plus_pane,
-                track_early_judgments: prof.track_early_judgments,
-                dim_post_fail_scatter: prof.dim_post_fail_scatter,
-                disabled_timing_windows: prof.timing_windows.disabled_windows(),
-                machine_records,
-                machine_record_highlight_rank,
-                personal_records,
-                personal_record_highlight_rank,
-                show_machine_personal_split,
-            });
-        }
-
+    if score_info.iter().any(Option::is_some) {
         let play_style = context.play_style;
         let graph_width: f32 = if play_style.is_versus() { 300.0 } else { 610.0 };
 
@@ -4636,20 +4239,6 @@ const fn eval_player_color_rgba(
     }
 }
 
-#[inline(always)]
-fn eval_grade_for_result(
-    is_failing: bool,
-    song_completed_naturally: bool,
-    disqualified: bool,
-    score_percent: f64,
-) -> score_data::Grade {
-    if is_failing || !song_completed_naturally || disqualified {
-        score_data::Grade::Failed
-    } else {
-        score_data::score_to_grade(score_percent * 10000.0)
-    }
-}
-
 pub fn all_joined_players_failed(state: &State) -> bool {
     let play_style = state.context.play_style;
     let mut found_player = false;
@@ -5232,7 +4821,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn nice_sfx_uses_entry_selection_once() {
-        let mut state = super::init(None, super::EvaluationInitView::default());
+        let mut state = super::init(super::EvaluationInitView::default());
         state.nice_scores = [true, false];
         state.sfx_paths.nice = Some("selected/nice.ogg".into());
         state.context.policy.machine_nice_sound = false;
@@ -5255,7 +4844,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn missing_nice_sfx_does_not_pick_a_late_replacement() {
-        let mut state = super::init(None, super::EvaluationInitView::default());
+        let mut state = super::init(super::EvaluationInitView::default());
         state.nice_scores = [true, true];
         state.context.policy.machine_nice_sound = true;
         assert!(matches!(

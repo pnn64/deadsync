@@ -430,16 +430,6 @@ pub struct PostSongRuntimeView {
         std::collections::HashMap<String, Vec<deadsync_score::LeaderboardEntry>>,
 }
 
-/// One player's shell-prepared local records and online eligibility state used
-/// while constructing an Evaluation screen.
-#[derive(Clone, Debug, Default)]
-pub struct EvaluationInitPlayerView {
-    pub machine_records: Vec<deadsync_score::LeaderboardEntry>,
-    pub personal_records: Vec<deadsync_score::LeaderboardEntry>,
-    pub groovestats: deadsync_score::GrooveStatsEvalState,
-    pub itl: deadsync_score::ItlEvalState,
-}
-
 /// Shell-owned Evaluation policy copied into theme state at screen entry and
 /// refreshed while the screen is active.
 #[derive(Clone, Copy, Debug)]
@@ -546,9 +536,13 @@ impl Default for EvaluationContextView {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+/// A view of the canonical completed stage; constructing a screen cannot
+/// determine the result later consumed by session or course bookkeeping.
+#[derive(Clone, Default)]
 pub struct EvaluationInitView {
-    pub players: [EvaluationInitPlayerView; 2],
+    pub score_info: [Option<ScoreInfo>; 2],
+    pub stage_duration_seconds: f32,
+    pub fail_stream_progress: [Option<(u32, u32)>; 2],
     pub context: EvaluationContextView,
 }
 

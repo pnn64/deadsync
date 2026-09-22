@@ -2307,6 +2307,185 @@ M000
     }
 
     #[test]
+    fn completed_results_preserve_sides_stats_and_evaluation_view() {
+        use deadsync_gameplay::{GameplayInputPlayStyle, GameplayInputPlayerSide};
+        use deadsync_profile_gameplay::results::stage_result;
+        use deadsync_score::{Grade, stage_stats::all_players_failed};
+        use deadsync_theme_simply_love::{screens::evaluation, views::EvaluationContextView};
+        let simfile = write_fixture("completed-results", generated_hold_mine_simfile());
+        for (style, side, joined) in [
+            (
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                [true, false],
+            ),
+            (
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P2,
+                [false, true],
+            ),
+            (
+                profile_data::PlayStyle::Versus,
+                profile_data::PlayerSide::P1,
+                [true, true],
+            ),
+        ] {
+            with_session(style, side, joined[0], joined[1], || {
+                let profiles = std::array::from_fn(|idx| profile_data::Profile {
+                    display_name: format!("Player {idx}"),
+                    show_fa_plus_window: true,
+                    noteskin: profile_data::NoteSkin::new("lambda"),
+                    ..Default::default()
+                });
+                let session = GameplaySession {
+                    play_style: if style == profile_data::PlayStyle::Versus {
+                        GameplayInputPlayStyle::Versus
+                    } else {
+                        GameplayInputPlayStyle::Single
+                    },
+                    player_side: if side == profile_data::PlayerSide::P2 {
+                        GameplayInputPlayerSide::P2
+                    } else {
+                        GameplayInputPlayerSide::P1
+                    },
+                    joined_sides: joined,
+                    ..Default::default()
+                };
+                let mut state = build_test_state(
+                    &simfile,
+                    GameplayViewport::new(640.0, 480.0),
+                    session,
+                    profiles,
+                );
+                state.boundary.total_elapsed_in_screen = 12.5;
+                state.progress.stage.song_completed_naturally = true;
+                for runtime in 0..state.num_players() {
+                    let (start, end) = state.note_range_for_player(runtime);
+                    for note in &mut state.chart_runtime.notes[start..end] {
+                        if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
+                            let column = note.column % 4;
+                            note.result = Some(Judgment {
+                                time_error_ms: [-7.0, 23.0, 0.0][column],
+                                time_error_music_ns: [-7_000_000, 23_000_000, 0][column],
+                                grade: [
+                                    JudgeGrade::Fantastic,
+                                    JudgeGrade::Excellent,
+                                    JudgeGrade::Miss,
+                                ][column],
+                                window: [Some(TimingWindow::W0), Some(TimingWindow::W2), None]
+                                    [column],
+                                miss_because_held: column == 2,
+                            });
+                        }
+                    }
+                    state.chart_runtime.column_judgment_eligible[start..end].fill(true);
+                    let player = &mut state.players_runtime.players[runtime];
+                    player.judgment_counts = [1, 1, 0, 0, 0, 1];
+                    player.scoring_counts = player.judgment_counts;
+                    player.earned_grade_points = 12;
+                    player.holds_held = 1;
+                    player.holds_held_for_score = 1;
+                    player.rolls_held = 1;
+                    player.rolls_held_for_score = 1;
+                    player.mines_avoided = 2;
+                    player.calories_burned = 3.25 + runtime as f32;
+                    player.life_history = vec![(0.0, 1.0), (5.0, 0.75)];
+                    state.progress.window_counts.canonical[runtime] =
+                        deadsync_rules::timing::WindowCounts {
+                            w0: 1,
+                            w2: 1,
+                            miss: 1,
+                            ..Default::default()
+                        };
+                    state.progress.window_counts.ten_ms_blue[runtime] =
+                        state.progress.window_counts.canonical[runtime];
+                }
+                let stage = stage_result(&state.gameplay, Default::default());
+                assert_eq!(stage.duration_seconds, 12.5);
+                assert_eq!(stage.players.iter().flatten().count(), state.num_players());
+                assert!(!all_players_failed(&stage, joined));
+                for runtime in 0..state.num_players() {
+                    let physical = deadsync_gameplay::gameplay_player_side_index(
+                        state.setup.session.runtime_player_side(runtime),
+                    );
+                    let result = stage.players[physical]
+                        .as_ref()
+                        .expect("result on physical side");
+                    assert_eq!(result.judgment_counts, [1, 1, 0, 0, 0, 1]);
+                    assert_eq!(result.notes_hit, 2);
+                    assert_eq!(result.calories_burned, 3.25 + runtime as f32);
+                    assert_eq!(result.column_judgments[0].w0, 1);
+                    assert_eq!(result.column_judgments[1].w2, 1);
+                    assert_eq!(result.column_judgments[2].miss, 1);
+                    assert_eq!(result.column_judgments[2].held_miss, 1);
+                    assert_eq!(result.histogram.bins, [(-7, 1), (23, 1)]);
+                    assert_eq!(result.timing.mean_ms, 8.0);
+                    assert_eq!(result.timing.mean_abs_ms, 15.0);
+                    assert_eq!(result.window_counts.w0, 1);
+                    assert_eq!(result.window_counts_10ms.w2, 1);
+                    assert_eq!(result.holds_held, 1);
+                    assert_eq!(result.rolls_held, 1);
+                    assert_eq!(result.mines_avoided, 2);
+                    assert_eq!(result.life_history, [(0.0, 1.0), (5.0, 0.75)]);
+                    assert!(!result.disqualified);
+                }
+                let mut context = EvaluationContextView {
+                    play_style: style,
+                    player_side: side,
+                    ..Default::default()
+                };
+                for (player, joined) in context.players.iter_mut().zip(joined) {
+                    player.joined = joined;
+                }
+                let view = crate::session_results::evaluation_view(&state, &stage, context);
+                for runtime in 0..state.num_players() {
+                    let score = view.score_info[runtime].as_ref().expect("evaluation view");
+                    let result = stage.players[profile_data::player_side_index(score.side)]
+                        .as_ref()
+                        .expect("canonical side");
+                    assert_eq!(score.grade, result.grade);
+                    assert_eq!(score.score_percent, result.score_percent);
+                    assert_eq!(score.ex_score_percent, result.ex_score_percent);
+                    assert_eq!(score.column_judgments, result.column_judgments);
+                    assert_eq!(score.scatter.len(), result.scatter.len());
+                    assert_eq!(score.histogram.bins, result.histogram.bins);
+                }
+                let screen = evaluation::init(view);
+                assert_eq!(screen.stage_duration_seconds, 12.5);
+                assert!(!evaluation::all_joined_players_failed(&screen));
+                // Session storage does not need the screen and remains unchanged by it.
+                drop(screen);
+                let mut session = crate::session::SessionState::<()>::new(0, [0; MAX_PLAYERS]);
+                session.record_stage_result(stage);
+                assert_eq!(session.played_stages.len(), 1);
+                assert!(session.course_stage_eval_pages.is_empty());
+                state.players_runtime.players[0].is_failing = true;
+                state.players_runtime.players[0].fail_time = Some(3.0);
+                let failed = stage_result(&state.gameplay, Default::default());
+                assert_eq!(
+                    all_players_failed(&failed, joined),
+                    state.num_players() == 1
+                );
+                state.progress.stage.autoplay_used = true;
+                let autoplay = stage_result(&state.gameplay, Default::default());
+                assert!(all_players_failed(&autoplay, joined));
+                assert!(
+                    autoplay
+                        .players
+                        .iter()
+                        .flatten()
+                        .all(|p| p.disqualified && !p.score_valid && p.grade == Grade::Failed)
+                );
+                state.progress.stage.autoplay_used = false;
+                state.progress.stage.song_completed_naturally = false;
+                let aborted = stage_result(&state.gameplay, Default::default());
+                assert!(all_players_failed(&aborted, joined));
+                assert!(aborted.players.iter().flatten().all(|p| !p.disqualified));
+            });
+        }
+    }
+
+    #[test]
     fn disabling_holding_explosions_keeps_hold_and_roll_heads_engaged() {
         let simfile = write_fixture("holding-explosion-off", generated_hold_mine_simfile());
         with_session(

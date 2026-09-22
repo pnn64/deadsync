@@ -1,108 +1,162 @@
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
-use deadsync_score::stage_stats::{PlayerStageSummary, StageSummary};
-use deadsync_theme_simply_love::views::ScoreInfo;
+use deadsync_online::score_compat as scores;
+use deadsync_profile::player_side_index;
+use deadsync_score::{self as score_data, stage_stats::StageSummary};
+use deadsync_theme_simply_love::screens::gameplay;
+use deadsync_theme_simply_love::views::{EvaluationContextView, EvaluationInitView, ScoreInfo};
 use std::borrow::Cow;
 use std::ops::Range;
 
-fn notes_hit(score: &ScoreInfo) -> u32 {
-    score.column_judgments.iter().fold(0, |total, column| {
-        total
-            .saturating_add(column.w0)
-            .saturating_add(column.w1)
-            .saturating_add(column.w2)
-            .saturating_add(column.w3)
-            .saturating_add(column.w4)
-            .saturating_add(column.w5)
-    })
-}
+/// Adapt an already authoritative result to the current theme's evaluation
+/// view. Artwork, labels and record highlighting do not feed back into it.
+pub(crate) fn evaluation_view(
+    gs: &gameplay::State,
+    stage: &StageSummary,
+    context: EvaluationContextView,
+) -> EvaluationInitView {
+    let policy = context.policy;
+    let mut score_info = std::array::from_fn(|_| None);
+    let mut fail_stream_progress = [None; MAX_PLAYERS];
+    for (player_idx, score_info_slot) in score_info
+        .iter_mut()
+        .enumerate()
+        .take(gs.num_players().min(MAX_PLAYERS))
+    {
+        let side = deadsync_profile_gameplay::profile_side_from_gameplay(
+            gs.setup.session.runtime_player_side(player_idx),
+        );
+        let Some(player) = stage.players[player_side_index(side)].as_ref() else {
+            continue;
+        };
+        let prof = &gs.profiles()[player_idx];
+        let score_percent = player.score_percent;
+        let noteskin = gs.noteskin_assets.noteskin[player_idx].clone();
+        fail_stream_progress[player_idx] = player.fail_stream_progress;
+        let machine_records =
+            scores::get_machine_leaderboard_local(player.chart.short_hash.as_str(), usize::MAX);
+        let machine_record_highlight_rank =
+            score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
+        let personal_records = scores::get_personal_leaderboard_local_for_side(
+            player.chart.short_hash.as_str(),
+            side,
+            usize::MAX,
+        );
+        let personal_record_highlight_rank =
+            score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
+        let score_valid = player.score_valid;
+        // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
+        // not by our broader local ranking-validity heuristics.
+        let disqualified = player.disqualified;
+        let local_score_valid = score_valid && !disqualified;
+        let outcome = gs.individual_song_outcome(player_idx);
+        let failed =
+            score_data::gameplay_run_failed(outcome.is_failing, outcome.fail_time.is_some());
+        let passed = score_data::gameplay_run_passed(
+            outcome.song_completed_naturally,
+            outcome.is_failing,
+            outcome.life,
+            outcome.fail_time.is_some(),
+        );
+        let chart_hash = gs.charts()[player_idx].short_hash.as_str();
+        let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
+        let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
+        let expected_groovestats_submit = policy.enable_groovestats
+            && passed
+            && player.groovestats.valid
+            && course_life_submit_eligible
+            && prof.groovestats_is_pad_player
+            && (!gs.course_display_is_course_stage()
+                || policy.autosubmit_course_scores_individually)
+            && !prof.groovestats_api_key.trim().is_empty();
+        let expected_arrowcloud_submit = policy.enable_arrowcloud
+            && !disqualified
+            && (passed || (failed && policy.submit_arrowcloud_fails))
+            && lua_submit_allowed
+            && (course_life_submit_eligible || (failed && policy.submit_arrowcloud_fails))
+            && (!gs.course_display_is_course_stage()
+                || policy.autosubmit_course_scores_individually)
+            && !prof.arrowcloud_api_key.trim().is_empty();
+        let earned_machine_record =
+            local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
+        let earned_top2_personal =
+            local_score_valid && personal_record_highlight_rank.is_some_and(|rank| rank <= 2);
+        let machine_record_highlight_rank = local_score_valid
+            .then_some(machine_record_highlight_rank)
+            .flatten();
+        let personal_record_highlight_rank = local_score_valid
+            .then_some(personal_record_highlight_rank)
+            .flatten();
+        let show_machine_personal_split = !earned_machine_record && earned_top2_personal;
 
-fn player_stage_summary(score: &ScoreInfo) -> PlayerStageSummary {
-    PlayerStageSummary {
-        profile_name: score.profile_name.clone(),
-        chart: score.chart.clone(),
-        score_valid: score.score_valid,
-        disqualified: score.disqualified,
-        groovestats: score.groovestats.clone(),
-        itl: score.itl.clone(),
-        grade: score.grade,
-        score_percent: score.score_percent,
-        earned_grade_points: score.earned_grade_points,
-        possible_grade_points: score.possible_grade_points,
-        ex_score_percent: score.ex_score_percent,
-        hard_ex_score_percent: score.hard_ex_score_percent,
-        hands_achieved: score.hands_achieved,
-        hands_total: score.hands_total,
-        holds_held: score.holds_held,
-        holds_held_for_score: score.holds_held_for_score,
-        holds_total: score.holds_total,
-        rolls_held: score.rolls_held,
-        rolls_held_for_score: score.rolls_held_for_score,
-        rolls_total: score.rolls_total,
-        mines_hit_for_score: score.mines_hit_for_score,
-        mines_avoided: score.mines_avoided,
-        mines_total: score.mines_total,
-        notes_hit: notes_hit(score),
-        calories_burned: score.calories_burned,
-        window_counts: score.window_counts,
-        window_counts_10ms: score.window_counts_10ms,
-        timing: score.timing,
-        arrow_timing: score.arrow_timing.clone(),
-        scatter: score.scatter.clone(),
-        scatter_worst_window_ms: score.scatter_worst_window_ms,
-        histogram: score.histogram.clone(),
-        graph_first_second: score.graph_first_second,
-        graph_last_second: score.graph_last_second,
-        life_history: score.life_history.clone(),
-        fail_time: score.fail_time,
-        show_w0: (score.show_fa_plus_window && score.show_fa_plus_pane) || score.show_ex_score,
-        show_fa_plus_pane: score.show_fa_plus_pane,
-        show_ex_score: score.show_ex_score,
-        show_hard_ex_score: score.show_hard_ex_score,
-        track_early_judgments: score.track_early_judgments,
-        dim_post_fail_scatter: score.dim_post_fail_scatter,
+        *score_info_slot = Some(ScoreInfo {
+                song: stage.song.clone(),
+                chart: player.chart.clone(),
+                course_graph_stages: Vec::new(),
+                side,
+                profile_name: player.profile_name.clone(),
+                score_valid: player.score_valid,
+                disqualified: player.disqualified,
+                expected_groovestats_submit,
+                expected_arrowcloud_submit,
+                groovestats: player.groovestats.clone(),
+                itl: player.itl.clone(),
+                judgment_counts: player.judgment_counts,
+                score_percent: player.score_percent,
+                earned_grade_points: player.earned_grade_points,
+                possible_grade_points: player.possible_grade_points,
+                grade: player.grade,
+                speed_mod: gs.scroll_speed_for_player(player_idx),
+                mods_text: deadsync_theme_simply_love::screens::components::gameplay::notefield::preferred_mods_text(
+                    gs, player_idx,
+                ),
+                hands_achieved: player.hands_achieved,
+                hands_total: player.hands_total,
+                holds_held: player.holds_held,
+                holds_held_for_score: player.holds_held_for_score,
+                holds_total: player.holds_total,
+                rolls_held: player.rolls_held,
+                rolls_held_for_score: player.rolls_held_for_score,
+                rolls_total: player.rolls_total,
+                mines_hit_for_score: player.mines_hit_for_score,
+                mines_avoided: player.mines_avoided,
+                mines_total: player.mines_total,
+                timing: player.timing,
+                arrow_timing: player.arrow_timing.clone(),
+                scatter: player.scatter.clone(),
+                scatter_worst_window_ms: player.scatter_worst_window_ms,
+                histogram: player.histogram.clone(),
+                graph_first_second: player.graph_first_second,
+                graph_last_second: player.graph_last_second,
+                music_rate: stage.music_rate,
+                life_history: player.life_history.clone(),
+                fail_time: player.fail_time,
+                window_counts: player.window_counts,
+                window_counts_10ms: player.window_counts_10ms,
+                ex_score_percent: player.ex_score_percent,
+                hard_ex_score_percent: player.hard_ex_score_percent,
+                calories_burned: player.calories_burned,
+                column_judgments: player.column_judgments.clone(),
+                noteskin,
+                show_fa_plus_window: prof.show_fa_plus_window,
+                show_ex_score: player.show_ex_score,
+                show_hard_ex_score: player.show_hard_ex_score,
+                show_fa_plus_pane: player.show_fa_plus_pane,
+                track_early_judgments: player.track_early_judgments,
+                dim_post_fail_scatter: player.dim_post_fail_scatter,
+                disabled_timing_windows: prof.timing_windows.disabled_windows(),
+                machine_records,
+                machine_record_highlight_rank,
+                personal_records,
+                personal_record_highlight_rank,
+                show_machine_personal_split,
+            });
     }
-}
-
-pub fn stage_summary_from_score_info(
-    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
-    duration_seconds: f32,
-    play_style: PlayStyle,
-    player_side: PlayerSide,
-) -> Option<StageSummary> {
-    let mut song = None;
-    let mut music_rate = 1.0;
-    let mut players: [Option<PlayerStageSummary>; MAX_PLAYERS] = std::array::from_fn(|_| None);
-
-    match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
-            for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
-                let Some(score) = score_info.get(idx).and_then(|entry| entry.as_ref()) else {
-                    continue;
-                };
-                song = Some(score.song.clone());
-                music_rate = score.music_rate;
-                players[player_side_index(side)] = Some(player_stage_summary(score));
-            }
-        }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
-            let score = score_info.first().and_then(|entry| entry.as_ref())?;
-            song = Some(score.song.clone());
-            music_rate = score.music_rate;
-            players[player_side_index(player_side)] = Some(player_stage_summary(score));
-        }
+    EvaluationInitView {
+        score_info,
+        fail_stream_progress,
+        context,
+        stage_duration_seconds: stage.duration_seconds,
     }
-
-    Some(StageSummary {
-        song: song?,
-        music_rate: if music_rate.is_finite() && music_rate > 0.0 {
-            music_rate
-        } else {
-            1.0
-        },
-        duration_seconds,
-        players,
-    })
 }
 
 pub fn post_select_display_stages<'a>(

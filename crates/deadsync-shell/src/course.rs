@@ -7,7 +7,7 @@ use deadsync_gameplay::{
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
-use deadsync_score::{self as score_data, ColumnJudgmentList, ColumnJudgments, stage_stats};
+use deadsync_score::{self as score_data, stage_stats};
 use deadsync_theme::views::CourseTypeView;
 use deadsync_theme_simply_love::views::{
     CourseGraphStage, CourseStagePlan, ScoreInfo, SelectedCoursePlan,
@@ -254,18 +254,6 @@ pub fn score_info_from_stage(
 ) -> Option<ScoreInfo> {
     let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
-    let judgment_counts = [
-        player
-            .window_counts
-            .w0
-            .saturating_add(player.window_counts.w1),
-        player.window_counts.w2,
-        player.window_counts.w3,
-        player.window_counts.w4,
-        player.window_counts.w5,
-        player.window_counts.miss,
-    ];
-
     let chart_hash = player.chart.short_hash.as_str();
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
     let personal_records =
@@ -302,7 +290,7 @@ pub fn score_info_from_stage(
         expected_arrowcloud_submit: false,
         groovestats: player.groovestats.clone(),
         itl: player.itl.clone(),
-        judgment_counts,
+        judgment_counts: player.judgment_counts,
         score_percent: player.score_percent,
         earned_grade_points: player.earned_grade_points,
         possible_grade_points: player.possible_grade_points,
@@ -341,7 +329,7 @@ pub fn score_info_from_stage(
         ex_score_percent: player.ex_score_percent,
         hard_ex_score_percent: player.hard_ex_score_percent,
         calories_burned: player.calories_burned,
-        column_judgments: ColumnJudgmentList::new(),
+        column_judgments: player.column_judgments.clone(),
         noteskin: None,
         show_fa_plus_window: player.show_w0,
         show_ex_score: player.show_ex_score,
@@ -410,91 +398,4 @@ pub fn build_course_graph_stages(
         }
         out
     })
-}
-
-#[inline(always)]
-const fn add_column_judgments(dst: &mut ColumnJudgments, src: ColumnJudgments) {
-    dst.w0 = dst.w0.saturating_add(src.w0);
-    dst.w1 = dst.w1.saturating_add(src.w1);
-    dst.w2 = dst.w2.saturating_add(src.w2);
-    dst.w3 = dst.w3.saturating_add(src.w3);
-    dst.w4 = dst.w4.saturating_add(src.w4);
-    dst.w5 = dst.w5.saturating_add(src.w5);
-    dst.miss = dst.miss.saturating_add(src.miss);
-    dst.early_w1 = dst.early_w1.saturating_add(src.early_w1);
-    dst.early_w2 = dst.early_w2.saturating_add(src.early_w2);
-    dst.early_w3 = dst.early_w3.saturating_add(src.early_w3);
-    dst.early_w4 = dst.early_w4.saturating_add(src.early_w4);
-    dst.early_w5 = dst.early_w5.saturating_add(src.early_w5);
-    dst.early_total_w0 = dst.early_total_w0.saturating_add(src.early_total_w0);
-    dst.early_total_w1 = dst.early_total_w1.saturating_add(src.early_total_w1);
-    dst.early_total_w2 = dst.early_total_w2.saturating_add(src.early_total_w2);
-    dst.early_total_w3 = dst.early_total_w3.saturating_add(src.early_total_w3);
-    dst.early_total_w4 = dst.early_total_w4.saturating_add(src.early_total_w4);
-    dst.early_total_w5 = dst.early_total_w5.saturating_add(src.early_total_w5);
-    dst.held_miss = dst.held_miss.saturating_add(src.held_miss);
-}
-
-fn merge_column_judgments(dst: &mut ColumnJudgmentList, src: &[ColumnJudgments]) {
-    if dst.len() < src.len() {
-        dst.resize(src.len(), ColumnJudgments::default());
-    }
-    for (dst, src) in dst.iter_mut().zip(src.iter().copied()) {
-        add_column_judgments(dst, src);
-    }
-}
-
-pub fn merge_course_score_columns<'a>(
-    summary: &mut ScoreInfo,
-    song_scores: impl IntoIterator<Item = &'a ScoreInfo>,
-) {
-    let mut columns = ColumnJudgmentList::new();
-    let mut noteskin = None;
-    for song in song_scores {
-        if song.side != summary.side {
-            continue;
-        }
-        merge_column_judgments(&mut columns, &song.column_judgments);
-        if noteskin.is_none() && song.noteskin.is_some() {
-            noteskin.clone_from(&song.noteskin);
-        }
-    }
-    summary.column_judgments = columns;
-    if summary.noteskin.is_none() {
-        summary.noteskin = noteskin;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn column_judgments_resize_and_saturate() {
-        let mut columns: ColumnJudgmentList = vec![ColumnJudgments {
-            w0: u32::MAX,
-            held_miss: 1,
-            ..Default::default()
-        }]
-        .into();
-        merge_column_judgments(
-            &mut columns,
-            &[
-                ColumnJudgments {
-                    w0: 1,
-                    held_miss: 2,
-                    ..Default::default()
-                },
-                ColumnJudgments {
-                    miss: 3,
-                    ..Default::default()
-                },
-            ],
-        );
-
-        assert_eq!(columns.len(), 2);
-        assert_eq!(columns[0].w0, u32::MAX);
-        assert_eq!(columns[0].held_miss, 3);
-        assert_eq!(columns[1].miss, 3);
-    }
 }

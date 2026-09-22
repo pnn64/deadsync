@@ -5321,7 +5321,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
     let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
-        views.contains("pub struct EvaluationInitPlayerView")
+        views.contains("pub score_info: [Option<ScoreInfo>; 2]")
             && views.contains("pub struct EvaluationInitView")
             && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
@@ -5331,6 +5331,10 @@ fn evaluation_leaderboards_are_shell_prepared() {
     shell.push_str(
         &fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
+    );
+    shell.push_str(
+        &fs::read_to_string(root.join("crates/deadsync-shell/src/session_results.rs"))
+            .expect("shell result view adapter should be readable"),
     );
     for shell_owner in [
         "fn evaluation_init_view",
@@ -5420,7 +5424,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
     );
     for shell_owner in [
         "fn evaluation_context_view(",
-        "context: evaluation_context_view(",
+        "crate::session_results::evaluation_view(",
         "profile_data::runtime_evaluation_favorite_membership",
         "SimplyLoveProfileRequest::ToggleFavorite {",
         "profile::toggle_favorite(side, &chart_hash)",
@@ -11337,4 +11341,52 @@ fn public_api_paths_expose_owners_without_legacy_catalogs() {
         renderer.contains("pub use deadlib_render_core::{"),
         "retain the technical renderer/core umbrella"
     );
+}
+
+#[test]
+fn stage_results_are_independent_of_evaluation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let evaluation = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("evaluation source");
+    for forbidden in [
+        "gameplay::State",
+        "calculate_itg_score_percent_from_counts",
+        "compute_column_judgments",
+        "stage_scored_ex_score_data",
+        "compute_note_timing_stats",
+    ] {
+        assert!(
+            !evaluation.contains(forbidden),
+            "theme still assembles results: {forbidden}"
+        );
+    }
+    assert!(evaluation.contains("pub fn init(init_view: EvaluationInitView)"));
+    let results = fs::read_to_string(root.join("crates/deadsync-profile-gameplay/src/results.rs"))
+        .expect("gameplay result owner");
+    assert!(results.contains("pub fn stage_result"));
+    assert!(results.contains("GameplayRuntimeState"));
+    for forbidden in [
+        "deadsync_theme",
+        "deadlib_present",
+        "evaluation::",
+        "profile::",
+    ] {
+        assert!(
+            !results.contains(forbidden),
+            "results depend on presentation/runtime: {forbidden}"
+        );
+    }
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell source");
+    assert!(!shell.contains("append_stage_results_from_eval"));
+    let session = fs::read_to_string(root.join("crates/deadsync-shell/src/session.rs"))
+        .expect("session source");
+    assert!(
+        session.contains("pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary)")
+    );
+    let adapter = fs::read_to_string(root.join("crates/deadsync-shell/src/session_results.rs"))
+        .expect("result view adapter");
+    assert!(!adapter.contains("stage_summary_from_score_info"));
 }

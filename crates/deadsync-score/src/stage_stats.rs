@@ -7,18 +7,25 @@ use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, TimingStatsAccum, WindowCounts,
 };
 
-use crate::{Grade, GrooveStatsEvalState, ItlEvalState, promote_quint_grade, score_to_grade};
+use crate::{
+    ColumnJudgmentList, ColumnJudgments, Grade, GrooveStatsEvalState, ItlEvalState,
+    promote_quint_grade, score_to_grade,
+};
 
 #[derive(Clone, Debug)]
 pub struct StageSummary {
     pub song: Arc<SongData>,
     pub music_rate: f32,
     pub duration_seconds: f32,
+    /// Physical sides (P1, P2), including P2-only play in slot 1.
     pub players: [Option<PlayerStageSummary>; MAX_PLAYERS],
 }
 
 #[derive(Clone, Debug)]
 pub struct PlayerStageSummary {
+    pub judgment_counts: judgment::JudgeCounts,
+    pub column_judgments: ColumnJudgmentList,
+    pub fail_stream_progress: Option<(u32, u32)>,
     pub profile_name: String,
     pub chart: Arc<ChartData>,
     pub score_valid: bool,
@@ -86,6 +93,66 @@ pub struct CourseSummaryInput<'a> {
     pub stage_summaries: &'a [StageSummary],
 }
 
+/// Preserve joined-side failure semantics, with the same fallback when join
+/// bookkeeping is unavailable. Stage player slots are always physical sides.
+pub fn all_players_failed(stage: &StageSummary, joined: [bool; MAX_PLAYERS]) -> bool {
+    let mut found = false;
+    for (player, joined) in stage.players.iter().zip(joined) {
+        if !joined {
+            continue;
+        }
+        if let Some(player) = player {
+            found = true;
+            if player.grade != Grade::Failed {
+                return false;
+            }
+        }
+    }
+    if found {
+        return true;
+    }
+    let mut any = false;
+    for player in stage.players.iter().flatten() {
+        any = true;
+        if player.grade != Grade::Failed {
+            return false;
+        }
+    }
+    any
+}
+
+#[inline(always)]
+const fn add_column_judgments(dst: &mut ColumnJudgments, src: ColumnJudgments) {
+    dst.w0 = dst.w0.saturating_add(src.w0);
+    dst.w1 = dst.w1.saturating_add(src.w1);
+    dst.w2 = dst.w2.saturating_add(src.w2);
+    dst.w3 = dst.w3.saturating_add(src.w3);
+    dst.w4 = dst.w4.saturating_add(src.w4);
+    dst.w5 = dst.w5.saturating_add(src.w5);
+    dst.miss = dst.miss.saturating_add(src.miss);
+    dst.early_w1 = dst.early_w1.saturating_add(src.early_w1);
+    dst.early_w2 = dst.early_w2.saturating_add(src.early_w2);
+    dst.early_w3 = dst.early_w3.saturating_add(src.early_w3);
+    dst.early_w4 = dst.early_w4.saturating_add(src.early_w4);
+    dst.early_w5 = dst.early_w5.saturating_add(src.early_w5);
+    dst.early_total_w0 = dst.early_total_w0.saturating_add(src.early_total_w0);
+    dst.early_total_w1 = dst.early_total_w1.saturating_add(src.early_total_w1);
+    dst.early_total_w2 = dst.early_total_w2.saturating_add(src.early_total_w2);
+    dst.early_total_w3 = dst.early_total_w3.saturating_add(src.early_total_w3);
+    dst.early_total_w4 = dst.early_total_w4.saturating_add(src.early_total_w4);
+    dst.early_total_w5 = dst.early_total_w5.saturating_add(src.early_total_w5);
+    dst.held_miss = dst.held_miss.saturating_add(src.held_miss);
+}
+
+fn merge_column_judgments(dst: &mut ColumnJudgmentList, src: &[ColumnJudgments]) {
+    if dst.len() < src.len() {
+        dst.resize(src.len(), ColumnJudgments::default());
+    }
+    for (dst, src) in dst.iter_mut().zip(src.iter().copied()) {
+        add_column_judgments(dst, src);
+    }
+}
+
 #[inline(always)]
 const fn merge_window_counts(mut total: WindowCounts, add: WindowCounts) -> WindowCounts {
     total.w0 = total.w0.saturating_add(add.w0);
@@ -150,6 +217,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
         let mut show_hard_ex = false;
         let mut track_early_judgments = false;
         let mut counts = WindowCounts::default();
+        let mut column_judgments = ColumnJudgmentList::new();
         let mut counts_10ms = WindowCounts::default();
         let mut hands_achieved = 0u32;
         let mut hands_total = 0u32;
@@ -206,6 +274,7 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             show_hard_ex |= player.show_hard_ex_score;
             track_early_judgments |= player.track_early_judgments;
             counts = merge_window_counts(counts, player.window_counts);
+            merge_column_judgments(&mut column_judgments, &player.column_judgments);
             counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
             hands_achieved = hands_achieved.saturating_add(player.hands_achieved);
             hands_total = hands_total.saturating_add(player.hands_total);
@@ -298,6 +367,16 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             }
         });
         players[idx] = Some(PlayerStageSummary {
+            judgment_counts: [
+                counts.w0.saturating_add(counts.w1),
+                counts.w2,
+                counts.w3,
+                counts.w4,
+                counts.w5,
+                counts.miss,
+            ],
+            column_judgments,
+            fail_stream_progress: None,
             profile_name: first_player.profile_name.clone(),
             chart: Arc::new(summary_chart),
             score_valid,
@@ -397,6 +476,35 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn column_judgments_resize_and_saturate() {
+        let mut columns: ColumnJudgmentList = vec![ColumnJudgments {
+            w0: u32::MAX,
+            held_miss: 1,
+            ..Default::default()
+        }]
+        .into();
+        merge_column_judgments(
+            &mut columns,
+            &[
+                ColumnJudgments {
+                    w0: 1,
+                    held_miss: 2,
+                    ..Default::default()
+                },
+                ColumnJudgments {
+                    miss: 3,
+                    ..Default::default()
+                },
+            ],
+        );
+
+        assert_eq!(columns.len(), 2);
+        assert_eq!(columns[0].w0, u32::MAX);
+        assert_eq!(columns[0].held_miss, 3);
+        assert_eq!(columns[1].miss, 3);
+    }
+
     fn test_chart(hash: &str) -> Arc<ChartData> {
         Arc::new(ChartData {
             chart_type: "dance-single".to_string(),
@@ -483,6 +591,9 @@ mod tests {
         possible_grade_points: i32,
     ) -> PlayerStageSummary {
         PlayerStageSummary {
+            judgment_counts: [0; 6],
+            column_judgments: ColumnJudgmentList::new(),
+            fail_stream_progress: None,
             profile_name: "P1".to_string(),
             chart,
             score_valid: true,

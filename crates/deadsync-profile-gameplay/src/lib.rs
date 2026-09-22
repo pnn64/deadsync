@@ -1,3 +1,5 @@
+pub mod results;
+
 use deadsync_core::input::MAX_PLAYERS;
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;

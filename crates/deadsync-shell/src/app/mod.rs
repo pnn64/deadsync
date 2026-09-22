@@ -23,7 +23,7 @@ use crate::command::Command;
 use crate::course::{
     CourseRunState, append_endless_cycle, build_course_graph_stages,
     build_course_run_from_selection, build_course_summary_score_info, build_course_summary_stage,
-    course_display_timing_for_run, course_life_config_for_stage, merge_course_score_columns,
+    course_display_timing_for_run, course_life_config_for_stage,
 };
 #[cfg(test)]
 use crate::course::{CourseStageRuntime, score_info_from_stage};
@@ -80,7 +80,6 @@ use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
 use crate::session_results::{
     fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
-    stage_summary_from_score_info,
 };
 use crate::stutter_diag::{
     STUTTER_DIAG_FRAME_CAPACITY, STUTTER_DIAG_WINDOW_NS, StutterDiagDumpContext,
@@ -189,13 +188,12 @@ use deadsync_theme::views::{
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
-    EvaluationContextView, EvaluationInitPlayerView, EvaluationInitView, EvaluationPlayerView,
-    EvaluationPolicyView, EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT,
-    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
-    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, PostSelectStageView,
-    ScoreboxLocalView, ScoreboxMachineView, ScoreboxSideView, ScreenBarBackgroundView,
-    SelectCourseContextView, SelectCoursePolicyView, SelectCourseRuntimeView,
-    SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
+    EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
+    EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
+    MusicWheelRuntimeRequest, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest,
+    MusicWheelSlotRuntimeView, PostSelectStageView, ScoreboxLocalView, ScoreboxMachineView,
+    ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView, SelectCoursePolicyView,
+    SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
     SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
     SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
@@ -682,17 +680,15 @@ struct GameplayInitFinish {
     config: config::app_config::Config,
 }
 
-fn apply_course_summary_column_judgments(
-    course_page: &mut evaluation::State,
-    song_pages: &[evaluation::State],
-) {
+fn apply_course_noteskins(course_page: &mut evaluation::State, song_pages: &[evaluation::State]) {
     for summary in course_page.score_info.iter_mut().flatten() {
-        merge_course_score_columns(
-            summary,
-            song_pages
+        if summary.noteskin.is_none() {
+            summary.noteskin = song_pages
                 .iter()
-                .flat_map(|page| page.score_info.iter().flatten()),
-        );
+                .flat_map(|page| page.score_info.iter().flatten())
+                .filter(|song| song.side == summary.side)
+                .find_map(|song| song.noteskin.clone());
+        }
     }
 }
 
@@ -1179,7 +1175,7 @@ impl ScreensState {
         let mut init_state = init::init(init_songs_root, init_courses_root);
         init_state.active_color_index = color_index;
 
-        let mut evaluation_state = evaluation::init(None, EvaluationInitView::default());
+        let mut evaluation_state = evaluation::init(EvaluationInitView::default());
         evaluation_state.active_color_index = color_index;
 
         let mut evaluation_summary_state = evaluation_summary::init(
@@ -2559,8 +2555,22 @@ impl App {
         changed
     }
 
+    fn gameplay_stage_result(gameplay: &gameplay::State) -> stage_stats::StageSummary {
+        let online = std::array::from_fn(|player| {
+            if player >= gameplay.num_players().min(MAX_PLAYERS) {
+                return Default::default();
+            }
+            (
+                scores::groovestats_eval_state_from_gameplay(gameplay, player),
+                scores::itl_eval_state_from_gameplay(gameplay, player),
+            )
+        });
+        deadsync_profile_gameplay::results::stage_result(&gameplay.gameplay, online)
+    }
+
     fn evaluation_init_view(
         gameplay: &gameplay::State,
+        stage: &stage_stats::StageSummary,
         config: &config::app_config::Config,
     ) -> EvaluationInitView {
         let profile = profile_data::runtime_music_profile_snapshot(
@@ -2568,34 +2578,14 @@ impl App {
             config.enable_arrowcloud,
             config.auto_populate_gs_scores,
         );
-        let profiles = &profile.scorebox;
-        EvaluationInitView {
-            players: std::array::from_fn(|player_idx| {
-                if player_idx >= gameplay.num_players().min(MAX_PLAYERS) {
-                    return EvaluationInitPlayerView::default();
-                }
-                let side = if gameplay.num_players() >= 2 {
-                    profile_data::player_side_for_index(player_idx)
-                } else {
-                    profiles.player_side
-                };
-                let chart_hash = gameplay.charts()[player_idx].short_hash.as_str();
-                EvaluationInitPlayerView {
-                    machine_records: scores::get_machine_leaderboard_local(chart_hash, usize::MAX),
-                    personal_records: scores::get_personal_leaderboard_local_for_side(
-                        chart_hash,
-                        side,
-                        usize::MAX,
-                    ),
-                    groovestats: scores::groovestats_eval_state_from_gameplay(gameplay, player_idx),
-                    itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
-                }
-            }),
-            context: evaluation_context_view(
+        crate::session_results::evaluation_view(
+            gameplay,
+            stage,
+            evaluation_context_view(
                 evaluation_views::EvaluationFramePolicy::from_config(config).context(),
                 &profile,
             ),
-        }
+        )
     }
 
     fn execute_evaluation_score_runtime(gameplay: &gameplay::State) {
@@ -6276,47 +6266,60 @@ impl App {
         gs.all_joined_players_failed()
     }
 
-    fn append_stage_results_from_eval(
+    fn record_stage_result(
         &mut self,
-        eval_state: &evaluation::State,
-    ) -> Option<(f32, f32)> {
-        let in_course_run = self.state.session.course_run.is_some();
-        let session = profile::get_session_snapshot();
-        let stage_summary = stage_summary_from_score_info(
-            &eval_state.score_info,
-            eval_state.stage_duration_seconds,
-            session.play_style,
-            session.player_side,
-        );
-        if let Some(stage) = stage_summary.as_ref() {
-            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                if let Some(p) = stage
-                    .players
-                    .get(profile_data::player_side_index(side))
-                    .and_then(|p| p.as_ref())
-                {
-                    profile::add_stage_calories_for_side(side, p.calories_burned);
-                }
+        stage: stage_stats::StageSummary,
+        failed: bool,
+        config: &config::app_config::Config,
+        charge_stage: bool,
+    ) -> Option<(CourseRunState, stage_stats::StageSummary)> {
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            if let Some(player) = &stage.players[profile_data::player_side_index(side)] {
+                profile::add_stage_calories_for_side(side, player.calories_burned);
             }
         }
-        let course_page = if in_course_run {
-            let mut stage_page = eval_state.clone();
-            stage_page.return_to_course = true;
-            stage_page.auto_advance_seconds = None;
-            Some(stage_page)
-        } else {
-            None
-        };
-        let stage_timing = stage_summary
-            .as_ref()
-            .map(|stage| (stage.song.precise_last_second(), stage.music_rate));
-        self.state
-            .session
-            .record_stage_result(stage_summary, course_page);
-        stage_timing
+        // Intermediate course songs historically do not consume another credit.
+        if charge_stage {
+            if self.state.session.course_run.is_some() {
+                self.state.coin.record_course_stage();
+            } else {
+                let gave_up = !failed
+                    && stage
+                        .players
+                        .iter()
+                        .flatten()
+                        .any(|player| !player.score_valid && !player.disqualified);
+                self.state.coin.record_stage(
+                    config.coin,
+                    stage.song.precise_last_second(),
+                    stage.music_rate,
+                    gave_up,
+                );
+            }
+        }
+        self.state.session.record_stage_result(stage);
+        let course = self.state.session.take_final_course(failed)?;
+        let summary = build_course_summary_stage(&course)?;
+        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+            if let Some(player) = &summary.players[profile_data::player_side_index(side)] {
+                scores::save_local_summary_score_for_side(
+                    &course.score_hash,
+                    side,
+                    summary.music_rate,
+                    player,
+                );
+            }
+        }
+        self.state.session.played_stages.push(summary.clone());
+        Some((course, summary))
     }
 
-    fn finalize_entered_evaluation(&mut self, config: &config::app_config::Config) {
+    fn finalize_entered_evaluation(
+        &mut self,
+        config: &config::app_config::Config,
+        failed: bool,
+        completed_course: Option<(CourseRunState, stage_stats::StageSummary)>,
+    ) {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
@@ -6327,33 +6330,8 @@ impl App {
             .prepare_screen(&mut self.audio, sfx_paths.iter());
         self.state.screens.evaluation_state.sfx_paths = sfx_paths.clone();
         let color_idx = self.state.screens.evaluation_state.active_color_index;
-        let eval_snapshot = self.state.screens.evaluation_state.clone();
-        let in_course_run = self.state.session.course_run.is_some();
-        let stage_timing = self.append_stage_results_from_eval(&eval_snapshot);
-        if let Some((song_seconds, music_rate)) = stage_timing {
-            if in_course_run {
-                self.state.coin.record_course_stage();
-            } else {
-                let gave_up = !screens::evaluation::all_joined_players_failed(&eval_snapshot)
-                    && eval_snapshot
-                        .score_info
-                        .iter()
-                        .flatten()
-                        .any(|score| !score.score_valid && !score.disqualified);
-                self.state
-                    .coin
-                    .record_stage(config.coin, song_seconds, music_rate, gave_up);
-            }
-        }
-        self.state.screens.evaluation_state.return_to_course =
-            self.state.session.course_run.is_some();
-        self.state.screens.evaluation_state.auto_advance_seconds = None;
-
-        // Pass / Fail SFX (zmod parity, issue #375). Based on the per-stage
-        // result that was just captured into `eval_snapshot`; even when that
-        // is immediately replaced by a course summary, this is the cue tied to
-        // the player's actual exit from gameplay.
-        let failed = screens::evaluation::all_joined_players_failed(&eval_snapshot);
+        // The cue follows the completed stage, even when its screen is replaced
+        // by the course summary below. Result bookkeeping has already finished.
         let entry_sfx = evaluation::entry_sfx(failed, config.visual_style, config.srpg_variant)
             .and_then(|path| {
                 self.audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
@@ -6364,59 +6342,41 @@ impl App {
             self.audio.play_screen_sfx(&sound);
         }
 
-        if let Some((course_run, per_song_pages)) = self.state.session.take_final_course(failed) {
-            let score_hash = course_run.score_hash.clone();
+        if let Some((course_run, course_stage)) = completed_course {
+            let per_song_pages = std::mem::take(&mut self.state.session.course_stage_eval_pages);
             let course_graph_stages = build_course_graph_stages(
                 &course_run,
                 profile::get_session_play_style().chart_type(),
             );
-            let course_summary = build_course_summary_stage(&course_run);
+            let gameplay_elapsed =
+                stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
+            let (session_elapsed, _) =
+                evaluation::elapsed_times(&self.state.screens.evaluation_state);
+            let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+            let mut course_page = build_course_summary_eval_state(
+                &course_stage,
+                &course_graph_stages,
+                color_idx,
+                session_elapsed,
+                gameplay_elapsed,
+                config,
+            );
+            apply_course_noteskins(&mut course_page, &per_song_pages);
+            course_page.screen_elapsed = screen_elapsed;
+            course_page.sfx_paths = sfx_paths.clone();
+            self.state.screens.evaluation_state = course_page.clone();
 
-            if let Some(course_stage) = course_summary {
-                for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                    if let Some(player) =
-                        course_stage.players[profile_data::player_side_index(side)].as_ref()
-                    {
-                        scores::save_local_summary_score_for_side(
-                            score_hash.as_str(),
-                            side,
-                            course_stage.music_rate,
-                            player,
-                        );
-                    }
-                }
-                self.state.session.played_stages.push(course_stage.clone());
-
-                let gameplay_elapsed =
-                    stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
-                let (session_elapsed, _) =
-                    evaluation::elapsed_times(&self.state.screens.evaluation_state);
-                let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
-                let mut course_page = build_course_summary_eval_state(
-                    &course_stage,
-                    &course_graph_stages,
-                    color_idx,
-                    session_elapsed,
-                    gameplay_elapsed,
-                    config,
-                );
-                apply_course_summary_column_judgments(&mut course_page, &per_song_pages);
-                course_page.screen_elapsed = screen_elapsed;
-                course_page.sfx_paths = sfx_paths.clone();
-                self.state.screens.evaluation_state = course_page.clone();
-
-                let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
-                pages.push(course_page);
-                for mut page in per_song_pages {
-                    page.sfx_paths = sfx_paths.clone();
-                    page.return_to_course = true;
-                    page.auto_advance_seconds = None;
-                    page.screen_elapsed = screen_elapsed;
-                    evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
-                    pages.push(page);
-                }
-                self.state.session.replace_course_eval_pages(pages);
+            let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
+            pages.push(course_page);
+            for mut page in per_song_pages {
+                page.sfx_paths = sfx_paths.clone();
+                page.return_to_course = true;
+                page.auto_advance_seconds = None;
+                page.screen_elapsed = screen_elapsed;
+                evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
+                pages.push(page);
             }
+            self.state.session.replace_course_eval_pages(pages);
         } else {
             self.state.session.clear_course_eval_pages();
         }
@@ -8583,6 +8543,34 @@ impl App {
             self.dynamic_media
                 .clear_gameplay_backgrounds(&mut self.asset_manager, backend);
         }
+        if prev == CurrentScreen::Gameplay
+            && !matches!(
+                target,
+                CurrentScreen::Gameplay | CurrentScreen::Evaluation | CurrentScreen::Practice
+            )
+            && self
+                .state
+                .screens
+                .gameplay_state
+                .as_ref()
+                .is_some_and(|gameplay| {
+                    gameplay.song_completed_naturally() || gameplay.all_joined_players_failed()
+                })
+            && let Some(mut gameplay) = self.state.screens.gameplay_state.take()
+        {
+            crate::gameplay_runtime::exit(&mut gameplay);
+            self.update_combo_carry_from_gameplay(&gameplay);
+            Self::execute_evaluation_score_runtime(&gameplay);
+            let stage = Self::gameplay_stage_result(&gameplay);
+            let failed =
+                stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
+            if self
+                .record_stage_result(stage, failed, &config::runtime::get(), true)
+                .is_some()
+            {
+                self.state.session.course_stage_eval_pages.clear();
+            }
+        }
         if target == CurrentScreen::Practice {
             self.audio.stop_music();
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
@@ -8901,10 +8889,18 @@ impl App {
                 let color_idx = gameplay_results.active_color_index();
                 Self::execute_evaluation_score_runtime(&gameplay_results);
                 let config = config::runtime::get();
-                let init_view = Self::evaluation_init_view(&gameplay_results, &config);
-                let mut eval_state = evaluation::init(Some(gameplay_results), init_view);
+                let stage = Self::gameplay_stage_result(&gameplay_results);
+                let failed = stage_stats::all_players_failed(
+                    &stage,
+                    gameplay_results.setup.session.joined_sides,
+                );
+                let _ = self.record_stage_result(stage.clone(), failed, &config, false);
+                let init_view = Self::evaluation_init_view(&gameplay_results, &stage, &config);
+                let mut eval_state = evaluation::init(init_view);
                 eval_state.active_color_index = color_idx;
-                let _ = self.append_stage_results_from_eval(&eval_state);
+                eval_state.return_to_course = true;
+                eval_state.auto_advance_seconds = None;
+                self.state.session.course_stage_eval_pages.push(eval_state);
             }
 
             let replay_pending =
@@ -9300,14 +9296,25 @@ impl App {
             if let Some(gameplay) = gameplay_results.as_ref() {
                 Self::execute_evaluation_score_runtime(gameplay);
             }
-            let init_view = gameplay_results
-                .as_ref()
-                .map(|gameplay| Self::evaluation_init_view(gameplay, &config))
-                .unwrap_or_default();
-            self.state.screens.evaluation_state = evaluation::init(gameplay_results, init_view);
+            let in_course_run = self.state.session.course_run.is_some();
+            let (init_view, failed, completed_course) = if let Some(gameplay) =
+                gameplay_results.as_ref()
+            {
+                let stage = Self::gameplay_stage_result(gameplay);
+                let failed =
+                    stage_stats::all_players_failed(&stage, gameplay.setup.session.joined_sides);
+                let completed = self.record_stage_result(stage.clone(), failed, &config, true);
+                (
+                    Self::evaluation_init_view(gameplay, &stage, &config),
+                    failed,
+                    completed,
+                )
+            } else {
+                (EvaluationInitView::default(), false, None)
+            };
+            self.state.screens.evaluation_state = evaluation::init(init_view);
             self.state.screens.evaluation_state.active_color_index = color_idx;
-            self.state.screens.evaluation_state.return_to_course =
-                self.state.session.course_run.is_some();
+            self.state.screens.evaluation_state.return_to_course = in_course_run;
             self.state.screens.evaluation_state.auto_advance_seconds = None;
             let session_elapsed = self.state.session.session_start_time.map_or(0.0, |start| {
                 Instant::now().duration_since(start).as_secs_f32()
@@ -9319,7 +9326,13 @@ impl App {
                 session_elapsed,
                 gameplay_elapsed,
             );
-            self.finalize_entered_evaluation(&config);
+            if in_course_run {
+                self.state
+                    .session
+                    .course_stage_eval_pages
+                    .push(self.state.screens.evaluation_state.clone());
+            }
+            self.finalize_entered_evaluation(&config, failed, completed_course);
             self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.mark_evaluation_runtime_dirty();
             self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
@@ -10439,18 +10452,6 @@ mod tests {
         assert_eq!(wheel_banner_path(None), None);
     }
 
-    fn test_evaluation_context(config: &config::app_config::Config) -> EvaluationContextView {
-        let profile = profile_data::runtime_music_profile_snapshot(
-            config.enable_groovestats,
-            config.enable_arrowcloud,
-            config.auto_populate_gs_scores,
-        );
-        evaluation_context_view(
-            evaluation_views::EvaluationFramePolicy::from_config(config).context(),
-            &profile,
-        )
-    }
-
     #[test]
     fn visual_policy_resolves_runtime_style_and_bar_choices() {
         let mut config = config::app_config::Config {
@@ -10841,6 +10842,9 @@ mod tests {
         possible_grade_points: i32,
     ) -> stage_stats::PlayerStageSummary {
         stage_stats::PlayerStageSummary {
+            judgment_counts: [0; 6],
+            column_judgments: deadsync_score::ColumnJudgmentList::new(),
+            fail_stream_progress: None,
             profile_name: "P1".to_string(),
             chart,
             score_valid: true,
@@ -10998,30 +11002,16 @@ mod tests {
     }
 
     #[test]
-    fn course_summary_merges_column_judgments_from_song_pages() {
-        crate::tests::init_paths();
-        let song = test_song_with_duration("Songs/Test/course.ssc", "course", 120.0);
-        let side = profile_data::PlayerSide::P2;
-        let config = config::app_config::Config::default();
-        let mut course_score = std::array::from_fn(|_| None);
-        course_score[0] = Some(test_score_info(
-            song.clone(),
-            side,
-            "course",
-            ScrollSpeedSetting::default(),
+    fn course_results_accumulate_without_evaluation_pages() {
+        let song = test_song_with_duration("Songs/Test/course.ssc", "course", 60.0);
+        let player = test_player_stage_summary(
+            Arc::new(test_chart("stage")),
+            score_data::Grade::Tier01,
             1.0,
-        ));
-        let mut course_page =
-            evaluation::init_from_score_info(course_score, 120.0, test_evaluation_context(&config));
-
-        let mut first = std::array::from_fn(|_| None);
-        let mut first_p2 = test_score_info(
-            song.clone(),
-            side,
-            "stage-a",
-            ScrollSpeedSetting::default(),
-            1.0,
+            100,
+            100,
         );
+        let mut first_p2 = player.clone();
         first_p2.column_judgments = vec![
             deadsync_score::ColumnJudgments {
                 w0: 1,
@@ -11040,26 +11030,7 @@ mod tests {
             },
         ]
         .into();
-        first[0] = Some(first_p2);
-        let mut ignored_p1 = test_score_info(
-            song.clone(),
-            profile_data::PlayerSide::P1,
-            "ignored",
-            ScrollSpeedSetting::default(),
-            1.0,
-        );
-        ignored_p1.column_judgments = vec![deadsync_score::ColumnJudgments {
-            w4: 1000,
-            ..Default::default()
-        }]
-        .into();
-        first[1] = Some(ignored_p1);
-        let first_page =
-            evaluation::init_from_score_info(first, 60.0, test_evaluation_context(&config));
-
-        let mut second = std::array::from_fn(|_| None);
-        let mut second_p2 =
-            test_score_info(song, side, "stage-b", ScrollSpeedSetting::default(), 1.0);
+        let mut second_p2 = player.clone();
         second_p2.column_judgments = vec![
             deadsync_score::ColumnJudgments {
                 w0: 4,
@@ -11078,16 +11049,64 @@ mod tests {
             },
         ]
         .into();
-        second[0] = Some(second_p2);
-        let second_page =
-            evaluation::init_from_score_info(second, 60.0, test_evaluation_context(&config));
-
-        apply_course_summary_column_judgments(&mut course_page, &[first_page, second_page]);
-
-        let columns = &course_page.score_info[0]
-            .as_ref()
-            .expect("course summary score")
-            .column_judgments;
+        let mut ignored_p1 = player;
+        ignored_p1.column_judgments = vec![deadsync_score::ColumnJudgments {
+            w4: 1000,
+            ..Default::default()
+        }]
+        .into();
+        let stages = [
+            stage_stats::StageSummary {
+                song: song.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: [Some(ignored_p1), Some(first_p2)],
+            },
+            stage_stats::StageSummary {
+                song: song.clone(),
+                music_rate: 1.0,
+                duration_seconds: 60.0,
+                players: [None, Some(second_p2)],
+            },
+        ];
+        let course = CourseRunState {
+            path: PathBuf::from("Courses/Test.crs"),
+            name: "Test Course".into(),
+            banner_path: None,
+            score_hash: "course-hash".into(),
+            course_difficulty_name: "Hard".into(),
+            course_meter: Some(12),
+            course_stepchart_label: "Hard".into(),
+            course_type: deadsync_theme::views::CourseTypeView::Nonstop,
+            lives: -1,
+            song_stub: song.clone(),
+            stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
+            course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
+            next_stage_index: 1,
+            stage_summaries: Vec::new(),
+        };
+        let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
+        session.course_run = Some(course.clone());
+        session.record_stage_result(stages[0].clone());
+        assert!(session.take_final_course(false).is_none());
+        session
+            .course_run
+            .as_mut()
+            .expect("active course")
+            .next_stage_index = 2;
+        session.record_stage_result(stages[1].clone());
+        let completed = session.take_final_course(false).expect("completed course");
+        assert!(session.course_run.is_none());
+        assert!(session.course_stage_eval_pages.is_empty());
+        assert!(session.course_eval_pages.is_empty());
+        assert_eq!(session.played_stages.len(), 2);
+        assert_eq!(session.course_individual_stage_indices, [0, 1]);
+        let summary = build_course_summary_stage(&completed).expect("canonical course result");
+        let player = summary.players[1].as_ref().expect("P2 result");
+        assert_eq!(player.calories_burned, 25.0);
+        assert_eq!(player.notes_hit, 40);
+        assert_eq!(player.earned_grade_points, 200);
+        let columns = &player.column_judgments;
         assert_eq!(columns.len(), 3);
         assert_eq!(columns[0].w0, 5);
         assert_eq!(columns[0].w1, 2);
@@ -11105,6 +11124,14 @@ mod tests {
         assert_eq!(columns[2].w5, 6);
         assert_eq!(columns[2].early_w5, 3);
         assert_eq!(columns[2].early_total_w5, 4);
+        // Early failure finalizes from the same data with no evaluation screen.
+        let mut failed = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
+        failed.course_run = Some(course);
+        failed.record_stage_result(stages[0].clone());
+        let completed = failed.take_final_course(true).expect("failed course");
+        assert_eq!(completed.stage_summaries.len(), 1);
+        assert!(failed.course_stage_eval_pages.is_empty());
+        assert!(build_course_summary_stage(&completed).is_some());
     }
 
     #[test]

@@ -63,28 +63,17 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
         self.clear_course_eval_pages();
     }
 
-    pub fn record_stage_result(
-        &mut self,
-        stage: Option<stage_stats::StageSummary>,
-        course_page: Option<EvaluationPage>,
-    ) {
-        if let Some(stage) = stage {
-            if let Some(course) = self.course_run.as_mut() {
-                self.course_individual_stage_indices
-                    .push(self.played_stages.len());
-                course.stage_summaries.push(stage.clone());
-            }
-            self.played_stages.push(stage);
+    /// Record authoritative data independently of any optional evaluation page.
+    pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary) {
+        if let Some(course) = self.course_run.as_mut() {
+            self.course_individual_stage_indices
+                .push(self.played_stages.len());
+            course.stage_summaries.push(stage.clone());
         }
-        if let Some(page) = course_page {
-            self.course_stage_eval_pages.push(page);
-        }
+        self.played_stages.push(stage);
     }
 
-    pub fn take_final_course(
-        &mut self,
-        failed: bool,
-    ) -> Option<(CourseRunState, Vec<EvaluationPage>)> {
+    pub fn take_final_course(&mut self, failed: bool) -> Option<CourseRunState> {
         let course = self.course_run.as_ref()?;
         if !course.is_finished(failed) {
             return None;
@@ -93,9 +82,8 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
             .course_run
             .take()
             .expect("course presence checked before finalization");
-        let pages = std::mem::take(&mut self.course_stage_eval_pages);
         self.clear_course_eval_pages();
-        Some((course, pages))
+        Some(course)
     }
 
     pub fn clear_course_eval_pages(&mut self) {
@@ -189,7 +177,7 @@ mod tests {
     #[test]
     fn course_pages_record_clear_replace_and_wrap() {
         let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
-        state.record_stage_result(None, Some(10));
+        state.course_stage_eval_pages.push(10);
         assert_eq!(state.course_stage_eval_pages, [10]);
 
         state.replace_course_eval_pages(vec![20, 30, 40]);

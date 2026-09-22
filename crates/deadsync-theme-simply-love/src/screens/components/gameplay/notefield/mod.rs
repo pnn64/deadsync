@@ -36,7 +36,7 @@ mod prewarm;
 mod text;
 mod zmod;
 pub use prewarm::{prewarm_frame_text_scratch, prewarm_text_layout};
-pub(crate) use text::preferred_mods_text;
+pub use text::preferred_mods_text;
 use text::{
     effective_accel_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
