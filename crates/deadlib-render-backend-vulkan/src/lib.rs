@@ -34,18 +34,13 @@ const VULKAN_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const VULKAN_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
 const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
+const PROJECTION_PUSH_BYTES: u32 = mem::size_of::<[f32; 16]>() as u32;
 #[cfg(windows)]
 static QPC_FREQ_HZ: std::sync::LazyLock<Option<u64>> = std::sync::LazyLock::new(qpc_freq_hz);
 
 // --- Structs ---
 // Vulkan consumes the shared draw-prep raw layouts directly so the dynamic
 // upload path can memcpy them into the mapped ring without repacking.
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct ProjPush {
-    proj: [[f32; 4]; 4],
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -58,13 +53,13 @@ fn projection_push_constant_range() -> vk::PushConstantRange {
     vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
-        .size(std::mem::size_of::<ProjPush>() as u32)
+        .size(PROJECTION_PUSH_BYTES)
 }
 
 fn yuv_push_constant_range() -> vk::PushConstantRange {
     vk::PushConstantRange::default()
         .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-        .offset(std::mem::size_of::<ProjPush>() as u32)
+        .offset(PROJECTION_PUSH_BYTES)
         .size(std::mem::size_of::<YuvPush>() as u32)
 }
 
@@ -342,19 +337,15 @@ pub struct State {
     projection: Matrix4,
     instance_ring: Option<BufferResource>, // one big VB for all frames
     instance_ring_ptr: *mut InstanceData,  // persistently mapped pointer
-    instance_capacity_instances: usize,    // total instances across ring
     per_frame_stride_instances: usize,     // instances reserved per frame
     mesh_ring: Option<BufferResource>,     // one big VB for all frames
     mesh_ring_ptr: *mut MeshVertex,        // persistently mapped pointer
-    mesh_capacity_vertices: usize,         // total vertices across ring
     per_frame_stride_vertices: usize,      // vertices reserved per frame
     tmesh_ring: Option<BufferResource>,    // one big VB for all frames (textured mesh)
     tmesh_ring_ptr: *mut TexturedMeshVertex, // persistently mapped pointer
-    tmesh_capacity_vertices: usize,        // total textured mesh vertices across ring
     per_frame_stride_tmesh_vertices: usize, // textured mesh vertices reserved per frame
     tmesh_instance_ring: Option<BufferResource>, // one big instanced VB for textured meshes
     tmesh_instance_ring_ptr: *mut TexturedMeshInstanceGpu, // persistently mapped pointer
-    tmesh_capacity_instances: usize,       // total textured mesh instances across ring
     per_frame_stride_tmesh_instances: usize, // textured mesh instances reserved per frame
     uploads: TexturedMeshUploads,
     target_uploads: Vec<TexturedMeshUploads>,
@@ -594,19 +585,15 @@ pub fn init(
         projection,
         instance_ring: None,
         instance_ring_ptr: std::ptr::null_mut(),
-        instance_capacity_instances: 0,
         per_frame_stride_instances: 0,
         mesh_ring: None,
         mesh_ring_ptr: std::ptr::null_mut(),
-        mesh_capacity_vertices: 0,
         per_frame_stride_vertices: 0,
         tmesh_ring: None,
         tmesh_ring_ptr: std::ptr::null_mut(),
-        tmesh_capacity_vertices: 0,
         per_frame_stride_tmesh_vertices: 0,
         tmesh_instance_ring: None,
         tmesh_instance_ring_ptr: std::ptr::null_mut(),
-        tmesh_capacity_instances: 0,
         per_frame_stride_tmesh_instances: 0,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
         target_uploads: Vec::new(),
@@ -1058,24 +1045,14 @@ fn ensure_instance_ring_capacity(
     state: &mut State,
     needed_instances: usize,
 ) -> Result<u32, Box<dyn Error>> {
-    // Request at least 1 instance, round to next power of two.
-    let requested_stride = next_pow2_usize(needed_instances.max(1));
+    // The per-frame stride is the ring's capacity for one frame. Only size a
+    // new allocation when that slice is too small or the ring is missing.
+    if state.instance_ring.is_none() || needed_instances > state.per_frame_stride_instances {
+        let stride = next_pow2_usize(needed_instances.max(1)).max(state.per_frame_stride_instances);
+        let need_bytes = (stride * MAX_FRAMES_IN_FLIGHT) as vk::DeviceSize
+            * mem::size_of::<InstanceData>() as vk::DeviceSize;
+        let dev = state.device.as_ref().unwrap();
 
-    // Grow-only policy: never shrink the ring to avoid frequent realloc + stalls.
-    let stride = if state.per_frame_stride_instances == 0 {
-        requested_stride
-    } else {
-        state.per_frame_stride_instances.max(requested_stride)
-    };
-
-    let need_total_instances = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_instance = std::mem::size_of::<InstanceData>() as vk::DeviceSize;
-    let need_bytes = (need_total_instances as u64) * (bytes_per_instance as u64);
-
-    let dev = state.device.as_ref().unwrap();
-
-    // Reallocate only if missing or too small.
-    if state.instance_ring.is_none() || state.instance_capacity_instances < need_total_instances {
         // SAFETY: The old ring buffer may still be referenced by in-flight command buffers.
         // Waiting for the device to go idle guarantees those submissions are complete before
         // unmapping or freeing the old allocation.
@@ -1110,10 +1087,6 @@ fn ensure_instance_ring_capacity(
             memory: mem,
         });
         state.instance_ring_ptr = mapped.cast::<InstanceData>();
-        state.instance_capacity_instances = need_total_instances;
-        state.per_frame_stride_instances = stride;
-    } else if state.per_frame_stride_instances != stride {
-        // We decided to grow-only; keep the bigger existing stride.
         state.per_frame_stride_instances = stride;
     }
 
@@ -1125,21 +1098,12 @@ fn ensure_mesh_ring_capacity(
     state: &mut State,
     needed_vertices: usize,
 ) -> Result<u32, Box<dyn Error>> {
-    let requested_stride = next_pow2_usize(needed_vertices.max(1));
+    if state.mesh_ring.is_none() || needed_vertices > state.per_frame_stride_vertices {
+        let stride = next_pow2_usize(needed_vertices.max(1)).max(state.per_frame_stride_vertices);
+        let need_bytes = (stride * MAX_FRAMES_IN_FLIGHT) as vk::DeviceSize
+            * mem::size_of::<MeshVertex>() as vk::DeviceSize;
+        let dev = state.device.as_ref().unwrap();
 
-    let stride = if state.per_frame_stride_vertices == 0 {
-        requested_stride
-    } else {
-        state.per_frame_stride_vertices.max(requested_stride)
-    };
-
-    let need_total_vertices = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_vertex = std::mem::size_of::<MeshVertex>() as vk::DeviceSize;
-    let need_bytes = (need_total_vertices as u64) * (bytes_per_vertex as u64);
-
-    let dev = state.device.as_ref().unwrap();
-
-    if state.mesh_ring.is_none() || state.mesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.mesh_ring.take() {
             // SAFETY: The old mesh ring may still be referenced by in-flight command buffers.
             // Waiting for idle guarantees those submissions are complete before unmapping/freeing.
@@ -1170,9 +1134,6 @@ fn ensure_mesh_ring_capacity(
             memory: mem,
         });
         state.mesh_ring_ptr = mapped.cast::<MeshVertex>();
-        state.mesh_capacity_vertices = need_total_vertices;
-        state.per_frame_stride_vertices = stride;
-    } else if state.per_frame_stride_vertices != stride {
         state.per_frame_stride_vertices = stride;
     }
 
@@ -1183,21 +1144,13 @@ fn ensure_tmesh_ring_capacity(
     state: &mut State,
     needed_vertices: usize,
 ) -> Result<u32, Box<dyn Error>> {
-    let requested_stride = next_pow2_usize(needed_vertices.max(1));
+    if state.tmesh_ring.is_none() || needed_vertices > state.per_frame_stride_tmesh_vertices {
+        let stride =
+            next_pow2_usize(needed_vertices.max(1)).max(state.per_frame_stride_tmesh_vertices);
+        let need_bytes = (stride * MAX_FRAMES_IN_FLIGHT) as vk::DeviceSize
+            * mem::size_of::<TexturedMeshVertex>() as vk::DeviceSize;
+        let dev = state.device.as_ref().unwrap();
 
-    let stride = if state.per_frame_stride_tmesh_vertices == 0 {
-        requested_stride
-    } else {
-        state.per_frame_stride_tmesh_vertices.max(requested_stride)
-    };
-
-    let need_total_vertices = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_vertex = std::mem::size_of::<TexturedMeshVertex>() as vk::DeviceSize;
-    let need_bytes = (need_total_vertices as u64) * (bytes_per_vertex as u64);
-
-    let dev = state.device.as_ref().unwrap();
-
-    if state.tmesh_ring.is_none() || state.tmesh_capacity_vertices < need_total_vertices {
         if let Some(old) = state.tmesh_ring.take() {
             // SAFETY: The old textured-mesh ring may still be referenced by in-flight command
             // buffers. Waiting for idle guarantees those submissions are complete first.
@@ -1228,9 +1181,6 @@ fn ensure_tmesh_ring_capacity(
             memory: mem,
         });
         state.tmesh_ring_ptr = mapped.cast::<TexturedMeshVertex>();
-        state.tmesh_capacity_vertices = need_total_vertices;
-        state.per_frame_stride_tmesh_vertices = stride;
-    } else if state.per_frame_stride_tmesh_vertices != stride {
         state.per_frame_stride_tmesh_vertices = stride;
     }
 
@@ -1241,22 +1191,15 @@ fn ensure_tmesh_instance_ring_capacity(
     state: &mut State,
     needed_instances: usize,
 ) -> Result<u32, Box<dyn Error>> {
-    let requested_stride = next_pow2_usize(needed_instances.max(1));
-
-    let stride = if state.per_frame_stride_tmesh_instances == 0 {
-        requested_stride
-    } else {
-        state.per_frame_stride_tmesh_instances.max(requested_stride)
-    };
-
-    let need_total_instances = stride * MAX_FRAMES_IN_FLIGHT;
-    let bytes_per_instance = std::mem::size_of::<TexturedMeshInstanceGpu>() as vk::DeviceSize;
-    let need_bytes = (need_total_instances as u64) * (bytes_per_instance as u64);
-
-    let dev = state.device.as_ref().unwrap();
-
-    if state.tmesh_instance_ring.is_none() || state.tmesh_capacity_instances < need_total_instances
+    if state.tmesh_instance_ring.is_none()
+        || needed_instances > state.per_frame_stride_tmesh_instances
     {
+        let stride =
+            next_pow2_usize(needed_instances.max(1)).max(state.per_frame_stride_tmesh_instances);
+        let need_bytes = (stride * MAX_FRAMES_IN_FLIGHT) as vk::DeviceSize
+            * mem::size_of::<TexturedMeshInstanceGpu>() as vk::DeviceSize;
+        let dev = state.device.as_ref().unwrap();
+
         if let Some(old) = state.tmesh_instance_ring.take() {
             // SAFETY: The old textured-mesh instance ring may still be referenced by in-flight
             // command buffers. Waiting for idle guarantees those submissions are complete first.
@@ -1287,9 +1230,6 @@ fn ensure_tmesh_instance_ring_capacity(
             memory: mem,
         });
         state.tmesh_instance_ring_ptr = mapped.cast::<TexturedMeshInstanceGpu>();
-        state.tmesh_capacity_instances = need_total_instances;
-        state.per_frame_stride_tmesh_instances = stride;
-    } else if state.per_frame_stride_tmesh_instances != stride {
         state.per_frame_stride_tmesh_instances = stride;
     }
 
@@ -1959,17 +1899,17 @@ pub fn update_yuv420_texture(
     else {
         return Err(std::io::Error::other("cannot upload YUV420 into RGBA texture").into());
     };
-    let device = texture.device.clone();
-    let (staging, offsets) = stage_yuv420(state, &device, upload.y, upload.u, upload.v)?;
+    let device = texture.device.as_ref();
+    let (staging, offsets) = stage_yuv420(state, device, upload.y, upload.u, upload.v)?;
     let cmd = match begin_pending_texture_upload_cmd(state) {
         Ok(cmd) => cmd,
         Err(error) => {
-            destroy_buffer(&device, &staging.resource);
+            destroy_buffer(device, &staging.resource);
             return Err(error);
         }
     };
     record_yuv420_upload(
-        &device,
+        device,
         cmd,
         staging.resource.buffer,
         images,
@@ -2331,11 +2271,7 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             if yuv420 {
@@ -2345,7 +2281,7 @@ fn record_render_pass(
                             },
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     if descriptor.update_required(set) {
@@ -2358,7 +2294,7 @@ fn record_render_pass(
                                 cmd,
                                 yuv_pipeline_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
-                                std::mem::size_of::<ProjPush>() as u32,
+                                PROJECTION_PUSH_BYTES,
                                 bytemuck::bytes_of(&conversion),
                             );
                         }
@@ -2404,17 +2340,13 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     device.cmd_draw(cmd, run.vertex_count, 1, offsets.mesh + run.vertex_start, 0);
@@ -2466,17 +2398,13 @@ fn record_render_pass(
                         let projection = pass
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let push = ProjPush {
-                            proj: projection.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&push),
+                            bytemuck::cast_slice(projection.as_ref()),
                         );
                     }
                     if descriptor.update_required(set) {
@@ -2698,7 +2626,7 @@ pub fn draw(
         let mut back_pressure_waited = false;
         let mut queue_idle_waited = false;
         let fence = state.in_flight_fences[state.current_frame];
-        let device = Arc::clone(state.device.as_ref().unwrap());
+        let device = state.device.as_deref().unwrap();
         let wait_started = Instant::now();
         device.wait_for_fences(&[fence], true, u64::MAX)?;
         stats.gpu_wait_us = stats
@@ -2729,6 +2657,7 @@ pub fn draw(
         record_cpu_present_completion(state, image_index);
         retire_completed_textures(state);
 
+        let device = state.device.as_deref().unwrap();
         let in_flight = state.images_in_flight[image_index as usize];
         // This frame's fence was already waited above and is reset only below.
         if in_flight != vk::Fence::null() && in_flight != fence {
@@ -2926,11 +2855,7 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(run.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             if yuv420 {
@@ -2940,7 +2865,7 @@ pub fn draw(
                             },
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
@@ -2954,7 +2879,7 @@ pub fn draw(
                                 cmd,
                                 state.yuv_pipeline_layout,
                                 vk::ShaderStageFlags::FRAGMENT,
-                                std::mem::size_of::<ProjPush>() as u32,
+                                PROJECTION_PUSH_BYTES,
                                 bytemuck::bytes_of(&conversion),
                             );
                         }
@@ -2992,17 +2917,13 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(draw.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             state.mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
@@ -3053,17 +2974,13 @@ pub fn draw(
                         let vp = frame
                             .cameras
                             .get(draw.camera as usize)
-                            .copied()
-                            .unwrap_or(state.projection);
-                        let pc = ProjPush {
-                            proj: vp.to_cols_array_2d(),
-                        };
+                            .unwrap_or(&state.projection);
                         device.cmd_push_constants(
                             cmd,
                             state.textured_mesh_pipeline_layout,
                             vk::ShaderStageFlags::VERTEX,
                             0,
-                            bytemuck::bytes_of(&pc),
+                            bytemuck::cast_slice(vp.as_ref()),
                         );
                     }
 
@@ -3109,7 +3026,7 @@ pub fn draw(
                 let copy_size = (bytes_per_row * height as usize) as vk::DeviceSize;
                 let (staging_buffer, staging_memory) = create_gpu_buffer(
                     &state.instance,
-                    &device,
+                    device,
                     state.pdevice,
                     copy_size,
                     vk::BufferUsageFlags::TRANSFER_DST,
@@ -3260,6 +3177,7 @@ pub fn draw(
             recreate_swapchain_and_dependents(state)?;
         }
         if apply_present_back_pressure && screenshot_staging.is_none() {
+            let device = state.device.as_deref().unwrap();
             // Match the wgpu Vulkan pacing path: when the app is running
             // uncapped, wait for this frame's GPU work to retire so the CPU
             // cannot build a long queue of stale Mailbox presents.
@@ -3270,6 +3188,7 @@ pub fn draw(
             back_pressure_waited = wait_us >= VULKAN_BACK_PRESSURE_THRESHOLD_US;
         }
         if let Some((staging, width, height, format)) = screenshot_staging {
+            let device = state.device.as_deref().unwrap();
             let wait_started = Instant::now();
             device.wait_for_fences(&[fence], true, u64::MAX)?;
             stats.gpu_wait_us = stats
@@ -3281,7 +3200,7 @@ pub fn draw(
                 match device.map_memory(staging.memory, 0, map_size, vk::MemoryMapFlags::empty()) {
                     Ok(ptr) => ptr,
                     Err(e) => {
-                        destroy_buffer(&device, &staging);
+                        destroy_buffer(device, &staging);
                         return Err(e.into());
                     }
                 };
@@ -3313,7 +3232,7 @@ pub fn draw(
                 }
             }
             device.unmap_memory(staging.memory);
-            destroy_buffer(&device, &staging);
+            destroy_buffer(device, &staging);
             state.captured_frame = RgbaImage::from_raw(width, height, rgba);
         }
 
@@ -5570,6 +5489,97 @@ pub fn set_present_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a Vulkan graphics device and a window system"]
+    fn mapped_rings_reuse_capacity_and_preserve_frame_offsets() {
+        use winit::{event_loop::EventLoop, platform::windows::EventLoopBuilderExtWindows};
+
+        let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
+        #[expect(deprecated, reason = "hidden renderer fixture needs no event dispatch")]
+        let window = event_loop
+            .create_window(Window::default_attributes().with_visible(false))
+            .unwrap();
+        let mut state = init(
+            &window,
+            Matrix4::IDENTITY,
+            false,
+            PresentModePolicy::Immediate,
+            false,
+        )
+        .unwrap();
+
+        macro_rules! check_ring {
+            ($ensure:ident, $ring:ident, $pointer:ident, $stride:ident) => {{
+                for needed in [0usize, 1, 2, 3, 4, 5, 16, 17, 1, 0, 33, 32] {
+                    for frame in 0..MAX_FRAMES_IN_FLIGHT {
+                        state.current_frame = frame;
+                        let old_stride = state.$stride;
+                        let previous = state
+                            .$ring
+                            .as_ref()
+                            .map(|ring| (ring.buffer, ring.memory, state.$pointer));
+                        let first = $ensure(&mut state, needed).unwrap();
+                        let expected = old_stride.max(needed.max(1).next_power_of_two());
+                        assert_eq!(state.$stride, expected);
+                        assert_eq!(first, (frame * expected) as u32);
+                        if previous.is_some() && needed <= old_stride {
+                            assert_eq!(
+                                state
+                                    .$ring
+                                    .as_ref()
+                                    .map(|ring| { (ring.buffer, ring.memory, state.$pointer) }),
+                                previous,
+                                "fitting requests must retain the allocation and mapping",
+                            );
+                        }
+                    }
+                }
+
+                // Allocation failure can leave a missing ring with its previous
+                // stride. Recreating it must still preserve the grow-only policy.
+                let stride = state.$stride;
+                let old = state.$ring.take().unwrap();
+                // SAFETY: this test never submits commands using these rings.
+                unsafe { state.device.as_ref().unwrap().unmap_memory(old.memory) };
+                destroy_buffer(state.device.as_ref().unwrap(), &old);
+                state.$pointer = std::ptr::null_mut();
+                assert_eq!(
+                    $ensure(&mut state, 1).unwrap(),
+                    (state.current_frame * stride) as u32,
+                );
+                assert!(state.$ring.is_some());
+                assert_eq!(state.$stride, stride);
+            }};
+        }
+
+        check_ring!(
+            ensure_instance_ring_capacity,
+            instance_ring,
+            instance_ring_ptr,
+            per_frame_stride_instances
+        );
+        check_ring!(
+            ensure_mesh_ring_capacity,
+            mesh_ring,
+            mesh_ring_ptr,
+            per_frame_stride_vertices
+        );
+        check_ring!(
+            ensure_tmesh_ring_capacity,
+            tmesh_ring,
+            tmesh_ring_ptr,
+            per_frame_stride_tmesh_vertices
+        );
+        check_ring!(
+            ensure_tmesh_instance_ring_capacity,
+            tmesh_instance_ring,
+            tmesh_instance_ring_ptr,
+            per_frame_stride_tmesh_instances
+        );
+        cleanup(&mut state);
+    }
 
     fn upload_batch(frame: usize) -> SubmittedTextureUpload {
         SubmittedTextureUpload {

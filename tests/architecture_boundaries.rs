@@ -3,6 +3,67 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[test]
+fn chart_lua_playback_has_no_theme_dependency() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest = fs::read_to_string(root.join("crates/deadsync-song-lua/Cargo.toml"))
+        .expect("shared playback manifest");
+    let manifest = manifest.split("[dev-dependencies]").next().unwrap();
+    for forbidden in ["deadsync-theme", "deadsync-shell"] {
+        assert!(
+            !manifest.contains(forbidden),
+            "playback depends on {forbidden}"
+        );
+    }
+    let theme =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("theme gameplay source");
+    for implementation in [
+        "fn prepare_song_lua(",
+        "fn compile_primary_song_lua(",
+        "fn build_song_lua_runtime_windows",
+        "fn song_lua_overlay_compose_state(",
+        "fn song_lua_overlay_runtime_updates_at(",
+        "fn song_lua_proxy_actor(",
+        "song_lua_compile_context(",
+        "impl deadsync_gameplay::SongLuaRuntimeBuilder",
+    ] {
+        assert!(
+            !theme.contains(implementation),
+            "theme owns {implementation}"
+        );
+    }
+    assert!(!theme.contains("deadsync_song_lua::playback::compose_frame("));
+    assert!(!theme.contains("prepare_song_lua("));
+    assert!(!theme.contains("video_renderer"));
+    let shell =
+        fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs")).unwrap();
+    assert!(shell.contains("deadsync_song_lua::playback::compose_frame("));
+    assert!(shell.contains("gameplay::frame_layers("));
+    for forbidden in [
+        "deadsync-assets",
+        "deadsync-profile",
+        "deadsync-profile-gameplay",
+    ] {
+        assert!(
+            !manifest.contains(forbidden),
+            "Lua playback depends on {forbidden}"
+        );
+    }
+    assert!(
+        !root.join("crates/deadsync-song-playback").exists(),
+        "playback must use existing crate owners"
+    );
+    let simulation = fs::read_to_string(root.join("crates/deadsync-gameplay/Cargo.toml"))
+        .expect("simulation manifest");
+    for presentation in ["deadsync-song-lua", "deadlib-present", "deadsync-theme"] {
+        assert!(
+            !simulation.contains(presentation),
+            "simulation depends on {presentation}"
+        );
+    }
+}
+
+#[test]
 fn asset_catalog_policy_stays_above_the_engine() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
@@ -5054,14 +5115,13 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        background_sync.contains("gameplay::refresh_foreground_media(gs)")
-            && background_sync.contains("gameplay::active_song_lua_video_paths(gs)"),
+        background_sync.contains("gs.song_media.refresh_foreground(&gs.gameplay)")
+            && background_sync.contains("gs.song_media.video_paths()"),
         "Gameplay foreground/video state must be advanced from song-lifetime caches"
     );
 
-    let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
-            .expect("Simply Love Gameplay source should be readable");
+    let gameplay = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("Shared song playback source should be readable");
     assert!(
         gameplay.contains("next_song_lua_sound_event_ix")
             && gameplay.contains("next_foreground_change_ix")
@@ -9723,13 +9783,13 @@ fn measure_quads_stay_on_the_direct_field_path() {
 #[test]
 fn error_bar_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared frame storage and compositor");
     let error_bar = fs::read_to_string(root.join("crates/deadsync-notefield/src/error_bar.rs"))
         .expect("canonical error-bar composer should be readable");
     let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
-    let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
-            .expect("Simply Love gameplay composer should be readable");
+
     let adapter = fs::read_to_string(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
@@ -9768,14 +9828,16 @@ fn error_bar_presentation_stays_on_the_direct_hud_path() {
         assert!(!prewarm.contains(removed));
     }
     assert!(!plan.contains("usize::from(features.error_bar_text)"));
-    assert!(gameplay.contains("notefield_hud_flat_draw_scratch"));
-    assert!(gameplay.contains("82 + deadsync_notefield::ERROR_BAR_TEXT_SLOTS_PER_PLAYER as usize"));
-    assert!(gameplay.contains("hud.with_flat_draws("));
+    assert!(playback.contains("notefield_hud_flat_draw_scratch"));
+    assert!(playback.contains("82 + deadsync_notefield::ERROR_BAR_TEXT_SLOTS_PER_PLAYER as usize"));
+    assert!(playback.contains("hud.with_flat_draws("));
 }
 
 #[test]
 fn column_countdowns_stay_on_the_prepared_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared frame storage and compositor");
     let feedback = fs::read_to_string(root.join("crates/deadsync-notefield/src/feedback.rs"))
         .expect("canonical feedback composer should be readable");
     let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
@@ -9784,9 +9846,7 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
         .expect("canonical field frame should be readable");
     let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD frame should be readable");
-    let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
-            .expect("Simply Love gameplay composer should be readable");
+
     let adapter = fs::read_to_string(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
@@ -9811,21 +9871,20 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
     assert!(prewarm.contains("let countdown_slot = FRAME_TEXT_COUNTDOWN_BASE"));
     assert!(prewarm.contains("prewarm_u32_text_slot("));
     assert!(!prewarm.contains("COLUMN_COUNTDOWN_PREWARM_CAP"));
-    assert!(gameplay.contains("const CUE_COUNTDOWN_FLAT_DRAW_CAPACITY: usize"));
-    assert!(gameplay.contains("+ CUE_COUNTDOWN_FLAT_DRAW_CAPACITY;"));
+    assert!(playback.contains("const CUE_COUNTDOWN_FLAT_DRAW_CAPACITY: usize"));
+    assert!(playback.contains("+ CUE_COUNTDOWN_FLAT_DRAW_CAPACITY;"));
 }
 
 #[test]
 fn judgment_sprites_stay_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared frame storage and compositor");
     let judgment =
         fs::read_to_string(root.join("crates/deadsync-notefield/src/judgment_feedback.rs"))
             .expect("canonical judgment-feedback composer should be readable");
     let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
-    let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
-            .expect("Simply Love gameplay composer should be readable");
 
     assert!(judgment.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
     for removed in ["SpriteBuilder", "Actor::Sprite"] {
@@ -9837,12 +9896,14 @@ fn judgment_sprites_stay_on_the_direct_hud_path() {
     assert!(hud.contains("let judgment_draw_start = draws.len();"));
     assert!(hud.contains("compose_judgment(draws,"));
     assert!(hud.contains("draws.drain(judgment_draw_start..).map(actor_from_flat_draw)"));
-    assert!(gameplay.contains("JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2"));
+    assert!(playback.contains("JUDGMENT_HUD_FLAT_DRAW_CAPACITY: usize = 2 + MAX_COLS * 2"));
 }
 
 #[test]
 fn combo_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared frame storage and compositor");
     let combo = fs::read_to_string(root.join("crates/deadsync-notefield/src/combo_feedback.rs"))
         .expect("canonical combo-feedback composer should be readable");
     let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
@@ -9872,7 +9933,7 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
     assert!(hud.contains("compose_combo_milestones(draws, &feedback);"));
     assert!(hud.contains("compose_combo_number(draws, &feedback);"));
     assert!(hud.contains("draws.drain(draw_start..).map(actor_from_flat_draw)"));
-    assert!(gameplay.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
+    assert!(playback.contains("COMBO_HUD_FLAT_DRAW_CAPACITY: usize = 7"));
     assert!(adapter.contains("ResolvedComboMilestoneAssets"));
     assert!(!adapter.contains("fn combo_number_text"));
     assert!(gameplay.contains("notefield_combo_assets"));
@@ -9881,13 +9942,13 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
 #[test]
 fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared frame storage and compositor");
     let zmod = fs::read_to_string(root.join("crates/deadsync-notefield/src/hud.rs"))
         .expect("canonical ZMod HUD composer should be readable");
     let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
-    let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
-            .expect("Simply Love gameplay composer should be readable");
+
     let theme_zmod = fs::read_to_string(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/zmod.rs",
     ))
@@ -9903,8 +9964,8 @@ fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
     assert!(zmod.contains("actors.push(hud_text_actor(style, font, entry));"));
     assert!(hud.contains("compose_counter_hud("));
     assert!(hud.contains("compose_mini_indicator("));
-    assert!(gameplay.contains("const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize"));
-    assert!(gameplay.contains("+ ZMOD_HUD_FLAT_DRAW_CAPACITY"));
+    assert!(playback.contains("const ZMOD_HUD_FLAT_DRAW_CAPACITY: usize"));
+    assert!(playback.contains("+ ZMOD_HUD_FLAT_DRAW_CAPACITY"));
     assert!(theme_zmod.contains(".with_frame_inline_slot(FRAME_TEXT_MINI_BASE"));
     assert!(prewarm.contains("prewarm_prepared_inline_text_slot("));
     assert!(prewarm.contains("FRAME_TEXT_MINI_BASE + player as u8"));
@@ -10484,11 +10545,13 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
 }
 
 #[test]
-fn simply_love_song_lua_player_transforms_use_canonical_notefield_owner() {
+fn song_playback_transforms_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme =
         fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay bridge should be readable");
+    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+        .expect("shared playback should be readable");
     let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
         .expect("canonical Song Lua notefield transforms should be readable");
 
@@ -10525,8 +10588,8 @@ fn simply_love_song_lua_player_transforms_use_canonical_notefield_owner() {
         "song_lua_player_transform_matrix(SongLuaPlayerTransformRequest",
     ] {
         assert!(
-            theme.contains(delegation),
-            "Simply Love must delegate Song Lua notefield transforms through {delegation}"
+            playback.contains(delegation),
+            "Shared playback must delegate Song Lua notefield transforms through {delegation}"
         );
     }
 
@@ -10674,7 +10737,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
             "noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
         ),
         (
-            "crates/deadsync-theme-simply-love/src/screens/gameplay.rs",
+            "crates/deadsync-song-lua/src/playback.rs",
             "noteskin_model_actor_from_draw",
         ),
         (

@@ -10,8 +10,8 @@ use deadsync_assets::song_lua::{
     overlay_state_after_blocks, parse_song_timing_bpms, song_elapsed_seconds_at,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_meta_file};
+use deadsync_song_lua::playback::actor_conformance::compose_overlay_states;
 use deadsync_song_lua::{overlay_state_axis_scale, song_beat_at_elapsed_seconds};
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::compose_overlay_states;
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -393,11 +393,16 @@ fn compile_trace_song_at(
     );
     context.song_display_bpms = [song.min_bpm as f32, song.max_bpm as f32];
     if trace.arrow_timing == "native" {
-        let chart_index = song.charts.iter().position(|chart| {
-            chart.chart_type == trace.steps_type
-                && chart.description == trace.description
-                && chart.difficulty.eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
-        })
+        let chart_index = song
+            .charts
+            .iter()
+            .position(|chart| {
+                chart.chart_type == trace.steps_type
+                    && chart.description == trace.description
+                    && chart
+                        .difficulty
+                        .eq_ignore_ascii_case(trace.difficulty.trim_start_matches("Difficulty_"))
+            })
             .expect("reference chart timing");
         let payload = deadsync_simfile::cache::load_gameplay_charts_with_options(
             &song,
@@ -411,7 +416,8 @@ fn compile_trace_song_at(
                 global_offset_seconds: 0.0,
             },
             |_| 0.0,
-        ).expect("load reference chart timing");
+        )
+        .expect("load reference chart timing");
         context.player_timing = std::array::from_fn(|_| Some(payload.charts[0].timing.clone()));
     }
     let timing_bpms = parse_song_timing_bpms(&song.normalized_bpms);
@@ -2355,7 +2361,7 @@ fn compare_column_splines(
         let windows = compiled
             .iter()
             .flat_map(|layer| {
-                deadsync_profile_gameplay::build_song_lua_column_offset_windows_for_player(
+                deadsync_song_lua::gameplay::build_song_lua_column_offset_windows_for_player(
                     layer, &timing, player, 0.0,
                 )
             })
@@ -2619,7 +2625,7 @@ fn compiled_perspective_vertices(
     index: usize,
     texture_size: [f32; 2],
 ) -> Option<[[f32; 2]; 4]> {
-    use deadsync_theme_simply_love::screens::gameplay::actor_conformance as actor;
+    use deadsync_song_lua::playback::actor_conformance as actor;
     let state = states[index];
     let mut parent = compiled.overlays[index].parent_index;
     let camera = loop {
@@ -3401,10 +3407,10 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
         },
         &[],
     );
-    let constants = deadsync_profile_gameplay::build_song_lua_constant_windows_for_player(
+    let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
         compiled, &timing, 0, 0.0,
     );
-    let (eases, unsupported) = deadsync_profile_gameplay::build_song_lua_ease_windows_for_player(
+    let (eases, unsupported) = deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
         compiled, &timing, 0, 0.0, &constants,
     );
     assert_eq!(unsupported, 0);
@@ -3437,7 +3443,8 @@ fn brogamer_dizzy_and_confusion_do_not_leak_between_authored_windows() {
             0,
             now,
             (now - previous_second).max(0.0),
-            deadsync_gameplay::AttackBaseEffects::default(),
+            deadsync_gameplay::AppearanceEffects::default(),
+            deadsync_gameplay::AttackBaseEffects::default,
             transform,
         ) {
             transform = next;

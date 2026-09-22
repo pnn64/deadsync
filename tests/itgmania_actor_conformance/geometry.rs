@@ -1,8 +1,6 @@
 use super::support::{actor, assert_array_ulp, f32_array, fixture};
 use deadsync_song_lua::SongLuaOverlayState;
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
-    SpriteVertex, crop_fade_vertices,
-};
+use deadsync_song_lua::playback::actor_conformance::{SpriteVertex, crop_fade_vertices};
 
 fn fixture_state() -> SongLuaOverlayState {
     SongLuaOverlayState {

@@ -179,15 +179,38 @@ pub struct CachedScore {
     pub lamp_judge_count: Option<u8>,
 }
 
+/// An earned full-combo lamp, independent of the highest percentage score.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
+pub struct CachedLamp {
+    pub index: u8,
+    pub judge_count: Option<u8>,
+}
+
+impl CachedLamp {
+    fn from_score(score: CachedScore) -> Option<Self> {
+        let index = score.lamp_index?;
+        (score.grade != Grade::Failed && index <= 4).then_some(Self {
+            index,
+            judge_count: score.lamp_judge_count,
+        })
+    }
+
+    const fn priority(self) -> (u8, u8) {
+        (self.index, lamp_judge_count_priority(self.judge_count))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalScalarScore {
     pub percent: f64,
     pub is_fail: bool,
 }
 
-/// Personal wheel percentages (0..=100). Only local records may supply fails.
+/// Personal wheel percentages (0..=100) and independently earned lamps.
+/// Only local records may supply failed percentages.
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CachedWheelScores {
+    pub lamp: Option<CachedLamp>,
     pub itg: Option<LocalScalarScore>,
     pub ex: Option<LocalScalarScore>,
     pub hard_ex: Option<LocalScalarScore>,
@@ -206,6 +229,12 @@ pub struct LocalScoreIndex {
     pub best_ex: HashMap<String, LocalScoreBestScalar>,
     pub best_hard_ex: HashMap<String, LocalScoreBestScalar>,
     pub best_pass_rate: HashMap<String, u32>,
+    // Part of the session profile index under the local-score mutex, with at
+    // most one lamp per saved chart. Rebuilt at profile load and updated on
+    // score append; wheel reads only look up entries, never scan or insert.
+    // Misses fall back to available score lamps. No independent eviction or
+    // maintenance; snapshots, destruction and logging follow the score index.
+    pub best_lamp: HashMap<String, CachedLamp>,
 }
 
 #[derive(Default)]
@@ -2079,6 +2108,22 @@ impl HeldProfileScores<'_> {
                 .map(|score| score.score_percent * 100.0)
         };
         CachedWheelScores {
+            lamp: self
+                .local
+                .and_then(|index| index.best_lamp.get(chart_hash).copied())
+                .into_iter()
+                .chain(
+                    [
+                        local_itg.copied(),
+                        self.gs.and_then(|scores| scores.get(chart_hash).copied()),
+                        ac.and_then(|scores| scores.itg)
+                            .map(|score| score.to_cached_score()),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(CachedLamp::from_score),
+                )
+                .min_by_key(|lamp| lamp.priority()),
             itg: wheel_scalar_score(
                 local_itg.map(|score| LocalScalarScore {
                     percent: score.score_percent * 100.0,
@@ -4329,7 +4374,7 @@ pub fn fix_local_ex_grade(grade: Grade, ex_score_percent: f64) -> Grade {
 }
 
 pub const LOCAL_SCORE_VERSION: u16 = 1;
-pub const LOCAL_SCORE_INDEX_VERSION: u16 = 3;
+pub const LOCAL_SCORE_INDEX_VERSION: u16 = 5;
 
 #[derive(Debug, Clone, Encode, Decode)]
 struct LocalScoreIndexFile {
@@ -4734,8 +4779,12 @@ pub fn local_score_entry_from_gameplay_input(
         );
 
     grade = promote_quint_grade(grade, ex_score_percent);
-    let (lamp_index, lamp_judge_count) =
-        compute_local_lamp(input.counts, grade, input.white_fantastics);
+    let (lamp_index, lamp_judge_count) = compute_local_lamp(
+        input.counts,
+        grade,
+        input.white_fantastics,
+        input.holds_held >= input.holds_total && input.rolls_held >= input.rolls_total,
+    );
 
     LocalScoreEntry {
         version: LOCAL_SCORE_VERSION,
@@ -4778,8 +4827,12 @@ pub fn local_score_entry_from_stage_summary(
         summary.window_counts.w5,
         summary.window_counts.miss,
     ];
-    let (lamp_index, lamp_judge_count) =
-        compute_local_lamp(counts, summary.grade, Some(summary.window_counts.w1));
+    let (lamp_index, lamp_judge_count) = compute_local_lamp(
+        counts,
+        summary.grade,
+        Some(summary.window_counts.w1),
+        summary.holds_held >= summary.holds_total && summary.rolls_held >= summary.rolls_total,
+    );
     LocalScoreEntry {
         version: LOCAL_SCORE_VERSION,
         played_at_ms,
@@ -4795,10 +4848,10 @@ pub fn local_score_entry_from_stage_summary(
         ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
         hard_ex_score_percent: summary.hard_ex_score_percent.clamp(0.0, 100.0),
         judgment_counts: counts,
-        holds_held: 0,
-        holds_total: 0,
-        rolls_held: 0,
-        rolls_total: 0,
+        holds_held: summary.holds_held,
+        holds_total: summary.holds_total,
+        rolls_held: summary.rolls_held,
+        rolls_total: summary.rolls_total,
         mines_avoided: 0,
         mines_total: 0,
         hands_achieved: 0,
@@ -4821,8 +4874,10 @@ pub fn compute_local_lamp(
     counts: [u32; 6],
     grade: Grade,
     white_fantastics: Option<u32>,
+    holds_complete: bool,
 ) -> (Option<u8>, Option<u8>) {
-    if grade == Grade::Failed {
+    // Both holds and rolls must be held; tap judgments alone do not prove FC.
+    if grade == Grade::Failed || !holds_complete {
         return (None, None);
     }
     if grade == Grade::Quint {
@@ -4866,13 +4921,17 @@ pub fn cached_score_from_local_header(h: &LocalScoreHeader) -> CachedScore {
         local_score_grade(h.grade_code, h.fail_time.is_some()),
         h.ex_score_percent,
     );
-    let (lamp_index, lamp_judge_count) = if grade == Grade::Quint {
-        (Some(0), None)
-    } else if h.lamp_index == Some(0) {
-        compute_local_lamp(h.judgment_counts, grade, None)
-    } else {
-        (h.lamp_index, h.lamp_judge_count)
-    };
+    let (lamp_index, lamp_judge_count) =
+        if h.holds_held < h.holds_total || h.rolls_held < h.rolls_total {
+            // Old records can contain tap-only lamps despite dropped holds/rolls.
+            (None, None)
+        } else if grade == Grade::Quint {
+            (Some(0), None)
+        } else if h.lamp_index == Some(0) {
+            compute_local_lamp(h.judgment_counts, grade, None, true)
+        } else {
+            (h.lamp_index, h.lamp_judge_count)
+        };
     cached_score(grade, h.score_percent, lamp_index, lamp_judge_count)
 }
 
@@ -4951,6 +5010,18 @@ pub fn update_local_score_index(
 ) {
     let cached = cached_score_from_local_header(header);
     let grade = cached.grade;
+
+    if let Some(lamp) = CachedLamp::from_score(cached) {
+        index
+            .best_lamp
+            .entry(chart_hash.to_string())
+            .and_modify(|best| {
+                if lamp.priority() < best.priority() {
+                    *best = lamp;
+                }
+            })
+            .or_insert(lamp);
+    }
 
     match index.best_itg.get_mut(chart_hash) {
         Some(existing) => {
@@ -8073,13 +8144,53 @@ mod tests {
     #[test]
     fn local_lamp_uses_white_fantastics_for_quad() {
         assert_eq!(
-            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5)),
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Tier01, Some(5), true),
             (Some(1), Some(5))
         );
         assert_eq!(
-            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0)),
+            compute_local_lamp([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0), true),
             (Some(0), None)
         );
+    }
+
+    #[test]
+    fn local_lamps_require_complete_holds_for_every_tier() {
+        for (counts, grade, white, expected) in [
+            ([12, 0, 0, 0, 0, 0], Grade::Quint, Some(0), (Some(0), None)),
+            (
+                [12, 0, 0, 0, 0, 0],
+                Grade::Tier01,
+                Some(5),
+                (Some(1), Some(5)),
+            ),
+            ([12, 3, 0, 0, 0, 0], Grade::Tier03, None, (Some(2), Some(3))),
+            ([12, 3, 2, 0, 0, 0], Grade::Tier03, None, (Some(3), Some(2))),
+            ([12, 3, 2, 1, 0, 0], Grade::Tier03, None, (Some(4), Some(1))),
+        ] {
+            assert_eq!(compute_local_lamp(counts, grade, white, true), expected);
+            assert_eq!(
+                compute_local_lamp(counts, grade, white, false),
+                (None, None)
+            );
+        }
+    }
+
+    #[test]
+    fn cached_lamps_reject_dropped_holds_and_rolls() {
+        let mut header = test_local_score_entry(1, 0.98).header();
+        // Mines do not break ITG full-combo lamps.
+        header.mines_avoided = 0;
+        header.mines_total = 1;
+        for (held, rolled, expected) in [(6, 8, Some(2)), (5, 8, None), (6, 7, None), (5, 7, None)]
+        {
+            header.holds_held = held;
+            header.rolls_held = rolled;
+            let cached = cached_score_from_local_header(&header);
+            assert_eq!(cached.lamp_index, expected);
+            assert_eq!(cached.lamp_judge_count, expected.map(|_| 4));
+            assert_eq!(cached.grade, Grade::Tier03);
+            assert_eq!(cached.score_percent, 0.98);
+        }
     }
 
     #[test]
@@ -8226,10 +8337,10 @@ mod tests {
             lamp_judge_count: Some(4),
             ex_score_percent: score_percent * 100.0,
             hard_ex_score_percent: score_percent * 100.0,
-            judgment_counts: [100, 4, 3, 2, 1, 0],
-            holds_held: 5,
+            judgment_counts: [100, 4, 0, 0, 0, 0],
+            holds_held: 6,
             holds_total: 6,
-            rolls_held: 7,
+            rolls_held: 8,
             rolls_total: 8,
             mines_avoided: 9,
             mines_total: 10,
@@ -8259,6 +8370,103 @@ mod tests {
         assert!(append.path.is_file());
 
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn local_lamps_outlive_higher_scores_in_any_order() {
+        let mut high_score = test_local_score_entry(1, 0.99);
+        high_score.lamp_index = None;
+        high_score.lamp_judge_count = None;
+        let mut great_fc = test_local_score_entry(2, 0.98);
+        great_fc.lamp_index = Some(3);
+        great_fc.lamp_judge_count = Some(1);
+        let mut excellent_fc = test_local_score_entry(3, 0.97);
+        excellent_fc.lamp_judge_count = Some(8);
+        let mut fewer_excellents = test_local_score_entry(4, 0.96);
+        fewer_excellents.lamp_judge_count = Some(3);
+        let mut failed = test_local_score_entry(5, 0.999);
+        failed.fail_time = Some(42.0);
+        failed.lamp_index = Some(0);
+        let plays = [high_score, great_fc, excellent_fc, fewer_excellents, failed];
+
+        for order in [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [1, 4, 3, 0, 2]] {
+            let mut index = LocalScoreIndex::default();
+            for play in order {
+                update_local_score_index(&mut index, "chart", &plays[play].header());
+            }
+            assert_eq!(
+                index.best_itg["chart"],
+                cached_score_from_local_header(&plays[0].header())
+            );
+            assert_eq!(
+                index.best_lamp["chart"],
+                CachedLamp {
+                    index: 2,
+                    judge_count: Some(3)
+                }
+            );
+            let bytes = encode_local_score_index(&index).expect("index should encode");
+            assert_eq!(decode_local_score_index(&bytes), Some(index));
+        }
+    }
+
+    #[test]
+    fn wheel_lamps_merge_sources_independently_of_score() {
+        let mut local = LocalScoreIndex::default();
+        let fc = test_local_score_entry(1, 0.98);
+        let mut high_score = test_local_score_entry(2, 0.99);
+        high_score.lamp_index = None;
+        high_score.lamp_judge_count = None;
+        update_local_score_index(&mut local, "chart", &fc.header());
+        update_local_score_index(&mut local, "chart", &high_score.header());
+        let ac = HashMap::from([(
+            "chart".into(),
+            ArrowCloudScores {
+                itg: Some(ArrowCloudScore {
+                    score_percent: 0.999,
+                    is_fail: false,
+                    server_grade: None,
+                    played_at: None,
+                    play_id: None,
+                }),
+                ..Default::default()
+            },
+        )]);
+        for (remote, expected_count) in [
+            (cached_score(Grade::Tier02, 0.995, Some(3), Some(1)), 4),
+            (cached_score(Grade::Tier03, 0.97, Some(2), Some(2)), 2),
+            (cached_score(Grade::Failed, 1.0, Some(0), None), 4),
+        ] {
+            let gs = HashMap::from([("chart".into(), remote)]);
+            let profile = HeldProfileScores {
+                profile_id: "player",
+                local: Some(&local),
+                gs: Some(&gs),
+                ac: Some(&ac),
+            };
+            let wheel = profile.wheel_scores("chart");
+            assert_eq!(
+                wheel.lamp,
+                Some(CachedLamp {
+                    index: 2,
+                    judge_count: Some(expected_count),
+                })
+            );
+            assert_eq!(
+                wheel.itg,
+                Some(LocalScalarScore {
+                    percent: 99.9,
+                    is_fail: false
+                })
+            );
+            assert_eq!(
+                profile.merged("chart").map(|score| score.score_percent),
+                Some(0.999)
+            );
+            perf::assert_no_churn(|| {
+                std::hint::black_box(profile.wheel_scores("chart"));
+            });
+        }
     }
 
     #[test]
@@ -8694,6 +8902,36 @@ mod tests {
         assert!((written[0].3.score_percent - 0.96).abs() < f64::EPSILON);
         assert_eq!(written[0].3.played_at_ms, 1234);
         assert_eq!(written[0].3.beat0_time_ns, 123);
+
+        for (held, rolled, expected) in [(1, 1, Some(2)), (0, 1, None), (1, 0, None)] {
+            let mut play = player(0, true, Vec::new());
+            play.holds_total = 1;
+            play.rolls_total = 1;
+            play.holds_held = held;
+            play.rolls_held = rolled;
+            play.holds_held_for_score = held;
+            play.rolls_held_for_score = rolled;
+            play.possible_grade_points = 510;
+            let mut saved = None;
+            save_local_gameplay_scores(
+                1234,
+                1.0,
+                false,
+                [play],
+                |_, _, _, entry| {
+                    saved = Some(entry.clone());
+                    true
+                },
+                |_| panic!("valid play must be saved"),
+            );
+            let saved = saved.expect("valid play should produce a score");
+            assert_eq!(saved.lamp_index, expected);
+            assert_eq!(saved.lamp_judge_count, None);
+            assert_eq!(
+                cached_score_from_local_header(&saved.header()).lamp_index,
+                expected
+            );
+        }
     }
 
     #[test]

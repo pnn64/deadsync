@@ -3,27 +3,21 @@ use deadsync_gameplay::{
     ActiveComboMilestone, ComboMilestoneKind, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, GameplayConfig, GameplayMiniIndicatorData, GameplayNoteskinData,
     GameplayNoteskinEffects, GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior,
-    GameplayRuntimeState, GameplaySession, GameplayTween, GameplayViewport, LeadInTiming,
-    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot,
-    TAP_EXPLOSION_WINDOWS, cached_hold_end_time_ns, refresh_active_attack_masks,
+    GameplaySession, GameplayTween, GameplayViewport, LeadInTiming, MINE_EXPLOSION_DURATION,
+    RECEPTOR_STEP_WINDOWS, ReplayInputEdge, ReplayOffsetSnapshot, TAP_EXPLOSION_WINDOWS,
+    cached_hold_end_time_ns, refresh_active_attack_masks,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
 use deadsync_profile_gameplay::GameplayProfile;
 
-type State = GameplayRuntimeState<
-    GameplayProfile,
-    deadsync_song_lua::SongLuaOverlayActor<deadsync_assets::song_lua::SongLuaOverlayKind>,
-    deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
->;
+type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
-    use crate::screens::gameplay as screen_gameplay;
     use deadlib_present::{
         actors::{Actor, SpriteSource},
         compose::{self, TextureContext, TextureMeta},
@@ -44,6 +38,7 @@ mod tests {
     use deadsync_profile as profile_data;
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
+    use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
     use std::alloc::{GlobalAlloc, Layout, System};
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, LazyLock, Mutex};
@@ -234,7 +229,7 @@ mod tests {
         pack_sync_pref: deadsync_chart::SyncPref,
         mini_indicator_data: super::GameplayMiniIndicatorData,
         noteskin_data: super::GameplayNoteskinData,
-        song_lua_data: screen_gameplay::GameplaySongLuaData,
+        song_lua_data: crate::gameplay_entry::PreparedGameplaySongLua,
         active_color_index: i32,
         music_rate: f32,
         scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -638,7 +633,7 @@ mod tests {
         let mut assets = deadlib_assets::AssetManager::new();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
-        for spec in crate::resources::FONT_ASSETS {
+        for spec in deadsync_theme_simply_love::asset_manifest().fonts {
             let ini_path = project_root.join(spec.ini_path);
             let mut font =
                 deadlib_assets::parse_font_with_asset_context(&ini_path, vec![asset_root.clone()])
@@ -694,10 +689,23 @@ mod tests {
             .clone_from(&player_profiles[1].display_name);
         hud.p2.guest = false;
         hud.p2.hide_username = false;
-        let init_view = crate::views::GameplayInitView {
+        let init_view = deadsync_theme_simply_love::views::GameplayInitView {
             hud,
             ..Default::default()
         };
+        let prepared = crate::gameplay_entry::prepare_song_lua(
+            &song,
+            &charts,
+            std::array::from_fn(|p| &gameplay_charts[p].timing),
+            &player_profiles,
+            &scroll_speed,
+            1.0,
+            viewport,
+            space::current_window_px(),
+            &session,
+            &GameplayConfig::default(),
+            deadlib_render_core::BackendType::Software,
+        );
         screen_gameplay::init(
             song,
             charts,
@@ -723,7 +731,7 @@ mod tests {
             None,
             None,
             [0; MAX_PLAYERS],
-            None,
+            prepared,
             init_view,
         )
     }
@@ -800,15 +808,15 @@ mod tests {
         texture_ctx: &T,
     ) -> deadlib_render_core::RenderFrame {
         actors.clear();
-        let segments = screen_gameplay::push_actors(
+        let segments = crate::gameplay_runtime::push_actors(
             actors,
             state,
             assets,
             view,
             123.0,
-            crate::views::SimplyLoveVisualPolicyView::default(),
+            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.segments(state, actors);
+        let actor_segments = segments.segments(state.song_frame(), actors);
         compose::build_passes(
             actor_segments,
             state.render_targets(),
@@ -843,7 +851,7 @@ mod tests {
     }
 
     fn compose_practice_fixture_frame(
-        state: &mut crate::screens::practice::State,
+        state: &mut deadsync_theme_simply_love::screens::practice::State,
         assets: &deadlib_assets::AssetManager,
         metrics: &space::Metrics,
         actors: &mut Vec<deadlib_present::actors::Actor>,
@@ -851,14 +859,14 @@ mod tests {
         scratch: &mut compose::ComposeScratch,
     ) -> deadlib_render_core::RenderFrame {
         actors.clear();
-        let segments = crate::screens::practice::push_actors(
+        let segments = crate::gameplay_runtime::push_practice_actors(
             actors,
             state,
             assets,
             123.0,
-            crate::views::SimplyLoveVisualPolicyView::default(),
+            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.segments(&state.gameplay, actors);
+        let actor_segments = segments.segments(state.gameplay.song_frame(), actors);
         compose::build_passes(
             actor_segments,
             state.gameplay.render_targets(),
@@ -1296,14 +1304,17 @@ L000
         assets: &mut deadlib_assets::AssetManager,
         backend: &mut deadlib_render::Backend,
     ) -> Result<(), String> {
-        let texture_assets = crate::resources::initial_texture_assets().collect::<Vec<_>>();
+        let texture_assets = deadsync_theme_simply_love::asset_manifest()
+            .textures
+            .collect::<Vec<_>>();
         deadsync_assets::load_initial_assets(
             assets,
             backend,
             deadsync_theme::ThemeAssetManifest {
                 fonts: &[],
                 textures: texture_assets.iter().copied(),
-                texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+                texture_needs_repeat_sampler: (deadsync_theme_simply_love::asset_manifest()
+                    .texture_needs_repeat_sampler),
             },
         )
         .map_err(|error| format!("failed to load capture textures: {error}"))?;
@@ -1311,7 +1322,7 @@ L000
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let asset_root = project_root.join("assets");
         let asset_roots = [asset_root.clone()];
-        for spec in crate::resources::FONT_ASSETS {
+        for spec in deadsync_theme_simply_love::asset_manifest().fonts {
             let ini_path = project_root.join(spec.ini_path);
             let deadlib_present::font::FontLoadData {
                 mut font,
@@ -1369,7 +1380,7 @@ L000
                 assets,
                 backend,
                 key,
-                crate::resources::texture_needs_repeat_sampler,
+                deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler,
             );
         }
         if assets.has_uploaded_texture_key(key) {
@@ -1396,7 +1407,7 @@ L000
         let sampler = sampler.unwrap_or_else(|| {
             deadlib_assets::texture_key_sampler(
                 &hints,
-                crate::resources::texture_needs_repeat_sampler(key),
+                (deadsync_theme_simply_love::asset_manifest().texture_needs_repeat_sampler)(key),
             )
         });
         let texture = backend
@@ -1564,15 +1575,15 @@ L000
         let frame_started = Instant::now();
         actors.clear();
         let actor_started = Instant::now();
-        let segments = screen_gameplay::push_actors(
+        let segments = crate::gameplay_runtime::push_actors(
             actors,
             state,
             assets,
             screen_gameplay::ActorViewOverride::default(),
             123.0,
-            crate::views::SimplyLoveVisualPolicyView::default(),
+            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
         );
-        let actor_segments = segments.segments(state, actors);
+        let actor_segments = segments.segments(state.song_frame(), actors);
         let actor_us = gpu_elapsed_us(actor_started);
 
         compose_scratch.begin_frame_stats(collect_sort_timing);
@@ -3049,13 +3060,14 @@ return Def.ActorFrame{
                     for screen_age in [10.0, 10.371] {
                         state.boundary.total_elapsed_in_screen = screen_age;
                         let mut actors = Vec::new();
-                        screen_gameplay::push_actors(
+                        crate::gameplay_runtime::push_actors(
                             &mut actors,
                             &mut state,
                             &assets,
                             screen_gameplay::ActorViewOverride::default(),
                             123.0,
-                            crate::views::SimplyLoveVisualPolicyView::default(),
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(
+                            ),
                         );
                         let actual = actors
                             .iter()
@@ -3123,13 +3135,13 @@ return Def.ActorFrame{
 
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                screen_gameplay::push_actors(
+                crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
 
                 assert!(actor_tree_has_text(&actors, "EVENT"));
@@ -3423,16 +3435,16 @@ return Def.ActorFrame{
                 }));
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                let segments = screen_gameplay::push_actors(
+                let segments = crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert!(segments.has_direct_field_proxy(&state));
-                let actor_segments = segments.segments(&state, &actors);
+                assert!(segments.has_direct_field_proxy(state.song_frame()));
+                let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
                 let mut warm = compose::build_passes(
@@ -3459,7 +3471,7 @@ return Def.ActorFrame{
                 );
 
                 let mut edit_actors = Vec::with_capacity(512);
-                let edit_segments = screen_gameplay::push_actors(
+                let edit_segments = crate::gameplay_runtime::push_actors(
                     &mut edit_actors,
                     &mut state,
                     &assets,
@@ -3471,12 +3483,12 @@ return Def.ActorFrame{
                         ..Default::default()
                     },
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert!(edit_segments.has_direct_field_proxy(&state));
+                assert!(edit_segments.has_direct_field_proxy(state.song_frame()));
 
                 let mut plain_edit_actors = Vec::with_capacity(512);
-                let plain_edit_segments = screen_gameplay::push_actors(
+                let plain_edit_segments = crate::gameplay_runtime::push_actors(
                     &mut plain_edit_actors,
                     &mut state,
                     &assets,
@@ -3490,9 +3502,9 @@ return Def.ActorFrame{
                         ..Default::default()
                     },
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert!(!plain_edit_segments.has_direct_field_proxy(&state));
+                assert!(!plain_edit_segments.has_direct_field_proxy(state.song_frame()));
                 assert!(state.render_targets().is_empty());
             },
         );
@@ -3527,17 +3539,17 @@ return Def.ActorFrame{
                 add_sprite_core_feedback(&mut state, 0, 0, 100);
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                let segments = screen_gameplay::push_actors(
+                let segments = crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
                 assert_eq!(segments.direct_proxy_count(), 2);
-                assert_eq!(segments.direct_field_proxy_count(&state), 1);
-                let actor_segments = segments.segments(&state, &actors);
+                assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 1);
+                let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
                 let mut warm = compose::build_passes(
@@ -3594,16 +3606,16 @@ return Def.ActorFrame{
                 set_fixture_time(&mut state, 2.5);
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                let segments = screen_gameplay::push_actors(
+                let segments = crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_field_proxy_count(&state), 0);
-                let actor_segments = segments.segments(&state, &actors);
+                assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 0);
+                let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
                 let mut warm = compose::build_passes(
@@ -3668,17 +3680,17 @@ return Def.ActorFrame{
                 add_sprite_core_feedback(&mut state, 0, 0, 100);
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                let segments = screen_gameplay::push_actors(
+                let segments = crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
                 assert_eq!(segments.direct_proxy_count(), 0);
-                assert_eq!(segments.direct_field_proxy_count(&state), 0);
-                let actor_segments = segments.segments(&state, &actors);
+                assert_eq!(segments.direct_field_proxy_count(state.song_frame()), 0);
+                let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
                 let mut warm = compose::build_passes(
@@ -3750,16 +3762,16 @@ return Def.ActorFrame{
                 }));
                 let assets = fixture_assets();
                 let mut actors = Vec::with_capacity(512);
-                let segments = screen_gameplay::push_actors(
+                let segments = crate::gameplay_runtime::push_actors(
                     &mut actors,
                     &mut state,
                     &assets,
                     screen_gameplay::ActorViewOverride::default(),
                     123.0,
-                    crate::views::SimplyLoveVisualPolicyView::default(),
+                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                 );
-                assert_eq!(segments.direct_combo_proxy_count(&state), 2);
-                let actor_segments = segments.segments(&state, &actors);
+                assert_eq!(segments.direct_combo_proxy_count(state.song_frame()), 2);
+                let actor_segments = segments.segments(state.song_frame(), &actors);
                 let mut text_cache = compose::TextLayoutCache::default();
                 let mut compose_scratch = compose::ComposeScratch::default();
                 let mut warm = compose::build_passes(
@@ -4173,9 +4185,9 @@ return Def.ActorFrame{
                     &mut text_cache,
                     &mut compose_scratch,
                 );
-                let mut practice = crate::screens::practice::init(
+                let mut practice = deadsync_theme_simply_love::screens::practice::init(
                     gameplay,
-                    crate::views::PracticeRuntimeView::default(),
+                    deadsync_theme_simply_love::views::PracticeRuntimeView::default(),
                 );
                 set_fixture_time(&mut practice.gameplay, 2.5);
                 assert!(!practice.gameplay.score_valid_for_player(0));
@@ -4235,9 +4247,9 @@ return Def.ActorFrame{
                         GameplaySession::default(),
                         profiles,
                     );
-                    let mut practice = crate::screens::practice::init(
+                    let mut practice = deadsync_theme_simply_love::screens::practice::init(
                         gameplay,
-                        crate::views::PracticeRuntimeView::default(),
+                        deadsync_theme_simply_love::views::PracticeRuntimeView::default(),
                     );
                     set_fixture_time(&mut practice.gameplay, 2.5);
                     let editor = compose_practice_fixture_frame(
@@ -4371,6 +4383,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn gameplay_handles_generated_song_lua_actor_build() {
+        crate::tests::init_paths();
         let simfile = write_generated_lua_song_fixture();
         const SONG_LUA_TEST_STACK: usize = 16 * 1024 * 1024;
         std::thread::Builder::new()
@@ -4447,15 +4460,9 @@ return Def.ActorFrame{}
                             .map(|change| {
                                 compile_song_lua(&change.path, &context)
                                     .expect("generated song lua should compile")
-                            })
-                            .map(|compiled| screen_gameplay::GameplayCompiledSongLua {
-                                compiled,
-                                compile_ms: 0.0,
                             });
-                        let song_lua_data = screen_gameplay::GameplaySongLuaData {
-                            primary,
-                            ..Default::default()
-                        };
+                        let song_lua_data =
+                            deadsync_song_lua::playback::actor_conformance::prepared_primary(primary);
                         let mut state = screen_gameplay::State::from_gameplay(
                             init(
                                 song,
@@ -4503,13 +4510,13 @@ return Def.ActorFrame{}
                                 state.timing_runtime.timing.get_beat_for_time(time);
                             refresh_active_attack_masks(&mut state.gameplay, 0.0);
                             let mut actors = Vec::new();
-                            screen_gameplay::push_actors(
+                            crate::gameplay_runtime::push_actors(
                                 &mut actors,
                                 &mut state,
                                 &assets,
                                 screen_gameplay::ActorViewOverride::default(),
                                 123.0,
-                                crate::views::SimplyLoveVisualPolicyView::default(),
+                                deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
                             );
                         }
                     },

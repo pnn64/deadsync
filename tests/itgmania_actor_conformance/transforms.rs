@@ -1,5 +1,5 @@
 use super::support::{actor, assert_array_ulp, assert_matrix, f32_array, fixture, matrix};
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+use deadsync_song_lua::playback::actor_conformance::{
     actor_matrix, multiply_matrices, project_world, sprite_matrix, view_projection,
 };
 

@@ -16,8 +16,8 @@ pub fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
     if !seconds.is_finite() {
         return INVALID_SONG_TIME_NS;
     }
-    let nanos = (f64::from(seconds) * SONG_TIME_NS_PER_SECOND).round();
-    nanos.clamp((i64::MIN + 1) as f64, i64::MAX as f64) as SongTimeNs
+    // The float-to-integer cast already saturates at the i64 bounds.
+    (f64::from(seconds) * SONG_TIME_NS_PER_SECOND).round() as SongTimeNs
 }
 
 #[inline(always)]
@@ -95,9 +95,35 @@ mod tests {
 
     #[test]
     fn invalid_seconds_stay_invalid() {
-        assert_eq!(song_time_ns_from_seconds(f32::NAN), INVALID_SONG_TIME_NS);
+        for seconds in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(song_time_ns_from_seconds(seconds), INVALID_SONG_TIME_NS);
+        }
         assert!(song_time_ns_invalid(INVALID_SONG_TIME_NS));
         assert!(song_time_ns_to_seconds(INVALID_SONG_TIME_NS).is_nan());
+    }
+
+    #[test]
+    fn seconds_conversion_preserves_rounding_and_saturation() {
+        for (seconds, expected) in [
+            (0.0, 0),
+            (-0.0, 0),
+            (f32::from_bits(1), 0),
+            (-f32::from_bits(1), 0),
+            (1e-9, 1),
+            (-1e-9, -1),
+            (0.25, 250_000_000),
+            (-0.25, -250_000_000),
+            (8_192.0, 8_192_000_000_000),
+            // Adjacent f32 values straddle the i64 nanosecond limits.
+            (f32::from_bits(0x5009_705f), 9_223_371_776_000_000_000),
+            (f32::from_bits(0x5009_7060), i64::MAX),
+            (f32::from_bits(0xd009_705f), -9_223_371_776_000_000_000),
+            (f32::from_bits(0xd009_7060), i64::MIN),
+            (f32::MAX, i64::MAX),
+            (-f32::MAX, i64::MIN),
+        ] {
+            assert_eq!(song_time_ns_from_seconds(seconds), expected, "{seconds:?}");
+        }
     }
 
     #[test]

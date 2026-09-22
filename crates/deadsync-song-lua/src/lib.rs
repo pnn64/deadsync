@@ -1,3 +1,7 @@
+pub mod gameplay;
+// Playback is tested with concrete asset fixtures by tests/playback.rs.
+#[cfg(not(test))]
+pub mod playback;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

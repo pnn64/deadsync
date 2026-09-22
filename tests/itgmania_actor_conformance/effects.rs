@@ -1,9 +1,9 @@
 use super::support::{actor, assert_array_ulp, f32_array, f32_at, fixture, samples};
 use deadlib_present::anim::{EffectClock, EffectMode};
-use deadsync_song_lua::{SongLuaOverlayState, parse_overlay_effect_mode};
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+use deadsync_song_lua::playback::actor_conformance::{
     effect_sample, vibration_magnitude, vibration_sample,
 };
+use deadsync_song_lua::{SongLuaOverlayState, parse_overlay_effect_mode};
 
 struct Mt19937 {
     state: [u32; 624],

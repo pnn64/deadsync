@@ -128,6 +128,45 @@ pub fn gameplay_last_played_commands(
     commands
 }
 
+pub(crate) type PreparedGameplaySongLua =
+    deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
+pub(crate) fn prepare_song_lua(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
+    player_profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
+    scroll_speed: &[deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    viewport: deadsync_gameplay::GameplayViewport,
+    display_size: (u32, u32),
+    session: &deadsync_gameplay::GameplaySession,
+    config: &deadsync_gameplay::GameplayConfig,
+    video_renderer: deadlib_render_core::BackendType,
+) -> PreparedGameplaySongLua {
+    if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
+        return PreparedGameplaySongLua::default();
+    }
+    let context = deadsync_profile_gameplay::song_lua_play_context(
+        song,
+        charts,
+        timing,
+        player_profiles,
+        scroll_speed,
+        music_rate,
+        viewport,
+        display_size,
+        session,
+        config,
+        &video_renderer.to_string(),
+    );
+    deadsync_song_lua::playback::prepare_song_lua(
+        song,
+        &context,
+        deadsync_assets::song_lua::compile_song_lua,
+        deadsync_assets::song_lua::compile_song_lua_layers,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

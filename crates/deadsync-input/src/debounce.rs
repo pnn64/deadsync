@@ -212,7 +212,7 @@ impl DebounceStore {
     }
 
     #[inline(always)]
-    fn take_next_due_slot(&mut self, now: Instant) -> Option<usize> {
+    fn next_due_slot(&self, now: Instant) -> Option<(usize, Instant)> {
         let &slot = self.due_slots.first()?;
         let due_at = self.slots[slot]
             .due_at
@@ -220,8 +220,7 @@ impl DebounceStore {
         if due_at > now {
             return None;
         }
-        self.unschedule_slot(slot);
-        Some(slot)
+        Some((slot, due_at))
     }
 }
 
@@ -332,15 +331,18 @@ fn debounce_step(
     // the new raw state, so a delayed release can still report just ahead of a
     // later repress instead of being silently lost.
     let first = debounce_emit_if_due(state, input_slot, now, windows);
-    if state.held_raw != pressed {
+    let second = if state.held_raw != pressed {
         state.action_mask = action_mask;
         state.source = source;
         state.held_raw = pressed;
         state.last_raw_change_time = timestamp;
         state.last_raw_change_host_nanos = timestamp_host_nanos;
         state.last_raw_store_time = now;
-    }
-    let second = debounce_emit_if_due(state, input_slot, now, windows);
+        debounce_emit_if_due(state, input_slot, now, windows)
+    } else {
+        // The first check already handled this unchanged raw state.
+        None
+    };
     DebounceEdges { first, second }
 }
 
@@ -627,7 +629,7 @@ pub(crate) fn next_due_edge(
     now: Instant,
     windows: DebounceWindows,
 ) -> Option<DebouncedEdge> {
-    while let Some(next_slot) = states.take_next_due_slot(now) {
+    while let Some((next_slot, old_due_at)) = states.next_due_slot(now) {
         let (edge, remove, new_due_at, after_state) = {
             let slot_state = &mut states.slots[next_slot];
             let input_slot = next_slot.min(u32::MAX as usize) as u32;
@@ -638,7 +640,9 @@ pub(crate) fn next_due_edge(
         if remove {
             states.active_len = states.active_len.saturating_sub(1);
         }
-        states.refresh_due_slot(next_slot, None, new_due_at);
+        // A delayed release keeps its slot for cleanup. Update its deadline
+        // directly instead of removing and reinserting the same heap entry.
+        states.refresh_due_slot(next_slot, Some(old_due_at), new_due_at);
         if let Some(edge) = edge
             && log::log_enabled!(log::Level::Debug)
         {
@@ -1187,6 +1191,57 @@ mod tests {
     }
 
     #[test]
+    fn delayed_releases_keep_deadline_order_after_rescheduling() {
+        let t0 = Instant::now();
+        let initial_window = Duration::from_millis(20);
+        let raw_release = t0 + Duration::from_millis(1);
+        for window in [initial_window, Duration::from_millis(50)] {
+            let mut store = DebounceStore::new();
+            store.prepare_slots(8);
+            for slot in [7, 2, 5] {
+                for (pressed, timestamp) in [(true, t0), (false, raw_release)] {
+                    debounce_input_edge_in_store_mut(
+                        &mut store,
+                        slot,
+                        TEST_MASK,
+                        InputSource::Gamepad,
+                        pressed,
+                        timestamp,
+                        123,
+                        DebounceWindows::uniform(initial_window),
+                        || timestamp,
+                    );
+                }
+            }
+            let windows = DebounceWindows::uniform(window);
+            if window > initial_window {
+                // A settings change postpones the existing deadlines without
+                // emitting edges or adding duplicate scheduled slots.
+                assert_eq!(
+                    next_due_edge(&mut store, t0 + initial_window, windows),
+                    None
+                );
+                assert_eq!(store.due_slots.len(), 3);
+            }
+            let due = t0 + window;
+            for slot in [2, 5, 7] {
+                let edge = next_due_edge(&mut store, due, windows).expect("due release");
+                assert_eq!(edge.input_slot, slot);
+                assert!(!edge.pressed);
+                assert_eq!(edge.timestamp, raw_release);
+                assert_eq!(edge.timestamp_host_nanos, 123);
+                assert_eq!(edge.stored_at, raw_release);
+                assert_eq!(edge.emitted_at, due);
+                assert_eq!(store.due_slots.len(), 3, "releases await cleanup");
+            }
+            assert_eq!(next_due_edge(&mut store, due, windows), None);
+            assert_eq!(next_due_edge(&mut store, due + window, windows), None);
+            assert!(store.due_slots.is_empty());
+            assert_eq!(store.active_len, 0);
+        }
+    }
+
+    #[test]
     fn due_schedule_matches_ordered_reference_after_mixed_updates() {
         let t0 = Instant::now();
         let mut store = DebounceStore::new();
@@ -1216,8 +1271,13 @@ mod tests {
                     .min()
                     .filter(|&(due, _)| due <= now)
                     .map(|(_, slot)| slot);
-                assert_eq!(store.take_next_due_slot(now), expected, "step {step}");
+                assert_eq!(
+                    store.next_due_slot(now).map(|(slot, _)| slot),
+                    expected,
+                    "step {step}"
+                );
                 if let Some(slot) = expected {
+                    store.unschedule_slot(slot);
                     deadlines[slot] = None;
                 }
             }
@@ -1244,10 +1304,11 @@ mod tests {
             .collect();
         remaining.sort_unstable();
         let now = t0 + Duration::from_millis(16);
-        for (_, slot) in remaining {
-            assert_eq!(store.take_next_due_slot(now), Some(slot));
+        for (due, slot) in remaining {
+            assert_eq!(store.next_due_slot(now), Some((slot, due)));
+            store.unschedule_slot(slot);
         }
-        assert_eq!(store.take_next_due_slot(now), None);
+        assert_eq!(store.next_due_slot(now), None);
     }
 
     #[test]

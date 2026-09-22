@@ -8,6 +8,7 @@ license = "GPL-3.0"
 test-support = []
 
 [dependencies]
+deadsync-song-lua = { path = "../deadsync-song-lua" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadlib-input-native = { path = "../deadlib-input-native" }
@@ -29,18 +30,17 @@ deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
 deadsync-simfile = { path = "../deadsync-simfile" }
-deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
 deadsync-version = { path = "../deadsync-version" }
 bitflags = "2.13.2"
 chrono = "0.4.45"
-glam = "0.33.7"
+glam = "0.33.8"
 image = "0.25.10"
 log = "0.4.34"
 memchr = "2.8.3"
 mlua = { version = "0.12.1", features = ["lua54", "vendored"] }
 qrcodegen = "1.8.0"
-rand = "0.10.2"
+rand = "0.10.3"
 rustc-hash = "2.1.3"
 smallvec = "1.16.1"
 strsim = "0.11.1"
@@ -59,8 +59,3 @@ winit = "0.30.13"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
-
-[[test]]
-name = "actor_capture_perf"
-path = "tests/perf/actor_capture.rs"
-required-features = ["test-support"]

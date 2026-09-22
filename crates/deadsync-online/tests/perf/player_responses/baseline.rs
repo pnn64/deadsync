@@ -179,7 +179,8 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
         .saturating_add(hs.missed_hold);
     let mines_total = hs.hit_mine.saturating_add(hs.avoid_mine);
 
-    let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, None);
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(counts, grade, None, hs.let_go == 0 && hs.missed_hold == 0);
 
     let fail_time = if grade == Grade::Failed {
         Some(hs.survive_seconds.max(0.0))

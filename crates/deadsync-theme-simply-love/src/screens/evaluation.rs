@@ -160,7 +160,6 @@ const SRPG10_EVAL_ZOOM: f32 = 480.0 / 1080.0;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
 const GRAPH_BARELY_ANIM_SEG_SECONDS: f32 = 0.2;
-const GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS: f32 = 0.5;
 const AUTO_SUBMIT_RECORD_TEXT_Y: f32 = 40.0;
 const AUTO_SUBMIT_RECORD_TEXT_ZOOM: f32 = 0.225;
 const AUTO_SUBMIT_GS_ICON_ZOOM: f32 = 0.2;
@@ -1043,6 +1042,112 @@ mod tests {
     fn fail_label_appends_stream_measure_progress() {
         assert_eq!(&*cached_fail_label_text(125.9, None), "2:05");
         assert_eq!(&*cached_fail_label_text(125.9, Some((3, 8))), "2:05\n3/8");
+    }
+
+    #[test]
+    fn barely_requires_a_pass_and_sampled_life_strictly_between_zero_and_ten_percent() {
+        for (life, expected) in [
+            (-0.1, None),
+            (0.0, None),
+            (0.0001, Some(0)),
+            (0.05, Some(0)),
+            (0.0999, Some(0)),
+            (0.1, None),
+            (1.0, None),
+        ] {
+            let history = [(0.0, life), (100.0, life)];
+            assert_eq!(
+                super::barely_marker_sample(&history, 0.0, 100.0, false),
+                expected
+            );
+            assert_eq!(
+                super::barely_marker_sample(&history, 0.0, 100.0, true),
+                None
+            );
+        }
+        assert_eq!(super::barely_marker_sample(&[], 0.0, 100.0, false), None);
+        assert_eq!(
+            super::barely_marker_sample(&[(0.0, 0.05)], 0.0, 0.0, false),
+            None
+        );
+    }
+
+    #[test]
+    fn barely_uses_the_first_minimum_of_the_same_hundred_samples_as_the_life_line() {
+        let history = [(0.0, 0.5), (60.0, 0.05), (70.0, 0.05), (110.0, 0.5)];
+        assert_eq!(
+            super::barely_marker_sample(&history, 10.0, 110.0, false),
+            Some(50)
+        );
+        for width in [300.0, 610.0] {
+            let points = graph_display_life_points(&history, 10.0, -2.0, 110.0, width, 64.0)
+                .expect("valid life graph");
+            let (_, left, step) = super::graph_display_life_layout(10.0, -2.0, 110.0, width)
+                .expect("valid life graph layout");
+            assert_eq!(points[50][0], 50.0_f32.mul_add(step, left));
+            assert!((points[50][1] - 61.8).abs() < 0.0001);
+        }
+        // ITGmania samples i / 100, not i / 99: neither the endpoint nor a
+        // short dip between sample times should trigger the marker.
+        let end_dip = [(0.0, 0.5), (99.0, 0.5), (100.0, 0.05)];
+        let short_dip = [(0.0, 0.5), (49.0, 0.5), (49.5, 0.05), (50.0, 0.5)];
+        assert_eq!(
+            super::barely_marker_sample(&end_dip, 0.0, 100.0, false),
+            None
+        );
+        assert_eq!(
+            super::barely_marker_sample(&short_dip, 0.0, 100.0, false),
+            None
+        );
+    }
+
+    #[test]
+    fn barely_matches_simply_loves_bounce_and_arrow_pulse() {
+        for (elapsed_us, expected_y, expected_alpha) in [
+            (0_i64, 12.0, 0.0),
+            (2_000_000, 12.0, 0.0),
+            (2_100_000, 19.5, 0.25),
+            (2_200_000, 42.0, 1.0),
+            (2_300_000, 30.75, 1.0),
+            (2_400_000, 27.0, 1.0),
+            (2_500_000, 30.75, 1.0),
+            (2_600_000, 42.0, 1.0),
+            (3_000_000, 42.0, 1.0),
+        ] {
+            let [text, arrow] = super::build_barely_marker([123.0, 32.0], elapsed_us as f32 / 1e6);
+            let Actor::Text {
+                offset,
+                color,
+                scale,
+                ..
+            } = text
+            else {
+                panic!("Barely text missing");
+            };
+            assert_eq!(offset[0], 123.0);
+            assert!((offset[1] - expected_y).abs() < 0.0001, "at {elapsed_us}us");
+            assert!((color[3] - expected_alpha).abs() < 0.00001);
+            assert_eq!(scale, [0.75; 2]);
+            let Actor::Sprite {
+                offset: arrow_offset,
+                scale,
+                rot_z_deg,
+                ..
+            } = arrow
+            else {
+                panic!("Barely arrow missing");
+            };
+            assert_eq!(arrow_offset, [offset[0], offset[1] + 10.0]);
+            assert_eq!(scale, [0.5; 2]);
+            assert_eq!(rot_z_deg, -90.0);
+        }
+        for (elapsed, expected_alpha) in [(3.0, 1.0), (3.25, 0.6), (3.5, 0.2), (4.0, 1.0)] {
+            let [_, Actor::Sprite { tint, .. }] = super::build_barely_marker([0.0, 32.0], elapsed)
+            else {
+                panic!("Barely arrow missing");
+            };
+            assert!((tint[3] - expected_alpha).abs() < 0.00001);
+        }
     }
 
     #[test]
@@ -2679,9 +2784,15 @@ pub struct State {
     menu_lr_undo: [i8; MAX_PLAYERS],
     favorite_code: crate::screens::favorite_code::FavoriteCodeTracker,
     test_input_state: test_input::State,
-    /// Memoized per-player graph subtree (cf. `GraphCacheKey`). Interior mutability so
-    /// it can be populated during `get_actors(&State, …)`.
-    graph_cache: [RefCell<Option<(GraphCacheKey, Arc<[Actor]>)>>; MAX_PLAYERS],
+    /// Memoized static graph actors and Barely x-position (cf. `GraphCacheKey`).
+    /// Animated marker actors are rebuilt from screen time outside this cache.
+    /// Game-thread-only RefCells retain at most one entry per player for this
+    /// evaluation screen. First draw or a key change rebuilds the fixed actor
+    /// tree and samples life 100 times; hits clone its Arc and copy one position.
+    /// Mesh payloads are already prepared at initialization. Entries are replaced
+    /// or dropped on the same thread, never during gameplay. No runtime counters;
+    /// the cache-reuse regression test checks Arc identity across animated frames.
+    graph_cache: [RefCell<Option<(GraphCacheKey, Arc<[Actor]>, Option<f32>)>>; MAX_PLAYERS],
     /// Memoized center-column title/banner frame (cf. `ChromeCacheKey`). Single
     /// instance (same in single + versus). Interior mutability so it can be populated
     /// during `get_actors(&State, …)`.
@@ -4999,15 +5110,18 @@ fn build_eval_life_graph_mesh(
     (!mesh.is_empty()).then_some(mesh)
 }
 
-#[inline(always)]
-fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32)> {
+fn barely_marker_sample(
+    life_history: &[(f32, f32)],
+    record_start: f32,
+    record_end: f32,
+    failed: bool,
+) -> Option<usize> {
     // ITGmania GraphDisplay only shows "Barely" if the chart was cleared.
-    if si.grade == score_data::Grade::Failed || si.fail_time.is_some() || si.life_history.is_empty()
-    {
+    if failed || life_history.is_empty() {
         return None;
     }
 
-    let sample_end = si.graph_last_second.max(record_start);
+    let sample_end = record_end.max(record_start);
     let sample_duration = sample_end - record_start;
     if !sample_duration.is_finite() || sample_duration <= 0.0 {
         return None;
@@ -5016,7 +5130,7 @@ fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32
     let mut min_life = 1.0_f32;
     let mut min_ix = 0usize;
     let sample_step = sample_duration / GRAPH_LIFE_SAMPLE_COUNT as f32;
-    let record = LifeRecordSampler::new(&si.life_history, record_start);
+    let record = LifeRecordSampler::new(life_history, record_start);
     for i in 0..GRAPH_LIFE_SAMPLE_COUNT {
         let t = (i as f32).mul_add(sample_step, record_start);
         let life = record.sample(t);
@@ -5030,7 +5144,36 @@ fn barely_marker_sample(si: &ScoreInfo, record_start: f32) -> Option<(usize, f32
         return None;
     }
 
-    Some((min_ix, min_life))
+    Some(min_ix)
+}
+
+fn build_barely_marker(origin: [f32; 2], elapsed: f32) -> [Actor; 2] {
+    // SL GraphDisplay Barely.lua: sleep(2), accelerate(.2) to y=10,
+    // decelerate(.2) to y=-5, accelerate(.2) back to y=10. The origin is
+    // GraphDisplay's center, not the life line's minimum y-coordinate.
+    let phase = (elapsed - GRAPH_BARELY_ANIM_DELAY_SECONDS) / GRAPH_BARELY_ANIM_SEG_SECONDS;
+    let drop = phase.clamp(0.0, 1.0);
+    let bounce = (phase - 1.0).clamp(0.0, 1.0);
+    let settle = (phase - 2.0).clamp(0.0, 1.0);
+    let alpha = drop * drop;
+    let y =
+        origin[1] - 20.0 + 30.0 * alpha - 15.0 * bounce * (2.0 - bounce) + 15.0 * settle * settle;
+    // ITGmania starts diffuseshift immediately, even after sleep(.5): effects
+    // are not tween-queued. Its one-second white pulse multiplies parent alpha.
+    let pulse = 0.6 + 0.4 * ((elapsed.rem_euclid(1.0) + 0.25) * std::f32::consts::TAU).sin();
+    [
+        act!(text:
+            font("miso"): settext(tr("Evaluation", "Barely")):
+            align(0.5, 0.5): xy(origin[0], y): zoom(0.75):
+            diffuse(1.0, 1.0, 1.0, alpha): z(113)
+        ),
+        act!(sprite("meter_arrow.png"):
+            align(0.5, 0.5): xy(origin[0], y + 10.0):
+            // DeadSync's world-space rotation has the opposite screen-space sign.
+            rotationz(-90.0): zoom(0.5):
+            diffuse(1.0, 1.0, 1.0, alpha * pulse): z(113)
+        ),
+    ]
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
@@ -6652,15 +6795,31 @@ pub fn push_actors(
             };
             let cache_hit = {
                 let slot = state.graph_cache[player_idx].borrow();
-                slot.as_ref().is_some_and(|(k, _)| *k == graph_key)
+                slot.as_ref().is_some_and(|(k, _, _)| *k == graph_key)
             };
-            // The graph subtree (density + scatter + life + baked-tween markers) reads
-            // no per-frame clock, so it is fully determined by `graph_key`. Memoize the
-            // built `Arc<[Actor]>` and clone it on subsequent frames instead of
-            // rebuilding hundreds of leaf actors.
-            let graph_children: Arc<[Actor]> = if cache_hit {
-                Arc::clone(&state.graph_cache[player_idx].borrow().as_ref().unwrap().1)
+            // Only static graph actors belong in this cache. Materialized tweens
+            // would otherwise remain frozen at their initial, transparent state.
+            let (graph_children, barely_x) = if cache_hit {
+                let cache = state.graph_cache[player_idx].borrow();
+                let (_, children, barely_x) = cache.as_ref().expect("graph cache hit");
+                (Arc::clone(children), *barely_x)
             } else {
+                let record_start = eval_life_record_start(si);
+                let barely_x = barely_marker_sample(
+                    &si.life_history,
+                    record_start,
+                    si.graph_last_second,
+                    si.grade == score_data::Grade::Failed || si.fail_time.is_some(),
+                )
+                .and_then(|sample| {
+                    let (_, left, step) = graph_display_life_layout(
+                        record_start,
+                        eval_life_graph_first(si),
+                        si.graph_last_second,
+                        graph_width,
+                    )?;
+                    Some((sample as f32).mul_add(step, left))
+                });
                 let density_mesh = state.density_graph_mesh[player_idx].as_ref();
                 let scatter_mesh = match graph_mode {
                     EvalGraphPane::Itg => state.scatter_mesh_itg[player_idx].as_ref(),
@@ -6807,12 +6966,8 @@ pub fn push_actors(
                         let first = si.graph_first_second;
                         let last = si.graph_last_second.max(first + 0.001_f32);
 
-                        let record_start = eval_life_record_start(si);
-                        let life_graph_first = eval_life_graph_first(si);
                         let life_mesh = state.life_graph_mesh[player_idx].as_ref();
-                        let barely = barely_marker_sample(si, record_start);
                         let child_capacity = usize::from(life_mesh.is_some())
-                            + usize::from(barely.is_some()) * 3
                             + usize::from(si.fail_time.is_some()) * 4;
                         let mut life_children: Vec<Actor> = Vec::with_capacity(child_capacity);
 
@@ -6827,65 +6982,6 @@ pub fn push_actors(
                                 blend: BlendMode::Alpha,
                                 z: 4,
                             });
-                        }
-
-                        if let Some((barely_ix, barely_life)) = barely
-                            && let Some((_, line_left, sample_x_step)) = graph_display_life_layout(
-                                record_start,
-                                life_graph_first,
-                                last,
-                                graph_width,
-                            )
-                        {
-                            let x = (barely_ix as f32).mul_add(sample_x_step, line_left);
-                            let y = (1.0 - barely_life).mul_add(graph_height, 1.0);
-                            // Keep a tiny marker on the life line, then animate the label/arrow
-                            // in the same timing pattern as Simply Love GraphDisplay Barely.
-                            life_children.push(act!(quad:
-                                align(0.5, 0.5): xy(x, y):
-                                setsize(3.0, 3.0):
-                                diffuse(1.0, 1.0, 1.0, 0.95):
-                                z(6)
-                            ));
-
-                            let anchor_y = (y - 12.0).clamp(18.0, graph_height - 24.0);
-                            let text_start_y = anchor_y - 20.0;
-                            let text_mid_y = anchor_y - 5.0;
-                            let text_end_y = anchor_y + 10.0;
-                            let arrow_start_y = anchor_y - 10.0;
-                            let arrow_mid_y = anchor_y + 5.0;
-                            let arrow_end_y = anchor_y + 20.0;
-                            let salt = u64::from(x.to_bits());
-
-                            life_children.push(act!(text:
-                                tweensalt(salt):
-                                font("miso"): settext(tr("Evaluation", "Barely")):
-                                align(0.5, 0.5): xy(x, text_start_y):
-                                zoom(0.75):
-                                diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
-                                sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
-                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(text_end_y):
-                                decelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(text_mid_y):
-                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(text_end_y):
-                                z(8)
-                            ));
-                            life_children.push(act!(sprite("meter_arrow.png"):
-                                tweensalt(salt):
-                                align(0.5, 0.5): xy(x, arrow_start_y):
-                                // SL uses rotationz(90); deadsync's current z-rotation sign
-                                // is opposite in screen space, so -90 is the visual parity.
-                                rotationz(-90.0): zoom(0.50):
-                                diffuse(1.0, 1.0, 1.0, 1.0): alpha(0.0):
-                                sleep(GRAPH_BARELY_ANIM_DELAY_SECONDS):
-                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): alpha(1.0): y(arrow_end_y):
-                                decelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(arrow_mid_y):
-                                accelerate(GRAPH_BARELY_ANIM_SEG_SECONDS): y(arrow_end_y):
-                                sleep(GRAPH_BARELY_ARROW_PULSE_DELAY_SECONDS):
-                                diffuseshift():
-                                effectcolor1(1.0, 1.0, 1.0, 1.0):
-                                effectcolor2(1.0, 1.0, 1.0, 0.2):
-                                z(8)
-                            ));
                         }
 
                         if let Some(fail_time) = si.fail_time {
@@ -6982,8 +7078,9 @@ pub fn push_actors(
                     },
                 ];
                 let arc: Arc<[Actor]> = Arc::from(graph_children_vec);
-                *state.graph_cache[player_idx].borrow_mut() = Some((graph_key, Arc::clone(&arc)));
-                arc
+                *state.graph_cache[player_idx].borrow_mut() =
+                    Some((graph_key, Arc::clone(&arc), barely_x));
+                (arc, barely_x)
             };
             let graph_frame = Actor::SharedFrame {
                 align: [0.5, 0.0],
@@ -6996,6 +7093,15 @@ pub fn push_actors(
                 blend: None,
             };
             actors.push(graph_frame);
+            if let Some(x) = barely_x {
+                actors.extend(build_barely_marker(
+                    [
+                        frame_center_x - graph_width / 2.0 + x,
+                        frame_center_y + graph_height / 2.0,
+                    ],
+                    state.screen_elapsed,
+                ));
+            }
         }
     }
 

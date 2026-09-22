@@ -1,4 +1,4 @@
-use deadlib_render_core::{BackendType, ClockDomainTrace, PresentModeTrace};
+use deadlib_render_core::{ClockDomainTrace, PresentModeTrace};
 use deadsync_assets::noteskin::Noteskin;
 use deadsync_input::Keymap;
 use deadsync_profile::{PlayMode, PlayStyle, PlayerSide};
@@ -206,7 +206,6 @@ impl Default for GameplayRuntimeView {
 #[derive(Clone, Debug)]
 pub struct GameplayInitView {
     pub runtime: GameplayRuntimeView,
-    pub video_renderer: BackendType,
     pub hud: deadsync_profile::GameplayHudSnapshot,
     pub judgment_palettes: [deadsync_theme::color::JudgmentPalette; 2],
     pub scores: GameplayScoreInitView,
@@ -217,7 +216,6 @@ impl Default for GameplayInitView {
     fn default() -> Self {
         Self {
             runtime: GameplayRuntimeView::default(),
-            video_renderer: BackendType::Software,
             hud: deadsync_profile::GameplayHudSnapshot {
                 play_style: PlayStyle::default(),
                 player_side: PlayerSide::default(),
@@ -686,6 +684,7 @@ pub struct MusicWheelScoreView {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MusicWheelSideRuntimeView {
     pub score: Option<deadsync_score::CachedScore>,
+    pub lamp: Option<deadsync_score::CachedLamp>,
     pub itl_rank: Option<u32>,
     pub srpg_pass_rate_hundredths: Option<u32>,
     pub percentage: Option<MusicWheelScoreView>,

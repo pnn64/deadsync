@@ -226,6 +226,18 @@ pub struct State {
     /// Up / Down currently held, for the Up+Down "tare" chord.
     raise_held: bool,
     lower_held: bool,
+    /// Load-cell pair before the first chord key steps it. The second key
+    /// must not preserve an accidental drag of the unfocused threshold.
+    tare_pair: Option<ThresholdPairSnapshot>,
+}
+
+#[derive(Clone, Copy)]
+struct ThresholdPairSnapshot {
+    device: PadDeviceId,
+    button: usize,
+    kind: ThresholdKind,
+    press: u16,
+    release: u16,
 }
 
 /// A held directional control and its repeat timer.
@@ -258,6 +270,9 @@ pub fn init() -> State {
 /// Apply the shell-owned FSR feature policy to input and presentation.
 pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
     state.fsr_enabled = enabled;
+    if !enabled {
+        clear_hold(state);
+    }
 }
 
 /// Replace the live pad snapshot (called by the app loop each frame while this
@@ -278,6 +293,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
     let total = total_bars(state);
     if total == 0 {
         state.selected = 0;
+        clear_hold(state);
     } else if state.selected >= total {
         state.selected = total - 1;
     }
@@ -290,6 +306,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
             if n == 0 {
                 state.advanced = None;
                 state.adv_sel = 0;
+                clear_hold(state);
             } else if state.adv_sel >= n {
                 state.adv_sel = n - 1;
             }
@@ -297,6 +314,7 @@ pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
         Some(_) => {
             state.advanced = None;
             state.adv_sel = 0;
+            clear_hold(state);
         }
         None => {}
     }
@@ -314,7 +332,7 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
 }
 
 /// Advance hold-to-repeat: a held direction re-fires after an initial delay,
-/// then at a steady cadence, in the Simple / Advanced views and the profiles
+/// then at an accelerating cadence, in the Simple / Advanced views and the profiles
 /// list. The name box ignores the hold (its Up/Down is a toggle).
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     tick_hold_repeat(state, dt);
@@ -438,11 +456,7 @@ pub fn apply_edit(state: &mut State, ev: &InputEvent, fine: bool) -> EditResult 
     // the Up+Down chord, whose second key tares the focused threshold to the
     // live reading instead of stepping it.
     if let Some(ui) = ui_action(ev.action) {
-        if note_press(state, ui, fine) {
-            tare_focused(state);
-        } else {
-            perform_ui_action(state, ui, fine);
-        }
+        apply_direction_press(state, ui, fine);
         return EditResult::Handled;
     }
 
@@ -496,22 +510,49 @@ fn perform_ui_action(state: &mut State, ui: UiAction, fine: bool) {
     }
 }
 
-/// Record a directional press: (re)start its hold-repeat timer and track the
-/// Up/Down pair. Returns true when this press completed the Up+Down chord.
-fn note_press(state: &mut State, ui: UiAction, fine: bool) -> bool {
-    match ui {
-        UiAction::Raise => state.raise_held = true,
-        UiAction::Lower => state.lower_held = true,
-        UiAction::PrevBar | UiAction::NextBar => {}
-    }
-    if state.raise_held && state.lower_held {
+/// Only a fresh Up/Down press can complete the tare chord. Horizontal input
+/// keeps navigating, even while both chord keys remain held.
+fn apply_direction_press(state: &mut State, ui: UiAction, fine: bool) {
+    let fresh = match ui {
+        UiAction::Raise => !std::mem::replace(&mut state.raise_held, true),
+        UiAction::Lower => !std::mem::replace(&mut state.lower_held, true),
+        UiAction::PrevBar | UiAction::NextBar => false,
+    };
+    let vertical = matches!(ui, UiAction::Raise | UiAction::Lower);
+    if vertical && state.raise_held && state.lower_held {
         // A chord is a one-shot: neither key keeps stepping afterwards, even
         // if they are released one at a time.
         state.held = None;
-        return true;
+        if fresh {
+            tare_focused(state);
+        }
+        return;
     }
+    state.tare_pair = if vertical {
+        focused_threshold_pair(state)
+    } else {
+        None
+    };
     begin_hold(state, ui, fine);
-    false
+    perform_ui_action(state, ui, fine);
+}
+
+fn focused_threshold_pair(state: &State) -> Option<ThresholdPairSnapshot> {
+    if state.advanced.is_some() {
+        return None;
+    }
+    let slot = selected_slot(state)?;
+    let pad = state.pads.get(slot.pad)?;
+    let bar = &pad.buttons[slot.button];
+    let (press, release) = pending_threshold_pair(state, pad.device_id, slot.button)
+        .unwrap_or((bar.aggregate_threshold, bar.release_threshold?));
+    Some(ThresholdPairSnapshot {
+        device: pad.device_id,
+        button: slot.button,
+        kind: slot.kind,
+        press,
+        release,
+    })
 }
 
 /// (Re)start the hold-repeat timer for a directional press.
@@ -542,6 +583,10 @@ fn note_release(state: &mut State, action: VirtualAction) {
     }
     if state.held.is_some_and(|h| h.ui == ui) {
         state.held = None;
+        state.tare_pair = None;
+    }
+    if !state.raise_held && !state.lower_held {
+        state.tare_pair = None;
     }
 }
 
@@ -550,6 +595,7 @@ const fn clear_hold(state: &mut State) {
     state.held = None;
     state.raise_held = false;
     state.lower_held = false;
+    state.tare_pair = None;
 }
 
 /// Snap the focused threshold(s) to the live reading ("tare": put a reference
@@ -562,6 +608,7 @@ fn tare_focused(state: &mut State) -> bool {
     if state.saving.is_some() || state.profiles_mode {
         return false;
     }
+    let original_pair = state.tare_pair.take();
     if let Some(dev) = state.advanced {
         let targets = advanced_targets(state);
         let Some(&AdvTarget::Sensor { button, sensor }) = targets.get(state.adv_sel) else {
@@ -578,6 +625,7 @@ fn tare_focused(state: &mut State) -> bool {
             .unwrap_or(sv.raw_threshold);
         let delta = i32::from(sv.raw_value) - i32::from(current);
         adjust_sensor_threshold(state, dev, button, sensor, delta);
+        state.held = None;
         return true;
     }
     let Some(slot) = selected_slot(state) else {
@@ -600,23 +648,50 @@ fn tare_focused(state: &mut State) -> bool {
             let current = current_sensor_threshold(state, device, slot.button, fw).unwrap_or(live);
             set_sensor_threshold(state, device, slot.button, fw, current, i32::from(reading));
         }
+        state.held = None;
         return true;
     }
     let reading = i32::from(bar.aggregate_value);
-    let current = match bar.release_threshold {
-        None => {
-            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold)
+    if let Some(live_release) = bar.release_threshold {
+        let current = pending_threshold_pair(state, device, slot.button)
+            .unwrap_or((bar.aggregate_threshold, live_release));
+        // The first chord key already stepped (and may already have reached
+        // hardware). Calibrate from the original pair so its partner drag is
+        // undone, including when the reading equals the original threshold.
+        let (press, release) = original_pair
+            .filter(|p| p.device == device && p.button == slot.button && p.kind == slot.kind)
+            .map_or(current, |p| (p.press, p.release));
+        let focused = match slot.kind {
+            ThresholdKind::Press => press,
+            ThresholdKind::Release => release,
+        };
+        let next = step_threshold_pair(
+            slot.kind,
+            press,
+            release,
+            reading - i32::from(focused),
+            threshold_gap(state),
+            bar.min_raw_threshold,
+            bar.max_raw_threshold,
+        )
+        .unwrap_or((press, release));
+        if next != current {
+            queue_unique(
+                state,
+                PadCommand::ThresholdPair {
+                    device,
+                    button: slot.button,
+                    press: next.0,
+                    release: next.1,
+                },
+            );
         }
-        Some(live_release) => {
-            let (press, release) = pending_threshold_pair(state, device, slot.button)
-                .unwrap_or((bar.aggregate_threshold, live_release));
-            match slot.kind {
-                ThresholdKind::Press => press,
-                ThresholdKind::Release => release,
-            }
-        }
-    };
-    adjust_simple_threshold(state, reading - i32::from(current));
+    } else {
+        let current =
+            pending_simple_threshold(state, device, slot.button).unwrap_or(bar.aggregate_threshold);
+        adjust_simple_threshold(state, reading - i32::from(current));
+    }
+    state.held = None;
     true
 }
 
@@ -720,6 +795,7 @@ pub fn begin_rename(state: &mut State) {
         set_default: entry.is_default,
         rename_of: Some(entry.name.clone()),
     });
+    clear_hold(state);
 }
 
 /// Handle a Delete press in the profiles list: the first arms a confirm, the
@@ -742,6 +818,7 @@ pub fn delete_key(state: &mut State) -> bool {
 /// disarms a pending delete, else closes the list.
 fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
     if is_back(ev.action) {
+        clear_hold(state);
         if state.delete_armed {
             state.delete_armed = false;
         } else {
@@ -756,7 +833,7 @@ fn apply_profiles_edit(state: &mut State, ev: &InputEvent) -> EditResult {
     if state.profiles_sel == 0 {
         // "Save current as new" — Start or Select opens the name box.
         if is_start(ev.action) || is_select(ev.action) {
-            state.saving = Some(SaveDraft::default());
+            begin_save(state);
         }
         return EditResult::Handled;
     }
@@ -1710,6 +1787,7 @@ fn enter_advanced(state: &mut State) {
         }
         state.advanced = Some(pad.device_id);
         state.adv_sel = 0;
+        clear_hold(state);
     }
 }
 
@@ -3859,6 +3937,237 @@ mod tests {
     }
 
     // ── Hold-to-repeat + tare ──
+
+    include!("pad_config_tare_tests.rs");
+
+    #[test]
+    fn leaving_profiles_does_not_turn_navigation_into_threshold_edits() {
+        let mut s = with_pad();
+        set_save_available(&mut s, true);
+        set_profiles(
+            &mut s,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
+        begin_profiles(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_down), false);
+        assert!(s.pending.is_empty());
+        apply_edit(&mut s, &ev(VirtualAction::p1_back), false);
+        assert!(!is_profiles_mode(&s));
+        update(&mut s, 0.301);
+        assert!(
+            s.pending.is_empty(),
+            "profile navigation became a hardware edit: {:?}",
+            s.pending
+        );
+    }
+
+    #[test]
+    fn entering_advanced_drops_the_previous_views_hold() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        assert!(s.advanced.is_some());
+        update(&mut s, 0.301);
+        assert!(
+            s.pending.is_empty(),
+            "old hold edited an advanced sensor: {:?}",
+            s.pending
+        );
+    }
+
+    fn modal_release_does_not_leave_cursor_repeating(rename: bool) {
+        use crate::screens::select_music;
+        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+        let mut pad = with_pad();
+        set_save_available(&mut pad, true);
+        set_profiles(
+            &mut pad,
+            vec![ProfileListEntry {
+                name: "A".into(),
+                is_default: false,
+                is_active: false,
+            }],
+        );
+        begin_profiles(&mut pad);
+        apply_edit(&mut pad, &ev(VirtualAction::p1_down), false);
+        if !rename {
+            apply_edit(&mut pad, &ev_release(VirtualAction::p1_down), false);
+            apply_edit(&mut pad, &ev(VirtualAction::p1_down), false);
+            assert_eq!(pad.profiles_sel, 0);
+            apply_edit(&mut pad, &ev(VirtualAction::p1_start), false);
+        }
+        let mut state = select_music::init_placeholder();
+        state.pad_config_overlay_visible = true;
+        state.pad_config_overlay = pad;
+        let mut effects = Vec::new();
+        let mut key = RawKeyboardEvent {
+            code: KeyCode::KeyR,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        };
+        if rename {
+            assert!(select_music::handle_raw_key_event(
+                &mut state,
+                Some(&key),
+                None,
+                &mut effects
+            ));
+        }
+        assert!(is_saving(&state.pad_config_overlay));
+        key.code = KeyCode::ArrowDown;
+        key.pressed = false;
+        // The shell does not map consumed raw keys into virtual release events.
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        key.code = KeyCode::Escape;
+        key.pressed = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(!is_saving(&state.pad_config_overlay));
+        let selected = state.pad_config_overlay.profiles_sel;
+        update(&mut state.pad_config_overlay, 0.301);
+        assert_eq!(
+            state.pad_config_overlay.profiles_sel, selected,
+            "cursor moved after the direction was released in the name box"
+        );
+    }
+
+    #[test]
+    fn rename_modal_does_not_lose_direction_release() {
+        modal_release_does_not_leave_cursor_repeating(true);
+    }
+
+    #[test]
+    fn save_new_modal_does_not_lose_direction_release() {
+        modal_release_does_not_leave_cursor_repeating(false);
+    }
+
+    #[test]
+    fn disconnecting_the_advanced_pad_drops_its_hold() {
+        let mut s = with_pad();
+        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
+        apply_edit(&mut s, &ev(VirtualAction::p1_start), false);
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_pads(&mut s, vec![smx_pad(1, true)]);
+        assert!(s.advanced.is_none());
+        update(&mut s, 0.301);
+        assert!(
+            take_commands(&mut s).is_empty(),
+            "hold must not edit the remaining pad"
+        );
+    }
+
+    #[test]
+    fn disconnecting_all_pads_drops_the_hold_before_reconnection() {
+        let mut s = with_pad();
+        apply_edit(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_pads(&mut s, Vec::new());
+        set_pads(&mut s, vec![smx_pad(0, false)]);
+        update(&mut s, 0.301);
+        assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn disabling_fsr_support_cancels_threshold_repeat() {
+        let mut s = with_pad();
+        set_fsr_enabled(&mut s, true);
+        handle_input(&mut s, &ev(VirtualAction::p1_up), false);
+        take_commands(&mut s);
+        set_fsr_enabled(&mut s, false);
+        update(&mut s, 0.301);
+        assert!(take_commands(&mut s).is_empty());
+        set_fsr_enabled(&mut s, true);
+        update(&mut s, 1.0);
+        assert!(take_commands(&mut s).is_empty());
+    }
+
+    #[test]
+    fn save_default_toggle_ignores_keyboard_repeats() {
+        use crate::screens::select_music;
+        use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
+        let mut state = select_music::init_placeholder();
+        state.pad_config_overlay_visible = true;
+        state.pad_config_overlay = with_pad();
+        set_save_available(&mut state.pad_config_overlay, true);
+        begin_save(&mut state.pad_config_overlay);
+        let mut effects = Vec::new();
+        let mut key = RawKeyboardEvent {
+            code: KeyCode::ArrowDown,
+            pressed: true,
+            repeat: false,
+            timestamp: std::time::Instant::now(),
+            host_nanos: 0,
+        };
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+        key.repeat = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+        key.repeat = false;
+        key.pressed = false;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        key.pressed = true;
+        assert!(select_music::handle_raw_key_event(
+            &mut state,
+            Some(&key),
+            None,
+            &mut effects
+        ));
+        assert!(
+            !state
+                .pad_config_overlay
+                .saving
+                .as_ref()
+                .unwrap()
+                .set_default
+        );
+    }
 
     fn ev_release(action: VirtualAction) -> InputEvent {
         ev_from(action, InputSource::Keyboard, false)

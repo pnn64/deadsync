@@ -143,7 +143,7 @@ fn edgar_countdown_onsets_and_hit_commands() {
 
 // Compare final model matrices, rather than just the Lua zoom/rotation writes.
 fn check_edgar_model_squash(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
-    use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+    use deadsync_song_lua::playback::actor_conformance::{
         WholeSongComposer, compose_overlay_states,
     };
     let screen = [context.screen_width, context.screen_height];
@@ -200,7 +200,7 @@ fn check_edgar_model_squash(compiled: &CompiledSongLua, context: &SongLuaCompile
 
 fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
     use deadlib_present::render::{BlendMode, DrawOp};
-    use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
+    use deadsync_song_lua::playback::actor_conformance::{
         WholeSongComposer, compose_overlay_states,
     };
     let screen = [context.screen_width, context.screen_height];
@@ -305,9 +305,7 @@ fn check_edgar_tap_draws(compiled: &CompiledSongLua, context: &SongLuaCompileCon
 }
 
 fn check_edgar_texture_phase(compiled: &CompiledSongLua, context: &SongLuaCompileContext) {
-    use deadsync_theme_simply_love::screens::gameplay::{
-        actor_conformance::WholeSongComposer, foreground_elapsed,
-    };
+    use deadsync_song_lua::playback::{actor_conformance::WholeSongComposer, foreground_elapsed};
     let screen = [context.screen_width, context.screen_height];
     let mut composer = WholeSongComposer::new(&compiled.overlays);
     let arrow = compiled
@@ -886,12 +884,11 @@ return Def.ActorFrame{
                 if !composed[index].visible {
                     continue;
                 }
-                let rendered =
-                    deadsync_theme_simply_love::screens::gameplay::actor_conformance::effect_sample(
-                        composed[index],
-                        song_elapsed_seconds_at(beat, &context),
-                        beat,
-                    );
+                let rendered = deadsync_song_lua::playback::actor_conformance::effect_sample(
+                    composed[index],
+                    song_elapsed_seconds_at(beat, &context),
+                    beat,
+                );
                 assert_eq!(
                     rendered.tint[3], 0.0,
                     "{skin}: no tap judgment at beat {beat}"
@@ -958,7 +955,11 @@ return Def.ActorFrame{
                         &command.blocks,
                         elapsed,
                     );
-                    let rendered = deadsync_theme_simply_love::screens::gameplay::actor_conformance::effect_sample(state, elapsed, elapsed * 137.0 / 60.0);
+                    let rendered = deadsync_song_lua::playback::actor_conformance::effect_sample(
+                        state,
+                        elapsed,
+                        elapsed * 137.0 / 60.0,
+                    );
                     assert_eq!(
                         rendered.glow[3], 0.0,
                         "{skin}: expired tap glow at {elapsed}"

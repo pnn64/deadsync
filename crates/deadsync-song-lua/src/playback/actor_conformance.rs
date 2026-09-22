@@ -180,7 +180,11 @@ pub fn crop_fade_vertices(state: SongLuaOverlayState, size: [f32; 2]) -> Vec<Spr
 
 #[must_use]
 pub fn stable_draw_order(input: &[(String, i32)]) -> Vec<String> {
-    let overlays = input
+    let overlays: Vec<
+        crate::SongLuaOverlayActor<
+            crate::SongLuaOverlayKind<(), TexturedMeshVertex, TextAttribute>,
+        >,
+    > = input
         .iter()
         .map(|(name, draw_order)| SongLuaOverlayActor {
             kind: SongLuaOverlayKind::Actor,
@@ -205,8 +209,8 @@ pub fn stable_draw_order(input: &[(String, i32)]) -> Vec<String> {
 /// gameplay. Whole-song archive tests feed sampled local states into this
 /// adapter; no test-only transform implementation is involved.
 #[must_use]
-pub fn compose_overlay_states(
-    overlays: &[SongLuaOverlayActor],
+pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
+    overlays: &[SongLuaOverlayActor<S>],
     local_states: &[SongLuaOverlayState],
     screen: [f32; 2],
 ) -> Vec<SongLuaOverlayState> {
@@ -232,7 +236,7 @@ pub struct WholeSongComposer {
 
 impl WholeSongComposer {
     #[must_use]
-    pub fn new(overlays: &[SongLuaOverlayActor]) -> Self {
+    pub fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
         let mut assets = AssetManager::new();
         for overlay in overlays {
             match &overlay.kind {
@@ -245,7 +249,7 @@ impl WholeSongComposer {
                 } => queue_texture(&mut assets, texture_key),
                 SongLuaOverlayKind::NoteskinActor { slots } => {
                     for slot in slots.iter() {
-                        queue_texture(&mut assets, slot.texture_key());
+                        queue_texture(&mut assets, slot.texture_key_shared().as_ref());
                     }
                 }
                 SongLuaOverlayKind::Model { layers } => {
@@ -265,9 +269,9 @@ impl WholeSongComposer {
     /// Exercise the warmed gameplay builder and final draw-pass composition,
     /// including the inherited camera and noteskin model textures.
     #[must_use]
-    pub fn render_overlay(
+    pub fn render_overlay<S: NoteskinSlot + Clone>(
         &mut self,
-        overlays: &[SongLuaOverlayActor],
+        overlays: &[SongLuaOverlayActor<S>],
         states: &[SongLuaOverlayState],
         index: usize,
         screen: [f32; 2],
@@ -316,9 +320,9 @@ impl WholeSongComposer {
     }
 
     #[must_use]
-    pub fn actor_count(
+    pub fn actor_count<S: NoteskinSlot + Clone>(
         &self,
-        overlays: &[SongLuaOverlayActor],
+        overlays: &[SongLuaOverlayActor<S>],
         states: &[SongLuaOverlayState],
         screen: [f32; 2],
         seconds: f32,
@@ -356,4 +360,17 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
+}
+
+/// Wrap an already compiled primary fixture without selecting additional layers.
+pub fn prepared_primary<S: NoteskinSlot + Clone>(
+    compiled: Option<CompiledSongLua<S>>,
+) -> PreparedGameplaySongLua<S> {
+    PreparedGameplaySongLua {
+        primary: compiled.map(|compiled| super::prepare::GameplayCompiledSongLua {
+            compiled,
+            compile_ms: 0.0,
+        }),
+        ..Default::default()
+    }
 }

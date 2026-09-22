@@ -7,8 +7,6 @@ pub(crate) mod favorite_code;
 mod flow;
 pub mod gameover;
 pub mod gameplay;
-#[cfg(test)]
-mod gameplay_regression_tests;
 pub mod groovestats_login;
 pub mod init;
 pub mod initials;

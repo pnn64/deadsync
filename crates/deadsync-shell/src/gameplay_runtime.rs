@@ -321,7 +321,6 @@ pub(crate) fn init_view(
     score_cursor.begin_song();
     GameplayInitView {
         runtime: runtime_view(config, lobby),
-        video_renderer: config.video_renderer,
         hud: profile::gameplay_hud_snapshot(),
         judgment_palettes: {
             let catalog = deadsync_config::judgment_palettes::runtime_catalog(
@@ -528,7 +527,10 @@ pub(crate) fn snapshot(
 }
 
 pub(crate) fn drain_core(
-    state: &mut gameplay::GameplayCoreState,
+    state: &mut deadsync_song_lua::playback::GameplayCoreState<
+        deadsync_profile_gameplay::GameplayProfile,
+        deadsync_assets::noteskin::SpriteSlot,
+    >,
     audio: &mut deadsync_audio_stream::AudioControl,
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
@@ -642,8 +644,7 @@ pub(crate) fn update(
     score_cursor.sync_if_dirty(state);
     drain(state, audio, sounds, music_clock);
     let current_song_lua_time = state.current_music_time_display();
-    gameplay::for_each_song_lua_sound_event(
-        state,
+    state.song_media.for_each_sound_event(
         previous_song_lua_time,
         current_song_lua_time,
         |path: &Path| {
@@ -733,6 +734,85 @@ pub(crate) fn handle_practice_raw_key(
     );
     drain(&mut state.gameplay, audio, sounds, music_clock);
     consumed
+}
+
+/// Run chart playback and request the current theme's presentation fragments.
+pub(crate) fn push_actors(
+    actors: &mut Vec<deadlib_present::actors::Actor>,
+    state: &mut deadsync_theme_simply_love::screens::gameplay::State,
+    assets: &deadlib_assets::AssetManager,
+    view: deadsync_theme_simply_love::screens::gameplay::ActorViewOverride,
+    arrow_effect_time_s: f32,
+    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    use deadsync_theme_simply_love::screens::gameplay;
+    let mut song = state
+        .song_scratch
+        .take()
+        .expect("song scratch restored after every frame");
+    let mut hud = state
+        .frame_scratch
+        .take()
+        .expect("theme scratch restored after every frame");
+    let session = &state.gameplay.setup.session;
+    let options = deadsync_song_lua::playback::FrameOptions {
+        play_style: session.play_style,
+        player_side: session.player_side,
+        hide_song_bg: std::array::from_fn(|p| state.profiles()[p].hide_song_bg),
+        notefield: view.notefield,
+        hide_gameplay_hud: view.hide_gameplay_hud,
+        apply_attacks: view.apply_attacks,
+        show_song_visuals: view.show_song_visuals,
+    };
+    let segments = deadsync_song_lua::playback::compose_frame(
+        actors,
+        &state.gameplay,
+        &state.song_media,
+        &mut song,
+        assets,
+        options,
+        gameplay::frame_layers(state, &mut hud, assets, view, visual_policy),
+        |request, cameras, field, flat, hud, hud_flat| {
+            gameplay::draw_field(
+                state,
+                assets,
+                view,
+                arrow_effect_time_s,
+                visual_policy,
+                request,
+                cameras,
+                field,
+                flat,
+                hud,
+                hud_flat,
+            )
+        },
+    );
+    state.song_scratch = Some(song);
+    state.frame_scratch = Some(hud);
+    segments
+}
+
+pub(crate) fn push_practice_actors(
+    actors: &mut Vec<deadlib_present::actors::Actor>,
+    state: &mut deadsync_theme_simply_love::screens::practice::State,
+    assets: &deadlib_assets::AssetManager,
+    arrow_effect_time_s: f32,
+    visual_policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    use deadsync_theme_simply_love::screens::practice;
+    actors.reserve(128);
+    let view = practice::practice_view(state);
+    let segments = push_actors(
+        actors,
+        &mut state.gameplay,
+        assets,
+        view,
+        arrow_effect_time_s,
+        visual_policy,
+    );
+    practice::push_overlay(actors, state);
+    segments
 }
 
 #[cfg(test)]

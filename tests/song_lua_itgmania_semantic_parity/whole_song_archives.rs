@@ -1,7 +1,5 @@
 use super::*;
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::{
-    WholeSongComposer, compose_overlay_states,
-};
+use deadsync_song_lua::playback::actor_conformance::{WholeSongComposer, compose_overlay_states};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;

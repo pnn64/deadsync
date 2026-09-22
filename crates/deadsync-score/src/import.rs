@@ -5,9 +5,10 @@
 //! unit-tested in isolation. The XML/INI parsing and the on-disk writing live
 //! in the main `deadsync` crate; this layer only performs the field mapping.
 //!
-//! `ITGmania` does not record the FA+ (W0) blue/white split, so neither the EX
-//! nor the Hard-EX score can be reconstructed from `Stats.xml`. Both are stored
-//! as `0.0`; only the ITG percent and grade carry over.
+//! zmod/Simply Love can store white Fantastics in the otherwise legacy `Score`
+//! field. Plausible counts preserve quad lamp digits and identify quints.
+//! A proven quint carries 100% EX; other EX and all Hard-EX values remain
+//! unknown (`0.0`) rather than reconstructing them without full timing data.
 
 use crate::{Grade, LOCAL_SCORE_VERSION, LocalScoreEntry, compute_local_lamp, grade_to_code};
 use chrono::{NaiveDateTime, TimeZone};
@@ -23,6 +24,9 @@ pub struct ImportedHighScore {
     pub grade: String,
     /// `<PercentDP>` as a 0.0–1.0 ratio (`ITGmania` stores it pre-divided).
     pub percent_dp: f64,
+    /// Raw `<Score>`; zmod stores white Fantastics here. Missing/invalid is
+    /// distinct from an explicit zero, which can prove a quint.
+    pub score: Option<u32>,
     /// `<DateTime>` text, expected as `"YYYY-MM-DD HH:MM:SS"` (local time).
     pub date_time: String,
     /// `<TapNoteScores>` tallies.
@@ -171,8 +175,9 @@ pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
 ///   are folded into the hold fields (`rolls_* = 0`).
 /// * `score_percent` is taken from `PercentDP` directly (both are 0.0–1.0).
 /// * `music_rate` is recovered from the `<Modifiers>` rate token (default 1.0).
-/// * EX / Hard-EX are unrecoverable → `0.0`.
-/// * The lamp is recomputed from the judgment counts (W0 split unknown).
+/// * EX is `100.0` for a proven quint, otherwise unknown (`0.0`).
+/// * Hard-EX is unknown (`0.0`); the 10ms split is not recorded.
+/// * Lamps use tap/hold judgments and plausible zmod white-Fantastic counts.
 #[must_use]
 pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
     let grade = grade_from_itg(&hs.grade)?;
@@ -184,7 +189,17 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
         .saturating_add(hs.missed_hold);
     let mines_total = hs.hit_mine.saturating_add(hs.avoid_mine);
 
-    let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, None);
+    // Legacy numeric scores exceed the Fantastic count; absent/malformed
+    // fields must not be mistaken for zero whites.
+    let whites = hs.score.filter(|&score| hs.w1 > 0 && score <= hs.w1);
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(counts, grade, whites, hs.let_go == 0 && hs.missed_hold == 0);
+    let is_quint = grade == Grade::Tier01
+        && hs.percent_dp == 1.0
+        && lamp_index == Some(1)
+        && whites == Some(0)
+        && hs.hit_mine == 0;
+    let grade = if is_quint { Grade::Quint } else { grade };
 
     let fail_time = if grade == Grade::Failed {
         Some(hs.survive_seconds.max(0.0))
@@ -198,9 +213,10 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
         music_rate: music_rate_from_modifiers(&hs.modifiers),
         score_percent: hs.percent_dp.clamp(0.0, 1.0),
         grade_code: grade_to_code(grade),
-        lamp_index,
+        lamp_index: if is_quint { Some(0) } else { lamp_index },
         lamp_judge_count,
-        ex_score_percent: 0.0,
+        // Persist the proven EX maximum so cache normalization retains Quint.
+        ex_score_percent: if is_quint { 100.0 } else { 0.0 },
         hard_ex_score_percent: 0.0,
         judgment_counts: counts,
         holds_held: hs.held,
@@ -268,6 +284,7 @@ mod tests {
         let hs = ImportedHighScore {
             grade: "Grade_Tier01".into(),
             percent_dp: 0.9912,
+            score: None,
             date_time: "2023-04-15 21:07:33".into(),
             w1: 480,
             w2: 12,
@@ -318,6 +335,67 @@ mod tests {
     }
 
     #[test]
+    fn imports_zmod_whites_without_legacy_score_digits() {
+        for (score, w1, grade, lamp, digits, ex) in [
+            (None, 100, Grade::Tier01, 1, None, 0.0),
+            (Some(0), 100, Grade::Quint, 0, None, 100.0),
+            (Some(1), 100, Grade::Tier01, 1, Some(1), 0.0),
+            (Some(9), 100, Grade::Tier01, 1, Some(9), 0.0),
+            (Some(10), 100, Grade::Tier01, 1, None, 0.0),
+            (Some(1), 1, Grade::Tier01, 1, Some(1), 0.0),
+            (Some(9), 8, Grade::Tier01, 1, None, 0.0),
+            (Some(100_000_000), 100, Grade::Tier01, 1, None, 0.0),
+        ] {
+            let hs = ImportedHighScore {
+                grade: "Tier01".into(),
+                percent_dp: 1.0,
+                score,
+                w1,
+                held: 10,
+                ..Default::default()
+            };
+            let entry = local_score_from_itg(&hs).expect("quad should import");
+            assert_eq!(entry.grade_code, grade_to_code(grade), "{hs:?}");
+            assert_eq!(entry.lamp_index, Some(lamp), "{hs:?}");
+            assert_eq!(entry.lamp_judge_count, digits, "{hs:?}");
+            assert_eq!(entry.ex_score_percent, ex, "{hs:?}");
+            assert_eq!(entry.hard_ex_score_percent, 0.0);
+        }
+    }
+
+    #[test]
+    fn zero_score_alone_does_not_prove_a_quint() {
+        for (grade, percent_dp, w1, w2, let_go, missed_hold, hit_mine) in [
+            ("Failed", 1.0, 100, 0, 0, 0, 0),
+            ("Tier02", 1.0, 100, 0, 0, 0, 0),
+            ("Tier01", 0.9999, 100, 0, 0, 0, 0),
+            ("Tier01", 1.01, 100, 0, 0, 0, 0),
+            ("Tier01", f64::NAN, 100, 0, 0, 0, 0),
+            ("Tier01", 1.0, 0, 0, 0, 0, 0),
+            ("Tier01", 1.0, 100, 1, 0, 0, 0),
+            ("Tier01", 1.0, 100, 0, 1, 0, 0),
+            ("Tier01", 1.0, 100, 0, 0, 1, 0),
+            ("Tier01", 1.0, 100, 0, 0, 0, 1),
+        ] {
+            let hs = ImportedHighScore {
+                grade: grade.into(),
+                percent_dp,
+                score: Some(0),
+                w1,
+                w2,
+                let_go,
+                missed_hold,
+                hit_mine,
+                ..Default::default()
+            };
+            let entry = local_score_from_itg(&hs).expect("known grade should import");
+            assert_ne!(entry.grade_code, grade_to_code(Grade::Quint), "{hs:?}");
+            assert_ne!(entry.lamp_index, Some(0), "{hs:?}");
+            assert_eq!(entry.ex_score_percent, 0.0, "{hs:?}");
+        }
+    }
+
+    #[test]
     fn folds_let_go_and_missed_into_hold_total() {
         let hs = ImportedHighScore {
             grade: "Grade_Tier05".into(),
@@ -329,6 +407,31 @@ mod tests {
         let e = local_score_from_itg(&hs).expect("entry");
         assert_eq!(e.holds_held, 10);
         assert_eq!(e.holds_total, 15);
+    }
+
+    #[test]
+    fn imported_lamps_require_all_holds_and_rolls_held() {
+        for (let_go, missed_hold, expected) in [(0, 0, Some(2)), (1, 0, None), (0, 1, None)] {
+            let hs = ImportedHighScore {
+                grade: "Grade_Tier03".into(),
+                percent_dp: 0.98,
+                w1: 100,
+                w2: 3,
+                held: 10,
+                let_go,
+                missed_hold,
+                hit_mine: 1,
+                ..Default::default()
+            };
+            let entry = local_score_from_itg(&hs).expect("passing score should import");
+            assert_eq!(entry.lamp_index, expected);
+            assert_eq!(entry.lamp_judge_count, expected.map(|_| 3));
+            assert_eq!(entry.score_percent, 0.98);
+            assert_eq!(
+                crate::cached_score_from_local_header(&entry.header()).lamp_index,
+                expected
+            );
+        }
     }
 
     #[test]

@@ -1513,21 +1513,13 @@ impl ComposeScratch {
             self.recycled_text_mesh_vertices.push(vertices);
         }
         self.tmesh_geometries = geometries;
-        let mut sprite_instances = std::mem::take(&mut render.sprite_instances);
-        sprite_instances.clear();
-        self.sprite_instances = sprite_instances;
-        let mut mesh_vertices = std::mem::take(&mut render.mesh_vertices);
-        mesh_vertices.clear();
-        self.mesh_vertices = mesh_vertices;
-        let mut tmesh_instances = std::mem::take(&mut render.tmesh_instances);
-        tmesh_instances.clear();
-        self.tmesh_instances = tmesh_instances;
-        let mut ops = std::mem::take(&mut render.ops);
-        ops.clear();
-        self.ops = ops;
-        let mut cameras = std::mem::take(&mut render.cameras);
-        cameras.clear();
-        self.cameras = cameras;
+        // These buffers contain plain values and are cleared before the next
+        // composition pass. Geometry above releases shared ownership now.
+        self.sprite_instances = std::mem::take(&mut render.sprite_instances);
+        self.mesh_vertices = std::mem::take(&mut render.mesh_vertices);
+        self.tmesh_instances = std::mem::take(&mut render.tmesh_instances);
+        self.ops = std::mem::take(&mut render.ops);
+        self.cameras = std::mem::take(&mut render.cameras);
     }
 
     fn recycle_target_frame(&mut self, mut target: renderer::RenderTargetFrame) {
@@ -1542,15 +1534,10 @@ impl ComposeScratch {
             }
         }
         self.tmesh_geometries = geometries;
-        target.sprite_instances.clear();
         self.sprite_instances = target.sprite_instances;
-        target.mesh_vertices.clear();
         self.mesh_vertices = target.mesh_vertices;
-        target.tmesh_instances.clear();
         self.tmesh_instances = target.tmesh_instances;
-        target.ops.clear();
         self.ops = target.ops;
-        target.cameras.clear();
         self.cameras = target.cameras;
     }
 
@@ -4699,11 +4686,6 @@ fn rebuild_prepared_text_mesh_batches(
     if batches.is_empty() {
         return;
     }
-    for batch in batches.iter_mut() {
-        Arc::get_mut(&mut batch.vertices)
-            .expect("prepared text bank must be uniquely owned")
-            .clear();
-    }
     visit_text_mesh_quads(
         font_height,
         line_spacing,
@@ -4713,10 +4695,12 @@ fn rebuild_prepared_text_mesh_batches(
         align,
         stroke,
         |texture_page, quad_x, quad_y, size, uv_scale, uv_offset| {
-            let batch_index = batches[..*used_len]
+            let (batch_index, first_quad) = match batches[..*used_len]
                 .iter()
                 .position(|batch| batch.texture_page == texture_page)
-                .unwrap_or_else(|| {
+            {
+                Some(index) => (index, false),
+                None => {
                     let index = batches[*used_len..]
                         .iter()
                         .position(|batch| batch.texture_page == texture_page)
@@ -4725,10 +4709,16 @@ fn rebuild_prepared_text_mesh_batches(
                     batches.swap(*used_len, index);
                     let inserted = *used_len;
                     *used_len += 1;
-                    inserted
-                });
+                    (inserted, true)
+                }
+            };
             let vertices = Arc::get_mut(&mut batches[batch_index].vertices)
                 .expect("prepared text bank must remain uniquely owned");
+            // Only the used prefix is submitted. Clear each page when
+            // activated, leaving unused prewarmed buffers untouched.
+            if first_quad {
+                vertices.clear();
+            }
             push_text_mesh_quad_vertices(
                 vertices, quad_x, quad_y, size, uv_scale, uv_offset, [1.0; 4],
             );
@@ -12443,6 +12433,15 @@ mod tests {
             ("BA", TextAlign::Right),
             ("AAB", TextAlign::Center),
             ("BBAA", TextAlign::Left),
+            // Drop pages from both reusable banks, then reactivate them in a
+            // different order. Old glyphs must never survive a page's reuse.
+            ("A", TextAlign::Left),
+            ("B", TextAlign::Right),
+            ("", TextAlign::Center),
+            ("", TextAlign::Left),
+            ("BB", TextAlign::Center),
+            ("AA", TextAlign::Right),
+            ("BA", TextAlign::Left),
         ] {
             let inline = InlineText::copy_from(value).expect("test value fits inline");
             let expected_actors = [actor(TextContent::Inline(inline), align)];

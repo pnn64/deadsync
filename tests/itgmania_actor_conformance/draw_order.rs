@@ -1,5 +1,5 @@
 use super::support::fixture;
-use deadsync_theme_simply_love::screens::gameplay::actor_conformance::stable_draw_order;
+use deadsync_song_lua::playback::actor_conformance::stable_draw_order;
 
 #[test]
 fn draw_order_sort_matches_itgmania_and_preserves_equal_input_order() {

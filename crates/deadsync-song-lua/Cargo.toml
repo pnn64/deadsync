@@ -4,7 +4,18 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+test-support = []
+
 [dependencies]
+deadlib-render-core = { path = "../deadlib-render-core" }
+deadsync-chart = { path = "../deadsync-chart" }
+deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
+deadsync-notefield = { path = "../deadsync-notefield" }
+deadsync-noteskin = { path = "../deadsync-noteskin" }
+glam = "0.33.8"
+twox-hash = "2.1.4"
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
 deadsync-rules = { path = "../deadsync-rules" }
@@ -21,3 +32,18 @@ smallvec = "1.16.1"
 perf = { level = "warn", priority = -1 }
 
 inline_always = "allow"
+
+[dev-dependencies]
+deadsync-assets = { path = "../deadsync-assets" }
+deadsync-config = { path = "../deadsync-config" }
+deadsync-profile = { path = "../deadsync-profile" }
+deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
+deadsync-simfile = { path = "../deadsync-simfile" }
+deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
+deadlib-render = { path = "../deadlib-render" }
+winit = "0.30.13"
+
+[[test]]
+name = "actor_capture_perf"
+path = "tests/perf/actor_capture.rs"
+required-features = ["test-support"]

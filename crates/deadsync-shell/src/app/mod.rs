@@ -653,7 +653,7 @@ struct GameplayPreload {
     song_path: PathBuf,
     requested_chart_ixs: Vec<usize>,
     gameplay_song: Vec<GameplayChartData>,
-    song_lua: gameplay::PreparedGameplaySongLua,
+    song_lua: crate::gameplay_entry::PreparedGameplaySongLua,
     payload_ms: f64,
     elapsed_ms: f64,
 }
@@ -917,7 +917,9 @@ fn prewarm_gameplay_text_layout_cache(
     cache.begin_frame_stats(true);
     compose_scratch.clear_retained_frames();
 
-    gameplay::prewarm_texture_bindings(state, assets);
+    if let Some(scratch) = state.song_scratch.as_mut() {
+        deadsync_song_lua::playback::prewarm_texture_bindings(&state.gameplay, scratch, assets);
+    }
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
     // Build the representative opening frame in the App-owned actor buffer.
@@ -925,7 +927,7 @@ fn prewarm_gameplay_text_layout_cache(
     // boundary and retained for the first live frame instead of being repeated
     // in a temporary Vec and then again during gameplay.
     actor_scratch.clear();
-    let segments = gameplay::push_actors(
+    let segments = crate::gameplay_runtime::push_actors(
         actor_scratch,
         state,
         assets,
@@ -933,7 +935,7 @@ fn prewarm_gameplay_text_layout_cache(
         arrow_effect_time_seconds(started),
         simply_love_visual_policy(config),
     );
-    let actor_segments = segments.segments(state, actor_scratch);
+    let actor_segments = segments.segments(state.song_frame(), actor_scratch);
     let mut render = compose::build_passes(
         actor_segments,
         state.render_targets(),
@@ -2153,7 +2155,7 @@ impl App {
                 )
                 .map(|gameplay_song| {
                     let payload_ms = payload_started.elapsed().as_secs_f64() * 1000.0;
-                    let song_lua = gameplay::prepare_song_lua(
+                    let song_lua = crate::gameplay_entry::prepare_song_lua(
                         song.as_ref(),
                         &charts,
                         std::array::from_fn(|player| &gameplay_song[player].timing),
@@ -2273,7 +2275,7 @@ impl App {
         self.gameplay_sfx = prewarm_gameplay_sfx(
             &mut self.audio,
             gs.song_lua_visuals(),
-            &gs.song_lua_sound_paths,
+            &gs.song_media.sound_paths,
         );
         let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
         let background_path =
@@ -2302,7 +2304,7 @@ impl App {
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gameplay::active_song_lua_video_paths(&gs),
+                gs.song_media.video_paths(),
             );
             prewarm_gameplay_banners(
                 &mut self.dynamic_media,
@@ -2891,7 +2893,7 @@ impl App {
         let cached_scores = request
             .read_scores
             .then(|| scores::cached_best_itg_scores(&score_queries));
-        let percentages = (read_percentages || has_srpg)
+        let wheel_scores = (request.read_scores || read_percentages || has_srpg)
             .then(|| deadsync_score::runtime_cached_wheel_scores(&score_queries));
         let slots = std::array::from_fn(|slot_idx| {
             let mut view = MusicWheelSlotRuntimeView::default();
@@ -2942,10 +2944,11 @@ impl App {
                                     .and_then(|ranks| ranks.get(chart_hash))
                                     .copied(),
                             };
-                            let personal = percentages
+                            let personal = wheel_scores
                                 .as_ref()
                                 .map(|scores| scores[slot_idx * 2 + side_idx])
                                 .unwrap_or_default();
+                            side_view.lamp = personal.lamp;
                             if is_srpg_event {
                                 side_view.srpg_pass_rate_hundredths = personal.pass_rate_hundredths;
                             }
@@ -4198,7 +4201,9 @@ impl App {
         let render_targets = gameplay_state.map_or(&[][..], gameplay::State::render_targets);
         let segmented_actors = gameplay_segments.as_ref().map(|segments| {
             segments.segments(
-                gameplay_state.expect("gameplay segments require gameplay state"),
+                gameplay_state
+                    .expect("gameplay segments require gameplay state")
+                    .song_frame(),
                 &actors,
             )
         });
@@ -6713,7 +6718,7 @@ impl App {
             let Some(gs) = gs else {
                 return;
             };
-            let foreground_videos_changed = gameplay::refresh_foreground_media(gs);
+            let foreground_videos_changed = gs.song_media.refresh_foreground(&gs.gameplay);
             let had_pending_background_change = gs.background_path_dirty;
             let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
             let mut background_changed = false;
@@ -6837,7 +6842,7 @@ impl App {
             self.dynamic_media.sync_active_song_lua_videos(
                 &mut self.asset_manager,
                 backend,
-                gameplay::active_song_lua_video_paths(gs),
+                gs.song_media.video_paths(),
             );
         }
     }
@@ -6967,7 +6972,7 @@ impl App {
     ) -> (
         Vec<Actor>,
         [f32; 4],
-        Option<gameplay::GameplayActorSegments>,
+        Option<deadsync_song_lua::playback::GameplayActorSegments>,
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
@@ -7062,7 +7067,7 @@ impl App {
                         }
                         _ => 1.0,
                     };
-                    gameplay_segments = Some(gameplay::push_actors(
+                    gameplay_segments = Some(crate::gameplay_runtime::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
@@ -7080,7 +7085,7 @@ impl App {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
-                    gameplay_segments = Some(practice::push_actors(
+                    gameplay_segments = Some(crate::gameplay_runtime::push_practice_actors(
                         &mut actors,
                         ps,
                         &self.asset_manager,
@@ -8714,6 +8719,19 @@ impl App {
                 let practice_runtime_view =
                     crate::gameplay_runtime::practice_view(&cfg, &gameplay_init_view);
                 let init_started = Instant::now();
+                let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
+                    &song_arc,
+                    &charts,
+                    std::array::from_fn(|p| &gameplay_charts[p].timing),
+                    &player_profiles,
+                    &scroll_speeds,
+                    po_state.music_rate,
+                    gameplay_viewport(self.state.shell.metrics),
+                    space::current_window_px(),
+                    &gameplay_session,
+                    &gameplay_config_from_config(&cfg),
+                    cfg.video_renderer,
+                );
                 let mut gs = gameplay::init(
                     song_arc,
                     charts,
@@ -8742,7 +8760,7 @@ impl App {
                     None,
                     None,
                     [0; MAX_PLAYERS],
-                    None,
+                    prepared_song_lua,
                     gameplay_init_view,
                 );
                 crate::gameplay_runtime::sync_initial_scores(&mut gs);
@@ -8753,7 +8771,7 @@ impl App {
                 self.gameplay_sfx = prewarm_gameplay_sfx(
                     &mut self.audio,
                     gs.song_lua_visuals(),
-                    &gs.song_lua_sound_paths,
+                    &gs.song_media.sound_paths,
                 );
                 let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let show_video_backgrounds = cfg.show_video_backgrounds;
@@ -8783,7 +8801,7 @@ impl App {
                     self.dynamic_media.sync_active_song_lua_videos(
                         &mut self.asset_manager,
                         backend,
-                        gameplay::active_song_lua_video_paths(&gs),
+                        gs.song_media.video_paths(),
                     );
                     prewarm_gameplay_banners(
                         &mut self.dynamic_media,
@@ -9183,6 +9201,7 @@ impl App {
                 let viewport = gameplay_viewport(self.state.shell.metrics);
                 let gameplay_config = gameplay_config_from_config(&cfg);
                 let music_rate = po_state.music_rate;
+                let video_renderer = cfg.video_renderer;
                 let song_lua_prepared = prepared_song_lua.is_some();
                 let finish = GameplayInitFinish {
                     started: init_started,
@@ -9197,6 +9216,21 @@ impl App {
                 let init = move || {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
+                    let prepared_song_lua = prepared_song_lua.unwrap_or_else(|| {
+                        crate::gameplay_entry::prepare_song_lua(
+                            &song_arc,
+                            &charts,
+                            std::array::from_fn(|p| &gameplay_charts[p].timing),
+                            &player_profiles,
+                            &scroll_speeds,
+                            music_rate,
+                            viewport,
+                            (pixel_width, pixel_height),
+                            &gameplay_session,
+                            &gameplay_config,
+                            video_renderer,
+                        )
+                    });
                     gameplay::init(
                         song_arc,
                         charts,
@@ -10698,6 +10732,94 @@ mod tests {
         song.total_length_seconds = seconds.round() as i32;
         song.precise_last_second_seconds = seconds;
         Arc::new(song)
+    }
+
+    #[test]
+    fn evaluation_barely_animates_while_graph_actors_stay_cached() {
+        use deadlib_present::actors::Actor;
+        use deadsync_profile::{PlayStyle, PlayerSide};
+        use deadsync_theme_simply_love::views::EvaluationContextView;
+
+        let assets = AssetManager::new();
+        let label = deadsync_theme_simply_love::i18n::tr("Evaluation", "Barely");
+        for (style, side) in [
+            (PlayStyle::Single, PlayerSide::P1),
+            (PlayStyle::Single, PlayerSide::P2),
+            (PlayStyle::Versus, PlayerSide::P1),
+        ] {
+            let mut score = test_score_info(
+                test_song_with_duration("barely.ssc", "barely", 100.0),
+                side,
+                "barely",
+                ScrollSpeedSetting::default(),
+                1.0,
+            );
+            score.life_history = vec![(0.0, 0.5), (50.0, 0.05), (100.0, 0.5)];
+            let second = style.is_versus().then(|| {
+                let mut second = score.clone();
+                second.side = PlayerSide::P2;
+                second
+            });
+            let mut state = evaluation::init_from_score_info(
+                [Some(score), second],
+                100.0,
+                EvaluationContextView {
+                    play_style: style,
+                    player_side: side,
+                    ..Default::default()
+                },
+            );
+            let count = if style.is_versus() { 2 } else { 1 };
+            let mut cached_graphs = Vec::new();
+            for (elapsed_us, alpha) in [
+                (0_i64, 0.0),
+                (2_100_000, 0.25),
+                (2_600_000, 1.0),
+                (3_000_000, 1.0),
+            ] {
+                state.screen_elapsed = elapsed_us as f32 / 1e6;
+                let actors = evaluation::get_actors(&state, &assets);
+                let graphs: Vec<_> = actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        Actor::SharedFrame {
+                            z: 101, children, ..
+                        } => Some(Arc::clone(children)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(graphs.len(), count);
+                if !cached_graphs.is_empty() {
+                    for (previous, current) in cached_graphs.iter().zip(&graphs) {
+                        assert!(Arc::ptr_eq(previous, current), "static graph was rebuilt");
+                    }
+                }
+                cached_graphs = graphs;
+                let markers: Vec<_> = actors
+                    .iter()
+                    .filter_map(|actor| match actor {
+                        Actor::Text {
+                            content,
+                            color,
+                            offset,
+                            ..
+                        } if content.as_str() == label.as_ref() => Some((color[3], offset)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(
+                    markers.len(),
+                    count,
+                    "missing marker for {style:?}/{side:?}"
+                );
+                for (actual, _) in &markers {
+                    assert!((actual - alpha).abs() < 0.00001, "at {elapsed_us}us");
+                }
+                if style.is_versus() {
+                    assert!((markers[1].1[0] - markers[0].1[0] - 310.0).abs() < 0.0001);
+                }
+            }
+        }
     }
 
     fn test_course_stage(song: Arc<SongData>) -> CourseStageRuntime {

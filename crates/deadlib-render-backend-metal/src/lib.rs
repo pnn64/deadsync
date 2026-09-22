@@ -140,20 +140,21 @@ struct FrameBuffers {
 
 #[derive(Default)]
 struct TextureUploadState {
-    scratch: Vec<u8>,
-    command: Option<CommandBuffer>,
-    blit: Option<BlitCommandEncoder>,
-    staging: Vec<Buffer>,
+    batch: Option<(CommandBuffer, BlitCommandEncoder)>,
     uploads: u64,
     batches: u64,
 }
 
 impl TextureUploadState {
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            staging: Vec::with_capacity(capacity),
-            ..Self::default()
-        }
+    #[inline]
+    fn blit(&mut self, queue: &CommandQueueRef) -> &BlitCommandEncoderRef {
+        let (_, blit) = self.batch.get_or_insert_with(|| {
+            let command = queue.new_command_buffer();
+            command.set_label("DeadSync native Metal texture uploads");
+            let blit = command.new_blit_command_encoder().to_owned();
+            (command.to_owned(), blit)
+        });
+        blit
     }
 }
 
@@ -206,9 +207,8 @@ struct CacheStats {
 /// behind a fast key map, capped at 16 MiB, and saturates instead of pruning. A
 /// saturated miss falls back to the current frame's bounded upload buffer.
 /// Texture uploads share one render-thread-owned blit command per draw batch.
-/// Its 16-entry staging owner is cleared after commit without losing capacity.
-/// Non-aligned rows use one scratch buffer that grows to the largest upload and
-/// is reused for the renderer session; aligned rows borrow their source.
+/// The command buffer retains staging resources from encoding through completion.
+/// Texture uploads copy packed source pixels directly into staging buffers.
 /// Cache entries are freed by the render thread during cleanup;
 /// hit/miss/saturation counters are logged then. Per-frame maintenance is O(draw
 /// ops + visible geometry), and the only unbounded GPU wait is explicit back
@@ -351,7 +351,7 @@ pub fn init(
         window_size,
         projection,
         uploads: TexturedMeshUploads::with_capacity(1024, 64),
-        texture_uploads: TextureUploadState::with_capacity(16),
+        texture_uploads: TextureUploadState::default(),
         cached_tmesh_slots: FastU64Map::with_capacity_and_hasher(256, Default::default()),
         cached_tmeshes: Vec::with_capacity(256),
         cached_tmesh_bytes: 0,
@@ -384,6 +384,7 @@ pub fn create_texture(
     desc.set_usage(MTLTextureUsage::ShaderRead);
     let raw = state.device.new_texture(&desc);
     upload_texture(
+        &state.device,
         &state.queue,
         &mut state.texture_uploads,
         &raw,
@@ -425,6 +426,7 @@ pub fn update_texture(
         return Err(std::io::Error::other("Metal texture update dimensions do not match").into());
     }
     upload_texture(
+        &state.device,
         &state.queue,
         &mut state.texture_uploads,
         raw,
@@ -464,6 +466,7 @@ pub fn create_yuv420_texture(
         (&images[2], upload.v, upload.width / 2, upload.height / 2),
     ] {
         upload_plane(
+            &state.device,
             &state.queue,
             &mut state.texture_uploads,
             texture,
@@ -520,6 +523,7 @@ pub fn update_yuv420_texture(
         (&images[2], upload.v, upload.width / 2, upload.height / 2),
     ] {
         upload_plane(
+            &state.device,
             &state.queue,
             &mut state.texture_uploads,
             texture,
@@ -646,13 +650,14 @@ fn draw_inner(
     stats.backend_upload_us = elapsed_us(upload_started);
 
     let acquire_started = Instant::now();
-    let Some(drawable) = state.layer.next_drawable().map(ToOwned::to_owned) else {
+    // draw()'s autorelease pool keeps the borrowed drawable alive through presentation.
+    let Some(drawable) = state.layer.next_drawable() else {
         stats.acquire_us = elapsed_us(acquire_started);
         return Ok(stats);
     };
     stats.acquire_us = elapsed_us(acquire_started);
     let waited_for_image = stats.acquire_us >= IMAGE_WAIT_THRESHOLD_US;
-    let submitted_id = next_present_id(state);
+    let submitted_id = next_present_id(&mut state.next_present_id);
 
     let setup_started = Instant::now();
     configure_render_pass(
@@ -673,13 +678,13 @@ fn draw_inner(
             } else {
                 MTLLoadAction::Clear
             });
-        configure_render_pass(
-            &target.pass.color,
-            target.texture.images.primary(),
-            [0.0, 0.0, 0.0, if target_frame.alpha { 0.0 } else { 1.0 }],
-        );
+        target.pass.color.set_clear_color(MTLClearColor::new(
+            0.0,
+            0.0,
+            0.0,
+            if target_frame.alpha { 0.0 } else { 1.0 },
+        ));
         let target_encoder = command.new_render_command_encoder(&target.pass.descriptor);
-        clear_render_target(&target.pass.color);
         target_encoder.set_label("DeadSync native Metal offscreen pass");
         target_encoder.set_front_facing_winding(MTLWinding::CounterClockwise);
         offscreen_vertices = offscreen_vertices.saturating_add(record_offscreen_pass(
@@ -741,7 +746,7 @@ fn draw_inner(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -804,7 +809,7 @@ fn draw_inner(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 encoder.draw_primitives(
@@ -867,7 +872,7 @@ fn draw_inner(
                     1,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -923,9 +928,8 @@ fn draw_inner(
     stats.backend_record_us = elapsed_us(record_started);
 
     let present_started = Instant::now();
-    command.present_drawable(&drawable);
+    command.present_drawable(drawable);
     stats.present_us = elapsed_us(present_started);
-    let owned_command = command.to_owned();
     let submit_started = Instant::now();
     command.commit();
     stats.submit_us = elapsed_us(submit_started);
@@ -933,17 +937,19 @@ fn draw_inner(
     let mut queue_idle_waited = false;
     if apply_present_back_pressure || screenshot.is_some() {
         let wait_started = Instant::now();
-        owned_command.wait_until_completed();
+        command.wait_until_completed();
         let waited = elapsed_us(wait_started);
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(waited);
         applied_back_pressure = apply_present_back_pressure && waited >= BACK_PRESSURE_THRESHOLD_US;
         queue_idle_waited = screenshot.is_some() && waited != 0;
         mark_completed(state, submitted_id);
+    } else {
+        // The slot was emptied before upload; only in-flight work needs an owner.
+        state.frames[slot_index].command = Some(command.to_owned());
     }
     if let Some((buffer, row_bytes)) = screenshot {
         state.captured_frame = read_screenshot(&buffer, width, height, row_bytes);
     }
-    state.frames[slot_index].command = Some(owned_command);
     state.frames[slot_index].submitted_id = submitted_id;
     state.frame_index = (slot_index + 1) % FRAMES_IN_FLIGHT;
     poll_completions(state);
@@ -1280,6 +1286,9 @@ fn create_offscreen_target(state: &mut State, pass: &RenderTargetFrame) -> Offsc
     state.next_texture_id = state.next_texture_id.wrapping_add(1).max(1);
     let depth = create_depth_target(&state.device, width, height);
     let target_pass = create_render_pass(&depth);
+    // Offscreen attachments share the target's lifetime; only window drawables
+    // need to be attached and released each frame.
+    target_pass.color.set_texture(Some(&raw));
     OffscreenTarget {
         handle: pass.texture_handle,
         width,
@@ -1420,7 +1429,7 @@ fn record_offscreen_pass(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -1483,7 +1492,7 @@ fn record_offscreen_pass(
                     0,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 encoder.draw_primitives(
@@ -1544,7 +1553,7 @@ fn record_offscreen_pass(
                     1,
                     run.camera,
                     &frame.cameras,
-                    state.projection,
+                    &state.projection,
                     &mut cache,
                 );
                 if cache.texture_changed(texture.id) {
@@ -1634,43 +1643,29 @@ fn mip_level_count(image: &RgbaImage, mipmaps: bool) -> u64 {
 }
 
 fn upload_texture(
+    device: &DeviceRef,
     queue: &CommandQueueRef,
     uploads: &mut TextureUploadState,
     texture: &TextureRef,
     image: &RgbaImage,
     mipmaps: bool,
 ) {
-    let packed_row_bytes = image.width() as usize * 4;
-    let row_bytes = packed_row_bytes.next_multiple_of(256);
-    let staging_bytes = stage_texture_rows(
-        image.as_raw(),
-        packed_row_bytes,
-        image.height() as usize,
-        row_bytes,
-        &mut uploads.scratch,
-    );
+    // Metal blits require pixel-aligned row strides, not 256-byte padding.
+    let row_bytes = u64::from(image.width()) * 4;
+    let pixels = image.as_raw();
     let staging = autoreleasepool(|| {
-        queue.device().new_buffer_with_data(
-            staging_bytes.as_ptr().cast(),
-            staging_bytes.len() as u64,
+        device.new_buffer_with_data(
+            pixels.as_ptr().cast(),
+            pixels.len() as u64,
             MTLResourceOptions::StorageModeShared,
         )
     });
-    if uploads.command.is_none() {
-        let command = queue.new_command_buffer();
-        command.set_label("DeadSync native Metal texture uploads");
-        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
-        uploads.command = Some(command.to_owned());
-    }
-    let blit = uploads
-        .blit
-        .as_ref()
-        .expect("texture upload command always has a blit encoder");
+    let blit = uploads.blit(queue);
     blit.copy_from_buffer_to_texture(
         &staging,
         0,
-        row_bytes as u64,
-        staging.length(),
+        row_bytes,
+        0,
         MTLSize::new(image.width() as u64, image.height() as u64, 1),
         texture,
         0,
@@ -1681,11 +1676,11 @@ fn upload_texture(
     if mipmaps {
         blit.generate_mipmaps(texture);
     }
-    uploads.staging.push(staging);
     uploads.uploads = uploads.uploads.saturating_add(1);
 }
 
 fn upload_plane(
+    device: &DeviceRef,
     queue: &CommandQueueRef,
     uploads: &mut TextureUploadState,
     texture: &TextureRef,
@@ -1693,37 +1688,19 @@ fn upload_plane(
     width: u32,
     height: u32,
 ) {
-    let packed_row_bytes = width as usize;
-    let row_bytes = packed_row_bytes.next_multiple_of(256);
-    let staging_bytes = stage_texture_rows(
-        pixels,
-        packed_row_bytes,
-        height as usize,
-        row_bytes,
-        &mut uploads.scratch,
-    );
     let staging = autoreleasepool(|| {
-        queue.device().new_buffer_with_data(
-            staging_bytes.as_ptr().cast(),
-            staging_bytes.len() as u64,
+        device.new_buffer_with_data(
+            pixels.as_ptr().cast(),
+            pixels.len() as u64,
             MTLResourceOptions::StorageModeShared,
         )
     });
-    if uploads.command.is_none() {
-        let command = queue.new_command_buffer();
-        command.set_label("DeadSync native Metal texture uploads");
-        uploads.blit = Some(command.new_blit_command_encoder().to_owned());
-        uploads.command = Some(command.to_owned());
-    }
-    let blit = uploads
-        .blit
-        .as_ref()
-        .expect("texture upload command always has a blit encoder");
+    let blit = uploads.blit(queue);
     blit.copy_from_buffer_to_texture(
         &staging,
         0,
-        row_bytes as u64,
-        staging.length(),
+        u64::from(width),
+        0,
         MTLSize::new(width as u64, height as u64, 1),
         texture,
         0,
@@ -1731,46 +1708,15 @@ fn upload_plane(
         MTLOrigin::default(),
         MTLBlitOption::None,
     );
-    uploads.staging.push(staging);
     uploads.uploads = uploads.uploads.saturating_add(1);
 }
 
 fn flush_texture_uploads(uploads: &mut TextureUploadState) -> Option<CommandBuffer> {
-    let blit = uploads.blit.take()?;
+    let (command, blit) = uploads.batch.take()?;
     blit.end_encoding();
-    let command = uploads
-        .command
-        .take()
-        .expect("texture upload blit encoder always has a command buffer");
     command.commit();
-    // `new_command_buffer` retains referenced resources after commit. Clearing
-    // releases Rust's extra ownership while preserving this vector's capacity.
-    uploads.staging.clear();
     uploads.batches = uploads.batches.saturating_add(1);
     Some(command)
-}
-
-fn stage_texture_rows<'a>(
-    source: &'a [u8],
-    packed_row_bytes: usize,
-    rows: usize,
-    row_bytes: usize,
-    scratch: &'a mut Vec<u8>,
-) -> &'a [u8] {
-    debug_assert_eq!(source.len(), packed_row_bytes * rows);
-    debug_assert!(row_bytes >= packed_row_bytes);
-    if row_bytes == packed_row_bytes {
-        return source;
-    }
-
-    scratch.resize(row_bytes * rows, 0);
-    for (source_row, destination) in source
-        .chunks_exact(packed_row_bytes)
-        .zip(scratch.chunks_exact_mut(row_bytes))
-    {
-        destination[..packed_row_bytes].copy_from_slice(source_row);
-    }
-    scratch
 }
 
 fn ensure_cached_tmesh(
@@ -1817,17 +1763,17 @@ fn set_camera(
     cache_slot: usize,
     camera: u8,
     cameras: &[Matrix4],
-    fallback: Matrix4,
+    fallback: &Matrix4,
     cache: &mut EncoderCache,
 ) {
     if !cache.camera_changed(cache_slot, camera) {
         return;
     }
-    let projection = cameras.get(camera as usize).copied().unwrap_or(fallback);
-    let columns = projection.to_cols_array();
+    let projection = cameras.get(camera as usize).unwrap_or(fallback);
+    let columns: &[f32; 16] = projection.as_ref();
     encoder.set_vertex_bytes(
         buffer_index,
-        mem::size_of_val(&columns) as u64,
+        mem::size_of_val(columns) as u64,
         columns.as_ptr().cast(),
     );
 }
@@ -1847,12 +1793,14 @@ fn retire_frame_slot(state: &mut State, index: usize, stats: &mut DrawStats) {
 fn poll_completions(state: &mut State) {
     let mut completed = state.completed_present_id;
     for frame in &state.frames {
-        if frame
-            .command
-            .as_ref()
-            .is_some_and(|command| command_complete(command))
+        // Older IDs cannot advance this snapshot, regardless of command status.
+        if frame.submitted_id > completed
+            && frame
+                .command
+                .as_ref()
+                .is_some_and(|command| command_complete(command))
         {
-            completed = completed.max(frame.submitted_id);
+            completed = frame.submitted_id;
         }
     }
     if completed > state.completed_present_id {
@@ -1874,9 +1822,9 @@ fn mark_completed(state: &mut State, present_id: u32) {
     }
 }
 
-fn next_present_id(state: &mut State) -> u32 {
-    let id = state.next_present_id.max(1);
-    state.next_present_id = id.wrapping_add(1).max(1);
+fn next_present_id(next: &mut u32) -> u32 {
+    let id = (*next).max(1);
+    *next = id.wrapping_add(1).max(1);
     id
 }
 
@@ -1973,81 +1921,112 @@ mod tests {
     use super::*;
 
     #[test]
-    fn texture_row_staging_preserves_pixels_when_reusing_scratch() {
-        let mut scratch = vec![0xff; 40];
-
-        for (packed_row_bytes, rows, row_bytes) in [
-            (8, 3, 16),
-            (12, 2, 16),
-            (3, 5, 256),
-            (260, 4, 512),
-            (8, 3, 16),
-        ] {
-            let source = (0..packed_row_bytes * rows)
-                .map(|i| (i % 251) as u8)
-                .collect::<Vec<_>>();
-            let staged =
-                stage_texture_rows(&source, packed_row_bytes, rows, row_bytes, &mut scratch);
-
-            assert_eq!(staged.len(), row_bytes * rows);
-            for row in 0..rows {
-                assert_eq!(
-                    &staged[row * row_bytes..row * row_bytes + packed_row_bytes],
-                    &source[row * packed_row_bytes..(row + 1) * packed_row_bytes]
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn aligned_texture_rows_borrow_source_without_growing_scratch() {
-        let source = [1u8; 32];
-        let mut scratch = Vec::with_capacity(7);
-        let capacity = scratch.capacity();
-
-        let staged = stage_texture_rows(&source, 16, 2, 16, &mut scratch);
-
-        assert_eq!(staged.as_ptr(), source.as_ptr());
-        assert_eq!(scratch.capacity(), capacity);
-    }
-
-    #[test]
-    fn texture_uploads_share_one_pending_blit_batch() {
+    fn packed_texture_uploads_round_trip_after_source_pools_drain() {
         autoreleasepool(|| {
             let device = Device::system_default().expect("Metal device");
             let queue = device.new_command_queue();
-            let desc = TextureDescriptor::new();
-            desc.set_texture_type(MTLTextureType::D2);
-            desc.set_pixel_format(MTLPixelFormat::RGBA8Unorm);
-            desc.set_width(2);
-            desc.set_height(2);
-            desc.set_storage_mode(MTLStorageMode::Private);
-            desc.set_usage(MTLTextureUsage::ShaderRead);
-            let first = device.new_texture(&desc);
-            let second = device.new_texture(&desc);
-            let image = RgbaImage::from_raw(2, 2, vec![0x7f; 16]).expect("2x2 RGBA image");
             let mut uploads = TextureUploadState::default();
+            let mut textures = Vec::new();
+            let mut batch_command = None;
 
-            upload_texture(&queue, &mut uploads, &first, &image, false);
-            let command = uploads
-                .command
-                .as_ref()
-                .expect("first upload creates a batch")
-                .as_ptr();
-            upload_texture(&queue, &mut uploads, &second, &image, false);
+            for (format, bytes_per_pixel) in [
+                (MTLPixelFormat::RGBA8Unorm, 4),
+                (MTLPixelFormat::R8Unorm, 1),
+            ] {
+                // Exercise packed rows on both sides of the old 256-byte boundary,
+                // including odd-width R8 planes and multiple rows per texture.
+                for width in [1u32, 3, 63, 64, 65, 255, 256, 257] {
+                    let height = 3;
+                    let desc = TextureDescriptor::new();
+                    desc.set_texture_type(MTLTextureType::D2);
+                    desc.set_pixel_format(format);
+                    desc.set_width(u64::from(width));
+                    desc.set_height(u64::from(height));
+                    desc.set_storage_mode(MTLStorageMode::Private);
+                    desc.set_usage(MTLTextureUsage::ShaderRead);
+                    let texture = device.new_texture(&desc);
+                    let pixels = (0..width * height * bytes_per_pixel)
+                        .map(|i| (i * 29 + width + bytes_per_pixel) as u8)
+                        .collect::<Vec<_>>();
 
-            assert_eq!(uploads.command.as_ref().unwrap().as_ptr(), command);
-            assert_eq!(uploads.staging.len(), 2);
-            assert_eq!(uploads.uploads, 2);
-            let staging_capacity = uploads.staging.capacity();
+                    // Drain each local pool before submission. The command buffer
+                    // must retain staging after the upload drops its local owner.
+                    autoreleasepool(|| {
+                        if bytes_per_pixel == 4 {
+                            let image = RgbaImage::from_raw(width, height, pixels.clone())
+                                .expect("RGBA image");
+                            upload_texture(&device, &queue, &mut uploads, &texture, &image, false);
+                        } else {
+                            upload_plane(
+                                &device,
+                                &queue,
+                                &mut uploads,
+                                &texture,
+                                &pixels,
+                                width,
+                                height,
+                            );
+                        }
+                    });
+                    let (command, _) = uploads.batch.as_ref().expect("pending batch");
+                    let command = command.as_ptr();
+                    assert_eq!(*batch_command.get_or_insert(command), command);
+                    textures.push((
+                        texture,
+                        pixels,
+                        (width * bytes_per_pixel) as usize,
+                        width,
+                        height,
+                    ));
+                }
+            }
+
+            assert_eq!(uploads.uploads, textures.len() as u64);
             let command = flush_texture_uploads(&mut uploads).expect("pending batch");
             command.wait_until_completed();
-            assert!(uploads.command.is_none());
-            assert!(uploads.blit.is_none());
-            assert!(uploads.staging.is_empty());
-            assert_eq!(uploads.staging.capacity(), staging_capacity);
+            assert_eq!(command.status(), MTLCommandBufferStatus::Completed);
+            assert!(uploads.batch.is_none());
             assert_eq!(uploads.batches, 1);
             assert!(flush_texture_uploads(&mut uploads).is_none());
+
+            // Reopen a flushed batch and replace pixels before readback, so the
+            // second upload must use a fresh, still-open command encoder.
+            let (texture, pixels, _, width, height) = &mut textures[0];
+            pixels.fill(71);
+            let replacement = RgbaImage::from_raw(*width, *height, pixels.clone())
+                .expect("replacement RGBA image");
+            autoreleasepool(|| {
+                upload_texture(&device, &queue, &mut uploads, texture, &replacement, false);
+            });
+            assert_eq!(uploads.uploads, textures.len() as u64 + 1);
+            let command = flush_texture_uploads(&mut uploads).expect("second batch");
+            command.wait_until_completed();
+            assert_eq!(command.status(), MTLCommandBufferStatus::Completed);
+            assert_eq!(uploads.batches, 2);
+            assert!(uploads.batch.is_none());
+            assert!(flush_texture_uploads(&mut uploads).is_none());
+
+            for (texture, expected, packed_row_bytes, width, height) in textures {
+                let readback = queue.new_command_buffer();
+                let (buffer, row_bytes) = encode_screenshot(readback, &texture, width, height);
+                readback.commit();
+                readback.wait_until_completed();
+                assert_eq!(readback.status(), MTLCommandBufferStatus::Completed);
+                for row in 0..height as usize {
+                    // SAFETY: The completed blit initialized these pixel bytes
+                    // within the live shared buffer; padding is excluded.
+                    let actual = unsafe {
+                        std::slice::from_raw_parts(
+                            buffer.contents().cast::<u8>().add(row * row_bytes),
+                            packed_row_bytes,
+                        )
+                    };
+                    assert_eq!(
+                        actual,
+                        &expected[row * packed_row_bytes..(row + 1) * packed_row_bytes]
+                    );
+                }
+            }
         });
     }
 

@@ -162,10 +162,10 @@ enum ProjState {
 pub struct Texture {
     id: u64,
     images: TextureImages,
-    bind_group: Arc<wgpu::BindGroup>,
-    bind_group_repeat: Arc<wgpu::BindGroup>,
-    nearest_bind_group: Option<Arc<wgpu::BindGroup>>,
-    nearest_bind_group_repeat: Option<Arc<wgpu::BindGroup>>,
+    bind_group: wgpu::BindGroup,
+    bind_group_repeat: wgpu::BindGroup,
+    nearest_bind_group: Option<wgpu::BindGroup>,
+    nearest_bind_group_repeat: Option<wgpu::BindGroup>,
 }
 
 impl Texture {
@@ -206,7 +206,7 @@ pub trait TextureLookup {
 }
 
 struct CachedTMeshGeom {
-    buffer: Arc<wgpu::Buffer>,
+    buffer: wgpu::Buffer,
     vertex_count: u32,
 }
 
@@ -372,6 +372,18 @@ impl PresentCompletionCell {
             }
         }
     }
+
+    // Report each observed interval once; the cell retains the clock and refresh
+    // estimate even when no new completion arrives.
+    fn load_since(&self, last_present_id: &mut u32) -> PresentCompletion {
+        let mut completion = self.load();
+        if completion.present_id == *last_present_id {
+            completion.interval_ns = 0;
+        } else {
+            *last_present_id = completion.present_id;
+        }
+        completion
+    }
 }
 
 struct OwnedWindowHandle(pub Arc<Window>);
@@ -416,7 +428,6 @@ pub struct State {
     pipelines: PipelineSet,
     alpha_pipelines: PipelineSet,
     yuv_shader: wgpu::ShaderModule,
-    yuv_pipeline_layout: wgpu::PipelineLayout,
     yuv_pipelines: PipelineSet,
     alpha_yuv_pipelines: PipelineSet,
     mesh_shader: wgpu::ShaderModule,
@@ -424,7 +435,6 @@ pub struct State {
     mesh_pipelines: MeshPipelineSet,
     alpha_mesh_pipelines: MeshPipelineSet,
     tmesh_shader: wgpu::ShaderModule,
-    tmesh_pipeline_layout: wgpu::PipelineLayout,
     tmesh_pipelines: PipelineSet,
     tmesh_depth_pipelines: PipelineSet,
     alpha_tmesh_pipelines: PipelineSet,
@@ -458,8 +468,6 @@ pub struct State {
     next_present_id: u32,
     present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
-    last_host_present_ns: u64,
-    last_present_interval_ns: u64,
     screenshot_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
@@ -698,20 +706,20 @@ fn init(
         usage: wgpu::BufferUsages::UNIFORM,
     });
 
-    let (shader, pipeline_layout, pipelines, alpha_pipelines) =
-        build_pipeline_set(&device, &proj, &bind_layout, format, false);
-    let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
-        build_pipeline_set(&device, &proj, &bind_layout, format, true);
+    let pipeline_layout = build_texture_pipeline_layout(&device, &proj, &bind_layout);
+    let (shader, pipelines, alpha_pipelines) =
+        build_pipeline_set(&device, &proj, &pipeline_layout, format, false);
+    let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) =
+        build_pipeline_set(&device, &proj, &pipeline_layout, format, true);
     let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
         build_mesh_pipeline_set(&device, &proj, format);
     let (
         tmesh_shader,
-        tmesh_pipeline_layout,
         tmesh_pipelines,
         tmesh_depth_pipelines,
         alpha_tmesh_pipelines,
         alpha_tmesh_depth_pipelines,
-    ) = build_textured_mesh_pipeline_set(&device, &proj, &bind_layout, format);
+    ) = build_textured_mesh_pipeline_set(&device, &proj, &pipeline_layout, format);
 
     let vertex_data = [
         Vertex {
@@ -797,7 +805,6 @@ fn init(
         pipelines,
         alpha_pipelines,
         yuv_shader,
-        yuv_pipeline_layout,
         yuv_pipelines,
         alpha_yuv_pipelines,
         mesh_shader,
@@ -805,7 +812,6 @@ fn init(
         mesh_pipelines,
         alpha_mesh_pipelines,
         tmesh_shader,
-        tmesh_pipeline_layout,
         tmesh_pipelines,
         tmesh_depth_pipelines,
         alpha_tmesh_pipelines,
@@ -835,8 +841,6 @@ fn init(
         next_present_id: 1,
         present_done,
         last_completed_present_id: 0,
-        last_host_present_ns: 0,
-        last_present_interval_ns: 0,
         screenshot_requested: false,
         captured_frame: None,
     })
@@ -886,25 +890,6 @@ fn next_present_id(state: &mut State) -> u32 {
         state.next_present_id = 1;
     }
     id
-}
-
-#[inline(always)]
-fn drain_present_completions(state: &mut State) -> PresentCompletion {
-    let mut latest = PresentCompletion {
-        present_id: state.last_completed_present_id,
-        host_ns: state.last_host_present_ns,
-        interval_ns: 0,
-        refresh_ns: state.last_present_interval_ns,
-    };
-    let done = state.present_done.load();
-    if done.present_id == 0 || done.present_id == state.last_completed_present_id {
-        return latest;
-    }
-    state.last_completed_present_id = done.present_id;
-    state.last_host_present_ns = done.host_ns;
-    state.last_present_interval_ns = done.refresh_ns;
-    latest = done;
-    latest
 }
 
 #[inline(always)]
@@ -1105,7 +1090,7 @@ fn create_texture_groups(
     sampler_desc: SamplerDesc,
     views: [&wgpu::TextureView; 3],
     conversion: Option<&wgpu::Buffer>,
-) -> (Arc<wgpu::BindGroup>, Arc<wgpu::BindGroup>) {
+) -> (wgpu::BindGroup, wgpu::BindGroup) {
     let sampler = get_sampler(state, sampler_desc);
     let sampler_repeat = get_sampler(
         state,
@@ -1167,7 +1152,7 @@ fn create_texture_groups(
             },
         ],
     });
-    (Arc::new(bind_group), Arc::new(bind_group_repeat))
+    (bind_group, bind_group_repeat)
 }
 
 #[inline(always)]
@@ -1430,14 +1415,14 @@ fn texture_bind_group(texture: &Texture, handle: TextureHandle, repeat: bool) ->
     match (render_target_uses_nearest(handle), repeat) {
         (true, false) => texture
             .nearest_bind_group
-            .as_deref()
-            .unwrap_or_else(|| texture.bind_group.as_ref()),
+            .as_ref()
+            .unwrap_or(&texture.bind_group),
         (true, true) => texture
             .nearest_bind_group_repeat
-            .as_deref()
-            .unwrap_or_else(|| texture.bind_group_repeat.as_ref()),
-        (false, false) => texture.bind_group.as_ref(),
-        (false, true) => texture.bind_group_repeat.as_ref(),
+            .as_ref()
+            .unwrap_or(&texture.bind_group_repeat),
+        (false, false) => &texture.bind_group,
+        (false, true) => &texture.bind_group_repeat,
     }
 }
 
@@ -1533,13 +1518,13 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                             wgpu::IndexFormat::Uint16,
                         );
                     }
-                    last_kind = Some(0);
-                    last_blend = None;
-                    if matches!(state.proj, ProjState::Immediates) {
-                        // Pipeline layout changes clear wgpu's immediate storage;
-                        // uniform projection bindings remain valid.
+                    if last_kind == Some(1) && matches!(state.proj, ProjState::Immediates) {
+                        // Only untextured meshes use a different layout. Sprites
+                        // and textured meshes share immediate projection storage.
                         bindings.reset_camera();
                     }
+                    last_kind = Some(0);
+                    last_blend = None;
                 }
                 let yuv = tex.images.is_yuv420();
                 if last_blend != Some(run.blend) || last_sprite_yuv != Some(yuv) {
@@ -1548,11 +1533,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     } else {
                         pipelines.get(run.blend)
                     });
-                    if last_sprite_yuv.is_some_and(|last| last != yuv)
-                        && matches!(state.proj, ProjState::Immediates)
-                    {
-                        bindings.reset_camera();
-                    }
                     last_blend = Some(run.blend);
                     last_sprite_yuv = Some(yuv);
                 }
@@ -1563,7 +1543,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -1592,7 +1572,6 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     );
                     last_kind = Some(1);
                     last_blend = None;
-                    last_sprite_yuv = None;
                     if matches!(state.proj, ProjState::Immediates) {
                         bindings.reset_camera();
                     }
@@ -1608,7 +1587,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -1637,12 +1616,11 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                                 .slice(data.tmesh_instance_offset..),
                         );
                     }
-                    last_kind = Some(2);
-                    last_blend = None;
-                    last_sprite_yuv = None;
-                    if matches!(state.proj, ProjState::Immediates) {
+                    if last_kind == Some(1) && matches!(state.proj, ProjState::Immediates) {
                         bindings.reset_camera();
                     }
+                    last_kind = Some(2);
+                    last_blend = None;
                     tmesh_buffer_cache.reset();
                 }
                 if last_blend != Some(run.blend) || last_tmesh_depth_test != run.depth_test {
@@ -1661,7 +1639,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                         run.camera,
                         camera_count,
                         data.cameras,
-                        state.projection,
+                        &state.projection,
                         data.camera_binding,
                     );
                 }
@@ -1812,13 +1790,11 @@ fn ensure_cached_tmesh(
         return None;
     }
 
-    let buffer = Arc::new(
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("wgpu cached textured-mesh vertex buffer"),
-            contents: cast_slice(vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        }),
-    );
+    let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("wgpu cached textured-mesh vertex buffer"),
+        contents: cast_slice(vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
     let buffer_key = cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
@@ -2167,7 +2143,9 @@ pub fn draw(
             warn!("wgpu screenshot readback failed: map_async returned error");
         }
     }
-    let completion = drain_present_completions(state);
+    let completion = state
+        .present_done
+        .load_since(&mut state.last_completed_present_id);
     let in_flight_images = if completion.present_id == 0 {
         1
     } else if submitted_present_id >= completion.present_id {
@@ -2192,7 +2170,7 @@ pub fn draw(
         suboptimal,
         submitted_present_id,
         completed_present_id: completion.present_id,
-        refresh_ns: state.last_present_interval_ns,
+        refresh_ns: completion.refresh_ns,
         actual_interval_ns: completion.interval_ns,
         present_margin_ns: 0,
         host_present_ns: completion.host_ns,
@@ -2262,35 +2240,33 @@ fn draw_offscreen_targets(
         );
     }
     upload_offscreen_projections(state, frame);
-    let mut instance_start = 0usize;
-    let mut mesh_start = 0usize;
-    let mut tmesh_instance_start = 0usize;
-    for target in &frame.render_targets {
-        if !target.sprite_instances.is_empty() {
-            state.queue.write_buffer(
-                &state.instance_buffer,
-                (instance_start * mem::size_of::<InstanceRaw>()) as u64,
-                cast_slice(target.sprite_instances.as_slice()),
-            );
-        }
-        if !target.mesh_vertices.is_empty() {
-            state.queue.write_buffer(
-                &state.mesh_vertex_buffer,
-                (mesh_start * mem::size_of::<deadlib_render_core::MeshVertex>()) as u64,
-                cast_slice(target.mesh_vertices.as_slice()),
-            );
-        }
-        if !target.tmesh_instances.is_empty() {
-            state.queue.write_buffer(
-                &state.tmesh_instance_buffer,
-                (tmesh_instance_start * mem::size_of::<TexturedMeshInstanceRaw>()) as u64,
-                cast_slice(&target.tmesh_instances),
-            );
-        }
-        tmesh_instance_start += target.tmesh_instances.len();
-        instance_start += target.sprite_instances.len();
-        mesh_start += target.mesh_vertices.len();
-    }
+    upload_buffer_slices(
+        &state.queue,
+        &state.instance_buffer,
+        total_instances * mem::size_of::<InstanceRaw>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.sprite_instances)),
+    );
+    upload_buffer_slices(
+        &state.queue,
+        &state.mesh_vertex_buffer,
+        total_mesh_vertices * mem::size_of::<deadlib_render_core::MeshVertex>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.mesh_vertices)),
+    );
+    upload_buffer_slices(
+        &state.queue,
+        &state.tmesh_instance_buffer,
+        total_tmesh_instances * mem::size_of::<TexturedMeshInstanceRaw>(),
+        frame
+            .render_targets
+            .iter()
+            .map(|target| cast_slice(&target.tmesh_instances)),
+    );
     stats.backend_upload_us = stats
         .backend_upload_us
         .saturating_add(elapsed_us(upload_started.elapsed()));
@@ -2375,6 +2351,8 @@ fn draw_offscreen_targets(
             textures,
             target_frame.alpha,
         ));
+        drop(pass);
+        state.offscreen_targets[index].initialized = true;
         geometry_start += target_frame.tmesh_geometries.len();
         tmesh_instance_start += target_frame.tmesh_instances.len();
         instance_start += target_frame.sprite_instances.len();
@@ -2390,19 +2368,41 @@ fn draw_offscreen_targets(
     stats.submit_us = stats
         .submit_us
         .saturating_add(elapsed_us(submit_started.elapsed()));
-    for target in state
-        .offscreen_targets
-        .iter_mut()
-        .take(frame.render_targets.len())
-    {
-        target.initialized = true;
-    }
     vertices
 }
 
 #[inline(always)]
 fn elapsed_us(elapsed: std::time::Duration) -> u32 {
     elapsed.as_micros().min(u128::from(u32::MAX)) as u32
+}
+
+fn upload_buffer_slices<'a>(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    byte_len: usize,
+    slices: impl Iterator<Item = &'a [u8]>,
+) {
+    let Some(size) = wgpu::BufferSize::new(byte_len as u64) else {
+        return;
+    };
+    let mut slices = slices.filter(|bytes| !bytes.is_empty());
+    let first = slices.next().expect("nonempty buffer upload");
+    if first.len() == byte_len {
+        queue.write_buffer(buffer, 0, first);
+        return;
+    }
+    // Fill wgpu's staging memory directly, with one transfer for this buffer
+    // across all targets. The destination offsets remain in target order.
+    let Some(mut upload) = queue.write_buffer_with(buffer, 0, size) else {
+        return;
+    };
+    let mut offset = 0;
+    for bytes in std::iter::once(first).chain(slices) {
+        let end = offset + bytes.len();
+        upload.slice(offset..end).copy_from_slice(bytes);
+        offset = end;
+    }
+    debug_assert_eq!(offset, byte_len);
 }
 
 fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
@@ -2415,7 +2415,7 @@ fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
         .iter()
         .map(|target| target.cameras.len() + 1)
         .sum::<usize>();
-    let buffer_recreated = ensure_projection_capacity(state, matrix_count.max(1));
+    ensure_projection_capacity(state, matrix_count.max(1));
     let changed = stage_offscreen_projection_upload(
         &mut state.offscreen_projection_upload,
         frame
@@ -2426,7 +2426,7 @@ fn upload_offscreen_projections(state: &mut State, frame: &RenderFrame) {
         stride,
         matrix_count,
     );
-    if matrix_count == 0 || !(buffer_recreated || changed) {
+    if matrix_count == 0 || !changed {
         return;
     }
 
@@ -2449,14 +2449,18 @@ fn stage_offscreen_projection_upload<'a>(
     matrix_count: usize,
 ) -> bool {
     debug_assert!(stride >= PROJ_BYTES as usize);
-    let required_len = matrix_count * stride;
+    // Matrix starts need alignment; the final binding ends after its 64 bytes.
+    let required_len = if matrix_count == 0 {
+        0
+    } else {
+        (matrix_count - 1) * stride + PROJ_BYTES as usize
+    };
     let mut changed = upload.len() != required_len;
     upload.resize(required_len, 0);
     let mut offset = 0;
     for cameras in camera_sets {
         for matrix in cameras.iter().chain(std::iter::once(&fallback)) {
-            let columns = matrix.to_cols_array();
-            let bytes = cast_slice(std::slice::from_ref(&columns));
+            let bytes = bytemuck::bytes_of::<[f32; 16]>(matrix.as_ref());
             let destination = &mut upload[offset..offset + bytes.len()];
             if destination != bytes {
                 destination.copy_from_slice(bytes);
@@ -2465,7 +2469,7 @@ fn stage_offscreen_projection_upload<'a>(
             offset += stride;
         }
     }
-    debug_assert_eq!(offset, upload.len());
+    debug_assert_eq!(offset, matrix_count * stride);
     changed
 }
 
@@ -2475,7 +2479,7 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         return;
     };
     let needed = cameras.len().saturating_add(1).max(1);
-    let buffer_recreated = ensure_projection_capacity(state, needed);
+    ensure_projection_capacity(state, needed);
 
     let ProjState::Uniform { stride, .. } = &state.proj else {
         return;
@@ -2488,7 +2492,7 @@ fn upload_projections(state: &mut State, cameras: &[Matrix4]) {
         state.projection,
         stride,
     );
-    if !changed && !buffer_recreated {
+    if !changed {
         return;
     }
 
@@ -2506,12 +2510,11 @@ fn stage_projection_upload(
     fallback: Matrix4,
     stride: usize,
 ) -> bool {
-    let needed = cameras.len().saturating_add(1).max(1);
-    let mut changed = upload.len() != needed * stride;
-    upload.resize(needed * stride, 0);
+    let required_len = cameras.len() * stride + PROJ_BYTES as usize;
+    let mut changed = upload.len() != required_len;
+    upload.resize(required_len, 0);
     for (index, matrix) in cameras.iter().chain(std::iter::once(&fallback)).enumerate() {
-        let columns = matrix.to_cols_array();
-        let bytes = cast_slice(std::slice::from_ref(&columns));
+        let bytes = bytemuck::bytes_of::<[f32; 16]>(matrix.as_ref());
         let offset = index * stride;
         let slot = &mut upload[offset..offset + bytes.len()];
         if slot != bytes {
@@ -2528,14 +2531,13 @@ fn set_camera(
     camera: u8,
     camera_count: usize,
     cameras: &[Matrix4],
-    fallback: Matrix4,
+    fallback: &Matrix4,
     binding: CameraBinding,
 ) {
     match proj {
         ProjState::Immediates => {
-            let vp = cameras.get(camera as usize).copied().unwrap_or(fallback);
-            let vp_array = vp.to_cols_array_2d();
-            pass.set_immediates(0, cast_slice(&vp_array));
+            let vp = cameras.get(camera as usize).unwrap_or(fallback);
+            pass.set_immediates(0, bytemuck::bytes_of::<[f32; 16]>(vp.as_ref()));
         }
         ProjState::Uniform {
             group,
@@ -2638,7 +2640,7 @@ fn ensure_tmesh_instance_capacity(state: &mut State, needed: usize) {
     state.tmesh_instance_capacity = new_cap;
 }
 
-fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
+fn ensure_projection_capacity(state: &mut State, needed: usize) {
     let ProjState::Uniform {
         stride,
         capacity,
@@ -2649,10 +2651,10 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         layout,
     } = &mut state.proj
     else {
-        return false;
+        return;
     };
     if needed <= *capacity {
-        return false;
+        return;
     }
     let new_cap = needed.next_power_of_two().max(4);
     *buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
@@ -2684,9 +2686,9 @@ fn ensure_projection_capacity(state: &mut State, needed: usize) -> bool {
         }],
     });
     *capacity = new_cap;
+    // Empty staging forces the next upload to initialize each new buffer.
     state.projection_upload.clear();
     state.offscreen_projection_upload.clear();
-    true
 }
 
 fn reconfigure_surface(state: &mut State) {
@@ -2731,26 +2733,24 @@ fn reconfigure_surface(state: &mut State) {
     }
 
     if format_changed {
-        let (shader, pipeline_layout, pipelines, alpha_pipelines) = build_pipeline_set(
+        let (shader, pipelines, alpha_pipelines) = build_pipeline_set(
             &state.device,
             &state.proj,
-            &state.bind_layout,
+            &state.pipeline_layout,
             state.config.format,
             false,
         );
-        let (yuv_shader, yuv_pipeline_layout, yuv_pipelines, alpha_yuv_pipelines) =
-            build_pipeline_set(
-                &state.device,
-                &state.proj,
-                &state.bind_layout,
-                state.config.format,
-                true,
-            );
+        let (yuv_shader, yuv_pipelines, alpha_yuv_pipelines) = build_pipeline_set(
+            &state.device,
+            &state.proj,
+            &state.pipeline_layout,
+            state.config.format,
+            true,
+        );
         let (mesh_shader, mesh_pipeline_layout, mesh_pipelines, alpha_mesh_pipelines) =
             build_mesh_pipeline_set(&state.device, &state.proj, state.config.format);
         let (
             tmesh_shader,
-            tmesh_pipeline_layout,
             tmesh_pipelines,
             tmesh_depth_pipelines,
             alpha_tmesh_pipelines,
@@ -2758,15 +2758,13 @@ fn reconfigure_surface(state: &mut State) {
         ) = build_textured_mesh_pipeline_set(
             &state.device,
             &state.proj,
-            &state.bind_layout,
+            &state.pipeline_layout,
             state.config.format,
         );
         state.shader = shader;
-        state.pipeline_layout = pipeline_layout;
         state.pipelines = pipelines;
         state.alpha_pipelines = alpha_pipelines;
         state.yuv_shader = yuv_shader;
-        state.yuv_pipeline_layout = yuv_pipeline_layout;
         state.yuv_pipelines = yuv_pipelines;
         state.alpha_yuv_pipelines = alpha_yuv_pipelines;
         state.mesh_shader = mesh_shader;
@@ -2774,7 +2772,6 @@ fn reconfigure_surface(state: &mut State) {
         state.mesh_pipelines = mesh_pipelines;
         state.alpha_mesh_pipelines = alpha_mesh_pipelines;
         state.tmesh_shader = tmesh_shader;
-        state.tmesh_pipeline_layout = tmesh_pipeline_layout;
         state.tmesh_pipelines = tmesh_pipelines;
         state.tmesh_depth_pipelines = tmesh_depth_pipelines;
         state.alpha_tmesh_pipelines = alpha_tmesh_pipelines;
@@ -2938,30 +2935,14 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
     }
 }
 
-fn build_pipeline_set(
+// All textured pipelines use these exact bindings. Reusing the layout also
+// keeps wgpu from clearing immediate data when switching between them.
+fn build_texture_pipeline_layout(
     device: &wgpu::Device,
     proj: &ProjState,
     bind_layout: &wgpu::BindGroupLayout,
-    format: wgpu::TextureFormat,
-    yuv420: bool,
-) -> (
-    wgpu::ShaderModule,
-    wgpu::PipelineLayout,
-    PipelineSet,
-    PipelineSet,
-) {
-    let shader_src = match (proj, yuv420) {
-        (ProjState::Immediates, false) => SHADER_IMM,
-        (ProjState::Uniform { .. }, false) => SHADER_UBO,
-        (ProjState::Immediates, true) => YUV_SHADER_IMM,
-        (ProjState::Uniform { .. }, true) => YUV_SHADER_UBO,
-    };
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("wgpu shader module"),
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
-    });
-
-    let pipeline_layout = match proj {
+) -> wgpu::PipelineLayout {
+    match proj {
         ProjState::Immediates => {
             let layouts = [Some(bind_layout)];
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -2978,24 +2959,43 @@ fn build_pipeline_set(
                 immediate_size: 0,
             })
         }
+    }
+}
+
+fn build_pipeline_set(
+    device: &wgpu::Device,
+    proj: &ProjState,
+    pipeline_layout: &wgpu::PipelineLayout,
+    format: wgpu::TextureFormat,
+    yuv420: bool,
+) -> (wgpu::ShaderModule, PipelineSet, PipelineSet) {
+    let shader_src = match (proj, yuv420) {
+        (ProjState::Immediates, false) => SHADER_IMM,
+        (ProjState::Uniform { .. }, false) => SHADER_UBO,
+        (ProjState::Immediates, true) => YUV_SHADER_IMM,
+        (ProjState::Uniform { .. }, true) => YUV_SHADER_UBO,
     };
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("wgpu shader module"),
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
+    });
 
     let pipelines = build_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         surface_write_mask(),
     );
     let alpha_pipelines = build_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         wgpu::ColorWrites::ALL,
     );
 
-    (shader, pipeline_layout, pipelines, alpha_pipelines)
+    (shader, pipelines, alpha_pipelines)
 }
 
 fn build_pipelines(
@@ -3112,11 +3112,10 @@ fn build_mesh_pipelines(
 fn build_textured_mesh_pipeline_set(
     device: &wgpu::Device,
     proj: &ProjState,
-    bind_layout: &wgpu::BindGroupLayout,
+    pipeline_layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
 ) -> (
     wgpu::ShaderModule,
-    wgpu::PipelineLayout,
     PipelineSet,
     PipelineSet,
     PipelineSet,
@@ -3131,28 +3130,9 @@ fn build_textured_mesh_pipeline_set(
         source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(shader_src)),
     });
 
-    let pipeline_layout = match proj {
-        ProjState::Immediates => {
-            let layouts = [Some(bind_layout)];
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("wgpu textured-mesh pipeline layout"),
-                bind_group_layouts: &layouts,
-                immediate_size: PROJ_BYTES as u32,
-            })
-        }
-        ProjState::Uniform { layout, .. } => {
-            let layouts = [Some(layout), Some(bind_layout)];
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("wgpu textured-mesh pipeline layout"),
-                bind_group_layouts: &layouts,
-                immediate_size: 0,
-            })
-        }
-    };
-
     let pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         false,
@@ -3160,7 +3140,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let depth_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         true,
@@ -3168,7 +3148,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let alpha_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         false,
@@ -3176,7 +3156,7 @@ fn build_textured_mesh_pipeline_set(
     );
     let alpha_depth_pipelines = build_tmesh_pipelines(
         device,
-        &pipeline_layout,
+        pipeline_layout,
         format,
         &shader,
         true,
@@ -3185,7 +3165,6 @@ fn build_textured_mesh_pipeline_set(
 
     (
         shader,
-        pipeline_layout,
         pipelines,
         depth_pipelines,
         alpha_pipelines,
@@ -3543,6 +3522,14 @@ const YUV_SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_yuv_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
 
+#[cfg(all(
+    test,
+    target_os = "windows",
+    not(target_pointer_width = "32"),
+    not(target_vendor = "win7")
+))]
+mod pipeline_state_tests;
+
 #[cfg(test)]
 mod tests {
     #[cfg(all(
@@ -3712,7 +3699,7 @@ mod tests {
             fallback,
             STRIDE,
         ));
-        assert_eq!(upload.len(), STRIDE * 2);
+        assert_eq!(upload.len(), STRIDE + 64);
         assert_eq!(
             &upload[..64],
             bytemuck::cast_slice(&cameras[0].to_cols_array())
@@ -3722,7 +3709,6 @@ mod tests {
             bytemuck::cast_slice(&fallback.to_cols_array())
         );
         assert!(upload[64..STRIDE].iter().all(|byte| *byte == 0));
-        assert!(upload[STRIDE + 64..].iter().all(|byte| *byte == 0));
     }
 
     #[test]
@@ -3744,18 +3730,10 @@ mod tests {
         ));
 
         let expected = [first[0], fallback, second[0], second[1], fallback];
-        assert_eq!(upload.len(), expected.len() * STRIDE);
-        for (index, matrix) in expected.iter().enumerate() {
-            let offset = index * STRIDE;
-            assert_eq!(
-                &upload[offset..offset + 64],
-                bytemuck::cast_slice(&matrix.to_cols_array())
-            );
-            assert!(
-                upload[offset + 64..offset + STRIDE]
-                    .iter()
-                    .all(|byte| *byte == 0)
-            );
+        assert_eq!(upload.len(), (expected.len() - 1) * STRIDE + 64);
+        for (slot, matrix) in upload.chunks(STRIDE).zip(&expected) {
+            assert_eq!(&slot[..64], bytemuck::cast_slice(&matrix.to_cols_array()));
+            assert!(slot[64..].iter().all(|byte| *byte == 0));
         }
         assert!(!stage_offscreen_projection_upload(
             &mut upload,
@@ -3775,12 +3753,11 @@ mod tests {
             1,
         ));
         assert_eq!(upload.as_ptr(), allocation);
-        assert_eq!(upload.len(), STRIDE);
+        assert_eq!(upload.len(), 64);
         assert_eq!(
             &upload[..64],
             bytemuck::cast_slice(&fallback.to_cols_array())
         );
-        assert!(upload[64..].iter().all(|byte| *byte == 0));
 
         assert!(stage_offscreen_projection_upload(
             &mut upload,
@@ -3856,6 +3833,59 @@ mod tests {
                 refresh_ns: 17,
             }
         );
+    }
+
+    #[test]
+    fn completion_cell_reports_each_observed_interval_once() {
+        let cell = PresentCompletionCell::new();
+        let mut last_present_id = 0;
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion::default()
+        );
+
+        // The reader may skip completions; smoothing still includes them all.
+        cell.publish(1, 100);
+        cell.publish(2, 116);
+        cell.publish(3, 136);
+        let latest = PresentCompletion {
+            present_id: 3,
+            host_ns: 136,
+            interval_ns: 20,
+            refresh_ns: 17,
+        };
+        assert_eq!(cell.load_since(&mut last_present_id), latest);
+        assert_eq!(last_present_id, 3);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                interval_ns: 0,
+                ..latest
+            }
+        );
+
+        // An unavailable timestamp preserves the clock and refresh estimate.
+        cell.publish(u32::MAX, 0);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                present_id: u32::MAX,
+                interval_ns: 0,
+                ..latest
+            }
+        );
+        // Present IDs wrap to one, which must still be observed as new.
+        cell.publish(1, 140);
+        assert_eq!(
+            cell.load_since(&mut last_present_id),
+            PresentCompletion {
+                present_id: 1,
+                host_ns: 140,
+                interval_ns: 4,
+                refresh_ns: 13,
+            }
+        );
+        assert_eq!(last_present_id, 1);
     }
 
     #[test]
