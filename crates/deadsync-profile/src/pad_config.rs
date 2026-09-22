@@ -322,18 +322,6 @@ pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<
     deadlib_platform::atomic_write::write_atomic(path, serialize(profiles).as_bytes())
 }
 
-/// Merge per-profile pad-config lists into one machine-global list.
-///
-/// `sources` is ordered newest-first (file mtime); earlier sources win every
-/// conflict:
-/// - A config that matches an already-merged one (same name ignoring case,
-///   backend, pad type, and settings) folds into it, contributing any serial
-///   defaults not already claimed.
-/// - A name collision between *different* configs keeps both, renaming the
-///   later one with a " (2)"-style suffix.
-/// - Each serial keeps one default and each backend one global default: the
-///   newest source claiming it.
-#[must_use]
 /// Name a migrated config after the profile it came from, so the merged
 /// list still says whose tuning each entry is ("ddrcoder - Left"). An empty
 /// owner leaves the name alone.
@@ -350,6 +338,9 @@ pub fn migrated_config_name(owner: &str, name: &str) -> String {
 /// Merge legacy per-profile config lists, newest source first, into one
 /// machine list. Each source is `(owner, configs)`; every config is renamed
 /// via [`migrated_config_name`] so it keeps its provenance.
+/// Matching names, backend, pad type, and settings are deduplicated. Other
+/// name collisions get a suffix; the newest source wins default conflicts.
+#[must_use]
 pub fn merge_for_migration(sources: Vec<(String, Vec<PadConfigProfile>)>) -> Vec<PadConfigProfile> {
     let mut merged: Vec<PadConfigProfile> = Vec::new();
     for (owner, source) in sources {
@@ -400,12 +391,13 @@ pub fn merge_for_migration(sources: Vec<(String, Vec<PadConfigProfile>)>) -> Vec
 /// untouched, so rolling back to a per-profile build loses nothing.
 ///
 /// Returns `None` when the machine store already exists, otherwise the number
-/// of migrated configs.
+/// of migrated configs. Read or write failures leave migration incomplete so
+/// the next call can retry without losing any source configs.
 pub fn migrate_machine_store(
     machine_path: &Path,
     profiles_root: &Path,
 ) -> std::io::Result<Option<usize>> {
-    if machine_path.exists() {
+    if machine_path.try_exists()? {
         return Ok(None);
     }
     let mut sources: Vec<(
@@ -414,16 +406,36 @@ pub fn migrate_machine_store(
         String,
         Vec<PadConfigProfile>,
     )> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(profiles_root) {
-        for entry in entries.flatten() {
+    let entries = match std::fs::read_dir(profiles_root) {
+        Ok(entries) => Some(entries),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    if let Some(entries) = entries {
+        for entry in entries {
+            let entry = entry?;
+            // Follow profile-directory symlinks, but ignore unrelated files.
+            if !std::fs::metadata(entry.path())?.is_dir() {
+                continue;
+            }
             let path = pad_config_path(&entry.path());
-            let Ok(list) = load_path(&path) else { continue };
+            let list = match load_path(&path) {
+                Ok(list) => list,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(std::io::Error::new(
+                        error.kind(),
+                        format!(
+                            "Failed to read legacy pad configs '{}': {error}",
+                            path.display()
+                        ),
+                    ));
+                }
+            };
             if list.is_empty() {
                 continue;
             }
-            let modified = std::fs::metadata(&path)
-                .and_then(|meta| meta.modified())
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let modified = std::fs::metadata(&path)?.modified()?;
             let owner = crate::read_profile_identity_dir(&entry.path())
                 .1
                 .unwrap_or_else(|| entry.file_name().to_string_lossy().into_owned());
@@ -455,7 +467,7 @@ pub fn upsert_path(
     make_default: bool,
     settings: Vec<(String, String)>,
 ) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
+    let mut list = load_path_or_empty(path)?;
     let changed = upsert_config(
         &mut list,
         name,
@@ -472,7 +484,7 @@ pub fn upsert_path(
 }
 
 pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
+    let mut list = load_path_or_empty(path)?;
     let changed = set_default_config(&mut list, serial, name);
     if changed {
         save_path(path, &list)?;
@@ -481,7 +493,7 @@ pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Resul
 }
 
 pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
+    let mut list = load_path_or_empty(path)?;
     let changed = rename_config(&mut list, old, new);
     if changed {
         save_path(path, &list)?;
@@ -490,7 +502,7 @@ pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
 }
 
 pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
+    let mut list = load_path_or_empty(path)?;
     let changed = delete_config(&mut list, name);
     if changed {
         save_path(path, &list)?;
@@ -498,9 +510,19 @@ pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
     Ok(changed)
 }
 
+fn load_path_or_empty(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
+    match load_path(path) {
+        Ok(list) => Ok(list),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) => Err(error),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    include!("pad_config_migration_tests.rs");
 
     fn sample(
         name: &str,

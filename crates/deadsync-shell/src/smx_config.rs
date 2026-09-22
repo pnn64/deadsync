@@ -130,7 +130,9 @@ pub fn apply_smx_saved_pad_config(pad: usize, name: &str) -> bool {
     if pad >= 2 || !deadsync_smx::get_info(pad).connected {
         return false;
     }
-    let configs = deadsync_profile::compat::load_pad_configs();
+    let Some(configs) = deadsync_profile::compat::load_pad_configs() else {
+        return false;
+    };
     configs
         .iter()
         .find(|config| config.name == name)
@@ -157,8 +159,7 @@ pub fn capture_smx_pad_config(pad: usize, name: &str, set_default: bool) -> bool
         Some(info.serial),
         set_default,
         data.to_settings(),
-    );
-    true
+    )
 }
 
 pub fn smx_assignment_plan(
@@ -297,7 +298,11 @@ pub fn resolve_smx_pad_config(
         preset: true,
         name: preset.as_str().to_owned(),
     };
-    let configs = deadsync_profile::compat::load_pad_configs();
+    let Some(configs) = deadsync_profile::compat::load_pad_configs() else {
+        // Leave hardware alone and keep the resolve signature invalid so a
+        // temporary migration/read failure can recover on the next attempt.
+        return (false, preset_label);
+    };
     match pad_config::resolve(&configs, deadsync_smx::BACKEND_ID, pad_type, serial).and_then(
         |config| {
             deadsync_smx::PadConfigData::from_settings(&config.settings)

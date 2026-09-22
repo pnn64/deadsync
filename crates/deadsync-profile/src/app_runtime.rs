@@ -1694,14 +1694,14 @@ pub fn machine_pad_config_path() -> PathBuf {
 /// Merge legacy per-profile pad configs into the machine store. Called at
 /// startup and again by every pad-config accessor (cheap once done), so the
 /// store is ready no matter which path touches it first. The machine file's
-/// existence marks the migration done; a failed write (e.g. disk full) leaves
+/// existence marks the migration done; a failed read or write leaves
 /// the flag unset so a later call retries instead of permanently orphaning
 /// the legacy configs.
-pub fn migrate_pad_configs() {
+pub fn migrate_pad_configs() -> bool {
     use std::sync::atomic::{AtomicBool, Ordering};
     static MIGRATED: AtomicBool = AtomicBool::new(false);
     if MIGRATED.load(Ordering::Acquire) {
-        return;
+        return true;
     }
     let path = machine_pad_config_path();
     match pad_config::migrate_machine_store(&path, &profiles_root()) {
@@ -1715,26 +1715,45 @@ pub fn migrate_pad_configs() {
                 );
             }
             MIGRATED.store(true, Ordering::Release);
+            true
         }
-        Err(error) => warn!(
-            "Failed to migrate pad configs into '{}': {error}",
-            path.display()
-        ),
+        Err(error) => {
+            warn!(
+                "Failed to migrate pad configs into '{}': {error}",
+                path.display()
+            );
+            false
+        }
     }
 }
 
-fn warn_pad_config_save(result: std::io::Result<bool>) {
-    if let Err(error) = result {
-        warn!(
-            "Failed to save {}: {error}",
-            machine_pad_config_path().display()
-        );
+fn warn_pad_config_save(result: std::io::Result<bool>) -> bool {
+    match result {
+        Ok(changed) => changed,
+        Err(error) => {
+            warn!(
+                "Failed to save {}: {error}",
+                machine_pad_config_path().display()
+            );
+            false
+        }
     }
 }
 
-pub fn load_pad_configs() -> Vec<PadConfigProfile> {
-    migrate_pad_configs();
-    pad_config::load_path(&machine_pad_config_path()).unwrap_or_default()
+/// `None` means the store is unavailable, not empty. Callers must retry rather
+/// than caching an empty list or applying a fallback hardware preset.
+pub fn load_pad_configs() -> Option<Vec<PadConfigProfile>> {
+    if !migrate_pad_configs() {
+        return None;
+    }
+    let path = machine_pad_config_path();
+    match pad_config::load_path(&path) {
+        Ok(configs) => Some(configs),
+        Err(error) => {
+            warn!("Failed to read pad configs '{}': {error}", path.display());
+            None
+        }
+    }
 }
 
 pub fn upsert_pad_config(
@@ -1744,8 +1763,10 @@ pub fn upsert_pad_config(
     serial: Option<String>,
     make_default: bool,
     settings: Vec<(String, String)>,
-) {
-    migrate_pad_configs();
+) -> bool {
+    if !migrate_pad_configs() {
+        return false;
+    }
     warn_pad_config_save(pad_config::upsert_path(
         &machine_pad_config_path(),
         name,
@@ -1754,11 +1775,13 @@ pub fn upsert_pad_config(
         serial,
         make_default,
         settings,
-    ));
+    ))
 }
 
 pub fn set_default_pad_config(serial: &str, name: &str) {
-    migrate_pad_configs();
+    if !migrate_pad_configs() {
+        return;
+    }
     warn_pad_config_save(pad_config::set_default_path(
         &machine_pad_config_path(),
         serial,
@@ -1767,7 +1790,9 @@ pub fn set_default_pad_config(serial: &str, name: &str) {
 }
 
 pub fn rename_pad_config(old: &str, new: &str) {
-    migrate_pad_configs();
+    if !migrate_pad_configs() {
+        return;
+    }
     warn_pad_config_save(pad_config::rename_path(
         &machine_pad_config_path(),
         old,
@@ -1776,7 +1801,9 @@ pub fn rename_pad_config(old: &str, new: &str) {
 }
 
 pub fn delete_pad_config(name: &str) {
-    migrate_pad_configs();
+    if !migrate_pad_configs() {
+        return;
+    }
     warn_pad_config_save(pad_config::delete_path(&machine_pad_config_path(), name));
 }
 

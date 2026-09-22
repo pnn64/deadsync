@@ -145,8 +145,9 @@ impl App {
                 && self
                     .pad_config_sync
                     .profiles_stale(pad, cursor_pad_type.as_deref())
+                && let Some(configs) = deadsync_profile::compat::load_pad_configs()
             {
-                let list = deadsync_profile::compat::load_pad_configs()
+                let list = configs
                     .into_iter()
                     .filter(|c| {
                         pad_profile_data::config_matches(

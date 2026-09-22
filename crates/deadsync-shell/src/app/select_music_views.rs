@@ -302,8 +302,9 @@ impl App {
             if self
                 .pad_config_sync
                 .profiles_stale(pad, smx.pad_type.as_deref())
+                && let Some(configs) = deadsync_profile::compat::load_pad_configs()
             {
-                let configs = deadsync_profile::compat::load_pad_configs()
+                let configs = configs
                     .into_iter()
                     .filter(|config| {
                         profile_data::pad_config::config_matches(
