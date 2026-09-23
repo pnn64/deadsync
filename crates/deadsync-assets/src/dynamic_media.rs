@@ -436,7 +436,7 @@ pub fn set_image_background_texture(
     video_rate: f32,
 ) -> Result<(String, DynamicBackgroundState), BackgroundTextureError> {
     let rgba = open_image_fallback(path)
-        .map(|img| img.to_rgba8())
+        .map(|img| img.into_rgba8())
         .map_err(|e| BackgroundTextureError::OpenImage(e.to_string()))?;
     let texture = backend
         .create_texture(&rgba, SamplerDesc::default())

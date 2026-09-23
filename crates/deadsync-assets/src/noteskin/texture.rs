@@ -1193,7 +1193,7 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let texture_key = slot.texture_key();
     let candidate = Path::new("assets").join(texture_key);
     let path = resolve_asset_path(&candidate);
-    let image = assets::open_image_fallback(&path).ok()?.to_rgba8();
+    let image = assets::open_image_fallback(&path).ok()?.into_rgba8();
 
     mine_gradient_samples_from_slot(
         &image,
