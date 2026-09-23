@@ -39,7 +39,7 @@ use deadsync_assets::noteskin::{self, Noteskin};
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
 };
-use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
@@ -791,6 +791,8 @@ pub struct State {
     song_background_key: Option<Arc<str>>,
     pub(crate) notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     pub(crate) notefield_hold_mesh_scratch: [RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    notefield_hold_emitters:
+        [RefCell<[deadsync_notefield::HoldEmitterState; MAX_COLS]>; MAX_PLAYERS],
     pub(crate) notefield_capture_scratch: [RefCell<CapturedActorScratch>; MAX_PLAYERS],
     notefield_broken_run_lookup: [BrokenRunLookup; MAX_PLAYERS],
     notefield_stream_progress_lookup: [StreamProgressLookup; MAX_PLAYERS],
@@ -1151,6 +1153,9 @@ impl State {
             song_background_key,
             notefield_model_cache,
             notefield_hold_mesh_scratch,
+            notefield_hold_emitters: std::array::from_fn(|_| {
+                RefCell::new([deadsync_notefield::HoldEmitterState::default(); MAX_COLS])
+            }),
             notefield_capture_scratch,
             notefield_broken_run_lookup,
             notefield_stream_progress_lookup,
@@ -5044,6 +5049,7 @@ pub fn draw_field(
         asset_manager.texture_context(),
         &state.notefield_model_cache,
         &state.notefield_hold_mesh_scratch,
+        &state.notefield_hold_emitters,
         &state.notefield_capture_scratch,
         notefield_camera_cache,
         &state.notefield_broken_run_lookup[player_idx],

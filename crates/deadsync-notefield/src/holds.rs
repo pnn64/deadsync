@@ -2971,6 +2971,7 @@ mod tests {
             bottomcap_inactive: Some(40),
             bottomcap_active: Some(41),
             explosion: None,
+            emitter: None,
         }
     }
 

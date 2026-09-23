@@ -15,6 +15,9 @@ pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 pub const ITG_BEAT_RECEPTOR_UPDATE: &str = "beat_receptor";
 pub const ITG_ACTOR_FRAME_CHILD: &str = "__deadsync_actor_frame_child";
+pub const ITG_HOLD_EMITTER: &str = "__deadsync_hold_emitter";
+pub const ITG_ROLL_EMITTER: &str = "__deadsync_roll_emitter";
+pub const MAX_HOLD_FLASHES: usize = 16;
 
 const STACK_LOWERCASE_KEY_CAPACITY: usize = 128;
 type Arg0Aliases<'a> = SmallVec<[&'a str; 4]>;
@@ -224,6 +227,9 @@ pub fn parse_actor_for_button(
                 condition_expr = find_post_call_property(content, outer_close, "Condition");
             }
         }
+        if let Some(name) = find_post_call_property(content, close, "Name") {
+            mark_hold_emitter(content, &name, &mut commands);
+        }
         decl.refs.push(ItgLuaRefDecl {
             button_override,
             element,
@@ -280,6 +286,112 @@ pub fn parse_actor_for_button(
     }
 
     decl
+}
+
+// Compile the classic named-child ring emitter, whose queued Emit command
+// survives HoldingOff once. Keep this recognition strict: an unrelated Flash
+// child must never turn into a continuously visible fallback explosion.
+fn mark_hold_emitter(content: &str, name: &str, commands: &mut HashMap<String, String>) {
+    if !commands.contains_key("flashcommand") {
+        return;
+    }
+    let name = name.trim_matches(['\'', '"']);
+    let Some(init) = command_body(content, "InitCommand", Some("self.emissions=")) else {
+        return;
+    };
+    if !init.contains("self.emitting=false")
+        || !init.contains("self.emitnumber=1")
+        || ![
+            format!("self:GetChild(\"{name}\")"),
+            format!("self:GetChild('{name}')"),
+        ]
+        .iter()
+        .any(|call| init.contains(call))
+    {
+        return;
+    }
+    let Some(emit) = command_body(content, "EmitCommand", None) else {
+        return;
+    };
+    let prefix = "self.emissions[self.emitnumber]:finishtweening():playcommand(";
+    let Some(after) = emit.strip_prefix(prefix) else {
+        return;
+    };
+    let Some((flash, after)) = after.split_once(')') else {
+        return;
+    };
+    if flash.trim_matches(['\'', '"']) != "Flash" {
+        return;
+    }
+    let Some(after) = after.strip_prefix("ifself.emitnumber==") else {
+        return;
+    };
+    let Some((count, after)) = after.split_once("thenself.emitnumber=1elseself.emitnumber=self.emitnumber+1endifself.emittingthenself:sleep(") else { return; };
+    let Ok(count) = count.parse::<usize>() else {
+        return;
+    };
+    let Some((delay, tail)) = after.split_once(')') else {
+        return;
+    };
+    let Some(interval) = crate::script::parse_script_number(delay) else {
+        return;
+    };
+    if !(1..=MAX_HOLD_FLASHES).contains(&count)
+        || !interval.is_finite()
+        || interval <= 0.0
+        || !matches!(
+            tail,
+            ":queuecommand(\"Emit\")end" | ":queuecommand('Emit')end"
+        )
+    {
+        return;
+    }
+    for (on, off, key) in [
+        ("HoldingOnCommand", "HoldingOffCommand", ITG_HOLD_EMITTER),
+        ("RollOnCommand", "RollOffCommand", ITG_ROLL_EMITTER),
+    ] {
+        let on = command_body(content, on, None);
+        if on.is_some_and(|body| {
+            matches!(
+                body.as_str(),
+                "self.emitting=trueself:finishtweening():playcommand(\"Emit\")"
+                    | "self.emitting=trueself:finishtweening():playcommand('Emit')"
+            )
+        }) && command_body(content, off, None).as_deref() == Some("self.emitting=false")
+        {
+            commands.insert(key.to_owned(), format!("{interval},{count}"));
+        }
+    }
+}
+
+fn command_body(content: &str, key: &str, contains: Option<&str>) -> Option<String> {
+    for (start, _) in content.match_indices(key) {
+        let mut cursor = skip_ws(content, start + key.len());
+        if content.as_bytes().get(cursor) != Some(&b'=') {
+            continue;
+        }
+        cursor = skip_ws(content, cursor + 1);
+        if !content[cursor..].starts_with("function") {
+            continue;
+        }
+        let open = skip_ws(content, cursor + "function".len());
+        if content.as_bytes().get(open) != Some(&b'(') {
+            continue;
+        }
+        let close = find_matching(content, open, '(', ')')?;
+        if content[open + 1..close].trim() != "self" {
+            continue;
+        }
+        let end = find_function_end(content, close + 1)?;
+        let body: String = content[close + 1..end]
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != ';')
+            .collect();
+        if contains.is_none_or(|needle| body.contains(needle)) {
+            return Some(body);
+        }
+    }
+    None
 }
 
 fn has_beat_fade_glow_update(content: &str, context: &CommandContext) -> bool {
@@ -1643,6 +1755,52 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_hold_emitter_preserves_interval_and_child_count() {
+        let script = r#"
+local flash = NOTESKIN:LoadActor(Var "Button", "Flash Dim")..{
+    Name="held",
+    InitCommand=function(self) self:blend(Blend.Add):diffuse(0,0,0,0) end,
+    FlashCommand=function(self) self:diffuse(1,1,0,0.9):linear(9/60):diffuse(0,0,0,1) end,
+}
+return Def.ActorFrame {
+    InitCommand=function(self)
+        self.emitting=false
+        self.emitnumber=1
+        self.emissions=self:GetChild("held")
+    end,
+    HoldingOnCommand=function(self) self.emitting=true; self:finishtweening():playcommand("Emit") end,
+    HoldingOffCommand=function(self) self.emitting=false end,
+    RollOnCommand=function(self) self.emitting=true; self:finishtweening():playcommand("Emit") end,
+    RollOffCommand=function(self) self.emitting=false end,
+    EmitCommand=function(self)
+        self.emissions[self.emitnumber]:finishtweening():playcommand("Flash")
+        if self.emitnumber==3 then self.emitnumber=1 else self.emitnumber=self.emitnumber+1 end
+        if self.emitting then self:sleep(4/60):queuecommand("Emit") end
+    end,
+    flash, flash, flash,
+}
+"#;
+        let metrics = noteskin_itg::IniData::default();
+        let decl = parse_actor_decl(script, &metrics);
+        for key in [ITG_HOLD_EMITTER, ITG_ROLL_EMITTER] {
+            let (delay, count) = decl.refs[0].commands[key].split_once(',').unwrap();
+            assert_eq!(count, "3");
+            assert!((delay.parse::<f32>().unwrap() - 4.0 / 60.0).abs() < 1e-6);
+        }
+        // A named Flash sprite alone does not establish the looping protocol.
+        for changed in [
+            script.replace("self:GetChild(\"held\")", "self:GetChild(\"unrelated\")"),
+            script.replace("self:sleep(4/60)", "self:sleep(0)"),
+            script.replace("self.emitnumber==3", "self.emitnumber==1000"),
+            script.replace("self.emitting=false end", "self.emitting=true end"),
+        ] {
+            let decl = parse_actor_decl(&changed, &metrics);
+            assert!(!decl.refs[0].commands.contains_key(ITG_HOLD_EMITTER));
+            assert!(!decl.refs[0].commands.contains_key(ITG_ROLL_EMITTER));
+        }
+    }
 
     #[test]
     fn frame_children_keep_independent_animation() {

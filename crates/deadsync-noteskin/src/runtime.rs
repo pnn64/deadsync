@@ -289,6 +289,41 @@ pub struct HoldVisuals<T> {
     pub bottomcap_inactive: Option<T>,
     pub bottomcap_active: Option<T>,
     pub explosion: Option<T>,
+    pub emitter: Option<HoldEmitter<T>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HoldEmitter<T> {
+    pub flash: TapExplosionLayer<T>,
+    pub interval_s: f32,
+    pub count: usize,
+}
+
+fn hold_emitter<T: Clone>(layers: &[ItgResolvedSprite<T>], key: &str) -> Option<HoldEmitter<T>> {
+    let layer = layers
+        .iter()
+        .find(|layer| layer.commands.contains_key(key))?;
+    let (interval, count) = layer.commands.get(key)?.split_once(',')?;
+    let interval_s: f32 = interval.parse().ok()?;
+    let count = count.parse().ok()?;
+    if !interval_s.is_finite()
+        || interval_s <= 0.0
+        || !(1..=actor::MAX_HOLD_FLASHES).contains(&count)
+    {
+        return None;
+    }
+    let animation = parse_explosion_animation_with_init(
+        layer.commands.get("initcommand").map(String::as_str),
+        layer.commands.get("flashcommand")?,
+    )?;
+    Some(HoldEmitter {
+        flash: TapExplosionLayer {
+            slot: layer.slot.clone(),
+            animation,
+        },
+        interval_s,
+        count,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -418,6 +453,7 @@ impl<T> Default for HoldVisuals<T> {
             bottomcap_inactive: None,
             bottomcap_active: None,
             explosion: None,
+            emitter: None,
         }
     }
 }
@@ -551,6 +587,7 @@ pub fn itg_hold_visuals_from_parts<T: Clone>(parts: HoldVisualParts<T>) -> HoldV
             .or_else(|| parts.bottomcap_inactive.clone()),
         bottomcap_inactive: parts.bottomcap_inactive,
         explosion: None,
+        emitter: None,
     }
 }
 
@@ -610,6 +647,7 @@ pub fn itg_roll_visuals_from_parts<T: Clone>(
             .bottomcap_inactive
             .or_else(|| hold.bottomcap_inactive.clone()),
         explosion: None,
+        emitter: None,
     }
 }
 
@@ -639,6 +677,7 @@ pub fn default_hold_visuals<T: Clone>(
             bottomcap_inactive: hold.bottomcap_inactive.clone(),
             bottomcap_active: hold.bottomcap_active.clone(),
             explosion: None,
+            emitter: None,
         });
     (hold, roll)
 }
@@ -2507,6 +2546,8 @@ fn itg_noteskin_runtime_selected<T: Clone>(
             Vec::new()
         };
     if !load.preview || load.has(SkinPart::HoldExplosions) {
+        hold.emitter = hold_emitter(&explosion_sprites, actor::ITG_HOLD_EMITTER);
+        roll.emitter = hold_emitter(&explosion_sprites, actor::ITG_ROLL_EMITTER);
         let hold_explosion_request = compiled.load_request_ref(base_button, "Hold Explosion");
         let hold_explosion_blank = hold_explosion_request.blank;
         let hold_explosion_sprites = resolve_sprites(base_button, "Hold Explosion");
@@ -2552,6 +2593,8 @@ fn itg_noteskin_runtime_selected<T: Clone>(
             );
 
             {
+                let mut hold_emitters = SmallVec::<[Option<HoldEmitter<T>>; 10]>::new();
+                let mut roll_emitters = SmallVec::<[Option<HoldEmitter<T>>; 10]>::new();
                 let mut resolve_hold_explosion_for_button =
                     |button: &str,
                      active_key: &str,
@@ -2565,6 +2608,17 @@ fn itg_noteskin_runtime_selected<T: Clone>(
                             resolved = resolve_sprites(button, "Explosion");
                             &resolved
                         };
+                        if active_key == "holdingoncommand" {
+                            hold_emitters.push(hold_emitter(
+                                column_explosion_sprites,
+                                actor::ITG_HOLD_EMITTER,
+                            ));
+                        } else {
+                            roll_emitters.push(hold_emitter(
+                                column_explosion_sprites,
+                                actor::ITG_ROLL_EMITTER,
+                            ));
+                        }
                         let request = compiled.load_request_ref(button, request_element);
                         let source_sprites = if request.blank {
                             Vec::new()
@@ -2591,6 +2645,13 @@ fn itg_noteskin_runtime_selected<T: Clone>(
                     roll.explosion.as_ref(),
                     &mut resolve_hold_explosion_for_button,
                 );
+                for (visuals, emitter) in hold_columns
+                    .iter_mut()
+                    .zip(hold_emitters)
+                    .chain(roll_columns.iter_mut().zip(roll_emitters))
+                {
+                    visuals.emitter = emitter;
+                }
             }
         }
     }
@@ -3000,6 +3061,7 @@ impl<T: Clone> NoteskinRuntime<T> {
                     .chain(self.roll_columns.iter_mut().zip(&source.roll_columns))
                 {
                     target.explosion.clone_from(&original.explosion);
+                    target.emitter.clone_from(&original.emitter);
                 }
             }
         }
@@ -3170,6 +3232,9 @@ impl<T> NoteskinRuntime<T> {
             }
             if let Some(slot) = h.explosion.as_ref() {
                 visit(slot);
+            }
+            if let Some(emitter) = h.emitter.as_ref() {
+                visit(&emitter.flash.slot);
             }
         };
         visit_hold(&self.hold);
@@ -3696,6 +3761,7 @@ mod tests {
             bottomcap_inactive: Some(Slot(7)),
             bottomcap_active: Some(Slot(8)),
             explosion: None,
+            emitter: None,
         };
 
         let roll = itg_roll_visuals_from_parts(
@@ -5913,6 +5979,14 @@ mod tests {
         source.hold.head_active = Some(Slot(6));
         source.hold.body_active = Some(Slot(7));
         source.hold.explosion = Some(Slot(8));
+        source.hold.emitter = Some(super::HoldEmitter {
+            flash: TapExplosionLayer {
+                slot: Slot(11),
+                animation: ExplosionAnimation::default(),
+            },
+            interval_s: 4.0 / 60.0,
+            count: 3,
+        });
         source.hold_columns = vec![source.hold.clone()];
         source.mines = vec![Some(Slot(9))];
         source.mine_frames = vec![Some(Slot(10))];
@@ -5938,9 +6012,10 @@ mod tests {
         assert_eq!(hold.body_inactive, Some(Slot(3)));
         assert_eq!(hold.head_inactive, Some(Slot(2)));
         assert_eq!(hold.explosion, Some(Slot(8)));
+        assert_eq!(hold.emitter.as_ref().unwrap().flash.slot, Slot(11));
         let mut uploaded = Vec::new();
         base.for_each_slot(|slot| uploaded.push(slot.0));
-        for id in [4, 5, 6, 7, 8, 9, 10] {
+        for id in [4, 5, 6, 7, 8, 9, 10, 11] {
             assert!(
                 uploaded.contains(&id),
                 "component slot {id} reaches texture/model prewarming"

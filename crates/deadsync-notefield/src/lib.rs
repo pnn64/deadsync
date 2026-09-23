@@ -46,7 +46,7 @@ pub use feedback::COLUMN_COUNTDOWN_SLOTS_PER_PLAYER;
 pub use field_frame::{
     NotefieldFieldFrameView, NotefieldFieldResult, actor_from_flat_draw, compose_notefield_field,
 };
-pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
+pub use frame_feedback::{HoldEmitterState, NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
     ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
     NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,

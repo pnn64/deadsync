@@ -35,6 +35,36 @@ fn rosewood_loads_skin_and_compiles_chart() {
     assert!(skin.notes.iter().all(|slot| slot.model.is_some()));
     assert!(skin.notes.iter().any(|slot| slot.uv_velocity[1] == -1.0));
     assert!(skin.mine_fill_slots.iter().all(Option::is_none));
+    for col in 0..4 {
+        for is_roll in [false, true] {
+            let emitter = skin
+                .hold_visuals_for_col(col, is_roll)
+                .emitter
+                .as_ref()
+                .expect("holding/roll command compiles its named-child emitter");
+            assert_eq!(emitter.count, 3);
+            assert!((emitter.interval_s - 4.0 / 60.0).abs() < 1e-6);
+            assert!(emitter.flash.slot.texture_key().contains("Flash Dim"));
+            assert_eq!(emitter.flash.slot.def.rotation_deg, [90, 0, 180, -90][col]);
+            let flash = &emitter.flash.animation;
+            assert!(flash.blend_add);
+            assert!((flash.duration() - 9.0 / 60.0).abs() < 1e-6);
+            let start = flash.state_at(0.0);
+            assert_eq!(start.zoom, 1.0);
+            for (actual, expected) in
+                start
+                    .diffuse
+                    .into_iter()
+                    .zip([1.0, 240.0 / 255.0, 100.0 / 255.0, 0.9])
+            {
+                assert!((actual - expected).abs() < 1e-5, "{start:?}");
+            }
+            let halfway = flash.state_at(0.075);
+            assert!((halfway.zoom - 1.125).abs() < 1e-6);
+            assert!((halfway.diffuse[0] - 0.5).abs() < 1e-6);
+            assert_eq!(flash.state_at(0.151).diffuse, [0.0, 0.0, 0.0, 1.0]);
+        }
+    }
     for slot in &skin.receptor_off {
         assert_eq!(slot.beat_receptor_start, Some(-8.0));
         assert_eq!(slot.frame_index(0.0, -9.0), 2);

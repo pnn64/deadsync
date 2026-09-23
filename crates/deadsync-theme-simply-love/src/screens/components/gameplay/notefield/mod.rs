@@ -4,7 +4,7 @@ use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
-use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
     TapExplosionOptions, VisibilityEffects, VisualEffects, blue_fantastic_window_ms,
@@ -607,6 +607,7 @@ pub(crate) fn compose_frame(
     textures: &impl deadlib_present::texture::TextureContext,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     hold_mesh_scratch: &[RefCell<HoldMeshScratch>; MAX_PLAYERS],
+    hold_emitters: &[RefCell<[deadsync_notefield::HoldEmitterState; MAX_COLS]>; MAX_PLAYERS],
     capture_scratch: &[RefCell<CapturedActorScratch>; MAX_PLAYERS],
     camera_caches: &mut [NotefieldCameraCache; MAX_PLAYERS],
     broken_run_lookup: &BrokenRunLookup,
@@ -880,6 +881,7 @@ pub(crate) fn compose_frame(
 
     let noteskin_sprite_source =
         |slot: &SpriteSlot| slot.actor_texture_source(actor_resources, textures);
+    let mut hold_emitters = hold_emitters[player_idx].borrow_mut();
     let feedback_frame = NotefieldFeedbackFrameView {
         column_cues: options
             .frame_features
@@ -917,8 +919,34 @@ pub(crate) fn compose_frame(
                 return NotefieldLaneFeedback::default();
             }
             let col = col_start + local_col;
+            let showing = state
+                .active_hold(col)
+                .filter(|active| {
+                    request
+                        .chart
+                        .notes
+                        .get(active.note_index)
+                        .is_some_and(|note| {
+                            deadsync_gameplay::hold_explosion_active(
+                                Some(active),
+                                prepared.current_beat,
+                                note.beat,
+                            )
+                        })
+                })
+                .map(|active| matches!(active.note_type, deadsync_core::note::NoteType::Roll));
+            let emitter = tap_explosion_noteskin.and_then(|skin| {
+                skin.hold_visuals_for_col(
+                    local_col,
+                    showing.unwrap_or(hold_emitters[local_col].is_roll),
+                )
+                .emitter
+                .as_ref()
+            });
+            hold_emitters[local_col].update(elapsed_screen, showing, emitter);
             NotefieldLaneFeedback {
                 active_hold: state.active_hold(col),
+                hold_emitter: hold_emitters[local_col],
                 receptor_bop_zoom: if options.hide_targets {
                     0.0
                 } else {

@@ -14,7 +14,7 @@ use deadsync_gameplay::{
     ActiveColumnFlash, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, ColumnCue,
     hold_explosion_active,
 };
-use deadsync_noteskin::NoteskinSlot;
+use deadsync_noteskin::{HoldEmitter, NoteskinSlot, actor::MAX_HOLD_FLASHES};
 #[cfg(test)]
 use deadsync_noteskin::{ReceptorIdleGlow, ReceptorReverseBehavior};
 #[cfg(test)]
@@ -40,6 +40,76 @@ pub struct NotefieldLaneFeedback<'a> {
     pub active_hold: Option<&'a ActiveHold>,
     pub receptor_bop_zoom: f32,
     pub receptor_press_visual: Option<(f32, f32)>,
+    pub hold_emitter: HoldEmitterState,
+}
+
+/// Song-lifetime presentation state. Fixed storage, no allocations or asset
+/// work; even after a long frame, update visits at most MAX_HOLD_FLASHES slots.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct HoldEmitterState {
+    pub is_roll: bool,
+    showing: bool,
+    next_emit_s: Option<f64>,
+    next_child: usize,
+    last_time_s: f32,
+    flashes: [Option<f32>; MAX_HOLD_FLASHES],
+}
+
+impl HoldEmitterState {
+    pub fn update<T>(&mut self, now: f32, showing: Option<bool>, emitter: Option<&HoldEmitter<T>>) {
+        let Some(emitter) = emitter.filter(|e| {
+            e.count > 0
+                && e.count <= MAX_HOLD_FLASHES
+                && e.interval_s.is_finite()
+                && e.interval_s > 0.0
+        }) else {
+            *self = Self::default();
+            return;
+        };
+        if !now.is_finite() {
+            return;
+        }
+        if now < self.last_time_s {
+            *self = Self::default();
+        }
+        let interval = f64::from(emitter.interval_s);
+        if let Some(next) = self.next_emit_s.filter(|next| *next < f64::from(now)) {
+            let due = if self.showing {
+                ((f64::from(now) - next) / interval).ceil() as usize
+            } else {
+                1
+            };
+            // Skip overwritten emissions analytically instead of catching up
+            // every queued command after a pause or stalled frame.
+            for offset in due.saturating_sub(emitter.count)..due {
+                let child = (self.next_child + offset % emitter.count) % emitter.count;
+                // ActorFrame updates its commands before its children. A
+                // newly flashed child receives the entire frame delta, even
+                // when Emit became due partway through that frame.
+                self.flashes[child] = Some(self.last_time_s);
+            }
+            self.next_child = (self.next_child + due % emitter.count) % emitter.count;
+            self.next_emit_s = self.showing.then_some(next + due as f64 * interval);
+        }
+        if let Some(is_roll) = showing {
+            if !self.showing || is_roll != self.is_roll {
+                // finishtweening on the parent also finishes every child.
+                self.flashes.fill(None);
+                self.flashes[self.next_child % emitter.count] = Some(now);
+                self.next_child = (self.next_child + 1) % emitter.count;
+                self.next_emit_s = Some(f64::from(now) + interval);
+            }
+            self.is_roll = is_roll;
+        }
+        self.showing = showing.is_some();
+        self.last_time_s = now;
+        let duration = emitter.flash.animation.duration();
+        for flash in &mut self.flashes {
+            if flash.is_some_and(|start| now - start > duration) {
+                *flash = None;
+            }
+        }
+    }
 }
 
 /// Borrowed per-frame feedback emitted around the receptor row.
@@ -303,6 +373,38 @@ pub(crate) fn compose_notefield_feedback<S, F>(
                 sprite_source,
             );
         }
+        if !hidden
+            && options.hold_explosion_enabled
+            && let Some(emitter) = tap_explosion.and_then(|skin| {
+                skin.hold_visuals_for_col(local_col, lane.hold_emitter.is_roll)
+                    .emitter
+                    .as_ref()
+            })
+        {
+            for started in lane.hold_emitter.flashes[..emitter.count].iter().flatten() {
+                let age = (elapsed_screen - started).max(0.0);
+                compose_explosion_layers(
+                    draws,
+                    ExplosionComposeRequest {
+                        layers: std::slice::from_ref(&emitter.flash),
+                        elapsed_s: age,
+                        effect_elapsed_s: age,
+                        current_frame_beat: current_beat,
+                        relative_frame_beat: None,
+                        uv_elapsed_s: elapsed_screen,
+                        center,
+                        field_zoom,
+                        effect_zoom,
+                        rotation: ExplosionRotation::Tap {
+                            rotation_y_deg: 0.0,
+                            extra_z_deg: confusion_rotation_deg,
+                        },
+                        z: crate::style::HOLD_EXPLOSION_Z,
+                    },
+                    sprite_source,
+                );
+            }
+        }
     }
 
     // Tap explosions are independent of the concrete "Hide Combo
@@ -402,7 +504,13 @@ fn feedback_lane_work_mask(
     }
     let mut mask = 0;
     for local_col in 0..num_cols {
-        let hold_active = hold_explosions_enabled && lanes[local_col].active_hold.is_some();
+        let hold_active = hold_explosions_enabled
+            && (lanes[local_col].active_hold.is_some()
+                || lanes[local_col]
+                    .hold_emitter
+                    .flashes
+                    .iter()
+                    .any(Option::is_some));
         let tap_active =
             tap_explosions_available && tap_explosions.get(local_col).is_some_and(Option::is_some);
         let mine_active = mine_explosions_available
@@ -1020,6 +1128,150 @@ mod tests {
         }
     }
 
+    fn hold_emitter() -> HoldEmitter<TestSlot> {
+        HoldEmitter {
+            flash: deadsync_noteskin::TapExplosionLayer {
+                slot: TestSlot::new("held-flash"),
+                animation: deadsync_noteskin::parse_explosion_animation(
+                    "blend,BlendMode_Add;diffuse,1,0.9411765,0.39215687,0.9;zoom,1;linear,0.15;diffuse,0,0,0,1;zoom,1.25",
+                ),
+            },
+            interval_s: 4.0 / 60.0,
+            count: 3,
+        }
+    }
+
+    #[test]
+    fn hold_emitter_cycles_children_and_finishes_queued_flash_after_off() {
+        let emitter = hold_emitter();
+        let mut state = HoldEmitterState::default();
+        state.update(0.0, Some(false), Some(&emitter));
+        assert_eq!(&state.flashes[..3], &[Some(0.0), None, None]);
+        state.update(0.05, Some(false), Some(&emitter));
+        state.update(0.10, Some(false), Some(&emitter));
+        state.update(0.14, Some(false), Some(&emitter));
+        assert_eq!(&state.flashes[..3], &[Some(0.0), Some(0.05), Some(0.10)]);
+        state.update(0.14, None, Some(&emitter));
+        state.update(0.19, None, Some(&emitter));
+        state.update(0.21, None, Some(&emitter));
+        assert_eq!(&state.flashes[..3], &[Some(0.19), None, Some(0.10)]);
+        assert!(state.next_emit_s.is_none());
+        state.update(0.40, None, Some(&emitter));
+        assert!(state.flashes.iter().all(Option::is_none));
+        state.update(0.41, Some(true), Some(&emitter));
+        assert!(state.is_roll);
+        assert_eq!(&state.flashes[..3], &[None, Some(0.41), None]);
+        state.update(0.41, Some(true), Some(&emitter));
+        assert_eq!(
+            state.next_child, 2,
+            "drawing another view must not emit twice"
+        );
+        state.update(0.45, None, Some(&emitter));
+        state.update(0.46, Some(true), Some(&emitter));
+        assert_eq!(
+            &state.flashes[..3],
+            &[None, None, Some(0.46)],
+            "On finishes old child tweens"
+        );
+        state.update(1000.0, Some(true), Some(&emitter));
+        assert!(
+            state.flashes.iter().all(Option::is_none),
+            "children consume the entire long frame delta"
+        );
+        state.update(0.0, Some(false), Some(&emitter));
+        assert_eq!(
+            &state.flashes[..3],
+            &[Some(0.0), None, None],
+            "rewinding resets the emitter"
+        );
+        let mut emitter = emitter;
+        emitter.interval_s = 0.125;
+        let mut state = HoldEmitterState::default();
+        state.update(0.0, Some(false), Some(&emitter));
+        state.update(0.125, Some(false), Some(&emitter));
+        assert_eq!(
+            state.next_child, 1,
+            "a zero-duration command waits for positive remaining delta"
+        );
+        state.update(0.25, Some(false), Some(&emitter));
+        assert_eq!(
+            state.next_child, 2,
+            "an exact second boundary must not emit twice"
+        );
+    }
+
+    #[test]
+    fn held_flash_layers_draw_additively_without_tap_or_receptor() {
+        let mut skin = noteskin();
+        skin.hold_columns[0].emitter = Some(hold_emitter());
+        skin.hold_columns[0].explosion = None;
+        skin.hold.explosion = None;
+        let emitter = skin.hold_columns[0].emitter.as_ref().unwrap();
+        let mut state = HoldEmitterState::default();
+        for now in [0.0, 0.05, 0.10, 0.14] {
+            state.update(now, Some(false), Some(emitter));
+        }
+        // Off must retain the fading children even with no active hold or tap.
+        state.update(0.14, None, Some(emitter));
+        let timing = TimingData::default();
+        let notes = [note(0)];
+        let hides = SongLuaNoteHideWindows::default();
+        let mut request = request(
+            &skin,
+            &timing,
+            &notes,
+            &hides,
+            FieldPlacement::P1,
+            0,
+            1,
+            2,
+            2,
+        );
+        request.options.hide_targets = true;
+        request.visual.elapsed_screen_s = 0.14;
+        let prepared = prepare_notefield(&request).unwrap();
+        let frame = NotefieldFeedbackFrameView {
+            column_cues: None,
+            column_cue_cursor: None,
+            crossover_cues: None,
+            crossover_cue_entries: None,
+            crossover_cue_cursor: None,
+            column_flashes: None,
+            tap_explosions: None,
+            mine_explosions: None,
+            lanes: std::array::from_fn(|col| NotefieldLaneFeedback {
+                hold_emitter: if col == 0 {
+                    state
+                } else {
+                    HoldEmitterState::default()
+                },
+                ..Default::default()
+            }),
+            countdown_font: "test",
+            countdown_text_slot: 0,
+        };
+        let mut draws = Vec::new();
+        compose_notefield_feedback(
+            &mut draws,
+            &mut Vec::new(),
+            &mut ModelMeshCache::default(),
+            &request,
+            &prepared,
+            &frame,
+            &source,
+        );
+        assert_eq!(sprite_keys(&draws), ["held-flash"; 3]);
+        for (draw, age) in draws.iter().zip([0.14, 0.09, 0.04]) {
+            let FlatDraw::Sprite(sprite) = draw else {
+                panic!("expected flash sprite");
+            };
+            assert_eq!(sprite.blend, deadlib_render_core::BlendMode::Add);
+            assert!((sprite.tint[0] - (1.0 - age / 0.15)).abs() < 1e-5);
+            assert!((sprite.size[0] / 64.0 - (1.0 + age / 0.15 * 0.25)).abs() < 1e-5);
+            assert_eq!(sprite.z, crate::style::HOLD_EXPLOSION_Z);
+        }
+    }
+
     fn sprite_keys(draws: &[FlatDraw]) -> Vec<&str> {
         draws
             .iter()
@@ -1103,6 +1355,7 @@ mod tests {
                     active_hold: Some(&hold),
                     receptor_bop_zoom: 1.0,
                     receptor_press_visual: Some((1.0, 1.0)),
+                    ..NotefieldLaneFeedback::default()
                 },
                 1 => NotefieldLaneFeedback {
                     receptor_bop_zoom: 1.0,
@@ -1638,6 +1891,7 @@ mod tests {
                         active_hold: Some(&holds[lane]),
                         receptor_bop_zoom: 1.0,
                         receptor_press_visual: Some((1.0, 1.0)),
+                        ..NotefieldLaneFeedback::default()
                     }
                 } else {
                     NotefieldLaneFeedback::default()

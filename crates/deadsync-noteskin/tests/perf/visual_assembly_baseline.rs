@@ -23,6 +23,7 @@ pub fn itg_hold_visuals_from_parts<T: Clone>(parts: HoldVisualParts<T>) -> HoldV
         bottomcap_inactive: parts.bottomcap_inactive.clone(),
         bottomcap_active: parts.bottomcap_active.or(parts.bottomcap_inactive),
         explosion: None,
+        emitter: None,
     }
 }
 
@@ -92,6 +93,7 @@ pub fn itg_roll_visuals_from_parts<T: Clone>(
             .or_else(|| hold.bottomcap_active.clone())
             .or_else(|| hold.bottomcap_inactive.clone()),
         explosion: None,
+        emitter: None,
     }
 }
 
