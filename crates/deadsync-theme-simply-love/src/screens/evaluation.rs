@@ -16,8 +16,8 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::{
     evaluation::{self as eval_panes, FooterClock, eval_grades, eval_graphs},
     shared::{
-        banner as shared_banner, lobby_hud, mode_pads, screen_bar, test_input, timers, transitions,
-        visual_style_bg,
+        banner as shared_banner, heart_rate, lobby_hud, mode_pads, screen_bar, test_input, timers,
+        transitions, visual_style_bg,
     },
 };
 use deadlib_present::actors::{Actor, SizeSpec};
@@ -25,7 +25,7 @@ use deadlib_present::cache::{
     SharedStrCache, TextCache, cached_shared_str, cached_text, shared_str_cache_with_capacity,
     text_cache_with_capacity,
 };
-use deadlib_present::space::widescale;
+use deadlib_present::space::{is_wide, widescale};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render_core::{BlendMode, MeshVertex};
 use deadsync_config::theme::GameFlag;
@@ -2607,6 +2607,10 @@ pub struct State {
     gameplay_elapsed: f32,
     session_timer: timers::TimerText,
     gameplay_timer: timers::TimerText,
+    heart_rate_view: heart_rate::HeartRateView,
+    // Screen-owned so each new result receives a reading even if the monitor
+    // has not published another sample since the previous evaluation.
+    heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
     /// Immutable per-result Nice eligibility compiled with `score_info`.
@@ -2710,6 +2714,8 @@ impl Clone for State {
             gameplay_elapsed: self.gameplay_elapsed,
             session_timer: self.session_timer.clone(),
             gameplay_timer: self.gameplay_timer.clone(),
+            heart_rate_view: self.heart_rate_view,
+            heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
             nice_scores: self.nice_scores,
@@ -2784,6 +2790,19 @@ impl Clone for State {
             submit_layout_cache: std::array::from_fn(|_| RefCell::new(None)),
         }
     }
+}
+
+pub const fn heart_rate_generation(state: &State) -> Option<(bool, u64, u64)> {
+    state.heart_rate_generation
+}
+
+pub const fn set_heart_rate_view(
+    state: &mut State,
+    generation: (bool, u64, u64),
+    view: heart_rate::HeartRateView,
+) {
+    state.heart_rate_view = view;
+    state.heart_rate_generation = Some(generation);
 }
 
 /// Synchronizes shell-owned elapsed values and their retained presentation.
@@ -3148,6 +3167,8 @@ pub fn init(init_view: EvaluationInitView) -> State {
         gameplay_elapsed: 0.0,
         session_timer: timers::TimerText::default(),
         gameplay_timer: timers::TimerText::default(),
+        heart_rate_view: heart_rate::HeartRateView::default(),
+        heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
         nice_scores,
@@ -3464,6 +3485,8 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         session_timer: timers::TimerText::default(),
         gameplay_timer: timers::TimerText::default(),
+        heart_rate_view: heart_rate::HeartRateView::default(),
+        heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
         nice_scores,
@@ -5374,6 +5397,45 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ThemeEffect::sequence(favorite_effect, effect)
 }
 
+fn push_heart_rates(actors: &mut Vec<Actor>, state: &State) {
+    if !is_wide() {
+        return;
+    }
+    let is_versus = state.context.play_style.is_versus();
+    let slots = [
+        Some((
+            if is_versus {
+                profile_data::PlayerSide::P1
+            } else {
+                state.context.player_side
+            },
+            screen_center_y() + if is_versus { 23.0 } else { 111.0 },
+        )),
+        is_versus.then_some((profile_data::PlayerSide::P2, screen_center_y() + 111.0)),
+    ];
+    // Evaluation's panels span the central 610 pixels. Center the pulsing heart
+    // and three-digit readout in the left gutter, below the upper breakdown.
+    // At 0.8 zoom they extend about 12 pixels left and 51 pixels right of x.
+    let panel_left = screen_center_x() - 305.0;
+    let x = (panel_left * 0.5 - 20.0).max(12.0);
+    for (side, y) in slots.into_iter().flatten() {
+        let player_idx = profile_data::player_side_index(side);
+        let reading = state.heart_rate_view.players[player_idx];
+        if state.context.players[player_idx].joined && reading.configured && reading.connected {
+            heart_rate::push(
+                actors,
+                reading,
+                heart_rate::text(reading.bpm),
+                state.screen_elapsed,
+                x,
+                y,
+                0.8,
+                121,
+            );
+        }
+    }
+}
+
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
@@ -5448,6 +5510,8 @@ pub fn push_actors(
         return;
     };
     let result_text = &state.result_text[score_index];
+
+    push_heart_rates(actors, state);
 
     // --- Lower Stats Pane Background ---
     {

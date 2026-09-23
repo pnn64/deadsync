@@ -1,4 +1,4 @@
-use deadsync_theme_simply_love::screens::{gameplay, player_options, select_music};
+use deadsync_theme_simply_love::screens::{evaluation, gameplay, player_options, select_music};
 
 /// Game-thread owner for heart-rate configuration invalidation.
 ///
@@ -65,7 +65,7 @@ impl Runtime {
         state: &mut select_music::State,
         enabled: bool,
     ) -> bool {
-        let key = select_music_view_key(enabled, heart_rate_view_generation);
+        let key = readings_view_key(enabled, heart_rate_view_generation);
         if self.select_music_view_key == Some(key) {
             return false;
         }
@@ -95,10 +95,7 @@ fn heart_rate_view_generation() -> (u64, u64) {
     )
 }
 
-fn select_music_view_key(
-    enabled: bool,
-    generation: impl FnOnce() -> (u64, u64),
-) -> (bool, u64, u64) {
+fn readings_view_key(enabled: bool, generation: impl FnOnce() -> (u64, u64)) -> (bool, u64, u64) {
     let (readings, profiles) = if enabled { generation() } else { (0, 0) };
     (enabled, readings, profiles)
 }
@@ -140,6 +137,20 @@ fn readings_view() -> gameplay::HeartRateView {
     gameplay::HeartRateView { players }
 }
 
+pub(crate) fn refresh_evaluation(state: &mut evaluation::State, enabled: bool) -> bool {
+    let generation = readings_view_key(enabled, heart_rate_view_generation);
+    if evaluation::heart_rate_generation(state) == Some(generation) {
+        return false;
+    }
+    let view = if enabled {
+        readings_view()
+    } else {
+        gameplay::HeartRateView::default()
+    };
+    evaluation::set_heart_rate_view(state, generation, view);
+    true
+}
+
 pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
     let generation = heart_rate_view_generation();
     if gameplay::heart_rate_generation(state) == generation {
@@ -151,7 +162,7 @@ pub(crate) fn refresh_gameplay(state: &mut gameplay::State) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{runtime_config_changed, select_music_view_key};
+    use super::{readings_view_key, runtime_config_changed};
 
     #[test]
     fn runtime_config_only_invalidates_on_input_changes() {
@@ -164,16 +175,16 @@ mod tests {
     }
 
     #[test]
-    fn disabled_select_music_view_does_not_read_the_generation() {
-        let key = select_music_view_key(false, || panic!("disabled view read generation"));
+    fn disabled_readings_view_does_not_read_the_generation() {
+        let key = readings_view_key(false, || panic!("disabled view read generation"));
         assert_eq!(key, (false, 0, 0));
-        assert_eq!(select_music_view_key(true, || (9, 4)), (true, 9, 4));
+        assert_eq!(readings_view_key(true, || (9, 4)), (true, 9, 4));
     }
 
     #[test]
-    fn select_music_view_key_tracks_max_heart_rate_changes() {
-        let before = select_music_view_key(true, || (9, 4));
-        let after = select_music_view_key(true, || (9, 5));
+    fn readings_view_key_tracks_max_heart_rate_changes() {
+        let before = readings_view_key(true, || (9, 4));
+        let after = readings_view_key(true, || (9, 5));
 
         assert_ne!(before, after);
     }

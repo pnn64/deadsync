@@ -3785,6 +3785,12 @@ impl App {
             {
                 self.heart_rate.refresh_player_options(state);
             }
+            if self.state.screens.current_screen == CurrentScreen::Evaluation {
+                crate::heart_rate::refresh_evaluation(
+                    &mut self.state.screens.evaluation_state,
+                    frame_policy.machine_enable_heart_rate_monitors,
+                );
+            }
         }
         let maintenance_us = elapsed_us_since(maintenance_started);
 
