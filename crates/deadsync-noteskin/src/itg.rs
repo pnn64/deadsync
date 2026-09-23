@@ -943,11 +943,13 @@ const NOTE_METRIC_KEYS: [NoteMetricKeys; crate::NOTE_ANIM_PART_COUNT] = [
     note_metric_keys!("HoldBody"),
     note_metric_keys!("HoldBottomCap"),
     note_metric_keys!("HoldTail"),
-    note_metric_keys!("RollHead"),
-    note_metric_keys!("RollTopCap"),
-    note_metric_keys!("RollBody"),
-    note_metric_keys!("RollBottomCap"),
-    note_metric_keys!("RollTail"),
+    // ITGmania selects roll graphics by subtype, but uses the corresponding
+    // Hold* metrics for their animation and texture translation as well.
+    note_metric_keys!("HoldHead"),
+    note_metric_keys!("HoldTopCap"),
+    note_metric_keys!("HoldBody"),
+    note_metric_keys!("HoldBottomCap"),
+    note_metric_keys!("HoldTail"),
 ];
 
 pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
@@ -1727,9 +1729,9 @@ mod tests {
         let metrics = ini_section(
             "NoteDisplay",
             &[
-                ("RollHeadAnimationLength", "nope"),
-                ("RollHeadNoteColorCount", "nope"),
-                ("RollHeadNoteColorType", "unknown"),
+                ("HoldHeadAnimationLength", "nope"),
+                ("HoldHeadNoteColorCount", "nope"),
+                ("HoldHeadNoteColorType", "unknown"),
             ],
         );
 

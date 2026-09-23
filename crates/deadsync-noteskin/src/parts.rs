@@ -109,6 +109,7 @@ impl NoteAnimPart {
         Self::RollTail,
     ];
 
+    /// ITGmania shares hold metrics with rolls, despite their separate assets.
     #[must_use]
     pub const fn metric_prefix(self) -> &'static str {
         match self {
@@ -116,16 +117,11 @@ impl NoteAnimPart {
             Self::Mine => "TapMine",
             Self::Lift => "TapLift",
             Self::Fake => "TapFake",
-            Self::HoldHead => "HoldHead",
-            Self::HoldTopCap => "HoldTopCap",
-            Self::HoldBody => "HoldBody",
-            Self::HoldBottomCap => "HoldBottomCap",
-            Self::HoldTail => "HoldTail",
-            Self::RollHead => "RollHead",
-            Self::RollTopCap => "RollTopCap",
-            Self::RollBody => "RollBody",
-            Self::RollBottomCap => "RollBottomCap",
-            Self::RollTail => "RollTail",
+            Self::HoldHead | Self::RollHead => "HoldHead",
+            Self::HoldTopCap | Self::RollTopCap => "HoldTopCap",
+            Self::HoldBody | Self::RollBody => "HoldBody",
+            Self::HoldBottomCap | Self::RollBottomCap => "HoldBottomCap",
+            Self::HoldTail | Self::RollTail => "HoldTail",
         }
     }
 }

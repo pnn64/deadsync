@@ -5748,6 +5748,27 @@ mod tests {
     }
 
     #[test]
+    fn default_skin_roll_heads_follow_note_quantization() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
+        let data = itg::load_noteskin_data(&root, "dance", "default").unwrap();
+        let runtime = NoteskinRuntime {
+            note_display_metrics: itg::note_display_metrics(&data.metrics),
+            ..empty_runtime()
+        };
+
+        // The default skin's arrow sheet uses red for quarters, blue for
+        // eighths and yellow for sixteenths. Roll heads must select those same
+        // rows even though the skin only declares HoldHead color metrics.
+        for (beat, expected_y) in [(4.0, 0.0), (4.5, 0.125), (4.25, 0.375)] {
+            assert_eq!(
+                runtime.part_uv_translation(NoteAnimPart::RollHead, beat, false),
+                [0.0, expected_y],
+                "roll head at beat {beat}"
+            );
+        }
+    }
+
+    #[test]
     fn noteskin_runtime_samples_uv_phase_and_translation() {
         let mut metrics = NoteDisplayMetrics::default();
         metrics.part_animation[NoteAnimPart::Tap as usize] = NotePartAnimation {
