@@ -208,24 +208,23 @@ impl Player {
         let target = clamp_play_time(play_time_sec, self.info);
         let mut latest = None;
         loop {
-            if self
-                .next_frame
-                .as_ref()
-                .is_some_and(|frame| frame.pts_sec > target)
-            {
-                break;
-            }
-            let frame = match self.next_frame.take() {
-                Some(frame) => frame,
+            let frame = match self.next_frame.as_ref() {
+                Some(frame) if frame.pts_sec > target => break,
+                Some(_) => self
+                    .next_frame
+                    .take()
+                    .expect("buffered frame was just checked"),
                 None => match self.frame_rx.as_ref()?.try_recv() {
-                    Ok(frame) => frame,
+                    Ok(frame) => {
+                        if frame.pts_sec > target {
+                            self.next_frame = Some(frame);
+                            break;
+                        }
+                        frame
+                    }
                     Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
                 },
             };
-            if frame.pts_sec > target {
-                self.next_frame = Some(frame);
-                break;
-            }
             if let Some(image) = latest.take() {
                 recycle_frame_buffer(&self.recycle_tx, image);
             }
