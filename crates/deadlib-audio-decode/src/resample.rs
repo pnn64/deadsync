@@ -203,6 +203,14 @@ pub fn write_channel_mapped_i16(
     out_ch: usize,
     out_tmp: &mut Vec<i16>,
 ) -> usize {
+    if in_ch == out_ch {
+        out_tmp.clear();
+        return append_channel_mapped_i16(input, in_ch, out_ch, out_tmp);
+    }
+    if in_ch == 1 && out_ch == 2 {
+        out_tmp.clear();
+        return append_channel_mapped_i16(input, 1, 2, out_tmp);
+    }
     if input.is_empty() || in_ch == 0 || out_ch == 0 {
         out_tmp.clear();
         return 0;
@@ -210,7 +218,24 @@ pub fn write_channel_mapped_i16(
     let frames = input.len() / in_ch;
     let produced_samples = frames * out_ch;
     resize_output(out_tmp, produced_samples);
-    map_channels_i16(input, in_ch, out_ch, out_tmp);
+    if out_ch == 2 {
+        for (output, input) in out_tmp
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(input.chunks_exact(in_ch))
+        {
+            *output = [input[0], input[1]];
+        }
+    } else {
+        for frame in 0..frames {
+            let in_base = frame * in_ch;
+            let out_base = frame * out_ch;
+            for channel in 0..out_ch {
+                out_tmp[out_base + channel] = input[in_base + channel % in_ch];
+            }
+        }
+    }
     frames
 }
 
@@ -254,39 +279,6 @@ pub fn append_channel_mapped_i16(
         }
     }
     frames
-}
-
-#[inline]
-fn map_channels_i16(input: &[i16], in_ch: usize, out_ch: usize, output: &mut [i16]) {
-    if in_ch == out_ch {
-        output.copy_from_slice(&input[..output.len()]);
-        return;
-    }
-    if in_ch == 1 && out_ch == 2 {
-        for (frame, sample) in output.as_chunks_mut::<2>().0.iter_mut().zip(input) {
-            *frame = [*sample, *sample];
-        }
-        return;
-    }
-    if out_ch == 2 {
-        for (output, input) in output
-            .as_chunks_mut::<2>()
-            .0
-            .iter_mut()
-            .zip(input.chunks_exact(in_ch))
-        {
-            *output = [input[0], input[1]];
-        }
-        return;
-    }
-    let frames = input.len() / in_ch;
-    for frame in 0..frames {
-        let in_base = frame * in_ch;
-        let out_base = frame * out_ch;
-        for channel in 0..out_ch {
-            output[out_base + channel] = input[in_base + channel % in_ch];
-        }
-    }
 }
 
 #[inline(always)]
